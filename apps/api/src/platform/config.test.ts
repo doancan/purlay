@@ -14,6 +14,7 @@ const valid = {
   DATABASE_URL: 'postgres://purlay:purlay@localhost:5432/purlay',
   GITHUB_CLIENT_ID: 'client-id',
   GITHUB_CLIENT_SECRET: 'client-secret',
+  ENCRYPTION_KEY: 'ZGV2ZWxvcG1lbnQtb25seS10aGlydHktdHdvLWJ5dGVzIQ==',
 };
 
 describe('loading configuration', () => {

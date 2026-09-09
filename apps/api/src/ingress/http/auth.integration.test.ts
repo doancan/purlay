@@ -1,0 +1,199 @@
+/**
+ * The whole sign-in, driven through real requests against a real database.
+ *
+ * GitHub is a double — the point is not that `fetch` works, it is that the
+ * handshake, the state check, the identity rules and the session all fit
+ * together, including when one of them refuses.
+ */
+import { afterAll, describe, expect, test } from 'bun:test';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { Value } from '@sinclair/typebox/value';
+import { ErrorResponse } from '@purlay/types';
+import { createApp } from './app';
+import { SESSION_COOKIE } from './cookies';
+import { NOW, aGitHubAccount, testDependencies } from './testing';
+
+afterAll(async () => {
+  await closeIntegrationDatabase();
+});
+
+const ORIGIN = 'https://purlay.test';
+
+const appFor = (
+  database: Executor,
+  github = testDependencies().github,
+): ReturnType<typeof createApp> => createApp(testDependencies({ database, github }));
+
+/** Everything a browser would carry back from the redirect, in one place. */
+const startAndCallback = async (
+  database: Executor,
+  options: {
+    code?: string;
+    tamperState?: boolean;
+    github?: ReturnType<typeof aGitHubAccount>;
+  } = {},
+): Promise<Response> => {
+  const app = appFor(database, options.github ?? testDependencies().github);
+
+  const started = await app.handle(new Request(`${ORIGIN}/auth/github`));
+  const stateCookie = started.headers.get('set-cookie') ?? '';
+  const location = new URL(started.headers.get('location') ?? '');
+  const state = location.searchParams.get('state') ?? '';
+
+  // Deterministically different. Replacing the last character with a fixed one
+  // is a no-op whenever it already is that character — a test that passes fifteen
+  // times in sixteen, which is worse than one that never passes.
+  const flipped = `${state.slice(0, -1)}${state.endsWith('0') ? '1' : '0'}`;
+  const returned = options.tamperState === true ? flipped : state;
+  return await app.handle(
+    new Request(
+      `${ORIGIN}/auth/github/callback?code=${options.code ?? 'a-valid-code'}&state=${returned}`,
+      {
+        headers: { cookie: stateCookie.split(';')[0] ?? '', 'user-agent': 'probe/1.0' },
+      },
+    ),
+  );
+};
+
+describe('integration: signing in with GitHub', () => {
+  test('the redirect asks for exactly the scopes D-38 allows, and nothing else', async () => {
+    await withRollback(async (db) => {
+      const response = await appFor(db).handle(new Request(`${ORIGIN}/auth/github`));
+      expect(response.status).toBe(302);
+
+      const location = new URL(response.headers.get('location') ?? '');
+      expect(location.origin + location.pathname).toBe('https://github.com/login/oauth/authorize');
+      expect(location.searchParams.get('scope')).toBe('read:user user:email');
+      expect(location.searchParams.get('redirect_uri')).toBe(`${ORIGIN}/auth/github/callback`);
+      expect(location.searchParams.get('state')).toHaveLength(32);
+
+      const cookie = response.headers.get('set-cookie') ?? '';
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('SameSite=Lax');
+      expect(cookie).toContain('Path=/auth');
+    });
+  });
+
+  test('a completed handshake creates the account and issues a session', async () => {
+    await withRollback(async (db) => {
+      const response = await startAndCallback(db);
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toBe(ORIGIN);
+
+      const cookie = response.headers.get('set-cookie') ?? '';
+      expect(cookie).toContain(`${SESSION_COOKIE}=`);
+      expect(cookie).toContain('HttpOnly');
+
+      const user = await db
+        .selectFrom('users')
+        .selectAll()
+        .where('email', '=', 'mona@example.test')
+        .executeTakeFirstOrThrow();
+      const sessions = await db
+        .selectFrom('sessions')
+        .selectAll()
+        .where('user_id', '=', user.id)
+        .execute();
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]?.user_agent).toBe('probe/1.0');
+
+      // The cookie carries the token; the database carries only its hash.
+      const token = cookie.slice(cookie.indexOf('=') + 1, cookie.indexOf(';'));
+      expect(JSON.stringify(sessions[0])).not.toContain(token);
+    });
+  });
+
+  test('a tampered state is refused, and no account is created', async () => {
+    await withRollback(async (db) => {
+      const response = await startAndCallback(db, { tamperState: true });
+
+      expect(response.status).toBe(400);
+      const body: unknown = await response.json();
+      expect(Value.Check(ErrorResponse, body)).toBe(true);
+      expect(body).toMatchObject({ error: { code: 'OAUTH_STATE_INVALID' } });
+
+      const users = await db.selectFrom('users').selectAll().execute();
+      expect(users).toHaveLength(0);
+    });
+  });
+
+  test('a callback with no cookie at all is refused', async () => {
+    await withRollback(async (db) => {
+      const response = await appFor(db).handle(
+        new Request(`${ORIGIN}/auth/github/callback?code=a-valid-code&state=anything`),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: 'OAUTH_STATE_INVALID' } });
+    });
+  });
+
+  test('an account with no verified address is refused, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const response = await startAndCallback(db, {
+        github: aGitHubAccount({ id: 7, login: 'ghost', name: null, avatarUrl: null }, [
+          { email: 'ghost@example.test', primary: true, verified: false },
+        ]),
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'EMAIL_REQUIRED' } });
+      expect(await db.selectFrom('users').selectAll().execute()).toHaveLength(0);
+    });
+  });
+
+  test('signing out revokes the session and clears the cookie', async () => {
+    await withRollback(async (db) => {
+      const signedIn = await startAndCallback(db);
+      const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+
+      const response = await appFor(db).handle(
+        new Request(`${ORIGIN}/auth/logout`, { method: 'POST', headers: { cookie } }),
+      );
+
+      expect(response.status).toBe(204);
+      expect(response.headers.get('set-cookie')).toContain(`${SESSION_COOKIE}=;`);
+
+      const live = await db
+        .selectFrom('sessions')
+        .selectAll()
+        .where('revoked_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(0);
+    });
+  });
+
+  test('signing out everywhere needs a session, and revokes every one of them', async () => {
+    await withRollback(async (db) => {
+      const first = await startAndCallback(db);
+      await startAndCallback(db); // the same person, a second device
+      const cookie = (first.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+
+      const withoutSession = await appFor(db).handle(
+        new Request(`${ORIGIN}/auth/logout-all`, { method: 'POST' }),
+      );
+      expect(withoutSession.status).toBe(401);
+
+      const response = await appFor(db).handle(
+        new Request(`${ORIGIN}/auth/logout-all`, { method: 'POST', headers: { cookie } }),
+      );
+      expect(response.status).toBe(204);
+
+      const live = await db
+        .selectFrom('sessions')
+        .selectAll()
+        .where('revoked_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(0);
+    });
+  });
+
+  test('the session the handshake issued actually expires when it should', async () => {
+    await withRollback(async (db) => {
+      expect((await startAndCallback(db)).status).toBe(302);
+      const session = await db.selectFrom('sessions').selectAll().executeTakeFirstOrThrow();
+      const expected = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
+      expect(new Date(session.expires_at).toISOString()).toBe(expected.toISOString());
+    });
+  });
+});

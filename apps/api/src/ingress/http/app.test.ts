@@ -16,14 +16,19 @@ import { ErrorResponse } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import { createApp } from './app';
 import { refusalFor } from './errors';
+import { testDependencies } from './testing';
 
 const get = async (path: string): Promise<Response> =>
-  await createApp().handle(new Request(`http://localhost${path}`));
+  await createApp(testDependencies()).handle(new Request(`http://localhost${path}`));
 
 const bodyOf = async (response: Response): Promise<unknown> => await response.json();
 
 describe('the application', () => {
-  test('answers liveness, and does so with no database in existence', async () => {
+  /**
+   * The database handle it is built with throws on any access, so this passing is
+   * proof that liveness touches nothing — not an assertion that it did not.
+   */
+  test('answers liveness without touching the database', async () => {
     const response = await get('/health');
     expect(response.status).toBe(200);
     expect(await bodyOf(response)).toEqual({ status: 'ok' });

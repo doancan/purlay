@@ -87,6 +87,14 @@ This spike did not hit it because it used a `bunfig.toml` preload, which registe
 **every** test in the repository. The client uses the queries `render` returns instead, and lint
 refuses the import.
 
+**A per-file DOM is not per-file unless it is also unregistered — and unless it is registered in a
+lifecycle hook.** `bun test` runs every selected file in one process and *imports* files whose tests
+are all filtered out. A top-level `GlobalRegistrator.register()` therefore fired during a run in
+which the component test executed nothing, replaced `Request`, `Response` and `Headers` for the
+whole process, and broke six API tests in another package. Each file passed alone. Registering in
+`beforeAll` and unregistering in `afterAll` fixes it; the first attempt, which only added the
+`afterAll`, did not — because the hook never ran.
+
 **`bun x <tool>` from the wrong directory downloads `latest` and says nothing.** `bun x vite` at
 the repository root fetched an unpinned Vite and built with it, because Vite is installed under
 `apps/web`. A check now refuses a script that names a tool its own manifest does not install.

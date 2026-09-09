@@ -44,6 +44,10 @@ export const Environment = Type.Object({
 
   GITHUB_CLIENT_ID: Type.String({ minLength: 1 }),
   GITHUB_CLIENT_SECRET: Type.String({ minLength: 1 }),
+
+  /** 32 bytes, base64. The root secret; the OAuth state signing key is derived
+   *  from it with domain separation rather than being a second variable (D-62). */
+  ENCRYPTION_KEY: Type.String({ minLength: 44 }),
   SESSION_TTL_DAYS: Type.Integer({ minimum: 1, maximum: 365, default: 30 }),
 
   /** Phase 0 has no invitations, so without this a second person cannot join a
@@ -56,7 +60,11 @@ export const Environment = Type.Object({
 export type Config = Static<typeof Environment>;
 
 /** Never printed, never logged, never included in an error. (`ARCHITECTURE.md` §10) */
-const SECRETS: ReadonlySet<string> = new Set(['GITHUB_CLIENT_SECRET', 'DATABASE_URL']);
+const SECRETS: ReadonlySet<string> = new Set([
+  'GITHUB_CLIENT_SECRET',
+  'DATABASE_URL',
+  'ENCRYPTION_KEY',
+]);
 
 /** The variables this application reads. `.env.example` is generated from it. */
 export const CONFIGURED: readonly string[] = Object.keys(Environment.properties);
