@@ -230,8 +230,13 @@ describe('integration: the frame router', () => {
       expect(delivered[0]?.event).toBe('MESSAGE_CREATED');
       expect(delivered[0]?.data).toMatchObject({ id, content: 'hello' });
 
-      // Durable, not only broadcast.
-      const rows = await db.selectFrom('messages').selectAll().execute();
+      // Durable, not only broadcast — and scoped to this channel, because the
+      // harness rolls back this test's writes rather than emptying the database.
+      const rows = await db
+        .selectFrom('messages')
+        .select('id')
+        .where('channel_id', '=', channelId)
+        .execute();
       expect(rows).toHaveLength(1);
     });
   });
@@ -262,7 +267,9 @@ describe('integration: the frame router', () => {
       expect(reply?.event).toBe('ERROR');
       expect(reply?.data).toMatchObject({ code: 'INVALID_MESSAGE_ID' });
       expect(delivered).toEqual([]);
-      expect(await db.selectFrom('messages').selectAll().execute()).toHaveLength(0);
+      expect(
+        await db.selectFrom('messages').select('id').where('channel_id', '=', channelId).execute(),
+      ).toHaveLength(0);
     });
   });
 

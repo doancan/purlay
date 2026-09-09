@@ -139,6 +139,34 @@ describe('integration: channels', () => {
     });
   });
 
+  /**
+   * PostgreSQL sorts nulls **first** under `DESC`, so without `NULLS LAST` a
+   * channel nobody has written in outranks every active one — the opposite of
+   * what `UX.md` §4 asks the sidebar to show, and invisible in any test where no
+   * channel has messages.
+   */
+  test('the sidebar puts recent activity first and silent channels last', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'chn-order');
+      const workspaceId = await aWorkspace(db, alice.cookie, 'chn-order-ws');
+      const quiet = await aChannel(db, alice.cookie, workspaceId, 'quiet');
+      const busy = await aChannel(db, alice.cookie, workspaceId, 'busy');
+      await db
+        .updateTable('channels')
+        .set({ last_message_at: new Date('2026-09-09T12:00:00.000Z') })
+        .where('id', '=', busy)
+        .execute();
+
+      const response = await call(db, 'GET', `/api/workspaces/${workspaceId}/channels`, {
+        cookie: alice.cookie,
+      });
+      const channels = (await response.json()) as { id: string; name: string }[];
+      expect(channels.map((channel) => channel.name)).toEqual(['busy', 'quiet']);
+      expect(channels[0]?.id).toBe(busy);
+      expect(channels[1]?.id).toBe(quiet);
+    });
+  });
+
   test('joining is idempotent, so a retry after a dropped response is not a failure', async () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'chn-owner');

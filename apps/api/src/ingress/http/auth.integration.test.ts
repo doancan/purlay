@@ -55,6 +55,24 @@ const startAndCallback = async (
   );
 };
 
+/**
+ * Scoped to the address under test. `withRollback` rolls back *this test's*
+ * writes; it does not empty the database, and a machine that has run the
+ * application has rows in it.
+ */
+const accountsFor = async (db: Executor, email: string): Promise<{ id: string }[]> =>
+  await db.selectFrom('users').select('id').where('email', '=', email).execute();
+
+/** Live sessions belonging to one account, for the same reason. */
+const liveSessionsFor = async (db: Executor, email: string): Promise<{ id: string }[]> =>
+  await db
+    .selectFrom('sessions')
+    .innerJoin('users', 'users.id', 'sessions.user_id')
+    .select('sessions.id')
+    .where('users.email', '=', email)
+    .where('sessions.revoked_at', 'is', null)
+    .execute();
+
 describe('integration: signing in with GitHub', () => {
   test('the redirect asks for exactly the scopes D-38 allows, and nothing else', async () => {
     await withRollback(async (db) => {
@@ -113,8 +131,7 @@ describe('integration: signing in with GitHub', () => {
       expect(Value.Check(ErrorResponse, body)).toBe(true);
       expect(body).toMatchObject({ error: { code: 'OAUTH_STATE_INVALID' } });
 
-      const users = await db.selectFrom('users').selectAll().execute();
-      expect(users).toHaveLength(0);
+      expect(await accountsFor(db, 'mona@example.test')).toHaveLength(0);
     });
   });
 
@@ -138,7 +155,7 @@ describe('integration: signing in with GitHub', () => {
 
       expect(response.status).toBe(403);
       expect(await response.json()).toMatchObject({ error: { code: 'EMAIL_REQUIRED' } });
-      expect(await db.selectFrom('users').selectAll().execute()).toHaveLength(0);
+      expect(await accountsFor(db, 'ghost@example.test')).toHaveLength(0);
     });
   });
 
@@ -154,12 +171,7 @@ describe('integration: signing in with GitHub', () => {
       expect(response.status).toBe(204);
       expect(response.headers.get('set-cookie')).toContain(`${SESSION_COOKIE}=;`);
 
-      const live = await db
-        .selectFrom('sessions')
-        .selectAll()
-        .where('revoked_at', 'is', null)
-        .execute();
-      expect(live).toHaveLength(0);
+      expect(await liveSessionsFor(db, 'mona@example.test')).toHaveLength(0);
     });
   });
 
@@ -179,19 +191,22 @@ describe('integration: signing in with GitHub', () => {
       );
       expect(response.status).toBe(204);
 
-      const live = await db
-        .selectFrom('sessions')
-        .selectAll()
-        .where('revoked_at', 'is', null)
-        .execute();
-      expect(live).toHaveLength(0);
+      expect(await liveSessionsFor(db, 'mona@example.test')).toHaveLength(0);
     });
   });
 
   test('the session the handshake issued actually expires when it should', async () => {
     await withRollback(async (db) => {
       expect((await startAndCallback(db)).status).toBe(302);
-      const session = await db.selectFrom('sessions').selectAll().executeTakeFirstOrThrow();
+      // The session belonging to *this* account. `selectAll().executeTakeFirst()`
+      // reads whichever row the database returns first, which on a machine that
+      // has run the application is somebody else's.
+      const session = await db
+        .selectFrom('sessions')
+        .innerJoin('users', 'users.id', 'sessions.user_id')
+        .select('sessions.expires_at')
+        .where('users.email', '=', 'mona@example.test')
+        .executeTakeFirstOrThrow();
       const expected = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
       expect(new Date(session.expires_at).toISOString()).toBe(expected.toISOString());
     });

@@ -70,6 +70,18 @@ const aChannel = async (
   return ((await channel.json()) as { id: string }).id;
 };
 
+/**
+ * Scoped to the channel under test, never to the whole table.
+ *
+ * `withRollback` guarantees that *this test's* writes disappear — not that the
+ * database is empty. A developer who has ever run the application locally has
+ * rows in it, and an assertion that a table is empty fails for them and passes in
+ * CI, which starts from nothing. That is a false negative that costs an afternoon
+ * and teaches people to distrust the suite.
+ */
+const messagesIn = async (db: Executor, channelId: string): Promise<{ content: string }[]> =>
+  await db.selectFrom('messages').select('content').where('channel_id', '=', channelId).execute();
+
 const send = async (
   db: Executor,
   cookie: string,
@@ -123,7 +135,7 @@ describe('integration: messages', () => {
       );
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ error: { code: 'INVALID_MESSAGE_ID' } });
-      expect(await db.selectFrom('messages').selectAll().execute()).toHaveLength(0);
+      expect(await messagesIn(db, channelId)).toHaveLength(0);
     });
   });
 
@@ -141,7 +153,7 @@ describe('integration: messages', () => {
 
       expect((await send(db, alice.cookie, channelId, ahead, 'later')).status).toBe(400);
       expect((await send(db, alice.cookie, channelId, behind, 'earlier')).status).toBe(400);
-      expect(await db.selectFrom('messages').selectAll().execute()).toHaveLength(0);
+      expect(await messagesIn(db, channelId)).toHaveLength(0);
     });
   });
 
@@ -157,7 +169,7 @@ describe('integration: messages', () => {
 
       expect(again.status).toBe(201);
       expect(await again.json()).toEqual(await first.json());
-      expect(await db.selectFrom('messages').selectAll().execute()).toHaveLength(1);
+      expect(await messagesIn(db, channelId)).toHaveLength(1);
     });
   });
 
@@ -197,7 +209,7 @@ describe('integration: messages', () => {
       expect(text).not.toContain(channelId);
 
       // And the original is untouched.
-      const rows = await db.selectFrom('messages').selectAll().execute();
+      const rows = await messagesIn(db, channelId);
       expect(rows).toHaveLength(1);
       expect(rows[0]?.content).toBe('a private thought');
     });
@@ -242,6 +254,67 @@ describe('integration: messages', () => {
       expect(final.data.map((m) => m.id)).toEqual(ids.slice(0, 1));
       // The last page says so, rather than making the client ask again to find out.
       expect(final.nextCursor).toBeNull();
+    });
+  });
+
+  /**
+   * The replay path, and the one that was silently wrong: the first version read
+   * the newest page and filtered it in JavaScript, so a client away for longer
+   * than a page lost the **oldest** messages it missed — exactly the ones it
+   * needs. This sends more than one page and asks from the beginning.
+   */
+  test('catching up returns everything missed, oldest first, past one page', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'msg-catchup');
+      const channelId = await aChannel(db, alice, 'msg-catchup-ws');
+
+      const ids: string[] = [];
+      for (let i = 0; i < 7; i += 1) {
+        const id = messageId(new Date(NOW.getTime() + i));
+        ids.push(id);
+        expect((await send(db, alice.cookie, channelId, id, `m${String(i)}`)).status).toBe(201);
+      }
+
+      const first = ids[0] ?? '';
+      const response = await call(
+        db,
+        'GET',
+        `/api/channels/${channelId}/messages?limit=3&after=${first}`,
+        { cookie: alice.cookie },
+      );
+      const page = (await response.json()) as { data: { id: string }[]; nextCursor: string | null };
+
+      // Oldest first, so a client appends rather than sorts.
+      expect(page.data.map((m) => m.id)).toEqual(ids.slice(1, 4));
+      expect(page.nextCursor).toBe(ids[3]!);
+
+      const next = await call(
+        db,
+        'GET',
+        `/api/channels/${channelId}/messages?limit=3&after=${page.nextCursor ?? ''}`,
+        { cookie: alice.cookie },
+      );
+      const rest = (await next.json()) as { data: { id: string }[]; nextCursor: string | null };
+      expect(rest.data.map((m) => m.id)).toEqual(ids.slice(4, 7));
+      expect(rest.nextCursor).toBeNull();
+    });
+  });
+
+  test('asking for older and newer at once is refused rather than silently picked', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'msg-both');
+      const channelId = await aChannel(db, alice, 'msg-both-ws');
+      const id = messageId(NOW);
+      await send(db, alice.cookie, channelId, id, 'one');
+
+      const response = await call(
+        db,
+        'GET',
+        `/api/channels/${channelId}/messages?before=${id}&after=${id}`,
+        { cookie: alice.cookie },
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
     });
   });
 

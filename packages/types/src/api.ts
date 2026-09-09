@@ -30,8 +30,9 @@ import {
 } from './models';
 
 /**
- * Keyset pagination, always. `nextCursor` is the id to pass as `before`, and it
- * is null when the page is the last one.
+ * Keyset pagination, always. `nextCursor` is the id to pass back **as whichever
+ * cursor you used** — `before` when reading older, `after` when catching up — and
+ * it is null when the page is the last one in that direction.
  *
  * `OFFSET` is never accepted: it is O(n) and it shifts under concurrent inserts,
  * which in a live channel is every page (`SCHEMA.md` §6.3, D-8).

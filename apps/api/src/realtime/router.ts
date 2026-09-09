@@ -187,12 +187,23 @@ export const routeFrame = async (
   }
 };
 
-/** Everything newer than the id the client holds. Keyset, like every other read. */
+/**
+ * Everything newer than the id the client holds — a range query, oldest first.
+ *
+ * The first version of this read the newest page and filtered it in JavaScript,
+ * while its own comment claimed to be keyset. A client away for longer than one
+ * page would have silently lost the **oldest** messages it missed, which are
+ * exactly the ones it needs. §5.4 asks for one indexed range query per channel;
+ * this is that query.
+ */
 const missedSince = async (
   executor: Executor,
   context: Parameters<typeof messageHistory>[1],
   afterMessageId: string,
 ): Promise<readonly unknown[]> => {
-  const page = await messageHistory(executor, context, { limit: REPLAY_LIMIT });
-  return page.data.filter((message) => message.id > afterMessageId).reverse();
+  const page = await messageHistory(executor, context, {
+    after: afterMessageId,
+    limit: REPLAY_LIMIT,
+  });
+  return page.data;
 };

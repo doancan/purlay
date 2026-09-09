@@ -6,6 +6,39 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Hardening — 2026-09-09: five places the documents and the code disagreed
+
+A cross-check of what the documents publish against what the code does. Each finding was found by
+**comparing**, not by reading — every document was individually consistent — and each now has a
+check, because finding them by hand once is not a strategy.
+
+- **`GET /api/me` was documented as Phase 0, had a response shape in the contract, and nothing
+  served it.** A signed-in client had no way to learn who it was signed in as: the first thing every
+  screen needs. Implemented (#176), and a check now compares the endpoints `API.md` publishes for
+  this phase against the routes served, **in both directions** — it also found `POST
+  /auth/logout-all` served while documented as Phase 1.
+- **`/auth/logout-all` is Phase 0 now**, with the reason written down: *sign out everywhere* is the
+  capability D-11 chose database-backed sessions **for**, so shipping the cost without it leaves the
+  decision unpaid.
+- **Five error codes could never be raised.** Four belonged to features that do not exist, and
+  `SESSION_EXPIRED` was unreachable **by design** — D-60 made every session refusal the same code
+  on purpose. A code a client is told to handle exhaustively and will never receive is a lie in the
+  contract. Removed, and a check now requires every published code to have a call site. `413` and
+  `429` left the status union for the same reason.
+- **`?after=` was in the contract, validated, and silently ignored.** Worse, the socket's replay
+  read the *newest* page and filtered it in JavaScript while its own comment claimed to be keyset —
+  so a client away for longer than one page silently lost the **oldest** messages it missed, which
+  are exactly the ones it needs. It is a range query now, and asking for older and newer at once is
+  a `400` rather than a silent choice.
+- **The sidebar put silent channels above active ones.** PostgreSQL sorts nulls *first* under
+  `DESC`, so a channel nobody had written in outranked every one with recent activity — invisible in
+  any test where no channel has messages.
+- **Eight assertions demanded an empty database.** `withRollback` rolls back a test's own writes; it
+  never claimed to empty anything. They passed because CI starts from nothing — and failed the
+  moment the application had actually been run locally. Green in CI, red for the person building the
+  product. Every query in an integration test now names what it is asking about, and a check
+  refuses one that does not.
+
 ### Implementation — 2026-09-09: the socket
 
 - **The bus, the admission and the router**, all framework-neutral, so the security gate and the

@@ -151,8 +151,10 @@ export const sendMessage = async (
 };
 
 export interface HistoryQuery {
-  /** Older than this id. The cursor is the last id seen — nothing else. */
+  /** Older than this id, newest first. */
   readonly before?: string | undefined;
+  /** Newer than this id, **oldest first** — what a reconnect asks for (§5.4). */
+  readonly after?: string | undefined;
   readonly limit?: number | undefined;
 }
 
@@ -171,7 +173,18 @@ export const messageHistory = async (
   context: ChannelContext,
   query: HistoryQuery = {},
 ): Promise<MessagePage> => {
+  if (query.before !== undefined && query.after !== undefined) {
+    // Two directions at once has no meaning, and picking one silently is how a
+    // client ends up reading a page it did not ask for and cannot tell.
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'Ask for older or newer, not both.',
+      details: { fields: { before: 'cannot be combined with `after`' } },
+    });
+  }
+
   const limit = Math.min(Math.max(query.limit ?? DEFAULT_PAGE, 1), MAX_PAGE);
+  const forwards = query.after !== undefined;
 
   let statement = executor
     .selectFrom('messages')
@@ -180,19 +193,22 @@ export const messageHistory = async (
     .where('messages.channel_id', '=', context.channelId)
     .where('messages.parent_id', 'is', null)
     .where('messages.deleted_at', 'is', null)
-    .orderBy('messages.id', 'desc')
+    // Ascending when catching up, so a reconnect reads what it missed in the
+    // order it happened and a client can append rather than sort (§5.4).
+    .orderBy('messages.id', forwards ? 'asc' : 'desc')
     // One more than asked for: whether another page exists is answered by
     // reading, not by a second COUNT over the same rows.
     .limit(limit + 1);
 
-  if (query.before !== undefined) {
-    statement = statement.where('messages.id', '<', query.before);
-  }
+  if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
+  if (query.after !== undefined) statement = statement.where('messages.id', '>', query.after);
 
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
   return {
     data: page.map(asMessage),
+    // The cursor to pass back **in the direction you were travelling**: the last
+    // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };
 };

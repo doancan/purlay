@@ -23,8 +23,11 @@ before the handler runs (`ARCHITECTURE.md` §7.3). Endpoints addressing a resour
 **404, never 403.** A resource in another workspace returns `404`, because `403` confirms it
 exists. This applies to every workspace-scoped route without exception. (D-21)
 
-**Pagination.** Keyset only. `?before=<uuid>` returns older rows, `?after=<uuid>` newer, with
-`?limit=` capped at 100 (default 50). `OFFSET` is never accepted. (D-8)
+**Pagination.** Keyset only. `?before=<uuid>` returns older rows newest-first, `?after=<uuid>`
+returns newer rows **oldest-first** — the order a reconnect appends them in (`ARCHITECTURE.md`
+§5.4). Asking for both at once is a `400`: choosing one silently would hand a client a page it
+did not ask for and could not tell apart. `?limit=` is capped at 100 (default 50). `OFFSET` is
+never accepted. (D-8)
 
 ```jsonc
 { "data": [ /* … */ ], "nextCursor": "0199155c-6200-7b7f-…" }  // null when exhausted
@@ -64,7 +67,7 @@ without disclosing it. (D-33)
 
 ## 2. Authentication
 
-| ○ | Method | Path | Notes |
+| | Method | Path | Notes |
 |:-:|---|---|---|
 | ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
 | ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL` |
@@ -73,7 +76,7 @@ Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary
 and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id`.
 Neither case is linked silently. (D-38)
 | ○ | `POST` | `/auth/logout` | Revokes the current session |
-| ① | `POST` | `/auth/logout-all` | Revokes every session for the user |
+| ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user plus workspace memberships |
 | ② | `POST` | `/api/me/erase` | Anonymises the account and revokes every session. **Never cascades to messages** (D-27) |
 
