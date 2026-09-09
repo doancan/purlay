@@ -117,7 +117,7 @@ purlay/
 │   │       │   ├── search/
 │   │       │   └── integrations/github/  unfurl, link_previews cache
 │   │       ├── realtime/        EventBus + socket hub
-│   │       ├── platform/        db, storage, config, logging, errors, uuid
+│   │       ├── platform/        db, storage, config, logging, errors, tenancy, uuid
 │   │       └── index.ts
 │   │
 │   └── web/
@@ -360,20 +360,31 @@ So it is made structural:
 ```typescript
 /** Cannot be constructed by callers. Produced only by the membership guard,
  *  and only after verifying this user actually belongs to this workspace. */
+const tenancy: unique symbol = Symbol('WorkspaceContext');
+
 export interface WorkspaceContext {
   readonly workspaceId: string;
   readonly userId: string;
   readonly role: UserRole;
-  readonly __brand: unique symbol;
+  readonly [tenancy]: true;
 }
 ```
 
+The brand is a property keyed by a symbol the module does not export, rather than a
+`readonly __brand: unique symbol` — that form is uninhabited, so not even the guard could produce
+one. (D-54)
+
 Workspace-scoped repositories accept a `WorkspaceContext` as their first argument and apply the
 filter internally. A caller who has not passed through the guard has no way to obtain one, so
-an unscoped query does not compile.
+an unscoped query does not compile. An assertion would be the way around it, so asserting a
+`*Context` into existence is a lint error everywhere, with no exemption. (D-54)
 
 **Not-found over forbidden.** Requesting another workspace's resource returns **404**, never
-403. A 403 confirms the resource exists, which is itself a leak.
+403. A 403 confirms the resource exists, which is itself a leak. The guard has one refusal and
+raises it for both "no such workspace" and "not your workspace", so the two are indistinguishable
+by construction rather than by two branches kept in step. A `:workspaceId` that is not a UUID
+takes the same refusal: handed to PostgreSQL it raises on the cast, and the boundary would answer
+500 where it promised 404.
 
 Every workspace-scoped endpoint carries a cross-tenant test asserting 404. (D-21)
 
@@ -400,12 +411,14 @@ axis over. (D-34)
 ```typescript
 /** Cannot be constructed by callers. Produced only by the channel guard,
  *  and only after verifying this user can see this channel. */
+const visibility: unique symbol = Symbol('ChannelContext');
+
 export interface ChannelContext {
   readonly workspaceId: string;
   readonly channelId: string;
   readonly channelType: ChannelType;
   readonly userId: string;
-  readonly __brand: unique symbol;
+  readonly [visibility]: true;
 }
 ```
 

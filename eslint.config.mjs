@@ -5,6 +5,16 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import { fileURLToPath } from 'node:url';
 import tseslint from 'typescript-eslint';
 
+// The layering rule two configurations below both need. ESLint replaces a rule
+// wholesale rather than merging it, so the block for `modules/` has to restate
+// everything the block for `modules/ + platform/` says — which is a second copy,
+// and a second copy drifts. Named once instead. (CONTRIBUTING.md §6.1)
+const NO_TRANSPORT_TYPES = {
+  group: ['**/ingress/**', '**/realtime/**', 'elysia', 'elysia/*'],
+  message:
+    'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
+};
+
 export default defineConfig([
   // `.gitignore` is the single source for "build output and things not in the
   // repository". Repeating that list here is how one copy silently falls behind
@@ -66,6 +76,23 @@ export default defineConfig([
           message:
             'Take the clock as a dependency instead of reading it directly, so time can be controlled in a test.',
         },
+        // A branded context is unforgeable by construction — its brand key is a
+        // symbol its own module does not export — but no type system stops a
+        // deliberate assertion. This does, everywhere, with no exemption: the
+        // guard that mints one never needs a cast, so there is nowhere for a
+        // legitimate case to live. Named by convention so `ChannelContext` (D-34,
+        // issue #13) is covered the day it exists, rather than the day somebody
+        // remembers to add it here. (D-21, D-54)
+        {
+          selector: 'TSAsExpression > TSTypeReference > Identifier[name=/Context$/]',
+          message:
+            'A context is minted by its guard, never asserted. Casting one bypasses the membership check it exists to prove. (D-21, D-54)',
+        },
+        {
+          selector: 'TSTypeAssertion > TSTypeReference > Identifier[name=/Context$/]',
+          message:
+            'A context is minted by its guard, never asserted. Casting one bypasses the membership check it exists to prove. (D-21, D-54)',
+        },
       ],
     },
   },
@@ -77,13 +104,7 @@ export default defineConfig([
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: ['**/ingress/**', '**/realtime/**', 'elysia', 'elysia/*'],
-              message:
-                'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
-            },
-          ],
+          patterns: [NO_TRANSPORT_TYPES],
         },
       ],
     },
@@ -146,13 +167,7 @@ export default defineConfig([
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: ['**/ingress/**', '**/realtime/**', 'elysia', 'elysia/*'],
-              message:
-                'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
-            },
-          ],
+          patterns: [NO_TRANSPORT_TYPES],
           paths: [
             {
               name: '@purlay/db',

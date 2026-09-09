@@ -1347,7 +1347,8 @@ specification before the code.
 
 ### D-48. Escape hatches are expensive and visible, not closed
 
-D-47 made seven rules fail the build. It did not close the hatch that makes all of them optional:
+D-47 made the stated rules fail the build. It did not close the hatch that makes all of them
+optional:
 
 ```ts
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1561,6 +1562,53 @@ behaviour, not polish.
 **What this does not mean.** It does not mean building Phase 1 features during Phase 0. The walking
 skeleton ships *few* screens; each is finished. A small excellent product is what the interface
 exemplars in D-51 all are.
+
+### D-54. A context is branded by a module-private symbol key, and asserting one is a lint error
+
+D-21 and D-34 make isolation structural: a scoped repository takes a context the caller cannot
+construct. `ARCHITECTURE.md` §7.3 originally wrote that brand the way it is usually written:
+
+```typescript
+readonly __brand: unique symbol;
+```
+
+It type-checks as a declaration and is **uninhabited**. In property position `unique symbol` names
+a symbol no expression has — not a fresh `Symbol()`, not another `unique symbol` — so *nothing*,
+including the guard, can produce a value of the type without an assertion. The mechanism would have
+shipped with its escape hatch at the one place that must not have one, and every compile-time proof
+that "a caller cannot forge a context" would have passed vacuously: nobody could make one at all.
+
+The brand is a property keyed by a symbol its own module does not export:
+
+```typescript
+const tenancy: unique symbol = Symbol('WorkspaceContext');
+
+export interface WorkspaceContext {
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly role: UserRole;
+  readonly [tenancy]: true;
+}
+```
+
+Naming that key is the capability, and it stays in the file that verifies the membership row. A
+plain object is rejected for a missing property; a `Symbol('WorkspaceContext')` declared elsewhere
+is rejected as a different symbol. The type is inhabited exactly once, by the guard.
+
+**Rejected: a class with a private field.** `class WorkspaceContext { #brand }` is nominal too, but
+it turns a value that only ever travels between functions into a runtime construct — a constructor
+to keep private, an instance that stops surviving serialization — and buys nothing the symbol key
+does not.
+
+**The hole that remains, and what closes it.** No type system refuses `{} as WorkspaceContext`.
+Lint does: an assertion to any type whose name ends in `Context` is rejected repository-wide, with
+**no exemption**, because the guard builds its context from a literal and never needs a cast —
+there is no legitimate case to make room for. The rule matches by name so `ChannelContext` (D-34)
+is covered before it is written, rather than on the day somebody remembers to extend a list.
+`scripts/verify-enforcement.ts` proves the ban by writing a violation and requiring *that rule* to
+be the one that rejects it.
+
+---
 
 ---
 

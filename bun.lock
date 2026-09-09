@@ -19,6 +19,7 @@
       "name": "@purlay/api",
       "version": "0.0.0",
       "dependencies": {
+        "@purlay/db": "workspace:*",
         "@purlay/types": "workspace:*",
         "@sinclair/typebox": "^0.34.52",
       },

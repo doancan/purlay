@@ -6,6 +6,33 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: the tenant boundary became a type
+
+- **D-54** — a context is branded by a **module-private symbol key**, and asserting one is a lint
+  error. The form `ARCHITECTURE.md` §7.3 documented — `readonly __brand: unique symbol` — is
+  uninhabited: in property position it names a symbol no expression has, so not even the guard
+  could have produced one, and every compile-time proof that a caller cannot forge a context would
+  have passed because nobody could make one at all. The mechanism would have shipped with its
+  escape hatch at the only place that must not have one.
+- **`apps/api/src/platform/tenancy.ts`** — the membership guard, the sole producer of a
+  `WorkspaceContext`. One refusal serves both "no such workspace" and "not your workspace", so the
+  two are indistinguishable by construction rather than by two branches kept in step. A
+  `:workspaceId` that is not a UUID takes the same refusal — handed to PostgreSQL it raises on the
+  cast, and the boundary would have answered 500 where it promised 404.
+- **The enforcement demonstration now names its rule.** It asserted only that ESLint exited
+  non-zero, which any unrelated error in the violating file satisfies — a demonstration that can
+  pass for the wrong reason, in the script that exists to stop exactly that. Each violation now
+  declares which rule must reject it, and both failure modes were reproduced on purpose.
+- **`verify` and the pipeline are compared in both directions.** The old comparison proved every
+  CI step was runnable locally and said nothing about the reverse, so
+  `bun run config:example -- --check` ran locally and never in CI. A check that cannot block a
+  merge is a suggestion.
+- **Branch names are checked** rather than named in a document nothing reads — the rule had been
+  broken twice already. The prefixes are the Conventional Commit types, so a branch and its commits
+  use one vocabulary (`CONTRIBUTING.md` §8).
+- **`OVERVIEW.md` no longer states progress.** It said Phase 0 had not started, in a repository
+  with a database, a contract and a pipeline in it. `bun run queue` computes it.
+
 ### Specification — 2026-09-09 (fourth pass): the interface, the budgets, and the escape hatch
 
 The previous pass made seven rules fail the build and left the hatch that makes all of them

@@ -299,7 +299,9 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 
 ## 8. Git
 
-- **Branches:** `feature/`, `fix/`, `chore/`, `refactor/`, `docs/`
+- **Branches:** `feat/`, `fix/`, `chore/`, `refactor/`, `docs/` — the same words as the
+  commit type below, so a branch and its commits do not use two vocabularies for one idea.
+  Checked by `bun run check:branch`, which runs in `verify` and in the pipeline.
 - **Commits:** Conventional Commits — `feat(messages): add keyset pagination`
 - **No AI attribution in commit messages.** No assistant name, no tool name, no
   `Co-Authored-By` trailer for one. A commit records what changed, not what typed it.

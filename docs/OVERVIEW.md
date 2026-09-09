@@ -62,6 +62,7 @@ looking for the error codes to a file that does not have them.
 | The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
 | Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |
 | The variables the application reads | `apps/api/src/platform/config.ts` — `.env.example` is generated from it |
+| The tenant boundary: what mints a `WorkspaceContext`, and what a stranger gets instead | `apps/api/src/platform/tenancy.ts` (D-21, D-54) |
 | The local environment: images, ports, credentials | `docker-compose.yml` |
 | Which rules the build enforces | `eslint.config.mjs`, demonstrated by `scripts/verify-enforcement.ts` |
 
@@ -113,10 +114,14 @@ from the browser, not a second codebase. (`DECISIONS.md` D-14, D-51)
 
 ## Current status
 
-**Phase 0 — Walking Skeleton. Not started.**
+**Phase 0 — Walking Skeleton.**
 
 Exit criterion: two browser tabs, signed in as two different GitHub users, exchange a message in
 real time, and the message survives an API restart.
+
+How much of it is done is deliberately not written here: a progress line is stale the moment a
+pull request merges, and a document that says "not started" about a repository with code in it
+teaches people to stop believing the documents. `bun run queue` computes it from the issues.
 
 No application code exists yet. The documents above are the specification it will be built
 against. What happens next is on the board, not in this repository (D-32).
