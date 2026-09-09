@@ -20,6 +20,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@purlay/types": "workspace:*",
+        "@sinclair/typebox": "^0.34.52",
       },
     },
     "apps/web": {

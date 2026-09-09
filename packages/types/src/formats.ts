@@ -28,8 +28,12 @@ const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2
  */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** An absolute URL with a scheme. `APP_URL` is the one that matters. */
+const URI = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/i;
+
 FormatRegistry.Set('uuid', (value) => UUID.test(value));
 FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
+FormatRegistry.Set('uri', (value) => URI.test(value));
 
-export const REGISTERED_FORMATS = ['uuid', 'date-time', 'email'] as const;
+export const REGISTERED_FORMATS = ['uuid', 'date-time', 'email', 'uri'] as const;

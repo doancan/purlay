@@ -30,6 +30,18 @@ node_modules/
 .pnp.*
 dist/
 .tsbuild/
+
+# Compiled output must never sit beside a source file. A cross-project relative
+# import makes the compiler compute a common root and emit in place; `git add -A`
+# would then commit it. A test fails on this too — this is the second lock.
+apps/**/src/**/*.js
+apps/**/src/**/*.js.map
+apps/**/src/**/*.d.ts
+apps/**/src/**/*.d.ts.map
+packages/**/src/**/*.js
+packages/**/src/**/*.js.map
+packages/**/src/**/*.d.ts
+packages/**/src/**/*.d.ts.map
 build/
 out/
 *.tsbuildinfo
