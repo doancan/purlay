@@ -34,6 +34,8 @@ export const ErrorCode = Type.Union([
   // Authorization — only ever for a resource the caller can already see
   Type.Literal('FORBIDDEN'),
   // Absence, and everything a boundary turns into absence
+  /** No such route. Distinct from a resource that does not exist, or is not yours. */
+  Type.Literal('ROUTE_NOT_FOUND'),
   Type.Literal('WORKSPACE_NOT_FOUND'),
   Type.Literal('CHANNEL_NOT_FOUND'),
   Type.Literal('MESSAGE_NOT_FOUND'),
@@ -67,6 +69,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   FORBIDDEN: 403,
   EMAIL_REQUIRED: 403,
 
+  ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
