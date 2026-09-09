@@ -6,6 +6,24 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09: the stack table has to be true
+
+- **D-59** — **the table says what is installed, and a test agrees.** D-57 stopped the next guess;
+  it did nothing about the ones already in the table. A third column names the packages or compose
+  services that make each row real, and every one is resolved against the manifests and
+  `docker-compose.yml`.
+- **The half that matters is the other direction.** `not yet` names its packages too and they must
+  be **absent**, so a row cannot quietly stay behind once its thing is installed — the same drift
+  pointing the other way, and the one nobody would think to look for. Proved by marking an
+  installed package `not yet`, an absent one installed, and by removing the watcher from an
+  `undecided` row.
+- **It found one immediately.** *"A small CommonMark/GFM renderer"* and *"a sanitising serialiser"*
+  are descriptions, not choices; they had no packages to name and nothing watching for the
+  decision. **O-6** now, decided together in Phase 1 because the client renderer and the server
+  sanitiser have to agree on what they accept.
+- Generating the column was rejected: it would agree with the manifests by construction, which is
+  the question being asked. The column has to be written and then contradicted by a check.
+
 ### Implementation — 2026-09-09: one command, two processes
 
 - **`bun run dev` starts both.** It delegates to each workspace's own `dev` rather than repeating
