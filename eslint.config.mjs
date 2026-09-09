@@ -136,6 +136,36 @@ export default defineConfig([
     extends: [tseslint.configs.disableTypeChecked],
   },
 
+  // A service takes its executor as an argument — a `Kysely` or a `Transaction`,
+  // indistinguishable to the caller. One that reaches for a handle of its own
+  // cannot be run inside a rolled-back transaction, which is how every
+  // integration test isolates itself. (D-46)
+  {
+    files: ['apps/api/src/modules/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/ingress/**', '**/realtime/**', 'elysia', 'elysia/*'],
+              message:
+                'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
+            },
+          ],
+          paths: [
+            {
+              name: '@purlay/db',
+              importNames: ['createDatabase'],
+              message:
+                'Take the executor as an argument instead. A service that opens its own connection cannot be tested inside a transaction. (D-46)',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Command-line entry points. Their output *is* their interface, so the ban on
   // `console` — which exists because application logging goes through the
   // structured logger (ARCHITECTURE.md §10) — does not apply. D-30 puts every

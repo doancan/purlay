@@ -7,6 +7,7 @@
  */
 export { createDatabase, type DatabaseOptions, type Executor } from './client';
 export { createMigrator, migrateToLatest, MIGRATIONS_DIRECTORY } from './migrator';
+export { closeIntegrationDatabase, integrationDatabase, withRollback } from './testing';
 export type * from './schema';
 
 /**

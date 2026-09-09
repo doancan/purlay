@@ -14,8 +14,18 @@ pr="${1:?usage: wait-for-checks.sh <pr-number> [expected-count]}"
 expected="${2:-2}"
 repo="${REPO:-doancan/purlay}"
 
+# The checks must belong to the commit that was pushed. Without that, a rollup
+# left over from the previous commit satisfies every other condition and reports
+# a result for work that was never tested — the third variant of this mistake,
+# and the second inside the script written to prevent it.
+head=$(git rev-parse HEAD)
+
 for _ in $(seq 1 80); do
-  json=$(gh pr view "$pr" -R "$repo" --json statusCheckRollup)
+  json=$(gh pr view "$pr" -R "$repo" --json statusCheckRollup,headRefOid)
+  if [ "$(jq -r '.headRefOid' <<<"$json")" != "$head" ]; then
+    sleep 5
+    continue
+  fi
   total=$(jq '[.statusCheckRollup[]] | length' <<<"$json")
   done_=$(jq '[.statusCheckRollup[] | select(.conclusion != "" and .conclusion != null)] | length' <<<"$json")
   if [ "$total" -ge "$expected" ] && [ "$total" -eq "$done_" ]; then

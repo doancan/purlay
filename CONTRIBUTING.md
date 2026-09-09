@@ -67,6 +67,7 @@ be healthy).
 |---|---|---|
 | `bun run verify` | nothing | Everything that can be checked without infrastructure — typecheck (both compilers), lint, format, tests, the enforcement demonstration, the document consistency check, and that `.env.example` still matches the loader |
 | `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
+| `bun run test:integration` | a database | The tests that exercise real SQL, each inside a transaction that is rolled back (D-46). **They refuse rather than skip** when there is no database — a suite that quietly runs nothing looks exactly like one where everything passed |
 
 **The rest of the commands**, so they are discoverable rather than folklore:
 

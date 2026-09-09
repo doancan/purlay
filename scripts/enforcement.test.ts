@@ -159,3 +159,51 @@ describe('build output stays outside the source tree', () => {
     expect(found.stdout.toString().trim()).toBe('');
   });
 });
+
+/**
+ * Integration tests are selected by name, and a name is a fragile thing to
+ * depend on. The dangerous direction is silence: a file that needs a database
+ * but whose describe does not start with the marker simply never runs, and the
+ * suite stays green while proving nothing.
+ *
+ * So the convention is a rule with a check, rather than a convention.
+ */
+// Deliberately not named with the marker: this check needs no database, and a
+// name starting with it would pull it into the integration run — a filter
+// matching something it was not meant to match.
+describe('selecting the integration tests reliably', () => {
+  const files = Bun.spawnSync([
+    'bash',
+    '-lc',
+    "find apps packages -name '*.integration.test.ts' -not -path '*/node_modules/*'",
+  ])
+    .stdout.toString()
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  test('there is at least one, so the check is not vacuous', () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  for (const file of files) {
+    test(`${file} opens with the marker the runner filters on`, () => {
+      const source = readFileSync(file, 'utf8');
+      const describes = [...source.matchAll(/^describe\(\s*['"`]([^'"`]+)/gm)].map(
+        (match) => match[1] ?? '',
+      );
+      expect(describes.length).toBeGreaterThan(0);
+      for (const name of describes) {
+        expect(name.startsWith('integration')).toBe(true);
+      }
+    });
+  }
+
+  test('the fast run excludes them, so it needs no infrastructure', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts['test']).toContain('*.integration.test.ts');
+    expect(pkg.scripts['test:integration']).toContain('^integration');
+  });
+});
