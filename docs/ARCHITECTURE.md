@@ -24,30 +24,37 @@
 
 ## 2. Stack
 
-| Layer | Choice | Cost we accepted |
-|---|---|---|
-| Monorepo | Bun workspaces | No task graph and no remote cache: a pipeline that repeats work is the trigger to add one (D-55) |
-| Logging | `pino` | Named here because §10 mandates structured JSON logging and no document named the tool (D-44) |
-| i18n | typed message catalogues + `Intl` | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
-| Runtime | Bun | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
-| HTTP + WS | ElysiaJS | Smaller community than Express/Fastify; docs move fast. **The highest-risk choice now that the cloud carries an uptime commitment** — Hono is the written fallback with a four-week trigger (D-20) |
-| Database | PostgreSQL, latest stable major | Ships a native `uuidv7()` we deliberately do not use — D-8 needs the id client-side |
-| Query builder | Kysely | No migration tooling and no relation loading; we write SQL and joins by hand |
-| Validation | TypeBox | Shared with Elysia's schema layer, so one definition validates and types |
-| Web | React + Vite, single-page with a **prerendered shell** | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
-| UI primitives | Radix, for dialog · menu · combobox · tooltip · popover only | One package per primitive so only what is used ships; everything else is written here (D-52) |
-| Component tests | `bun test` + `happy-dom` + Testing Library | Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
-| Browser tests | Playwright + `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
-| Styling | Tailwind CSS | Verbose markup; arbitrary values prohibited, extend the theme instead |
-| Server state | TanStack Query | (D-18) |
-| Realtime state | Zustand | (D-18) |
-| Object storage | S3-compatible (MinIO local) | An extra service locally; filesystem driver exists for simple self-hosts |
-| Server markdown | `unified` / `remark` + sanitising serialiser | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
-| Client markdown | a small CommonMark/GFM renderer | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
-| Highlighting | Shiki, grammars loaded lazily | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
-| Thumbnails | to be confirmed against Bun in Phase 0 | Native image libraries are Bun's most common incompatibility — a Phase 0 spike, not a Phase 1 surprise |
+| Layer | Choice | In the repo | Cost we accepted |
+|---|---|---|---|
+| Monorepo | Bun workspaces | built in | No task graph and no remote cache: a pipeline that repeats work is the trigger to add one (D-55) |
+| Logging | `pino` | not yet · `pino` | Named here because §10 mandates structured JSON logging and no document named the tool (D-44) |
+| i18n | typed message catalogues + `Intl` | none, on purpose | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
+| Runtime | Bun | built in | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
+| HTTP + WS | ElysiaJS | `elysia` | Smaller community than Express/Fastify; docs move fast. **The highest-risk choice now that the cloud carries an uptime commitment** — Hono is the written fallback with a four-week trigger (D-20) |
+| Database | PostgreSQL, latest stable major | `postgres` | Ships a native `uuidv7()` we deliberately do not use — D-8 needs the id client-side |
+| Query builder | Kysely | `kysely`, `pg` | No migration tooling and no relation loading; we write SQL and joins by hand |
+| Validation | TypeBox | `@sinclair/typebox` | Shared with Elysia's schema layer, so one definition validates and types |
+| Web | React + Vite, single-page with a **prerendered shell** | `react`, `react-dom`, `vite` | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
+| UI primitives | Radix, for dialog · menu · combobox · tooltip · popover only | not yet · `@radix-ui/*` | One package per primitive so only what is used ships; everything else is written here (D-52) |
+| Component tests | `bun test` + `happy-dom` + Testing Library | `happy-dom`, `@happy-dom/global-registrator`, `@testing-library/react` | Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
+| Browser tests | Playwright + `@axe-core/playwright` | not yet · `playwright`, `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
+| Styling | Tailwind CSS | `tailwindcss`, `@tailwindcss/vite` | Verbose markup; arbitrary values prohibited, extend the theme instead |
+| Server state | TanStack Query | not yet · `@tanstack/react-query` | (D-18) |
+| Realtime state | Zustand | not yet · `zustand` | (D-18) |
+| Object storage | S3-compatible (MinIO local) | `minio` | An extra service locally; filesystem driver exists for simple self-hosts |
+| Server markdown | `unified` / `remark` + sanitising serialiser | not yet · `unified` | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
+| Client markdown | a small CommonMark/GFM renderer | undecided · O-6 | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
+| Highlighting | Shiki, grammars loaded lazily | not yet · `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
+| Thumbnails | to be confirmed against Bun in Phase 0 | undecided · #6 | Native image libraries are Bun's most common incompatibility — a Phase 0 spike, not a Phase 1 surprise |
 
 Full rationale and rejected alternatives: `DECISIONS.md` D-20.
+
+**The third column is checked.** `installed` is not a word here — a cell names the packages or
+compose services that make the row real, and a test resolves every one of them. `not yet` names
+them too, and the test requires them to be **absent**, so a row cannot quietly stay behind after
+its thing is installed. `undecided` means no package has been chosen and must cite the issue or
+open question that will choose it. Turborepo sat in this table for months because there was no
+such column. (D-59)
 
 **No version numbers here, on purpose.** A version is a fact, and its home is the manifest that
 installs it — `package.json`, `bun.lock`, `docker-compose.yml`. A table that also carries the
