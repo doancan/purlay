@@ -30,8 +30,9 @@ exists. This applies to every workspace-scoped route without exception. (D-21)
 { "data": [ /* … */ ], "nextCursor": "0199155c-6200-7b7f-…" }  // null when exhausted
 ```
 
-**Errors.** One shape, always. `code` is stable and machine-readable; `message` is for humans
-and may change.
+**Errors.** One shape, always. `code` is a **discriminated union declared in `@purlay/types`** —
+stable, machine-readable and exhaustively handleable; adding one breaks any switch that does not
+account for it. `message` is for humans and may change. (D-47)
 
 ```jsonc
 { "error": { "code": "CHANNEL_NOT_FOUND", "message": "…", "details": {} } }

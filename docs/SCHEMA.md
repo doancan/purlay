@@ -702,9 +702,15 @@ traffic.
 
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
-Hand-written to match the SQL above. Kysely does no runtime reflection, so these types and the
-migrations are two halves of one contract: **changing one without the other is the single most
-likely way to break this project.** A schema-drift test compares them in CI. (D-20, D-21)
+**Generated** by `kysely-codegen` from a database with every migration applied, and committed so
+that typechecking never needs a running database. The migrations are the single source; the types
+are derived, so drift is not detected — it is impossible. CI regenerates and requires an empty
+diff. (D-45)
+
+The shape below is what the generator produces once the `CreatedAt`, `UpdatedAt` and `Json<T>`
+overrides are configured. It is reproduced here because this document is where the data model is
+read, **not** because it is maintained here: editing it by hand is a defect the CI check will
+reject.
 
 ```typescript
 import type { Generated, ColumnType, Selectable, Insertable, Updateable } from 'kysely';

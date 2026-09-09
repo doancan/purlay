@@ -6,6 +6,39 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09 (third pass): making the rules executable
+
+Forty-four decisions and eleven invariants, and **not one of them enforced by anything but
+reading**. That is the mechanism by which a well-specified project quietly becomes an ordinary
+one: the documents stay true and the code stops matching them, one reasonable exception at a time.
+This pass closes that, and it is the last one before code.
+
+- **D-45** — the Kysely types are **generated** from the applied migrations, not hand-written.
+  `SCHEMA.md` §10 previously admitted to a hand-maintained copy policed by a drift test, which is
+  the exact trade the ownership rule tells us not to make — and weaker than it looks, since a
+  drift test only catches what someone thought to compare. Generation makes drift impossible
+  rather than detectable. D-20's rejection of an ORM does not apply: code generation is build-time.
+- **D-46** — integration tests run in **one transaction per test, rolled back**, with a template
+  database for the cases that cannot. The consequence is architectural and is why it could not
+  wait: **every service takes its executor as an argument**, so a service reaching for a
+  module-level database handle is now a lint failure. Also written down: a flaky test is
+  quarantined the day it appears and fixed or deleted within one working day, because a suite
+  people learn to re-run has stopped being a gate.
+- **D-47** — **a rule that is not mechanically enforced is not a rule.** The first code written is
+  the enforcement layer, and its acceptance is a demonstration: a pull request containing `any`
+  must go red. `strict: true` becomes the floor rather than the ceiling
+  (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`); lint rules become type-aware, which
+  closes the likeliest defect in this architecture — a transaction whose `await` was forgotten;
+  the layering rule becomes a real lint configuration; the documents' invariants become
+  architecture fitness tests; `main` gets branch protection **that applies to the author of this
+  entry, who pushed to it directly four times while writing these documents**; `AppError` codes
+  become a discriminated union instead of free text; and request-id logging exists from the first
+  handler rather than from the phase that needs it.
+
+  Rejected in the same decision, so the effort goes where it pays: mutation testing, a global
+  coverage target, DDD ceremony, pre-commit hooks as the authority, and tuning a build graph with
+  nothing yet to build.
+
 ### Specification — 2026-09-09 (second pass): the product gained a cloud
 
 The founding decision said *not a SaaS*. It now ships two ways, and that reopened everything

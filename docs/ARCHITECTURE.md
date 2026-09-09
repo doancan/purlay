@@ -491,12 +491,19 @@ never public URLs. Images are downscaled and a thumbnail is stored alongside.
 
 ## 10. Errors, Observability, Testing
 
-**Errors.** One `AppError` type with a stable machine-readable `code`. Never leak internals to
-the client; never swallow an error to make a code path look clean. A caught error is either
-handled or re-thrown — logging and continuing is prohibited.
+**Errors.** One `AppError` type whose `code` is a **discriminated union in `@purlay/types`**, not
+a free string — so a client can handle it exhaustively and adding a code breaks the switch that
+forgot it (D-47). Never leak internals to the client; never swallow an error to make a code path
+look clean. A caught error is either handled or re-thrown — logging and continuing is prohibited.
 
-**Logging.** Structured JSON with a request id that flows through HTTP, WS and service calls.
+**Logging.** Structured JSON (`pino`) with a request id that flows through HTTP, WS and service
+calls **from the first handler** — threading it through afterwards touches every signature (D-47).
 Never logged: session tokens, `access_token_encrypted`, message content, email addresses.
+
+**Executors are arguments.** Every service and repository takes its `Kysely<Database>` or
+`Transaction<Database>` as a parameter rather than reaching for a module-level handle. This is what
+makes one-transaction-per-test possible, and it is enforced by the same lint boundary as the
+layering rule. (D-46)
 
 **Health.** `/health` (liveness) and `/health/ready` (database reachable, migrations applied).
 
@@ -511,7 +518,8 @@ Never logged: session tokens, `access_token_encrypted`, message content, email a
 | Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) |
 | Permission | Every role-gated action, per role |
 | Realtime | Two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency |
-| Schema drift | Kysely types match the applied migrations |
+| Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) |
+| Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) |
 | Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) |
 | Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); erasure never removes a message (I-11) |
 

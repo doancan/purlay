@@ -23,15 +23,16 @@ the first four drafts of this project ended up contradicting each other at the s
    `ChannelContext` (§7.5). Never hand-write `where workspace_id = …` at a call site — obtain
    the context from the guard. A cross-tenant leak is a critical-severity bug.
    Cross-tenant access returns **404, never 403**: a 403 confirms the resource exists.
-3. **No `any`.** `strict: true` everywhere. Use `unknown` with TypeBox narrowing at every
-   boundary. Every function has an explicit return type.
+3. **No `any`.** `strict: true` is the floor, not the ceiling — `noUncheckedIndexedAccess` and
+   `exactOptionalPropertyTypes` are on, and the lint rules are type-aware (D-47). Use `unknown`
+   with TypeBox narrowing at every boundary. Every function has an explicit return type.
 4. **Contracts live in `@purlay/types`.** No ad-hoc DTOs, event shapes or response types inside
    an app. A shape defined twice will diverge.
 5. **Database access lives in `@purlay/db`.** Kysely is the only query builder. No ORM, no
    runtime reflection.
-6. **Migrations are append-only.** Never edit an applied migration. New file, ordered, with the
-   Kysely types in `packages/db/src/schema.ts` updated in the same commit — they are two halves
-   of one contract and the schema-drift test will catch you.
+6. **Migrations are append-only.** Never edit an applied migration. New file, ordered, and then
+   **regenerate** `packages/db/src/schema.ts` — it is derived from the migrations, never hand-
+   edited, and CI fails on any diff between the committed file and a fresh generation. (D-45)
 7. **Soft deletion never cascades.** `deleted_at` plus a tombstone. Content is not erased.
    (D-9)
 8. **`messages.id` is an application-generated UUIDv7.** Never `gen_random_uuid()`, never a
@@ -94,7 +95,11 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 
 ## 5. Testing
 
-Mandatory. `typecheck` + `lint` + `test` gate every merge.
+Mandatory. `typecheck` + `lint` + `test` gate every merge, and **CI is the only authority on
+whether they pass** — a claim in a pull request description is not evidence (D-47).
+
+`main` is protected: no direct pushes, required status checks, linear history. One issue, one
+branch, one pull request.
 
 | Required | For |
 |---|---|
