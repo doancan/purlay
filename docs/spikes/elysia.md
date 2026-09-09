@@ -60,6 +60,19 @@ what `API.md` §1 already requires.
 silently dropped: `Type.Object` does not set `additionalProperties: false` and the framework does
 not add it. Closed by D-57 at the contract, not per route.
 
+## The socket, measured a second time (while building it)
+
+- **`beforeHandle` runs twice per connection.** Once for the route, once for the upgrade. It is
+  idempotent here, so the cost is a second session lookup per connect, not a defect — recorded
+  because a check with a side effect placed there would run twice.
+- **`ws.data.request` is available in `open`.** The connection can therefore re-derive who it
+  belongs to without carrying a value out of the handshake, which is framework plumbing that would
+  be verified once and then quietly change.
+- **A JSON payload is already parsed by the time `message` receives it** — `typeof raw` is
+  `object`, not `string`. A non-JSON payload arrives as a string. The router accepts both, and the
+  64 KB frame cap cannot be enforced from there for the JSON case (issue #174).
+- **`maxPayloadLength` was not verified.** The probe hung and was abandoned rather than guessed at.
+
 ## Two things worth knowing
 
 **There is one TypeBox, not two.** The framework declares `@sinclair/typebox` as a peer dependency
