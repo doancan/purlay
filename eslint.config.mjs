@@ -136,6 +136,15 @@ export default defineConfig([
     extends: [tseslint.configs.disableTypeChecked],
   },
 
+  // Command-line entry points. Their output *is* their interface, so the ban on
+  // `console` — which exists because application logging goes through the
+  // structured logger (ARCHITECTURE.md §10) — does not apply. D-30 puts every
+  // background job here, so this is a place rather than an exception.
+  {
+    files: ['**/src/cli/**/*.ts'],
+    rules: { 'no-console': 'off' },
+  },
+
   // Tests may reach further, but they may not weaken the type rules.
   {
     files: ['**/*.test.ts', 'scripts/**/*.ts'],

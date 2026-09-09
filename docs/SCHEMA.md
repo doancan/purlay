@@ -714,233 +714,37 @@ read, **not** because it is maintained here: editing it by hand is a defect the 
 reject.
 
 ```typescript
-import type { Generated, ColumnType, Selectable, Insertable, Updateable } from 'kysely';
-
-/** Written once, never updated. */
-type CreatedAt = ColumnType<Date, Date | string | undefined, never>;
-/** Set by the database, updatable by the application. */
-type UpdatedAt = ColumnType<Date, Date | string | undefined, Date | string>;
-/** JSONB: object on read, serialized string on write. */
-type Json<T> = ColumnType<T, string, string>;
-
-export type UserRole          = 'owner' | 'admin' | 'member';
-export type ChannelType       = 'public' | 'private' | 'direct_message';
-export type MessageType       = 'text' | 'system_event';
-export type AttachmentKind    = 'image' | 'video' | 'audio' | 'file';
-export type NotificationLevel = 'all' | 'mentions' | 'none';
-export type NotificationType  =
-  | 'mention' | 'direct_message' | 'thread_reply' | 'thread_resolved';
-
-export interface UsersTable {
-  id: Generated<string>;
-  github_id: number | null;
-  email: string;
-  username: string;
-  display_name: string;
-  avatar_url: string | null;
-  last_seen_at: Date | null;
-  created_at: CreatedAt;
-  updated_at: UpdatedAt;
-  deleted_at: Date | null;
+// packages/db/src/schema.ts — generated, never edited
+export interface DB {
+  users: Users;
+  sessions: Sessions;
+  workspaces: Workspaces;
+  workspace_members: WorkspaceMembers;
+  channels: Channels;
+  messages: Messages;
+  channel_members: ChannelMembers;
+  // …one entry per applied migration's tables
 }
-
-export interface SessionsTable {
-  id: Generated<string>;
-  user_id: string;
-  token_hash: string;
-  user_agent: string | null;
-  ip_address: string | null;
-  created_at: CreatedAt;
-  last_used_at: UpdatedAt;
-  expires_at: Date;
-  revoked_at: Date | null;
-}
-
-export interface WorkspacesTable {
-  id: Generated<string>;
-  name: string;
-  slug: string;
-  avatar_url: string | null;
-  created_by: string | null;
-  storage_quota_bytes: Generated<string>;   // BIGINT arrives as string
-  storage_used_bytes: Generated<string>;
-  retention_days: number | null;
-  created_at: CreatedAt;
-  updated_at: UpdatedAt;
-  deleted_at: Date | null;
-}
-
-export interface WorkspaceMembersTable {
-  id: Generated<string>;
-  workspace_id: string;
-  user_id: string;
-  role: Generated<UserRole>;
-  is_deep_work_active: Generated<boolean>;
-  deep_work_until: Date | null;
-  joined_at: CreatedAt;
-}
-
-export interface ChannelsTable {
-  id: Generated<string>;
-  workspace_id: string;
-  name: string | null;
-  topic: string | null;
-  type: Generated<ChannelType>;
-  dm_key: string | null;
-  created_by: string | null;
-  last_message_at: Date | null;
-  created_at: CreatedAt;
-  updated_at: UpdatedAt;
-  deleted_at: Date | null;
-}
-
-export interface ChannelMembersTable {
-  id: Generated<string>;
-  channel_id: string;
-  user_id: string;
-  last_read_message_id: string | null;
-  unread_count: Generated<number>;
-  unread_mention_count: Generated<number>;
-  notification_level: Generated<NotificationLevel>;
-  joined_at: CreatedAt;
-}
-
-/**
- * `id` is NOT Generated: the application supplies a UUIDv7 on every insert,
- * which is what makes keyset pagination stable. (D-8)
- */
-export interface MessagesTable {
-  id: string;
-  workspace_id: string;
-  channel_id: string;
-  sender_id: string;
-  parent_id: string | null;
-  thread_reply_count: Generated<number>;
-  thread_last_reply_at: Date | null;
-  resolved_at: Date | null;
-  resolved_by: string | null;
-  content: string;
-  message_type: Generated<MessageType>;
-  metadata: Json<Record<string, unknown>>;
-  edited_at: Date | null;
-  created_at: CreatedAt;
-  updated_at: UpdatedAt;
-  deleted_at: Date | null;
-}
-
-export interface ReactionsTable {
-  id: Generated<string>;
-  message_id: string;
-  user_id: string;
-  emoji: string;
-  created_at: CreatedAt;
-}
-
-export interface AttachmentsTable {
-  id: Generated<string>;
-  workspace_id: string;
-  message_id: string | null;
-  uploader_id: string;
-  storage_key: string;
-  thumbnail_key: string | null;
-  file_name: string;
-  mime_type: string;
-  size_bytes: string;                       // BIGINT
-  kind: Generated<AttachmentKind>;
-  width: number | null;
-  height: number | null;
-  created_at: CreatedAt;
-  deleted_at: Date | null;
-}
-
-export interface MentionsTable {
-  id: Generated<string>;
-  workspace_id: string;
-  channel_id: string;
-  message_id: string;
-  mentioned_user_id: string;
-  created_at: CreatedAt;
-}
-
-export interface NotificationsTable {
-  id: Generated<string>;
-  user_id: string;
-  workspace_id: string;
-  channel_id: string;
-  message_id: string;
-  type: NotificationType;
-  suppressed_by_deep_work: Generated<boolean>;
-  read_at: Date | null;
-  created_at: CreatedAt;
-}
-
-export interface GithubIntegrationsTable {
-  id: Generated<string>;
-  workspace_id: string;
-  installation_id: number | null;
-  access_token_encrypted: string | null;
-  created_by: string | null;
-  created_at: CreatedAt;
-  updated_at: UpdatedAt;
-}
-
-export interface LinkPreviewsTable {
-  url_hash: string;
-  url: string;
-  payload: Json<Record<string, unknown>>;
-  fetched_at: CreatedAt;
-  expires_at: Date;
-}
-
-/** Append-only. There is no Updateable export for this table, on purpose. (D-26) */
-export interface AuditLogTable {
-  id: string;                               // application-supplied UUIDv7
-  workspace_id: string;
-  actor_user_id: string | null;
-  action: string;
-  target_type: string;
-  target_id: string | null;
-  ip_address: string | null;
-  user_agent: string | null;
-  metadata: Json<Record<string, unknown>>;
-  created_at: CreatedAt;
-}
-
-export interface JobRunsTable {
-  job_name: string;
-  last_started_at: Date | null;
-  last_success_at: Date | null;
-  last_duration_ms: number | null;
-  last_error: string | null;
-  consecutive_failures: Generated<number>;
-}
-
-export interface Database {
-  users: UsersTable;
-  sessions: SessionsTable;
-  workspaces: WorkspacesTable;
-  workspace_members: WorkspaceMembersTable;
-  channels: ChannelsTable;
-  channel_members: ChannelMembersTable;
-  messages: MessagesTable;
-  reactions: ReactionsTable;
-  attachments: AttachmentsTable;
-  mentions: MentionsTable;
-  notifications: NotificationsTable;
-  github_integrations: GithubIntegrationsTable;
-  link_previews: LinkPreviewsTable;
-  audit_log: AuditLogTable;
-  job_runs: JobRunsTable;
-}
-
-export type User    = Selectable<UsersTable>;
-export type Message = Selectable<MessagesTable>;
-export type NewMessage    = Insertable<MessagesTable>;
-export type MessageUpdate = Updateable<MessagesTable>;
-
-/** Insert only. Exporting an Updateable here would make the append-only rule optional. */
-export type NewAuditEntry = Insertable<AuditLogTable>;
 ```
+
+The generator names the root interface `DB`; `@purlay/db` re-exports it as `Database`, which is
+the name the rest of the documents use (`ARCHITECTURE.md` §10, D-46). That is an alias, not a
+second definition.
+
+**Three things a reader should know, because the generator's output is not obvious:**
+
+- `BIGINT` arrives as a **string**, not a number — `storage_quota_bytes`, `storage_used_bytes` and
+  `attachments.size_bytes`. JavaScript's number cannot hold the range, so the driver refuses to
+  narrow it.
+- **`messages.id` is not `Generated`.** The column has no default, so the generator types it as
+  required on insert — which is exactly the loud failure D-8 asked for: an insert that forgets the
+  application's UUIDv7 does not compile.
+- `JSONB` columns are a `ColumnType` with different read and write shapes: an object on the way
+  out, a serialised string on the way in.
+
+A full listing is not reproduced here. It would be a copy of a generated file, and the last
+consistency pass spent its time removing exactly that kind of copy. `bun run db:generate`
+regenerates it; CI fails on any diff.
 
 ---
 
