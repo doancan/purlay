@@ -437,3 +437,34 @@ describe('development starts with one command', () => {
     });
   }
 });
+
+/**
+ * Every path the API owns is proxied in development.
+ *
+ * One origin is a decision (D-61), and a path left out of the proxy is that
+ * decision quietly untrue for that path: `/health` answered with the client's
+ * HTML until it was added. The check reads the routes the application registers
+ * and requires the proxy to cover each of their first segments.
+ */
+describe('development serves the one origin it promises', () => {
+  const app = readFileSync('apps/api/src/ingress/http/app.ts', 'utf8');
+  const vite = readFileSync('apps/web/vite.config.ts', 'utf8');
+
+  const served = [...app.matchAll(/\.(?:get|post|put|patch|delete)\('(\/[^']*)'/g)].map(
+    (match) => `/${(match[1] ?? '').split('/')[1] ?? ''}`,
+  );
+  const proxied = [
+    ...(/\[([^\]]*)\]\.map\(\(prefix\)/.exec(vite)?.[1] ?? '').matchAll(/'([^']+)'/g),
+  ].map((match) => match[1] ?? '');
+
+  test('the application serves paths, and the proxy lists some', () => {
+    expect(served.length).toBeGreaterThan(2);
+    expect(proxied.length).toBeGreaterThan(2);
+  });
+
+  for (const prefix of [...new Set(served)]) {
+    test(`${prefix} reaches the API through the development proxy`, () => {
+      expect(proxied).toContain(prefix);
+    });
+  }
+});

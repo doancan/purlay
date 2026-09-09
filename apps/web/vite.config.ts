@@ -25,8 +25,12 @@ export default defineConfig({
     // The browser talks to one origin, in development as in production (D-61).
     // Cookies, redirect URIs and the socket's `Origin` are exactly what cannot be
     // tested on a machine whose topology differs from the deployed one.
+    //
+    // Every path the API owns is listed. Leaving one out recreates the difference
+    // this exists to remove, one path at a time — `/health` was missing and
+    // answered with the client's HTML.
     proxy: Object.fromEntries(
-      ['/auth', '/api', '/ws'].map((prefix) => [
+      ['/auth', '/api', '/ws', '/health'].map((prefix) => [
         prefix,
         {
           target: `http://localhost:${String(process.env['PORT'] ?? 3001)}`,
