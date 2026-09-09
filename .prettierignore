@@ -1,7 +1,5 @@
-node_modules
-dist
-.tsbuild
-bun.lock
+# Build output and untracked files come from .gitignore, which Prettier is also
+# pointed at. Only prettier-specific exclusions belong here. (single source, D-45 spirit)
 
 # Generated from the migrations; never edited by hand. (D-45)
 packages/db/src/schema.ts
@@ -12,3 +10,4 @@ packages/db/src/schema.ts
 *.md
 LICENSE
 NOTICE
+bun.lock

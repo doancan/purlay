@@ -14,13 +14,14 @@
     "typecheck": "tsc --build --pretty",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
+    "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
     "test": "bun test",
-    "verify": "bun run typecheck && bun run lint && bun test",
+    "verify": "bun run typecheck && bun run lint && bun run format:check && bun test && bun run verify:enforcement",
     "verify:enforcement": "bun run scripts/verify-enforcement.ts"
   },
   "devDependencies": {
+    "@eslint/compat": "^2.1.1",
     "@types/bun": "1.4.2",
     "eslint": "10.10.0",
     "prettier": "3.9.6",

@@ -1,10 +1,18 @@
 // Enforcement, not advice. Every rule here corresponds to a rule the documents
 // state in prose; a rule the build does not check is not a rule. (D-47)
+import { includeIgnoreFile } from '@eslint/compat';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import { fileURLToPath } from 'node:url';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['**/dist/**', '**/node_modules/**', '**/*.d.ts', 'packages/db/src/schema.ts']),
+  // `.gitignore` is the single source for "build output and things not in the
+  // repository". Repeating that list here is how one copy silently falls behind
+  // the other — which is exactly what happened the first time CI ran this.
+  includeIgnoreFile(fileURLToPath(new URL('.gitignore', import.meta.url))),
+
+  // Ignored for lint but tracked in git, so they cannot come from `.gitignore`.
+  globalIgnores(['**/*.d.ts', 'packages/db/src/schema.ts']),
 
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
