@@ -17,15 +17,17 @@
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
     "test": "bun test",
-    "verify": "bun run typecheck && bun run lint && bun run format:check && bun test && bun run verify:enforcement",
-    "verify:enforcement": "bun run scripts/verify-enforcement.ts"
+    "verify": "bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun test && bun run verify:enforcement",
+    "verify:enforcement": "bun run scripts/verify-enforcement.ts",
+    "typecheck:ts6": "tsc6 --build --force --pretty"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
     "@types/bun": "1.4.2",
+    "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "10.10.0",
     "prettier": "3.9.6",
-    "typescript": "6.0.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "8.70.0"
   }
 }
