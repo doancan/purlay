@@ -1,5 +1,9 @@
 {
   "extends": "../config/tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src" },
+  "compilerOptions": {
+    "outDir": "../../.tsbuild/db",
+    "rootDir": "src",
+    "tsBuildInfoFile": "../../.tsbuild/db.tsbuildinfo"
+  },
   "include": ["src/**/*.ts"]
 }

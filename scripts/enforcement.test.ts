@@ -76,3 +76,70 @@ describe('the documents are not reformatted by tooling', () => {
     expect(readFileSync('.prettierignore', 'utf8')).toContain('*.md');
   });
 });
+
+/**
+ * Local green must mean CI green.
+ *
+ * This has already failed twice: once because the linter's ignore list did not
+ * match the one CI produced, and once because `verify` omitted a step CI ran.
+ * Both were invisible locally. Comparing the two lists is cheaper than
+ * rediscovering the difference from a red pipeline.
+ */
+describe('the local verify runs everything CI runs', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  const verify = pkg.scripts['verify'] ?? '';
+
+  // Steps that set the machine up rather than check the code.
+  const setup = /bun install|actions\/|uses:/;
+  const ciCommands = [...workflow.matchAll(/^\s+run:\s*(.+)$/gm)]
+    .map((m) => (m[1] ?? '').trim())
+    .filter((c) => !setup.test(c));
+
+  test('CI actually runs something', () => {
+    expect(ciCommands.length).toBeGreaterThan(3);
+  });
+
+  for (const command of ciCommands) {
+    test(`\`${command}\` is part of \`bun run verify\``, () => {
+      const script = command.replace(/^bun run /, '');
+      const reachable =
+        verify.includes(command) ||
+        verify.includes(`bun run ${script}`) ||
+        Object.values(pkg.scripts).some((s) => s.includes(command));
+      expect(reachable).toBe(true);
+    });
+  }
+});
+
+/**
+ * Build output never lands in a directory a check scans.
+ *
+ * `bun test` found compiled copies of its own test files and ran them twice;
+ * before that, the linter tried to parse its own output. Both were the same
+ * mistake — emitted artifacts sitting inside the source tree — so the invariant
+ * is stated once here rather than remembered per tool.
+ */
+describe('build output stays outside the source tree', () => {
+  const projects = ['packages/types', 'packages/db', 'apps/api', 'apps/web', 'scripts'] as const;
+
+  for (const project of projects) {
+    test(`${project} emits into .tsbuild`, () => {
+      const config = JSON.parse(readFileSync(`${project}/tsconfig.json`, 'utf8')) as {
+        compilerOptions: { outDir?: string };
+      };
+      expect(config.compilerOptions.outDir).toMatch(/\.tsbuild\//);
+    });
+  }
+
+  test('no compiled test file exists under a scanned directory', () => {
+    const found = Bun.spawnSync([
+      'bash',
+      '-lc',
+      "find apps packages scripts -name '*.test.js' -not -path '*/node_modules/*' | head -1",
+    ]);
+    expect(found.stdout.toString().trim()).toBe('');
+  });
+});

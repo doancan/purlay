@@ -16,10 +16,12 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
-    "test": "bun test",
-    "verify": "bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun test && bun run verify:enforcement",
+    "test": "bun test apps packages scripts",
+    "verify": "bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun test && bun run verify:enforcement && bun run check:docs",
     "verify:enforcement": "bun run scripts/verify-enforcement.ts",
-    "typecheck:ts6": "tsc6 --build --force --pretty"
+    "typecheck:ts6": "tsc6 --build --force --pretty",
+    "check:docs": "python3 scripts/check-docs.py",
+    "queue": "bun run scripts/queue.ts"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",

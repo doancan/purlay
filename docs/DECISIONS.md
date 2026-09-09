@@ -314,7 +314,7 @@ reconnect) is a large, separate undertaking and is **not planned**.
 
 ### D-20. Stack confirmed, and its costs written down where they can be seen
 
-Keeping Bun + ElysiaJS + Kysely + PostgreSQL 16 + React 19 + Vite + Tailwind + Zustand. Each is
+Keeping Bun + ElysiaJS + Kysely + PostgreSQL + React + Vite + Tailwind + Zustand. Each is
 defensible for this project.
 
 The problem with the earlier draft was not the choices but the justification: its "Architectural
@@ -1273,7 +1273,7 @@ rests on the gate holding.
 
 ### D-47. A rule that is not mechanically enforced is not a rule
 
-This document contains forty-odd decisions and `SCHEMA.md` eleven invariants. **None of them is
+This document's decisions and `SCHEMA.md`'s invariants number in the dozens. **None of them is
 currently enforced by anything but reading.** That is the mechanism by which a well-specified
 project becomes an ordinary one: the documents stay true and the code stops matching them, one
 reasonable exception at a time.
