@@ -102,14 +102,23 @@ describe('the local verify runs everything CI runs', () => {
     expect(ciCommands.length).toBeGreaterThan(3);
   });
 
+  // Some checks need infrastructure — a database, in particular — and putting
+  // those in `verify` would make the fast loop depend on Docker being up. So the
+  // rule is not "everything is in verify"; it is "everything CI runs, a developer
+  // can run, and knows about". Anything outside `verify` has to be documented.
+  const contributing = readFileSync('CONTRIBUTING.md', 'utf8');
+
   for (const command of ciCommands) {
-    test(`\`${command}\` is part of \`bun run verify\``, () => {
-      const script = command.replace(/^bun run /, '');
-      const reachable =
-        verify.includes(command) ||
-        verify.includes(`bun run ${script}`) ||
-        Object.values(pkg.scripts).some((s) => s.includes(command));
-      expect(reachable).toBe(true);
+    const script = command.replace(/^bun run /, '');
+
+    test(`\`${command}\` is a command a developer can run`, () => {
+      expect(Object.keys(pkg.scripts)).toContain(script);
+    });
+
+    test(`\`${command}\` is either in \`verify\` or documented`, () => {
+      const inVerify = verify.includes(`bun run ${script}`);
+      const documented = contributing.includes(`bun run ${script}`);
+      expect(inVerify || documented).toBe(true);
     });
   }
 });

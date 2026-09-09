@@ -17,7 +17,7 @@
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
     "test": "bun test apps packages scripts",
-    "verify": "bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun test && bun run verify:enforcement && bun run check:docs",
+    "verify": "bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun run test && bun run verify:enforcement && bun run check:docs",
     "verify:enforcement": "bun run scripts/verify-enforcement.ts",
     "typecheck:ts6": "tsc6 --build --force --pretty",
     "check:docs": "python3 scripts/check-docs.py",
@@ -27,7 +27,8 @@
     "db:reset": "docker compose down -v && docker compose up -d --wait",
     "db:logs": "docker compose logs -f",
     "db:migrate": "bun run packages/db/src/cli/migrate.ts",
-    "db:generate": "bun x kysely-codegen --dialect postgres --out-file packages/db/src/schema.ts --exclude-pattern 'kysely_migration*'"
+    "db:generate": "bun x kysely-codegen --dialect postgres --out-file packages/db/src/schema.ts --exclude-pattern 'kysely_migration*'",
+    "db:check": "./scripts/check-schema.sh"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
