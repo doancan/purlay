@@ -134,7 +134,9 @@ purlay/
 │           ├── components/      shared primitives: CodeBlock, Markdown, Avatar
 │           ├── realtime/        socket client, reconnect, replay, Zustand stores
 │           ├── api/             TanStack Query hooks, typed fetch client
-│           └── App.tsx
+│           ├── testing/         the component-test DOM — registered here, never globally
+│           ├── main.tsx         the entry: mounts the shell
+│           └── shell.tsx        the application shell
 │
 ├── packages/
 │   ├── types/                   models.ts · events.ts · api.ts — the contract

@@ -190,6 +190,30 @@ export default defineConfig([
     rules: { 'no-console': 'off' },
   },
 
+  // The global `screen` binds to `document.body` when `@testing-library/dom` is
+  // evaluated, which happens before a component test's DOM registration can run.
+  // It therefore throws a confusing error rather than failing to import. The
+  // queries `render` returns work, are scoped to what was rendered, and are the
+  // better habit. See `apps/web/src/testing/dom.ts` for the measurement.
+  {
+    files: ['apps/web/**/*.test.tsx', 'apps/web/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@testing-library/react',
+              importNames: ['screen'],
+              message:
+                'Use the queries `render` returns. The global `screen` binds before the test DOM exists and throws. (apps/web/src/testing/dom.ts)',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Tests may reach further, but they may not weaken the type rules.
   {
     files: ['**/*.test.ts', 'scripts/**/*.ts'],

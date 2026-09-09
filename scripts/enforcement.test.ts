@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ESLint } from 'eslint';
 import { readFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 
 const base = JSON.parse(readFileSync('packages/config/tsconfig.base.json', 'utf8')) as {
   compilerOptions: Record<string, unknown>;
@@ -185,7 +185,7 @@ describe('build output stays outside the source tree', () => {
       'bash',
       '-lc',
       "find apps packages scripts \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' " +
-        "-o -name '*.d.ts.map' \\) -not -path '*/node_modules/*'",
+        "-o -name '*.d.ts.map' \\) -not -path '*/node_modules/*' -not -path '*/dist/*'",
     ]);
     expect(found.stdout.toString().trim()).toBe('');
   });
@@ -256,14 +256,25 @@ describe('selecting the integration tests reliably', () => {
  * reimplementing glob semantics and trusting the reimplementation.
  */
 describe('the compiler sees every file the linter does', () => {
-  const PROJECTS = ['apps/api', 'apps/web', 'packages/db', 'packages/types', 'scripts'] as const;
+  /**
+   * Derived from the solution config, not listed. A hand-written list is a
+   * second copy, and this one fell behind within the hour: a tooling project
+   * was added and the check reported a file that nothing compiled.
+   */
+  const solution = JSON.parse(readFileSync('tsconfig.json', 'utf8')) as {
+    references: readonly { path: string }[];
+  };
+  const PROJECTS = solution.references.map((reference) => reference.path);
 
   const compiled = new Set<string>();
   for (const project of PROJECTS) {
     const shown = Bun.spawnSync(['bun', 'x', 'tsc', '--showConfig', '-p', project]);
     const config = JSON.parse(shown.stdout.toString()) as { files?: readonly string[] };
+    // A reference may name a directory or a config file; `files` are relative
+    // to whichever directory that config lives in.
+    const base = project.endsWith('.json') ? dirname(project) : project;
     for (const file of config.files ?? []) {
-      compiled.add(resolve(project, file));
+      compiled.add(resolve(base, file));
     }
   }
 
@@ -336,4 +347,54 @@ describe('dependencies are pinned, not ranged', () => {
       expect(ranged).toEqual([]);
     });
   }
+});
+
+/**
+ * A script never reaches the network for a tool the repository pins.
+ *
+ * `bun x vite` from the repository root silently downloaded **vite@latest** and
+ * built with it, because `vite` is installed under `apps/web` and `bun x` found
+ * nothing locally. It worked, which is the problem: the build succeeded with an
+ * unpinned version and said nothing. That is the same failure D-56 removed from
+ * the documents, one layer down — a version nobody chose, used without a trace.
+ *
+ * So a script may only `bun x` something the manifest it lives in installs.
+ */
+describe('scripts run the versions this repository pins', () => {
+  const manifests = Bun.spawnSync([
+    'bash',
+    '-lc',
+    'ls package.json apps/*/package.json packages/*/package.json',
+  ])
+    .stdout.toString()
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  const invocations: (readonly [string, string, string])[] = [];
+  for (const manifest of manifests) {
+    const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as {
+      scripts?: Record<string, string>;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const installed = new Set([
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.devDependencies ?? {}),
+    ]);
+    for (const [name, command] of Object.entries(pkg.scripts ?? {})) {
+      for (const match of command.matchAll(/\bbun\s+x\s+([@\w][\w@/.-]*)/g)) {
+        const tool = match[1] ?? '';
+        if (!installed.has(tool)) invocations.push([manifest, name, tool]);
+      }
+    }
+  }
+
+  test('there are scripts to check', () => {
+    expect(manifests.length).toBeGreaterThan(3);
+  });
+
+  test('every `bun x` names a tool the same manifest installs', () => {
+    expect(invocations.map(([m, s, t]) => `${m} → ${s} → ${t}`)).toEqual([]);
+  });
 });

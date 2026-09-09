@@ -73,6 +73,15 @@ const VIOLATIONS: readonly Violation[] = [
     path: 'apps/api/src/platform/__enforcement__.ts',
     source: '// @ts-ignore\nexport const broken: number = "not a number";\n',
   },
+  // Reaching for the global `screen` in a component test produces a confusing
+  // runtime error rather than a compile failure, so lint has to be what stops it.
+  {
+    rule: 'the global `screen` is refused in component tests (docs/spikes/web-client.md)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/web/src/__enforcement__.test.tsx',
+    source:
+      "import { screen } from '@testing-library/react';\n\nexport const use = (): unknown => screen;\n",
+  },
   // The type makes a context unforgeable; nothing in a type system stops an
   // assertion. This is the hole, and the rule that closes it. (D-21, D-54)
   {

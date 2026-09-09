@@ -6,6 +6,28 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: the client boots
+
+- **`bun run dev:web` serves and `bun run build:web` builds.** Vite, React and Tailwind at exact
+  pins, wired the way the spike said Tailwind wants — its plugin and one line of CSS, no config
+  file and no content array. Proved by the emitted rules, not by a class name in the markup:
+  `.bg-slate-950{background-color:var(--color-slate-950)}`.
+- **The measured floor: ~60 KB gzipped**, a quarter of the 250 KB budget, before a product screen
+  exists. That number now sits beside the budget in `PRD.md` §5 rather than in a spike nobody
+  re-reads. It is *smaller* than the spike's 82 KB because the spike installed things the client
+  does not need yet — which is D-57 paying for itself.
+- **The component-test DOM is registered per test file, not globally.** A `bunfig.toml` preload
+  would install a DOM into every suite in the repository, including the ones where a dependency
+  that feature-detects `window` would quietly take its browser path. The cost is that the global
+  `screen` cannot work — `@testing-library/dom` binds it before any test file runs — so lint
+  refuses that import and points at the measurement.
+- **`bun x` from the wrong directory silently downloaded an unpinned Vite** and built with it. It
+  succeeded, which is the problem. A check now refuses a script naming a tool its own manifest does
+  not install.
+- **The list of TypeScript projects is derived from the solution config**, not written down. The
+  hand-written one fell behind within the hour: a tooling project was added and the check that
+  compares what the compiler sees to what the linter sees reported a file nothing compiled.
+
 ### Implementation — 2026-09-09: the API is a process
 
 - **It serves.** `bun run dev:api` starts ElysiaJS, `GET /health` answers `200`, an unknown route

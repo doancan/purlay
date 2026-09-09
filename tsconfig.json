@@ -15,6 +15,9 @@
     },
     {
       "path": "scripts"
+    },
+    {
+      "path": "apps/web/tsconfig.tooling.json"
     }
   ]
 }
