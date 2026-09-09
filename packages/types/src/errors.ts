@@ -9,6 +9,8 @@
  * A code is added when the endpoint that raises it is built, not before.
  */
 
+import { Type, type Static } from '@sinclair/typebox';
+
 /** Statuses this API is allowed to return. (`API.md` §1) */
 export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500;
 
@@ -20,31 +22,33 @@ export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500;
  * another workspace, or in a channel the caller cannot see, resolves to the
  * `*_NOT_FOUND` code for that resource. (D-21, D-34)
  */
-export type ErrorCode =
+export const ErrorCode = Type.Union([
   // Validation
-  | 'VALIDATION_FAILED'
-  | 'INVALID_MESSAGE_ID'
+  Type.Literal('VALIDATION_FAILED'),
+  Type.Literal('INVALID_MESSAGE_ID'),
   // Authentication
-  | 'UNAUTHENTICATED'
-  | 'SESSION_EXPIRED'
-  | 'OAUTH_STATE_INVALID'
-  | 'EMAIL_REQUIRED'
+  Type.Literal('UNAUTHENTICATED'),
+  Type.Literal('SESSION_EXPIRED'),
+  Type.Literal('OAUTH_STATE_INVALID'),
+  Type.Literal('EMAIL_REQUIRED'),
   // Authorization — only ever for a resource the caller can already see
-  | 'FORBIDDEN'
+  Type.Literal('FORBIDDEN'),
   // Absence, and everything a boundary turns into absence
-  | 'WORKSPACE_NOT_FOUND'
-  | 'CHANNEL_NOT_FOUND'
-  | 'MESSAGE_NOT_FOUND'
-  | 'USER_NOT_FOUND'
+  Type.Literal('WORKSPACE_NOT_FOUND'),
+  Type.Literal('CHANNEL_NOT_FOUND'),
+  Type.Literal('MESSAGE_NOT_FOUND'),
+  Type.Literal('USER_NOT_FOUND'),
   // Conflict
-  | 'CHANNEL_NAME_TAKEN'
-  | 'ALREADY_A_MEMBER'
-  | 'MESSAGE_ID_CONFLICT'
-  | 'ACCOUNT_EMAIL_CONFLICT'
+  Type.Literal('CHANNEL_NAME_TAKEN'),
+  Type.Literal('ALREADY_A_MEMBER'),
+  Type.Literal('MESSAGE_ID_CONFLICT'),
+  Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
   // Limits
-  | 'RATE_LIMITED'
+  Type.Literal('RATE_LIMITED'),
   // Anything we failed to anticipate. Never carries detail to the client.
-  | 'INTERNAL';
+  Type.Literal('INTERNAL'),
+]);
+export type ErrorCode = Static<typeof ErrorCode>;
 
 /**
  * The status each code is returned with.
@@ -79,9 +83,10 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 };
 
 /** Which field failed, and why, in language a person can act on. */
-export interface ValidationDetails {
-  readonly fields: Readonly<Record<string, string>>;
-}
+export const ValidationDetails = Type.Object({
+  fields: Type.Record(Type.String(), Type.String()),
+});
+export type ValidationDetails = Static<typeof ValidationDetails>;
 
 /**
  * The error body, discriminated on `code`.
@@ -90,18 +95,24 @@ export interface ValidationDetails {
  * `API.md` specifies details for. Others gain a member here when a real endpoint
  * needs one — a speculative payload is a shape nobody validates.
  */
-export type AppErrorBody =
-  | {
-      readonly code: 'VALIDATION_FAILED';
-      readonly message: string;
-      readonly details: ValidationDetails;
-    }
-  | { readonly code: Exclude<ErrorCode, 'VALIDATION_FAILED'>; readonly message: string };
+export const AppErrorBody = Type.Union([
+  Type.Object({
+    code: Type.Literal('VALIDATION_FAILED'),
+    message: Type.String(),
+    details: ValidationDetails,
+  }),
+  Type.Object({
+    // Derived, so the codes are listed once. A new code lands here automatically
+    // rather than in a second list somebody has to remember to update.
+    code: Type.Exclude(ErrorCode, Type.Literal('VALIDATION_FAILED')),
+    message: Type.String(),
+  }),
+]);
+export type AppErrorBody = Static<typeof AppErrorBody>;
 
 /** The wire shape. One envelope, always. (`API.md` §1) */
-export interface ErrorResponse {
-  readonly error: AppErrorBody;
-}
+export const ErrorResponse = Type.Object({ error: AppErrorBody });
+export type ErrorResponse = Static<typeof ErrorResponse>;
 
 /**
  * `MESSAGE_ID_CONFLICT` deliberately carries no detail: the response must not

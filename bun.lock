@@ -47,6 +47,9 @@
     "packages/types": {
       "name": "@purlay/types",
       "version": "0.0.0",
+      "dependencies": {
+        "@sinclair/typebox": "^0.34.52",
+      },
     },
   },
   "packages": {
@@ -97,6 +100,8 @@
     "@purlay/types": ["@purlay/types@workspace:packages/types"],
 
     "@purlay/web": ["@purlay/web@workspace:apps/web"],
+
+    "@sinclair/typebox": ["@sinclair/typebox@0.34.52", "", {}, "sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw=="],
 
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
