@@ -49,6 +49,11 @@ const VIOLATIONS: readonly Violation[] = [
     source: "import { db } from '@purlay/db';\n\nexport const use = (): unknown => db;\n",
   },
   {
+    rule: 'the browser may not reach for Bun APIs (ARCHITECTURE.md §4)',
+    path: 'apps/web/src/__enforcement__.ts',
+    source: 'export const read = (): unknown => Bun.file("x");\n',
+  },
+  {
     rule: 'ban-ts-comment: @ts-ignore is prohibited (D-47)',
     path: 'apps/api/src/platform/__enforcement__.ts',
     source: '// @ts-ignore\nexport const broken: number = "not a number";\n',
