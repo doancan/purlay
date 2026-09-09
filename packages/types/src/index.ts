@@ -1,15 +1,16 @@
 /**
  * `@purlay/types` — the contract.
  *
- * Models, WebSocket frames and HTTP request/response shapes are defined here and
- * nowhere else. A shape defined in two places will diverge, so an app never
- * declares its own. (ARCHITECTURE.md §1, CONTRIBUTING.md §1.4)
+ * Models, WebSocket frames and HTTP shapes are defined here and nowhere else. A
+ * shape defined in two places will diverge, so an app never declares its own
+ * (`ARCHITECTURE.md` §1, `CONTRIBUTING.md` §1.4).
+ *
+ * Everything is authored once as a TypeBox schema and the TypeScript type is
+ * derived from it, so one definition both validates at runtime and types at
+ * compile time (`ARCHITECTURE.md` §2).
  */
-export type {
-  AppErrorBody,
-  ErrorCode,
-  ErrorResponse,
-  HttpStatus,
-  ValidationDetails,
-} from './errors';
-export { ERROR_STATUS, statusFor } from './errors';
+export * from './formats';
+export * from './errors';
+export * from './models';
+export * from './events';
+export * from './api';
