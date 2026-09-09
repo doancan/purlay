@@ -19,7 +19,7 @@ no message history limit. (`DECISIONS.md` D-1)
 | 5 | **`UX.md`** | How it behaves: layout, thread interaction, keyboard, states | Interaction |
 | 6 | **`API.md`** | The HTTP endpoint contract, per phase | Interface |
 | 7 | **`CONFIG.md`** | Every environment variable, validated at boot | Deployment |
-| 8 | **`ROADMAP.md`** | The ordered task list for the current phase | Execution |
+| 8 | **GitHub Issues & board** | The ordered task list, one issue per task, milestone per version | Execution |
 | — | **`../README.md`** | The public front door for self-hosters | Positioning |
 | — | **`../CONTRIBUTING.md`** | The rules any contributor — human or AI — works under | Practice |
 
@@ -42,7 +42,7 @@ second file is a number that will eventually disagree with itself.
 | Layout, interaction, keyboard model, required states | `UX.md` |
 | HTTP endpoints | `API.md` |
 | Environment variables | `CONFIG.md` |
-| Task breakdown | `ROADMAP.md` |
+| Task breakdown and its ordering | GitHub Issues, milestoned by version (D-32) |
 
 ---
 
@@ -88,7 +88,7 @@ purlay/
 │   ├── types/        the contract: models · events · api  (@purlay/types)
 │   ├── db/           Kysely schema · SQL migrations       (@purlay/db)
 │   └── config/       shared eslint · prettier · tailwind · tsconfig
-├── docs/             PRD · DECISIONS · ARCHITECTURE · SCHEMA · UX · API · CONFIG · ROADMAP · changelog/
+├── docs/             PRD · DECISIONS · ARCHITECTURE · SCHEMA · UX · API · CONFIG · changelog/
 ├── README.md         public front door
 ├── LICENSE           MIT (D-24)
 └── CONTRIBUTING.md   contributor and AI-agent rules
@@ -108,4 +108,4 @@ Exit criterion: two browser tabs, signed in as two different GitHub users, excha
 real time, and the message survives an API restart.
 
 No application code exists yet. The documents above are the specification it will be built
-against. Next steps: `ROADMAP.md`.
+against. What happens next is on the board, not in this repository (D-32).

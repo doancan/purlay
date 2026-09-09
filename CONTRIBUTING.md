@@ -4,7 +4,8 @@ Rules for anyone working in this repository, human or AI.
 
 **Read before writing code.** `docs/OVERVIEW.md` orients you; `docs/DECISIONS.md` is the
 authority on *why*; `docs/PRD.md` fixes scope; `docs/ARCHITECTURE.md` and `docs/SCHEMA.md` fix
-structure and data; `docs/ROADMAP.md` says what is next.
+structure and data. What is next lives in GitHub Issues and the project board, not in a file
+(D-32).
 
 **Conflict rule:** if two documents disagree, `DECISIONS.md` wins and the other is a bug. Fix
 it in the same change. Never work around a documentation contradiction silently — that is how
@@ -114,13 +115,18 @@ in front of you.
 
 1. **Read the contract first.** Check `@purlay/types`. If the shape does not exist, define it
    there before writing any implementation.
-2. **Check the phase.** Is this task in the current phase in `ROADMAP.md`? If not, stop.
+2. **Check the phase.** Is this issue on the current milestone? If not, stop. A milestone is a
+   version: `v0.1.0` is the walking skeleton, `v1.0.0` is the product finished as specified.
 3. **Minimal delta.** Only the code the task requires. Do not refactor unrelated files.
 4. **Update the documents in the same change.** Schema change → `SCHEMA.md`. Protocol change →
    `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in
    `DECISIONS.md`, with what you rejected and why.
 5. **Verify.** `bun run typecheck && bun run lint && bun test`. Paste real output.
 6. **Log it.** Notable changes go to `docs/changelog/changes.md`.
+
+**When is it done?** A task is done when it is typed, tested, and its documentation is accurate
+— not when it runs. A milestone is done when its exit criterion is *demonstrated*, not when the
+issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issues replaced.)
 7. **When the spec is silent, stop and ask.** Do not invent behaviour and do not guess at an
    undefined edge case. The open questions are listed in `DECISIONS.md` Part D — if your task
    hits one, that is a decision to be made, not a gap to be filled quietly.

@@ -1,0 +1,48 @@
+name: Feature
+description: User-visible capability. Must displace something, not merely add.
+title: "Short imperative title, 50–70 characters"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Subtract before adding.** Every feature must displace a feature the target team actually
+        uses; parity is not a reason (`docs/DECISIONS.md` D-2). Check `docs/PRD.md` §6 first — a
+        permanent non-goal is refused, not deferred, and refusing them *is* the product.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What a 5–30 person engineering team cannot do today, stated without naming a solution.
+    validations: { required: true }
+  - type: textarea
+    id: displaces
+    attributes:
+      label: What this displaces
+      description: The thing it replaces or removes. "Nothing, it is additive" is a reason to close this.
+    validations: { required: true }
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: Behaviour
+      description: How it behaves, including the loading, error and empty states. An unhandled empty state is an incomplete feature.
+    validations: { required: true }
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Which phase does this belong to?
+      options:
+        - "v0.1.0 — Walking Skeleton"
+        - "v0.2.0 — MVP"
+        - "v0.3.0 — Community-ready"
+        - "v1.0.0 — Complete"
+        - "Not yet decided — needs a PRD change"
+    validations: { required: true }
+  - type: checkboxes
+    id: gates
+    attributes:
+      label: Before this can be picked up
+      options:
+        - label: "It is in the current phase, or this issue is a `PRD.md` change request"
+        - label: "It does not appear on the permanent non-goal list"
+        - label: "The contract exists in `@purlay/types`, or defining it is the first task"
+        - label: "Keyboard path, visible focus and WCAG AA contrast are specified, not assumed"

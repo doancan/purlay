@@ -1,0 +1,27 @@
+name: Epic
+description: A group of issues that finish one coherent thing.
+title: "The capability this epic delivers, 50–70 characters"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An epic is not a folder. It exists only if there is a sentence describing what becomes
+        true when every child closes. If you cannot write that sentence, these are just issues.
+
+        Link children with GitHub sub-issues so progress is tracked automatically.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What becomes true when this closes
+      description: One sentence. Observable, not a list of tasks.
+    validations: { required: true }
+  - type: textarea
+    id: children
+    attributes:
+      label: Children
+      description: Add them as sub-issues. List them here only if the order matters.
+  - type: textarea
+    id: risks
+    attributes:
+      label: Open questions this touches
+      description: "Any of `DECISIONS.md` Part D (O-1 … O-5). An epic that touches an open question stays in Backlog, not Ready."

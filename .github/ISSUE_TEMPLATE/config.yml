@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Why was it built this way?
+    url: https://github.com/doancan/purlay/blob/main/docs/DECISIONS.md
+    about: Every non-obvious choice, with what was rejected and why. It wins any conflict between documents.
+  - name: What is in scope, and when?
+    url: https://github.com/doancan/purlay/blob/main/docs/PRD.md
+    about: Phases, non-goals and quality budgets. A feature on the permanent non-goal list is not built at all.
+  - name: The rules you are working under
+    url: https://github.com/doancan/purlay/blob/main/CONTRIBUTING.md
+    about: Read before writing code — human or AI.

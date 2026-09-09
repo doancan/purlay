@@ -121,7 +121,7 @@ purlay/
 │   ├── db/                      schema.ts (Kysely) · migrations/ · client.ts
 │   └── config/                  eslint · prettier · tailwind · tsconfig bases
 │
-├── docs/                        PRD · DECISIONS · ARCHITECTURE · SCHEMA · OVERVIEW · ROADMAP
+├── docs/                        PRD · DECISIONS · ARCHITECTURE · SCHEMA · OVERVIEW · UX · API
 └── CONTRIBUTING.md
 ```
 

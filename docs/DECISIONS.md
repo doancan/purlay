@@ -90,7 +90,7 @@ every time someone has a free afternoon. Refusing it permanently is what makes t
 before adding" tenet (D-2) enforceable rather than aspirational.
 
 > **Single source of truth:** phase contents live in `PRD.md` §4. The permanent non-goal list
-> lives in `PRD.md` §6. The task-level breakdown lives in `ROADMAP.md`. This decision records
+> lives in `PRD.md` §6. The task-level breakdown lives in GitHub Issues (D-32). This decision records
 > only *why the shape is this way* — it deliberately does not restate them.
 
 ### D-5. Cut from the previous PRD
@@ -550,7 +550,14 @@ The rest of `PRD.md` §6 is unaffected and stays permanent.
 ### D-32. Work is tracked in GitHub Issues and Projects
 
 **Decided: GitHub Issues for the unit of work, a GitHub Project board for the view.** One issue
-per `ROADMAP.md` task, phase as a field, the exit criterion as the milestone.
+per task; the milestone is the version it ships in, and carries that version's exit criterion.
+
+**`docs/ROADMAP.md` is retired.** It held the same task list the issues now hold, and keeping
+both would have been the duplication `OVERVIEW.md`'s ownership rule exists to prevent — the copy
+that drifts is always the one nobody is looking at. Its two unique facts moved: the *working
+rule* (a task is done when typed, tested and documented; a milestone is done when its exit
+criterion is demonstrated) went to `CONTRIBUTING.md` §6, and the "not on this roadmap, ever"
+list was already only a pointer to `PRD.md` §6.
 
 **Rejected — Linear:** better interface, and the wrong home for this project. It is a per-seat
 closed SaaS, which is the model D-1 exists to reject; it puts the work behind a second account

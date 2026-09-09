@@ -70,7 +70,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
 | [`docs/API.md`](docs/API.md) | HTTP endpoint contract |
 | [`docs/CONFIG.md`](docs/CONFIG.md) | Environment variables |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | The ordered task list |
+| [Issues & board](https://github.com/doancan/purlay/issues) | The ordered task list — one issue per task, milestoned by version |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Rules contributors work under |
 
 **`DECISIONS.md` wins any conflict between documents.** If two disagree, the other one is a bug.

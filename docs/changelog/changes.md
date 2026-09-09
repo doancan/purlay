@@ -79,6 +79,20 @@ rather than worked around.
 - `PRD.md` §4 carried a `4.6b` subsection. Renumbered to 4.7 and 4.8; nothing referenced §4.7,
   so the renumbering was free.
 
+**Repository — work tracking moved to GitHub**
+- **`docs/ROADMAP.md` retired.** Its task list now lives as GitHub Issues, one per task, and
+  keeping both would have been exactly the duplication `OVERVIEW.md`'s ownership rule forbids.
+  Its two unique facts moved rather than vanished: the working rule went to `CONTRIBUTING.md` §6,
+  and the "never" list was already only a pointer to `PRD.md` §6. Eleven references updated in
+  the same change.
+- Milestones are versions, not phase names: `v0.1.0`, `v0.2.0`, `v0.3.0`, `v1.0.0`. The phase each
+  one corresponds to, and its exit criterion, live in the milestone description; `PRD.md` §4
+  remains the owner of what a phase contains.
+- Issue templates for epic, feature, task and bug, plus a pull request template, each carrying the
+  definition of done in two tiers — what always applies, and what applies conditionally. A
+  checklist whose items do not all apply is a checklist people learn to tick without reading,
+  which is the same failure D-17 was written to prevent.
+
 **Repository**
 - The contributor rules moved from an agent-specific filename to **`CONTRIBUTING.md`**, which is
   what an open-source repository is read for anyway. Content and section numbering are unchanged,
