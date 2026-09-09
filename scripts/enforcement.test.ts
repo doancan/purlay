@@ -58,6 +58,10 @@ describe('lint rules in effect for API source (D-47)', () => {
     '@typescript-eslint/explicit-function-return-type',
     '@typescript-eslint/switch-exhaustiveness-check',
     '@typescript-eslint/ban-ts-comment',
+    // Carries the ban on reading the clock directly and on asserting a branded
+    // context into existence. Which shapes it rejects is proved separately, by
+    // `verify-enforcement.ts` writing one. (D-54)
+    'no-restricted-syntax',
   ] as const;
 
   const rules = apiConfig.rules;
@@ -108,8 +112,12 @@ describe('the local verify runs everything CI runs', () => {
   // can run, and knows about". Anything outside `verify` has to be documented.
   const contributing = readFileSync('CONTRIBUTING.md', 'utf8');
 
+  /** `bun run config:example -- --check` names the script `config:example`. */
+  const scriptName = (command: string): string =>
+    (command.replace(/^bun run /, '').split(' ')[0] ?? '').trim();
+
   for (const command of ciCommands) {
-    const script = command.replace(/^bun run /, '');
+    const script = scriptName(command);
 
     test(`\`${command}\` is a command a developer can run`, () => {
       expect(Object.keys(pkg.scripts)).toContain(script);
@@ -119,6 +127,28 @@ describe('the local verify runs everything CI runs', () => {
       const inVerify = verify.includes(`bun run ${script}`);
       const documented = contributing.includes(`bun run ${script}`);
       expect(inVerify || documented).toBe(true);
+    });
+  }
+
+  /**
+   * And the other direction, which was missing.
+   *
+   * Only CI can block a merge. A step that runs in `verify` and nowhere else is a
+   * check a developer can pass locally and a pull request can ignore — which is
+   * how `config:example -- --check` sat outside the pipeline unnoticed. Comparing
+   * one direction told us every CI step was runnable and nothing about whether
+   * every runnable step was in CI (`CONTRIBUTING.md` §6.4).
+   */
+  const ciScripts = new Set(ciCommands.map(scriptName));
+  const verifySteps = [...verify.matchAll(/bun run ([\w:-]+)/g)].map((m) => m[1] ?? '');
+
+  test('verify is made of steps, so this comparison is not vacuous', () => {
+    expect(verifySteps.length).toBeGreaterThan(5);
+  });
+
+  for (const step of verifySteps) {
+    test(`\`${step}\` runs in CI too, so it can actually block a merge`, () => {
+      expect([...ciScripts]).toContain(step);
     });
   }
 });
@@ -175,7 +205,9 @@ describe('selecting the integration tests reliably', () => {
   const files = Bun.spawnSync([
     'bash',
     '-lc',
-    "find apps packages -name '*.integration.test.ts' -not -path '*/node_modules/*'",
+    // The same roots `bun test` is given in package.json. A directory the runner
+    // scans but this does not is a file that can quietly opt out of the convention.
+    "find apps packages scripts -name '*.integration.test.ts' -not -path '*/node_modules/*'",
   ])
     .stdout.toString()
     .trim()

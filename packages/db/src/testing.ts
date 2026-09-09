@@ -64,7 +64,14 @@ export const withRollback = async (
   }
 };
 
-/** Closes the shared pool. Called once, from the last test file to finish. */
+/**
+ * Closes the shared pool. Every integration file calls this in `afterAll`.
+ *
+ * That is safe because `integrationDatabase` reopens on demand: the runner works
+ * through the files one at a time, so a file that closes the pool costs the next
+ * one a reconnection and nothing else. Naming one file as "the last" would be a
+ * fact nothing enforces, wrong the moment a file is added.
+ */
 export const closeIntegrationDatabase = async (): Promise<void> => {
   if (shared !== undefined) {
     await shared.destroy();
