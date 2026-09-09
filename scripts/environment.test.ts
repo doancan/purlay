@@ -107,6 +107,20 @@ describe('the development environment', () => {
     expect(workflow).not.toMatch(/bun-version:\s*\d/);
   });
 
+  /**
+   * The port defaults exist in the compose file and are documented in
+   * `CONFIG.md`. Both are useful — one is the behaviour, the other explains it —
+   * so they are bound rather than reduced to one.
+   */
+  test('the documented port defaults are the ones the compose file uses', () => {
+    const config = readFileSync('docs/CONFIG.md', 'utf8');
+    for (const variable of ['POSTGRES_PORT', 'MINIO_PORT', 'MINIO_CONSOLE_PORT']) {
+      const used = new RegExp(`\\$\\{${variable}:-(\\d+)\\}`).exec(compose)?.[1];
+      expect(used).toBeDefined();
+      expect(config).toContain(`\`${variable}\` | \`${used ?? ''}\``);
+    }
+  });
+
   test('every service defines readiness, so a cold start is deterministic', () => {
     const services = (/^services:\n([\s\S]*?)\nvolumes:/m.exec(compose)?.[1] ?? '')
       .split(/\n  (?=[a-z])/)

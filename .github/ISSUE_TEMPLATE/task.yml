@@ -37,29 +37,20 @@ body:
       options: [api, web, database, realtime, contracts, infra, docs]
     validations: { required: true }
   - type: checkboxes
-    id: dod-always
+    id: dod
     attributes:
-      label: 'Definition of done — always'
+      label: "Definition of done — the part a machine cannot check"
+      description: >-
+        typecheck, lint, tests, the enforcement demonstration and the document
+        check are required status checks; a merge is blocked without them. Ticking
+        a box for what CI already refuses is theatre, and a checklist whose items
+        are theatre stops being read. What is left is what only a person can
+        confirm. Which tests must exist is `ARCHITECTURE.md` §10.
       options:
-        - label: '`bun run typecheck` clean — no `any`, explicit return type on every function'
-        - label: '`bun run lint` clean — the layering rule holds (`ingress → modules → platform`)'
-        - label: '`bun test` green, **with the output pasted in the pull request**. Evidence, then assertion'
-        - label: 'Documentation updated **in the same change**: schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a new numbered decision in `DECISIONS.md`'
-        - label: 'The change is the minimal delta the task requires; no unrelated refactor rode along'
-  - type: checkboxes
-    id: dod-conditional
-    attributes:
-      label: 'Definition of done — when it applies'
-      options:
-        - label: 'Shapes defined in `@purlay/types` **before** any implementation'
-        - label: 'Unit test per new service rule, and per `SCHEMA.md` §11 invariant touched'
-        - label: 'Integration test against real PostgreSQL and real migrations'
-        - label: '**Cross-tenant isolation test asserting 404** — every workspace-scoped endpoint, no exceptions'
-        - label: '**Intra-workspace visibility test asserting 404** — every channel-scoped endpoint'
-        - label: 'Permission test per role, for role-gated actions'
-        - label: 'Realtime test — ordering, ACK, reconnect replay, duplicate-send idempotency'
-        - label: 'Kysely types and the migration changed in the same commit; schema-drift test passes'
-        - label: '`docs/changelog/changes.md` updated, if the change is notable'
+        - label: "Documentation updated **in the same change** — schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a numbered decision in `DECISIONS.md` with what was rejected"
+        - label: "The change is the minimal delta the task requires; no unrelated refactor rode along"
+        - label: "Shapes defined in `@purlay/types` **before** any implementation, if this touches a contract"
+        - label: "A violation was fixed rather than waived — no rule loosened to make this pass"
   - type: textarea
     id: specific
     attributes:

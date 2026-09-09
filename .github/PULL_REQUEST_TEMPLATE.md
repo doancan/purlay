@@ -15,16 +15,19 @@ $ bun run typecheck && bun run lint && bun test
 
 ## Checklist
 
-- [ ] No `any`; every function has an explicit return type
-- [ ] The layering rule holds: `ingress → modules → platform`, and `apps/web` imports only from `packages/*`
-- [ ] Contracts live in `@purlay/types`; no ad-hoc DTO inside an app
-- [ ] Cross-tenant isolation test asserting **404** for every workspace-scoped endpoint touched
-- [ ] Intra-workspace visibility test asserting **404** for every channel-scoped endpoint touched
-- [ ] Permission test per role, for every role-gated action touched
-- [ ] Migrations are append-only, and `packages/db/src/schema.ts` changed in the same commit
-- [ ] Documentation updated in this change; a non-obvious choice is a new numbered decision in `docs/DECISIONS.md` with what was rejected
+CI decides whether typecheck, lint, the tests, the enforcement demonstration and the document
+check pass — they are required status checks and this pull request cannot merge without them.
+Repeating them here as boxes to tick would be theatre. What is left is what only a person can
+confirm:
+
+- [ ] Documentation updated **in this change** — a non-obvious choice is a numbered decision in
+      `docs/DECISIONS.md` with what was rejected and why
+- [ ] The minimal delta the issue required; no unrelated refactor rode along
+- [ ] Contracts live in `@purlay/types`; no ad-hoc shape declared inside an app
+- [ ] **No rule was loosened to make this pass** — no new lint exception, no widened budget, no
+      waived violation. If one was genuinely unavoidable it is linked to an issue (D-48)
 - [ ] `docs/changelog/changes.md` updated, if this is notable
-- [ ] Commit messages carry no tool name and no ticket reference (`CONTRIBUTING.md` §7)
+- [ ] The commit messages carry no tool name and no ticket reference (`CONTRIBUTING.md` §7)
 
 ## New runtime dependency?
 

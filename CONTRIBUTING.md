@@ -103,7 +103,7 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 - **Pagination is mandatory** on every list endpoint, and keyset on `messages`.
 - **Errors:** one `AppError` with a stable machine-readable `code`. A caught error is handled
   or re-thrown. Logging it and continuing is prohibited — that is how silent failures are born.
-- **Never logged:** session tokens, encrypted access tokens, message content, email addresses.
+- **Never logged:** the list is `ARCHITECTURE.md` §10's, and lives there. Repeating it here is how one copy loses an entry.
 - **Services publish to the `EventBus`; they never touch a socket.** The socket hub subscribes;
   it never touches the database.
 
