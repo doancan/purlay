@@ -9,6 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ESLint } from 'eslint';
 import { readFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 
 const base = JSON.parse(readFileSync('packages/config/tsconfig.base.json', 'utf8')) as {
   compilerOptions: Record<string, unknown>;
@@ -238,4 +239,54 @@ describe('selecting the integration tests reliably', () => {
     expect(pkg.scripts['test']).toContain('*.integration.test.ts');
     expect(pkg.scripts['test:integration']).toContain('^integration');
   });
+});
+
+/**
+ * Every file the linter reads is a file a compiler reads.
+ *
+ * `apps/web/tsconfig.json` said `include: ["src/**\/*.ts"]` and carried no `jsx`
+ * setting, while `eslint.config.mjs` lints `apps/web/**\/*.tsx`. A component would
+ * therefore have been linted and **never typechecked**, and `bun run typecheck`
+ * would have reported success over zero of them — a green check measuring an
+ * empty set, which is the failure this repository guards against everywhere else
+ * (`CONTRIBUTING.md` §6.4).
+ *
+ * The compiler answers for itself: `tsc --showConfig` expands `include` into the
+ * exact file list a project compiles, so this compares two real sets rather than
+ * reimplementing glob semantics and trusting the reimplementation.
+ */
+describe('the compiler sees every file the linter does', () => {
+  const PROJECTS = ['apps/api', 'apps/web', 'packages/db', 'packages/types', 'scripts'] as const;
+
+  const compiled = new Set<string>();
+  for (const project of PROJECTS) {
+    const shown = Bun.spawnSync(['bun', 'x', 'tsc', '--showConfig', '-p', project]);
+    const config = JSON.parse(shown.stdout.toString()) as { files?: readonly string[] };
+    for (const file of config.files ?? []) {
+      compiled.add(resolve(project, file));
+    }
+  }
+
+  const linted = Bun.spawnSync([
+    'bash',
+    '-lc',
+    "find apps packages scripts \\( -name '*.ts' -o -name '*.tsx' \\) " +
+      "-not -path '*/node_modules/*' -not -name '*.d.ts'",
+  ])
+    .stdout.toString()
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((file) => resolve(file));
+
+  test('there are source files at all, so this is not an empty comparison', () => {
+    expect(linted.length).toBeGreaterThan(10);
+    expect(compiled.size).toBeGreaterThan(10);
+  });
+
+  for (const file of linted) {
+    test(`${relative(process.cwd(), file)} is compiled by some project`, () => {
+      expect(compiled.has(file)).toBe(true);
+    });
+  }
 });
