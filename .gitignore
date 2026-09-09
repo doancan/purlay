@@ -1,0 +1,196 @@
+# Purlay — .gitignore
+#
+# Rule of thumb: ignore anything that is (a) a secret, (b) reproducible from a
+# committed manifest, or (c) specific to one machine or one person's tooling.
+# Everything else — including this project's documentation and agent rules — is
+# tracked deliberately. See the explicit un-ignores at the bottom of each section.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Secrets & environment            (see docs/CONFIG.md for every variable)
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+*.env
+# tracked: must list every variable in CONFIG.md
+!.env.example
+
+# Key material. ENCRYPTION_KEY and GITHUB_CLIENT_SECRET live in .env, never here,
+# but a stray key file must never be committable by accident.
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.secrets/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Dependencies & build output
+# ─────────────────────────────────────────────────────────────────────────────
+node_modules/
+.pnp.*
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Turborepo / Bun caches
+.turbo/
+.bun/
+
+# Vite
+.vite/
+apps/web/dist/
+
+# Lockfiles are TRACKED — reproducible installs are the point.
+# (bun.lock / bun.lockb are intentionally absent from this file.)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Tests, coverage, profiling
+# ─────────────────────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+.playwright/
+*.cpuprofile
+*.heapsnapshot
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Local infrastructure state
+#    docker compose brings up PostgreSQL and MinIO; their volumes are local data,
+#    never repository content.
+# ─────────────────────────────────────────────────────────────────────────────
+.docker/
+docker-data/
+pgdata/
+postgres-data/
+minio-data/
+.volumes/
+
+# STORAGE_DRIVER=filesystem writes uploads to STORAGE_LOCAL_PATH (docs/CONFIG.md).
+# These are user attachments, not source.
+storage/
+uploads/
+tmp/
+.tmp/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Logs
+# ─────────────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+bun-debug.log*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Tauri — Phase 3 (docs/DECISIONS.md D-14)
+#    Listed now so the Rust build output can never land in a commit by surprise.
+# ─────────────────────────────────────────────────────────────────────────────
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/WixTools/
+**/target/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. AI assistants & coding agents
+#
+#    Two categories, treated differently:
+#      · Vendored skills / caches / local state  → ignored (reproducible or personal)
+#      · Rule files that define how this project is worked on → TRACKED
+#
+#    CONTRIBUTING.md is the project's constitution: it is referenced by README.md and
+#    docs/OVERVIEW.md and MUST stay tracked. Agent-specific entry points are not.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Agent entry points and local tooling
+# Local agent entry point and tooling. The project's rules live in CONTRIBUTING.md,
+# which IS tracked — these are personal working files and never reach the repository.
+.claude/
+.claude-flow/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+
+# Vendored agent skills and their manifest
+.agents/
+skills-lock.json
+
+# Cursor
+.cursor/
+.cursorignore
+.cursorindexingignore
+
+# Windsurf / Codeium
+.windsurf/
+.codeium/
+
+# Cline / Roo Code
+.cline/
+.clinerules/
+.roo/
+.roomodes
+
+# Aider
+.aider*
+!.aiderignore
+
+# Continue
+.continue/
+
+# OpenAI Codex CLI
+.codex/
+AGENTS.local.md
+
+# Google Gemini CLI
+.gemini/
+GEMINI.local.md
+
+# GitHub Copilot (workspace/session state; .github/copilot-instructions.md stays tracked)
+.copilot/
+
+# JetBrains AI / Junie · Amazon Q · Sourcegraph Cody · Tabnine · Zed
+.junie/
+.amazonq/
+.cody/
+.sourcegraph/
+.tabnine/
+.zed/
+
+# Session transcripts and repo-dump tooling — these can contain pasted secrets
+# and message content, and must never reach a public repository.
+.specstory/
+.history/
+.ai/
+.llm/
+repomix-output.*
+.repomix/
+
+# MCP server configuration frequently carries tokens.
+# A committed .mcp.json must be reviewed by hand; the local variant never is.
+.mcp.local.json
+
+# Agent rule files are NOT tracked. The project's rules live in CONTRIBUTING.md,
+# which is the one file a contributor — human or otherwise — is expected to read.
+# Per-assistant entry points are personal working files and stay local.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. Editors & OS
+# ─────────────────────────────────────────────────────────────────────────────
+.vscode/*
+# shared recommendations are useful to the team
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini

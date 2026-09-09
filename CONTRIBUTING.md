@@ -1,0 +1,151 @@
+# Purlay — Contributor Rules (`CONTRIBUTING.md`)
+
+Rules for anyone working in this repository, human or AI.
+
+**Read before writing code.** `docs/OVERVIEW.md` orients you; `docs/DECISIONS.md` is the
+authority on *why*; `docs/PRD.md` fixes scope; `docs/ARCHITECTURE.md` and `docs/SCHEMA.md` fix
+structure and data; `docs/ROADMAP.md` says what is next.
+
+**Conflict rule:** if two documents disagree, `DECISIONS.md` wins and the other is a bug. Fix
+it in the same change. Never work around a documentation contradiction silently — that is how
+the first four drafts of this project ended up contradicting each other at the schema level.
+
+---
+
+## 1. Non-negotiable
+
+1. **Scope is the current phase.** `PRD.md` §4 fixes what ships when. A feature belonging to a
+   later phase is not built early because it "would only take a minute". A feature on the
+   permanent non-goals list (`PRD.md` §6) is not built at all.
+2. **Tenant isolation, on both axes.** Every workspace-scoped query goes through
+   `WorkspaceContext` (`ARCHITECTURE.md` §7.3) and every channel-scoped query through
+   `ChannelContext` (§7.5). Never hand-write `where workspace_id = …` at a call site — obtain
+   the context from the guard. A cross-tenant leak is a critical-severity bug.
+   Cross-tenant access returns **404, never 403**: a 403 confirms the resource exists.
+3. **No `any`.** `strict: true` everywhere. Use `unknown` with TypeBox narrowing at every
+   boundary. Every function has an explicit return type.
+4. **Contracts live in `@purlay/types`.** No ad-hoc DTOs, event shapes or response types inside
+   an app. A shape defined twice will diverge.
+5. **Database access lives in `@purlay/db`.** Kysely is the only query builder. No ORM, no
+   runtime reflection.
+6. **Migrations are append-only.** Never edit an applied migration. New file, ordered, with the
+   Kysely types in `packages/db/src/schema.ts` updated in the same commit — they are two halves
+   of one contract and the schema-drift test will catch you.
+7. **Soft deletion never cascades.** `deleted_at` plus a tombstone. Content is not erased.
+   (D-9)
+8. **`messages.id` is an application-generated UUIDv7.** Never `gen_random_uuid()`, never a
+   database default. Pagination is keyset on `id`; `OFFSET` is prohibited on `messages`. (D-8)
+9. **Optimistic first.** Every user action paints before the network round-trip and reconciles
+   after. A send that fails surfaces as `failed` with a retry — never silently dropped.
+10. **Quiet by default.** `@here` and `@channel` are rejected by the parser. Only a direct
+    `@username` or a DM may produce a notification. (D-12)
+11. **No new infrastructure without a measurement.** No Redis, no broker, no queue, no cache
+    layer, no client-side database. The `EventBus` seam already exists for Phase 3. (D-7)
+12. **No new runtime dependency without justification in the PR.** Prefer web standards and Bun
+    built-ins. Lodash, Moment and Axios are specifically not wanted.
+
+---
+
+## 2. Stack
+
+`bun` for everything (`bun add`, `bun run`, `bun test`) · Bun + ElysiaJS · Kysely +
+PostgreSQL 16 · TypeBox validation · React 19 + Vite + Tailwind · TanStack Query + Zustand ·
+S3-compatible storage.
+
+Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
+
+---
+
+## 3. Backend (`apps/api`)
+
+- **Layering:** `ingress → modules → platform`. A module never imports from `ingress`; HTTP and
+  WebSocket types never cross into a module. Lint enforces this.
+- **Thin ingress:** validate → call one service → serialize. No business logic in a route
+  handler or a frame handler.
+- **No N+1.** List endpoints join or batch. Counters that appear in list views are denormalized
+  columns (`unread_count`, `thread_reply_count`) — never a `COUNT(*)` per row. (D-13)
+- **Pagination is mandatory** on every list endpoint, and keyset on `messages`.
+- **Errors:** one `AppError` with a stable machine-readable `code`. A caught error is handled
+  or re-thrown. Logging it and continuing is prohibited — that is how silent failures are born.
+- **Never logged:** session tokens, encrypted access tokens, message content, email addresses.
+- **Services publish to the `EventBus`; they never touch a socket.** The socket hub subscribes;
+  it never touches the database.
+
+## 4. Frontend (`apps/web`)
+
+- **TanStack Query owns server state** (hydration, history, search). `fetch` inside `useEffect`
+  is prohibited. **Zustand owns realtime and optimistic state** (socket, pending sends,
+  presence). The boundary is in D-18 — if it arrived over HTTP it is Query's; if it arrived
+  over the socket or has not been sent yet it is Zustand's.
+- Every screen handles **loading, error and empty** states. An empty channel is a designed
+  state, not a blank div.
+- **No Tailwind arbitrary values** (`mt-[13px]`). Extend the theme instead.
+- Forms use `react-hook-form` + `zod`.
+- **Accessibility is not optional:** keyboard navigation, visible focus, WCAG AA contrast,
+  labels on interactive controls. This product is keyboard-driven; there is no excuse.
+- **Do not move work to a Web Worker by default.** Move it only when a measurement shows a
+  dropped frame. For a clamped 12-line code block, the `postMessage` round-trip costs more than
+  the highlight.
+- Components stay focused and composable. There is **no line-count rule** — a diff renderer is
+  legitimately large, and splitting a file to satisfy a number makes the code worse.
+
+---
+
+## 5. Testing
+
+Mandatory. `typecheck` + `lint` + `test` gate every merge.
+
+| Required | For |
+|---|---|
+| Unit test | Every new service rule, and every invariant in `SCHEMA.md` §11 |
+| **Cross-tenant isolation test asserting 404** | **Every workspace-scoped endpoint. No exceptions.** |
+| **Intra-workspace visibility test asserting 404** | **Every channel-scoped endpoint, plus search and open questions. No exceptions.** |
+| Permission test | Every role-gated action, per role |
+| Integration test | Every endpoint, against real PostgreSQL and real migrations |
+| Realtime test | Ordering, ACK, reconnect replay, duplicate-send idempotency |
+| Regression test | Every bug fix, written before the fix |
+
+Write the test first. Verify by running it — never claim something passes without the output
+in front of you.
+
+---
+
+## 6. Working on a task
+
+1. **Read the contract first.** Check `@purlay/types`. If the shape does not exist, define it
+   there before writing any implementation.
+2. **Check the phase.** Is this task in the current phase in `ROADMAP.md`? If not, stop.
+3. **Minimal delta.** Only the code the task requires. Do not refactor unrelated files.
+4. **Update the documents in the same change.** Schema change → `SCHEMA.md`. Protocol change →
+   `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in
+   `DECISIONS.md`, with what you rejected and why.
+5. **Verify.** `bun run typecheck && bun run lint && bun test`. Paste real output.
+6. **Log it.** Notable changes go to `docs/changelog/changes.md`.
+7. **When the spec is silent, stop and ask.** Do not invent behaviour and do not guess at an
+   undefined edge case. The open questions are listed in `DECISIONS.md` Part D — if your task
+   hits one, that is a decision to be made, not a gap to be filled quietly.
+
+---
+
+## 7. Git
+
+- **Branches:** `feature/`, `fix/`, `chore/`, `refactor/`, `docs/`
+- **Commits:** Conventional Commits — `feat(messages): add keyset pagination`
+- **No AI attribution in commit messages.** No assistant name, no tool name, no
+  `Co-Authored-By` trailer for one. A commit records what changed, not what typed it.
+- **No project-management vocabulary in commit messages.** No task, sprint, story, epic,
+  ticket, issue or ADR references.
+  - ❌ `feat(auth): task-123 sprint-5 için oturum ekle`
+  - ✅ `feat(auth): add database-backed session validation`
+- Before a PR: `bun run lint && bun run typecheck && bun test`.
+
+---
+
+## 8. Reminders
+
+1. `DECISIONS.md` wins every documentation conflict.
+2. Tenant isolation is checked on every endpoint, and returns 404.
+3. Documentation is updated in the same change as the code.
+4. Scope is the current phase — nothing from a later one.
+5. Non-goals are permanent, not deferred.
+6. Verify before claiming. Evidence, then assertion.
