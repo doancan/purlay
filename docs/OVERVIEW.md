@@ -50,6 +50,26 @@ second file is a number that will eventually disagree with itself.
 | Environment variables | `CONFIG.md` |
 | Task breakdown and its ordering | GitHub Issues, milestoned by version (D-32) |
 
+**Facts the code owns.** Added when there was code: a map that only covers documents sends somebody
+looking for the error codes to a file that does not have them.
+
+| Fact | Owner |
+|---|---|
+| Every version in the stack | `docs/ARCHITECTURE.md` §2 — the manifests and the pipeline are bound to it by tests |
+| Repository layout and the enforced dependency direction | `docs/ARCHITECTURE.md` §4, enforced in `eslint.config.mjs` |
+| What is never logged | `docs/ARCHITECTURE.md` §10 |
+| The database schema | `packages/db/migrations/` — the types are generated from it, never written (D-45) |
+| The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
+| Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |
+| The variables the application reads | `apps/api/src/platform/config.ts` — `.env.example` is generated from it |
+| The local environment: images, ports, credentials | `docker-compose.yml` |
+| Which rules the build enforces | `eslint.config.mjs`, demonstrated by `scripts/verify-enforcement.ts` |
+
+**How a fact stays owned.** Where a second copy is genuinely useful — the compose file *does* the
+thing and `CONFIG.md` *explains* it — the two are bound by a test rather than trusted. Where it is
+not, the copy is removed. A conflict rule that says which copy wins is not single ownership; it is
+an admission that drift is expected.
+
 ---
 
 ## What it is, in one screen
