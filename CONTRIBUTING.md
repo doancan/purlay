@@ -65,8 +65,20 @@ be healthy).
 
 | Command | Needs | Runs |
 |---|---|---|
-| `bun run verify` | nothing | Everything that can be checked without infrastructure — typecheck (both compilers), lint, format, tests, the enforcement demonstration, the document consistency check |
+| `bun run verify` | nothing | Everything that can be checked without infrastructure — typecheck (both compilers), lint, format, tests, the enforcement demonstration, the document consistency check, and that `.env.example` still matches the loader |
 | `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
+
+**The rest of the commands**, so they are discoverable rather than folklore:
+
+| Command | Does |
+|---|---|
+| `bun run queue` | What is startable now, and what each blocked issue waits on |
+| `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
+| `bun run db:reset` | Throw the data away and start again |
+| `bun run db:migrate` | Apply pending migrations. Idempotent |
+| `bun run db:generate` | Regenerate the database types from the applied migrations |
+| `bun run config:example` | Regenerate `.env.example` from the configuration loader |
+| `bun run lint:fix` | Fix what the linter can fix on its own |
 
 `verify` is the fast loop and is deliberately the subset that needs nothing installed. A check that
 requires a database is not omitted from CI — it is a job of its own, and this is the command that
@@ -130,20 +142,18 @@ whether they pass** — a claim in a pull request description is not evidence (D
 `main` is protected: no direct pushes, required status checks, linear history. One issue, one
 branch, one pull request.
 
-| Required | For |
-|---|---|
-| Unit test | Every new service rule, and every invariant in `SCHEMA.md` §11 |
-| **Cross-tenant isolation test asserting 404** | **Every workspace-scoped endpoint. No exceptions.** |
-| **Intra-workspace visibility test asserting 404** | **Every channel-scoped endpoint, plus search and open questions. No exceptions.** |
-| Permission test | Every role-gated action, per role |
-| Integration test | Every endpoint, against real PostgreSQL and real migrations |
-| Realtime test | Ordering, ACK, reconnect replay, duplicate-send idempotency |
-| Regression test | Every bug fix, written before the fix |
-| **Accessibility test (`axe`)** | **Every component and every screen. A violation is fixed, not waived.** |
-| **Keyboard-path test** | **Every screen — what the mouse reaches, a key reaches (`UX.md` §7)** |
-| **State test** | **Every view: loading, error and empty each render (`UX.md` §8)** |
-| Visual snapshot | Every component and screen, in each theme that exists |
-| Budget check | Bundle size and idle RSS block; latency budgets block on regression (D-49) |
+**Which tests must exist is owned by `ARCHITECTURE.md` §10**, and is not repeated here. It was
+repeated here until a sweep found the two copies had already drifted by six rows — which is the
+whole argument against a copy, made by the copy itself.
+
+What belongs here is the discipline around them:
+
+- **Write the test first.** For a bug, the regression test is written before the fix and fails
+  first.
+- **Verify by running it.** Never claim something passes without the output in front of you, and
+  CI is the only authority on whether it does.
+- **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
+  budget regression is a defect, not a threshold to adjust.
 
 Write the test first. Verify by running it — never claim something passes without the output
 in front of you.

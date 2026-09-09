@@ -405,9 +405,15 @@ remembering.
 
 **404, never 403:** a 403 confirms the resource exists, which is itself a disclosure.
 
-> **Single source of truth:** the required test matrix lives in `ARCHITECTURE.md` §10.
-> `CONTRIBUTING.md` §5 restates it in imperative form for contributors; if the two ever disagree,
-> `ARCHITECTURE.md` wins.
+> **Single source of truth:** the required test matrix lives in `ARCHITECTURE.md` §10, and lives
+> there only.
+>
+> **Amended 2026-09-09.** This decision used to sanction a copy — `CONTRIBUTING.md` §5 restating
+> the matrix in imperative form, with a rule for which won when they disagreed. A sweep found the
+> two had already drifted by six rows. A conflict rule is not a substitute for having one copy; it
+> is an admission that drift is expected. `CONTRIBUTING.md` now points here and keeps only the
+> discipline around the tests: write it first, verify by running it, and fix a violation rather
+> than waiving it.
 
 ### D-22. Workspace ownership lives in the membership row, not on the workspace
 

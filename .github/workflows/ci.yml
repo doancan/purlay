@@ -22,7 +22,10 @@ jobs:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          # One source: package.json's packageManager field. Pinning it here as
+          # well is how the pipeline and the repository end up on different
+          # versions after a dependency bump, silently.
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 
@@ -63,7 +66,10 @@ jobs:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          # One source: package.json's packageManager field. Pinning it here as
+          # well is how the pipeline and the repository end up on different
+          # versions after a dependency bump, silently.
+          bun-version-file: package.json
 
       - run: bun install --frozen-lockfile
 
@@ -72,8 +78,6 @@ jobs:
 
       - name: the committed types are exactly what the migrations produce
         run: bun run db:check
-        env:
-          DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
 
   documents:
     runs-on: ubuntu-latest
@@ -85,6 +89,9 @@ jobs:
           python-version: '3.12'
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          # One source: package.json's packageManager field. Pinning it here as
+          # well is how the pipeline and the repository end up on different
+          # versions after a dependency bump, silently.
+          bun-version-file: package.json
       - name: cross-document references resolve
         run: bun run check:docs
