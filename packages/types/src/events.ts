@@ -9,7 +9,7 @@
  */
 import { Type, type Static } from '@sinclair/typebox';
 import { AppErrorBody } from './errors';
-import { Message, Uuid } from './models';
+import { FromClient, Message, Uuid } from './models';
 
 /**
  * Every client frame carries a client-generated UUIDv7 as its correlation id.
@@ -25,10 +25,10 @@ import { Message, Uuid } from './models';
  * in the list when the acknowledgement lands (D-8). The server validates it
  * before trusting it: v7 shape, and a timestamp close to now (D-33).
  */
-export const MessageSendFrame = Type.Object({
+export const MessageSendFrame = FromClient({
   id: Uuid,
   op: Type.Literal('MESSAGE_SEND'),
-  payload: Type.Object({ channelId: Uuid, content: Type.String({ minLength: 1 }) }),
+  payload: FromClient({ channelId: Uuid, content: Type.String({ minLength: 1 }) }),
 });
 
 /**
@@ -36,26 +36,26 @@ export const MessageSendFrame = Type.Object({
  * returns everything newer by keyset scan — one indexed range query rather than a
  * timestamp comparison with clock-skew problems (`ARCHITECTURE.md` §5.4).
  */
-export const SubscribeFrame = Type.Object({
+export const SubscribeFrame = FromClient({
   id: Uuid,
   op: Type.Literal('SUBSCRIBE'),
-  payload: Type.Object({
+  payload: FromClient({
     channels: Type.Array(
-      Type.Object({ channelId: Uuid, afterMessageId: Type.Union([Uuid, Type.Null()]) }),
+      FromClient({ channelId: Uuid, afterMessageId: Type.Union([Uuid, Type.Null()]) }),
     ),
   }),
 });
 
-export const UnsubscribeFrame = Type.Object({
+export const UnsubscribeFrame = FromClient({
   id: Uuid,
   op: Type.Literal('UNSUBSCRIBE'),
-  payload: Type.Object({ channelIds: Type.Array(Uuid) }),
+  payload: FromClient({ channelIds: Type.Array(Uuid) }),
 });
 
-export const PingFrame = Type.Object({
+export const PingFrame = FromClient({
   id: Uuid,
   op: Type.Literal('PING'),
-  payload: Type.Object({}),
+  payload: FromClient({}),
 });
 
 export const ClientFrame = Type.Union([

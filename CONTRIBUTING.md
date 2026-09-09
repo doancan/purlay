@@ -260,6 +260,27 @@ why, in the pull request, so somebody can disagree.
 **Never destroy uncommitted work to get out of a mess.** Look at what is there first. A minute of
 reading beats an hour of reconstruction.
 
+### 6.7. A choice that has not been run is not a choice
+
+**Reasoning about a tool is not evidence about a tool.** A version range, a compatibility matrix, a
+changelog, an answer you are confident about — these describe what something claims. §6.3 says run
+it; this says *when*, and the answer is **before it is written down as decided**.
+
+**A tool enters `ARCHITECTURE.md` §2 on a spike record, not on an argument.** `docs/spikes/` holds
+one file per tool: the date, the versions actually resolved, the commands and their real output,
+and — the part that matters — **what had to be loosened to make it work**. A spike that reports
+only "it works" has not been written down.
+
+**"Nothing was loosened" has to be said out loud.** Silence there is indistinguishable from not
+having looked, which is exactly the reading §6.4 forbids.
+
+**Rejecting an alternative is also a claim.** "We rejected X because Y" is a guess unless Y was
+observed. If the rejection is load-bearing — a fallback the project would actually reach for — it
+is worth the same spike as the thing chosen.
+
+**A compatibility answer expires.** It is true of the versions that were resolved on the day it was
+run, which is why the record carries both.
+
 ## 7. Working on a task
 
 1. **Read the contract first.** Check `@purlay/types`. If the shape does not exist, define it

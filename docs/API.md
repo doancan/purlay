@@ -30,6 +30,12 @@ exists. This applies to every workspace-scoped route without exception. (D-21)
 { "data": [ /* … */ ], "nextCursor": "0199155c-6200-7b7f-…" }  // null when exhausted
 ```
 
+**Unknown fields are refused, not ignored.** Every request body and query this API accepts is
+closed: a property the contract does not declare is a `400`, never a silently discarded field. A
+client that sends something the server quietly drops has been told its request succeeded when it
+did not. Responses are the other way round — they may gain fields, so a client that has not been
+rebuilt keeps working. (D-58)
+
 **Errors.** One shape, always. `code` is a **discriminated union declared in `@purlay/types`** —
 stable, machine-readable and exhaustively handleable; adding one breaks any switch that does not
 account for it. `message` is for humans and may change. (D-47)
