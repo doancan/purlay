@@ -357,7 +357,10 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
 5. Set `purlay_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, 30-day expiry.
 
 `state` verification is not optional — without it the callback is a CSRF endpoint that logs
-victims into an attacker's account.
+victims into an attacker's account. The cookie carrying it is **signed**, with a key derived from
+`ENCRYPTION_KEY` rather than a second secret: a sibling subdomain can write a cookie for this
+origin, so an equality check alone would still let an attacker supply both halves (D-62). Every way
+the handshake can be wrong produces the same refusal.
 
 **Validating one.** The token is looked up by its hash, and a session resolves only while it is
 unexpired, unrevoked, and owned by a user who has not been deleted — a soft-deleted account does
@@ -594,7 +597,12 @@ sits inside the volume so that a later `pg_upgrade --link` does not cross a moun
 Mounting the data directory works perfectly until an operator's first major upgrade — a problem we
 would have created for them.
 
-`docker compose` brings up `api`, `web`, `postgres`, `minio` and a **scheduler** container that
+**One public origin.** `APP_URL` is the origin the browser uses; the API serves the built client
+from it, and in development Vite proxies `/auth`, `/api` and `/ws` to the API process so the two
+look identical to a browser. There is therefore no CORS to configure, the socket's `Origin`
+check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
+
+`docker compose` brings up `api`, `postgres`, `minio` and a **scheduler** container that
 runs the CLI jobs on a cron (D-30). The scheduler ships wired by default: the known failure mode
 of external scheduling is the cron nobody installed, and every run records its outcome in
 `job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job. Migrations

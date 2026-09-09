@@ -12,9 +12,36 @@
  * anything that touches `document`. The same pattern as `@purlay/types`
  * registering its string formats.
  */
+import { afterAll, beforeAll } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
-GlobalRegistrator.register();
+/**
+ * Registered **in a lifecycle hook**, not at import time.
+ *
+ * `bun test` imports every file it selects, including ones whose tests are all
+ * filtered out — so a top-level `register()` fires even when nothing in this file
+ * runs, and the matching `afterAll` never does. That is how a component test file
+ * broke six API tests in another package during `test:integration`, a run in
+ * which it executed nothing at all.
+ */
+beforeAll(() => {
+  GlobalRegistrator.register();
+});
+
+/**
+ * And undone when the file is finished.
+ *
+ * Registering replaces globals — `Request`, `Response` and `Headers` among them —
+ * for the whole process, because `bun test` runs every file in one. A "per-file"
+ * DOM that is never unregistered is not per-file; it is global with a later start
+ * time.
+ *
+ * Found by running the whole suite rather than the file under test. Each file
+ * passed alone. A green run of one file is not a green run.
+ */
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 /**
  * **The global `screen` does not work with this, and lint refuses it.**

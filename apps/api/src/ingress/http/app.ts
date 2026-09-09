@@ -5,13 +5,11 @@
  * layer below never sees an HTTP type, and lint enforces that direction
  * (`ARCHITECTURE.md` §4).
  *
- * **It takes no dependencies yet, deliberately.** A database handle threaded
- * through here today would have no consumer — `/health` is liveness and must
- * answer while the database is down. The handle arrives with the first route
- * that needs one, which is the rule the configuration loader already follows:
- * a thing is wired when the feature that needs it is built (D-57). It also makes
- * "`/health` cannot touch the database" structural rather than tested — there is
- * no database here to touch.
+ * **Dependencies are arguments, and they arrived with the first route that needed
+ * them.** Until sign-in existed the application took none, which is the rule the
+ * configuration loader follows: a thing is wired when the feature that needs it
+ * is built (D-57). `/health` still touches none of them, which is what keeps
+ * liveness answerable while the database is down.
  *
  * **What it returns is the surface the caller uses, not the framework's type.**
  * Left to inference that is the accumulated type of every route, which under
@@ -24,7 +22,20 @@
  * on which framework is underneath.
  */
 import { Elysia } from 'elysia';
+import type { Executor } from '@purlay/db';
+import type { Clock } from '../../platform/clock';
+import type { Config } from '../../platform/config';
+import type { GitHubClient } from '../../modules/auth/github';
+import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
 import { refusalFor } from './errors';
+
+export interface Dependencies {
+  readonly config: Config;
+  /** A `Kysely` or a `Transaction` — indistinguishable here, which is the point (D-46). */
+  readonly database: Executor;
+  readonly clock: Clock;
+  readonly github: GitHubClient;
+}
 
 /**
  * Everything outside ingress may do with the application.
@@ -41,8 +52,28 @@ export interface HttpApplication {
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
 
-export const createApp = (): HttpApplication =>
-  new Elysia()
+/**
+ * The only place a handler's decision becomes a framework response.
+ *
+ * The handlers in `auth.ts` know nothing about the framework, so this is where a
+ * cookie and a redirect are applied — once, rather than four times.
+ */
+const respond = (
+  set: { status?: number | string; headers: Record<string, string | number | undefined> },
+  result: AuthResponse,
+): string => {
+  set.headers['set-cookie'] = result.setCookie;
+  if (result.location === undefined) {
+    set.status = 204;
+    return '';
+  }
+  set.status = 302;
+  set.headers['location'] = result.location;
+  return '';
+};
+
+export const createApp = (dependencies: Dependencies): HttpApplication => {
+  const app = new Elysia()
     /**
      * One error handler for the whole surface, so a status is decided in exactly
      * one place. `set.status` rather than a thrown response: a second way to
@@ -54,4 +85,18 @@ export const createApp = (): HttpApplication =>
       set.status = refusal.status;
       return refusal.body;
     })
-    .get('/health', () => HEALTH);
+    .get('/health', () => HEALTH)
+
+    .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
+    .get('/auth/github/callback', async ({ request, set }) =>
+      respond(set, await completeSignIn(dependencies, request)),
+    )
+    .post('/auth/logout', async ({ request, set }) =>
+      respond(set, await signOut(dependencies, request)),
+    )
+    .post('/auth/logout-all', async ({ request, set }) =>
+      respond(set, await signOutEverywhere(dependencies, request)),
+    );
+
+  return app;
+};

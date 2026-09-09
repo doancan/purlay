@@ -1,20 +1,35 @@
 /**
  * `apps/api` — Bun + ElysiaJS, one process.
  *
- * The composition root, and the only file that reads the environment. Everything
- * below takes what it needs as an argument, which is what makes it testable
- * without a process (D-46).
+ * The composition root, and the only file that reads the environment or opens a
+ * connection. Everything below takes what it needs as an argument, which is what
+ * makes it testable without a process (D-46).
  *
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
- *
- * **The database handle is not built here yet.** Nothing needs one: `/health` is
- * liveness and must answer while the database is down. It arrives with the first
- * route that needs it, which is the rule the configuration loader already
- * follows — a thing is wired when the feature that needs it exists (D-57).
  */
+import { createDatabase } from '@purlay/db';
 import { loadConfig } from './platform/config';
+import { systemClock } from './platform/clock';
+import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
 
 const config = loadConfig(process.env);
-createApp().listen(config.PORT);
+
+const app = createApp({
+  config,
+  clock: systemClock,
+  database: createDatabase({
+    connectionString: config.DATABASE_URL,
+    poolSize: config.DATABASE_POOL_MAX,
+    ssl: config.DATABASE_SSL,
+  }),
+  github: githubClient({
+    clientId: config.GITHUB_CLIENT_ID,
+    clientSecret: config.GITHUB_CLIENT_SECRET,
+    // One origin, so this is the origin the browser is already on (D-61).
+    redirectUri: `${config.APP_URL}/auth/github/callback`,
+  }),
+});
+
+app.listen(config.PORT);

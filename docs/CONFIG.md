@@ -37,7 +37,9 @@ Variables marked **required** have no default. Anything holding a secret is neve
 | `WORKSPACE_OPEN_JOIN_SLUG` | — | — | When set, any authenticated user is joined to that workspace as `member` on sign-in. Unset means the instance is closed. (D-37) |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
-The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/github/callback`.
+The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/github/callback`. That is
+the client's origin **and** the API's: the browser talks to one origin, and development is
+proxied so it matches (D-61). There is no separate API URL to configure.
 
 **On `WORKSPACE_OPEN_JOIN_SLUG`.** Phase 0 cannot reach its exit criterion without it —
 invitations are Phase 1, so a second user otherwise has no way into a workspace. The boot log

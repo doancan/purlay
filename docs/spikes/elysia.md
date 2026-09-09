@@ -75,6 +75,13 @@ real thing rather than here, because this spike never annotated it. The answer i
 surface the caller actually uses — `handle` and `listen` — which also keeps the framework's types
 out of everything above ingress.
 
+**Routes cannot be split into a function that takes or returns an application.** The invariance
+above bites in both directions: an application carrying `/health` is not assignable to a parameter
+typed as one carrying none. The library's own permissive alias, `AnyElysia`, is
+`Elysia<any, …>` — passing a handler context derived from it produces **42 `no-unsafe-*` lint
+errors**, because it launders `any` into every handler. The answer is to keep handlers
+framework-neutral — a request in, a decision out — and do the routing in one file.
+
 **Declaration emit grows with routes × error branches.** Under `composite: true`, the accumulated
 route type lands in the emitted `.d.ts`, and because the error handler is global, *every* route's
 response type carries the error union. Six trivial routes produced 5 KB.

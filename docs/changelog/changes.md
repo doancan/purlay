@@ -6,6 +6,40 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: signing in with GitHub
+
+- **The whole handshake**, driven end to end in tests against a real database with GitHub as a
+  double: the redirect asking for exactly `read:user user:email`, the signed `state`, the code
+  exchange, identity resolution, the session, and signing out — here and everywhere.
+- **D-61** — **one public origin.** `CONFIG.md` said the callback registered with GitHub is
+  `${APP_URL}/auth/github/callback` while `APP_URL` was documented as the *client's* origin and the
+  API was a separate container. Every document was individually consistent and the combination did
+  not work. Development is proxied so a browser sees what production shows it — which is the one
+  place a topology difference is most expensive, because cookies and redirect URIs cannot be tested
+  on a machine shaped differently from the deployed one. There is now no CORS at all.
+- **D-62** — the `state` cookie is signed with a key **derived** from `ENCRYPTION_KEY`. Comparing
+  the cookie to the query parameter is sound only while nothing else can write a cookie for this
+  origin; a sibling subdomain can, and *cookie tossing* plus an attacker-chosen state signs the
+  victim into the attacker's account. A second secret was rejected: the failure mode of *one more
+  key* is the one nobody rotates.
+- **Every collision D-38 names has a test**, including the likely one — GitHub omits the address
+  from the profile for anyone who has not made one public, which is common among the developers
+  this product is for. Removing the email-conflict check on purpose reproduced the silent account
+  merge it exists to prevent.
+- **A route group cannot be split out as a typed function.** The application's type is invariant in
+  its routes, and the library's permissive alias launders `any` into every handler — 42 lint errors,
+  which is the rule working. Handlers are framework-neutral now: a request in, a decision out.
+- **A component test's DOM was leaking into the API's tests.** `bun test` runs every selected file
+  in one process and imports files whose tests are all filtered out, so a top-level DOM
+  registration fired during a run in which that file executed nothing — replacing `Request`,
+  `Response` and `Headers` globally and breaking six API tests. Every file passed alone. Registering
+  in `beforeAll` and unregistering in `afterAll` fixes it; adding only the `afterAll` did not,
+  because the hook never ran. The reasoning behind choosing a per-file DOM over a global preload
+  was right and the mechanism was not.
+- **One test was silently flaky and was caught before it merged.** It tampered with the state by
+  replacing the last character with `0`, which is a no-op whenever it already was `0` — a test that
+  would have passed fifteen times in sixteen.
+
 ### Implementation — 2026-09-09: sessions
 
 - **An opaque token, and only its hash in the database.** The claim is that a database dump hands

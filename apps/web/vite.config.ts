@@ -21,6 +21,20 @@ export default defineConfig({
     // Overridable for the same reason the compose ports are: a busy port is the
     // friction that turns "runs from the README" into a support ticket.
     port: Number(process.env['WEB_PORT'] ?? 5173),
+
+    // The browser talks to one origin, in development as in production (D-61).
+    // Cookies, redirect URIs and the socket's `Origin` are exactly what cannot be
+    // tested on a machine whose topology differs from the deployed one.
+    proxy: Object.fromEntries(
+      ['/auth', '/api', '/ws'].map((prefix) => [
+        prefix,
+        {
+          target: `http://localhost:${String(process.env['PORT'] ?? 3001)}`,
+          changeOrigin: false,
+          ws: prefix === '/ws',
+        },
+      ]),
+    ),
   },
   build: {
     // The bundle budget is measured in `PRD.md` §5 terms. Reporting compressed
