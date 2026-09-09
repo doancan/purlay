@@ -79,15 +79,22 @@ describe('the development environment', () => {
    * defaults to them. Two places, bound rather than trusted — the sweep that
    * found this also found the Bun version pinned in five.
    */
-  test('the schema check and the compose file agree on the development credentials', () => {
-    const script = readFileSync('scripts/check-schema.sh', 'utf8');
+  test('everything that needs the development credentials agrees with the compose file', () => {
     const user = /POSTGRES_USER:\s*(\S+)/.exec(compose)?.[1];
     const password = /POSTGRES_PASSWORD:\s*(\S+)/.exec(compose)?.[1];
     const database = /POSTGRES_DB:\s*(\S+)/.exec(compose)?.[1];
-
     expect(user).toBeDefined();
-    expect(script).toContain(`postgres://${user ?? ''}:${password ?? ''}@localhost:`);
+
+    const prefix = `postgres://${user ?? ''}:${password ?? ''}@localhost:`;
+
+    // The schema check defaults to them for local use…
+    const script = readFileSync('scripts/check-schema.sh', 'utf8');
+    expect(script).toContain(prefix);
     expect(script).toContain(`/${database ?? ''}"`);
+
+    // …and the pipeline declares them once for the job that needs a database.
+    const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+    expect(workflow).toContain(`${prefix}5432/${database ?? ''}`);
   });
 
   /** `packageManager` is the source; the type package must not drift from it. */
