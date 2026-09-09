@@ -28,7 +28,10 @@ message in real time — and the message is still there after the API restarts.
 - [ ] TypeBox schemas for every frame and request body
 
 ### 0.3 · Identity
-- [ ] GitHub OAuth with `state` verification (`ARCHITECTURE.md` §7.1)
+- [ ] GitHub OAuth with `state` verification, scopes `read:user user:email` (`ARCHITECTURE.md` §7.1)
+- [ ] Identity resolution: verified primary email, `EMAIL_REQUIRED` and `ACCOUNT_EMAIL_CONFLICT`,
+      username refresh and rename collision (D-38)
+- [ ] `WORKSPACE_OPEN_JOIN_SLUG` — without it Phase 0's exit criterion is unreachable (D-37)
 - [ ] `sessions`: opaque token, SHA-256 at rest, HttpOnly cookie
 - [ ] `WorkspaceContext` guard — the branded type that makes an unscoped query fail to compile
 - [ ] `ChannelContext` guard — the same mechanism on the channel-visibility axis (D-34)

@@ -57,6 +57,28 @@ rather than worked around.
   claimed to save client render cost, which it never did. The content-pipeline dependencies §8
   was built on are now named in `ARCHITECTURE.md` §2 with their costs.
 
+**Added — `DECISIONS.md` D-37, D-38, closing the last two gaps that blocked Phase 0**
+- **D-37** `WORKSPACE_OPEN_JOIN_SLUG`. Phase 0's exit criterion requires two GitHub users in one
+  workspace, and no Phase 0 endpoint could put them there — invitations are Phase 1 and joining a
+  channel already requires membership. The phase had been defined with an exit criterion its own
+  scope could not reach.
+- **D-38** GitHub identity, with every collision given a defined answer: the requested scopes
+  (`read:user user:email`) were written down for the first time; the email is the primary
+  **verified** address or sign-in is refused, because the default `/user` response omits it for
+  any developer who has not made it public and `users.email` is `NOT NULL`; a known address
+  arriving under a different `github_id` is refused rather than silently linked (D-5); a username
+  freed by a GitHub rename and taken by somebody else no longer collides fatally. It also closes
+  an interaction neither D-22 nor D-27 covered — erasure now clears `github_id`, so signing in
+  again creates a new account instead of resurrecting the one the person asked to have removed.
+  Invariant I-11 extended.
+
+**Fixed — found by a machine audit of every cross-document reference**
+- `UX.md` §5 pointed at `PRD.md` §4.2 (*Threads*) for a statement about GFM in the composer,
+  which belongs to §4.1 (*Messaging*). The section number was valid, so no link check would ever
+  have caught it — only resolving each reference to its target's **title** did.
+- `PRD.md` §4 carried a `4.6b` subsection. Renumbered to 4.7 and 4.8; nothing referenced §4.7,
+  so the renumbering was free.
+
 **Repository**
 - The contributor rules moved from an agent-specific filename to **`CONTRIBUTING.md`**, which is
   what an open-source repository is read for anyway. Content and section numbering are unchanged,

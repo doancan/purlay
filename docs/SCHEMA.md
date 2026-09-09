@@ -73,7 +73,9 @@ Global account. Not workspace-scoped: one identity spans workspaces. (D-3)
 CREATE TABLE users (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Nullable: reserved for Phase 2 magic-link accounts, which have no GitHub identity. (D-11)
+    -- Nullable for two reasons: Phase 2 magic-link accounts have no GitHub identity (D-11),
+    -- and erasure clears this column so a returning person gets a new account rather than
+    -- resurrecting the one they asked to have removed (D-38). UNIQUE permits many NULLs.
     github_id     BIGINT UNIQUE,
 
     -- The stable identity anchor across auth methods.
@@ -936,7 +938,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit.service` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry. | `retention.service` |
-| I-11 | An erased user has no personal data on `users`, no live session, and every message they authored still exists. Erasure never cascades. (D-27) | `erasure.service` |
+| I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
 
 ---
 

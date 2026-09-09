@@ -156,7 +156,7 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 
 ## 5. Composer
 
-Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.2).
+Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1).
 
 | Key | Action |
 |---|---|

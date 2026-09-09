@@ -30,12 +30,18 @@ Variables marked **required** have no default. Anything holding a secret is neve
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id |
+| `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38) |
 | `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64. Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
+| `WORKSPACE_OPEN_JOIN_SLUG` | — | — | When set, any authenticated user is joined to that workspace as `member` on sign-in. Unset means the instance is closed. (D-37) |
 
 The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/github/callback`.
+
+**On `WORKSPACE_OPEN_JOIN_SLUG`.** Phase 0 cannot reach its exit criterion without it —
+invitations are Phase 1, so a second user otherwise has no way into a workspace. The boot log
+states which workspace is open: an instance that quietly accepts anyone with a GitHub account is
+not something an operator should discover by accident.
 
 ## Object storage
 
@@ -78,6 +84,7 @@ configure what is not already a database constraint.
 `docker compose` provides PostgreSQL and MinIO. A `.env.example` ships with Phase 0 and must
 list every variable above — a variable added to the loader without being added there is a bug.
 
-**Production checklist:** `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and
+**Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
+intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and
 backed up · `DATABASE_SSL=true` on managed PostgreSQL · `TRUST_PROXY=true` behind a proxy ·
 `LOG_LEVEL=info` or higher, never `debug` (it is verbose, not secret-leaking, but noisy).

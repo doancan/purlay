@@ -144,11 +144,11 @@ a question you asked is the thing you were waiting for, not an interruption.
 `Cmd/Ctrl+K` command palette over channels, DMs, people and settings · substring search scoped
 to a workspace, optionally to a channel, keyset-paginated
 
-**4.6b · Administration** (D-26)
+**4.7 · Administration** (D-26)
 An append-only audit log of administrative actions — role changes, membership changes,
 integration credentials, workspace and channel settings. Never message content.
 
-**4.7 · GitHub**
+**4.8 · GitHub**
 Pasting a PR or Issue URL renders a card: title, state (`open`/`closed`/`merged`), author, CI
 status, review decision. Cached in PostgreSQL (D-23). Workspace-level credential.
 

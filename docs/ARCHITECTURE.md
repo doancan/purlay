@@ -315,13 +315,24 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
 > single source of truth. Adding a route here instead of there is a bug.
 
 1. `GET /auth/github` → redirect with a `state` value stored in a short-lived signed cookie.
-2. `GET /auth/github/callback` → verify `state`, exchange the code, fetch the profile.
-3. Upsert `users` by `github_id`.
+   Scopes: **`read:user user:email`**, nothing more. Repository access belongs to the
+   workspace-level integration token (D-23), never to a member's sign-in. (D-38)
+2. `GET /auth/github/callback` → verify `state`, exchange the code, fetch the profile **and
+   `/user/emails`**.
+3. Resolve identity (D-38): take the primary **verified** email, or refuse with `EMAIL_REQUIRED`.
+   Upsert `users` by `github_id`. A different `github_id` carrying an already-registered email is
+   refused with `ACCOUNT_EMAIL_CONFLICT` — **never linked silently** (D-5). `username` is
+   refreshed from GitHub's `login` and is display-only; a collision caused by a rename is stored
+   with a numeric suffix and logged.
 4. Generate a 32-byte random token. Store **only its SHA-256** in `sessions`. (D-11)
 5. Set `purlay_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, 30-day expiry.
 
 `state` verification is not optional — without it the callback is a CSRF endpoint that logs
 victims into an attacker's account.
+
+**Open join.** When `WORKSPACE_OPEN_JOIN_SLUG` is set, a user who is not yet a member of that
+workspace is joined as `member` here. Unset by default; Phase 0 cannot reach its exit criterion
+without it, because invitations are Phase 1. (D-37)
 
 ### 7.2. WebSocket upgrade
 

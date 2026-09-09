@@ -59,8 +59,12 @@ without disclosing it. (D-33)
 
 | ○ | Method | Path | Notes |
 |:-:|---|---|---|
-| ○ | `GET` | `/auth/github` | 302 to GitHub. Sets a short-lived signed `state` cookie |
-| ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, upserts the user, creates a session, 302 to `APP_URL` |
+| ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
+| ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL` |
+
+Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
+and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id`.
+Neither case is linked silently. (D-38)
 | ○ | `POST` | `/auth/logout` | Revokes the current session |
 | ① | `POST` | `/auth/logout-all` | Revokes every session for the user |
 | ○ | `GET` | `/api/me` | Current user plus workspace memberships |
