@@ -6,6 +6,21 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09: versions leave the documents
+
+- **D-56** — **a version is a fact, so it lives in the manifest and nowhere else.** `ARCHITECTURE.md`
+  §2 named versions beside choices. Two were bound to reality by a test; the third could not be,
+  because nothing had installed the thing. The table was asserting a fact about a repository it had
+  never looked at. §2 now names choices and never numbers, and `check-docs.py` — which already
+  refused a version outside its owners — has stopped exempting it. It caught the paragraph
+  explaining the rule, which named two versions while doing so.
+- **Every dependency is pinned exactly.** The repository was mixed, with no rule written for which
+  was which. A caret range is the polite form of *I do not know which version this is*; a pass from
+  a differently-resolved tree is "green in one state is not green" one layer down. Checked, and the
+  check was made to fail on purpose.
+- The test binding the database image to a major written in §2 **lost its subject** and was
+  replaced. The image tag is the fact; there is nothing left to bind it to.
+
 ### Specification — 2026-09-09: three claims the documents made and the repository did not
 
 - **D-55** — **Bun workspaces are the build orchestration; there is no task runner.** The stack

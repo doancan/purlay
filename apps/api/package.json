@@ -6,6 +6,6 @@
   "dependencies": {
     "@purlay/db": "workspace:*",
     "@purlay/types": "workspace:*",
-    "@sinclair/typebox": "^0.34.52"
+    "@sinclair/typebox": "0.34.52"
   }
 }

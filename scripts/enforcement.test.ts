@@ -290,3 +290,50 @@ describe('the compiler sees every file the linter does', () => {
     });
   }
 });
+
+/**
+ * Every dependency is pinned exactly.
+ *
+ * A caret range is the polite way of saying "I do not know which version this
+ * is". The lockfile knows, but a lockfile is a consequence, and a green check
+ * from a different resolved tree is the "green in one state is not green"
+ * problem one layer down (`CONTRIBUTING.md` §6.3). An exact pin makes an upgrade
+ * a visible commit that CI judges, which is what Dependabot already opens.
+ *
+ * `workspace:*` is not a range — it names the package in this repository, and
+ * there is nothing else it could resolve to. (D-56)
+ */
+describe('dependencies are pinned, not ranged', () => {
+  const manifests = Bun.spawnSync([
+    'bash',
+    '-lc',
+    'ls package.json apps/*/package.json packages/*/package.json',
+  ])
+    .stdout.toString()
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  test('there are manifests to check', () => {
+    expect(manifests.length).toBeGreaterThan(3);
+  });
+
+  for (const manifest of manifests) {
+    test(`${manifest} names an exact version for everything it installs`, () => {
+      const pkg = JSON.parse(readFileSync(manifest, 'utf8')) as Record<
+        string,
+        Record<string, string> | undefined
+      >;
+      const ranged: string[] = [];
+      for (const field of ['dependencies', 'devDependencies'] as const) {
+        for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
+          if (spec.startsWith('workspace:')) continue;
+          // An alias carries its own spec after the last `@`; check that part.
+          const version = spec.startsWith('npm:') ? (spec.split('@').pop() ?? '') : spec;
+          if (!/^\d/.test(version)) ranged.push(`${name}: ${spec}`);
+        }
+      }
+      expect(ranged).toEqual([]);
+    });
+  }
+});

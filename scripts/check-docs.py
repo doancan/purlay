@@ -89,8 +89,11 @@ for f, s in docs.items():
 # other document names the technology without a version, so there is nothing to
 # fall out of date. This is the check that would have caught four stale
 # "PostgreSQL 16" references an upgrade left behind.
-VERSION_OWNERS = {"docs/ARCHITECTURE.md", "docs/DECISIONS.md",
-                  "docs/changelog/changes.md"}
+# ARCHITECTURE.md used to be an owner. It is not one any more: a version is a
+# fact and its home is the manifest that installs it, so §2 names choices and
+# never numbers (D-56). DECISIONS.md keeps the exemption because it records dated
+# history — "the documents said PostgreSQL 16" has to stay sayable.
+VERSION_OWNERS = {"docs/DECISIONS.md", "docs/changelog/changes.md"}
 TECHNOLOGIES = ["PostgreSQL", "Bun", "React", "Vite", "Tailwind", "Kysely",
                 "TypeBox", "ElysiaJS", "Elysia", "TypeScript", "ESLint", "Prettier",
                 "Zustand", "Turborepo"]
@@ -115,7 +118,7 @@ for f, body in docs.items():
             continue
         line = body[:m.start()].count("\n") + 1
         problems["version stated outside its owner"].append(
-            f"{f}:{line}: {m.group(0)} — ARCHITECTURE.md §2 owns versions; name the technology only")
+            f"{f}:{line}: {m.group(0)} — a version lives in the manifest that installs it, not in a document; name the technology only (D-56)")
 
 # ---- 10. counts claimed in prose match the counts that exist ----------------
 count_re = re.compile(r"(\d+)\s+decisions\b")

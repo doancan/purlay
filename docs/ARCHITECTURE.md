@@ -29,12 +29,12 @@
 | Monorepo | Bun workspaces | No task graph and no remote cache: a pipeline that repeats work is the trigger to add one (D-55) |
 | Logging | `pino` | Named here because §10 mandates structured JSON logging and no document named the tool (D-44) |
 | i18n | typed message catalogues + `Intl` | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
-| Runtime | Bun 1.4+ | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
+| Runtime | Bun | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
 | HTTP + WS | ElysiaJS | Smaller community than Express/Fastify; docs move fast. **The highest-risk choice now that the cloud carries an uptime commitment** — Hono is the written fallback with a four-week trigger (D-20) |
-| Database | PostgreSQL 18 | Latest stable major (2025-09, supported to 2030-11). Ships a native `uuidv7()` we deliberately do not use — D-8 needs the id client-side |
+| Database | PostgreSQL, latest stable major | Ships a native `uuidv7()` we deliberately do not use — D-8 needs the id client-side |
 | Query builder | Kysely | No migration tooling and no relation loading; we write SQL and joins by hand |
 | Validation | TypeBox | Shared with Elysia's schema layer, so one definition validates and types |
-| Web | React 19 + Vite, single-page with a **prerendered shell** | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
+| Web | React + Vite, single-page with a **prerendered shell** | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
 | UI primitives | Radix, for dialog · menu · combobox · tooltip · popover only | One package per primitive so only what is used ships; everything else is written here (D-52) |
 | Component tests | `bun test` + `happy-dom` + Testing Library | Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
 | Browser tests | Playwright + `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
@@ -48,6 +48,13 @@
 | Thumbnails | to be confirmed against Bun in Phase 0 | Native image libraries are Bun's most common incompatibility — a Phase 0 spike, not a Phase 1 surprise |
 
 Full rationale and rejected alternatives: `DECISIONS.md` D-20.
+
+**No version numbers here, on purpose.** A version is a fact, and its home is the manifest that
+installs it — `package.json`, `bun.lock`, `docker-compose.yml`. A table that also carries the
+number is a second copy, and the second copy is the one that goes stale without anybody noticing:
+this document named a superseded database major for months, and named a web framework version
+while nothing had installed the framework at all. The check that keeps every other document free
+of versions now applies to this one too — and it caught this paragraph naming them. (D-56)
 
 **Not in the stack, deliberately:** an ORM (D-20) · Tauri before Phase 3 (D-14) · any client-side
 database (D-19) · `citext`, dropped in favour of an explicit `COLLATE "C"` (D-40) · an i18n
@@ -65,7 +72,7 @@ will. The cloud runs several nodes and swaps in the shared adapters behind the t
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Web client — React 19 + Vite                            │
+│  Web client — React + Vite                               │
 │  TanStack Query: HTTP/server state                       │
 │  Zustand:        socket, optimistic buffer, presence     │
 └────────────┬──────────────────────────┬──────────────────┘
