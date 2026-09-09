@@ -27,7 +27,7 @@ confirm:
 - [ ] **No rule was loosened to make this pass** — no new lint exception, no widened budget, no
       waived violation. If one was genuinely unavoidable it is linked to an issue (D-48)
 - [ ] `docs/changelog/changes.md` updated, if this is notable
-- [ ] The commit messages carry no tool name and no ticket reference (`CONTRIBUTING.md` §7)
+- [ ] The commit messages carry no tool name and no ticket reference (`CONTRIBUTING.md` §8)
 
 ## New runtime dependency?
 

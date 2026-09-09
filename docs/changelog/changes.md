@@ -212,7 +212,7 @@ rather than worked around.
 **Repository — work tracking moved to GitHub**
 - **`docs/ROADMAP.md` retired.** Its task list now lives as GitHub Issues, one per task, and
   keeping both would have been exactly the duplication `OVERVIEW.md`'s ownership rule forbids.
-  Its two unique facts moved rather than vanished: the working rule went to `CONTRIBUTING.md` §6,
+  Its two unique facts moved rather than vanished: the working rule went to `CONTRIBUTING.md` §7,
   and the "never" list was already only a pointer to `PRD.md` §6. Eleven references updated in
   the same change.
 - Milestones are versions, not phase names: `v0.1.0`, `v0.2.0`, `v0.3.0`, `v1.0.0`. The phase each

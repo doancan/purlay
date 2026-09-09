@@ -79,6 +79,8 @@ be healthy).
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |
 | `bun run lint:fix` | Fix what the linter can fix on its own |
+| `python3 scripts/check-docs.py -v` | Every cross-document reference, with the title of the section it lands on |
+| `python3 scripts/check-docs.py --write-sections` | Re-lock the section numbering after deliberately renumbering a document |
 
 `verify` is the fast loop and is deliberately the subset that needs nothing installed. A check that
 requires a database is not omitted from CI — it is a job of its own, and this is the command that
@@ -160,7 +162,107 @@ in front of you.
 
 ---
 
-## 6. Working on a task
+## 6. How to work
+
+These are not style preferences. Each one closes a way that a repository with good documents
+becomes a repository whose documents are fiction.
+
+### 6.1. One fact, one home
+
+**Before writing a fact down, find where it already lives.** `docs/OVERVIEW.md` carries the
+ownership map for both the documents and the code. A version, a credential, a limit, a list of
+rules — if it exists somewhere, point at it instead of repeating it.
+
+**Prefer deriving to maintaining.** A value that can be generated from its source is never wrong;
+a value transcribed from its source is wrong the first time somebody edits one of them. Generate
+the types, generate the example file, compute the queue.
+
+**Where a second copy genuinely earns its place, bind the two with a test.** Some duplication is
+useful — one place *does* the thing and another *explains* it. That is fine when a check fails if
+they disagree. A comment asking the reader to keep them in sync is not a mechanism.
+
+**A conflict rule is not single ownership.** "If these two disagree, that one wins" is an
+admission that drift is expected. Remove the copy or bind it.
+
+### 6.2. A rule without a mechanism is a wish
+
+**If a rule matters, make the build refuse to break it.** Prose is advisory. A rule nobody can
+violate accidentally is worth more than three rules everybody agrees with.
+
+**After writing a check, make it fail on purpose.** A check that has never failed is a check you
+have not tested — and the most expensive kind is one that passes for the wrong reason.
+
+**Never put a machine-checked thing on a human checklist.** The pipeline already blocks the merge;
+a box to tick beside it teaches people to tick boxes without reading. A checklist earns attention
+only if every item on it needs a person.
+
+**Name what watches a trigger.** A written condition — *revisit when X* — with nothing watching for
+X is a sentence, not a plan.
+
+### 6.3. Verify behaviour, not descriptions
+
+**A declared constraint is not an observed one.** Version ranges, capability matrices, tool
+documentation and metadata describe what something claims. Run it.
+
+**A mechanical edit asserts that it matched.** An automated change that silently does nothing is
+worse than one that fails: the failure is loud, the no-op is discovered later by somebody else.
+
+**When waiting for something, assert the positive condition.** *Nothing is pending* is trivially
+true before anything starts. Wait for *the thing I expect exists, and it has finished.*
+
+**Green in one state is not green.** Run the full verification in the order the pipeline runs it,
+before committing. A local pass from a different working state is an opinion.
+
+### 6.4. Suspect silence, and suspect success
+
+The expensive failures are the quiet ones. A thing that breaks loudly costs an hour; a thing that
+stops working without saying so costs whatever was built on top of it in the meantime.
+
+**Prefer loud failure to a quiet one.** An error over a no-op, a refusal over a silent default, a
+crash over a fallback that hides the cause. Anything that can fail without saying so eventually
+will, at the worst time.
+
+**Interrogate a pass.** *Could this have passed for a reason other than the one intended?* A check
+that matched a comment instead of code, a filter that matched nothing, a validator that accepted
+everything, a wait that returned before there was anything to wait for — each reports success and
+means nothing.
+
+**Absence is not evidence.** An empty result, a zero count, a clean search: equally consistent with
+*nothing is wrong* and *nothing was measured*. Before believing one, establish that the measurement
+could have produced the other answer.
+
+**A green check is a claim, not a proof, until you have seen it go red.** This applies hardest to
+checks you wrote yourself and to the ones that guard the most.
+
+**When something works first time, be more careful rather than less.** It usually means you have
+not yet run the case that fails.
+
+### 6.5. Make a place, not an exception
+
+When a rule does not fit a legitimate case, the fix is a **location** where that case belongs —
+not a waiver for one file. A per-file exception is invisible and multiplies; a named place is
+discoverable and stays small.
+
+The same applies to an exception that is genuinely unavoidable: it carries its reason and a linked
+issue, so it can be counted and eventually removed. **The target is not zero exceptions — it is
+zero exceptions nobody can find.**
+
+### 6.6. Finish the whole thing
+
+**A task is done when the code, its tests, the documents and the board have all moved.** Not when
+it runs. Anything less leaves work that looks finished, which is more expensive than work that
+looks unfinished.
+
+**Prove it, then say it.** Run the thing and paste the output. Evidence, then assertion — never the
+other way round, and never assertion alone.
+
+**Leaving part of the scope is a decision to state, not to make quietly.** Say what is left and
+why, in the pull request, so somebody can disagree.
+
+**Never destroy uncommitted work to get out of a mess.** Look at what is there first. A minute of
+reading beats an hour of reconstruction.
+
+## 7. Working on a task
 
 1. **Read the contract first.** Check `@purlay/types`. If the shape does not exist, define it
    there before writing any implementation.
@@ -194,7 +296,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 
 ---
 
-## 7. Git
+## 8. Git
 
 - **Branches:** `feature/`, `fix/`, `chore/`, `refactor/`, `docs/`
 - **Commits:** Conventional Commits — `feat(messages): add keyset pagination`
@@ -208,7 +310,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 
 ---
 
-## 8. Reminders
+## 9. Reminders
 
 1. `DECISIONS.md` wins every documentation conflict.
 2. Tenant isolation is checked on every endpoint, and returns 404.

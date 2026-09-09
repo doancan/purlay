@@ -8,7 +8,7 @@ a valid section with the wrong meaning, which no link checker would have caught.
 `docs/OVERVIEW.md` makes the ownership rule normative; this makes it enforceable.
 (D-47)
 """
-import re, pathlib, collections, sys
+import json, re, pathlib, collections, sys
 
 docs = {p.as_posix(): p.read_text() for p in sorted(pathlib.Path('.').rglob('*.md'))
         if not {'.agents', '.claude', 'node_modules'} & set(p.parts)}
@@ -138,6 +138,40 @@ for n in sorted(defined["D"]):
                 if f not in {"docs/DECISIONS.md", "docs/changelog/changes.md"})
     if not cited:
         problems["decision never cited outside DECISIONS.md"].append(f"D-{n}")
+
+# ---- 12. section numbering is locked to its meaning -------------------------
+# A reference names a number. When the text at that number changes, every
+# reference to it becomes quietly wrong while still resolving — which is a check
+# reporting success for the wrong reason, the failure this guards against
+# everywhere else. So the numbers and their titles are committed, and a change
+# has to be acknowledged rather than noticed later.
+LOCK = pathlib.Path("docs/sections.lock.json")
+current = {f: {n: t for n, t in sorted(TITLES[f].items()) if t}
+           for f in sorted(docs) if f != "docs/changelog/changes.md"}
+
+if "--write-sections" in sys.argv:
+    LOCK.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n")
+    print(f"wrote {LOCK} — {sum(len(v) for v in current.values())} sections")
+    sys.exit(0)
+
+if not LOCK.exists():
+    problems["section lock is missing"].append(
+        "run: python3 scripts/check-docs.py --write-sections")
+else:
+    locked = json.loads(LOCK.read_text())
+    for f, sections in current.items():
+        was = locked.get(f, {})
+        for number, title in sections.items():
+            before = was.get(number)
+            if before is not None and before != title:
+                pointing = sorted({src for src, doc, sec, _ in resolved
+                                   if alias.get(doc) == f and sec == number})
+                where = f" — referenced by {', '.join(pointing)}" if pointing else ""
+                problems["a section number changed meaning"].append(
+                    f"{f} §{number}: was {before!r}, now {title!r}{where}")
+        for number, title in was.items():
+            if number not in sections:
+                problems["a section number disappeared"].append(f"{f} §{number} ({title})")
 
 print(f"decisions D-1..D-{max(defined['D'])} · invariants I-1..I-{max(defined['I'])} · open questions O-1..O-{max(defined['O'])}")
 print(f"migrations {mig[0]}..{mig[-1]}")
