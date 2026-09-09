@@ -1,0 +1,55 @@
+# CI is the only authority on whether the checks pass. A claim in a pull request
+# description is not evidence. (D-47, CONTRIBUTING.md §5)
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+
+      - name: typecheck
+        run: bun run typecheck
+
+      - name: lint
+        run: bun run lint
+
+      - name: format
+        run: bun run format:check
+
+      - name: test
+        run: bun test
+
+      # Proves the guardrails still exist. A rule that stops failing the build has
+      # stopped being a rule, and that is a more expensive failure than a bug.
+      - name: enforcement is still enforced
+        run: bun run verify:enforcement
+
+  documents:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: cross-document references resolve
+        run: python3 scripts/check-docs.py

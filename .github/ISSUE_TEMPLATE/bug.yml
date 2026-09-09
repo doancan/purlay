@@ -1,6 +1,6 @@
 name: Bug
 description: Something behaves differently from what the documents specify.
-title: "What breaks, in 50–70 characters"
+title: 'What breaks, in 50–70 characters'
 labels: []
 body:
   - type: markdown
@@ -31,6 +31,6 @@ body:
     attributes:
       label: Fix discipline
       options:
-        - label: "A regression test is written **before** the fix, and fails first"
-        - label: "The caught error is handled or re-thrown — never logged and stepped over"
-        - label: "If the documents were wrong rather than the code, they are corrected in the same change"
+        - label: 'A regression test is written **before** the fix, and fails first'
+        - label: 'The caught error is handled or re-thrown — never logged and stepped over'
+        - label: 'If the documents were wrong rather than the code, they are corrected in the same change'

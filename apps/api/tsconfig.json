@@ -1,0 +1,6 @@
+{
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["bun"] },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../../packages/types" }, { "path": "../../packages/db" }]
+}

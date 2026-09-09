@@ -1,0 +1,13 @@
+# Build output and untracked files come from .gitignore, which Prettier is also
+# pointed at. Only prettier-specific exclusions belong here. (single source, D-45 spirit)
+
+# Generated from the migrations; never edited by hand. (D-45)
+packages/db/src/schema.ts
+
+# The documents are hand-wrapped at a deliberate width and their line breaks carry
+# intent. Reflowing them would produce an enormous diff and destroy that discipline.
+# Prettier's job is code.
+*.md
+LICENSE
+NOTICE
+bun.lock
