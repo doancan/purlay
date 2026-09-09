@@ -26,7 +26,7 @@
 
 | Layer | Choice | Cost we accepted |
 |---|---|---|
-| Monorepo | Bun workspaces + Turborepo | Turborepo config is another thing to maintain |
+| Monorepo | Bun workspaces | No task graph and no remote cache: a pipeline that repeats work is the trigger to add one (D-55) |
 | Logging | `pino` | Named here because §10 mandates structured JSON logging and no document named the tool (D-44) |
 | i18n | typed message catalogues + `Intl` | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
 | Runtime | Bun 1.4+ | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |

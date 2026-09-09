@@ -6,6 +6,23 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09: three claims the documents made and the repository did not
+
+- **D-55** — **Bun workspaces are the build orchestration; there is no task runner.** The stack
+  table listed Turborepo and accepted the cost of maintaining its configuration. Nothing was ever
+  installed: no `turbo.json`, no `turbo` in any manifest. A table describing a repository that does
+  not exist is worse than either choice. Resolved by deciding rather than by installing, with the
+  trigger for revisiting written down instead of implied.
+- **D-47 named the wrong owner.** Its text sent readers to `CONTRIBUTING.md` §5 for the required
+  test matrix — the copy D-21 was amended to remove, and which §5 itself says lives in
+  `ARCHITECTURE.md` §10. The reference resolved, so the consistency check passed: a section number
+  can be right while the sentence around it is wrong.
+- **`CONTRIBUTING.md` §5 said the same thing twice**, once as bullets and once as a paragraph under
+  them. Removed rather than reconciled.
+
+None of the three could be caught by what exists today. #156 covers the class the first one belongs
+to: the table has to say which tools are installed, and a test has to agree.
+
 ### Implementation — 2026-09-09: the tenant boundary became a type
 
 - **D-54** — a context is branded by a **module-private symbol key**, and asserting one is a lint

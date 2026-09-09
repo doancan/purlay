@@ -158,9 +158,6 @@ What belongs here is the discipline around them:
 - **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
   budget regression is a defect, not a threshold to adjust.
 
-Write the test first. Verify by running it — never claim something passes without the output
-in front of you.
-
 ---
 
 ## 6. How to work
