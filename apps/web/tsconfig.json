@@ -4,9 +4,10 @@
     "outDir": "../../.tsbuild/web",
     "rootDir": "src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "tsBuildInfoFile": "../../.tsbuild/web.tsbuildinfo"
+    "tsBuildInfoFile": "../../.tsbuild/web.tsbuildinfo",
+    "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "references": [
     {
       "path": "../../packages/types"
