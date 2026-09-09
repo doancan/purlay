@@ -552,6 +552,12 @@ monitoring and error tracking (D-44). Tenancy stays row-level in one database (D
 The build target, the multi-node ceiling and the numeric triggers between them are owned by
 `DECISIONS.md` D-25 — this section deliberately does not restate the numbers.
 
+**One operator-facing detail, decided now because it is invisible until it hurts.** The PostgreSQL
+volume is mounted at `/var/lib/postgresql`, not at `.../data`: from 18 onward the data directory
+sits inside the volume so that a later `pg_upgrade --link` does not cross a mount boundary.
+Mounting the data directory works perfectly until an operator's first major upgrade — a problem we
+would have created for them.
+
 `docker compose` brings up `api`, `web`, `postgres`, `minio` and a **scheduler** container that
 runs the CLI jobs on a cron (D-30). The scheduler ships wired by default: the known failure mode
 of external scheduling is the cron nobody installed, and every run records its outcome in

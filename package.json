@@ -21,7 +21,11 @@
     "verify:enforcement": "bun run scripts/verify-enforcement.ts",
     "typecheck:ts6": "tsc6 --build --force --pretty",
     "check:docs": "python3 scripts/check-docs.py",
-    "queue": "bun run scripts/queue.ts"
+    "queue": "bun run scripts/queue.ts",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",

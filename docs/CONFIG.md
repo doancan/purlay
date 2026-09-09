@@ -103,8 +103,21 @@ configure what is not already a database constraint.
 
 ## Local development
 
-`docker compose` provides PostgreSQL and MinIO. A `.env.example` ships with Phase 0 and must
-list every variable above — a variable added to the loader without being added there is a bug.
+`docker compose` provides PostgreSQL and MinIO. `bun run db:up` starts them and waits for both to
+report healthy; `bun run db:reset` throws the data away and starts again.
+
+**Host ports are overridable**, because 5432 and 9000 are conventional and frequently already
+taken — and a port collision is exactly the friction that turns *self-hosts it from the README*
+into a support ticket (`PRD.md` §3, S-2):
+
+| Variable | Default | For |
+|---|---|---|
+| `POSTGRES_PORT` | `5432` | Local development only; not read by the application |
+| `MINIO_PORT` | `9000` | S3 API |
+| `MINIO_CONSOLE_PORT` | `9001` | MinIO console |
+
+A `.env.example` ships with Phase 0 and must list every variable above — a variable added to the
+loader without being added there is a bug.
 
 **Database provisioning.** Identifier columns declare `COLLATE "C"` in the migrations, so the
 server locale cannot change how channel names or emails compare (D-40). `/health/ready` asserts
