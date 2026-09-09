@@ -44,7 +44,15 @@ the first four drafts of this project ended up contradicting each other at the s
 11. **No new infrastructure without a measurement.** No Redis, no broker, no queue, no cache
     layer, no client-side database. The `EventBus` seam already exists for Phase 3. (D-7)
 12. **No new runtime dependency without justification in the PR.** Prefer web standards and Bun
-    built-ins. Lodash, Moment and Axios are specifically not wanted.
+    built-ins. Lodash, Moment and Axios are specifically not wanted. The same justification is
+    owed for a **new UI primitive**: interfaces decay by fifty reasonable additions, not by one
+    bad one. (D-52)
+13. **Exceptions are expensive and visible, never invisible.** Every `eslint-disable` names its
+    rule, explains itself, and links an issue; a blanket or file-level disable is refused, and an
+    unused one fails the build. `@ts-expect-error` follows the same rule and `@ts-ignore` stays
+    banned. A `TODO` without an issue number is unowned debt and fails lint. Dead code is debt:
+    an export nothing imports is wired up or deleted. **The target is not zero exceptions — it is
+    zero exceptions nobody can count.** (D-48)
 
 ---
 
@@ -79,9 +87,16 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
   is prohibited. **Zustand owns realtime and optimistic state** (socket, pending sends,
   presence). The boundary is in D-18 — if it arrived over HTTP it is Query's; if it arrived
   over the socket or has not been sent yet it is Zustand's.
-- Every screen handles **loading, error and empty** states. An empty channel is a designed
-  state, not a blank div.
-- **No Tailwind arbitrary values** (`mt-[13px]`). Extend the theme instead.
+- Every screen handles **loading, error and empty** states, and a test asserts all four render.
+  An empty channel is a designed state, not a blank div. **No screen merges with a state
+  unhandled** — that is missing specified behaviour, not missing polish. (D-53)
+- **No raw visual values anywhere** — colour, spacing, type size, radius, shadow, motion duration
+  and easing come from the tokens, and a literal is a lint error. `mt-[13px]` is the obvious case;
+  the rule covers the whole vocabulary. Consistency comes from having no way to be inconsistent,
+  not from remembering. (D-52)
+- **Headless primitives for dialog, menu, combobox, tooltip and popover** (Radix). Focus
+  management and ARIA are where hand-written components fail silently. Everything else is written
+  here. (D-52)
 - Forms use `react-hook-form` + `zod`.
 - **Accessibility is not optional:** keyboard navigation, visible focus, WCAG AA contrast,
   labels on interactive controls. This product is keyboard-driven; there is no excuse.

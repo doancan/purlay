@@ -34,7 +34,10 @@
 | Database | PostgreSQL 18 | Latest stable major (2025-09, supported to 2030-11). Ships a native `uuidv7()` we deliberately do not use — D-8 needs the id client-side |
 | Query builder | Kysely | No migration tooling and no relation loading; we write SQL and joins by hand |
 | Validation | TypeBox | Shared with Elysia's schema layer, so one definition validates and types |
-| Web | React 19 + Vite | — |
+| Web | React 19 + Vite, single-page with a **prerendered shell** | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
+| UI primitives | Radix, for dialog · menu · combobox · tooltip · popover only | One package per primitive so only what is used ships; everything else is written here (D-52) |
+| Component tests | `bun test` + `happy-dom` + Testing Library | Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
+| Browser tests | Playwright + `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
 | Styling | Tailwind CSS | Verbose markup; arbitrary values prohibited, extend the theme instead |
 | Server state | TanStack Query | (D-18) |
 | Realtime state | Zustand | (D-18) |
