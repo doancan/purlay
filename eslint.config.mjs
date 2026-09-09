@@ -119,6 +119,13 @@ export default defineConfig([
           ],
         },
       ],
+      // Bun's types are available repository-wide because Bun is the test runner
+      // everywhere. Its runtime is not available in a browser, so reaching for it
+      // here compiles and then fails at the worst possible moment.
+      'no-restricted-globals': [
+        'error',
+        { name: 'Bun', message: 'apps/web runs in a browser. Bun APIs do not exist there.' },
+      ],
     },
   },
 

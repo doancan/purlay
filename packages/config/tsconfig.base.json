@@ -21,6 +21,7 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "allowJs": false,
+    "types": ["bun"],
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
