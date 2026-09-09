@@ -6,6 +6,44 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09 (fourth pass): the interface, the budgets, and the escape hatch
+
+The previous pass made seven rules fail the build and left the hatch that makes all of them
+optional wide open. This pass closes that, and settles the two things the enforcement layer could
+not check because nobody had decided them: what the interface is made of, and what "fast" means as
+a number a build can fail on.
+
+- **D-48** — exceptions are **expensive and visible, not closed**. Nothing stopped
+  `// eslint-disable-next-line @typescript-eslint/no-explicit-any`, which made every rule optional.
+  Each exception now names its rule, explains itself and links an issue; an unused one fails the
+  build, so the debt cleans itself up. An outright ban was rejected: it pushes people to loosen the
+  shared config instead, and a rule quietly weakened for the whole repository is far worse than one
+  line marked as an exception. **The target is zero exceptions nobody can count, not zero
+  exceptions.**
+- **D-49** — seven performance budgets were declared CI-enforceable and **none was measured**, which
+  is the exact failure D-17 exists to prevent, reproduced inside the document containing D-17. The
+  two deterministic ones now block; the five that move between identical runs block on a regression
+  instead. Thresholding a noisy p95 teaches a team to say "flaky, re-run it", and that habit does
+  not stay confined to one check.
+- **D-50** — the client stays a single-page application with a **prerendered shell**. The incumbent
+  everyone finds heavy is not heavy because of how it renders; it is heavy because of how much it
+  ships and how much it holds, so the answer is D-49's two numbers rather than a different
+  architecture.
+- **D-51** — desktop and mobile are **the same client in a shell**, and the bar is polish rather
+  than platform nativeness. Recorded because the quality bar named two exemplar groups that made
+  opposite decisions: none of the interface exemplars ships a native desktop application. Native
+  Swift clients are **not planned** — not deferred, since that choice changes the design system and
+  the contract from the first component.
+- **D-52** — the frontend gets an architecture rather than only an interaction spec: **one source
+  for every visual value** with a literal as a lint error, headless primitives for the five
+  components where focus and ARIA fail silently, `axe` and a keyboard-path test per screen, visual
+  snapshots, and a justification owed for each new primitive. `@base-ui-components/react` was the
+  obvious modern choice and is **deprecated at release-candidate stage** — checked rather than
+  remembered.
+- **D-53** — "production-ready" is a **per-screen definition of done**, not a phase. Phase order
+  decides what ships; this decides what shipping means. Each cause of an unfinished feel gets a
+  mechanism instead of an intention.
+
 ### Specification — 2026-09-09 (third pass): making the rules executable
 
 Forty-four decisions and eleven invariants, and **not one of them enforced by anything but

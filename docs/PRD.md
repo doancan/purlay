@@ -187,8 +187,13 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 
 ### Phase 3 — Polish
 
-Tauri desktop shell (D-14) · multi-node scale-out via a Redis-backed event bus (D-7, D-25) ·
-**OIDC single sign-on, gated on demand** (D-31) · mobile client
+Tauri desktop shell (D-14) · **mobile as an installable progressive web application** — one
+client in a shell, not a second codebase (D-51) · multi-node scale-out via a Redis-backed event
+bus (D-7, D-25) · **OIDC single sign-on, gated on demand** (D-31)
+
+> **Native Swift clients are not planned** — not deferred (D-51). The bar for desktop and mobile is
+> polish, not platform nativeness, which is the trade every interface exemplar we measure against
+> has also made.
 
 ---
 
@@ -215,8 +220,18 @@ service level; that is the operator's own business.
 20 messages/second peak, one API process. The multi-node ceiling and the numeric triggers that
 open Phase 3 live in `DECISIONS.md` D-25, which owns that fact.
 
+**How the budgets are enforced (D-49).** The two that are deterministic — **initial JS bundle**
+and **API idle RSS** — are measured on every pull request and **block the merge**. The five that
+depend on a running system are recorded per commit and block on a **regression**, not on an
+absolute threshold: a p95 measured on a shared runner moves by tens of percent between identical
+runs, and a check people learn to re-run stops being a check at all. The bundle budget is the
+urgent one, because it is the constraint that decides the markdown renderer, the highlighter and
+the i18n approach — all still unchosen.
+
 **Accessibility:** full keyboard navigation, visible focus, WCAG AA contrast, screen-reader
-labels on interactive controls. A tool this keyboard-driven has no excuse.
+labels on interactive controls. A tool this keyboard-driven has no excuse. **Verified in CI** by
+`axe` on every screen and a keyboard-path test per screen — a stated requirement with no check is
+not a requirement. (D-52)
 
 **Reliability:** a dropped socket reconnects with exponential backoff and replays missed
 messages by keyset cursor. Unacknowledged sends surface as `failed` with a retry action after

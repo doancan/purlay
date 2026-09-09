@@ -224,8 +224,9 @@ product; an invisible focus ring is a broken product, not a style choice. (`PRD.
 
 ## 8. Required states
 
-Every view implements all four. An unhandled empty state is an incomplete feature, not a polish
-item (`CONTRIBUTING.md` §4).
+Every view implements all four, **and a test asserts each one renders** (D-53). An unhandled empty
+state is an incomplete feature, not a polish item (`CONTRIBUTING.md` §4) — a screen missing one is
+missing specified behaviour and does not merge.
 
 | View | Empty | Loading | Error |
 |---|---|---|---|
@@ -247,6 +248,11 @@ forget you are in is a mode that loses you messages.
 ## 9. Visual system
 
 Decided here so Phase 0 does not invent one at random.
+
+> **These values are tokens, and the tokens are the only source.** Colour, spacing, type scale,
+> radius, shadow, motion duration and easing are declared once and consumed through the theme; a
+> literal in a component is a lint error. What makes an interface look designed rather than
+> assembled is the absence of a way to be inconsistent. (D-52)
 
 - **Type:** system UI stack for prose; `ui-monospace`/`SF Mono`/`JetBrains Mono` for code.
   Base 14px, code 13px, line-height 1.5 prose / 1.45 code.

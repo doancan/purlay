@@ -1,6 +1,6 @@
 # Purlay — Decision Record (`DECISIONS.md`)
 
-> **Status:** Approved 2026-09-07. Amended 2026-09-09 (D-25 – D-47; D-1, D-24 and D-28
+> **Status:** Approved 2026-09-07. Amended 2026-09-09 (D-25 – D-53; D-1, D-24 and D-28
 > rewritten when the product gained a cloud offering). Binding.
 > This file is the SSOT for *why*. `PRD.md` says what, `ARCHITECTURE.md`/`SCHEMA.md` say how.
 > Every decision below closes a question that was previously ambiguous or self-contradictory
@@ -256,6 +256,11 @@ New tables: `mentions` (parsed at write time, one row per mentioned user) and `n
 is the N+1 the project rules already forbid.
 
 ### D-14. Desktop is Phase 3, and the memory target is replaced
+
+**Amended 2026-09-09 by D-51**, which settled what the desktop and mobile clients *are*: one
+client in a shell, with the bar at polish rather than platform nativeness. Native Swift clients
+are not planned, and mobile is an installable progressive web application rather than the separate
+"mobile client" this phase list originally implied.
 
 The `<35MB idle` figure is removed from all documents. It is the footprint of an empty Tauri
 shell; a React 19 app with a tokenizer and a live socket inside WKWebView realistically idles
@@ -1333,6 +1338,223 @@ signature.
 **The cost, stated:** roughly the first week produces no user-visible behaviour. That is the
 trade — and it is the trade this project has already made once, deliberately, by writing the
 specification before the code.
+
+### D-48. Escape hatches are expensive and visible, not closed
+
+D-47 made seven rules fail the build. It did not close the hatch that makes all of them optional:
+
+```ts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const parse = (x: any) => x;
+```
+
+Nothing stopped that. A ban with an unrestricted bypass is a suggestion, and the cost is not
+theoretical — it is the days someone spends later removing `any` and ignore comments one file at a
+time, long after the reasoning behind each has been forgotten.
+
+**Decided: the hatch stays open, and is made expensive enough that nobody uses it casually.**
+
+- **Every `eslint-disable` carries a rule name, a description and a linked issue.** No blanket
+  disables, no file-level disables. The issue is what turns an exception into a countable, ownable
+  piece of debt instead of an anonymous one.
+- **An unused disable is an error.** When the code changes and the exception stops being needed,
+  CI says so. The debt cleans itself up rather than accumulating.
+- **`@ts-expect-error` follows the same rule** and is preferred over `@ts-ignore`, which stays
+  banned: `@ts-expect-error` fails once the underlying error is gone.
+- **A `TODO` or `FIXME` without an issue number is a lint error.** An unowned TODO is unowned debt.
+- **Dead code is debt.** `knip` runs in CI: an export nothing imports is either wired up or
+  deleted, not left for later.
+
+**Rejected — banning disable comments outright.** It sounds stricter and is worse. A genuinely
+unavoidable case — a third-party type that is wrong — pushes people to loosen
+`eslint.config.mjs` instead, and a rule quietly weakened for the whole repository is far more
+expensive than one line marked as an exception. The goal is not zero exceptions; it is **zero
+invisible exceptions**.
+
+**Accepted cost:** filing an issue for a one-line exception is friction. That is the point. The
+friction is what makes the count stay near zero.
+
+### D-49. Deterministic budgets block; noisy ones block on regression
+
+`PRD.md` §5 lists seven performance budgets and calls every one CI-enforceable. **None was being
+measured.** That is precisely the failure D-17 was written to prevent, reproduced by the document
+that contains D-17.
+
+They do not all have the same measurement maturity, and treating them identically is how the whole
+gate loses credibility.
+
+**Blocking, measured on every pull request:**
+
+| Budget | Why it can block |
+|---|---|
+| Initial JS bundle, gzipped < 250 KB | A single deterministic number from a build. It does not vary between runs. |
+| API idle RSS < 120 MB | Measured by starting the process and reading it. Stable enough to threshold. |
+
+**Blocking on regression, not on an absolute threshold:** ACK round-trip p95, fan-out p95, cold
+load, channel switch, keystroke→paint. Each is recorded per commit and compared with the previous
+measurement; a **jump** fails, a number near the line does not.
+
+**Why not threshold everything.** A p95 latency measured on a shared CI runner moves by tens of
+percent between identical runs. Make that blocking and within two weeks the team is saying "flaky,
+re-run it" — and that habit does not stay confined to one check. It spreads to the whole gate, and
+then nothing is enforced. **A gate people learn to re-run has already stopped being a gate.**
+
+**The bundle budget is the urgent one and it is architectural.** The markdown renderer, the
+syntax highlighter and the i18n approach are all still unchosen (D-36, D-41), and 250 KB is the
+constraint that decides them. Measuring after they are wired in is sitting the exam with the
+answers already written.
+
+**This is also the honest answer to why the incumbent is heavy.** Slack is not slow because of how
+it renders; it is slow because of how much it ships and how much it holds. The remedy is these two
+numbers, enforced from the first build — not a different rendering architecture (D-50).
+
+### D-50. The client stays a single-page application, with a prerendered shell
+
+Making load speed a first-class constraint reopens the question D-20 settled: React + Vite as a
+single-page application, or server rendering.
+
+**Decided: it stays an SPA, and the shell is prerendered to static HTML at build time.**
+
+**Why not server rendering.** This is chat: people leave it open all day. A cold load happens once;
+interaction latency happens thousands of times, and the product's central promise is an
+interaction one — *keystroke → your own message painted, under one frame, never awaiting the
+network* (D-17). Server rendering does not improve that and it fights the model the whole client is
+built on: the Zustand optimistic buffer, ACK reconciliation and reconnect replay (D-18) all assume
+the client owns this state, and a hydration boundary is where that assumption breaks.
+
+**What the prerendered shell buys.** The application frame — sidebar, channel header, message-list
+skeleton — is real HTML in the initial response, so the first paint is immediate and the JavaScript
+fills it rather than creating it. Most of what server rendering would have bought for a
+logged-in-all-day product, at none of the architectural cost.
+
+**Cold load is met by shipping less, not by rendering elsewhere:** route-level code splitting,
+lazily loaded highlighter grammars (D-36), one locale catalogue (D-41), and the budget in D-49
+that fails the build when any of that slips.
+
+**Trigger to revisit:** if the cold-load budget cannot be met with code splitting and a prerendered
+shell, server rendering returns to the table — with a measurement behind it. Switching now would
+trade a proven interaction model for an unmeasured fear.
+
+### D-51. Desktop and mobile are the same client in a shell, and the bar is polish rather than nativeness
+
+The quality bar was set by naming two groups: Vercel, Supabase and GitHub for interface quality,
+and Microsoft, Adobe and Google for the macOS and iOS applications. Those halves pull apart, and
+the tension is worth recording rather than resolving quietly.
+
+**None of the three interface exemplars ships a native macOS application.** Vercel does not.
+Supabase does not. GitHub Desktop is a web technology shell. They reached that interface quality
+partly *because* they concentrated on one client. Adobe, on the other side, has tens of thousands
+of employees.
+
+**Decided: one client, wrapped. The bar is polish, not platform nativeness.**
+
+- **Desktop:** the Tauri shell already scheduled for Phase 3 (D-14) — a real application bundle, a
+  dock badge, a global shortcut, native notifications, remembered window state.
+- **Mobile:** an installable progressive web application. iOS has supported installation and web
+  push since 16.4, which covers what a chat client actually needs.
+- **Native Swift clients are not planned.** Not "later" — not planned, until a measurement says
+  otherwise.
+
+**Why this is a decision and not a deferral.** Polish and nativeness look like the same road with
+different lengths, and they are not. Native clients require a second design system, a second
+release channel, App Store review, platform expertise and permanent maintenance — and they require
+choosing that **now**, because it changes how the API contract and the design system are shaped
+from the first component. Deciding it in Phase 3 is not deciding it; it is discovering that the
+first two phases were built for something else.
+
+**Said plainly: a web-technology shell does not feel native, and it will not.** That is exactly why
+Teams is criticised on macOS. This decision accepts that trade in exchange for one client that is
+excellent, which is the trade the interface exemplars all made.
+
+**Trigger to revisit:** paying customers asking for it, with numbers. At that point it is a
+business decision with revenue behind it (D-1), not an engineering preference.
+
+**Consistent with:** D-1's stated size — a small operation funded by its users — and D-2's
+*subtract before adding*. Three clients maintained by one person is the most reliable way to have
+three mediocre clients.
+
+### D-52. The frontend architecture: constraint, evidence and friction
+
+`UX.md` specifies behaviour beautifully and says nothing about how the code is shaped. Interface
+quality of the kind named as the bar is not produced by taste applied repeatedly; it is produced by
+**having few choices, checking the result, and making novelty cost something**.
+
+**1 · Constraint — one source for every visual value.**
+
+Design tokens (colour, spacing, type scale, radius, shadow, motion duration and easing) are
+declared once and consumed through Tailwind's theme. **A raw value in a component is a lint
+error** — `CONTRIBUTING.md` §4 already forbids arbitrary Tailwind values, and this extends that
+rule to the whole vocabulary. What makes an interface look designed rather than assembled is not
+inspiration; it is the absence of a way to be inconsistent.
+
+**2 · Primitives — headless, for the five things that are genuinely hard.**
+
+Dialog, menu, combobox (the command palette), tooltip and popover. Focus management, focus
+trapping, ARIA wiring and keyboard semantics are where hand-written components fail **silently**:
+they look correct and are unusable with a screen reader, while `PRD.md` §5 states accessibility as
+a requirement.
+
+**Radix**, verified rather than assumed: actively published, one package per primitive so only what
+is used ships, which matters against D-49's budget. *`@base-ui-components/react` was the obvious
+modern alternative and is **deprecated at release-candidate stage** — checked, not remembered.*
+Everything outside those five primitives is written here: a button that pulls in a dependency is a
+dependency that owns your button.
+
+**3 · Evidence — the interface is checked, not admired.**
+
+- `axe` on every component and every screen, in CI. A stated accessibility requirement with no
+  check is not a requirement.
+- A **keyboard-path test per screen**: every action reachable by mouse is reached by key, because
+  `UX.md` §7 says the product is keyboard-first and that claim needs an owner.
+- **Visual regression snapshots.** The only mechanical way to notice an interface breaking
+  quietly. Its maintenance cost is real and accepted; the alternative is finding out from a user.
+
+**4 · Friction — a new primitive must justify itself in the pull request.**
+
+Exactly what `CONTRIBUTING.md` §1.12 does for runtime dependencies, applied to components.
+Interfaces do not decay by a bad decision; they decay by fifty reasonable ones, each adding a
+variant nobody consolidated.
+
+**Testing shape:** `bun test` with `happy-dom` and Testing Library for component logic and
+accessibility; Playwright for keyboard paths, visual snapshots and the cold-load measurement
+D-49 needs. Two tools with two jobs, not two tools doing one job.
+
+**Rejected — a component library with opinions** (a full design system package). It brings a visual
+identity that is not ours and a bundle we do not control, and the interface is the product's face.
+
+**Rejected — no primitives at all.** Hand-writing a combobox with correct ARIA and focus behaviour
+is a fortnight, and it will still be wrong in a way nobody notices until somebody using a screen
+reader tries the command palette.
+
+### D-53. "Production-ready" is a per-screen definition of done, not a phase
+
+The requirement was stated directly: no output that feels like a prototype, production quality from
+the beginning. Read as scope that would contradict D-4's phasing and sink the project. Read
+correctly it is a **quality bar per unit of work**: phase order decides *what* ships, this decides
+*what shipping means*.
+
+`UX.md` §8 already says it — *"an unhandled empty state is an incomplete feature, not a polish
+item"* — and nothing checked it. Prototype feel has specific, mechanical causes, so each gets a
+mechanism rather than an intention:
+
+| What makes it feel unfinished | What prevents it |
+|---|---|
+| Default browser styling on form controls | Tokens and primitives; a raw value is a lint error (D-52) |
+| Inconsistent spacing and type sizes | One scale, no arbitrary values |
+| Missing loading, empty or error states | A test per screen asserting all four states render (`UX.md` §8) |
+| Invisible or default focus ring | `axe` plus the keyboard-path test; `outline: none` is a lint error |
+| Animation that is arbitrary or absent | Duration and easing are tokens; `UX.md` §9 keeps motion near zero |
+| Text that overflows or truncates badly | Visual snapshots at narrow and wide widths |
+| Icons of mixed weight and size | One icon set, one weight, sized from the type scale |
+| A screen that only works in one theme | Snapshots in **every theme that exists** — one until light arrives in Phase 2 (`UX.md` §9), both after |
+
+**No screen is merged with a state unhandled.** Not "styled later" — `UX.md` §8 names the empty,
+loading and error state for every view already, so a screen missing one is missing specified
+behaviour, not polish.
+
+**What this does not mean.** It does not mean building Phase 1 features during Phase 0. The walking
+skeleton ships *few* screens; each is finished. A small excellent product is what the interface
+exemplars in D-51 all are.
 
 ---
 
