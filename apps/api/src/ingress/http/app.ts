@@ -34,6 +34,7 @@ import {
   listWorkspaceMembers,
   readWorkspace,
 } from './workspaces';
+import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 
 export interface Dependencies {
   readonly config: Config;
@@ -117,6 +118,24 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
+    )
+
+    .get(
+      '/api/workspaces/:workspaceId/channels',
+      async ({ request, params }) => await listChannels(dependencies, request, params.workspaceId),
+    )
+    .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
+      set.status = 201;
+      return await createWorkspaceChannel(dependencies, request, params.workspaceId, body);
+    })
+    .get(
+      '/api/channels/:channelId',
+      async ({ request, params }) => await readChannel(dependencies, request, params.channelId),
+    )
+    .post(
+      '/api/channels/:channelId/join',
+      async ({ request, params }) =>
+        await joinPublicChannel(dependencies, request, params.channelId),
     );
 
   return app;

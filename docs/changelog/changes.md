@@ -6,6 +6,22 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: channels
+
+- **The four channel endpoints Phase 0 serves**, and the first place both guards meet: a channel
+  named inside its workspace goes through the membership guard then the visibility guard; a channel
+  named on its own derives the workspace from the resource and does both.
+- **Two mandates, not one.** Every workspace-scoped endpoint carries the cross-tenant `404` (D-21)
+  and every channel-scoped one carries the intra-workspace visibility `404` (D-34) — four tests,
+  each also asserting the body matches the one for something that does not exist.
+- **Listing narrows with the visible set** rather than filtering after the fact, which is the shape
+  D-34 requires and what will confine the trigram scan when search arrives. Replacing it with a
+  workspace-wide read on purpose failed the test.
+- **Joining is idempotent.** A `409` on a second join makes a retry after a dropped response look
+  like a failure, when the outcome asked for is already true.
+- Names are unique **per workspace**, case-insensitively, among live channels only — so the same
+  name in another workspace is fine, and deleting a channel frees its name.
+
 ### Implementation — 2026-09-09: channel visibility as a type
 
 - **`ChannelContext`**, the second axis (D-34). Same mechanism as the tenant boundary: a brand keyed
