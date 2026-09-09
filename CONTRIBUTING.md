@@ -125,6 +125,11 @@ branch, one pull request.
 | Integration test | Every endpoint, against real PostgreSQL and real migrations |
 | Realtime test | Ordering, ACK, reconnect replay, duplicate-send idempotency |
 | Regression test | Every bug fix, written before the fix |
+| **Accessibility test (`axe`)** | **Every component and every screen. A violation is fixed, not waived.** |
+| **Keyboard-path test** | **Every screen — what the mouse reaches, a key reaches (`UX.md` §7)** |
+| **State test** | **Every view: loading, error and empty each render (`UX.md` §8)** |
+| Visual snapshot | Every component and screen, in each theme that exists |
+| Budget check | Bundle size and idle RSS block; latency budgets block on regression (D-49) |
 
 Write the test first. Verify by running it — never claim something passes without the output
 in front of you.

@@ -51,7 +51,9 @@ Full rationale and rejected alternatives: `DECISIONS.md` D-20.
 
 **Not in the stack, deliberately:** an ORM (D-20) · Tauri before Phase 3 (D-14) · any client-side
 database (D-19) · `citext`, dropped in favour of an explicit `COLLATE "C"` (D-40) · an i18n
-framework (D-41).
+framework (D-41) · **a component library with opinions** (D-52) — headless primitives *are* in the
+stack, because focus and ARIA fail silently when hand-written; an imposed visual identity is not,
+because the interface is the product's face · server-side rendering (D-50).
 
 **Redis is deployment-dependent, not absent.** A self-hosted instance never needs it and never
 will. The cloud runs several nodes and swaps in the shared adapters behind the three interfaces in
@@ -525,6 +527,11 @@ layering rule. (D-46)
 | Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) |
 | Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) |
 | Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); erasure never removes a message (I-11) |
+| **Accessibility** | **`axe` clean on every component and every screen. A violation is fixed, never waived (D-52)** |
+| **Keyboard path** | **Every action reachable by mouse is reached by key, per screen (`UX.md` §7)** |
+| **Screen states** | **Loading, error and empty each render, per view. A missing state is missing specified behaviour (`UX.md` §8, D-53)** |
+| Visual regression | A snapshot per component and screen, in every theme that exists (D-52) |
+| Budget | Bundle and idle RSS against `PRD.md` §5 block; latency budgets block on a regression against the previous commit (D-49) |
 
 `typecheck` + `lint` + `test` gate every merge. No `any`. Every bug fix ships with a regression
 test.

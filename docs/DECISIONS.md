@@ -257,6 +257,11 @@ is the N+1 the project rules already forbid.
 
 ### D-14. Desktop is Phase 3, and the memory target is replaced
 
+**Amended 2026-09-09 by D-51**, which settled what the desktop and mobile clients *are*: one
+client in a shell, with the bar at polish rather than platform nativeness. Native Swift clients
+are not planned, and mobile is an installable progressive web application rather than the separate
+"mobile client" this phase list originally implied.
+
 The `<35MB idle` figure is removed from all documents. It is the footprint of an empty Tauri
 shell; a React 19 app with a tokenizer and a live socket inside WKWebView realistically idles
 at 80–150MB. A requirement that fails on first measurement teaches the team to ignore the
@@ -1541,7 +1546,7 @@ mechanism rather than an intention:
 | Animation that is arbitrary or absent | Duration and easing are tokens; `UX.md` §9 keeps motion near zero |
 | Text that overflows or truncates badly | Visual snapshots at narrow and wide widths |
 | Icons of mixed weight and size | One icon set, one weight, sized from the type scale |
-| A screen that only works in one theme | Snapshots taken in both |
+| A screen that only works in one theme | Snapshots in **every theme that exists** — one until light arrives in Phase 2 (`UX.md` §9), both after |
 
 **No screen is merged with a state unhandled.** Not "styled later" — `UX.md` §8 names the empty,
 loading and error state for every view already, so a screen missing one is missing specified
