@@ -6,6 +6,27 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: the socket
+
+- **The bus, the admission and the router**, all framework-neutral, so the security gate and the
+  protocol are tested against a real database without a server. What the transport adds is thin,
+  and this is what it is thin around.
+- **The origin is checked before the session is looked up** (D-39). `SameSite=Lax` does not
+  reliably protect a handshake: another origin can open the socket and the browser may attach the
+  cookie. A missing origin is refused too — a browser following the rules always sends one.
+  Removing the check failed two tests.
+- **One transaction, published after it commits, acknowledged after publishing** (D-35). A refused
+  send publishes nothing, so nobody sees a message that was not written. The transaction boundary is
+  a **dependency** rather than a call, for the reason D-46 makes every executor an argument: a
+  function that opens its own transaction cannot be run inside the one the harness rolls back.
+- **Subscribing is authorised per channel** — a socket cannot listen to a conversation it could not
+  read over HTTP — and replays what was missed oldest-first by keyset, because ids are time-ordered.
+- **The bus forgets a closed socket entirely.** A topic set that is never cleaned up grows with
+  every channel anybody ever opened, and only shows up after a long uptime.
+- **#174 opened for the two limits §5.5 states and nothing enforces**: the frame cap cannot be
+  applied where the router sees the payload, because the framework parses JSON first — measured —
+  and the rate limit is still O-4.
+
 ### Implementation — 2026-09-09: messages
 
 - **The hot path, and all three of D-33's permanent failures.** A wrong version, a timestamp from

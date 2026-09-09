@@ -36,6 +36,10 @@ import {
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 import { postMessage, readHistory } from './messages';
+import { inProcessEventBus } from '../../realtime/bus';
+import { createSocketHub } from '../../realtime/hub';
+import { routeFrame } from '../../realtime/router';
+import { admitSocket } from '../../realtime/upgrade';
 
 export interface Dependencies {
   readonly config: Config;
@@ -81,6 +85,9 @@ const respond = (
 };
 
 export const createApp = (dependencies: Dependencies): HttpApplication => {
+  const hub = createSocketHub(dependencies.database, dependencies.clock);
+  const bus = inProcessEventBus(hub.deliver);
+
   const app = new Elysia()
     /**
      * One error handler for the whole surface, so a status is decided in exactly
@@ -146,6 +153,61 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
       set.status = 201;
       return await postMessage(dependencies, request, params.channelId, body);
+    })
+
+    /**
+     * The socket.
+     *
+     * `beforeHandle` runs **before the socket is bound** — verified, not assumed
+     * (`docs/spikes/elysia.md`) — so a wrong origin and a missing session are
+     * refused with a real HTTP status rather than a socket that opens and then
+     * closes for a reason the client has to guess at (D-39, §7.2).
+     */
+    .ws('/ws', {
+      beforeHandle: async ({ request, set }) => {
+        try {
+          await admitSocket(
+            {
+              database: dependencies.database,
+              clock: dependencies.clock,
+              appUrl: dependencies.config.APP_URL,
+            },
+            request,
+          );
+          return undefined;
+        } catch (error) {
+          const refusal = refusalFor('UPGRADE', error, []);
+          set.status = refusal.status;
+          return refusal.body;
+        }
+      },
+      open: (socket) => {
+        hub.opened(socket.id, (payload) => {
+          socket.send(payload);
+        });
+      },
+      message: async (socket, raw) => {
+        const identity = await hub.identify(socket.id, socket.data.request);
+        // The session went while the socket was open. Nothing to answer to.
+        if (identity === undefined) return;
+        for (const reply of await routeFrame(
+          {
+            database: dependencies.database,
+            clock: dependencies.clock,
+            bus,
+            // The real boundary. D-35: one transaction, published after it returns.
+            atomically: async (body) => await dependencies.database.transaction().execute(body),
+          },
+          identity,
+          raw,
+        )) {
+          socket.send(JSON.stringify(reply));
+        }
+      },
+      close: (socket) => {
+        bus.forget(socket.id);
+        hub.closed(socket.id);
+      },
     });
 
   return app;
