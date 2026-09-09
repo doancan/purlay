@@ -1,0 +1,13 @@
+{
+  "extends": "../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../.tsbuild/scripts",
+    "rootDir": ".",
+    "types": [
+      "bun"
+    ]
+  },
+  "include": [
+    "**/*.ts"
+  ]
+}

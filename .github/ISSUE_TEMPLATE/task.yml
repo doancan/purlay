@@ -1,6 +1,6 @@
 name: Task
 description: A unit of work that already has a decision behind it.
-title: "Short imperative title, 50–70 characters"
+title: 'Short imperative title, 50–70 characters'
 body:
   - type: markdown
     attributes:
@@ -16,7 +16,7 @@ body:
     attributes:
       label: Context
       description: Why this exists, and which decision it rests on. Cite the D-number.
-      placeholder: "D-21 singles this defect class out as silent, unbounded and unrecoverable, so…"
+      placeholder: 'D-21 singles this defect class out as silent, unbounded and unrecoverable, so…'
     validations: { required: true }
   - type: textarea
     id: scope
@@ -39,30 +39,30 @@ body:
   - type: checkboxes
     id: dod-always
     attributes:
-      label: "Definition of done — always"
+      label: 'Definition of done — always'
       options:
-        - label: "`bun run typecheck` clean — no `any`, explicit return type on every function"
-        - label: "`bun run lint` clean — the layering rule holds (`ingress → modules → platform`)"
-        - label: "`bun test` green, **with the output pasted in the pull request**. Evidence, then assertion"
-        - label: "Documentation updated **in the same change**: schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a new numbered decision in `DECISIONS.md`"
-        - label: "The change is the minimal delta the task requires; no unrelated refactor rode along"
+        - label: '`bun run typecheck` clean — no `any`, explicit return type on every function'
+        - label: '`bun run lint` clean — the layering rule holds (`ingress → modules → platform`)'
+        - label: '`bun test` green, **with the output pasted in the pull request**. Evidence, then assertion'
+        - label: 'Documentation updated **in the same change**: schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a new numbered decision in `DECISIONS.md`'
+        - label: 'The change is the minimal delta the task requires; no unrelated refactor rode along'
   - type: checkboxes
     id: dod-conditional
     attributes:
-      label: "Definition of done — when it applies"
+      label: 'Definition of done — when it applies'
       options:
-        - label: "Shapes defined in `@purlay/types` **before** any implementation"
-        - label: "Unit test per new service rule, and per `SCHEMA.md` §11 invariant touched"
-        - label: "Integration test against real PostgreSQL and real migrations"
-        - label: "**Cross-tenant isolation test asserting 404** — every workspace-scoped endpoint, no exceptions"
-        - label: "**Intra-workspace visibility test asserting 404** — every channel-scoped endpoint"
-        - label: "Permission test per role, for role-gated actions"
-        - label: "Realtime test — ordering, ACK, reconnect replay, duplicate-send idempotency"
-        - label: "Kysely types and the migration changed in the same commit; schema-drift test passes"
-        - label: "`docs/changelog/changes.md` updated, if the change is notable"
+        - label: 'Shapes defined in `@purlay/types` **before** any implementation'
+        - label: 'Unit test per new service rule, and per `SCHEMA.md` §11 invariant touched'
+        - label: 'Integration test against real PostgreSQL and real migrations'
+        - label: '**Cross-tenant isolation test asserting 404** — every workspace-scoped endpoint, no exceptions'
+        - label: '**Intra-workspace visibility test asserting 404** — every channel-scoped endpoint'
+        - label: 'Permission test per role, for role-gated actions'
+        - label: 'Realtime test — ordering, ACK, reconnect replay, duplicate-send idempotency'
+        - label: 'Kysely types and the migration changed in the same commit; schema-drift test passes'
+        - label: '`docs/changelog/changes.md` updated, if the change is notable'
   - type: textarea
     id: specific
     attributes:
       label: Specific to this issue
       description: The acceptance criterion only this task has. Be concrete enough to fail.
-      placeholder: "A repository method called without a `WorkspaceContext` fails to compile."
+      placeholder: 'A repository method called without a `WorkspaceContext` fails to compile.'

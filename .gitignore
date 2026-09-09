@@ -29,6 +29,7 @@ secrets/
 node_modules/
 .pnp.*
 dist/
+.tsbuild/
 build/
 out/
 *.tsbuildinfo

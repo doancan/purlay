@@ -338,6 +338,14 @@ pinned to its current stable line: Bun 1.4, ElysiaJS 1.4, React 19.2, Vite 8, Ta
 Kysely 0.29, TypeBox 0.34, TanStack Query 5, Zustand 5. A stack table with a version nobody
 checked is how a project arrives at launch three majors behind.
 
+**TypeScript is pinned to 6.0.3, one major behind, and the reason is worth recording.** The
+latest stable is 7.0.2. **No release of `typescript-eslint` supports it** — the peer range is
+`>=4.8.4 <6.1.0`, and that is still true of the canary. Choosing TypeScript 7 would therefore have
+silently disabled type-aware linting, which is the entire mechanism D-47 rests on: without it,
+`no-floating-promises` and the `no-unsafe-*` family stop working and the rules become prose again.
+A newer compiler is not worth a weaker gate. **Revisit when `typescript-eslint` widens the range**
+— that is the trigger, and nothing else.
+
 *Noted, not adopted:* PostgreSQL 18 ships a native `uuidv7()`. D-8 requires the **client** to
 generate the id so the optimistic row and the durable row share one value, so the server function
 is not used — but the column type and ordering assumptions are now backed by the database's own
