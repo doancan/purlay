@@ -6,6 +6,25 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: workspaces
+
+- **The four workspace endpoints Phase 0 serves**, each through the membership guard, each carrying
+  the cross-tenant test `ARCHITECTURE.md` §10 makes mandatory — and asserting not only `404` but
+  that the body is **byte-identical** to the one for a workspace that does not exist. Turning the
+  guard's refusal into a `403` on purpose failed both.
+- **`WORKSPACE_SLUG_TAKEN`** joins the closed error set. A slug is an address in a URL and the
+  contract had no code for taking one twice; the nearest existing one was about channels.
+- **Validation is this project's, not the framework's.** The framework's refusal echoes the
+  submitted value and publishes the schema, so a typo comes back as a description of the server's
+  own rules. The test asserts a submitted secret and the words `minLength` and `pattern` are all
+  absent from the refusal.
+- **I-2 is established here and guarded elsewhere**, stated rather than left implied: creation makes
+  an owner and that is tested, and nothing in Phase 0 can then break it — changing a role and
+  removing a member are both Phase 1. The guard belongs with the endpoints that can violate it,
+  where it can be tested against something that tries.
+- **`/api/*` requires a session**, in one place, with a missing and an invalid cookie producing the
+  same `401`.
+
 ### Implementation — 2026-09-09: signing in with GitHub
 
 - **The whole handshake**, driven end to end in tests against a real database with GitHub as a

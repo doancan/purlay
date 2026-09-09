@@ -50,7 +50,7 @@ account for it. `message` is for humans and may change. (D-47)
 | `401` | No session, or the session is expired or revoked |
 | `403` | Authenticated and in the workspace, but the role is insufficient |
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
-| `409` | Conflict — duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33) |
+| `409` | Conflict — duplicate workspace slug, duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33) |
 | `413` | Upload exceeds `attachment_size_limit` |
 | `429` | Rate limited |
 

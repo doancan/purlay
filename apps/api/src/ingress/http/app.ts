@@ -28,6 +28,12 @@ import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
 import { refusalFor } from './errors';
+import {
+  createMyWorkspace,
+  listMyWorkspaces,
+  listWorkspaceMembers,
+  readWorkspace,
+} from './workspaces';
 
 export interface Dependencies {
   readonly config: Config;
@@ -96,6 +102,21 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .post('/auth/logout-all', async ({ request, set }) =>
       respond(set, await signOutEverywhere(dependencies, request)),
+    )
+
+    .get('/api/workspaces', async ({ request }) => await listMyWorkspaces(dependencies, request))
+    .post('/api/workspaces', async ({ request, body, set }) => {
+      set.status = 201;
+      return await createMyWorkspace(dependencies, request, body);
+    })
+    .get(
+      '/api/workspaces/:workspaceId',
+      async ({ request, params }) => await readWorkspace(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/members',
+      async ({ request, params }) =>
+        await listWorkspaceMembers(dependencies, request, params.workspaceId),
     );
 
   return app;
