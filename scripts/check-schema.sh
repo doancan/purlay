@@ -10,7 +10,11 @@
 # Requires a database. `bun run verify` is deliberately the subset that does not.
 set -euo pipefail
 
-: "${DATABASE_URL:?DATABASE_URL is not set. Start the environment with: bun run db:up}"
+# The development credentials live in docker-compose.yml. Defaulting to them
+# here rather than repeating the string in the workflow keeps one place to
+# change, and `environment.test.ts` fails if this default stops matching them.
+DEV_DATABASE_URL="postgres://purlay:purlay@localhost:${POSTGRES_PORT:-5432}/purlay"
+export DATABASE_URL="${DATABASE_URL:-$DEV_DATABASE_URL}"
 
 bun run db:migrate
 bun run db:generate

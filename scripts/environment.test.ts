@@ -74,6 +74,53 @@ describe('the development environment', () => {
     }
   });
 
+  /**
+   * The development credentials exist in the compose file; the schema check
+   * defaults to them. Two places, bound rather than trusted — the sweep that
+   * found this also found the Bun version pinned in five.
+   */
+  test('the schema check and the compose file agree on the development credentials', () => {
+    const script = readFileSync('scripts/check-schema.sh', 'utf8');
+    const user = /POSTGRES_USER:\s*(\S+)/.exec(compose)?.[1];
+    const password = /POSTGRES_PASSWORD:\s*(\S+)/.exec(compose)?.[1];
+    const database = /POSTGRES_DB:\s*(\S+)/.exec(compose)?.[1];
+
+    expect(user).toBeDefined();
+    expect(script).toContain(`postgres://${user ?? ''}:${password ?? ''}@localhost:`);
+    expect(script).toContain(`/${database ?? ''}"`);
+  });
+
+  /** `packageManager` is the source; the type package must not drift from it. */
+  test('the Bun runtime and its types are the same version', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      packageManager: string;
+      devDependencies: Record<string, string>;
+    };
+    const runtime = /^bun@(.+)$/.exec(pkg.packageManager)?.[1];
+    expect(runtime).toBeDefined();
+    expect(pkg.devDependencies['@types/bun']).toBe(runtime ?? '');
+  });
+
+  test('the pipeline reads the Bun version rather than repeating it', () => {
+    const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+    expect(workflow).toContain('bun-version-file: package.json');
+    expect(workflow).not.toMatch(/bun-version:\s*\d/);
+  });
+
+  /**
+   * The port defaults exist in the compose file and are documented in
+   * `CONFIG.md`. Both are useful — one is the behaviour, the other explains it —
+   * so they are bound rather than reduced to one.
+   */
+  test('the documented port defaults are the ones the compose file uses', () => {
+    const config = readFileSync('docs/CONFIG.md', 'utf8');
+    for (const variable of ['POSTGRES_PORT', 'MINIO_PORT', 'MINIO_CONSOLE_PORT']) {
+      const used = new RegExp(`\\$\\{${variable}:-(\\d+)\\}`).exec(compose)?.[1];
+      expect(used).toBeDefined();
+      expect(config).toContain(`\`${variable}\` | \`${used ?? ''}\``);
+    }
+  });
+
   test('every service defines readiness, so a cold start is deterministic', () => {
     const services = (/^services:\n([\s\S]*?)\nvolumes:/m.exec(compose)?.[1] ?? '')
       .split(/\n  (?=[a-z])/)

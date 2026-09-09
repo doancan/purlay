@@ -85,26 +85,11 @@ serving 30 people does not need one, and the seam to add one later is already in
 
 ## Repository layout
 
-```
-purlay/
-├── apps/
-│   ├── api/          Bun + Elysia — ingress/ · modules/ · realtime/ · platform/
-│   └── web/          React + Vite — features/ · components/ · realtime/ · api/
-├── packages/
-│   ├── types/        the contract: models · events · api  (@purlay/types)
-│   ├── db/           Kysely schema · SQL migrations       (@purlay/db)
-│   └── config/       shared eslint · prettier · tailwind · tsconfig
-├── docs/             PRD · DECISIONS · ARCHITECTURE · SCHEMA · UX · API · CONFIG · changelog/
-├── README.md         public front door
-├── LICENSE           AGPL-3.0 (D-24) · NOTICE
-└── CONTRIBUTING.md   contributor and AI-agent rules
-```
+Owned by `ARCHITECTURE.md` §4, with the dependency direction lint enforces. Not drawn twice: a
+tree copied into a second file is a tree that will describe a directory somebody moved.
 
-`apps/desktop` (Tauri) arrives in **Phase 3**, not before. (`DECISIONS.md` D-14)
-
-Detailed layout and the enforced dependency direction: `ARCHITECTURE.md` §4.
-
----
+`apps/desktop` (Tauri) arrives in **Phase 3**, not before. Mobile is the same client installed
+from the browser, not a second codebase. (`DECISIONS.md` D-14, D-51)
 
 ## Current status
 
