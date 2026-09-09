@@ -1332,14 +1332,14 @@ signature.
 
 - **Mutation testing.** Genuinely rigorous, and its setup and run-time cost at this scale buys less
   than the fitness tests above.
-- **A global coverage target.** A percentage produces tests written to move the percentage. The
-  required test matrix in `CONTRIBUTING.md` §5 already says which tests must exist and why; a floor
-  on *newly added* lines is the only number worth keeping.
+- **A global coverage target.** A percentage produces tests written to move the percentage.
+  `ARCHITECTURE.md` §10 already says which tests must exist and why; a floor on *newly added*
+  lines is the only number worth keeping.
 - **DDD or hexagonal ceremony.** `ingress → modules → platform` is enough structure for this
   product and it is enforceable. Aggregates and repository interfaces over repository interfaces
   are cost without a defect class to justify them.
 - **Pre-commit hooks as the authority.** Useful for speed, skippable by design. CI decides.
-- **Tuning the Turborepo task graph.** There is nothing to build yet.
+- **A monorepo task runner.** Bun workspaces are the whole build orchestration (D-55).
 
 **The cost, stated:** roughly the first week produces no user-visible behaviour. That is the
 trade — and it is the trade this project has already made once, deliberately, by writing the
@@ -1607,6 +1607,30 @@ there is no legitimate case to make room for. The rule matches by name so `Chann
 is covered before it is written, rather than on the day somebody remembers to extend a list.
 `scripts/verify-enforcement.ts` proves the ban by writing a violation and requiring *that rule* to
 be the one that rejects it.
+
+---
+
+### D-55. Bun workspaces are the build orchestration; there is no task runner
+
+The stack table listed **Bun workspaces + Turborepo** and accepted "Turborepo config is another
+thing to maintain" as its cost. Nothing was ever installed: there is no `turbo.json` and no `turbo`
+in any manifest. The table described a repository that does not exist, which is worse than either
+choice — a reader following it looks for a file that is not there, and a claim nobody checks is a
+claim that stays wrong.
+
+Resolved by deciding rather than by installing. **Bun workspaces are the orchestration.** Five
+packages, one `tsc --build` that already caches incrementally through project references, and a
+pipeline whose longest job is under a few minutes: a task graph and a remote cache have no defect
+class to justify them here. It is the argument D-47 makes against DDD ceremony, one layer down.
+
+**The trigger, named rather than implied.** Add one when the pipeline repeats work it has already
+done — concretely, when `verify` exceeds five minutes locally or a CI job exceeds ten, and the
+cause is rebuilding unchanged packages rather than the work itself growing. Until then the
+orchestration is a shell `&&`.
+
+**Rejected: installing it now to make the document true.** Configuration written before there is
+anything to cache is configuration nobody can evaluate, and it would have to be maintained through
+every packaging change in the meantime for a benefit measured at zero.
 
 ---
 
