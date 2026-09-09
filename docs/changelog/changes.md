@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: one command, two processes
+
+- **`bun run dev` starts both.** It delegates to each workspace's own `dev` rather than repeating
+  their commands, so there is one definition of how each application starts and the shortcuts
+  (`dev:api`, `dev:web`) cannot drift from it. Bound by a test.
+- Verified by running it: API `200` on `/health`, client `200`, from a single command.
+
 ### Implementation — 2026-09-09: the client boots
 
 - **`bun run dev:web` serves and `bun run build:web` builds.** Vite, React and Tailwind at exact
