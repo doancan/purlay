@@ -53,6 +53,44 @@ The stack table named only the first.
 **`types` must be extended, not replaced.** The base pins `types: ["bun"]`, which suppresses
 automatic inclusion — so a CSS side-effect import fails until `vite/client` is named explicitly.
 
+## What building it for real then taught
+
+**The measured skeleton is smaller than this spike's**, because this spike installed more than the
+client needed. Built from `apps/web` with React, Tailwind and nothing else:
+
+```
+index.html   raw     391 B  ·  gzip     275 B
+index.css    raw   5 582 B  ·  gzip   1 931 B
+index.js     raw 190 730 B  ·  gzip  59 333 B
+─────────────────────────────────────────────
+                              gzip  61 539 B   ≈ 25% of the 250 KB budget
+```
+
+The difference from the number below is the server-state library, the store and one dialog
+primitive — none of which the client needs yet, and each of which will arrive with the issue that
+needs it. That is D-57's rule paying for itself: the spike answered the compatibility question
+without the repository taking on the dependencies.
+
+**The global `screen` does not work with a locally-registered DOM.**
+`@testing-library/dom` decides at *its own* module evaluation whether a global document exists and
+binds `screen` accordingly — before a side-effect import in the test file can register one, despite
+the source order. Measured:
+
+```
+[probe] document.body = <body></body>
+[probe] screen.getByRole is function
+[probe] render queries work: hi
+[probe] screen threw: For queries bound to document.body a global document has to…
+```
+
+This spike did not hit it because it used a `bunfig.toml` preload, which registers a DOM into
+**every** test in the repository. The client uses the queries `render` returns instead, and lint
+refuses the import.
+
+**`bun x <tool>` from the wrong directory downloads `latest` and says nothing.** `bun x vite` at
+the repository root fetched an unpinned Vite and built with it, because Vite is installed under
+`apps/web`. A check now refuses a script that names a tool its own manifest does not install.
+
 ## The number that changes a budget
 
 The skeleton — React, one query hook, one store, one dialog, no product code — builds to:

@@ -60,6 +60,12 @@ jobs:
       - name: test
         run: bun run test
 
+      # A client that does not build is a client nobody can ship, and it fails in
+      # a way no typecheck sees — a missing asset, a plugin that stopped
+      # resolving, an entry that moved.
+      - name: build the client
+        run: bun run build:web
+
       # Proves the guardrails still exist. A rule that stops failing the build has
       # stopped being a rule, and that is a more expensive failure than a bug.
       - name: enforcement is still enforced

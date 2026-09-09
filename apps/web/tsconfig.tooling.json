@@ -1,0 +1,10 @@
+{
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../.tsbuild/web-tooling",
+    "rootDir": ".",
+    "tsBuildInfoFile": "../../.tsbuild/web-tooling.tsbuildinfo",
+    "types": ["bun", "vite/client"]
+  },
+  "files": ["vite.config.ts"]
+}

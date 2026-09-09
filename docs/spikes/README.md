@@ -21,4 +21,4 @@ A spike that only reports "it works" has not been written down. (D-57)
 | Spike | Date | Verdict |
 |---|---|---|
 | [`elysia.md`](elysia.md) | 2026-09-09 | Works, nothing loosened — contingent on `skipLibCheck` |
-| [`web-client.md`](web-client.md) | 2026-09-09 | Works, nothing loosened — skeleton costs 33% of the bundle budget |
+| [`web-client.md`](web-client.md) | 2026-09-09 | Works, nothing loosened — the shipped skeleton costs 25% of the bundle budget |
