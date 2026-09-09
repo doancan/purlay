@@ -732,7 +732,7 @@ per task; the milestone is the version it ships in, and carries that version's e
 both would have been the duplication `OVERVIEW.md`'s ownership rule exists to prevent — the copy
 that drifts is always the one nobody is looking at. Its two unique facts moved: the *working
 rule* (a task is done when typed, tested and documented; a milestone is done when its exit
-criterion is demonstrated) went to `CONTRIBUTING.md` §6, and the "not on this roadmap, ever"
+criterion is demonstrated) went to `CONTRIBUTING.md` §7, and the "not on this roadmap, ever"
 list was already only a pointer to `PRD.md` §6.
 
 **Rejected — Linear:** better interface, and the wrong home for this project. It is a per-seat
@@ -764,7 +764,7 @@ Both together describe a different product, so that is a `PRD.md` change and not
 **Rejected — issues in a Markdown file:** it is what the roadmap already is, and it cannot show
 what is in flight.
 
-`CONTRIBUTING.md` §7 is unchanged and still binding: **no issue or ticket reference appears in a commit
+`CONTRIBUTING.md` §8 is unchanged and still binding: **no issue or ticket reference appears in a commit
 message.** Linkage lives in the pull request body, where it belongs.
 
 ### D-33. A client-supplied message id is validated at the boundary, and a conflict is never an ACK
