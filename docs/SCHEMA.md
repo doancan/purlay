@@ -136,6 +136,8 @@ CREATE INDEX idx_sessions_user    ON sessions (user_id);
 CREATE INDEX idx_sessions_expiry  ON sessions (expires_at) WHERE revoked_at IS NULL;
 ```
 
+`last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60)
+
 ---
 
 ## 4. Workspaces & Membership
