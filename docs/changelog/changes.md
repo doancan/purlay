@@ -6,6 +6,23 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: channel visibility as a type
+
+- **`ChannelContext`**, the second axis (D-34). Same mechanism as the tenant boundary: a brand keyed
+  by a symbol its module does not export, so the only way to hold one is to have passed the guard,
+  and asserting one is a lint error. The rule written for #12 covered it before it existed —
+  matching by name rather than by a list was the reason.
+- **The rule is written whole, though Phase 0 creates only public channels.** A guard correct only
+  for today's case stops being one when the next arrives, and here that means showing somebody a
+  conversation they were not in. The private cases are seeded directly and tested now; removing the
+  membership check on purpose made a private channel visible to the whole workspace.
+- **Four ways to be refused, one value.** Another workspace, private and not yours, soft-deleted,
+  never existed — and a channel id that is not a UUID, which would otherwise be a `500` on the cast.
+  The test compares the serialised responses and asserts there is exactly **one distinct shape**.
+- **The lint rule caught the test that proves it.** Asserting a workspace context where a channel
+  one was required is exactly what the ban forbids; the assertion is a `declare const` now, with no
+  exemption anywhere.
+
 ### Implementation — 2026-09-09: workspaces
 
 - **The four workspace endpoints Phase 0 serves**, each through the membership guard, each carrying
