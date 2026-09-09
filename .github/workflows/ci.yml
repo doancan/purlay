@@ -41,13 +41,39 @@ jobs:
       - name: format
         run: bun run format:check
 
+      # `bun run test`, not bare `bun test`: the script scopes discovery to the
+      # source directories. Bare `bun test` also finds the compiled copies the
+      # typecheck step emits, and runs every test twice.
       - name: test
-        run: bun test
+        run: bun run test
 
       # Proves the guardrails still exist. A rule that stops failing the build has
       # stopped being a rule, and that is a more expensive failure than a bug.
       - name: enforcement is still enforced
         run: bun run verify:enforcement
+
+  # Requires a database, which is why it is a job of its own rather than part of
+  # `bun run verify` — that stays the subset a developer can run with nothing
+  # installed. The database comes from docker-compose.yml so the image is
+  # declared in exactly one place. (D-45)
+  schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+
+      - name: start the database
+        run: bun run db:up
+
+      - name: the committed types are exactly what the migrations produce
+        run: bun run db:check
+        env:
+          DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
 
   documents:
     runs-on: ubuntu-latest
@@ -57,5 +83,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
       - name: cross-document references resolve
-        run: python3 scripts/check-docs.py
+        run: bun run check:docs

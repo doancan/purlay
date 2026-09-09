@@ -59,7 +59,18 @@ the first four drafts of this project ended up contradicting each other at the s
 ## 2. Stack
 
 Start the local environment with `bun run db:up` (PostgreSQL and object storage, waits for both to
-be healthy). `bun run verify` runs exactly what CI runs.
+be healthy).
+
+**Two verification commands, and the difference matters:**
+
+| Command | Needs | Runs |
+|---|---|---|
+| `bun run verify` | nothing | Everything that can be checked without infrastructure — typecheck (both compilers), lint, format, tests, the enforcement demonstration, the document consistency check |
+| `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
+
+`verify` is the fast loop and is deliberately the subset that needs nothing installed. A check that
+requires a database is not omitted from CI — it is a job of its own, and this is the command that
+runs it.
 
 `bun` for everything (`bun add`, `bun run`, `bun test`) · Bun + ElysiaJS · Kysely +
 PostgreSQL · TypeBox validation · React + Vite + Tailwind · TanStack Query + Zustand ·

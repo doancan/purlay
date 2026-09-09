@@ -60,7 +60,14 @@ services:
       retries: 20
       start_period: 5s
 
-  # One-shot: creates the bucket and exits. Attachments are stored under opaque
+  # One-shot: creates the bucket and exits.
+  #
+  # It is deliberately not part of `--wait`, which considers a container that has
+  # exited to be a failure however cleanly it exited. `bun run db:up` waits on the
+  # long-running services and then runs this one to completion, so its exit code
+  # is still the answer to "did the bucket get created".
+  #
+  # Attachments are stored under opaque
   # keys and never served as public URLs — downloads are brokered by the API so
   # membership is actually checked (D-16, ARCHITECTURE.md §9), so the bucket
   # stays private.
