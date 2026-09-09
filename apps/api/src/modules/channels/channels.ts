@@ -110,7 +110,10 @@ export const channelsVisibleIn = async (
     .selectFrom('channels')
     .select(COLUMNS)
     .where('id', 'in', visible)
-    .orderBy('last_message_at', 'desc')
+    // `NULLS LAST` because PostgreSQL sorts nulls *first* under `DESC`: without
+    // it a channel nobody has written in yet ranks above every active one, which
+    // is the opposite of what `UX.md` §4 asks the sidebar to show.
+    .orderBy('last_message_at', (order) => order.desc().nullsLast())
     .orderBy('name', 'asc')
     .execute();
   return rows.map(asChannel);

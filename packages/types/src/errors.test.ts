@@ -1,8 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { ERROR_STATUS, statusFor, type ErrorCode, type HttpStatus } from './errors';
+import { ERROR_STATUS, statusFor, type ErrorCode } from './errors';
 
 const codes = Object.keys(ERROR_STATUS) as ErrorCode[];
-const allowed: readonly HttpStatus[] = [400, 401, 403, 404, 409, 413, 429, 500];
+/**
+ * Not a second list of the statuses this API may return — that is `HttpStatus`
+ * itself, and a copy here would be the drift `CONTRIBUTING.md` §6.1 forbids.
+ * These are the ones `API.md` §1 tabulates, and the test below is that every
+ * status a code produces is among them.
+ */
+const allowed: readonly number[] = [400, 401, 403, 404, 409, 413, 429, 500];
 
 describe('the error contract', () => {
   test('every code has a status, and it is one API.md allows', () => {

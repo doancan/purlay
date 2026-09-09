@@ -543,3 +543,139 @@ describe('the message feed is keyset, never offset', () => {
     });
   }
 });
+
+/**
+ * The endpoints the contract publishes and the routes the application serves are
+ * the same set.
+ *
+ * Found by hand, which is the problem: `GET /api/me` was documented as Phase 0,
+ * had a response shape in the contract, and **nothing served it** — the client
+ * could not have learned who it was signed in as. `POST /auth/logout-all` was the
+ * other direction: served, and documented as belonging to a later phase.
+ *
+ * Neither is catchable by reading. Both are catchable by comparing.
+ */
+describe('what API.md publishes for this phase is what the application serves', () => {
+  const PHASE_0 = '○';
+
+  const documented = readFileSync('docs/API.md', 'utf8')
+    .split('\n')
+    .map((line) => line.split('|').map((cell) => cell.trim()))
+    .filter((cells) => cells.length > 4 && cells[1] === PHASE_0)
+    .map(
+      (cells) => `${(cells[2] ?? '').replaceAll('`', '')} ${(cells[3] ?? '').replaceAll('`', '')}`,
+    );
+
+  const served = [
+    ...readFileSync('apps/api/src/ingress/http/app.ts', 'utf8').matchAll(
+      /\.(get|post|put|patch|delete)\(\s*'([^']+)'/g,
+    ),
+  ].map((match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`);
+
+  // `.ws('/ws')` is a route too, and it is in the table.
+  const sockets = readFileSync('apps/api/src/ingress/http/app.ts', 'utf8').includes(".ws('/ws'")
+    ? ['GET /ws']
+    : [];
+
+  /** Phase 0 rows for endpoints another issue is still building. */
+  const notYetBuilt = new Set(['GET /health/ready']);
+
+  test('both sides were parsed, so this is not comparing two empty lists', () => {
+    expect(documented.length).toBeGreaterThan(10);
+    expect(served.length).toBeGreaterThan(10);
+  });
+
+  test('every Phase 0 endpoint in API.md is served', () => {
+    const missing = documented.filter(
+      (endpoint) => ![...served, ...sockets].includes(endpoint) && !notYetBuilt.has(endpoint),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  test('every route the application serves is published at this phase', () => {
+    const undocumented = served.filter((endpoint) => !documented.includes(endpoint));
+    expect(undocumented).toEqual([]);
+  });
+});
+
+/**
+ * Every error code the contract publishes can actually be raised.
+ *
+ * `errors.ts` says a code is added when the endpoint that raises it is built.
+ * Five were not: four belonged to features that do not exist, and
+ * `SESSION_EXPIRED` could **never** be raised, because D-60 made every session
+ * refusal the same code on purpose. A code a client is told to handle
+ * exhaustively and will never receive is a lie in the contract.
+ */
+describe('every error code the contract publishes is one the server can send', () => {
+  const declared = [
+    ...readFileSync('packages/types/src/errors.ts', 'utf8').matchAll(
+      /Type\.Literal\('([A-Z_]+)'\)/g,
+    ),
+  ].map((match) => match[1] ?? '');
+
+  const raised = new Set(
+    Bun.spawnSync([
+      'bash',
+      '-lc',
+      "grep -rhoE \"code: '[A-Z_]+'\" apps/api/src --include='*.ts' | sed \"s/code: '//;s/'//\"",
+    ])
+      .stdout.toString()
+      .trim()
+      .split('\n')
+      .filter(Boolean),
+  );
+
+  test('codes were found on both sides', () => {
+    expect(declared.length).toBeGreaterThan(5);
+    expect(raised.size).toBeGreaterThan(5);
+  });
+
+  test('nothing is published that no code path produces', () => {
+    expect(declared.filter((code) => !raised.has(code))).toEqual([]);
+  });
+});
+
+/**
+ * No integration test reads a whole table.
+ *
+ * `withRollback` guarantees that *a test's own* writes disappear. It does not
+ * guarantee an empty database, and it never claimed to — but eight assertions
+ * were written as though it did (`expect(await db.selectFrom('users').selectAll()
+ * .execute()).toHaveLength(0)`), and they passed for months.
+ *
+ * They passed because CI starts from nothing. On a machine where the application
+ * has ever run, they fail — a suite that is green in CI and red for the person
+ * who ran the product they are building, which is the fastest way to teach a team
+ * to distrust its tests.
+ *
+ * So a query in an integration test names what it is asking about.
+ */
+describe('integration tests ask about their own rows, not about the table', () => {
+  const files = Bun.spawnSync([
+    'bash',
+    '-lc',
+    "find apps packages scripts -name '*.integration.test.ts' -not -path '*/node_modules/*'",
+  ])
+    .stdout.toString()
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  test('there are integration tests, so this is not an empty sweep', () => {
+    expect(files.length).toBeGreaterThan(2);
+  });
+
+  for (const file of files) {
+    test(`${file} scopes every query it asserts on`, () => {
+      const source = readFileSync(file, 'utf8');
+      const unscoped: string[] = [];
+      // From each `selectFrom(` to the `.execute…()` that ends the statement.
+      for (const match of source.matchAll(/\.selectFrom\([\s\S]{0,400}?\.execute\w*\(\)/g)) {
+        const statement = match[0];
+        if (!statement.includes('.where(')) unscoped.push(statement.split('\n')[0] ?? '');
+      }
+      expect(unscoped).toEqual([]);
+    });
+  }
+});

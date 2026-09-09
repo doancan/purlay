@@ -207,3 +207,52 @@ describe('integration: workspaces', () => {
     });
   });
 });
+
+describe('integration: who am I', () => {
+  test('returns the caller with their own email, and their memberships', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'me-alice');
+      await aWorkspace(db, alice.cookie, 'me-acme');
+
+      const response = await call(db, 'GET', '/api/me', { cookie: alice.cookie });
+      expect(response.status).toBe(200);
+
+      const me = (await response.json()) as {
+        user: { id: string; email: string; username: string };
+        memberships: { role: string; workspace: { slug: string } }[];
+      };
+      expect(me.user.id).toBe(alice.userId);
+      expect(me.user.email).toBe('me-alice@example.test');
+      expect(me.memberships).toHaveLength(1);
+      expect(me.memberships[0]?.role).toBe('owner');
+      expect(me.memberships[0]?.workspace.slug).toBe('me-acme');
+    });
+  });
+
+  /**
+   * The email is the identity anchor and belongs to exactly one person. Listing
+   * members must never carry it, and this is the only shape that does.
+   */
+  test('another member cannot reach this email through the member list', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'me-owner');
+      const bob = await signedIn(db, 'me-other');
+      const workspace = await aWorkspace(db, alice.cookie, 'me-shared');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspace.id, user_id: bob.userId })
+        .execute();
+
+      const members = await call(db, 'GET', `/api/workspaces/${workspace.id}/members`, {
+        cookie: bob.cookie,
+      });
+      expect(JSON.stringify(await members.json())).not.toContain('me-owner@example.test');
+    });
+  });
+
+  test('without a session it is 401, like every other /api endpoint', async () => {
+    await withRollback(async (db) => {
+      expect((await call(db, 'GET', '/api/me')).status).toBe(401);
+    });
+  });
+});

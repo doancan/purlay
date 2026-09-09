@@ -32,6 +32,7 @@ import {
   createMyWorkspace,
   listMyWorkspaces,
   listWorkspaceMembers,
+  readMe,
   readWorkspace,
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
@@ -113,6 +114,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       respond(set, await signOutEverywhere(dependencies, request)),
     )
 
+    .get('/api/me', async ({ request }) => await readMe(dependencies, request))
     .get('/api/workspaces', async ({ request }) => await listMyWorkspaces(dependencies, request))
     .post('/api/workspaces', async ({ request, body, set }) => {
       set.status = 201;

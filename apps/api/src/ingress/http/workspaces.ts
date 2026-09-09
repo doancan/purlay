@@ -12,6 +12,7 @@
 import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
+  type MeResponse,
   type Membership,
   type Workspace,
   type WorkspaceMember,
@@ -31,6 +32,38 @@ export interface WorkspaceDependencies {
   readonly database: Executor;
   readonly clock: Clock;
 }
+
+/**
+ * `GET /api/me` — who the caller is, and what they belong to.
+ *
+ * The only shape that carries an email address, and only ever to its owner
+ * (`models.ts`). The client cannot render anything until it knows this, which is
+ * why it is Phase 0 and why nothing else can stand in for it.
+ */
+export const readMe = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+): Promise<MeResponse> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const user = await database
+    .selectFrom('users')
+    .select(['id', 'username', 'display_name', 'avatar_url', 'email'])
+    .where('id', '=', userId)
+    .where('deleted_at', 'is', null)
+    .executeTakeFirstOrThrow();
+
+  return {
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+      email: user.email,
+    },
+    memberships: [...(await membershipsOf(database, userId))],
+  };
+};
 
 export const listMyWorkspaces = async (
   dependencies: WorkspaceDependencies,

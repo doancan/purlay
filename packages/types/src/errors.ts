@@ -12,7 +12,14 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500;
+export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 500;
+
+/**
+ * `413` and `429` are in `API.md` §1's table and are **not** here: no code maps
+ * to them yet, because uploads and the rate limiter are not built (#174). A
+ * status this type permits but no code produces is a case a client is asked to
+ * handle and will never see.
+ */
 
 /**
  * Every failure this API can express.
@@ -27,8 +34,13 @@ export const ErrorCode = Type.Union([
   Type.Literal('VALIDATION_FAILED'),
   Type.Literal('INVALID_MESSAGE_ID'),
   // Authentication
+  /**
+   * Every reason a session does not resolve — absent, expired, revoked, or owned
+   * by a deleted account — is this one code. There is deliberately no
+   * `SESSION_EXPIRED`: telling them apart hands an unauthenticated caller an
+   * oracle about accounts it does not own (D-60).
+   */
   Type.Literal('UNAUTHENTICATED'),
-  Type.Literal('SESSION_EXPIRED'),
   Type.Literal('OAUTH_STATE_INVALID'),
   Type.Literal('EMAIL_REQUIRED'),
   // Authorization — only ever for a resource the caller can already see
@@ -38,17 +50,12 @@ export const ErrorCode = Type.Union([
   Type.Literal('ROUTE_NOT_FOUND'),
   Type.Literal('WORKSPACE_NOT_FOUND'),
   Type.Literal('CHANNEL_NOT_FOUND'),
-  Type.Literal('MESSAGE_NOT_FOUND'),
-  Type.Literal('USER_NOT_FOUND'),
   // Conflict
   /** A workspace slug is an identifier in a URL, so it is unique across the instance. */
   Type.Literal('WORKSPACE_SLUG_TAKEN'),
   Type.Literal('CHANNEL_NAME_TAKEN'),
-  Type.Literal('ALREADY_A_MEMBER'),
   Type.Literal('MESSAGE_ID_CONFLICT'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
-  // Limits
-  Type.Literal('RATE_LIMITED'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -66,7 +73,6 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   OAUTH_STATE_INVALID: 400,
 
   UNAUTHENTICATED: 401,
-  SESSION_EXPIRED: 401,
 
   FORBIDDEN: 403,
   EMAIL_REQUIRED: 403,
@@ -74,16 +80,11 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
-  MESSAGE_NOT_FOUND: 404,
-  USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,
-  ALREADY_A_MEMBER: 409,
   MESSAGE_ID_CONFLICT: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
-
-  RATE_LIMITED: 429,
 
   INTERNAL: 500,
 };
