@@ -26,8 +26,14 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: typecheck
+      - name: typecheck (TypeScript 7)
         run: bun run typecheck
+
+      # The linter reasons with the TypeScript 6 API while typescript-eslint catches
+      # up (D-20). Checking with both turns a disagreement between the two into a
+      # CI failure rather than a mystery.
+      - name: typecheck (TypeScript 6 API, the one the linter uses)
+        run: bun run typecheck:ts6
 
       - name: lint
         run: bun run lint

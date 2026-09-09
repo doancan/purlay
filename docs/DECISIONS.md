@@ -338,13 +338,32 @@ pinned to its current stable line: Bun 1.4, ElysiaJS 1.4, React 19.2, Vite 8, Ta
 Kysely 0.29, TypeBox 0.34, TanStack Query 5, Zustand 5. A stack table with a version nobody
 checked is how a project arrives at launch three majors behind.
 
-**TypeScript is pinned to 6.0.3, one major behind, and the reason is worth recording.** The
-latest stable is 7.0.2. **No release of `typescript-eslint` supports it** — the peer range is
-`>=4.8.4 <6.1.0`, and that is still true of the canary. Choosing TypeScript 7 would therefore have
-silently disabled type-aware linting, which is the entire mechanism D-47 rests on: without it,
-`no-floating-promises` and the `no-unsafe-*` family stop working and the rules become prose again.
-A newer compiler is not worth a weaker gate. **Revisit when `typescript-eslint` widens the range**
-— that is the trigger, and nothing else.
+**TypeScript 7 compiles the code; the TypeScript 6 API serves the linter. Both are checked.**
+
+The naive reading is that these are alternatives. They are not — `typescript-eslint` hard-fails on
+TypeScript 7 (`typescript-eslint does not support TS 7.0`), and its own error message points at the
+side-by-side setup TypeScript 7 shipped for exactly this. Verified rather than assumed:
+
+```
+devDependencies: {
+  "@typescript/native": "npm:typescript@7.0.2",         // provides `tsc`
+  "typescript": "npm:@typescript/typescript6@6.0.2"     // provides `tsc6` and the 6.0 API
+}
+```
+
+`tsc` is 7.0.2 and gates the build. `require('typescript')` resolves to the 6.0 API, so
+`no-floating-promises` and the `no-unsafe-*` family — the entire mechanism D-47 rests on — keep
+working. Neither is given up.
+
+**The cost, and it is real: two type systems are now in the toolchain.** The compiler that gates
+the build and the one the linter reasons with can in principle disagree, and TypeScript 7 aims at
+behavioural parity rather than guaranteeing it. That risk is made *detectable* instead of accepted:
+**CI typechecks with both**, so a disagreement is a failed build rather than a confusing lint
+result. This is the same move as every other decision in D-47 — a risk that is checked is not a
+risk that is remembered.
+
+**Trigger to collapse back to one compiler:** `typescript-eslint` supporting TypeScript ≥ 7.1
+(upstream issue 10940). At that point the alias, the second typecheck and this paragraph all go.
 
 *Noted, not adopted:* PostgreSQL 18 ships a native `uuidv7()`. D-8 requires the **client** to
 generate the id so the optimistic row and the durable row share one value, so the server function
