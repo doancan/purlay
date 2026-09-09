@@ -60,6 +60,7 @@ message in real time — and the message is still there after the API restarts.
 - [ ] **Intra-workspace visibility test returning 404** (D-34)
 - [ ] Realtime test: two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency
 - [ ] Schema-drift test: Kysely types vs. applied migrations
+- [ ] Documentation consistency check: every `D-`/`I-`/`O-` and `§` reference resolves, in CI
 - [ ] CI: `typecheck` + `lint` + `test`
 
 ---
