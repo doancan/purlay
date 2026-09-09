@@ -25,13 +25,16 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait",
-    "db:logs": "docker compose logs -f"
+    "db:logs": "docker compose logs -f",
+    "db:migrate": "bun run packages/db/src/cli/migrate.ts",
+    "db:generate": "bun x kysely-codegen --dialect postgres --out-file packages/db/src/schema.ts --exclude-pattern 'kysely_migration*'"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
     "@types/bun": "1.4.2",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "10.10.0",
+    "kysely-codegen": "^0.20.0",
     "prettier": "3.9.6",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "8.70.0"
