@@ -143,11 +143,18 @@ describe('build output stays outside the source tree', () => {
     });
   }
 
-  test('no compiled test file exists under a scanned directory', () => {
+  /**
+   * Broadened after a cross-project relative import made the compiler compute a
+   * common root and emit beside the sources. The earlier version looked only for
+   * compiled *tests*, so it watched the symptom that had already happened rather
+   * than the thing that causes it.
+   */
+  test('no compiled output of any kind sits beside a source file', () => {
     const found = Bun.spawnSync([
       'bash',
       '-lc',
-      "find apps packages scripts -name '*.test.js' -not -path '*/node_modules/*' | head -1",
+      "find apps packages scripts \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' " +
+        "-o -name '*.d.ts.map' \\) -not -path '*/node_modules/*'",
     ]);
     expect(found.stdout.toString().trim()).toBe('');
   });
