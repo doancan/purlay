@@ -6,6 +6,26 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09: two claims finally run, and the rule that follows
+
+- **D-57** — **a choice that has not been run is not a choice.** Three defects in a row had one
+  shape: a branded type that could never have compiled (D-54), a task runner in the stack table
+  that was never installed (D-55), a framework version named while nothing had installed the
+  framework (D-56). The count, taken before fixing it: **19 stack rows, 6 ever run.** A tool now
+  enters §2 on a record in `docs/spikes/` carrying the date, the versions actually resolved, the
+  real output, and what had to be **loosened** — with "nothing" said out loud, because silence
+  there is indistinguishable from not having looked. `CONTRIBUTING.md` §6.7 states it.
+- **The two riskiest claims were run.** ElysiaJS and the whole web client stack both hold under
+  this repository's strictness with **nothing loosened**. Both found things the documents did not
+  know: ElysiaJS's own declarations produce 104 errors with `skipLibCheck` off, so its
+  compatibility is contingent on that flag (now on D-20's risk row); the web skeleton spends a
+  third of the bundle budget before a product screen exists; `happy-dom` alone cannot render a
+  component; and one headless primitive costs about 28 KB.
+- **D-58** — **what the client sends refuses what it did not declare.** Measured, not assumed: an
+  undeclared property returns 200 and is silently dropped. Every shape a client sends is now
+  closed, nested payloads included, and the set is derived from `ClientFrame` rather than listed —
+  a new frame cannot escape by not being added to a list. Responses stay open on purpose.
+
 ### Specification — 2026-09-09: versions leave the documents
 
 - **D-56** — **a version is a fact, so it lives in the manifest and nowhere else.** `ARCHITECTURE.md`

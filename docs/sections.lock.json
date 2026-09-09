@@ -27,6 +27,7 @@
     "6.4": "Suspect silence, and suspect success",
     "6.5": "Make a place, not an exception",
     "6.6": "Finish the whole thing",
+    "6.7": "A choice that has not been run is not a choice",
     "7": "Working on a task",
     "7.1": "Read the contract first",
     "7.2": "Check the phase",
@@ -171,5 +172,8 @@
     "7": "Keyboard model",
     "8": "Required states",
     "9": "Visual system"
-  }
+  },
+  "docs/spikes/README.md": {},
+  "docs/spikes/elysia.md": {},
+  "docs/spikes/web-client.md": {}
 }

@@ -10,7 +10,8 @@ import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody, ErrorCode } from './errors';
 import { Channel, CurrentUser, Message, User } from './models';
 import { ClientFrame, MessageSendFrame, ServerFrame } from './events';
-import { MessagePage, Page, SendMessageRequest } from './api';
+import { MeResponse, MessagePage, Page, SendMessageRequest } from './api';
+import * as api from './api';
 import { Type } from '@sinclair/typebox';
 
 const id = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
@@ -134,5 +135,78 @@ describe('http shapes', () => {
     expect(Value.Check(SendMessageRequest, { id, content: 'hi' })).toBe(true);
     expect(Value.Check(SendMessageRequest, { content: 'hi' })).toBe(false);
     expect(Value.Check(SendMessageRequest, { id: 'not-a-uuid', content: 'hi' })).toBe(false);
+  });
+});
+
+/**
+ * Nothing the client sends may carry a field nobody validates.
+ *
+ * TypeBox does not set `additionalProperties: false`, and the server framework
+ * does not add it — measured, not assumed (`docs/spikes/elysia.md`): a body with
+ * an extra property returns 200 and the property is silently dropped. A client
+ * sending `roleOverride` would be told it worked. (D-57)
+ *
+ * The set of shapes checked is **derived, not listed**: the client frames come
+ * out of `ClientFrame` itself, which is by definition everything the client can
+ * send, and the HTTP side is matched by name. A hand-written list would be a
+ * second copy that a new request shape silently escapes.
+ */
+describe('what the client sends refuses what it did not declare', () => {
+  interface Node {
+    readonly type?: string;
+    readonly additionalProperties?: unknown;
+    readonly properties?: Readonly<Record<string, unknown>>;
+    readonly items?: unknown;
+    readonly anyOf?: readonly unknown[];
+  }
+
+  /** Every object anywhere inside a schema, including through arrays and unions. */
+  const objectsIn = (schema: unknown, path: string): (readonly [string, Node])[] => {
+    if (typeof schema !== 'object' || schema === null) return [];
+    const node = schema as Node;
+    const found: (readonly [string, Node])[] = [];
+    if (node.type === 'object') found.push([path, node]);
+    for (const [key, value] of Object.entries(node.properties ?? {})) {
+      found.push(...objectsIn(value, `${path}.${key}`));
+    }
+    if (node.items !== undefined) found.push(...objectsIn(node.items, `${path}[]`));
+    for (const [index, member] of (node.anyOf ?? []).entries()) {
+      found.push(...objectsIn(member, `${path}|${String(index)}`));
+    }
+    return found;
+  };
+
+  const sent: (readonly [string, unknown])[] = [
+    // Derived: the union *is* the set of frames a client may send.
+    ...ClientFrame.anyOf.map((frame, index) => [`ClientFrame|${String(index)}`, frame] as const),
+    ...Object.entries(api).filter(([name]) => /(?:Request|Query)$/.test(name)),
+  ];
+
+  test('there are shapes to check, and they contain objects', () => {
+    expect(sent.length).toBeGreaterThan(5);
+    expect(sent.flatMap(([name, schema]) => objectsIn(schema, name)).length).toBeGreaterThan(
+      sent.length,
+    );
+  });
+
+  for (const [name, schema] of sent) {
+    test(`${name} and everything inside it refuses unknown properties`, () => {
+      const open = objectsIn(schema, name)
+        .filter(([, node]) => node.additionalProperties !== false)
+        .map(([where]) => where);
+      expect(open).toEqual([]);
+    });
+  }
+
+  test('and it actually rejects one at runtime', () => {
+    expect(Value.Check(SendMessageRequest, { id, content: 'hi' })).toBe(true);
+    expect(Value.Check(SendMessageRequest, { id, content: 'hi', roleOverride: 'owner' })).toBe(
+      false,
+    );
+  });
+
+  /** A response may gain a field without breaking a client that has not rebuilt. */
+  test('a response is not closed, deliberately', () => {
+    expect(MeResponse.additionalProperties).toBeUndefined();
   });
 });

@@ -18,7 +18,16 @@ import {
   type TString,
   type TUnion,
 } from '@sinclair/typebox';
-import { Channel, CurrentUser, Membership, Message, User, UserRole, Uuid } from './models';
+import {
+  Channel,
+  CurrentUser,
+  FromClient,
+  Membership,
+  Message,
+  User,
+  UserRole,
+  Uuid,
+} from './models';
 
 /**
  * Keyset pagination, always. `nextCursor` is the id to pass as `before`, and it
@@ -32,7 +41,7 @@ export const Page = <T extends TSchema>(
 ): TObject<{ data: TArray<T>; nextCursor: TUnion<[TString, TNull]> }> =>
   Type.Object({ data: Type.Array(item), nextCursor: Type.Union([Uuid, Type.Null()]) });
 
-export const PageQuery = Type.Object({
+export const PageQuery = FromClient({
   /** Older than this id. */
   before: Type.Optional(Uuid),
   /** Newer than this id. */
@@ -52,7 +61,7 @@ export type MeResponse = Static<typeof MeResponse>;
 
 // ── Workspaces ──────────────────────────────────────────────────────────────
 
-export const CreateWorkspaceRequest = Type.Object({
+export const CreateWorkspaceRequest = FromClient({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   /** Lowercase, and an identifier rather than prose — hence `COLLATE "C"` (D-40). */
   slug: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
@@ -69,7 +78,7 @@ export type WorkspaceMember = Static<typeof WorkspaceMember>;
 
 // ── Channels ────────────────────────────────────────────────────────────────
 
-export const CreateChannelRequest = Type.Object({
+export const CreateChannelRequest = FromClient({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   topic: Type.Optional(Type.String()),
 });
@@ -88,7 +97,7 @@ export type CreateChannelRequest = Static<typeof CreateChannelRequest>;
  * timestamp — and a collision with somebody else's message is a conflict that
  * discloses nothing (D-33).
  */
-export const SendMessageRequest = Type.Object({
+export const SendMessageRequest = FromClient({
   id: Uuid,
   content: Type.String({ minLength: 1 }),
 });

@@ -369,6 +369,15 @@ behavioural parity rather than guaranteeing it. That risk is made *detectable* i
 result. This is the same move as every other decision in D-47 — a risk that is checked is not a
 risk that is remembered.
 
+**ElysiaJS, measured.** D-20 called it the highest-risk choice and never ran it. It was run on
+2026-09-09 (`docs/spikes/elysia.md`): it typechecks under both compilers, lints clean under the
+full strict rule set, and needed **nothing loosened**. One finding goes on the risk row rather than
+into nobody's head — **its own published `.d.ts` files produce 104 errors under this project's
+strictness**, so its compatibility is contingent on `skipLibCheck: true`. That flag stays on: it
+says "we do not typecheck other people's shipped declarations", which is ordinary and is not an
+escape hatch of ours. What is not ordinary is not knowing, and now it is written down. The Hono
+trigger is unchanged and now has a real data point beside it rather than an intuition.
+
 **Trigger to collapse back to one compiler:** `typescript-eslint` supporting TypeScript ≥ 7.1
 (upstream issue 10940). At that point the alias, the second typecheck and this paragraph all go.
 
@@ -1666,6 +1675,65 @@ a second thing to read that adds nothing — the manifest is already legible, an
 is a copy whose generator has to be maintained. **Rejected: a rule for which dependencies are
 pinned and which are ranged.** Two policies separated by a line nobody remembers is how the
 repository got into this state.
+
+---
+
+### D-57. A choice that has not been run is not a choice
+
+Three defects in a row had one shape. D-54: the branded type `ARCHITECTURE.md` §7.3 specified was
+uninhabited — it could never have compiled. D-55: Turborepo was in the stack table and had never
+been installed. D-56: the table named a web framework version while nothing had installed the
+framework. Each was written down as decided, and each was a guess.
+
+The count, taken before fixing it: **19 rows in the stack table, 6 of which had ever been run.**
+One of the remaining thirteen did not even name a package — *"a small CommonMark/GFM renderer"* sat
+there as though it were a choice.
+
+**So a tool enters the stack table on a spike record, not on an argument.** `docs/spikes/` holds
+one file per tool, carrying the date, the versions actually resolved, the commands and their real
+output, and what had to be **loosened** to make it work. `CONTRIBUTING.md` §6.7 states the rule;
+the directory is where the evidence lives.
+
+**"Nothing was loosened" is stated explicitly, never by omission.** Silence there is
+indistinguishable from not having looked, and this project already treats absence as
+non-evidence (§6.4).
+
+The first two records exist because the two riskiest claims were finally run. Both hold, both
+needed nothing loosened, and both **found things the documents did not know**: ElysiaJS's own
+declarations produce 104 errors under this project's strictness, so its compatibility is contingent
+on `skipLibCheck` (recorded on D-20's risk row); the web skeleton consumes a third of the bundle
+budget before a product screen exists; `happy-dom` alone cannot render a component; and `apps/web`
+was compiling zero `.tsx` files while reporting success.
+
+**Rejected: installing everything now to make the table true.** Thirteen dependencies nobody uses
+yet, each with an upgrade and audit cost, to answer a question a scratch directory answers for
+free. The spike produces the knowledge without taking on the debt.
+
+**Rejected: a checklist item.** A box beside "did you actually run it" is the theatre `CONTRIBUTING.md`
+§6.2 forbids. The mechanism is that the record has to exist and say what it cost.
+
+### D-58. What the client sends refuses what it did not declare
+
+Measured, not assumed (`docs/spikes/elysia.md`): a request body carrying an undeclared property
+returns **200**, and the property is silently dropped. TypeBox does not set
+`additionalProperties: false` and the server framework does not add it.
+
+That is the silent-swallow class this project refuses everywhere else. A client sending
+`roleOverride: "owner"` is told it worked.
+
+**So every shape the client sends is closed**, through one helper in `packages/types` rather than
+per call site — including nested payloads, which is where a shallow rule would miss it. The set of
+shapes is **derived rather than listed**: the socket frames come out of `ClientFrame` itself, which
+by definition is everything a client may send, so a new frame cannot escape by not being added to
+a list.
+
+**Responses are deliberately left open.** Adding a field to something we produce must not break a
+client that has not been rebuilt. The asymmetry is the point: strict about what we accept, additive
+about what we emit.
+
+**Rejected: tolerating unknown fields.** The usual argument is a third-party client on an older or
+newer version. There is no third-party client — D-51 ships one client with the server — so the
+tolerance would buy nothing and cost a silent failure mode.
 
 ---
 

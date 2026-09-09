@@ -16,7 +16,7 @@
  * the query builder and the hand-written SQL disagree, and D-20 chose to write
  * SQL and joins by hand.
  */
-import { Type, type Static } from '@sinclair/typebox';
+import { Type, type Static, type TObject, type TProperties } from '@sinclair/typebox';
 // Side effect: registers the string formats these schemas use. Without it
 // TypeBox rejects every value carrying a `format`, valid ones included.
 import './formats';
@@ -26,6 +26,24 @@ export const Uuid = Type.String({ format: 'uuid' });
 
 /** ISO 8601, UTC. Never used for ordering — ordering is keyset on the id (D-8). */
 export const Timestamp = Type.String({ format: 'date-time' });
+
+/**
+ * A shape the client sends.
+ *
+ * Unknown properties are **refused**, not ignored. TypeBox does not set
+ * `additionalProperties: false` and neither does the server framework, so a
+ * request carrying a field nobody validates returns 200 and the field is
+ * silently dropped — a client sending `roleOverride` would be told it worked.
+ * Silently discarding input is the failure class this project refuses everywhere
+ * else (`CONTRIBUTING.md` §6.4), and there is no third-party client whose extra
+ * fields we owe tolerance to: there is one client and it ships with the server
+ * (D-51).
+ *
+ * Responses deliberately do **not** use this. Adding a field to something we
+ * produce must not break a client that has not been rebuilt yet. (D-57)
+ */
+export const FromClient = <T extends TProperties>(properties: T): TObject<T> =>
+  Type.Object(properties, { additionalProperties: false });
 
 export const UserRole = Type.Union([
   Type.Literal('owner'),

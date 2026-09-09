@@ -94,6 +94,10 @@ for f, s in docs.items():
 # never numbers (D-56). DECISIONS.md keeps the exemption because it records dated
 # history — "the documents said PostgreSQL 16" has to stay sayable.
 VERSION_OWNERS = {"docs/DECISIONS.md", "docs/changelog/changes.md"}
+# A spike record exists to say which versions were actually resolved on a
+# given day. Naming them is its entire job, so the whole directory is an
+# owner — the same reasoning as the changelog. (D-57)
+VERSION_OWNER_PREFIXES = ("docs/spikes/",)
 TECHNOLOGIES = ["PostgreSQL", "Bun", "React", "Vite", "Tailwind", "Kysely",
                 "TypeBox", "ElysiaJS", "Elysia", "TypeScript", "ESLint", "Prettier",
                 "Zustand", "Turborepo"]
@@ -110,7 +114,7 @@ def historical_spans(body: str) -> list[tuple[int, int]]:
     return spans
 
 for f, body in docs.items():
-    if f in VERSION_OWNERS:
+    if f in VERSION_OWNERS or f.startswith(VERSION_OWNER_PREFIXES):
         continue
     skip = historical_spans(body)
     for m in version_re.finditer(body):
