@@ -39,7 +39,7 @@ body:
   - type: checkboxes
     id: dod
     attributes:
-      label: "Definition of done — the part a machine cannot check"
+      label: 'Definition of done — the part a machine cannot check'
       description: >-
         typecheck, lint, tests, the enforcement demonstration and the document
         check are required status checks; a merge is blocked without them. Ticking
@@ -47,10 +47,10 @@ body:
         are theatre stops being read. What is left is what only a person can
         confirm. Which tests must exist is `ARCHITECTURE.md` §10.
       options:
-        - label: "Documentation updated **in the same change** — schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a numbered decision in `DECISIONS.md` with what was rejected"
-        - label: "The change is the minimal delta the task requires; no unrelated refactor rode along"
-        - label: "Shapes defined in `@purlay/types` **before** any implementation, if this touches a contract"
-        - label: "A violation was fixed rather than waived — no rule loosened to make this pass"
+        - label: 'Documentation updated **in the same change** — schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a numbered decision in `DECISIONS.md` with what was rejected'
+        - label: 'The change is the minimal delta the task requires; no unrelated refactor rode along'
+        - label: 'Shapes defined in `@purlay/types` **before** any implementation, if this touches a contract'
+        - label: 'A violation was fixed rather than waived — no rule loosened to make this pass'
   - type: textarea
     id: specific
     attributes:
