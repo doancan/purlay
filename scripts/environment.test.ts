@@ -11,7 +11,6 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 const compose = readFileSync('docker-compose.yml', 'utf8');
-const architecture = readFileSync('docs/ARCHITECTURE.md', 'utf8');
 
 const images = [...compose.matchAll(/^\s+image:\s*(\S+)$/gm)].map((m) => m[1] ?? '');
 
@@ -32,13 +31,17 @@ describe('the development environment', () => {
     }
   });
 
-  test('the PostgreSQL major matches the one ARCHITECTURE.md §2 declares', () => {
-    const declared = /\|\s*Database\s*\|\s*PostgreSQL\s+(\d+)/.exec(architecture)?.[1];
-    expect(declared).toBeDefined();
-
+  /**
+   * There used to be a test here binding the compose image to a major number
+   * written in `ARCHITECTURE.md` §2. The document no longer carries one (D-56):
+   * the image tag *is* the fact, so there is nothing left to bind it to. What
+   * remains of its job — no document may name a version — is `check-docs.py`,
+   * which now applies that rule to `ARCHITECTURE.md` as well.
+   */
+  test('the database image names an explicit major, not a moving one', () => {
     const used = images.find((i) => i.startsWith('postgres:'));
     expect(used).toBeDefined();
-    expect(used).toContain(`postgres:${declared ?? ''}`);
+    expect(used).toMatch(/^postgres:\d+/);
   });
 
   /**

@@ -338,10 +338,11 @@ optimistic buffer needs).
 **Amended 2026-09-09 — versions, and the one choice that got riskier.**
 
 **Target the latest stable major and say so.** The documents said PostgreSQL 16, released in 2023.
-The target is **PostgreSQL 18** (released 2025-09-25, supported to 2030-11). Everything else is
-pinned to its current stable line: Bun 1.4, ElysiaJS 1.4, React 19.2, Vite 8, Tailwind 4,
-Kysely 0.29, TypeBox 0.34, TanStack Query 5, Zustand 5. A stack table with a version nobody
-checked is how a project arrives at launch three majors behind.
+The target is **PostgreSQL 18** (released 2025-09-25, supported to 2030-11), and everything else
+is pinned to its current stable line. *Which* line each one is on is not written here — that is
+the manifest's answer, and D-56 removed the copies. A stack table with a version nobody checked is
+how a project arrives at launch three majors behind; a stack table with a version nobody
+*installed* is how it arrives believing things it never ran.
 
 **TypeScript 7 compiles the code; the TypeScript 6 API serves the linter. Both are checked.**
 
@@ -351,12 +352,13 @@ side-by-side setup TypeScript 7 shipped for exactly this. Verified rather than a
 
 ```
 devDependencies: {
-  "@typescript/native": "npm:typescript@7.0.2",         // provides `tsc`
-  "typescript": "npm:@typescript/typescript6@6.0.2"     // provides `tsc6` and the 6.0 API
+  "@typescript/native": "npm:typescript@…",          // provides `tsc`
+  "typescript": "npm:@typescript/typescript6@…"      // provides `tsc6` and the 6.0 API
 }
 ```
 
-`tsc` is 7.0.2 and gates the build. `require('typescript')` resolves to the 6.0 API, so
+The exact pins are in `package.json`, which is the only place they are. `tsc` gates the build.
+`require('typescript')` resolves to the 6.0 API, so
 `no-floating-promises` and the `no-unsafe-*` family — the entire mechanism D-47 rests on — keep
 working. Neither is given up.
 
@@ -1631,6 +1633,39 @@ orchestration is a shell `&&`.
 **Rejected: installing it now to make the document true.** Configuration written before there is
 anything to cache is configuration nobody can evaluate, and it would have to be maintained through
 every packaging change in the meantime for a benefit measured at zero.
+
+---
+
+### D-56. A version is a fact, so it lives in the manifest and nowhere else
+
+`ARCHITECTURE.md` §2 named versions alongside choices: *Bun 1.4+*, *PostgreSQL 18*, *React 19*. Two
+of the three were bound to reality by a test. The third was not, and could not be — nothing had
+installed React, so there was nothing to bind it to. The table was asserting a fact about a
+repository it had never looked at.
+
+That is the general shape, not an accident of one row. A version in a document is a **copy**, and
+the copy is the one that goes stale silently: this project already carried *PostgreSQL 16* for
+months after deciding to move, and D-55 found *Turborepo* named in the same table with nothing
+installed at all.
+
+**So §2 names choices and never numbers.** `check-docs.py` already refused a version outside its
+owners; `ARCHITECTURE.md` has simply stopped being one. `DECISIONS.md` keeps the exemption because
+it records dated history — *"the documents said PostgreSQL 16"* has to remain sayable — and the
+changelog by definition.
+
+**And every dependency is pinned exactly.** The repository was mixed: `eslint` exact,
+`kysely` caret, with no rule written down for which was which. A caret range is the polite form of
+*I do not know which version this is*; the lockfile knows, but a lockfile is a consequence, and a
+pass from a differently-resolved tree is "green in one state is not green" one layer down. An exact
+pin turns an upgrade into a commit CI judges — which is what the weekly grouped Dependabot pull
+requests already are. `workspace:*` is exempt: it is not a range, it names a package in this
+repository and cannot resolve to anything else.
+
+**Rejected: generating the table from the manifests.** It would be accurate, and it would still be
+a second thing to read that adds nothing — the manifest is already legible, and a generated copy
+is a copy whose generator has to be maintained. **Rejected: a rule for which dependencies are
+pinned and which are ranged.** Two policies separated by a line nobody remembers is how the
+repository got into this state.
 
 ---
 
