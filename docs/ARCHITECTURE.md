@@ -112,7 +112,8 @@ purlay/
 │   ├── api/
 │   │   └── src/
 │   │       ├── ingress/
-│   │       │   ├── http/        route definitions only — validate, delegate, serialize
+│   │       │   ├── http/        route definitions only — validate, delegate, serialize,
+│   │       │   │              plus the one error handler: AppError → its status, else INTERNAL
 │   │       │   └── ws/          frame router, connection lifecycle, backpressure
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line
 │   │       │   ├── auth/        GitHub OAuth, sessions

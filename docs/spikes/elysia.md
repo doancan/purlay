@@ -69,7 +69,17 @@ narrowly rather than as `any`. An install deliberately forced to a version outsi
 still produced one copy and still typechecked; the two-copies failure class could not be
 reproduced.
 
+**Annotating the return type as the bare `Elysia` does not compile.** The type is invariant in its
+routes, so `Elysia` with no routes is not assignable to `Elysia` with one. Found while writing the
+real thing rather than here, because this spike never annotated it. The answer is to name the
+surface the caller actually uses — `handle` and `listen` — which also keeps the framework's types
+out of everything above ingress.
+
 **Declaration emit grows with routes × error branches.** Under `composite: true`, the accumulated
 route type lands in the emitted `.d.ts`, and because the error handler is global, *every* route's
-response type carries the error union. Six trivial routes produced 5 KB. `apps/api` is referenced
-by nothing, so it does not need `composite` and should not pay this.
+response type carries the error union. Six trivial routes produced 5 KB.
+
+This spike concluded that `apps/api` is referenced by nothing and should therefore drop
+`composite`. **That was wrong about this repository** — the solution `tsconfig.json` references
+`apps/api`, and a referenced project must be composite. Checked before acting on it. The emit is
+kept small by the return-type annotation above instead.

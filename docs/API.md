@@ -46,10 +46,10 @@ account for it. `message` is for humans and may change. (D-47)
 
 | Status | Meaning |
 |---|---|
-| `400` | Validation failed — `details` names the fields |
+| `400` | Validation failed — `details` names the fields. Never the submitted value and never the schema: a typo must not come back as a description of the server's own rules (`docs/spikes/elysia.md`) |
 | `401` | No session, or the session is expired or revoked |
 | `403` | Authenticated and in the workspace, but the role is insufficient |
-| `404` | Does not exist, **or exists in a workspace you are not in** |
+| `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
 | `409` | Conflict — duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33) |
 | `413` | Upload exceeds `attachment_size_limit` |
 | `429` | Rate limited |

@@ -6,6 +6,26 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: the API is a process
+
+- **It serves.** `bun run dev:api` starts ElysiaJS, `GET /health` answers `200`, an unknown route
+  answers the error envelope rather than the framework's default, and a missing variable makes the
+  process **refuse to start** — every problem at once, with secret values withheld.
+- **One error handler, and three of its branches exist because a spike found the trap**
+  (`docs/spikes/elysia.md`). A framework validation failure is not an `AppError`, so a handler
+  branching only on `instanceof AppError` would have sent every `400` to the catch-all and told a
+  client that mistyped a field the server had broken. The framework's own validation body echoes
+  the request and publishes the schema; it is replaced entirely. Both were verified by removing the
+  branch and watching the test fail.
+- **`ROUTE_NOT_FOUND`** joins the closed error set: the contract had no code for *no such route*,
+  and the nearest one would have been a lie.
+- **The application returns the surface its caller uses, not the framework's type.** Annotating it
+  as the bare `Elysia` does not compile — the type is invariant in its routes — and letting it
+  infer puts every route's accumulated type into a committed `.d.ts`. Naming `handle` and `listen`
+  answers both and keeps the framework's types out of everything above ingress.
+- **No database handle is built yet**, because nothing needs one: liveness must answer while the
+  database is down. It arrives with the first route that needs it.
+
 ### Specification — 2026-09-09: two claims finally run, and the rule that follows
 
 - **D-57** — **a choice that has not been run is not a choice.** Three defects in a row had one
