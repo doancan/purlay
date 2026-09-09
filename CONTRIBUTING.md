@@ -51,7 +51,7 @@ the first four drafts of this project ended up contradicting each other at the s
 ## 2. Stack
 
 `bun` for everything (`bun add`, `bun run`, `bun test`) · Bun + ElysiaJS · Kysely +
-PostgreSQL 16 · TypeBox validation · React 19 + Vite + Tailwind · TanStack Query + Zustand ·
+PostgreSQL · TypeBox validation · React + Vite + Tailwind · TanStack Query + Zustand ·
 S3-compatible storage.
 
 Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
@@ -122,6 +122,18 @@ in front of you.
    there before writing any implementation.
 2. **Check the phase.** Is this issue on the current milestone? If not, stop. A milestone is a
    version: `v0.1.0` is the walking skeleton, `v1.0.0` is the product finished as specified.
+
+   **What to pick is a command, not a conversation:**
+
+   ```
+   bun run queue            # what is startable now, and what each blocked issue waits on
+   bun run queue --apply    # also writes Status back to the board
+   ```
+
+   `Ready` means startable *now*: in the current milestone, and every issue it depends on is
+   closed. Dependencies live in the issue body as `**Blocked by** #N`, and the board's Status is
+   **derived** from them rather than maintained by hand — the same argument D-45 makes about the
+   database types, one layer up. Setting it by hand meant it was wrong the moment something merged.
 3. **Minimal delta.** Only the code the task requires. Do not refactor unrelated files.
 4. **Update the documents in the same change.** Schema change → `SCHEMA.md`. Protocol change →
    `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in

@@ -84,9 +84,64 @@ for f, s in docs.items():
         if re.search(r'\b(CLAUDE|Claude|Copilot|Windsurf)\b', line):
             problems['araç referansı'].append(f"{f}:{i}: {line.strip()[:70]}")
 
-print(f"karar D-1..D-{max(defined['D'])} · invariant I-1..I-{max(defined['I'])} · açık soru O-1..O-{max(defined['O'])}")
-print(f"migration: {mig[0]}..{mig[-1]}")
-print(f"çözümlenen çapraz gönderme: {len(resolved)}\n")
+# ---- 9. single-owner facts: a version lives in exactly one place ------------
+# ARCHITECTURE.md §2 is the stack table and DECISIONS.md D-20 records why. Every
+# other document names the technology without a version, so there is nothing to
+# fall out of date. This is the check that would have caught four stale
+# "PostgreSQL 16" references an upgrade left behind.
+VERSION_OWNERS = {"docs/ARCHITECTURE.md", "docs/DECISIONS.md",
+                  "docs/changelog/changes.md"}
+TECHNOLOGIES = ["PostgreSQL", "Bun", "React", "Vite", "Tailwind", "Kysely",
+                "TypeBox", "ElysiaJS", "Elysia", "TypeScript", "ESLint", "Prettier",
+                "Zustand", "Turborepo"]
+version_re = re.compile(r"\b(" + "|".join(TECHNOLOGIES) + r")\s+v?(\d+(?:\.\d+)*)")
+# A section whose whole purpose is recording what changed may name both versions.
+HISTORICAL = re.compile(r"^#+.*(Corrections against earlier drafts|Cut from the previous)",
+                        re.M | re.I)
+
+def historical_spans(body: str) -> list[tuple[int, int]]:
+    spans = []
+    for m in HISTORICAL.finditer(body):
+        nxt = re.compile(r"^#{1,3} ", re.M).search(body, m.end())
+        spans.append((m.start(), nxt.start() if nxt else len(body)))
+    return spans
+
+for f, body in docs.items():
+    if f in VERSION_OWNERS:
+        continue
+    skip = historical_spans(body)
+    for m in version_re.finditer(body):
+        if any(a <= m.start() < b for a, b in skip):
+            continue
+        line = body[:m.start()].count("\n") + 1
+        problems["version stated outside its owner"].append(
+            f"{f}:{line}: {m.group(0)} — ARCHITECTURE.md §2 owns versions; name the technology only")
+
+# ---- 10. counts claimed in prose match the counts that exist ----------------
+count_re = re.compile(r"(\d+)\s+decisions\b")
+real = len(defined["D"])
+for f, body in docs.items():
+    if f == "docs/changelog/changes.md":
+        continue  # historical entries record what was true on their date
+    for m in count_re.finditer(body):
+        if int(m.group(1)) != real:
+            line = body[:m.start()].count("\n") + 1
+            problems["decision count is wrong"].append(
+                f"{f}:{line}: claims {m.group(1)}, there are {real}")
+
+# ---- 11. every decision is cited by something other than the record itself --
+# A decision nothing points at was either never propagated or is dead.
+for n in sorted(defined["D"]):
+    # The changelog mentions every decision by construction, so it cannot count
+    # as propagation — that would make this check pass for a decision nothing acts on.
+    cited = any(re.search(rf"\bD-{n}\b", body) for f, body in docs.items()
+                if f not in {"docs/DECISIONS.md", "docs/changelog/changes.md"})
+    if not cited:
+        problems["decision never cited outside DECISIONS.md"].append(f"D-{n}")
+
+print(f"decisions D-1..D-{max(defined['D'])} · invariants I-1..I-{max(defined['I'])} · open questions O-1..O-{max(defined['O'])}")
+print(f"migrations {mig[0]}..{mig[-1]}")
+print(f"{len(resolved)} cross-document references resolved\n")
 for k, v in problems.items():
     print(f"[!] {k} ({len(v)})")
     for i in v[:15]: print(f"      {i}")

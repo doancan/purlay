@@ -2,7 +2,8 @@
 
 > Authority: `DECISIONS.md` explains *why*. This file is the normative definition of *what is
 > stored*. If SQL here and prose elsewhere disagree, this file wins.
-> Target: **PostgreSQL 18** (latest stable; D-20).
+> Target: the PostgreSQL major named in `ARCHITECTURE.md` §2, which owns every version in the
+> stack. Repeating it here is how one copy goes stale (D-20).
 > Identifier columns carry an explicit `COLLATE "C"` so uniqueness never depends on the locale the
 > server was provisioned with (D-40).
 

@@ -314,7 +314,7 @@ reconnect) is a large, separate undertaking and is **not planned**.
 
 ### D-20. Stack confirmed, and its costs written down where they can be seen
 
-Keeping Bun + ElysiaJS + Kysely + PostgreSQL 16 + React 19 + Vite + Tailwind + Zustand. Each is
+Keeping Bun + ElysiaJS + Kysely + PostgreSQL + React + Vite + Tailwind + Zustand. Each is
 defensible for this project.
 
 The problem with the earlier draft was not the choices but the justification: its "Architectural
@@ -364,6 +364,11 @@ risk that is remembered.
 
 **Trigger to collapse back to one compiler:** `typescript-eslint` supporting TypeScript ≥ 7.1
 (upstream issue 10940). At that point the alias, the second typecheck and this paragraph all go.
+
+**Something has to watch for that.** A written trigger nobody checks is a wish, so dependency
+updates arrive weekly as grouped pull requests that pass the same gate as everything else
+(`.github/dependabot.yml`). That is also what keeps *target the latest stable major* true six
+months from now rather than only on the day it was written.
 
 *Noted, not adopted:* PostgreSQL 18 ships a native `uuidv7()`. D-8 requires the **client** to
 generate the id so the optimistic row and the durable row share one value, so the server function
@@ -1273,7 +1278,7 @@ rests on the gate holding.
 
 ### D-47. A rule that is not mechanically enforced is not a rule
 
-This document contains forty-odd decisions and `SCHEMA.md` eleven invariants. **None of them is
+This document's decisions and `SCHEMA.md`'s invariants number in the dozens. **None of them is
 currently enforced by anything but reading.** That is the mechanism by which a well-specified
 project becomes an ordinary one: the documents stay true and the code stops matching them, one
 reasonable exception at a time.

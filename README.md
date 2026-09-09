@@ -85,8 +85,10 @@ The design is fully specified before implementation, deliberately. Read in this 
 
 ## Planned stack
 
-Bun + ElysiaJS · PostgreSQL 16 + Kysely · React 19 + Vite + Tailwind · TanStack Query + Zustand ·
-S3-compatible object storage.
+Bun + ElysiaJS · PostgreSQL + Kysely · React + Vite + Tailwind · TanStack Query + Zustand ·
+S3-compatible object storage. Versions, and the cost accepted for each, live in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2 — repeating them here is how one copy goes
+stale.
 
 **Self-hosted needs no Redis, no message broker and no ORM.** A single node serving thirty people
 needs none of them, and that path stays broker-free permanently. The cloud runs several nodes and

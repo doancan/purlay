@@ -3,7 +3,8 @@
   "compilerOptions": {
     "outDir": "../.tsbuild/scripts",
     "rootDir": ".",
-    "types": ["bun"]
+    "types": ["bun"],
+    "tsBuildInfoFile": "../.tsbuild/scripts.tsbuildinfo"
   },
   "include": ["**/*.ts"]
 }

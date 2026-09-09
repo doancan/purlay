@@ -81,7 +81,7 @@ will. The cloud runs several nodes and swaps in the shared adapters behind the t
 └────────────┬─────────────────────────────┬───────────────┘
              ▼                             ▼
    ┌──────────────────┐        ┌──────────────────────┐
-   │  PostgreSQL 16   │        │  Object storage      │
+   │  PostgreSQL      │        │  Object storage      │
    │  everything      │        │  attachments (D-16)  │
    │  durable         │        │                      │
    └──────────────────┘        └──────────────────────┘

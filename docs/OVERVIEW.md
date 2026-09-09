@@ -70,7 +70,7 @@ second file is a number that will eventually disagree with itself.
 ## Architecture in six lines
 
 ```
-React 19 + Vite  ──HTTP──▶  Bun + ElysiaJS  ──▶  PostgreSQL 16
+React + Vite     ──HTTP──▶  Bun + ElysiaJS  ──▶  PostgreSQL
        │           ──WS───▶        │              (everything durable)
        │                           ▼
   TanStack Query (server state)   EventBus (in-process)  ──▶  S3-compatible storage
@@ -89,7 +89,7 @@ serving 30 people does not need one, and the seam to add one later is already in
 purlay/
 ├── apps/
 │   ├── api/          Bun + Elysia — ingress/ · modules/ · realtime/ · platform/
-│   └── web/          React 19 + Vite — features/ · components/ · realtime/ · api/
+│   └── web/          React + Vite — features/ · components/ · realtime/ · api/
 ├── packages/
 │   ├── types/        the contract: models · events · api  (@purlay/types)
 │   ├── db/           Kysely schema · SQL migrations       (@purlay/db)
