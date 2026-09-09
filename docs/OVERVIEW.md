@@ -61,6 +61,7 @@ looking for the error codes to a file that does not have them.
 | The database schema | `packages/db/migrations/` — the types are generated from it, never written (D-45) |
 | The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
 | Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |
+| What a message id is, and how a client makes one | `packages/types/src/message-id.ts` — the rule and the generator together, bound by a test (D-8, D-33) |
 | The variables the application reads | `apps/api/src/platform/config.ts` — `.env.example` is generated from it |
 | The tenant boundary: what mints a `WorkspaceContext`, and what a stranger gets instead | `apps/api/src/platform/tenancy.ts` (D-21, D-54) |
 | The local environment: images, ports, credentials | `docker-compose.yml` |

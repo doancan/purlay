@@ -6,6 +6,22 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: what a message id is
+
+- **The generator and the rule live together**, in the contract package, bound by a test that
+  generates two hundred ids and validates every one. They are two halves of one fact — the client
+  makes ids the server must accept — and separating them is how a window widens on one side only.
+  Neither app may own it: `apps/web` cannot import from `apps/api`, and a copy in each is the
+  duplication the rule exists to prevent.
+- **A test that reads the value it is testing cannot catch a change to that value.** Widening the
+  window from five seconds to sixty passed every test around it, because they all computed their
+  offsets *from* the constant. Found by breaking it on purpose. The numbers are now asserted
+  literally, and bound to the sentence in D-33 that decided them — changing either without the
+  other fails.
+- The shape check refuses a v4 id, which the contract's own `uuid` format accepts. That is the
+  whole reason it exists: an id of the wrong version makes a channel's ordering wrong **forever**,
+  because the value is the primary key and the pagination cursor.
+
 ### Implementation — 2026-09-09: channels
 
 - **The four channel endpoints Phase 0 serves**, and the first place both guards meet: a channel
