@@ -365,6 +365,11 @@ risk that is remembered.
 **Trigger to collapse back to one compiler:** `typescript-eslint` supporting TypeScript ≥ 7.1
 (upstream issue 10940). At that point the alias, the second typecheck and this paragraph all go.
 
+**Something has to watch for that.** A written trigger nobody checks is a wish, so dependency
+updates arrive weekly as grouped pull requests that pass the same gate as everything else
+(`.github/dependabot.yml`). That is also what keeps *target the latest stable major* true six
+months from now rather than only on the day it was written.
+
 *Noted, not adopted:* PostgreSQL 18 ships a native `uuidv7()`. D-8 requires the **client** to
 generate the id so the optimistic row and the durable row share one value, so the server function
 is not used — but the column type and ordering assumptions are now backed by the database's own

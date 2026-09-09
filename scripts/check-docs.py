@@ -132,8 +132,10 @@ for f, body in docs.items():
 # ---- 11. every decision is cited by something other than the record itself --
 # A decision nothing points at was either never propagated or is dead.
 for n in sorted(defined["D"]):
+    # The changelog mentions every decision by construction, so it cannot count
+    # as propagation — that would make this check pass for a decision nothing acts on.
     cited = any(re.search(rf"\bD-{n}\b", body) for f, body in docs.items()
-                if f != "docs/DECISIONS.md")
+                if f not in {"docs/DECISIONS.md", "docs/changelog/changes.md"})
     if not cited:
         problems["decision never cited outside DECISIONS.md"].append(f"D-{n}")
 

@@ -1,0 +1,34 @@
+# D-20 says to target the latest stable major and records a trigger for the one
+# version deliberately held back — typescript-eslint widening its range to allow
+# TypeScript 7. A written trigger nobody watches is a wish. This is what watches.
+#
+# Updates are grouped so a week produces one pull request rather than a dozen,
+# and each one still has to pass the same gate as everything else.
+version: 2
+updates:
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      toolchain:
+        patterns:
+          ['typescript', '@typescript/*', 'typescript-eslint', 'eslint', '@eslint/*', 'prettier']
+      everything-else:
+        patterns: ['*']
+        exclude-patterns:
+          ['typescript', '@typescript/*', 'typescript-eslint', 'eslint', '@eslint/*', 'prettier']
+    commit-message:
+      prefix: chore
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: chore
