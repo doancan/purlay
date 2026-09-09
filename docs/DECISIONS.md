@@ -1513,7 +1513,10 @@ they look correct and are unusable with a screen reader, while `PRD.md` §5 stat
 a requirement.
 
 **Radix**, verified rather than assumed: actively published, one package per primitive so only what
-is used ships, which matters against D-49's budget. *`@base-ui-components/react` was the obvious
+is used ships, which matters against D-49's budget. **Amended 2026-09-09 — it is four primitives,
+not five.** Radix publishes no combobox; `@radix-ui/react-combobox` does not exist, which was found
+by installing them rather than by re-reading this paragraph. Dialog, menu, tooltip and popover are
+real and were built against; the command palette is **O-7**. *`@base-ui-components/react` was the obvious
 modern alternative and is **deprecated at release-candidate stage** — checked, not remembered.*
 Everything outside those five primitives is written here: a button that pulls in a dependency is a
 dependency that owns your button.
@@ -1871,6 +1874,11 @@ Recorded so they are not silently assumed. None block Phase 0.
   *Decide when the limiter is written, Phase 1.* D-25 adds the `RateLimiter` seam so that a
   shared implementation is later an adapter rather than a refactor — but the seam does not decide
   the number, which is what this question is about.
+- **O-7 · What the command palette is built on.** D-52 named a Radix combobox; Radix does not
+  publish one (`docs/spikes/frontend-budget.md`). `cmdk` is built on Radix and is what the budget
+  measurement used; a listbox hand-built on `@radix-ui/react-popover` is the alternative, and the
+  argument for primitives — that focus and ARIA fail *silently* when hand-written — applies hardest
+  to exactly this component. *Decide with #138, and measure it.*
 - **O-6 · The two markdown packages D-36 named as categories.** *"A small CommonMark/GFM
   renderer"* and *"a sanitising serialiser"* are descriptions, not choices — they sat in the stack
   table beside real packages as though something had been decided. Surfaced by D-59's column, which

@@ -6,6 +6,25 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Research — 2026-09-09: what the frontend stack costs, before a screen exists
+
+- **The declared stack is 69% of the declared budget with no product code**, imported eagerly.
+  Split, the initial bundle returns to **43%**, leaving about 142 KB for the whole product. The
+  budget is reachable — and only if splitting is a rule from the first screen, not a cleanup at the
+  end. A budget check that arrives once five screens exist arrives with a violation already in it.
+- **The highlighter's *engine* is the weight, not its grammars.** Shiki's JavaScript regex engine is
+  53 KB gzipped lazily loaded; the WASM engine is smaller in JavaScript and **seven times larger in
+  total** (36 KB + 232 KB of WASM). For a product where most messages carry no code block, that is
+  the wrong trade. `ARCHITECTURE.md` §2 said grammars load lazily; the measurement says the engine
+  is the sentence that matters.
+- **Radix publishes no combobox.** D-52 named five primitives and four exist — found by installing
+  them, not by re-reading the paragraph. The command palette is **O-7** now, with `cmdk` and a
+  hand-built listbox as the two candidates and the argument for primitives applying hardest to
+  exactly that component.
+- The lint rule D-52 requires — *a raw value is an error* — **is available**: two plugins support
+  Tailwind 4 and ESLint 10. Which one actually refuses an arbitrary value here is the spike #137
+  owes before either enters the stack.
+
 ### Hardening — 2026-09-09: five places the documents and the code disagreed
 
 A cross-check of what the documents publish against what the code does. Each finding was found by

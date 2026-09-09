@@ -35,7 +35,7 @@
 | Query builder | Kysely | `kysely`, `pg` | No migration tooling and no relation loading; we write SQL and joins by hand |
 | Validation | TypeBox | `@sinclair/typebox` | Shared with Elysia's schema layer, so one definition validates and types |
 | Web | React + Vite, single-page with a **prerendered shell** | `react`, `react-dom`, `vite` | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
-| UI primitives | Radix, for dialog · menu · combobox · tooltip · popover only | not yet · `@radix-ui/*` | One package per primitive so only what is used ships; everything else is written here (D-52) |
+| UI primitives | Radix, for dialog · menu · tooltip · popover only — the command palette is **undecided**, because Radix publishes no combobox | not yet · `@radix-ui/*`, and O-7 for the palette | One package per primitive so only what is used ships; everything else is written here (D-52) |
 | Component tests | `bun test` + `happy-dom` + Testing Library | `happy-dom`, `@happy-dom/global-registrator`, `@testing-library/react` | Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
 | Browser tests | Playwright + `@axe-core/playwright` | not yet · `playwright`, `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
 | Styling | Tailwind CSS | `tailwindcss`, `@tailwindcss/vite` | Verbose markup; arbitrary values prohibited, extend the theme instead |
