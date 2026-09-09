@@ -27,9 +27,11 @@
 | Layer | Choice | Cost we accepted |
 |---|---|---|
 | Monorepo | Bun workspaces + Turborepo | Turborepo config is another thing to maintain |
+| Logging | `pino` | Named here because §10 mandates structured JSON logging and no document named the tool (D-44) |
+| i18n | typed message catalogues + `Intl` | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
 | Runtime | Bun 1.4+ | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
-| HTTP + WS | ElysiaJS | Smaller community than Express/Fastify; docs move fast |
-| Database | PostgreSQL 16+ | — |
+| HTTP + WS | ElysiaJS | Smaller community than Express/Fastify; docs move fast. **The highest-risk choice now that the cloud carries an uptime commitment** — Hono is the written fallback with a four-week trigger (D-20) |
+| Database | PostgreSQL 18 | Latest stable major (2025-09, supported to 2030-11). Ships a native `uuidv7()` we deliberately do not use — D-8 needs the id client-side |
 | Query builder | Kysely | No migration tooling and no relation loading; we write SQL and joins by hand |
 | Validation | TypeBox | Shared with Elysia's schema layer, so one definition validates and types |
 | Web | React 19 + Vite | — |
@@ -44,8 +46,13 @@
 
 Full rationale and rejected alternatives: `DECISIONS.md` D-20.
 
-**Not in the stack, deliberately:** Redis (D-7) · an ORM (D-20) · Tauri before Phase 3
-(D-14) · any client-side database (D-19).
+**Not in the stack, deliberately:** an ORM (D-20) · Tauri before Phase 3 (D-14) · any client-side
+database (D-19) · `citext`, dropped in favour of an explicit `COLLATE "C"` (D-40) · an i18n
+framework (D-41).
+
+**Redis is deployment-dependent, not absent.** A self-hosted instance never needs it and never
+will. The cloud runs several nodes and swaps in the shared adapters behind the three interfaces in
+§6. One codebase, two deployments (D-7, D-25).
 
 ---
 
@@ -515,9 +522,17 @@ test.
 
 ## 11. Deployment
 
-Phase 0–2 is a single API process, one PostgreSQL, one bucket. Vertical scaling only. The build
-target, the multi-node ceiling and the numeric triggers between them are owned by `DECISIONS.md`
-D-25 — this section deliberately does not restate the numbers.
+**Two deployments, one codebase.**
+
+*Self-hosted* is a single API process, one PostgreSQL, one bucket, vertical scaling only — and
+stays that way permanently. A thirty-person team is never asked to install a broker.
+
+*Cloud* runs several API nodes behind a sticky-session load balancer with the shared `EventBus`,
+`PresenceRegistry` and `RateLimiter` adapters, plus point-in-time recovery, external uptime
+monitoring and error tracking (D-44). Tenancy stays row-level in one database (D-42).
+
+The build target, the multi-node ceiling and the numeric triggers between them are owned by
+`DECISIONS.md` D-25 — this section deliberately does not restate the numbers.
 
 `docker compose` brings up `api`, `web`, `postgres`, `minio` and a **scheduler** container that
 runs the CLI jobs on a cron (D-30). The scheduler ships wired by default: the known failure mode

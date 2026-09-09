@@ -27,6 +27,11 @@ with `docker compose`. Already self-hosts something (Gitea, Plausible, an intern
 Resents the Slack bill more than the Slack UI. Wants the team's knowledge on disks they
 control.
 
+**Also primary — "the same lead, who would rather not."** Identical in every respect except that
+they do not want to be woken up by a database. They pay us to run it, and they can stop paying and
+take the export with them — which is the only thing that makes this persona and the one above the
+same product rather than two. (D-1, D-43)
+
 **Secondary — "the engineer who lives in threads."** Asks a design question, gets three
 answers, and wants the thread to end in a decision that stays findable. Pastes stack traces and
 PR links all day.
@@ -52,9 +57,11 @@ survive contact with a real user. Full analysis in `DECISIONS.md` D-2.
 ## 2. Product Identity
 
 - **Name:** Purlay · **Domain:** `purlay.app` (project site and documentation)
-- **License & model:** open source, self-hosted. Not a SaaS. (D-1)
-- **One-line positioning:** *Team chat for engineers who self-host — nothing is thrown away,
-  nothing interrupts you by default.*
+- **License & model:** open source under **AGPL-3.0** (D-24), shipped two ways — self-hosted for
+  free, or a cloud we operate for teams who would rather not (D-1). **No open core:** the cloud
+  runs the same code, with nothing held back.
+- **One-line positioning:** *Team chat for engineers — nothing is thrown away, nothing interrupts
+  you by default. Run it yourself, or let us run it.*
 
 ### 2.1. Tenets
 
@@ -69,23 +76,26 @@ looks in isolation.
    `@channel` do not exist — they are rejected by the parser, not merely discouraged. (D-12)
 4. **Nothing is thrown away.** No history limit. Deleted content is tombstoned, not erased.
    Resolved threads stay searchable. (D-9)
-5. **The operator owns the data.** Self-hosted, with a portable export. This is our answer to
-   privacy — not client-side encryption, which would make search impossible. (D-4)
+5. **The operator owns the data.** Self-hosted, with a portable export, and the export works
+   identically in the cloud — leaving is a supported operation, not a support ticket. This is our
+   answer to privacy, not client-side encryption, which would make search impossible. (D-4, D-27)
 
 ---
 
 ## 3. Success Criteria
 
-Three audiences, three tests. Ordered: the first can kill a feature, the third cannot. (D-1)
+Four audiences, four tests. Ordered: the first can kill a feature, the last cannot. (D-1)
 
 | # | Audience | Success is | Failure looks like |
 |---|---|---|---|
 | **S-1** | The owner's own team | The team stops opening Slack for internal discussion, and stays off it for 30 consecutive days. | People keep a Slack tab open "for the important stuff." |
 | **S-2** | Self-hosting community | A stranger deploys it from the README without opening an issue, and comes back a week later. | Every deployment needs hand-holding. |
-| **S-3** | Portfolio | A reviewer can trace any feature from `PRD.md` → `DECISIONS.md` → schema → code in under five minutes. | The code is fine but nobody can tell what was decided or why. |
+| **S-3** | Cloud customers | A team pays for a workspace, stays a second month, and never files a ticket that a self-hoster could not have solved from the README. | Revenue arrives with a support load that consumes the engineering budget. |
+| **S-4** | Portfolio | A reviewer can trace any feature from `PRD.md` → `DECISIONS.md` → schema → code in under five minutes. | The code is fine but nobody can tell what was decided or why. |
 
-**S-1 is the only gate on Phase 1.** If the owner's team will not switch, no amount of
-community interest makes the product real.
+**S-1 is the only gate on Phase 1.** If the owner's team will not switch, no amount of community
+interest or revenue makes the product real — and **no cloud work begins until S-1 has been met**
+(D-1).
 
 ---
 
@@ -162,6 +172,19 @@ Web Push notifications · unified/split diff viewer for ` ```diff ` blocks · ma
 (D-11) · message edit history · **retention policy, account erasure and workspace export**
 (D-27) · **operator compliance documentation** — data map, retention and erasure runbooks (D-28)
 
+### Phase 2.5 — Cloud (v0.4.0)
+
+Gates on S-3, and **cannot start before S-1 is met**. (D-1)
+
+Multi-node deployment behind a sticky load balancer with the shared `EventBus`, `PresenceRegistry`
+and `RateLimiter` adapters (D-7, D-25) · per-workspace subscription billing through a merchant of
+record (D-43) · transactional email · point-in-time recovery with a tested restore · error
+tracking, uptime monitoring and a status page (D-44) · the data processing agreement and
+subprocessor list (D-28) · retention as a plan attribute (D-27)
+
+> **Nothing here is a feature self-hosters do not get.** The cloud sells operation, not
+> capability (D-1).
+
 ### Phase 3 — Polish
 
 Tauri desktop shell (D-14) · multi-node scale-out via a Redis-backed event bus (D-7, D-25) ·
@@ -183,6 +206,11 @@ Measured, not asserted. Every figure below is CI-enforceable. (D-17)
 | Channel switch, 50 cached messages | < 100 ms |
 | API idle RSS, single node | < 120 MB |
 
+**Cloud service levels (Phase 2.5).** A published RPO and RTO, an uptime target measured by an
+external monitor against `/health/ready`, and a restore rehearsed on a schedule with the result
+recorded — an untested backup is a belief, not a backup (D-44). Self-hosted deployments carry no
+service level; that is the operator's own business.
+
 **Capacity.** These budgets are measured at the Phase 0–2 build target — 300 concurrent sockets,
 20 messages/second peak, one API process. The multi-node ceiling and the numeric triggers that
 open Phase 3 live in `DECISIONS.md` D-25, which owns that fact.
@@ -203,8 +231,15 @@ Refusing these **is** the product. Each is permanent, not deferred. (D-4)
 Audio / video / WebRTC · screen sharing · an app marketplace or plugin directory · a visual
 workflow or automation builder · AI summarization · end-to-end zero-knowledge encryption
 (incompatible with server-side search; self-hosting is our privacy answer) · custom emoji
-management UI · Slack import fidelity · per-seat billing · message scheduling · polls ·
-reminders · status emoji · SAML · a SOC 2 / ISO certification programme (D-28)
+management UI · Slack import fidelity · **per-seat billing** · **open core** · message scheduling ·
+polls · reminders · status emoji · SAML · a SOC 2 / ISO certification programme until a customer
+contractually requires one (D-28)
+
+> **Billing left this list on 2026-09-09; per-seat billing did not.** D-1 added a cloud, so
+> subscription billing is now built (D-43) — but charging by seat would contradict the cost axis
+> D-2 competes on and the first paragraph of `README.md`. The cloud charges per workspace, so
+> adding a teammate never costs more. **Open core joined the list** in the same change: the cloud
+> sells operation, never withheld capability.
 
 > **SSO left this list on 2026-09-09.** D-25 set a multi-node capacity ceiling and D-26 added an
 > audit log; both describe an organisation that has an identity provider, so "never SSO" had

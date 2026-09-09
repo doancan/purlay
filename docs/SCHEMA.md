@@ -2,7 +2,9 @@
 
 > Authority: `DECISIONS.md` explains *why*. This file is the normative definition of *what is
 > stored*. If SQL here and prose elsewhere disagree, this file wins.
-> Target: **PostgreSQL 16+**.
+> Target: **PostgreSQL 18** (latest stable; D-20).
+> Identifier columns carry an explicit `COLLATE "C"` so uniqueness never depends on the locale the
+> server was provisioned with (D-40).
 
 ---
 
@@ -20,7 +22,11 @@
 4. **Counters that appear in list views are denormalized.** Unread counts and thread reply
    counts are maintained columns, never `COUNT(*)` subqueries in a sidebar render. (D-13)
 5. **Secrets are never stored in plaintext.** Session tokens are stored as SHA-256 hashes;
-   third-party access tokens are encrypted at the application layer. (D-11, D-23)
+   third-party access tokens are encrypted with AES-256-GCM at the application layer.
+   (D-11, D-23, D-39)
+6. **Identifiers collate deterministically.** `channels.name`, `workspaces.slug`,
+   `users.username` and `users.email` carry an explicit `COLLATE "C"`, so uniqueness and case
+   folding never depend on the locale the server was provisioned with. (D-40)
 
 ### 1.1. Corrections against earlier drafts
 
@@ -37,6 +43,9 @@ Recorded so the deltas are traceable rather than mysterious:
 | `workspaces.owner_id … RESTRICT` | dropped; ownership is a member role | Made workspace owners undeletable. (D-22) |
 | `users.github_id NOT NULL` | nullable | Magic-link users have no GitHub ID. (D-11) |
 | *(missing)* | `sessions`, `attachments`, `mentions`, `notifications`, `link_previews` | Promised by the PRD, absent from the schema. |
+| `citext` for `email` | `TEXT COLLATE "C"`, normalised by the application | `citext` lowercases with the database locale, so uniqueness depended on `initdb`. (D-40) |
+| identifier columns with the default collation | explicit `COLLATE "C"` | `lower('İ')` is not `i` under a Turkish locale; channel-name uniqueness must not vary by deployment. (D-40) |
+| PostgreSQL 16 | PostgreSQL 18 | 16 shipped in 2023. Target the latest stable major. (D-20) |
 
 ---
 
@@ -50,8 +59,9 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- so search can be filtered by workspace without a full index scan.
 CREATE EXTENSION IF NOT EXISTS btree_gin;
 
--- Case-insensitive email comparison without lower() on every lookup.
-CREATE EXTENSION IF NOT EXISTS citext;
+-- citext is deliberately absent: it lowercases with the database locale, which makes email
+-- uniqueness depend on how the server was provisioned. Email is TEXT COLLATE "C", normalised
+-- to lowercase ASCII by the application before it is stored or compared. (D-40)
 
 CREATE TYPE user_role           AS ENUM ('owner', 'admin', 'member');
 CREATE TYPE channel_type        AS ENUM ('public', 'private', 'direct_message');
@@ -78,11 +88,12 @@ CREATE TABLE users (
     -- resurrecting the one they asked to have removed (D-38). UNIQUE permits many NULLs.
     github_id     BIGINT UNIQUE,
 
-    -- The stable identity anchor across auth methods.
-    email         CITEXT       NOT NULL UNIQUE,
+    -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
+    -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
+    email         TEXT COLLATE "C" NOT NULL UNIQUE,
 
     -- 39 characters is GitHub's maximum username length.
-    username      VARCHAR(39)  NOT NULL UNIQUE,
+    username      VARCHAR(39) COLLATE "C" NOT NULL UNIQUE,
     display_name  VARCHAR(128) NOT NULL,
     avatar_url    TEXT,
 
@@ -134,7 +145,8 @@ CREATE INDEX idx_sessions_expiry  ON sessions (expires_at) WHERE revoked_at IS N
 CREATE TABLE workspaces (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        VARCHAR(64) NOT NULL,
-    slug        VARCHAR(64) NOT NULL UNIQUE,
+    -- COLLATE "C": a slug is an identifier, not prose. (D-40)
+    slug        VARCHAR(64) COLLATE "C" NOT NULL UNIQUE,
     avatar_url  TEXT,
 
     -- Audit only. Ownership is workspace_members.role = 'owner'. (D-22)
@@ -205,7 +217,10 @@ CREATE TABLE channels (
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
 
     -- NULL for DMs, which are identified by their members, not by a name.
-    name         VARCHAR(64),
+    -- COLLATE "C" so that lower(name) folds identically on every deployment: under a Turkish
+    -- locale lower('İ') does not produce 'i', and channel-name uniqueness would otherwise
+    -- depend on how the server was provisioned. (D-40)
+    name         VARCHAR(64) COLLATE "C",
     topic        TEXT,
     type         channel_type NOT NULL DEFAULT 'public',
 

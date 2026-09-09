@@ -1,6 +1,7 @@
 # Purlay — Decision Record (`DECISIONS.md`)
 
-> **Status:** Approved 2026-09-07. Amended 2026-09-09 (D-25 – D-38). Binding.
+> **Status:** Approved 2026-09-07. Amended 2026-09-09 (D-25 – D-44; D-1, D-24 and D-28
+> rewritten when the product gained a cloud offering). Binding.
 > This file is the SSOT for *why*. `PRD.md` says what, `ARCHITECTURE.md`/`SCHEMA.md` say how.
 > Every decision below closes a question that was previously ambiguous or self-contradictory
 > across the earlier drafts. Nothing here is inherited from those drafts unchallenged.
@@ -12,25 +13,64 @@ cost of reversing it later.
 
 ## Part A — Product Identity
 
-### D-1. Purlay is a self-hosted open-source product, not a SaaS
+### D-1. Purlay ships two ways: self-hosted open source, and a cloud we operate
 
-Three audiences, in priority order:
+Amended 2026-09-09. The original decision said *not a SaaS* and ruled out billing, metering,
+trials, support and an uptime commitment. That is no longer the plan, and this decision is
+rewritten rather than patched — everything downstream of it was written against the old answer.
 
-1. **Dogfood** — the owner's own team replaces Slack with it. This is the only audience whose
-   opinion can kill a feature.
-2. **Community** — other small dev teams self-host it. Drives OSS distribution.
-3. **Portfolio** — the codebase is a work sample. Drives code quality standards.
+**Four audiences, in priority order:**
 
-**Consequences (things we now explicitly do NOT build):** billing, subscription plans,
-usage metering, trial flows, sales-led onboarding, uptime SLA, multi-region infrastructure.
-A SOC 2 or ISO certification programme stays rejected (D-28). **Enterprise SSO has left this
-list** — it moved to Phase 3, gated on demand (D-31).
+1. **Dogfood** — the maintainer's own team replaces Slack with it. Still the only audience whose
+   opinion can *kill* a feature. A feature the dogfood team will not use does not ship because a
+   prospect asked for it.
+2. **Cloud customers** — teams who pay us to run it. They fund the work and they set the
+   reliability bar, but they do not get to add surface area the tenets refuse (D-2).
+3. **Self-hosting community** — teams who run it themselves, for free, forever. Not a funnel and
+   not a lesser tier: they are the distribution channel and the reason the product is trustworthy.
+4. **Portfolio** — the codebase is a work sample. Drives code quality standards.
 
-**Rejected:** building for paying customers. That path requires a distribution channel we do
-not have, and would force ~40% of the engineering budget into non-product work.
+**No open core.** Everything the cloud runs is in this repository under the same licence. There
+is no paid tier of features held back from self-hosters, and there never will be — the only thing
+the cloud sells is *that we operate it*: backups, upgrades, monitoring, incident response and
+somebody to email. Crippling the free product to sell the paid one would destroy audience 3, and
+audience 3 is what makes audience 2 believe the data is portable.
 
-**Reversibility:** cheap. A hosted offering can be added later on top of the same schema.
-Multi-tenancy (D-3) is retained partly to keep this door open.
+The billing and metering modules live in the same repository, ship disabled by default, and are
+inert in a self-hosted deployment.
+
+**Consequences — things we now DO build, and did not before:** subscription billing and invoices ·
+usage metering · a trial or free tier · transactional email · a support channel · a status page ·
+backups with point-in-time recovery · incident response · an on-call expectation · a data
+processing agreement and a subprocessor list (D-28).
+
+**Consequences — still refused:** a sales-led enterprise motion · multi-region infrastructure ·
+open core · a SOC 2 or ISO programme *until a customer contractually requires one*, at which point
+it is a business decision and not an engineering preference (D-28).
+
+**The cost, stated plainly because the original decision warned about it.** D-1 previously
+rejected paying customers on the grounds that it *"would force ~40% of the engineering budget into
+non-product work."* That estimate was not wrong; it is now **accepted rather than avoided**.
+Billing, email deliverability, uptime, backups and support are real engineering, and they compete
+with the product for the same hours. Phasing exists to keep that cost from arriving before there
+is a product worth charging for: **nothing in this list is built before `v0.2.0` ships and the
+dogfood team has stayed off Slack for thirty days.**
+
+**The size of the business is itself a decision.** This is a small, sustainable operation funded
+by people who would rather not run a database — **not a growth-stage SaaS**. That is a constraint,
+not modesty, and it forbids things a venture-funded competitor would do: no sales team, no
+enterprise motion, no upsell pressure on self-hosters, no usage-based pricing designed to grow
+with a customer's success, and no feature held back to create an upgrade path (D-43). The cloud
+exists to pay for the work and to serve the persona in §1.1 who wants the product without the
+server. If it ever needs to grow faster than that, the honest move is to revisit this decision in
+writing rather than to let the pressure leak into the product.
+
+**Rejected — a separate hosted fork.** Two codebases diverge, and the divergence always lands on
+the free one. One repository, one schema, feature flags where behaviour genuinely differs.
+
+**Reversibility:** shutting the cloud down is cheap — the self-hosted product is the whole product
+and survives untouched. Adding the cloud later would have been cheap too; multi-tenancy (D-3) was
+retained precisely to keep this door open, and that bet paid.
 
 ### D-2. The wedge is *subtraction*, not features
 
@@ -80,7 +120,8 @@ built in, expensive to retrofit.
 
 Work is phased, and each phase ends on something **demonstrated**, not on a ticked task list:
 Phase 0 proves the pipe works end to end, Phase 1 gates on the owner's own team switching (S-1),
-Phase 2 on a stranger self-hosting it (S-2), Phase 3 is polish.
+Phase 2 on a stranger self-hosting it (S-2), Phase 2.5 on the cloud earning a second month (S-3),
+Phase 3 is polish.
 
 **Why phase at all:** the earlier drafts had no phases, so every feature was implicitly due at
 once — which is how a solo side project produces a monorepo scaffold and no working chat.
@@ -133,6 +174,13 @@ monitor and reason about during the phase where velocity matters most.
 **Also decided:** presence and typing indicators are **ephemeral and in-memory**. They are
 never persisted and are allowed to be wrong after a restart.
 
+**Amended 2026-09-09.** The cloud (D-1) cannot run on one process with an uptime commitment, so
+the shared adapter is no longer a Phase 3 contingency — it is required before the cloud carries
+paying customers. **The self-hosted product is unchanged and stays broker-free**: a team of thirty
+on one box will never need it, and making them install Redis to use free software would be a
+betrayal of the third audience. One interface, two deployments, and the decision to run a broker
+belongs to whoever operates the instance.
+
 ### D-8. Message primary keys are UUIDv7 (time-ordered)
 
 `gen_random_uuid()` (v4) is replaced by v7 for `messages`. Pagination is keyset on `id` alone.
@@ -161,8 +209,10 @@ their parent. Hard deletion happens only via an explicit operator-run purge job.
 
 ### D-10. Search is honest and scoped
 
-- Text search config becomes **`simple`**, not `english`. English stemming folds
-  `getUserById` into one unsearchable token and is actively wrong for Turkish content.
+- ~~Text search config becomes **`simple`**, not `english`.~~ **Removed by D-40:** the next bullet
+  drops the `tsvector` entirely, so no text search configuration is left to choose. The reasoning
+  survives as *why full-text search went away* — English stemming folds `getUserById` into one
+  unsearchable token and is actively wrong for Turkish content.
 - The generated `tsvector` column and its GIN index are **dropped for Phase 1**. A GIN trigram
   index alone covers substring and identifier lookup.
 - Search is scoped: within a workspace, optionally within a channel, newest-first, paginated.
@@ -280,6 +330,31 @@ optimistic buffer needs).
 
 > **Single source of truth:** the stack table with accepted costs lives in `ARCHITECTURE.md` §2.
 
+**Amended 2026-09-09 — versions, and the one choice that got riskier.**
+
+**Target the latest stable major and say so.** The documents said PostgreSQL 16, released in 2023.
+The target is **PostgreSQL 18** (released 2025-09-25, supported to 2030-11). Everything else is
+pinned to its current stable line: Bun 1.4, ElysiaJS 1.4, React 19.2, Vite 8, Tailwind 4,
+Kysely 0.29, TypeBox 0.34, TanStack Query 5, Zustand 5. A stack table with a version nobody
+checked is how a project arrives at launch three majors behind.
+
+*Noted, not adopted:* PostgreSQL 18 ships a native `uuidv7()`. D-8 requires the **client** to
+generate the id so the optimistic row and the durable row share one value, so the server function
+is not used — but the column type and ordering assumptions are now backed by the database's own
+implementation rather than only by ours.
+
+**ElysiaJS is now the highest-risk choice in the stack, and it stays.** §2 already accepted
+"smaller community, docs move fast". That was a cheap cost for a side project and is a real one
+for a service with an uptime commitment (D-1). It stays because the end-to-end type safety in
+`ARCHITECTURE.md` §1 is built on Elysia's TypeBox integration, and no equivalent exists elsewhere.
+**Hono is the written fallback** — it runs on Bun, has far wider deployment, and is runtime-
+agnostic. **Trigger:** if a security fix or a Bun-major compatibility fix is unavailable for more
+than four weeks, the ingress layer moves. It is one layer by design (`ARCHITECTURE.md` §1, tenet
+3: protocols are adapters, not architecture), which is what keeps that move survivable.
+
+**Named because the documents required the behaviour and never named the tool:** `pino` for the
+structured JSON logging `ARCHITECTURE.md` §10 mandates (D-44).
+
 ### D-21. Testing floor, with tenant isolation as the non-negotiable
 
 Inherited from the owner's standing engineering rules, with one addition specific to this
@@ -325,31 +400,52 @@ Redis and entirely fast enough at our scale.
 the viewer's own token would leak which private repositories a given member can see, based on
 whether the card renders. One workspace token means every member sees the same card or no card.
 
-### D-24. MIT license
+### D-24. AGPL-3.0, with a contributor licence agreement
 
-The project called itself open source in three documents while having no license file, which
-means default copyright applied and **nobody had permission to use it** — including the
-self-hosters the product is designed for.
+Amended 2026-09-09. The original decision chose MIT, and its reasoning was explicit:
+*"D-1 explicitly gave up commercial ambition, so AGPL would guard revenue we have decided not to
+pursue."* D-1 no longer says that. The premise changed, so the conclusion is re-derived rather
+than defended.
 
-**Decided: MIT.** Shortest, most widely understood, imposes nothing on the people we want
-adopting it, and fits the portfolio goal (S-3) where the point is that others can read and reuse
-the work.
+**Decided: AGPL-3.0 for the whole repository, plus a CLA on every outside contribution.**
 
-**Rejected — AGPL-3.0:** it protects against someone taking Purlay closed-source and running it
-as a paid SaaS. But D-1 explicitly gave up commercial ambition, so AGPL would guard revenue we
-have decided not to pursue — while a meaningful number of companies ban AGPL dependencies
-outright, costing us adoption among exactly the self-hosting teams we are building for. Trading
-real adoption for hypothetical revenue protection is the wrong side of that trade.
+**Why AGPL rather than MIT, now.** With a cloud offering, MIT permits anyone to take this code and
+run it as a competing paid service with no obligation of any kind. That was an acceptable trade
+when there was no revenue to defend. It is not one now.
 
-**Rejected — Apache-2.0:** the explicit patent grant is genuinely better for corporate adopters,
-but it costs a much longer license text and a `NOTICE` file obligation, for a patent risk that is
-negligible in a chat application.
+**Correcting an error in the original reasoning.** The old D-24 rejected AGPL because *"a
+meaningful number of companies ban AGPL dependencies outright."* That is true of **libraries
+linked into a company's own product** — and Purlay is not a library. A company running Purlay
+internally is not conveying it to anyone and incurs no AGPL obligation whatsoever. The old
+decision applied a library-shaped cost to an application, and overstated it as a result. The real
+adoption cost is much smaller than it claimed.
 
-**Reversibility:** a project can relicense forward while it has a single copyright holder.
-Once outside contributors hold copyright it requires their agreement — which is one more reason
-outside pull requests are closed until Phase 2 (`README.md`).
+**Why the CLA is not optional.** The old decision already noted that *"a project can relicense
+forward while it has a single copyright holder. Once outside contributors hold copyright it
+requires their agreement."* That is exactly the window we are standing in. Without a CLA, the
+first merged outside pull request permanently ends the ability to dual-licence — which is the
+mechanism by which a customer who cannot accept AGPL buys a commercial licence instead. The CLA is
+set up **before** pull requests open in Phase 2 (`README.md`).
 
----
+**What AGPL does not do, said plainly.** It does not prevent a competitor from hosting Purlay. It
+requires them to publish their modifications, which deters most and stops none. Preventing
+competing hosting outright requires a non-compete licence, and that is the next entry.
+
+**Precedent worth naming:** this is the shape Plausible Analytics runs — AGPL source, an
+affordable managed offering, no open core, explicitly not chasing growth. It is the closest
+analogue to what D-1 describes, and it works.
+
+**Rejected — MIT and Apache-2.0.** Both leave the cloud entirely undefended. Apache's patent grant
+is genuinely better for corporate adopters, but that is not the axis that matters here.
+
+**Rejected — BSL or another fair-source licence.** It is the strongest commercial protection and
+it would work. It also means the project can no longer honestly call itself open source, and
+`README.md`, `PRD.md` §2 and D-1's third audience all rest on that word. Trading the community
+that makes the product credible for protection against a competitor who does not yet exist is the
+wrong side of that trade.
+
+**Reversibility:** forward relicensing stays possible only while copyright is consolidated. The
+CLA is the thing that keeps it true, which is why it ships before contributions open.
 
 ### D-25. Capacity ceiling is multi-node; the system is built single-node until a measurement says otherwise
 
@@ -400,6 +496,14 @@ already records that cost. It is revisited at 10 M messages, not before.
 
 **Reversibility:** cheap in this direction. The seams cost three interfaces. Removing them later
 if the ceiling never arrives costs nothing — an interface with one implementation is not debt.
+
+**Amended 2026-09-09.** The ceiling is no longer hypothetical for one of the two deployments.
+The cloud (D-1) is multi-tenant and carries an uptime commitment, so it crosses into multi-node
+territory by obligation rather than by measurement, and the three triggers above now describe
+*when the self-hosted single node stops being enough* — which for a thirty-person team may be
+never. **Two deployments, one codebase:** the cloud runs several nodes behind a sticky load
+balancer with the shared adapters; a self-hoster runs one process with the in-process ones, and
+nothing about that path gets harder because the cloud exists.
 
 ### D-26. Administrative actions are recorded in an append-only audit log
 
@@ -458,23 +562,45 @@ the attachment blobs, produced by a CLI command (D-30) and downloadable once. Ph
 would take a resolved thread — knowledge belonging to the whole team — with it, which is the
 exact loss D-9 was written to prevent.
 
-### D-28. We are not a data processor, and we will not publish a DPA
+**Amended 2026-09-09 — who sets retention differs by deployment.** Self-hosted, it stays exactly
+as above: infinite by default, and the operator opts in on disks they pay for. In the cloud the
+disk is ours, so retention becomes an attribute of the plan — the mechanism is identical
+(`workspaces.retention_days`), only the person who sets it changes. **The tenet survives on the
+side where it was made**: a self-hoster is never told what to throw away. And under D-28 the cloud
+now *performs* erasure as a contractual obligation rather than documenting how an operator would.
 
-A data processing agreement is a contract between a controller and a processor. Purlay is
-MIT-licensed software that the operator runs on their own infrastructure; the project processes
-no personal data and is party to no such contract. A DPA published by this project would be
-legally void and would give operators false assurance about their own obligations.
+### D-28. In the cloud we are the processor; a self-hoster remains their own controller
 
-**Decided: ship what an operator actually needs to write their own.**
+Amended 2026-09-09. The original decision said the project processes nobody's data and would not
+publish a DPA. That was correct for MIT-licensed software somebody else runs. It is **wrong for a
+service we operate**, and the two cases now have to be answered separately.
 
-- A **data map** — every table holding personal data, what it holds, why, and how long.
-- A **retention runbook** — how to configure and verify D-27's policy.
-- An **erasure runbook** — the two operations in D-27, with the commands to run and how to
-  verify completion.
-- A **subprocessor statement** — the project has none. The operator's own list is theirs.
+**Two postures, one document set.**
 
-**Rejected:** a SOC 2 or ISO programme. D-1 already ruled these out and a self-hosted tool
-cannot be certified on someone else's hardware in any case.
+**Cloud — we are a data processor.** The customer is the controller of their team's messages; we
+process on their instructions. That is a contractual relationship, so it needs the contract:
+
+- A **data processing agreement**, offered as standard terms and signable without negotiation.
+- A **subprocessor list** that is real and maintained — hosting, object storage, transactional
+  email, payments, error tracking. Customers are notified before one is added.
+- **Retention and erasure become obligations we perform**, not runbooks we hand over (D-27).
+- **Breach notification** with a stated timeline, and a record of processing activities.
+- Data residency is single-region and stated up front, because D-1 refuses multi-region.
+
+**Self-hosted — the operator is the controller and we are not a party at all.** Unchanged from the
+original decision: the project processes no personal data and signs nothing. What ships is what an
+operator needs to write their own contract — a **data map** (every table holding personal data,
+what it holds, why, how long), a **retention runbook**, an **erasure runbook**, and a statement
+that the project itself has no subprocessors.
+
+**Certification.** Still not a programme, and still not an engineering preference: a SOC 2 or
+ISO 27001 effort begins when a customer contractually requires one and is budgeted as the business
+cost it is. Starting one speculatively is exactly the non-product work D-1 phases against.
+
+**Rejected — one posture covering both.** A single document that tries to describe our obligations
+and the self-hoster's at once would be wrong in both directions: it would promise self-hosters
+guarantees we cannot give about their own server, and it would let cloud customers think our
+obligations end at documentation.
 
 ### D-29. Notifications include thread participation — revises D-12
 
@@ -547,6 +673,13 @@ schema does not change.
 
 The rest of `PRD.md` §6 is unaffected and stays permanent.
 
+**Amended 2026-09-09.** "Gated on demand" now has a concrete demander: a cloud customer (D-1)
+with an identity provider will ask, and will be paying. The gate is unchanged — it is built when
+someone actually asks — but the expectation is that it arrives sooner than Phase 3. This is also
+the point at which D-11's hand-rolled session layer stops being the obvious choice: a library that
+owns OIDC is worth a dependency, and `better-auth` is the current candidate. `lucia`, a plausible
+alternative when D-11 was written, has since been deprecated.
+
 ### D-32. Work is tracked in GitHub Issues and Projects
 
 **Decided: GitHub Issues for the unit of work, a GitHub Project board for the view.** One issue
@@ -576,13 +709,13 @@ imagined. It loses on four concrete grounds, none of them ideological:
    qualitatively by the dogfood team.
 2. **S-2 is a distribution criterion.** Strangers do not discover self-hosted instances. Leaving
    GitHub does not slow that goal down, it removes its channel.
-3. **S-3 is an access criterion.** A reviewer needs a URL that opens without an account.
+3. **S-4 is an access criterion.** A reviewer needs a URL that opens without an account.
 4. **`CONTRIBUTING.md` §1.11 applies to us too.** Operating a DevOps platform — backups,
    upgrades, TLS — to track a few dozen issues for a team of one is the complexity this project
    refuses everywhere else.
 
 **What would reverse this:** OneDev wins if Purlay stops being GitHub-native (D-23 and the Phase 2
-feeds leave scope) **and** the repository stays private permanently (S-2 and S-3 are abandoned).
+feeds leave scope) **and** the repository stays private permanently (S-2 and S-4 are abandoned).
 Both together describe a different product, so that is a `PRD.md` change and not a tooling choice.
 
 **Rejected — issues in a Markdown file:** it is what the roadmap already is, and it cannot show
@@ -838,6 +971,204 @@ follows. Invariant I-11 is extended accordingly.
 **Reversibility:** the scopes and the email rule are free to change before the first sign-in and
 expensive afterwards — a stored anchor that turns out to be wrong is a migration over live
 accounts.
+
+### D-39. Browser and transport security posture
+
+The documents specified `state` verification, an HttpOnly cookie and a hashed session token, and
+stopped there. Four surfaces were never covered, and one of them is built in Phase 0.
+
+**1 · `Origin` is validated on the WebSocket upgrade. Phase 0.**
+`SameSite=Lax` does not reliably protect a WebSocket handshake — a page on another origin can open
+`wss://…/ws` and the browser may attach the cookie. That is cross-site WebSocket hijacking, and it
+hands an attacker a live authenticated socket. The upgrade therefore rejects any request whose
+`Origin` is not `APP_URL`, before the session is even looked up.
+
+**2 · CSRF is defended by `SameSite=Lax` plus an `Origin` check on state-changing requests, not by
+a token.** Every mutation is `POST`/`PATCH`/`PUT`/`DELETE` with `Content-Type: application/json`,
+which a cross-site form cannot produce, and CORS is restricted to `APP_URL` with credentials. A
+token would add a mechanism without adding a guarantee. The OAuth `state` cookie stays signed and
+short-lived, which is a different problem with a different answer (`ARCHITECTURE.md` §7.1).
+
+**3 · Attachments are served defensively. Phase 1.**
+A user-uploaded SVG or HTML file served from the application's own origin is stored XSS, and D-16
+already routes downloads through the API. So: `Content-Disposition: attachment` for everything
+that is not an image we re-encoded ourselves, `X-Content-Type-Options: nosniff`, a restrictive
+`Content-Security-Policy` on the response, and the stored MIME type is never echoed back for
+`text/html` or `image/svg+xml` — SVG uploads are rasterised or refused, never served as SVG.
+
+**4 · The image proxy is a hardened fetcher, not a `fetch()` call. Phase 1.**
+`ARCHITECTURE.md` §8.1 says external images are proxied, in one line, with no definition. A proxy
+that will fetch any URL a message contains is an SSRF endpoint pointed at the internal network.
+It resolves DNS first and refuses any address outside public unicast ranges, follows no redirects,
+caps bytes and wall-clock time, sends no credentials, and re-encodes what it returns.
+
+*Rejected: not proxying, and rendering remote images directly.* It leaks every reader's IP address
+to whoever hosts the image, which in a private team chat is worse than the SSRF risk we can
+actually contain.
+
+**5 · A content security policy baseline. Phase 1.**
+`default-src 'self'`, no `unsafe-inline` script, images from `'self'` and the proxy only. It lands
+with the content pipeline, because that is when there is user-controlled markup to constrain.
+
+**6 · `ENCRYPTION_KEY` is AES-256-GCM.** A random 96-bit nonce per record, stored as a prefix on
+the ciphertext, with the record id as additional authenticated data. `CONFIG.md` named the key and
+never named the algorithm, which is how two call sites end up encrypting differently.
+
+**Reversibility:** items 1 and 6 are free now and expensive after the first session and the first
+stored token. The rest arrive with the features they protect.
+
+### D-40. The database is created with a deterministic collation, and `citext` is dropped
+
+Migration `0001` runs in Phase 0, and two identifier rules in `SCHEMA.md` quietly depend on the
+locale the operator happened to pass to `initdb`.
+
+`idx_channels_unique_name` is `UNIQUE (workspace_id, lower(name))`. In PostgreSQL, `lower()`
+follows the collation of its argument. Under a Turkish locale `lower('İ')` does not produce `i`,
+and `I`/`ı` fold differently than they do under `C`. **Channel-name uniqueness would therefore
+depend on how the server was provisioned** — the same two names could collide on one deployment
+and coexist on another. For a product that will run on machines we do not control *and* in a cloud
+we do, that is not acceptable.
+
+**Decided: identifier columns carry an explicit `COLLATE "C"`** — `channels.name`,
+`workspaces.slug`, `users.username` and `users.email`. Byte-wise, deterministic, identical
+everywhere. Message `content` keeps the database default; linguistic ordering never applies to it,
+and trigram matching is unaffected.
+
+**`citext` is dropped.** The extension existed only for `users.email`, and it lowercases using the
+database locale — the same defect one column over. Email becomes `TEXT COLLATE "C"`, normalised
+(trimmed and lowercased as ASCII) at the application boundary before it is ever stored or compared.
+One fewer extension, and `CONTRIBUTING.md` §1.12 prefers exactly that.
+
+**`/health/ready` asserts the expected collation**, so a mis-provisioned database fails at startup
+rather than at the first colliding channel name.
+
+**Also settled: the vestigial text-search line in D-10.** D-10 said the search configuration
+*"becomes `simple`, not `english`"* and then dropped the `tsvector` column and its index entirely.
+With no `tsvector` there is no text search configuration at all. The sentence is removed; the
+trigram index is the whole story.
+
+**Rejected — leaving it to documentation.** "Create the database with `LC_COLLATE=C`" in an
+operator guide is a rule that holds until somebody uses a managed provider that does not offer it.
+A column-level collation travels with the schema.
+
+### D-41. The interface ships in English and Turkish, with no i18n library
+
+**Decided: real internationalisation from the first screen, built on `Intl` and typed message
+catalogues rather than a framework.**
+
+Waiting is the expensive option: Phase 0 builds the client, and retrofitting translation means
+touching every component that ever rendered a string.
+
+**The mechanism.** One catalogue module per locale, a `Messages` type generated from the English
+catalogue so a missing or misspelt key is a **compile error**, and the platform's own `Intl` for
+everything that varies: `Intl.PluralRules`, `Intl.DateTimeFormat`, `Intl.NumberFormat`, and
+`Intl.RelativeTimeFormat` for the *"last 12m ago"* strings `UX.md` §3 specifies. Only the active
+locale's catalogue is loaded; the other never enters the bundle.
+
+**Why no library.** `PRD.md` §5 fixes the initial bundle at 250 KB gzipped, and React, the markdown
+renderer and the highlighter already spend most of it. The runtime this needs is a lookup and a
+formatter call. Compile-time key checking is stronger than what most libraries provide, and
+`CONTRIBUTING.md` §1.12 prefers a web standard over a dependency. **Lingui is the named fallback**
+if message extraction from source becomes the bottleneck — that is a tooling problem, and adopting
+it later does not change the call sites.
+
+**Locale selection** follows `navigator.language`, is overridable, and persists in
+`localStorage` — per device, no schema. A `users.locale` column arrives with Web Push (Phase 2),
+because that is the first user-facing text the *server* generates and the first time the choice
+has to follow the person rather than the browser.
+
+**Message content is never translated.** Only the product's own chrome. Translating what people
+wrote to each other is not a feature, it is a misunderstanding.
+
+**Accepted cost, stated because it is real.** Two catalogues means every new string is two edits
+and the Turkish one will lag. The compile error stops a *missing* key, not a *stale* one.
+Turkish text also runs longer than English, so layouts are built to wrap rather than to fit.
+
+**Related:** the Turkish locale is exactly why D-40 pins the database collation. The interface
+language must never reach identifier comparison.
+
+### D-42. The cloud stays shared-database multi-tenant
+
+A paid cloud raises a question a single-team self-host never had to answer: does every customer get
+their own database, their own schema, or a row-level tenant column in one database?
+
+**Decided: unchanged — one database, `workspace_id` on every scoped table, isolation enforced by
+`WorkspaceContext` and `ChannelContext` (D-21, D-34).**
+
+**Why not a database per customer.** Every migration would fan out across every customer database,
+and a migration that fails on customer 40 of 200 leaves the fleet in two different schema versions
+— which is the failure mode that ends small teams. It also breaks D-3 outright: one identity across
+workspaces is not expressible when the workspaces live in different databases.
+
+**Why not a schema per customer.** The same migration fan-out, plus connection-pool pressure that
+grows with the customer count, for isolation that a row filter already provides.
+
+**The cost we are accepting, and it is the largest one in this document.** With shared tenancy the
+blast radius of an isolation bug is *every customer at once*. That is precisely why D-21 makes the
+cross-tenant test mandatory on every endpoint, why D-34 added the second axis, and why both are
+enforced by types rather than by review. Those two rules stop being hygiene and become the thing
+the business rests on.
+
+**Noisy neighbours** are handled by limits that already exist — per-workspace storage quota (D-16)
+and the connection rate limiter (D-25's `RateLimiter` seam) — extended with a per-workspace query
+budget **only if a measurement shows one customer degrading another** (`CONTRIBUTING.md` §1.11).
+
+### D-43. Cloud pricing is per workspace, not per seat, and sold through a merchant of record
+
+**Per-workspace pricing, with a generous included seat band.** D-2 lists *cost* as one of the four
+axes Purlay competes on, and `README.md` says it in the first paragraph: no per-seat cost. A cloud
+that then charges per seat would contradict the product's own headline and hand every reader a
+reason to distrust the rest of it. Charging by workspace keeps the claim true: **adding a
+teammate never costs more**, which is a real differentiator against Slack rather than a slogan.
+
+*Rejected: per-seat pricing.* It is the obvious model and it is the one that makes the positioning
+a lie.
+
+**Sold through a merchant of record** — Polar, Lemon Squeezy or Paddle — rather than Stripe
+directly. Selling software to teams worldwide from a Turkish entity means EU VAT, UK VAT, US sales
+tax nexus and invoicing rules in each. That is not engineering; it is a permanent compliance load
+on one person, and D-1 already accepted enough non-product work. A merchant of record becomes the
+seller and absorbs it.
+
+*Accepted cost:* a higher percentage than Stripe, less control over the checkout, and a dependency
+on a smaller company than Stripe. **Trigger to revisit:** when the fee delta over Stripe's rate
+exceeds the annual cost of tax compliance tooling and an accountant, migrate. A number, not a
+feeling (D-17).
+
+**Priced to be boring.** The number covers infrastructure, the merchant-of-record fee and the time
+to operate it, with enough margin to fund development — and not more. D-1 fixed the size of this
+business deliberately, and pricing is where that decision either holds or quietly stops holding.
+The target customer is a team that finds Slack expensive; arriving with a price they also find
+expensive would be an odd way to compete on cost (D-2).
+
+**Metering is per workspace and per month**, and the numbers that matter are already columns:
+`storage_used_bytes` (D-16) and the member count. No new usage-tracking subsystem.
+
+### D-44. Operating the cloud: backups, observability and incidents
+
+D-1 previously refused all of this. It is now the product, so it gets specified rather than
+improvised at the first outage.
+
+**Backups.** Point-in-time recovery on PostgreSQL, plus object-storage versioning. A stated RPO and
+RTO, published to customers. **A restore is tested on a schedule and the test result is recorded**
+— an untested backup is a belief, not a backup.
+
+**Observability.** `ARCHITECTURE.md` §10 already fixes structured JSON logging with a request id
+and a never-logged list; the library is `pino`, named here because §10 required the behaviour and
+no document named the tool. Added for the cloud: error tracking with a Sentry-compatible client,
+external uptime monitoring against `/health/ready`, and a public status page.
+
+**Self-hosters get the same instrumentation, disabled by default and pointing nowhere.** No
+telemetry is collected from a self-hosted deployment, ever — D-1's third audience exists because
+the operator owns the data, and phoning home would end that.
+
+**No metrics stack yet.** Logs, health checks and error tracking answer *is it up* and *what
+broke*. A time-series stack answers *how is it trending*, which nobody is asking until there are
+customers to trend. `CONTRIBUTING.md` §1.11 applies to us.
+
+**Incidents.** A written severity scale, a status-page update before a root-cause analysis, and a
+public post-incident note for anything customer-visible. Written now, while it is cheap and
+nobody is angry.
 
 ---
 

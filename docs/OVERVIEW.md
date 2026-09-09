@@ -1,10 +1,12 @@
 # Purlay — Start Here (`OVERVIEW.md`)
 
-Purlay is self-hosted team chat for small engineering teams. Nothing is thrown away, and
-nothing interrupts you by default.
+Purlay is team chat for small engineering teams. Nothing is thrown away, and nothing interrupts
+you by default.
 
-It is **open source and self-hosted, not a SaaS.** There is no billing, no per-seat cost, and
-no message history limit. (`DECISIONS.md` D-1)
+It is **open source under AGPL-3.0**, and it ships two ways: self-hosted for free, or a cloud we
+operate for teams who would rather not. Same code, **no open core**, and **no per-seat cost on
+either** — the cloud charges per workspace. A small business funded by the people who use it, not
+a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 
 ---
 
@@ -34,6 +36,10 @@ second file is a number that will eventually disagree with itself.
 |---|---|
 | Phase contents, non-goals, performance budgets | `PRD.md` §4, §6, §5 |
 | Capacity ceiling and the triggers that open Phase 3 | `DECISIONS.md` D-25 |
+| What the cloud is, what it sells, and what it never sells | `DECISIONS.md` D-1, D-43 |
+| Security posture: origin checks, CSP, attachment serving, the image proxy | `DECISIONS.md` D-39 |
+| Collation and identifier text handling | `DECISIONS.md` D-40 |
+| Interface languages and the i18n mechanism | `DECISIONS.md` D-41 |
 | Retention, erasure and export semantics | `DECISIONS.md` D-27 |
 | The list of background jobs and how they are scheduled | `DECISIONS.md` D-30 |
 | Why any choice was made, and what was rejected | `DECISIONS.md` |
@@ -90,7 +96,7 @@ purlay/
 │   └── config/       shared eslint · prettier · tailwind · tsconfig
 ├── docs/             PRD · DECISIONS · ARCHITECTURE · SCHEMA · UX · API · CONFIG · changelog/
 ├── README.md         public front door
-├── LICENSE           MIT (D-24)
+├── LICENSE           AGPL-3.0 (D-24) · NOTICE
 └── CONTRIBUTING.md   contributor and AI-agent rules
 ```
 

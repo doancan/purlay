@@ -35,6 +35,7 @@ Variables marked **required** have no default. Anything holding a secret is neve
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64. Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
 | `WORKSPACE_OPEN_JOIN_SLUG` | — | — | When set, any authenticated user is joined to that workspace as `member` on sign-in. Unset means the instance is closed. (D-37) |
+| `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
 The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/github/callback`.
 
@@ -57,6 +58,27 @@ not something an operator should discover by accident.
 
 Storage keys are opaque and never served as public URLs — downloads are brokered by the API so
 workspace membership is actually checked (`ARCHITECTURE.md` §9).
+
+## Interface
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `DEFAULT_LOCALE` | — | `en` | `en` \| `tr`. The fallback when the browser asks for neither (D-41) |
+
+## Cloud only — Phase 2.5
+
+Every variable here is **unset in a self-hosted deployment**, and the features they configure are
+inert without them. A self-hoster never holds a payment or telemetry credential, and nothing about
+the free path gets harder because the cloud exists. (D-1, D-44)
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `CLOUD_MODE` | — | `false` | Enables billing, metering and the operator surfaces. Off means the deployment behaves exactly as it did before the cloud existed |
+| `REDIS_URL` | cloud | — | Shared `EventBus`, `PresenceRegistry` and `RateLimiter` adapters (D-7, D-25). **Never required for self-hosting** |
+| `BILLING_PROVIDER_KEY` | cloud | — | **Secret.** Merchant of record (D-43) |
+| `BILLING_WEBHOOK_SECRET` | cloud | — | **Secret.** Signature verification on subscription events |
+| `SMTP_URL` | cloud | — | **Secret.** Transactional email: invitations, receipts, and Phase 2 magic links |
+| `ERROR_TRACKING_DSN` | cloud | — | Sentry-compatible. **No telemetry is ever collected from a self-hosted deployment** (D-44) |
 
 ## Limits
 
@@ -83,6 +105,10 @@ configure what is not already a database constraint.
 
 `docker compose` provides PostgreSQL and MinIO. A `.env.example` ships with Phase 0 and must
 list every variable above — a variable added to the loader without being added there is a bug.
+
+**Database provisioning.** Identifier columns declare `COLLATE "C"` in the migrations, so the
+server locale cannot change how channel names or emails compare (D-40). `/health/ready` asserts
+this and refuses to report ready if the applied schema disagrees.
 
 **Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
 intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and

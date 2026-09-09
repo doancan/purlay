@@ -6,6 +6,65 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-09-09 (second pass): the product gained a cloud
+
+The founding decision said *not a SaaS*. It now ships two ways, and that reopened everything
+downstream of it. Three decisions were **rewritten** rather than amended, because patching a
+decision whose premise changed leaves the old reasoning in place for the next reader to trust.
+
+**Rewritten**
+- **D-1** — self-hosted open source *and* a cloud we operate. Four audiences; the dogfood team
+  still holds the only veto. **No open core**: the cloud runs the same code and sells operation,
+  never withheld capability. The original decision's own warning — that paying customers would
+  push roughly 40% of the engineering budget into non-product work — is now accepted rather than
+  avoided, and phased so it cannot arrive before there is a product worth charging for. The size
+  of the business is written down as a constraint: a small operation funded by its users, not a
+  growth-stage SaaS.
+- **D-24** — **MIT → AGPL-3.0, plus a CLA.** The original reasoning hinged word-for-word on
+  *"D-1 explicitly gave up commercial ambition"*, which is no longer true. It also contained an
+  error worth naming: it rejected AGPL because companies ban AGPL dependencies, which is a cost
+  that applies to **libraries linked into a product**, not to an application a company runs
+  internally. The CLA matters now rather than later — the ability to relicense or dual-licence
+  ends at the first merged outside pull request, and `README.md` still says contributions open in
+  Phase 2. `LICENSE` replaced; `NOTICE` added.
+- **D-28** — for the cloud **we are the data processor**, so the DPA the previous decision
+  refused to publish is now genuinely required, along with a real subprocessor list and breach
+  notification. For self-hosters nothing changes: the operator is the controller and we are not a
+  party at all. Two postures, stated separately, because one document covering both would be
+  wrong in both directions.
+
+**Amended** — D-7 (the shared broker is required by the cloud and *never* by a self-hoster),
+D-20 (PostgreSQL 16 → **18**, versions pinned to current stable, ElysiaJS named as the highest-risk
+choice now that uptime is a commitment, with Hono as a written fallback and a four-week trigger),
+D-25 (multi-node is an obligation for one deployment and a measurement for the other), D-27
+(retention is set by the operator when they own the disk, and by the plan when we do), D-31
+(SSO has a paying demander now), D-10 (a vestigial line about text search configuration removed).
+
+**Added**
+- **D-39** browser and transport security. The gap that mattered: **no `Origin` validation on the
+  WebSocket upgrade**, which is cross-site WebSocket hijacking, and it is built in Phase 0.
+  Also: attachments served defensively, the one-line "external images proxied" turned into a
+  hardened fetcher rather than an SSRF endpoint, a CSP baseline, and AES-256-GCM named for a key
+  the configuration had already required.
+- **D-40** deterministic collation. `lower('İ')` is not `i` under a Turkish locale, so channel-name
+  uniqueness depended on how the server was provisioned. Identifier columns now declare
+  `COLLATE "C"`, `citext` is dropped for the same reason, and `/health/ready` asserts it.
+- **D-41** English and Turkish from the first screen, built on `Intl` and typed catalogues with no
+  i18n library — a missing key is a compile error, and the 250 KB budget survives.
+- **D-42** the cloud stays shared-database multi-tenant. The accepted cost is the largest in the
+  document: an isolation bug reaches every customer at once, which is exactly why D-21 and D-34
+  are enforced by types rather than by review.
+- **D-43** per-**workspace** pricing, never per seat — charging by seat would contradict the cost
+  axis the product competes on and the first paragraph of the README. Sold through a merchant of
+  record, with a numeric trigger for moving to direct payments.
+- **D-44** backups with a *tested* restore, error tracking, uptime monitoring, a status page, and
+  `pino` named at last for the structured logging §10 had always mandated. No telemetry is ever
+  collected from a self-hosted deployment.
+
+**Scope** — a new phase, **2.5 / `v0.4.0` — Cloud**, gated on S-3 and blocked until S-1 is met.
+`PRD.md` gains a fourth success criterion and a second primary persona; §6 keeps *per-seat
+billing* on the permanent non-goal list and adds *open core* to it, while billing itself leaves.
+
 ### Specification — 2026-09-09
 
 A capacity, compliance and operations pass. Four questions that the specification had never been

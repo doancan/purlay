@@ -1,11 +1,15 @@
 # Purlay
 
-**Self-hosted team chat for small engineering teams. Nothing is thrown away, and nothing
-interrupts you by default.**
+**Team chat for small engineering teams. Nothing is thrown away, and nothing interrupts you by
+default. Run it yourself, or let us run it.**
 
-Purlay is for a 5–30 person engineering team that resents paying per seat for Slack and loses
-its own answers to Slack's 90-day history limit. It is open source and self-hosted. There is no
-per-seat cost, no message history limit, and no hosted version to upsell you.
+Purlay is for a 5–30 person engineering team that resents paying per seat for Slack and loses its
+own answers to Slack's 90-day history limit.
+
+It is open source, and it ships two ways: **run it yourself for free, forever**, or **let us run
+it** for a flat price per workspace. Both are the same code — there is no paid tier of features
+held back from self-hosters, and there never will be. **Adding a teammate never costs more**, on
+either one.
 
 > **Status: pre-alpha. No code yet.** The design is complete and documented; Phase 0 has not
 > started. See [Project status](#project-status) before investing time. This README describes
@@ -23,8 +27,9 @@ searchable. A workspace-wide view lists every question still open.
 `@here` and `@channel` are rejected by the message parser: they do not exist, rather than being
 discouraged. Deep Work mode stops delivery on the server, not just the badge on your screen.
 
-**Nothing is thrown away.** Full history, forever. Deleted messages are tombstoned, not erased.
-Resolved threads stay searchable.
+**Nothing is thrown away.** Full history, forever, on a server you run. Deleted messages are
+tombstoned, not erased. Resolved threads stay searchable. In the cloud, history length is part of
+the plan — the disk is ours there — and the export is the same one command either way.
 
 **Developer-native.** GitHub Flavored Markdown, fenced code blocks with a language badge and
 line clamping, and GitHub PR/Issue links that render as live cards with CI and review status.
@@ -32,9 +37,9 @@ line clamping, and GitHub PR/Issue links that render as live cards with CI and r
 ### What Purlay is not
 
 No audio, video or screen sharing. No app marketplace. No workflow builder. No AI summaries. No
-SAML. These are permanent non-goals, not a roadmap — refusing them is the product. The full list
-is in [`docs/PRD.md`](docs/PRD.md) §6. (OIDC single sign-on is Phase 3 and gated on demand, not a
-non-goal — see D-31.)
+SAML. **No open core, and no per-seat pricing.** These are permanent non-goals, not a roadmap —
+refusing them is the product. The full list is in [`docs/PRD.md`](docs/PRD.md) §6. (OIDC single
+sign-on is gated on demand rather than refused — see D-31.)
 
 **If you are happy with [Zulip](https://zulip.com), stay there.** It has a better threading
 model than ours and a decade of work behind it. Purlay differs by being lighter to operate and
@@ -50,7 +55,8 @@ than waste your afternoon.
 | **0** | Walking skeleton | Two tabs, two GitHub users, a message in real time that survives an API restart | **Not started** |
 | **1** | MVP | The maintainer's own team stops opening Slack for 30 days | Not started |
 | **2** | Community-ready | A stranger self-hosts it from this README without opening an issue | Not started |
-| **3** | Polish | Desktop app, multi-node, mobile | Not started |
+| **2.5** | Cloud | A team pays for a workspace and stays a second month | Not started |
+| **3** | Polish | Desktop app, mobile | Not started |
 
 Self-hosting instructions land in Phase 2. Until then there is nothing to deploy.
 
@@ -64,7 +70,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 38 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 44 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
@@ -82,16 +88,18 @@ The design is fully specified before implementation, deliberately. Read in this 
 Bun + ElysiaJS · PostgreSQL 16 + Kysely · React 19 + Vite + Tailwind · TanStack Query + Zustand ·
 S3-compatible object storage.
 
-**No Redis, no message broker, no ORM.** A single node serving thirty people needs none of them,
-and the seam to add one later already exists. Reasoning and accepted costs:
+**Self-hosted needs no Redis, no message broker and no ORM.** A single node serving thirty people
+needs none of them, and that path stays broker-free permanently. The cloud runs several nodes and
+swaps in shared adapters behind the same interfaces — a self-hoster is never made to install
+infrastructure so that our hosting can scale. Reasoning and accepted costs:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §2.
 
 ---
 
 ## Contributing
 
-Not open to outside contributions yet — the API and schema will churn heavily through Phase 0.
-Issues and design feedback are welcome now; pull requests from Phase 2.
+Not open to outside contributions yet — the API and schema will churn heavily through Phase 0, and
+the CLA is not in place. Issues and design feedback are welcome now; pull requests from Phase 2.
 
 If you do work in this repository, read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. It applies to human and
 AI contributors alike.
@@ -100,5 +108,9 @@ AI contributors alike.
 
 ## License
 
-[MIT](LICENSE) — use it, fork it, run it, sell it. Reasoning in
+**[AGPL-3.0](LICENSE)** — run it, fork it, modify it. If you run a modified version as a network
+service, publish your changes. Running it inside your own company creates no obligation at all.
+
+Outside contributions require a CLA, so that the project can keep offering a commercial licence to
+teams whose policies do not permit AGPL. Reasoning, and the alternatives rejected, in
 [`docs/DECISIONS.md`](docs/DECISIONS.md) D-24.
