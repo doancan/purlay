@@ -29,12 +29,14 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # `github.head_ref` on a pull request, the checked-out branch otherwise.
-      # Passed as an environment variable rather than interpolated into the shell,
-      # because a branch name is attacker-controlled text.
+      # `head_ref` is the pull request's branch and is empty on a push, where
+      # `ref_name` is the branch pushed to — so this judges a real name on both
+      # triggers rather than failing on every merge to main. Passed as an
+      # environment variable rather than interpolated into the shell, because a
+      # branch name is attacker-controlled text.
       - name: the branch is named the way CONTRIBUTING.md §8 says
         env:
-          BRANCH: ${{ github.head_ref }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: bun run check:branch
 
       - name: typecheck (TypeScript 7)
