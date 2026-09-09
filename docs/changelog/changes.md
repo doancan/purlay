@@ -6,6 +6,23 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: messages
+
+- **The hot path, and all three of D-33's permanent failures.** A wrong version, a timestamp from
+  the future or too far back, and a collision acknowledged as a send — each has a test, and each
+  test was made to fail by removing the check it guards.
+- **A collision discloses nothing.** The row it hit is read back and compared with the requester
+  before anything is returned; a mismatch is `409` carrying neither the content, nor the sender, nor
+  the channel. The same sender re-sending the same id in the same channel gets the **same message
+  back**, which is what D-8 designed the client-generated id for.
+- **Keyset, never `OFFSET`.** One row more than asked for answers *is there another page* by
+  reading rather than by a second `COUNT`, and the last page says so instead of making the client
+  ask again to find out.
+- **The prohibition on `OFFSET` is a check now**, one of the fitness tests #130 collects, added with
+  the code rather than after it. Its first version matched the *prose explaining the rule* in the
+  file that obeys it — a check reporting a violation it had read in a comment. Comments are
+  stripped first, and it still catches a real one.
+
 ### Implementation — 2026-09-09: what a message id is
 
 - **The generator and the rule live together**, in the contract package, bound by a test that
