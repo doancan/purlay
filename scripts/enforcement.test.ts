@@ -468,3 +468,33 @@ describe('development serves the one origin it promises', () => {
     });
   }
 });
+
+/**
+ * The message-id window is the one D-33 decided.
+ *
+ * The unit tests around it compute their offsets from the constant, so they move
+ * with it — widening the window from five seconds to sixty passed every one of
+ * them. A test that reads the value it is testing cannot catch a change to that
+ * value, which is the tautological pass `CONTRIBUTING.md` §6.4 is about.
+ *
+ * So the code is bound to the decision instead. Changing either without the other
+ * fails here.
+ */
+describe('the message-id skew window matches the decision that set it', () => {
+  const decisions = readFileSync('docs/DECISIONS.md', 'utf8');
+  const source = readFileSync('packages/types/src/message-id.ts', 'utf8');
+
+  const stated = /within `\[now − (\d+) s, now \+ (\d+) s\]`/.exec(decisions);
+  const declared = /behindMs: ([\d_]+), aheadMs: ([\d_]+)/.exec(source);
+
+  test('both places still say it, so this is not comparing nothing to nothing', () => {
+    expect(stated).not.toBeNull();
+    expect(declared).not.toBeNull();
+  });
+
+  test('the code allows exactly what the decision permits, behind and ahead', () => {
+    const seconds = (value: string | undefined): number => Number(value?.replace(/_/g, '') ?? '0');
+    expect(seconds(declared?.[1]) / 1000).toBe(Number(stated?.[1]));
+    expect(seconds(declared?.[2]) / 1000).toBe(Number(stated?.[2]));
+  });
+});
