@@ -35,6 +35,7 @@ import {
   readWorkspace,
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
+import { postMessage, readHistory } from './messages';
 
 export interface Dependencies {
   readonly config: Config;
@@ -136,7 +137,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/join',
       async ({ request, params }) =>
         await joinPublicChannel(dependencies, request, params.channelId),
-    );
+    )
+
+    .get(
+      '/api/channels/:channelId/messages',
+      async ({ request, params }) => await readHistory(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
+      set.status = 201;
+      return await postMessage(dependencies, request, params.channelId, body);
+    });
 
   return app;
 };

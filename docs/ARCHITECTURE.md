@@ -128,6 +128,7 @@ purlay/
 │   │       │   │              ownership is a membership row, never a column (D-22)
 │   │       │   ├── channels/    channels, DMs, membership, read state
 │   │       │   ├── messages/    messages, threads, resolution, mentions
+│   │       │   │              keyset on the id alone; OFFSET is a check, not advice
 │   │       │   ├── attachments/ upload, thumbnails, quota
 │   │       │   ├── notifications/
 │   │       │   ├── search/

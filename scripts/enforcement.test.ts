@@ -498,3 +498,48 @@ describe('the message-id skew window matches the decision that set it', () => {
     expect(seconds(declared?.[2]) / 1000).toBe(Number(stated?.[2]));
   });
 });
+
+/**
+ * `OFFSET` never appears in a query against `messages`.
+ *
+ * It is O(n) and it shifts under concurrent inserts, which in a live channel is
+ * every page (`SCHEMA.md` §6.3). The prohibition was prose until the code it
+ * governs existed; this is one of the architecture fitness tests #130 collects,
+ * added with the code rather than after it.
+ */
+describe('the message feed is keyset, never offset', () => {
+  const sources = Bun.spawnSync([
+    'bash',
+    '-lc',
+    "find apps/api/src -name '*.ts' -not -name '*.test.ts' | xargs grep -l 'messages' || true",
+  ])
+    .stdout.toString()
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  test('there are files that query messages, so this is not an empty sweep', () => {
+    expect(sources.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Comments are stripped first. The prohibition is *explained* in prose in the
+   * file that obeys it, and the first version of this check matched that prose —
+   * a check reporting a violation it had read in a comment, which is the same
+   * defect as one passing because it matched a comment (`CONTRIBUTING.md` §6.4).
+   */
+  const code = (file: string): string =>
+    readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+
+  test('stripping comments leaves code, so the sweep is not looking at nothing', () => {
+    expect(sources.every((file) => code(file).includes('export'))).toBe(true);
+  });
+
+  for (const file of sources) {
+    test(`${file} paginates by cursor`, () => {
+      expect(code(file)).not.toMatch(/\.offset\(|\bOFFSET\b/);
+    });
+  }
+});
