@@ -58,6 +58,9 @@ the first four drafts of this project ended up contradicting each other at the s
 
 ## 2. Stack
 
+Start the local environment with `bun run db:up` (PostgreSQL and object storage, waits for both to
+be healthy). `bun run verify` runs exactly what CI runs.
+
 `bun` for everything (`bun add`, `bun run`, `bun test`) · Bun + ElysiaJS · Kysely +
 PostgreSQL · TypeBox validation · React + Vite + Tailwind · TanStack Query + Zustand ·
 S3-compatible storage.

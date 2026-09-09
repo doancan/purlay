@@ -1,0 +1,82 @@
+# The local development environment: PostgreSQL and object storage, nothing else.
+#
+# No Redis and no broker. A self-hosted instance never needs one and never will;
+# the cloud swaps in shared adapters behind the same interfaces. (D-7, D-25)
+#
+# Every image is pinned. A floating tag would make "target the latest stable
+# major, and say so" (D-20) untrue the first time upstream moved, silently.
+
+name: purlay
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: purlay
+      POSTGRES_PASSWORD: purlay # development only; production comes from DATABASE_URL
+      POSTGRES_DB: purlay
+      # Identifier columns declare COLLATE "C" so uniqueness never depends on how
+      # the server was provisioned (D-40). The cluster locale is pinned as well, so
+      # a developer's machine and a reviewer's behave identically.
+      POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+    ports:
+      # Overridable: 5432 is conventional and frequently already taken. A port
+      # collision is exactly the friction that turns "self-hosts from the README"
+      # into a support ticket (PRD.md §3, S-2).
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # PostgreSQL 18+ wants a single mount at /var/lib/postgresql rather than at
+      # .../data: the data directory then sits inside the volume, so a later
+      # `pg_upgrade --link` does not have to cross a mount boundary. Getting this
+      # wrong is invisible until the first major upgrade — which, for a
+      # self-hosted product, is an operator's problem we would have created.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # `docker compose up` is only deterministic if readiness is defined. Without
+      # this, the migration runner races the database on a cold start.
+      test: ['CMD-SHELL', 'pg_isready -U purlay -d purlay']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: purlay
+      MINIO_ROOT_PASSWORD: purlay-development # development only
+    ports:
+      - '${MINIO_PORT:-9000}:9000' # S3 API
+      - '${MINIO_CONSOLE_PORT:-9001}:9001' # console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # One-shot: creates the bucket and exits. Attachments are stored under opaque
+  # keys and never served as public URLs — downloads are brokered by the API so
+  # membership is actually checked (D-16, ARCHITECTURE.md §9), so the bucket
+  # stays private.
+  minio-bucket:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 purlay purlay-development &&
+      mc mb --ignore-existing local/purlay-attachments &&
+      mc anonymous set none local/purlay-attachments
+      "
+    restart: 'no'
+
+volumes:
+  postgres-data:
+  minio-data:
