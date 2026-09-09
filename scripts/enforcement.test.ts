@@ -398,3 +398,42 @@ describe('scripts run the versions this repository pins', () => {
     expect(invocations.map(([m, s, t]) => `${m} → ${s} → ${t}`)).toEqual([]);
   });
 });
+
+/**
+ * One command starts everything a developer needs running.
+ *
+ * Not a style preference: a two-process product whose two processes start
+ * differently is one somebody eventually runs half of, then debugs the half that
+ * is missing. `dev` delegates to each workspace's own `dev` rather than
+ * repeating their commands, so there is one definition of how each starts.
+ */
+describe('development starts with one command', () => {
+  const root = JSON.parse(readFileSync('package.json', 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+
+  test('`dev` exists and names both applications', () => {
+    const dev = root.scripts['dev'] ?? '';
+    expect(dev).toContain('@purlay/api');
+    expect(dev).toContain('@purlay/web');
+  });
+
+  for (const app of ['apps/api', 'apps/web'] as const) {
+    test(`${app} defines the \`dev\` script that delegation resolves to`, () => {
+      const pkg = JSON.parse(readFileSync(`${app}/package.json`, 'utf8')) as {
+        scripts?: Record<string, string>;
+      };
+      expect(Object.keys(pkg.scripts ?? {})).toContain('dev');
+    });
+  }
+
+  /** The single-process shortcuts must not restate what the workspace already says. */
+  for (const [shortcut, app] of [
+    ['dev:api', 'apps/api'],
+    ['dev:web', 'apps/web'],
+  ] as const) {
+    test(`\`${shortcut}\` delegates rather than repeating the command`, () => {
+      expect(root.scripts[shortcut]).toBe(`bun run --cwd ${app} dev`);
+    });
+  }
+});

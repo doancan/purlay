@@ -306,9 +306,10 @@ run, which is why the record carries both.
 5. **Verify.** `bun run typecheck && bun run lint && bun test`. Paste real output.
 6. **Log it.** Notable changes go to `docs/changelog/changes.md`.
 
-**Running it.** `bun run dev:api` starts the API with reload. It reads `.env`, which
-`bun run config:example` generates the template for, and it **refuses to start** if a variable is
-missing rather than failing later on the request that needed it.
+**Running it.** `bun run dev` starts both processes; `bun run dev:api` and `bun run dev:web` start
+one. They read `.env`, which `bun run config:example` generates the template for, and the API
+**refuses to start** if a variable is missing rather than failing later on the request that needed
+it.
 
 **When is it done?** A task is done when it is typed, tested, and its documentation is accurate
 — not when it runs. A milestone is done when its exit criterion is *demonstrated*, not when the
