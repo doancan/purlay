@@ -125,6 +125,7 @@ purlay/
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line
 │   │       │   ├── auth/        GitHub OAuth, sessions (opaque token, SHA-256 at rest)
 │   │       │   ├── workspaces/  tenancy, membership, roles, Deep Work
+│   │       │   │              ownership is a membership row, never a column (D-22)
 │   │       │   ├── channels/    channels, DMs, membership, read state
 │   │       │   ├── messages/    messages, threads, resolution, mentions
 │   │       │   ├── attachments/ upload, thumbnails, quota

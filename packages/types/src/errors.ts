@@ -41,6 +41,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('MESSAGE_NOT_FOUND'),
   Type.Literal('USER_NOT_FOUND'),
   // Conflict
+  /** A workspace slug is an identifier in a URL, so it is unique across the instance. */
+  Type.Literal('WORKSPACE_SLUG_TAKEN'),
   Type.Literal('CHANNEL_NAME_TAKEN'),
   Type.Literal('ALREADY_A_MEMBER'),
   Type.Literal('MESSAGE_ID_CONFLICT'),
@@ -75,6 +77,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   MESSAGE_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,
 
+  WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,
   ALREADY_A_MEMBER: 409,
   MESSAGE_ID_CONFLICT: 409,
