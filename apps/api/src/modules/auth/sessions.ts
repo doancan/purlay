@@ -1,0 +1,150 @@
+/**
+ * Sessions: an opaque token in the user's cookie, only its hash in the database.
+ *
+ * Chosen over a stateless token because revocation — *sign out everywhere*, *this
+ * device was stolen* — matters more here than saving a database round-trip the
+ * request makes anyway (D-11).
+ *
+ * **The raw token exists in exactly two places: the response that issues it, and
+ * the user's cookie.** Everything stored is `SHA-256(token)`, so a database dump
+ * hands over no live session. Nothing in this module logs, returns or stores the
+ * raw value except the one function whose job is to hand it to the caller.
+ *
+ * Lookup is by hash, and the hash is derived from 256 bits of randomness the
+ * attacker does not have — so an indexed equality is not a timing oracle: there
+ * is no prefix to guess your way along.
+ *
+ * The executor is an argument, so this runs inside a rolled-back transaction in a
+ * test and never opens a connection of its own (D-46).
+ */
+import type { Executor } from '@purlay/db';
+import type { Clock } from '../../platform/clock';
+
+/** 32 bytes, hex-encoded. The cookie value. */
+const TOKEN_BYTES = 32;
+
+/**
+ * How stale `last_used_at` may get before a resolve refreshes it.
+ *
+ * Writing it on every request would put an `UPDATE` on the hottest path in the
+ * system to maintain a column whose only consumer is a device list nobody has
+ * built yet. An hour is precise enough for *when was this device last seen* and
+ * costs one write per session per hour. (D-60)
+ */
+const LAST_USED_STALE_AFTER_MS = 60 * 60 * 1000;
+
+export interface IssuedSession {
+  /** The only place the raw token is ever returned. It is never stored. */
+  readonly token: string;
+  readonly expiresAt: Date;
+}
+
+export interface SessionOwner {
+  readonly sessionId: string;
+  readonly userId: string;
+}
+
+export interface IssueOptions {
+  readonly userAgent?: string | undefined;
+  readonly ipAddress?: string | undefined;
+}
+
+const sha256 = async (value: string): Promise<string> => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const randomToken = (): string => {
+  const bytes = new Uint8Array(TOKEN_BYTES);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+export const issueSession = async (
+  executor: Executor,
+  clock: Clock,
+  userId: string,
+  ttlDays: number,
+  options: IssueOptions = {},
+): Promise<IssuedSession> => {
+  const token = randomToken();
+  const expiresAt = new Date(clock.now().getTime() + ttlDays * 24 * 60 * 60 * 1000);
+
+  await executor
+    .insertInto('sessions')
+    .values({
+      user_id: userId,
+      token_hash: await sha256(token),
+      expires_at: expiresAt,
+      ...(options.userAgent === undefined ? {} : { user_agent: options.userAgent }),
+      ...(options.ipAddress === undefined ? {} : { ip_address: options.ipAddress }),
+    })
+    .execute();
+
+  return { token, expiresAt };
+};
+
+/**
+ * Resolves a token to its owner, or to nothing.
+ *
+ * Every reason to refuse produces the same answer: expired, revoked, unknown, or
+ * belonging to a user who has been deleted. A caller that could tell them apart
+ * could use this endpoint to ask questions about accounts it does not own.
+ */
+export const resolveSession = async (
+  executor: Executor,
+  clock: Clock,
+  token: string,
+): Promise<SessionOwner | undefined> => {
+  const now = clock.now();
+  const row = await executor
+    .selectFrom('sessions')
+    .innerJoin('users', 'users.id', 'sessions.user_id')
+    .select(['sessions.id as sessionId', 'sessions.user_id as userId', 'sessions.last_used_at'])
+    .where('sessions.token_hash', '=', await sha256(token))
+    .where('sessions.revoked_at', 'is', null)
+    .where('sessions.expires_at', '>', now)
+    .where('users.deleted_at', 'is', null)
+    .executeTakeFirst();
+
+  if (row === undefined) return undefined;
+
+  if (now.getTime() - new Date(row.last_used_at).getTime() > LAST_USED_STALE_AFTER_MS) {
+    await executor
+      .updateTable('sessions')
+      .set({ last_used_at: now })
+      .where('id', '=', row.sessionId)
+      .execute();
+  }
+
+  return { sessionId: row.sessionId, userId: row.userId };
+};
+
+/** Sign out, on this device. Revoking is a stamp, never a delete: the row is evidence. */
+export const revokeSession = async (
+  executor: Executor,
+  clock: Clock,
+  token: string,
+): Promise<void> => {
+  await executor
+    .updateTable('sessions')
+    .set({ revoked_at: clock.now() })
+    .where('token_hash', '=', await sha256(token))
+    .where('revoked_at', 'is', null)
+    .execute();
+};
+
+/** Sign out everywhere. Returns how many sessions were live, so a caller can report it. */
+export const revokeAllSessions = async (
+  executor: Executor,
+  clock: Clock,
+  userId: string,
+): Promise<number> => {
+  const result = await executor
+    .updateTable('sessions')
+    .set({ revoked_at: clock.now() })
+    .where('user_id', '=', userId)
+    .where('revoked_at', 'is', null)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
+};

@@ -123,7 +123,7 @@ purlay/
 │   │       │   │              plus the one error handler: AppError → its status, else INTERNAL
 │   │       │   └── ws/          frame router, connection lifecycle, backpressure
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line
-│   │       │   ├── auth/        GitHub OAuth, sessions
+│   │       │   ├── auth/        GitHub OAuth, sessions (opaque token, SHA-256 at rest)
 │   │       │   ├── workspaces/  tenancy, membership, roles, Deep Work
 │   │       │   ├── channels/    channels, DMs, membership, read state
 │   │       │   ├── messages/    messages, threads, resolution, mentions
@@ -132,7 +132,7 @@ purlay/
 │   │       │   ├── search/
 │   │       │   └── integrations/github/  unfurl, link_previews cache
 │   │       ├── realtime/        EventBus + socket hub
-│   │       ├── platform/        db, storage, config, logging, errors, tenancy, uuid
+│   │       ├── platform/        db, storage, config, clock, logging, errors, tenancy, uuid
 │   │       └── index.ts
 │   │
 │   └── web/
@@ -358,6 +358,12 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
 
 `state` verification is not optional — without it the callback is a CSRF endpoint that logs
 victims into an attacker's account.
+
+**Validating one.** The token is looked up by its hash, and a session resolves only while it is
+unexpired, unrevoked, and owned by a user who has not been deleted — a soft-deleted account does
+not keep a live session. Every reason to refuse produces the same answer, so an unauthenticated
+caller cannot learn from it whether a token was ever real or an account ever existed. `last_used_at`
+is refreshed at most once an hour rather than on every request. (D-60)
 
 **Open join.** When `WORKSPACE_OPEN_JOIN_SLUG` is set, a user who is not yet a member of that
 workspace is joined as `member` here. Unset by default; Phase 0 cannot reach its exit criterion

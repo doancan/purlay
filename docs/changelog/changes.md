@@ -6,6 +6,26 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Implementation — 2026-09-09: sessions
+
+- **An opaque token, and only its hash in the database.** The claim is that a database dump hands
+  over no live session, so the test looks for the raw token in **every column** of the row it
+  created — a token that leaked into `user_agent` would pass a narrower assertion.
+- **Every reason to refuse looks the same.** Expired, revoked, unknown, or owned by a deleted user
+  all resolve to nothing. Otherwise an unauthenticated caller learns whether a token was ever real
+  and whether an account ever existed — the 404-not-403 argument (D-21), one layer earlier. The
+  deleted-user case is the one that would have been missed: a soft delete leaves the session row
+  untouched, so without the join it keeps working.
+- **D-60** — `last_used_at` is refreshed at most once an hour. This table is read on every request
+  and every socket upgrade; writing it on every resolve turns the hottest read path into a write
+  path to maintain a column whose only consumer is a device list nobody has built. Not maintaining
+  it at all was also rejected: a column that never moves reads as data and is fiction.
+- **The clock is a dependency**, in `platform/clock.ts` — the place the lint rule against reading
+  it directly has been pointing at since it was written. It needs no exception to that rule.
+- **The cookie's attributes are asserted, not trusted**, including the one that is invisible when
+  wrong: the cleared cookie must match the original on everything a browser keys on, or sign-out
+  stores a second cookie and the session survives.
+
 ### Specification — 2026-09-09: the stack table has to be true
 
 - **D-59** — **the table says what is installed, and a test agrees.** D-57 stopped the next guess;
