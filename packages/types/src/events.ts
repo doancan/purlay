@@ -9,7 +9,16 @@
  */
 import { Type, type Static } from '@sinclair/typebox';
 import { AppErrorBody } from './errors';
-import { FromClient, Message, Uuid } from './models';
+import { FromClient, Message, MessageContent, Uuid } from './models';
+
+/**
+ * The largest frame either side may send, in bytes (`ARCHITECTURE.md` §5.5).
+ *
+ * Part of the contract because both sides need it: the server refuses a larger
+ * frame by ending the connection, so a client that does not know the number finds
+ * out by losing its socket. Attachments never traverse the socket. (D-66)
+ */
+export const MAX_FRAME_BYTES = 64 * 1024;
 
 /**
  * Every client frame carries a client-generated UUIDv7 as its correlation id.
@@ -28,7 +37,7 @@ import { FromClient, Message, Uuid } from './models';
 export const MessageSendFrame = FromClient({
   id: Uuid,
   op: Type.Literal('MESSAGE_SEND'),
-  payload: FromClient({ channelId: Uuid, content: Type.String({ minLength: 1 }) }),
+  payload: FromClient({ channelId: Uuid, content: MessageContent }),
 });
 
 /**

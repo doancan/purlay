@@ -108,6 +108,24 @@ export const Channel = Type.Object({
 });
 export type Channel = Static<typeof Channel>;
 
+/**
+ * The longest message, in UTF-16 code units — what `String.length` counts.
+ *
+ * Sixteen thousand is roughly four hundred lines of stack trace, which `PRD.md`
+ * names as something this product's users paste. It also bounds what the trigram
+ * index has to digest per row. And it fits the socket's frame cap with room to
+ * spare at the format's worst case of three bytes a unit — proven by a test, not
+ * asserted here. The database enforces the same number (D-67).
+ */
+export const MESSAGE_CONTENT_MAX = 16_000;
+
+/** What a client may send as a message's text. */
+export const MessageContent = Type.String({
+  minLength: 1,
+  maxLength: MESSAGE_CONTENT_MAX,
+  format: 'message-content',
+});
+
 export const Message = Type.Object({
   /** A UUIDv7 the client generated. It is also the pagination cursor. (D-8) */
   id: Uuid,

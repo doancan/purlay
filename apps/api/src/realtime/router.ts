@@ -18,6 +18,11 @@
 import { Value } from '@sinclair/typebox/value';
 import {
   ClientFrame,
+  MessageSendFrame,
+  PingFrame,
+  SubscribeFrame,
+  UnsubscribeFrame,
+  type ClientOp,
   REPLAY_OVERLAP_MS,
   isMessageIdShape,
   messageIdFloor,
@@ -32,17 +37,6 @@ import { requireChannelById } from '../platform/channels';
 import { messageHistory, sendMessage } from '../modules/messages/messages';
 import { channelTopic, type EventBus } from './bus';
 import type { RateLimiter } from './rate-limiter';
-
-/**
- * `ARCHITECTURE.md` §5.5. Attachments never traverse the socket.
- *
- * Enforced by the server before a frame reaches this file, not here: the
- * framework has already parsed a JSON frame by the time the router sees it, so a
- * check here would measure what had already been paid for. The framework's
- * per-route option is silently ignored; the server-wide one is what refuses
- * (`app.ts`, `docs/spikes/elysia.md`).
- */
-export const MAX_FRAME_BYTES = 64 * 1024;
 
 /** How many missed messages a reconnect replays per channel before giving up on catching up. */
 const REPLAY_LIMIT = 100;
@@ -96,12 +90,50 @@ const refIdOf = (raw: unknown): string | undefined =>
     ? raw.id
     : undefined;
 
+/**
+ * The whole body of an `AppError`, which is written for the client — including
+ * `details`, which the contract requires of a validation failure. Dropping it
+ * sent every socket validation error outside the contract, and told the composer
+ * nothing about which field to fix while HTTP named it.
+ */
 const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame => {
   const body =
     error instanceof AppError
-      ? { code: error.body.code, message: error.body.message }
+      ? error.body
       : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
   return frame('ERROR', body, clock, refId);
+};
+
+/**
+ * Each operation's own schema. `satisfies` makes it total: an operation added to
+ * the contract without a schema here does not compile.
+ */
+const FRAME_BY_OP = {
+  MESSAGE_SEND: MessageSendFrame,
+  SUBSCRIBE: SubscribeFrame,
+  UNSUBSCRIBE: UnsubscribeFrame,
+  PING: PingFrame,
+} as const satisfies Record<ClientOp, unknown>;
+
+const isClientOp = (value: unknown): value is ClientOp =>
+  typeof value === 'string' && Object.hasOwn(FRAME_BY_OP, value);
+
+/**
+ * Which fields of a refused frame were wrong, in the shape HTTP reports them
+ * (`API.md` §1) — the path and why, never the value sent.
+ *
+ * Checked against the frame's own operation rather than the union: against the
+ * union every field of every other operation is "wrong", which names nothing.
+ */
+const fieldsOf = (parsed: unknown): Record<string, string> => {
+  const op =
+    typeof parsed === 'object' && parsed !== null && 'op' in parsed ? parsed.op : undefined;
+  if (!isClientOp(op)) return { op: 'is not an operation this server accepts' };
+  const fields: Record<string, string> = {};
+  for (const error of Value.Errors(FRAME_BY_OP[op], parsed)) {
+    fields[error.path.replace(/^\//, '') || 'frame'] ??= error.message;
+  }
+  return fields;
 };
 
 /**
@@ -129,9 +161,9 @@ export const routeFrame = async (
     ];
   }
 
-  const refuse = (message: string, refId?: string): ServerFrame =>
+  const refuse = (message: string, fields: Record<string, string>, refId?: string): ServerFrame =>
     errorFrame(
-      new AppError({ code: 'VALIDATION_FAILED', message, details: { fields: {} } }),
+      new AppError({ code: 'VALIDATION_FAILED', message, details: { fields } }),
       clock,
       refId,
     );
@@ -145,12 +177,12 @@ export const routeFrame = async (
       parsed = JSON.parse(raw);
     } catch {
       // No `refId`: there is no frame to answer, only bytes that were not one.
-      return [refuse('That was not a frame.')];
+      return [refuse('That was not a frame.', { frame: 'is not JSON' })];
     }
   }
 
   if (!Value.Check(ClientFrame, parsed)) {
-    return [refuse('That frame did not match the contract.', refIdOf(parsed))];
+    return [refuse('That frame did not match the contract.', fieldsOf(parsed), refIdOf(parsed))];
   }
 
   try {

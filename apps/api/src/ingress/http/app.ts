@@ -39,7 +39,8 @@ import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } 
 import { postMessage, readHistory } from './messages';
 import { inProcessEventBus } from '../../realtime/bus';
 import { createSocketHub } from '../../realtime/hub';
-import { MAX_FRAME_BYTES, routeFrame } from '../../realtime/router';
+import { MAX_FRAME_BYTES } from '@purlay/types';
+import { routeFrame } from '../../realtime/router';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { admitSocket } from '../../realtime/upgrade';
 

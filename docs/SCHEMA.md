@@ -354,7 +354,11 @@ CREATE TABLE messages (
     CONSTRAINT replies_have_no_thread_summary
         CHECK (parent_id IS NULL OR thread_reply_count = 0),
 
-    CONSTRAINT thread_reply_count_non_negative CHECK (thread_reply_count >= 0)
+    CONSTRAINT thread_reply_count_non_negative CHECK (thread_reply_count >= 0),
+
+    -- The contract's MESSAGE_CONTENT_MAX, for every writer that is not one of the
+    -- two doors. Added by 0007, NOT VALID then validated. (D-67)
+    CONSTRAINT messages_content_length CHECK (char_length(content) <= 16000)
 );
 ```
 
@@ -775,22 +779,24 @@ Rules the schema cannot express. Each has a named test. (D-21)
 `packages/db/migrations/` — ordered, additive, never edited after being applied. (D-21)
 
 ```
-0001_extensions.sql          pg_trgm, btree_gin, citext, enum types
+0001_extensions.sql          pg_trgm, btree_gin, enum types  (citext deliberately absent, D-40)
 0002_identity.sql            users, sessions
-0003_workspaces.sql          workspaces, workspace_members
+0003_workspaces.sql          workspaces (incl. retention_days), workspace_members
 0004_channels.sql            channels  (without the channel_members FK)
 0005_messages.sql            messages + indexes
 0006_channel_members.sql     channel_members, incl. last_read_message_id FK
-0007_engagement.sql          reactions, attachments, mentions, notifications
-0008_integrations.sql        github_integrations, link_previews
+0007_message_content_limit.sql   messages_content_length CHECK  (D-67)
+0008_engagement.sql          reactions, attachments, mentions, notifications
+0009_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0009_administration.sql      audit_log, job_runs, workspaces.retention_days  (Phase 1)
+0010_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0010_github_feeds.sql`; Phase 2's magic links add `0011_email_auth.sql`.
+Phase 2 adds `0011_github_feeds.sql`; Phase 2's magic links add `0012_email_auth.sql`.
 
-The Phase 2 numbers moved up by one when `0009_administration.sql` was inserted. That is legal
-only because neither had been applied — **a migration that has run is never renumbered and never
-edited.** (`CONTRIBUTING.md` §1.6)
+Unapplied numbers have moved twice: up by one when the administration migration was inserted, and
+again when `0007_message_content_limit.sql` shipped in Phase 0. That is legal only because none of
+them had been applied — **a migration that has run is never renumbered and never edited.**
+(`CONTRIBUTING.md` §1.6)

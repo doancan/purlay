@@ -19,9 +19,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
-import { MESSAGE_ID_SKEW, messageId, ServerFrame } from '@purlay/types';
+import {
+  MAX_FRAME_BYTES,
+  MESSAGE_CONTENT_MAX,
+  MESSAGE_ID_SKEW,
+  messageId,
+  ServerFrame,
+} from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { MAX_FRAME_BYTES } from './router';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
@@ -428,19 +433,7 @@ describe('integration: two real sockets', () => {
     const after = sendMessage(bob, room.channelId, 'still here');
     await bob.until((frames) => ack(frames, after) !== undefined, 'the other socket to be served');
 
-    // And a frame just under the cap is not refused: the limit is the cap, not lower.
-    const fits = await connect(room.alice);
-    const near = messageId(at(1));
-    fits.send({
-      id: near,
-      op: 'MESSAGE_SEND',
-      payload: { channelId: room.channelId, content: 'y'.repeat(MAX_FRAME_BYTES - 1_024) },
-    });
-    await fits.until(
-      (frames) => ack(frames, near) !== undefined,
-      'a frame under the cap to be accepted',
-    );
-    await fits.close();
+    // The largest frame a valid message makes is accepted: see the length test below (D-67).
     await bob.close();
   });
 
@@ -472,5 +465,49 @@ describe('integration: two real sockets', () => {
     );
     await alice.close();
     await again.close();
+  });
+
+  /**
+   * The length limit meets the frame cap here (D-67). The longest message in its
+   * most expensive form must be written, not end the connection; one unit more is
+   * an error the composer can show, on a connection that stays open.
+   */
+  test('the longest message is accepted over the socket, and a longer one is refused without a disconnect', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+
+    const longest = messageId(NOW);
+    alice.send({
+      id: longest,
+      op: 'MESSAGE_SEND',
+      payload: { channelId: room.channelId, content: '\u0800'.repeat(MESSAGE_CONTENT_MAX) },
+    });
+    await alice.until(
+      (frames) => ack(frames, longest) !== undefined,
+      'the longest message to be ACKed',
+    );
+
+    const tooLong = messageId(at(1));
+    alice.send({
+      id: tooLong,
+      op: 'MESSAGE_SEND',
+      payload: { channelId: room.channelId, content: 'x'.repeat(MESSAGE_CONTENT_MAX + 1) },
+    });
+    await alice.until((frames) => frames.some((f) => f.refId === tooLong), 'an answer');
+    const refusal = alice.frames.find((f) => f.refId === tooLong);
+    if (refusal?.event !== 'ERROR' || refusal.data.code !== 'VALIDATION_FAILED') {
+      throw new Error(`expected a validation refusal, got ${JSON.stringify(refusal)}`);
+    }
+    expect(Object.keys(refusal.data.details.fields)).toEqual(['payload/content']);
+
+    // Still connected: the next frame on the same socket is served.
+    const after = messageId(at(2));
+    alice.send({ id: after, op: 'PING', payload: {} });
+    await alice.until(
+      (frames) => frames.some((f) => f.refId === after && f.event === 'PONG'),
+      'a pong',
+    );
+    expect(await history(room.alice, room.channelId)).toEqual([longest]);
+    await alice.close();
   });
 });
