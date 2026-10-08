@@ -68,13 +68,19 @@ export const issueSession = async (
   options: IssueOptions = {},
 ): Promise<IssuedSession> => {
   const token = randomToken();
-  const expiresAt = new Date(clock.now().getTime() + ttlDays * 24 * 60 * 60 * 1000);
+  const now = clock.now();
+  const expiresAt = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
 
   await executor
     .insertInto('sessions')
     .values({
       user_id: userId,
       token_hash: await sha256(token),
+      // From the clock, never the column default: `resolveSession` compares
+      // `last_used_at` against `clock.now()`, and two clocks in one comparison
+      // made the staleness check depend on the wall date the test ran on.
+      created_at: now,
+      last_used_at: now,
       expires_at: expiresAt,
       ...(options.userAgent === undefined ? {} : { user_agent: options.userAgent }),
       ...(options.ipAddress === undefined ? {} : { ip_address: options.ipAddress }),
