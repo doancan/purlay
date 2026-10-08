@@ -11,6 +11,7 @@ import { createApp } from './app';
 import { testDependencies } from './testing';
 import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
+import { SESSION_COOKIE } from './cookies';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -46,7 +47,7 @@ const signedIn = async (
     .returning('id')
     .executeTakeFirstOrThrow();
   const { token } = await issueSession(db, clock, row.id, 30);
-  return { userId: row.id, cookie: `purlay_session=${token}` };
+  return { userId: row.id, cookie: `${SESSION_COOKIE}=${token}` };
 };
 
 const aWorkspace = async (db: Executor, cookie: string, slug: string): Promise<string> => {

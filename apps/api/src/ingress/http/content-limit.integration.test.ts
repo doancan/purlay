@@ -14,6 +14,7 @@ import { createApp } from './app';
 import { NOW, testDependencies } from './testing';
 import { fixedClock } from '../../platform/clock';
 import { issueSession } from '../../modules/auth/sessions';
+import { SESSION_COOKIE } from './cookies';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -32,7 +33,7 @@ const aChannel = async (
     .returning('id')
     .executeTakeFirstOrThrow();
   const { token } = await issueSession(db, clock, user.id, 30);
-  const cookie = `purlay_session=${token}`;
+  const cookie = `${SESSION_COOKIE}=${token}`;
   const app = createApp(testDependencies({ database: db, clock }));
   const post = async (path: string, body: unknown): Promise<string> => {
     const response = await app.handle(
