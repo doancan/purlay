@@ -33,8 +33,10 @@ export const MessageSendFrame = FromClient({
 
 /**
  * Resume. Per channel the client names the highest id it holds, and the server
- * returns everything newer by keyset scan — one indexed range query rather than a
- * timestamp comparison with clock-skew problems (`ARCHITECTURE.md` §5.4).
+ * returns what it may have missed by keyset scan — one indexed range query
+ * rather than a timestamp comparison with clock-skew problems
+ * (`ARCHITECTURE.md` §5.4). The scan starts `REPLAY_OVERLAP_MS` below that id,
+ * so some of what comes back the client already holds (D-65).
  */
 export const SubscribeFrame = FromClient({
   id: Uuid,
@@ -82,6 +84,34 @@ export const AckFrame = Type.Object({
   ...envelope,
 });
 
+/**
+ * Where a channel's replay stopped.
+ *
+ * `null` means it reached the present. Anything else means the replay was one
+ * page and there is more: the client continues with
+ * `GET /api/channels/:channelId/messages?after=<nextCursor>`, the same cursor and
+ * the same contract as every other page (`API.md` §1). Without it a client that
+ * missed more than a page is told nothing and believes it has caught up. (D-65)
+ */
+export const ReplayState = Type.Object({
+  channelId: Uuid,
+  nextCursor: Type.Union([Uuid, Type.Null()]),
+});
+
+/** Answers `SUBSCRIBE`, before the replayed messages, one entry per channel asked for. */
+export const SubscribedFrame = Type.Object({
+  event: Type.Literal('ACK'),
+  data: Type.Object({ channels: Type.Array(ReplayState) }),
+  ...envelope,
+});
+
+/** Answers `UNSUBSCRIBE`, naming the channels delivery has stopped for. */
+export const UnsubscribedFrame = Type.Object({
+  event: Type.Literal('ACK'),
+  data: Type.Object({ channelIds: Type.Array(Uuid) }),
+  ...envelope,
+});
+
 /** Never removed from the client's buffer silently — it is marked failed, with the reason. */
 export const ErrorFrame = Type.Object({
   event: Type.Literal('ERROR'),
@@ -101,7 +131,14 @@ export const PongFrame = Type.Object({
   ...envelope,
 });
 
-export const ServerFrame = Type.Union([AckFrame, ErrorFrame, MessageCreatedFrame, PongFrame]);
+export const ServerFrame = Type.Union([
+  AckFrame,
+  SubscribedFrame,
+  UnsubscribedFrame,
+  ErrorFrame,
+  MessageCreatedFrame,
+  PongFrame,
+]);
 export type ServerFrame = Static<typeof ServerFrame>;
 export type ServerEvent = ServerFrame['event'];
 

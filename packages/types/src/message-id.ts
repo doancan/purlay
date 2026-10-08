@@ -77,3 +77,26 @@ export const messageId = (now: Date): string => {
 
   return `${timeHigh}-${timeLow}-${versioned}-${variant}-${tail}`;
 };
+
+/**
+ * How far before a client's cursor a replay starts, so that nothing is lost.
+ *
+ * A cursor is not a watermark. The server accepts an id up to `behindMs` older
+ * than its own clock, so a message written *after* a client last heard anything
+ * can sort *below* the newest id that client holds — a send that waited out a
+ * dropped connection does exactly this. Such a message still has an id no older
+ * than the moment the client stopped listening, minus `behindMs`; and the cursor
+ * is no newer than that moment plus `aheadMs`. Starting the replay this far below
+ * the cursor therefore reaches every message the client can have missed.
+ *
+ * Derived rather than written, so widening the window widens the overlap with
+ * it. The cost is re-sending what the client already holds from that stretch,
+ * which a client keeping messages by id discards (D-65).
+ */
+export const REPLAY_OVERLAP_MS = MESSAGE_ID_SKEW.behindMs + MESSAGE_ID_SKEW.aheadMs;
+
+/** The lowest UUIDv7 at an instant: every id made at or after it sorts above it. */
+export const messageIdFloor = (milliseconds: number): string => {
+  const clamped = Math.max(0, milliseconds);
+  return `${hex(Math.floor(clamped / 0x1_0000), 8)}-${hex(clamped % 0x1_0000, 4)}-7000-8000-000000000000`;
+};

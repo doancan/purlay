@@ -16,7 +16,14 @@
  * swap depends on (D-7).
  */
 import { Value } from '@sinclair/typebox/value';
-import { ClientFrame, type ServerFrame } from '@purlay/types';
+import {
+  ClientFrame,
+  REPLAY_OVERLAP_MS,
+  isMessageIdShape,
+  messageIdFloor,
+  messageIdTime,
+  type ServerFrame,
+} from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { AppError } from '../platform/errors';
@@ -126,32 +133,33 @@ export const routeFrame = async (
 
       case 'SUBSCRIBE': {
         const replayed: ServerFrame[] = [];
+        const states: { channelId: string; nextCursor: string | null }[] = [];
         for (const wanted of parsed.payload.channels) {
           // Subscribing is authorised per channel: a socket cannot listen to a
           // conversation it could not read over HTTP.
           const context = await requireChannelById(database, identity.userId, wanted.channelId);
           bus.subscribe(channelTopic(context.channelId), identity.socketId);
 
+          let nextCursor: string | null = null;
           if (wanted.afterMessageId !== null) {
             // "What did I miss" is one indexed range query per channel, because
             // ids are time-ordered (§5.4).
             const missed = await missedSince(database, context, wanted.afterMessageId);
-            for (const message of missed) {
+            for (const message of missed.data) {
               replayed.push(frame('MESSAGE_CREATED', message, clock));
             }
+            nextCursor = missed.nextCursor;
           }
+          states.push({ channelId: context.channelId, nextCursor });
         }
-        return [
-          frame('ACK', { channels: parsed.payload.channels.length }, clock, parsed.id),
-          ...replayed,
-        ];
+        return [frame('ACK', { channels: states }, clock, parsed.id), ...replayed];
       }
 
       case 'UNSUBSCRIBE': {
         for (const channelId of parsed.payload.channelIds) {
           bus.unsubscribe(channelTopic(channelId), identity.socketId);
         }
-        return [frame('ACK', { channels: parsed.payload.channelIds.length }, clock, parsed.id)];
+        return [frame('ACK', { channelIds: parsed.payload.channelIds }, clock, parsed.id)];
       }
 
       case 'MESSAGE_SEND': {
@@ -188,7 +196,8 @@ export const routeFrame = async (
 };
 
 /**
- * Everything newer than the id the client holds — a range query, oldest first.
+ * Everything the client may have missed — a range query, oldest first, starting
+ * `REPLAY_OVERLAP_MS` below the id it holds.
  *
  * The first version of this read the newest page and filtered it in JavaScript,
  * while its own comment claimed to be keyset. A client away for longer than one
@@ -200,10 +209,22 @@ const missedSince = async (
   executor: Executor,
   context: Parameters<typeof messageHistory>[1],
   afterMessageId: string,
-): Promise<readonly unknown[]> => {
-  const page = await messageHistory(executor, context, {
-    after: afterMessageId,
+): Promise<Awaited<ReturnType<typeof messageHistory>>> => {
+  if (!isMessageIdShape(afterMessageId)) {
+    // Its timestamp is what the overlap is measured from; a cursor that is not a
+    // v7 id has none, and guessing would replay from an arbitrary point.
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'A replay cursor is a message id.',
+      details: { fields: { afterMessageId: 'is not a message id' } },
+    });
+  }
+  // Not from the cursor itself: a message written after the client stopped
+  // listening can sort below it, and starting at the cursor loses it for good
+  // (D-65). The page's `nextCursor` goes back in the ACK, so a replay longer than
+  // one page says so rather than passing for complete.
+  return await messageHistory(executor, context, {
+    after: messageIdFloor(messageIdTime(afterMessageId) - REPLAY_OVERLAP_MS),
     limit: REPLAY_LIMIT,
   });
-  return page.data;
 };

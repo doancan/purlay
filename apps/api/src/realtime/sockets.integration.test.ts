@@ -18,7 +18,8 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
-import { messageId, type ServerFrame } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
+import { MESSAGE_ID_SKEW, messageId, ServerFrame } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
@@ -127,8 +128,17 @@ const connect = async (cookie: string): Promise<Client> => {
     headers: { cookie, origin },
   } as unknown as string[]);
   const frames: ServerFrame[] = [];
+  // Every frame on the wire must be one the contract declares. The router builds
+  // frames behind a cast, so the compiler cannot see a wrong one; this can. Kept
+  // rather than thrown: an exception in a listener does not fail the test.
+  const outsideContract: string[] = [];
+  const conforms = (): void => {
+    expect(outsideContract).toEqual([]);
+  };
   socket.addEventListener('message', (event) => {
-    frames.push(JSON.parse(String(event.data)) as ServerFrame);
+    const received: unknown = JSON.parse(String(event.data));
+    if (Value.Check(ServerFrame, received)) frames.push(received);
+    else outsideContract.push(String(event.data));
   });
   await new Promise<void>((resolve, reject) => {
     socket.addEventListener('open', () => {
@@ -147,6 +157,7 @@ const connect = async (cookie: string): Promise<Client> => {
     until: async (done, what): Promise<void> => {
       const deadline = Date.now() + 5_000;
       while (!done(frames)) {
+        conforms();
         if (Date.now() > deadline) {
           throw new Error(
             `timed out waiting for ${what}; saw ${JSON.stringify(frames.map((f) => f.event))}`,
@@ -156,6 +167,7 @@ const connect = async (cookie: string): Promise<Client> => {
       }
     },
     close: async (): Promise<void> => {
+      conforms();
       const closed = new Promise<void>((resolve) => {
         socket.addEventListener('close', () => {
           resolve();
@@ -174,17 +186,23 @@ const sendMessage = (client: Client, channelId: string, content: string, at = NO
   return id;
 };
 
+/** Subscribes, and returns where the replay stopped (`null`: it reached the present). */
 const subscribe = async (
   client: Client,
   channelId: string,
   afterMessageId: string | null = null,
-): Promise<void> => {
+): Promise<string | null> => {
   const id = messageId(NOW);
   client.send({ id, op: 'SUBSCRIBE', payload: { channels: [{ channelId, afterMessageId }] } });
   await client.until(
     (frames) => frames.some((f) => f.refId === id),
     'the subscription to be acknowledged',
   );
+  const answer = client.frames.find((f) => f.refId === id);
+  if (answer?.event !== 'ACK' || !('channels' in answer.data)) {
+    throw new Error(`the subscription was answered with ${JSON.stringify(answer)}`);
+  }
+  return answer.data.channels[0]?.nextCursor ?? null;
 };
 
 const ack = (frames: readonly ServerFrame[], id: string): ServerFrame | undefined =>
@@ -283,7 +301,15 @@ describe('integration: two real sockets', () => {
     await bob.close();
   });
 
-  test('a reconnect replays exactly what was missed, oldest first', async () => {
+  /**
+   * The replay starts below the cursor (D-65), so it may repeat what the client
+   * holds. What it must do is contain everything missed, in order, and nothing
+   * the client could not have held.
+   */
+  const missedOnly = (replayed: readonly string[], held: readonly string[]): string[] =>
+    replayed.filter((id) => !held.includes(id));
+
+  test('a reconnect replays everything that was missed, oldest first', async () => {
     const room = await aRoom();
     const alice = await connect(room.alice);
     let bob = await connect(room.bob);
@@ -299,8 +325,67 @@ describe('integration: two real sockets', () => {
     await alice.until((frames) => missed.every((id) => ack(frames, id) !== undefined), 'the ACKs');
 
     bob = await connect(room.bob);
-    await subscribe(bob, room.channelId, seen);
-    expect(createdIds(bob.frames)).toEqual(missed);
+    expect(await subscribe(bob, room.channelId, seen)).toBeNull();
+    await bob.until(
+      (frames) => missed.every((id) => createdIds(frames).includes(id)),
+      'the replay',
+    );
+    const replayed = createdIds(bob.frames);
+    expect(missedOnly(replayed, [seen])).toEqual(missed);
+    expect(replayed).toEqual([...replayed].sort());
+    await alice.close();
+    await bob.close();
+  });
+
+  /** Regression: a send that waited out a dropped connection sorts below the cursor. */
+  test('a message whose id sorts below the cursor is still replayed', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+    const latest = sendMessage(alice, room.channelId, 'the newest the reader saw', at(4_000));
+    await alice.until((frames) => ack(frames, latest) !== undefined, 'the ACK');
+
+    // Generated half a minute ago, inside the window the server accepts.
+    const late = sendMessage(alice, room.channelId, 'sent before the drop', at(-30_000));
+    await alice.until((frames) => ack(frames, late) !== undefined, 'the late ACK');
+    expect(late < latest).toBe(true);
+    expect(30_000).toBeLessThan(MESSAGE_ID_SKEW.behindMs);
+
+    const bob = await connect(room.bob);
+    expect(await subscribe(bob, room.channelId, latest)).toBeNull();
+    await bob.until((frames) => createdIds(frames).includes(late), 'the late message');
+    await alice.close();
+    await bob.close();
+  });
+
+  /** Regression: a replay longer than a page used to end without saying so. */
+  test('a reconnect that missed more than a page is told where to continue', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+    const seen = sendMessage(alice, room.channelId, 'before', at(0));
+    const missed = Array.from({ length: 150 }, (_, i) =>
+      sendMessage(alice, room.channelId, `m${String(i)}`, at(i + 1)),
+    );
+    await alice.until((frames) => missed.every((id) => ack(frames, id) !== undefined), 'the ACKs');
+
+    const bob = await connect(room.bob);
+    const nextCursor = await subscribe(bob, room.channelId, seen);
+    expect(nextCursor).not.toBeNull();
+    await bob.until((frames) => createdIds(frames).includes(nextCursor ?? ''), 'the first page');
+
+    // The rest, the way the client is told to fetch it: HTTP, from that cursor.
+    const recovered = [...createdIds(bob.frames)];
+    let cursor = nextCursor;
+    while (cursor !== null) {
+      const response = await http(
+        'GET',
+        `/api/channels/${room.channelId}/messages?after=${cursor}&limit=100`,
+        room.bob,
+      );
+      const page = (await response.json()) as { data: { id: string }[]; nextCursor: string | null };
+      recovered.push(...page.data.map((m) => m.id));
+      cursor = page.nextCursor;
+    }
+    expect(missedOnly(recovered, [seen])).toEqual(missed);
     await alice.close();
     await bob.close();
   });

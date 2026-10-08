@@ -256,9 +256,17 @@ receiving client has no way to learn it should forget it. Publish and ACK both f
 ### 5.4. Reconnect and replay
 
 Exponential backoff with jitter: 1s, 2s, 4s, 8s, capped at 30s. On reconnect the client sends
-`SUBSCRIBE` with the highest message id it holds per channel; the server returns everything
-newer by keyset scan. Because ids are time-ordered, "what did I miss" is a single indexed range
+`SUBSCRIBE` with the highest message id it holds per channel; the server returns what it may have
+missed by keyset scan. Because ids are time-ordered, "what did I miss" is a single indexed range
 query per channel — not a timestamp comparison with clock-skew problems.
+
+**The scan starts below that id, not at it.** The server accepts an id up to a minute old (D-33), so
+a message written after the client stopped listening can sort beneath the newest one it holds — a
+send that waited out its own dropped connection does exactly that. The replay therefore begins
+`REPLAY_OVERLAP_MS` earlier, a window derived from `MESSAGE_ID_SKEW`, and the client discards what
+it already holds by id. **The acknowledgement says where each channel's replay stopped**: a
+`nextCursor` of `null` means it reached the present; anything else means it was one page, and the
+client continues over HTTP with `?after=` from there. (D-65)
 
 ### 5.5. Backpressure and limits
 
