@@ -48,6 +48,14 @@ import type { RateLimiter } from './rate-limiter';
  * is continued over HTTP from the `nextCursor` the acknowledgement carries (D-65).
  */
 const REPLAY_TOTAL = 1_000;
+
+/**
+ * And at most this many bytes, because a count does not bound a burst: a
+ * thousand of the longest messages is 48 MB. The outbound high-water mark must
+ * exceed this, or a healthy reader would be closed by its own replay and loop
+ * (`OUTBOUND_HIGH_WATER_MARK`, bound by a test).
+ */
+export const REPLAY_BYTES_MAX = 1024 * 1024;
 const REPLAY_PER_CHANNEL_MAX = 100;
 const REPLAY_PER_CHANNEL_MIN = 10;
 
@@ -222,17 +230,34 @@ export const routeFrame = async (
           const after = wanted[index]?.afterMessageId ?? null;
           return after === null ? [] : [{ context, after: replayFloor(after) }];
         });
+        const floors = new Map(replaying.map((entry) => [entry.context.channelId, entry.after]));
         const replays = await missedIn(database, replaying, replayPerChannel(replaying.length));
 
         const states: { channelId: string; nextCursor: string | null }[] = [];
         const replayed: ServerFrame[] = [];
+        let bytes = 0;
         for (const context of contexts) {
           bus.subscribe(channelTopic(context.channelId), identity.socketId);
           const replay = replays.get(context.channelId);
+          // Where this channel's replay continues if the byte budget stops it:
+          // after the last message sent, or from its start if none was.
+          let resumeFrom = floors.get(context.channelId) ?? null;
+          let cut = false;
           for (const message of replay?.data ?? []) {
-            replayed.push(frame('MESSAGE_CREATED', message, clock));
+            const created = frame('MESSAGE_CREATED', message, clock);
+            const size = Buffer.byteLength(JSON.stringify(created), 'utf8');
+            if (bytes + size > REPLAY_BYTES_MAX) {
+              cut = true;
+              break;
+            }
+            bytes += size;
+            replayed.push(created);
+            resumeFrom = message.id;
           }
-          states.push({ channelId: context.channelId, nextCursor: replay?.nextCursor ?? null });
+          states.push({
+            channelId: context.channelId,
+            nextCursor: cut ? resumeFrom : (replay?.nextCursor ?? null),
+          });
         }
         return [frame('ACK', { channels: states }, clock, parsed.id), ...replayed];
       }

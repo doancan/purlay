@@ -195,10 +195,16 @@ export type Topic =
 
 /**
  * Why the server closed a socket, for the codes the application defines
- * (4000–4999 are reserved for that by RFC 6455). A client reconnects on none of
- * them without asking the person first: each means a reconnect would be refused.
+ * (4000–4999 are reserved for that by RFC 6455). Each says whether reconnecting
+ * can help.
  */
 export const CLOSE_CODES = {
   /** The session ended — signed out, signed out everywhere, or expired. */
   SESSION_ENDED: 4401,
+  /**
+   * This connection fell too far behind what the server had to send it. Unlike
+   * the code above, reconnect: resubscribe with the newest id held per channel,
+   * and the replay fills the gap — nothing was dropped without this close (#197).
+   */
+  RESYNC: 4408,
 } as const;

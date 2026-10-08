@@ -29,6 +29,8 @@ import {
 } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
+import { REPLAY_BYTES_MAX } from './router';
+import { createConnection } from 'node:net';
 import { testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
@@ -605,5 +607,151 @@ describe('integration: two real sockets', () => {
       content: 'sent while my socket was down',
     });
     await bob.close();
+  });
+
+  /**
+   * §5.5's high-water mark, against a reader that really stops reading (#197).
+   * Measured before this existed: the transport queued 16 MB for such a socket
+   * and then dropped frames while it stayed open, so the client missed messages
+   * and, never disconnected, never replayed them.
+   */
+  describe('a connection that falls behind', () => {
+    /** A WebSocket client frame: text, masked, as RFC 6455 requires of a client. */
+    const maskedText = (text: string): Buffer => {
+      const payload = Buffer.from(text, 'utf8');
+      const header =
+        payload.length < 126
+          ? Buffer.from([0x81, 0x80 | payload.length])
+          : Buffer.from([0x81, 0x80 | 126, payload.length >> 8, payload.length & 0xff]);
+      const mask = Buffer.from(crypto.getRandomValues(new Uint8Array(4)));
+      const masked = Buffer.from(payload.map((byte, i) => byte ^ (mask[i % 4] ?? 0)));
+      return Buffer.concat([header, mask, masked]);
+    };
+
+    /** The code of the close frame at the end of what the server sent, if any. */
+    const closeCodeIn = (received: Buffer): number | undefined => {
+      for (let i = received.length - 4; i >= 0; i -= 1) {
+        if (received[i] === 0x88 && (received[i + 1] ?? 0) >= 2) {
+          return ((received[i + 2] ?? 0) << 8) | (received[i + 3] ?? 0);
+        }
+      }
+      return undefined;
+    };
+
+    test('is closed to resync, rather than left open with frames dropped', async () => {
+      const room = await aRoom();
+      const { port } = new URL(origin);
+      const received: Buffer[] = [];
+      const socket = createConnection({ host: '127.0.0.1', port: Number(port) });
+      const closed = new Promise<void>((resolve) =>
+        socket.on('close', () => {
+          resolve();
+        }),
+      );
+      socket.on('data', (chunk: Buffer) => received.push(chunk));
+      await new Promise<void>((resolve) =>
+        socket.on('connect', () => {
+          resolve();
+        }),
+      );
+      socket.write(
+        [
+          'GET /ws HTTP/1.1',
+          `Host: 127.0.0.1:${port}`,
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+          'Sec-WebSocket-Version: 13',
+          `Origin: ${origin}`,
+          `Cookie: ${room.bob}`,
+          '',
+          '',
+        ].join('\r\n'),
+      );
+      const subscribeId = messageId(NOW);
+      const seen = async (needle: string): Promise<void> => {
+        const deadline = Date.now() + 5_000;
+        while (!Buffer.concat(received).includes(needle)) {
+          if (Date.now() > deadline) throw new Error(`never saw ${needle}`);
+          await Bun.sleep(10);
+        }
+      };
+      await seen('101 Switching Protocols');
+      socket.write(
+        maskedText(
+          JSON.stringify({
+            id: subscribeId,
+            op: 'SUBSCRIBE',
+            payload: { channels: [{ channelId: room.channelId, afterMessageId: null }] },
+          }),
+        ),
+      );
+      await seen(subscribeId);
+
+      // Stop reading, then send it far more than the mark.
+      socket.pause();
+      const long = 'x'.repeat(MESSAGE_CONTENT_MAX);
+      for (let i = 0; i < 600; i += 1) {
+        const response = await http(
+          'POST',
+          `/api/channels/${room.channelId}/messages`,
+          room.alice,
+          {
+            id: messageId(at(i)),
+            content: long,
+          },
+        );
+        expect(response.status).toBe(201);
+      }
+
+      // Read again: what was queued drains, and then the server's close arrives.
+      socket.resume();
+      const outcome = await Promise.race([
+        closed.then(() => 'closed'),
+        Bun.sleep(10_000).then(() => 'still open'),
+      ]);
+      expect(outcome).toBe('closed');
+      expect(closeCodeIn(Buffer.concat(received))).toBe(CLOSE_CODES.RESYNC);
+    });
+
+    /**
+     * What a loopback reader can show: the replay stays inside its byte budget and
+     * the connection is served after it. That the mark exceeds the budget — the
+     * property that keeps a slow but healthy reader out of a resync loop — cannot
+     * be shown over loopback, which drains too fast; `hub.test.ts` binds it.
+     */
+    test('the largest replay stays inside its budget, and the reader is served after it', async () => {
+      const room = await aRoom();
+      const seenFirst = messageId(at(0));
+      expect(
+        (
+          await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+            id: seenFirst,
+            content: 'before',
+          })
+        ).status,
+      ).toBe(201);
+      // More than the replay's byte budget, so the replay is as large as it gets.
+      const long = 'y'.repeat(MESSAGE_CONTENT_MAX);
+      for (let i = 1; i <= 120; i += 1) {
+        await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+          id: messageId(at(i)),
+          content: long,
+        });
+      }
+      const bob = await connect(room.bob);
+      const nextCursor = await subscribe(bob, room.channelId, seenFirst);
+      expect(nextCursor).not.toBeNull();
+      // It stays open and served after the burst.
+      const after = messageId(at(500));
+      bob.send({ id: after, op: 'PING', payload: {} });
+      await bob.until((frames) => frames.some((f) => f.refId === after), 'a pong after the replay');
+      const replayedBytes = bob.frames
+        .filter((f) => f.event === 'MESSAGE_CREATED')
+        .reduce((sum, f) => sum + Buffer.byteLength(JSON.stringify(f), 'utf8'), 0);
+      expect(replayedBytes).toBeLessThanOrEqual(REPLAY_BYTES_MAX);
+      expect(replayedBytes).toBeGreaterThan(REPLAY_BYTES_MAX / 2);
+      await bob.close();
+    });
   });
 });

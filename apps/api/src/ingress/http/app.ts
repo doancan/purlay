@@ -69,6 +69,27 @@ export interface HttpApplication {
   readonly stop: (closeActiveConnections?: boolean) => Promise<unknown>;
 }
 
+/**
+ * How much a socket has queued and not yet written, read from Bun's own socket.
+ *
+ * Bun has it — measured (#197) — and the framework's copy of the socket's type
+ * does not declare it. Checked rather than cast: if a runtime ever lacks it, the
+ * first connection refuses loudly instead of every connection running with no
+ * backpressure at all.
+ */
+const outboundBufferOf = (raw: object): (() => number) => {
+  const read: unknown = Reflect.get(raw, 'getBufferedAmount');
+  if (typeof read !== 'function') {
+    throw new Error('the socket cannot report its outbound buffer, so backpressure cannot be held');
+  }
+  return () => {
+    const amount: unknown = Reflect.apply(read, raw, []);
+    // Unreadable is treated as full: the safe failure is a resync, not an
+    // unbounded queue.
+    return typeof amount === 'number' ? amount : Number.POSITIVE_INFINITY;
+  };
+};
+
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
 
@@ -207,9 +228,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         const identity = await hub.opened(
           socket.id,
           {
-            send: (payload) => {
-              socket.send(payload);
-            },
+            // The raw socket's answers, not the framework wrapper's: whether a
+            // frame was dropped and how much is queued (#197).
+            send: (payload) => socket.raw.send(payload),
+            buffered: outboundBufferOf(socket.raw),
             close: (code, reason) => {
               socket.close(code, reason);
             },
@@ -239,7 +261,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           identity,
           raw,
         )) {
-          socket.send(JSON.stringify(reply));
+          // Through the hub, so a replay burst is held to the same mark as the
+          // bus's fan-out rather than queued without limit.
+          hub.deliver(socket.id, reply);
         }
       },
       close: (socket) => {

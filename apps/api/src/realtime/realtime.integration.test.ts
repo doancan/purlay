@@ -8,7 +8,12 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId, SUBSCRIBE_MAX_CHANNELS, type ServerFrame } from '@purlay/types';
+import {
+  MESSAGE_CONTENT_MAX,
+  messageId,
+  SUBSCRIBE_MAX_CHANNELS,
+  type ServerFrame,
+} from '@purlay/types';
 import { AppError } from '../platform/errors';
 import { fixedClock } from '../platform/clock';
 import { issueSession } from '../modules/auth/sessions';
@@ -17,7 +22,7 @@ import { testDependencies } from '../ingress/http/testing';
 import { inProcessEventBus } from './bus';
 import { channelTopic } from '../platform/events';
 import { atomicallyOn } from '../platform/transactions';
-import { replayPerChannel, routeFrame } from './router';
+import { REPLAY_BYTES_MAX, replayPerChannel, routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
 import { SESSION_COOKIE } from '../ingress/http/cookies';
@@ -408,6 +413,7 @@ describe('integration: the frame router', () => {
       alice: { userId: string; cookie: string },
       count: number,
       missed: number,
+      content: (i: number) => string = (i) => `m${String(i)}`,
     ): Promise<string[]> => {
       const { workspaceId } = await aChannel(
         db,
@@ -432,7 +438,7 @@ describe('integration: the frame router', () => {
           workspace_id: workspaceId,
           channel_id: id,
           sender_id: alice.userId,
-          content: `m${String(i)}`,
+          content: content(i),
           created_at: NOW,
         })),
       );
@@ -494,6 +500,67 @@ describe('integration: the frame router', () => {
         expect(ack.data.channels).toHaveLength(20);
         expect(ack.data.channels.every((state) => state.nextCursor !== null)).toBe(true);
         expect(replies.slice(1)).toHaveLength(20 * perChannel);
+      });
+    });
+
+    /**
+     * The byte budget can stop a replay mid-channel, or before a channel starts.
+     * Either way the cursor it returns must lose nothing: continuing every channel
+     * over HTTP from its cursor yields exactly what was missed (#197).
+     */
+    test('a replay cut by its byte budget loses nothing when continued', async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'rt-bytes');
+        const channels = await manyChannels(db, alice, 3, 30, (i) =>
+          String(i).padEnd(MESSAGE_CONTENT_MAX, 'z'),
+        );
+        const replies = await route(
+          db,
+          alice,
+          subscribeTo(channels, messageId(new Date(NOW.getTime() - 120_000))),
+        );
+        const ack = replies[0];
+        if (ack?.event !== 'ACK' || !('channels' in ack.data))
+          throw new Error('no subscription ACK');
+        const replayed = replies.slice(1);
+        const bytes = replayed.reduce(
+          (sum, f) => sum + Buffer.byteLength(JSON.stringify(f), 'utf8'),
+          0,
+        );
+        expect(bytes).toBeLessThanOrEqual(REPLAY_BYTES_MAX);
+        expect(replayed.length).toBeLessThan(90);
+
+        const recovered = new Map<string, string[]>(channels.map((id) => [id, []]));
+        for (const f of replayed) {
+          const message = f.data as { id: string; channelId: string };
+          recovered.get(message.channelId)?.push(message.id);
+        }
+        for (const state of ack.data.channels) {
+          let cursor = state.nextCursor;
+          while (cursor !== null) {
+            const response = await call(
+              db,
+              'GET',
+              `/api/channels/${state.channelId}/messages?after=${cursor}&limit=100`,
+              { cookie: alice.cookie },
+            );
+            const page = (await response.json()) as {
+              data: { id: string }[];
+              nextCursor: string | null;
+            };
+            recovered.get(state.channelId)?.push(...page.data.map((m) => m.id));
+            cursor = page.nextCursor;
+          }
+        }
+        for (const channelId of channels) {
+          const all = await db
+            .selectFrom('messages')
+            .select('id')
+            .where('channel_id', '=', channelId)
+            .orderBy('id')
+            .execute();
+          expect(recovered.get(channelId)).toEqual(all.map((row) => row.id));
+        }
       });
     });
 

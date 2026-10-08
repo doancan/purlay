@@ -287,8 +287,11 @@ is not ten thousand frames from one. (D-69)
   implementation in Phase 0–2; the seam exists because an in-process limiter on N nodes grants
   N times the quota (D-25). **The number is not yet decided (O-4)** — 10 frames/second with a
   burst of 20 is what is enforced, as a provisional value, until dogfooding measures it.
-- If a client's outbound buffer exceeds its high-water mark, the connection is closed with a
-  resync code rather than allowed to grow without bound.
+- If a client's outbound buffer passes `OUTBOUND_HIGH_WATER_MARK`, or the transport drops a frame,
+  the connection is closed with `CLOSE_CODES.RESYNC`; the client reconnects and replays from its
+  cursor. Every frame to a socket — fan-out and replies alike — goes through that check. A replay is
+  bounded in bytes as well as messages, below the mark, so a healthy reader is never closed by its
+  own replay. (D-70)
 
 ---
 

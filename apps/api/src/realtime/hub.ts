@@ -27,9 +27,29 @@ import type { SocketIdentity } from './router';
 
 /** How a connection is reached and ended. The transport supplies both. */
 export interface Connection {
-  readonly send: (payload: string) => void;
+  /**
+   * The transport's answer: bytes written, `-1` when queued behind earlier
+   * frames, or `0` when the frame was **dropped** — Bun's, measured (#197).
+   */
+  readonly send: (payload: string) => number;
+  /** Bytes queued for this connection and not yet written to the network. */
+  readonly buffered: () => number;
   readonly close: (code: number, reason: string) => void;
 }
+
+/**
+ * How far a connection may fall behind before it is closed to resync.
+ *
+ * Measured: with nothing reading, the transport queues 16 MB per connection and
+ * then **drops** frames while the connection stays open — the client misses
+ * messages and, never disconnected, never replays them. Closing first turns that
+ * into a reconnect and a replay from the cursor, so nothing is lost silently.
+ *
+ * It must exceed the largest burst a healthy connection receives at once, or a
+ * fast reader would be closed by its own replay and loop: that is the replay's
+ * byte budget, and a test binds the two (`REPLAY_BYTES_MAX` in `router.ts`).
+ */
+export const OUTBOUND_HIGH_WATER_MARK = 4 * 1024 * 1024;
 
 /** A timer, injected so a thirty-day expiry can be tested without thirty days. */
 export interface Timers {
@@ -106,9 +126,16 @@ export const createSocketHub = (
     // best-effort by design: what a client missed it asks for on reconnect, by
     // keyset (`ARCHITECTURE.md` §5.4).
     if (socket === undefined) return;
-    socket.connection.send(JSON.stringify(frame));
+    const written = socket.connection.send(JSON.stringify(frame));
     if (frame.event === 'SESSION_ENDED') {
       socket.connection.close(CLOSE_CODES.SESSION_ENDED, frame.data.reason);
+      return;
+    }
+    // A dropped frame, or a queue past the mark: this connection can no longer be
+    // trusted to have everything, so it is told to reconnect and replay rather
+    // than left open with a gap it cannot see (`ARCHITECTURE.md` §5.5).
+    if (written === 0 || socket.connection.buffered() > OUTBOUND_HIGH_WATER_MARK) {
+      socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
     }
   };
 
