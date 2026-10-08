@@ -64,6 +64,9 @@ export interface RouterDependencies {
 export interface SocketIdentity {
   readonly socketId: string;
   readonly userId: string;
+  /** The session the connection was opened with; its end ends the connection. */
+  readonly sessionId: string;
+  readonly expiresAt: Date;
 }
 
 const frame = (

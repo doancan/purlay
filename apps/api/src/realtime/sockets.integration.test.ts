@@ -20,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
+  CLOSE_CODES,
   MAX_FRAME_BYTES,
   MESSAGE_CONTENT_MAX,
   MESSAGE_ID_SKEW,
@@ -509,5 +510,75 @@ describe('integration: two real sockets', () => {
     );
     expect(await history(room.alice, room.channelId)).toEqual([longest]);
     await alice.close();
+  });
+
+  /**
+   * A connection lives as long as its session (#194). Each way a session ends must
+   * reach the sockets it holds: announced with `SESSION_ENDED`, then closed with
+   * the code that says why — and nothing else is closed with it.
+   */
+  describe('a session’s end reaches its sockets', () => {
+    const endedWith = async (
+      client: Client,
+      reason: 'signed-out' | 'expired',
+    ): Promise<{ code: number | string; reason: unknown }> => {
+      const code = await Promise.race([client.ended, Bun.sleep(5_000).then(() => 'still open')]);
+      const announced = client.frames.find((f) => f.event === 'SESSION_ENDED');
+      expect(announced?.data).toEqual({ reason });
+      return { code, reason: announced?.data };
+    };
+
+    const stillServed = async (client: Client): Promise<void> => {
+      const id = messageId(NOW);
+      client.send({ id, op: 'PING', payload: {} });
+      await client.until((frames) => frames.some((f) => f.refId === id), 'a pong');
+    };
+
+    test('signing out closes this device’s socket, and only this device’s', async () => {
+      const alice = await aUser('alice');
+      const otherDevice = await issueSession(db, clock, alice.id, 30);
+      const here = await connect(alice.cookie);
+      const there = await connect(`purlay_session=${otherDevice.token}`);
+      await stillServed(here);
+
+      expect((await http('POST', '/auth/logout', alice.cookie)).status).toBe(204);
+      expect(await endedWith(here, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+      await stillServed(there);
+      await there.close();
+    });
+
+    test('signing out everywhere closes every socket of that user, and nobody else’s', async () => {
+      const alice = await aUser('alice');
+      const bob = await aUser('bob');
+      const second = await issueSession(db, clock, alice.id, 30);
+      const phone = await connect(alice.cookie);
+      const laptop = await connect(`purlay_session=${second.token}`);
+      const bystander = await connect(bob.cookie);
+      await stillServed(phone);
+
+      expect((await http('POST', '/auth/logout-all', alice.cookie)).status).toBe(204);
+      for (const client of [phone, laptop]) {
+        expect(await endedWith(client, 'signed-out')).toMatchObject({
+          code: CLOSE_CODES.SESSION_ENDED,
+        });
+      }
+      await stillServed(bystander);
+      await bystander.close();
+    });
+
+    test('a session that expires closes its socket on time, without a frame to prompt it', async () => {
+      const alice = await aUser('alice');
+      const { token } = await issueSession(db, clock, alice.id, 30);
+      // Three hundred milliseconds left on the server's clock.
+      await db
+        .updateTable('sessions')
+        .set({ expires_at: new Date(NOW.getTime() + 300) })
+        .where('user_id', '=', alice.id)
+        .execute();
+      const socket = await connect(`purlay_session=${token}`);
+      expect(await endedWith(socket, 'expired')).toMatchObject({ code: CLOSE_CODES.SESSION_ENDED });
+    });
   });
 });

@@ -37,9 +37,9 @@ import {
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 import { postMessage, readHistory } from './messages';
-import { inProcessEventBus } from '../../realtime/bus';
+import { inProcessEventBus, sessionTopic } from '../../realtime/bus';
 import { createSocketHub } from '../../realtime/hub';
-import { MAX_FRAME_BYTES } from '@purlay/types';
+import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
 import { routeFrame } from '../../realtime/router';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { admitSocket } from '../../realtime/upgrade';
@@ -117,10 +117,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       respond(set, await completeSignIn(dependencies, request)),
     )
     .post('/auth/logout', async ({ request, set }) =>
-      respond(set, await signOut(dependencies, request)),
+      respond(set, await signOut({ ...dependencies, bus }, request)),
     )
     .post('/auth/logout-all', async ({ request, set }) =>
-      respond(set, await signOutEverywhere(dependencies, request)),
+      respond(set, await signOutEverywhere({ ...dependencies, bus }, request)),
     )
 
     .get('/api/me', async ({ request }) => await readMe(dependencies, request))
@@ -192,15 +192,30 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           return refusal.body;
         }
       },
-      open: (socket) => {
-        hub.opened(socket.id, (payload) => {
-          socket.send(payload);
-        });
+      open: async (socket) => {
+        const identity = await hub.opened(
+          socket.id,
+          {
+            send: (payload) => {
+              socket.send(payload);
+            },
+            close: (code, reason) => {
+              socket.close(code, reason);
+            },
+          },
+          socket.data.request,
+        );
+        // Where the end of this session will be announced, on whichever node.
+        if (identity !== undefined) bus.subscribe(sessionTopic(identity.sessionId), socket.id);
       },
       message: async (socket, raw) => {
-        const identity = await hub.identify(socket.id, socket.data.request);
-        // The session went while the socket was open. Nothing to answer to.
-        if (identity === undefined) return;
+        const identity = await hub.identity(socket.id);
+        if (identity === undefined) {
+          // Its session ended before the frame could be answered; the hub has
+          // already announced that, or is about to. Nothing here may be served.
+          socket.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
+          return;
+        }
         for (const reply of await routeFrame(
           {
             database: dependencies.database,

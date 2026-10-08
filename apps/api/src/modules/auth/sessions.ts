@@ -42,6 +42,8 @@ export interface IssuedSession {
 export interface SessionOwner {
   readonly sessionId: string;
   readonly userId: string;
+  /** When it stops resolving, so a long-lived connection can end on time. */
+  readonly expiresAt: Date;
 }
 
 export interface IssueOptions {
@@ -106,7 +108,12 @@ export const resolveSession = async (
   const row = await executor
     .selectFrom('sessions')
     .innerJoin('users', 'users.id', 'sessions.user_id')
-    .select(['sessions.id as sessionId', 'sessions.user_id as userId', 'sessions.last_used_at'])
+    .select([
+      'sessions.id as sessionId',
+      'sessions.user_id as userId',
+      'sessions.last_used_at',
+      'sessions.expires_at',
+    ])
     .where('sessions.token_hash', '=', await sha256(token))
     .where('sessions.revoked_at', 'is', null)
     .where('sessions.expires_at', '>', now)
@@ -123,7 +130,7 @@ export const resolveSession = async (
       .execute();
   }
 
-  return { sessionId: row.sessionId, userId: row.userId };
+  return { sessionId: row.sessionId, userId: row.userId, expiresAt: new Date(row.expires_at) };
 };
 
 /** Sign out, on this device. Revoking is a stamp, never a delete: the row is evidence. */
@@ -131,26 +138,33 @@ export const revokeSession = async (
   executor: Executor,
   clock: Clock,
   token: string,
-): Promise<void> => {
-  await executor
+): Promise<string | undefined> => {
+  const revoked = await executor
     .updateTable('sessions')
     .set({ revoked_at: clock.now() })
     .where('token_hash', '=', await sha256(token))
     .where('revoked_at', 'is', null)
-    .execute();
+    .returning('id')
+    .executeTakeFirst();
+  return revoked?.id;
 };
 
-/** Sign out everywhere. Returns how many sessions were live, so a caller can report it. */
+/**
+ * Sign out everywhere. Returns the ids of the sessions that were live, so the
+ * caller can end the connections they hold — a revoked session with an open
+ * socket is not signed out (#194).
+ */
 export const revokeAllSessions = async (
   executor: Executor,
   clock: Clock,
   userId: string,
-): Promise<number> => {
-  const result = await executor
+): Promise<readonly string[]> => {
+  const revoked = await executor
     .updateTable('sessions')
     .set({ revoked_at: clock.now() })
     .where('user_id', '=', userId)
     .where('revoked_at', 'is', null)
-    .executeTakeFirst();
-  return Number(result.numUpdatedRows);
+    .returning('id')
+    .execute();
+  return revoked.map((row) => row.id);
 };
