@@ -253,6 +253,13 @@ export default defineConfig([
               message:
                 'apps/web imports only from packages/*. The database never reaches the browser. (ARCHITECTURE.md §4)',
             },
+            // A relative path climbs out of apps/web without ever spelling
+            // `apps/api`, so the pattern above let it through — measured (#130).
+            {
+              regex: String.raw`^(\.\./)+(apps/)?api(/|$)`,
+              message:
+                'apps/web imports only from packages/*, by name — never by climbing into apps/api. (ARCHITECTURE.md §4)',
+            },
           ],
         },
       ],
