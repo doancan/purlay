@@ -55,6 +55,14 @@ defined = {
  'I': {int(m) for m in re.findall(r'^\| I-(\d+) \|', sch, re.M)},
  'O': {int(m) for m in re.findall(r'\*\*O-(\d+)\s*·', dec)},
 }
+# Numbering is contiguous: a gap is a decision or invariant that was renumbered,
+# deleted, or never written, and every citation of the missing number is a lie.
+for kind in ('D', 'I'):
+    known = defined[kind]
+    missing = sorted(set(range(1, max(known) + 1)) - known) if known else []
+    if missing:
+        problems[f'{kind}-numbering has a gap'].append(', '.join(f'{kind}-{n}' for n in missing))
+
 for f, s in docs.items():
     for kind, known in defined.items():
         for n in {int(m) for m in re.findall(rf'\b{kind}-(\d+)\b', s)}:
@@ -68,7 +76,21 @@ for f, s in docs.items():
         if not tgt.startswith(('http', 'mailto')) and not (base / tgt).exists():
             problems['kırık link'].append(f"{f}: [{text}]({tgt})")
 
-mig = sorted(set(re.findall(r'\b(00\d\d)_[a-z_]+\.sql', sch)))
+# The migrations that exist are the files, not what a document says about them —
+# reading the list from SCHEMA.md compared the document to itself.
+applied = sorted(p.name for p in pathlib.Path('packages/db/migrations').glob('*.sql'))
+planned = sorted(set(re.findall(r'\b(00\d\d_[a-z_]+\.sql)', sch)))
+for name in applied:
+    # Listed as an entry of §12's list — a line of its own — not merely mentioned
+    # somewhere in prose, which would pass for a file the list forgot.
+    if not re.search(rf'^{re.escape(name)}\b', sch, re.M):
+        problems['migration missing from SCHEMA.md §12'].append(name)
+for name in planned:
+    number = name[:4]
+    real = [a for a in applied if a.startswith(number + '_')]
+    if real and real[0] != name:
+        problems['SCHEMA.md names a migration that is not the file'].append(f"{name} -> {real[0]}")
+mig = sorted({n[:4] for n in applied} | {n[:4] for n in planned})
 for f, s in docs.items():
     for m in re.findall(r'migrations?\s+`?(00\d\d)`?', s):
         if m not in mig:
@@ -188,9 +210,13 @@ for k, v in problems.items():
     for i in v[:15]: print(f"      {i}")
 if not problems: print("[ok] no findings.\n")
 
+# The exit status is the check. Printing problems and exiting 0 is how this
+# script guarded nothing for its whole life before #193.
+status = 1 if problems else 0
 if "-v" not in sys.argv:
-    sys.exit(0)
+    sys.exit(status)
 
 print("=== every reference, with the title of the section it lands on ===")
 for f, doc, sec, title in sorted(set(resolved)):
     print(f"  {f:28} -> {doc:18} §{sec:<5} {title}")
+sys.exit(status)
