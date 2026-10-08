@@ -33,14 +33,30 @@ import {
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { AppError } from '../platform/errors';
-import { requireChannelById } from '../platform/channels';
-import { messageHistory, send } from '../modules/messages/messages';
+import { requireChannelById, requireChannelsById } from '../platform/channels';
+import { missedIn, send } from '../modules/messages/messages';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { RateLimiter } from './rate-limiter';
 
-/** How many missed messages a reconnect replays per channel before giving up on catching up. */
-const REPLAY_LIMIT = 100;
+/**
+ * How much one subscription replays, at most, across every channel it names.
+ *
+ * A hundred channels each a page behind was ten thousand frames from one frame
+ * (#196). The total is fixed and shared: one channel gets a full page, many get a
+ * smaller one each, never fewer than `REPLAY_PER_CHANNEL_MIN`. Whatever is left
+ * is continued over HTTP from the `nextCursor` the acknowledgement carries (D-65).
+ */
+const REPLAY_TOTAL = 1_000;
+const REPLAY_PER_CHANNEL_MAX = 100;
+const REPLAY_PER_CHANNEL_MIN = 10;
+
+/** The page each replaying channel gets when `count` of them share the total. */
+export const replayPerChannel = (count: number): number =>
+  Math.min(
+    REPLAY_PER_CHANNEL_MAX,
+    Math.max(REPLAY_PER_CHANNEL_MIN, Math.floor(REPLAY_TOTAL / Math.max(1, count))),
+  );
 
 export interface RouterDependencies {
   readonly database: Executor;
@@ -185,25 +201,38 @@ export const routeFrame = async (
         return [frame('PONG', {}, clock, parsed.id)];
 
       case 'SUBSCRIBE': {
-        const replayed: ServerFrame[] = [];
-        const states: { channelId: string; nextCursor: string | null }[] = [];
-        for (const wanted of parsed.payload.channels) {
-          // Subscribing is authorised per channel: a socket cannot listen to a
-          // conversation it could not read over HTTP.
-          const context = await requireChannelById(database, identity.userId, wanted.channelId);
-          bus.subscribe(channelTopic(context.channelId), identity.socketId);
+        const wanted = parsed.payload.channels;
+        const channelIds = wanted.map((entry) => entry.channelId);
+        if (new Set(channelIds).size !== channelIds.length) {
+          return [
+            refuse(
+              'A channel is named twice.',
+              { 'payload/channels': 'names a channel more than once' },
+              parsed.id,
+            ),
+          ];
+        }
 
-          let nextCursor: string | null = null;
-          if (wanted.afterMessageId !== null) {
-            // "What did I miss" is one indexed range query per channel, because
-            // ids are time-ordered (§5.4).
-            const missed = await missedSince(database, context, wanted.afterMessageId);
-            for (const message of missed.data) {
-              replayed.push(frame('MESSAGE_CREATED', message, clock));
-            }
-            nextCursor = missed.nextCursor;
+        // Authorised together, before anything is subscribed: one channel the
+        // caller cannot see refuses the frame, and nothing is left half-done
+        // behind an error. One query, however many channels (#196).
+        const contexts = await requireChannelsById(database, identity.userId, channelIds);
+
+        const replaying = contexts.flatMap((context, index) => {
+          const after = wanted[index]?.afterMessageId ?? null;
+          return after === null ? [] : [{ context, after: replayFloor(after) }];
+        });
+        const replays = await missedIn(database, replaying, replayPerChannel(replaying.length));
+
+        const states: { channelId: string; nextCursor: string | null }[] = [];
+        const replayed: ServerFrame[] = [];
+        for (const context of contexts) {
+          bus.subscribe(channelTopic(context.channelId), identity.socketId);
+          const replay = replays.get(context.channelId);
+          for (const message of replay?.data ?? []) {
+            replayed.push(frame('MESSAGE_CREATED', message, clock));
           }
-          states.push({ channelId: context.channelId, nextCursor });
+          states.push({ channelId: context.channelId, nextCursor: replay?.nextCursor ?? null });
         }
         return [frame('ACK', { channels: states }, clock, parsed.id), ...replayed];
       }
@@ -237,20 +266,11 @@ export const routeFrame = async (
 };
 
 /**
- * Everything the client may have missed — a range query, oldest first, starting
- * `REPLAY_OVERLAP_MS` below the id it holds.
- *
- * The first version of this read the newest page and filtered it in JavaScript,
- * while its own comment claimed to be keyset. A client away for longer than one
- * page would have silently lost the **oldest** messages it missed, which are
- * exactly the ones it needs. §5.4 asks for one indexed range query per channel;
- * this is that query.
+ * Where a channel's replay starts: `REPLAY_OVERLAP_MS` below the id the client
+ * holds, not at it — a message written after the client stopped listening can
+ * sort below that id, and starting at the cursor loses it for good (D-65).
  */
-const missedSince = async (
-  executor: Executor,
-  context: Parameters<typeof messageHistory>[1],
-  afterMessageId: string,
-): Promise<Awaited<ReturnType<typeof messageHistory>>> => {
+const replayFloor = (afterMessageId: string): string => {
   if (!isMessageIdShape(afterMessageId)) {
     // Its timestamp is what the overlap is measured from; a cursor that is not a
     // v7 id has none, and guessing would replay from an arbitrary point.
@@ -260,12 +280,5 @@ const missedSince = async (
       details: { fields: { afterMessageId: 'is not a message id' } },
     });
   }
-  // Not from the cursor itself: a message written after the client stopped
-  // listening can sort below it, and starting at the cursor loses it for good
-  // (D-65). The page's `nextCursor` goes back in the ACK, so a replay longer than
-  // one page says so rather than passing for complete.
-  return await messageHistory(executor, context, {
-    after: messageIdFloor(messageIdTime(afterMessageId) - REPLAY_OVERLAP_MS),
-    limit: REPLAY_LIMIT,
-  });
+  return messageIdFloor(messageIdTime(afterMessageId) - REPLAY_OVERLAP_MS);
 };

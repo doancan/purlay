@@ -268,6 +268,12 @@ it already holds by id. **The acknowledgement says where each channel's replay s
 `nextCursor` of `null` means it reached the present; anything else means it was one page, and the
 client continues over HTTP with `?after=` from there. (D-65)
 
+**A subscription is bounded, and costs the same whatever it names.** One frame names at most
+`SUBSCRIBE_MAX_CHANNELS`, each once. Every channel is authorised in one query before any is
+subscribed — one the caller cannot see refuses the frame, and nothing is left half-subscribed — and
+every channel's replay is read in one more, sharing a fixed total so a hundred channels a page behind
+is not ten thousand frames from one. (D-69)
+
 ### 5.5. Backpressure and limits
 
 - Max frame size 64 KB, enforced by the server for every connection: a frame over it ends that

@@ -6,6 +6,11 @@
  * fresh generation. The migrations are the single source. (D-45)
  */
 export { createDatabase, type DatabaseOptions, type Executor } from './client';
+/**
+ * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.
+ * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).
+ */
+export { sql } from 'kysely';
 export { createMigrator, migrateToLatest, MIGRATIONS_DIRECTORY } from './migrator';
 export {
   cloneIntegrationDatabase,

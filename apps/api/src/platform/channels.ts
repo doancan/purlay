@@ -20,7 +20,7 @@ import { Value } from '@sinclair/typebox/value';
 import { Uuid, type ChannelType } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import { AppError } from './errors';
-import { requireWorkspaceMembership, type WorkspaceContext } from './tenancy';
+import type { WorkspaceContext } from './tenancy';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const visibility: unique symbol = Symbol('ChannelContext');
@@ -43,50 +43,93 @@ const channelNotFound = (): AppError =>
 
 interface VisibleChannel {
   readonly id: string;
+  readonly workspaceId: string;
   readonly type: ChannelType;
 }
 
+interface Scope {
+  /** These channels; omitted for "every channel this user can see". */
+  readonly channelIds?: readonly string[];
+  /** Inside this workspace only; omitted when the channel names its own. */
+  readonly workspaceId?: string;
+}
+
 /**
- * The one visibility rule.
+ * The one visibility rule, as the one query every entry point runs.
  *
- * A public channel is visible to any member of its workspace. Anything else
- * requires a `channel_members` row. Written once here so the two entry points
- * below cannot answer differently.
+ * A channel is visible to a user when it is not deleted, its workspace is not
+ * deleted, the user is a member of that workspace, and it is public or the user
+ * is in it. Written once so no two entry points can answer differently (D-34) —
+ * and one round trip whatever the outcome, so a channel that never existed and a
+ * channel in somebody else's workspace cost the same and cannot be told apart by
+ * how long the refusal takes (#200).
  */
-const canSee = async (
+const visible = async (
   executor: Executor,
-  workspaceId: string,
   userId: string,
-  channelId: string,
-): Promise<VisibleChannel | undefined> => {
-  if (!Value.Check(Uuid, channelId)) return undefined;
-
-  const channel = await executor
+  scope: Scope,
+): Promise<readonly VisibleChannel[]> => {
+  let query = executor
     .selectFrom('channels')
-    .select(['id', 'type'])
-    .where('id', '=', channelId)
-    .where('workspace_id', '=', workspaceId)
-    .where('deleted_at', 'is', null)
-    .executeTakeFirst();
-  if (channel === undefined) return undefined;
-  if (channel.type === 'public') return channel;
-
-  const membership = await executor
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', channelId)
-    .where('user_id', '=', userId)
-    .executeTakeFirst();
-  return membership === undefined ? undefined : channel;
+    .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
+    .innerJoin('workspace_members', (join) =>
+      join
+        .onRef('workspace_members.workspace_id', '=', 'channels.workspace_id')
+        .on('workspace_members.user_id', '=', userId),
+    )
+    .leftJoin('channel_members', (join) =>
+      join
+        .onRef('channel_members.channel_id', '=', 'channels.id')
+        .on('channel_members.user_id', '=', userId),
+    )
+    .select(['channels.id as id', 'channels.workspace_id as workspaceId', 'channels.type as type'])
+    .where('channels.deleted_at', 'is', null)
+    .where('workspaces.deleted_at', 'is', null)
+    .where((eb) =>
+      eb.or([eb('channels.type', '=', 'public'), eb('channel_members.user_id', 'is not', null)]),
+    );
+  if (scope.channelIds !== undefined) query = query.where('channels.id', 'in', scope.channelIds);
+  if (scope.workspaceId !== undefined) {
+    query = query.where('channels.workspace_id', '=', scope.workspaceId);
+  }
+  return await query.execute();
 };
 
-const mint = (context: WorkspaceContext, channel: VisibleChannel): ChannelContext => ({
-  workspaceId: context.workspaceId,
+const mint = (userId: string, channel: VisibleChannel): ChannelContext => ({
+  workspaceId: channel.workspaceId,
   channelId: channel.id,
   channelType: channel.type,
-  userId: context.userId,
+  userId,
   [visibility]: true,
 });
+
+/**
+ * Every channel named, or none: one invisible channel refuses the whole request,
+ * with the same value as any other refusal. Answering for the visible ones would
+ * tell a caller which of the others exist.
+ */
+const allOrNothing = async (
+  executor: Executor,
+  userId: string,
+  channelIds: readonly string[],
+  workspaceId?: string,
+): Promise<readonly ChannelContext[]> => {
+  // A non-UUID handed to PostgreSQL raises on the cast, and the boundary would
+  // answer 500 where it promised 404.
+  if (channelIds.length === 0 || !channelIds.every((id) => Value.Check(Uuid, id))) {
+    throw channelNotFound();
+  }
+  const found = await visible(executor, userId, {
+    channelIds,
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+  });
+  const byId = new Map(found.map((channel) => [channel.id, channel]));
+  return channelIds.map((id) => {
+    const channel = byId.get(id);
+    if (channel === undefined) throw channelNotFound();
+    return mint(userId, channel);
+  });
+};
 
 /** For a caller that already holds a workspace context — the nested route shape. */
 export const requireChannelVisibility = async (
@@ -94,49 +137,32 @@ export const requireChannelVisibility = async (
   context: WorkspaceContext,
   channelId: string,
 ): Promise<ChannelContext> => {
-  const channel = await canSee(executor, context.workspaceId, context.userId, channelId);
+  const [channel] = await allOrNothing(executor, context.userId, [channelId], context.workspaceId);
   if (channel === undefined) throw channelNotFound();
-  return mint(context, channel);
+  return channel;
 };
 
 /**
  * For a route that names a channel and nothing else (`/api/channels/:channelId`).
- *
- * The workspace is derived from the resource and membership is verified before
- * anything about the channel is returned (`API.md` §1). The channel is looked up
- * first, to find out *which* workspace to check — and because every refusal is
- * the same value, that lookup tells a caller nothing it did not already supply.
+ * The workspace is derived from the resource, and membership of it is part of the
+ * same query rather than a second guard whose refusal has to be translated.
  */
 export const requireChannelById = async (
   executor: Executor,
   userId: string,
   channelId: string,
 ): Promise<ChannelContext> => {
-  if (!Value.Check(Uuid, channelId)) throw channelNotFound();
-
-  const owner = await executor
-    .selectFrom('channels')
-    .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
-    .select('channels.workspace_id')
-    .where('channels.id', '=', channelId)
-    .where('channels.deleted_at', 'is', null)
-    .where('workspaces.deleted_at', 'is', null)
-    .executeTakeFirst();
-  if (owner === undefined) throw channelNotFound();
-
-  // A non-member of the workspace must not learn that this channel exists, so the
-  // membership guard's own refusal is replaced by this boundary's.
-  let context: WorkspaceContext;
-  try {
-    context = await requireWorkspaceMembership(executor, userId, owner.workspace_id);
-  } catch {
-    throw channelNotFound();
-  }
-
-  const channel = await canSee(executor, context.workspaceId, userId, channelId);
+  const [channel] = await allOrNothing(executor, userId, [channelId]);
   if (channel === undefined) throw channelNotFound();
-  return mint(context, channel);
+  return channel;
 };
+
+/** Several channels at once, all or nothing, in one query — what a subscription needs. */
+export const requireChannelsById = async (
+  executor: Executor,
+  userId: string,
+  channelIds: readonly string[],
+): Promise<readonly ChannelContext[]> => await allOrNothing(executor, userId, channelIds);
 
 /**
  * The channels this user can see, for a workspace-wide read.
@@ -148,20 +174,7 @@ export const requireChannelById = async (
 export const visibleChannelIds = async (
   executor: Executor,
   context: WorkspaceContext,
-): Promise<readonly string[]> => {
-  const rows = await executor
-    .selectFrom('channels')
-    .leftJoin('channel_members', (join) =>
-      join
-        .onRef('channel_members.channel_id', '=', 'channels.id')
-        .on('channel_members.user_id', '=', context.userId),
-    )
-    .select('channels.id')
-    .where('channels.workspace_id', '=', context.workspaceId)
-    .where('channels.deleted_at', 'is', null)
-    .where((eb) =>
-      eb.or([eb('channels.type', '=', 'public'), eb('channel_members.user_id', 'is not', null)]),
-    )
-    .execute();
-  return rows.map((row) => row.id);
-};
+): Promise<readonly string[]> =>
+  (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map(
+    (channel) => channel.id,
+  );

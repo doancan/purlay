@@ -16,7 +16,7 @@
  * the last id seen — no timestamp, no tie-break, because a UUIDv7 already sorts
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { isPlausibleMessageId, type Message, type MessagePage } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -213,6 +213,74 @@ export const messageHistory = async (
     // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };
+};
+
+/** What one channel's replay returned, and where to continue it (`ReplayState`). */
+export interface Replay {
+  readonly data: readonly Message[];
+  readonly nextCursor: string | null;
+}
+
+/**
+ * Everything after each cursor, for several channels, in **one** query.
+ *
+ * A subscription names up to a hundred channels; one range query per channel was
+ * a hundred round trips for one frame (#196). `unnest` pairs each channel with its
+ * cursor and a lateral subquery reads each one's range by the primary key, oldest
+ * first, one row past the limit so "is there more" is answered by reading.
+ */
+export const missedIn = async (
+  executor: Executor,
+  wanted: readonly { readonly context: ChannelContext; readonly after: string }[],
+  perChannel: number,
+): Promise<ReadonlyMap<string, Replay>> => {
+  const replays = new Map<string, Replay>();
+  if (wanted.length === 0) return replays;
+
+  const rows = await executor
+    .selectFrom(
+      sql<{ channel_id: string; after_id: string }>`(
+        select * from unnest(
+          ${wanted.map((w) => w.context.channelId)}::uuid[],
+          ${wanted.map((w) => w.after)}::uuid[]
+        ) as pairs(channel_id, after_id)
+      )`.as('wanted'),
+    )
+    .innerJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom('messages')
+          .selectAll('messages')
+          .whereRef('messages.channel_id', '=', 'wanted.channel_id')
+          .whereRef('messages.id', '>', 'wanted.after_id')
+          .where('messages.parent_id', 'is', null)
+          .where('messages.deleted_at', 'is', null)
+          .orderBy('messages.id', 'asc')
+          .limit(perChannel + 1)
+          .as('messages'),
+      (join) => join.onTrue(),
+    )
+    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .select(COLUMNS)
+    .orderBy('messages.channel_id')
+    .orderBy('messages.id', 'asc')
+    .execute();
+
+  const byChannel = new Map<string, MessageRow[]>();
+  for (const row of rows) {
+    const list = byChannel.get(row.channel_id) ?? [];
+    list.push(row);
+    byChannel.set(row.channel_id, list);
+  }
+  for (const { context } of wanted) {
+    const list = byChannel.get(context.channelId) ?? [];
+    const page = list.slice(0, perChannel);
+    replays.set(context.channelId, {
+      data: page.map(asMessage),
+      nextCursor: list.length > perChannel ? (page.at(-1)?.id ?? null) : null,
+    });
+  }
+  return replays;
 };
 
 export interface SendDependencies {
