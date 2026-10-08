@@ -9,9 +9,8 @@
  * Run by CI. A failure here means the guardrails are gone, not that the code is
  * wrong — which is the more expensive failure of the two.
  */
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
 
 interface Violation {
   readonly rule: string;
@@ -82,6 +81,14 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "import { screen } from '@testing-library/react';\n\nexport const use = (): unknown => screen;\n",
   },
+  // `new Date()` was refused and `Date.now()` was not, so the rule could be met by
+  // reading the clock the other way. (#202)
+  {
+    rule: 'the clock is a dependency: Date.now() outside platform/clock.ts (D-46)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/modules/__enforcement__.ts',
+    source: 'export const stamp = (): number => Date.now();\n',
+  },
   // The type makes a context unforgeable; nothing in a type system stops an
   // assertion. This is the hole, and the rule that closes it. (D-21, D-54)
   {
@@ -97,48 +104,81 @@ interface EslintMessage {
   readonly ruleId: string | null;
 }
 interface EslintResult {
+  readonly filePath: string;
   readonly messages: readonly EslintMessage[];
 }
 
-/** Which rules actually reported on this file. A parse error reports `null` and counts for nothing. */
-const rulesReported = (target: string): ReadonlySet<string> => {
+/**
+ * Each violation in a file of its own, in the directory its rule is scoped to.
+ *
+ * One lint run for all of them: a type-aware run costs about a second to start,
+ * and running one per violation made this the slowest step of `verify` (#202).
+ * The directory is what the path-scoped rules match; the index only keeps two
+ * violations aimed at one directory from overwriting each other.
+ */
+const placed = VIOLATIONS.map((violation, index) => {
+  const extension = extname(violation.path);
+  const stem = basename(violation.path, extension).replace(
+    /__enforcement__/,
+    `__enforcement_${String(index)}__`,
+  );
+  // `.test.tsx` is part of what a rule matches; keep it whole.
+  const suffix = violation.path.endsWith(`.test${extension}`) ? `.test${extension}` : extension;
+  const name = `${stem.replace(/\.test$/, '')}${suffix}`;
+  return { ...violation, file: join(dirname(violation.path), name) };
+});
+
+let failures = 0;
+try {
+  for (const violation of placed) {
+    mkdirSync(dirname(violation.file), { recursive: true });
+    writeFileSync(violation.file, violation.source);
+  }
+
   const result = Bun.spawnSync(
-    ['bun', 'x', 'eslint', '--no-warn-ignored', '--format', 'json', target],
+    [
+      'bun',
+      'x',
+      'eslint',
+      '--no-warn-ignored',
+      '--format',
+      'json',
+      ...placed.map((violation) => violation.file),
+    ],
     { cwd: process.cwd(), stdout: 'pipe', stderr: 'pipe' },
   );
   const stdout = result.stdout.toString().trim();
   if (stdout === '') {
-    throw new Error(`eslint produced no report for ${target}:\n${result.stderr.toString()}`);
+    throw new Error(`eslint produced no report:\n${result.stderr.toString()}`);
   }
-  const reports = JSON.parse(stdout) as readonly EslintResult[];
-  return new Set(
-    reports.flatMap((report) =>
-      report.messages.map((message) => message.ruleId).filter((id) => id !== null),
-    ),
+  const byFile = new Map(
+    (JSON.parse(stdout) as readonly EslintResult[]).map((report) => [
+      report.filePath,
+      new Set(report.messages.map((message) => message.ruleId).filter((id) => id !== null)),
+    ]),
   );
-};
 
-let failures = 0;
-const scratch = mkdtempSync(join(tmpdir(), 'purlay-enforcement-'));
-
-for (const violation of VIOLATIONS) {
-  const absolute = join(process.cwd(), violation.path);
-  mkdirSync(dirname(absolute), { recursive: true });
-  writeFileSync(absolute, violation.source);
-  const reported = rulesReported(violation.path);
-  rmSync(absolute, { force: true });
-
-  if (reported.has(violation.ruleId)) {
-    console.log(`  ok       ${violation.rule}`);
-  } else {
-    failures += 1;
-    const instead = reported.size === 0 ? 'nothing' : [...reported].join(', ');
-    console.log(
-      `  NOT HELD ${violation.rule} — ${violation.ruleId} stayed silent, ${instead} fired`,
-    );
+  for (const violation of placed) {
+    const reported = byFile.get(join(process.cwd(), violation.file));
+    // A file eslint did not report on at all is a failure, not a silence: it
+    // means the file was ignored, and nothing about the rule was learned.
+    if (reported === undefined) {
+      failures += 1;
+      console.log(`  NOT HELD ${violation.rule} — eslint did not lint ${violation.file}`);
+    } else if (reported.has(violation.ruleId)) {
+      console.log(`  ok       ${violation.rule}`);
+    } else {
+      failures += 1;
+      const instead = reported.size === 0 ? 'nothing' : [...reported].join(', ');
+      console.log(
+        `  NOT HELD ${violation.rule} — ${violation.ruleId} stayed silent, ${instead} fired`,
+      );
+    }
   }
+} finally {
+  // Always, or a throw above leaves a violation in the source tree.
+  for (const violation of placed) rmSync(violation.file, { force: true });
 }
-rmSync(scratch, { recursive: true, force: true });
 
 if (failures > 0) {
   console.log(
