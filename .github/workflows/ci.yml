@@ -9,7 +9,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a pull request's superseded run is cancelled. On main every commit is
+  # checked: cancelling the first of two quick merges left it never verified (#202).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -111,10 +113,10 @@ jobs:
       - name: the committed types are exactly what the migrations produce
         run: bun run db:check
 
-      # These refuse to run without a database rather than skipping, so a green
-      # run here means they actually executed.
-      - name: integration tests
-        run: bun run test:integration
+      # Every test with a database, held to the coverage floor in bunfig.toml —
+      # the same command `verify` runs. Refuses here if the database is missing.
+      - name: every test, with coverage
+        run: bun run test:all
 
   documents:
     runs-on: ubuntu-latest

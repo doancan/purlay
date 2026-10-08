@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ServerFrame } from '@purlay/types';
 import { inProcessEventBus } from './bus';
-import { channelTopic, workspaceTopic } from '../platform/events';
+import { channelTopic } from '../platform/events';
 
 const aFrame = (data: unknown): ServerFrame =>
   ({ event: 'MESSAGE_CREATED', data, ts: 1 }) as ServerFrame;
@@ -38,7 +38,7 @@ describe('the event bus', () => {
 
   test('publishing to a topic nobody watches reaches nobody, and does not throw', async () => {
     const { bus, sent } = collecting();
-    await bus.publish(workspaceTopic('w1'), aFrame('nobody'));
+    await bus.publish(channelTopic('nobody-listens'), aFrame('nobody'));
     expect(sent).toEqual([]);
   });
 

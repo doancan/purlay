@@ -27,6 +27,20 @@ describe('string formats', () => {
     expect(check?.('2026-09-09T08:00:00.000Z')).toBe(true);
     expect(check?.('2026-09-09T08:00:00')).toBe(false);
   });
+
+  test('email takes an address and refuses what is not one', () => {
+    const check = FormatRegistry.Get('email');
+    expect(check?.('mona@example.test')).toBe(true);
+    expect(check?.('mona@example')).toBe(false);
+    expect(check?.('mona example.test')).toBe(false);
+  });
+
+  test('uri needs a scheme and an authority', () => {
+    const check = FormatRegistry.Get('uri');
+    expect(check?.('https://purlay.test')).toBe(true);
+    expect(check?.('purlay.test')).toBe(false);
+    expect(check?.('https://')).toBe(false);
+  });
 });
 
 /**

@@ -33,9 +33,10 @@
     "queue": "bun run scripts/queue.ts",
     "test": "bun test apps packages scripts --path-ignore-patterns '**/*.integration.test.ts'",
     "test:integration": "bun test apps packages scripts --test-name-pattern '^integration'",
+    "test:all": "bun run scripts/test-all.ts",
     "typecheck": "tsc --build --pretty",
     "typecheck:ts6": "tsc6 --build --force --pretty",
-    "verify": "bun run check:branch && bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun run test && bun run build:web && bun run verify:enforcement && bun run check:docs && bun run config:example -- --check",
+    "verify": "bun run check:branch && bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run format:check && bun run test:all && bun run build:web && bun run verify:enforcement && bun run check:docs && bun run config:example -- --check",
     "verify:enforcement": "bun run scripts/verify-enforcement.ts"
   },
   "devDependencies": {

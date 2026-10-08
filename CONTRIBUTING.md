@@ -66,7 +66,9 @@ and what CI runs, because the MinIO images `db:up` pulls are no longer published
 
 | Command | Needs | Runs |
 |---|---|---|
-| `bun run verify` | nothing | Everything that can be checked without infrastructure — typecheck (both compilers), lint, format, tests, the enforcement demonstration, the document consistency check, and that `.env.example` still matches the loader |
+| `bun run verify` | a database, to be complete | Typecheck (both compilers), lint, format, **every test** through `test:all`, the enforcement demonstration, the document consistency check, and that `.env.example` still matches the loader. Without a reachable database the integration tests are not run, and it says so in a banner: that is a unit-only result, not the gate CI runs |
+| `bun run test:all` | a database, to be complete | Unit and integration tests together, held to the coverage floor in `bunfig.toml`. In CI a missing database is a failure, never a skip (#202) |
+| `bun run test` | nothing | The unit tests alone — the fast loop |
 | `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
 | `bun run test:integration` | a database | The tests that exercise real SQL, each inside a transaction that is rolled back (D-46). **They refuse rather than skip** when there is no database — a suite that quietly runs nothing looks exactly like one where everything passed |
 
@@ -84,9 +86,10 @@ and what CI runs, because the MinIO images `db:up` pulls are no longer published
 | `python3 scripts/check-docs.py -v` | Every cross-document reference, with the title of the section it lands on |
 | `python3 scripts/check-docs.py --write-sections` | Re-lock the section numbering after deliberately renumbering a document |
 
-`verify` is the fast loop and is deliberately the subset that needs nothing installed. A check that
-requires a database is not omitted from CI — it is a job of its own, and this is the command that
-runs it.
+`verify` runs what CI runs. With a database it is the whole gate; without one it still runs and
+says plainly what it skipped, because the fast loop must not depend on Docker — and a banner
+reading *integration tests not run* is the opposite of a quiet skip. `db:check` needs a database
+and is a CI job of its own.
 
 `bun` for everything (`bun add`, `bun run`, `bun test`) · Bun + ElysiaJS · Kysely +
 PostgreSQL · TypeBox validation · React + Vite + Tailwind · TanStack Query + Zustand ·
