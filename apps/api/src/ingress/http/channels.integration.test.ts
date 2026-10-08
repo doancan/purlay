@@ -9,9 +9,9 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { createApp } from './app';
 import { testDependencies } from './testing';
-import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from './cookies';
+import { aSignedInUser, type SignedInUser } from './fixtures';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -37,23 +37,13 @@ const call = async (
     }),
   );
 
-const signedIn = async (
-  db: Executor,
-  name: string,
-): Promise<{ userId: string; cookie: string }> => {
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${name}@example.test`, username: name, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, row.id, 30);
-  return { userId: row.id, cookie: `${SESSION_COOKIE}=${token}` };
-};
+const signedIn = async (db: Executor, name: string): Promise<SignedInUser> =>
+  await aSignedInUser(db, clock, name);
 
 const aWorkspace = async (db: Executor, cookie: string, slug: string): Promise<string> => {
   const response = await call(db, 'POST', '/api/workspaces', {
     cookie,
-    body: { name: slug, slug },
+    body: { name: slug, slug: aUniqueSlug(slug) },
   });
   expect(response.status).toBe(201);
   return ((await response.json()) as { id: string }).id;

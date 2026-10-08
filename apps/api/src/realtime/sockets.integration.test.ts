@@ -35,6 +35,8 @@ import { testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../ingress/http/cookies';
+import { aSignedInUser } from '../ingress/http/fixtures';
+import { aUniqueSlug } from '../testing/users';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -42,34 +44,28 @@ let cloned: ClonedDatabase;
 let db: Executor;
 
 let app: HttpApplication;
-let origin = '';
-
-/** A port nothing is listening on. Asked of the OS, not guessed. */
-const freePort = (): number => {
-  const probe = Bun.serve({ port: 0, fetch: () => new Response() });
-  const port = probe.port;
-  void probe.stop(true);
-  if (port === undefined) throw new Error('the OS did not hand out a port');
-  return port;
-};
+/**
+ * The application's public origin, which the socket's `Origin` check compares
+ * against — not the address the server happens to listen on. Kept apart, the
+ * server can bind port 0 and take whatever the OS gives it, with no window in
+ * which another process takes a port this test probed and released (#202).
+ */
+const origin = 'https://purlay.test';
+let server = '';
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-  const port = freePort();
-  origin = `http://localhost:${String(port)}`;
   app = createApp(
-    testDependencies({ database: db, clock, config: testConfig({ APP_URL: origin, PORT: port }) }),
+    testDependencies({ database: db, clock, config: testConfig({ APP_URL: origin }) }),
   );
-  app.listen(port);
+  server = `http://localhost:${String(app.listen(0))}`;
 });
 
 afterAll(async () => {
   await app.stop(true);
   await cloned.drop();
 });
-
-const unique = (): string => crypto.randomUUID().slice(0, 8);
 
 const http = async (
   method: string,
@@ -89,21 +85,15 @@ const http = async (
   );
 
 const aUser = async (name: string): Promise<{ id: string; cookie: string }> => {
-  const handle = `${name}-${unique()}`;
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${handle}@example.test`, username: handle, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, row.id, 30);
-  return { id: row.id, cookie: `${SESSION_COOKIE}=${token}` };
+  const user = await aSignedInUser(db, clock, name);
+  return { id: user.userId, cookie: user.cookie };
 };
 
 /** Alice owns a workspace with one channel; Bob is a member who has joined it. */
 const aRoom = async (): Promise<{ alice: string; bob: string; channelId: string }> => {
   const alice = await aUser('alice');
   const bob = await aUser('bob');
-  const slug = `rt-${unique()}`;
+  const slug = aUniqueSlug('rt');
   const workspace = await http('POST', '/api/workspaces', alice.cookie, { name: slug, slug });
   const workspaceId = ((await workspace.json()) as { id: string }).id;
   await db
@@ -137,7 +127,7 @@ interface Client {
 }
 
 const connect = async (cookie: string): Promise<Client> => {
-  const socket = new WebSocket(`${origin.replace('http', 'ws')}/ws`, {
+  const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
     headers: { cookie, origin },
   } as unknown as string[]);
   const ended = new Promise<number>((resolve) => {
@@ -640,7 +630,7 @@ describe('integration: two real sockets', () => {
 
     test('is closed to resync, rather than left open with frames dropped', async () => {
       const room = await aRoom();
-      const { port } = new URL(origin);
+      const { port } = new URL(server);
       const received: Buffer[] = [];
       const socket = createConnection({ host: '127.0.0.1', port: Number(port) });
       const closed = new Promise<void>((resolve) =>
@@ -752,6 +742,43 @@ describe('integration: two real sockets', () => {
       expect(replayedBytes).toBeLessThanOrEqual(REPLAY_BYTES_MAX);
       expect(replayedBytes).toBeGreaterThan(REPLAY_BYTES_MAX / 2);
       await bob.close();
+    });
+  });
+
+  /**
+   * The handshake's refusals, through the running server rather than the function
+   * behind them (#202). If the wiring swallowed the error, the socket would open
+   * and every test that calls `admitSocket` directly would still pass.
+   */
+  describe('an upgrade the server refuses', () => {
+    const upgrade = async (headers: Record<string, string>): Promise<Response> =>
+      await fetch(`${server}/ws`, {
+        headers: {
+          upgrade: 'websocket',
+          connection: 'Upgrade',
+          'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+          'sec-websocket-version': '13',
+          ...headers,
+        },
+      });
+
+    test('from another origin is 403, with a session that is otherwise valid', async () => {
+      const alice = await aUser('alice');
+      const response = await upgrade({ origin: 'https://evil.test', cookie: alice.cookie });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+    });
+
+    test('without a session is 401, from the right origin', async () => {
+      const response = await upgrade({ origin });
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
+    });
+
+    test('the same request with both is switched, so the refusals above are the checks', async () => {
+      const alice = await aUser('alice');
+      const response = await upgrade({ origin, cookie: alice.cookie });
+      expect(response.status).toBe(101);
     });
   });
 });

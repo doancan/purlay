@@ -11,9 +11,9 @@ import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
 import { testDependencies } from './testing';
-import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from './cookies';
+import { aSignedInUser, type SignedInUser } from './fixtures';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -23,24 +23,9 @@ const ORIGIN = 'https://purlay.test';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
 
-const addUser = async (db: Executor, name: string): Promise<string> => {
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${name}@example.test`, username: name, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  return row.id;
-};
-
 /** A signed-in caller: a user, and the cookie a browser would send for them. */
-const signedIn = async (
-  db: Executor,
-  name: string,
-): Promise<{ userId: string; cookie: string }> => {
-  const userId = await addUser(db, name);
-  const { token } = await issueSession(db, clock, userId, 30);
-  return { userId, cookie: `${SESSION_COOKIE}=${token}` };
-};
+const signedIn = async (db: Executor, name: string): Promise<SignedInUser> =>
+  await aSignedInUser(db, clock, name);
 
 const call = async (
   db: Executor,
@@ -59,13 +44,17 @@ const call = async (
     }),
   );
 
-const aWorkspace = async (db: Executor, cookie: string, slug: string): Promise<{ id: string }> => {
+const aWorkspace = async (
+  db: Executor,
+  cookie: string,
+  name: string,
+): Promise<{ id: string; slug: string }> => {
   const response = await call(db, 'POST', '/api/workspaces', {
     cookie,
-    body: { name: slug, slug },
+    body: { name, slug: aUniqueSlug(name) },
   });
   expect(response.status).toBe(201);
-  return (await response.json()) as { id: string };
+  return (await response.json()) as { id: string; slug: string };
 };
 
 describe('integration: workspaces', () => {
@@ -90,11 +79,11 @@ describe('integration: workspaces', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'ws-first');
       const bob = await signedIn(db, 'ws-second');
-      await aWorkspace(db, alice.cookie, 'taken');
+      const taken = await aWorkspace(db, alice.cookie, 'taken');
 
       const response = await call(db, 'POST', '/api/workspaces', {
         cookie: bob.cookie,
-        body: { name: 'Also Taken', slug: 'taken' },
+        body: { name: 'Also Taken', slug: taken.slug },
       });
       expect(response.status).toBe(409);
       expect(await response.json()).toMatchObject({ error: { code: 'WORKSPACE_SLUG_TAKEN' } });
@@ -126,7 +115,7 @@ describe('integration: workspaces', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'ws-mine');
       const bob = await signedIn(db, 'ws-theirs');
-      await aWorkspace(db, alice.cookie, 'mine');
+      const mine = await aWorkspace(db, alice.cookie, 'mine');
       await aWorkspace(db, bob.cookie, 'theirs');
 
       const response = await call(db, 'GET', '/api/workspaces', { cookie: alice.cookie });
@@ -135,7 +124,7 @@ describe('integration: workspaces', () => {
         role: string;
       }[];
       expect(memberships).toHaveLength(1);
-      expect(memberships[0]?.workspace.slug).toBe('mine');
+      expect(memberships[0]?.workspace.slug).toBe(mine.slug);
       expect(memberships[0]?.role).toBe('owner');
     });
   });
@@ -151,7 +140,7 @@ describe('integration: workspaces', () => {
       expect(response.status).toBe(200);
       const members: unknown = await response.json();
       expect(JSON.stringify(members)).not.toContain('@example.test');
-      expect(members).toMatchObject([{ role: 'owner', user: { username: 'ws-member' } }]);
+      expect(members).toMatchObject([{ role: 'owner', user: { username: alice.username } }]);
     });
   });
 
@@ -179,7 +168,7 @@ describe('integration: who am I', () => {
   test('returns the caller with their own email, and their memberships', async () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'me-alice');
-      await aWorkspace(db, alice.cookie, 'me-acme');
+      const acme = await aWorkspace(db, alice.cookie, 'me-acme');
 
       const response = await call(db, 'GET', '/api/me', { cookie: alice.cookie });
       expect(response.status).toBe(200);
@@ -189,10 +178,10 @@ describe('integration: who am I', () => {
         memberships: { role: string; workspace: { slug: string } }[];
       };
       expect(me.user.id).toBe(alice.userId);
-      expect(me.user.email).toBe('me-alice@example.test');
+      expect(me.user.email).toBe(alice.email);
       expect(me.memberships).toHaveLength(1);
       expect(me.memberships[0]?.role).toBe('owner');
-      expect(me.memberships[0]?.workspace.slug).toBe('me-acme');
+      expect(me.memberships[0]?.workspace.slug).toBe(acme.slug);
     });
   });
 
@@ -213,7 +202,11 @@ describe('integration: who am I', () => {
       const members = await call(db, 'GET', `/api/workspaces/${workspace.id}/members`, {
         cookie: bob.cookie,
       });
-      expect(JSON.stringify(await members.json())).not.toContain('me-owner@example.test');
+      const listed = JSON.stringify(await members.json());
+      // The owner is in the list — so the address being absent from it means
+      // something, rather than that the list was empty.
+      expect(listed).toContain(alice.username);
+      expect(listed).not.toContain(alice.email);
     });
   });
 

@@ -21,9 +21,9 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { createApp } from './app';
 import { CROSS_TENANT, pathFor } from './cross-tenant';
 import { NOW, testDependencies } from './testing';
-import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from './cookies';
+import { aSignedInUser } from './fixtures';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -50,13 +50,8 @@ const call = async (
   );
 
 const aUser = async (db: Executor, name: string): Promise<{ id: string; cookie: string }> => {
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${name}@example.test`, username: name, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, row.id, 30);
-  return { id: row.id, cookie: `${SESSION_COOKIE}=${token}` };
+  const user = await aSignedInUser(db, clock, name);
+  return { id: user.userId, cookie: user.cookie };
 };
 
 const created = async (response: Response): Promise<string> => {
@@ -86,7 +81,10 @@ const aWorld = async (db: Executor): Promise<World> => {
   const third = await aUser(db, 'vis-third');
 
   const workspaceId = await created(
-    await call(db, 'POST', '/api/workspaces', owner.cookie, { name: 'vis', slug: 'vis' }),
+    await call(db, 'POST', '/api/workspaces', owner.cookie, {
+      name: 'vis',
+      slug: aUniqueSlug('vis'),
+    }),
   );
   await db
     .insertInto('workspace_members')

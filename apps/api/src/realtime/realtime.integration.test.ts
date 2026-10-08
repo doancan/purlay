@@ -16,7 +16,6 @@ import {
 } from '@purlay/types';
 import { AppError } from '../platform/errors';
 import { fixedClock } from '../platform/clock';
-import { issueSession } from '../modules/auth/sessions';
 import { createApp } from '../ingress/http/app';
 import { testDependencies } from '../ingress/http/testing';
 import { inProcessEventBus } from './bus';
@@ -25,7 +24,8 @@ import { atomicallyOn } from '../platform/transactions';
 import { REPLAY_BYTES_MAX, replayPerChannel, routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
-import { SESSION_COOKIE } from '../ingress/http/cookies';
+import { aSignedInUser, type SignedInUser } from '../ingress/http/fixtures';
+import { aUniqueSlug } from '../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -52,18 +52,8 @@ const call = async (
     }),
   );
 
-const signedIn = async (
-  db: Executor,
-  name: string,
-): Promise<{ userId: string; cookie: string }> => {
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${name}@example.test`, username: name, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, row.id, 30);
-  return { userId: row.id, cookie: `${SESSION_COOKIE}=${token}` };
-};
+const signedIn = async (db: Executor, name: string): Promise<SignedInUser> =>
+  await aSignedInUser(db, clock, name);
 
 const aChannel = async (
   db: Executor,
@@ -72,7 +62,7 @@ const aChannel = async (
 ): Promise<{ workspaceId: string; channelId: string }> => {
   const workspace = await call(db, 'POST', '/api/workspaces', {
     cookie: who.cookie,
-    body: { name: slug, slug },
+    body: { name: slug, slug: aUniqueSlug(slug) },
   });
   const workspaceId = ((await workspace.json()) as { id: string }).id;
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, {

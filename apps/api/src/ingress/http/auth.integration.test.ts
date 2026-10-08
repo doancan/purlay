@@ -13,6 +13,7 @@ import { createApp } from './app';
 import { SESSION_COOKIE, STATE_COOKIE } from './cookies';
 import { NOW, aGitHubAccount, testConfig, testDependencies } from './testing';
 import type { Config } from '../../platform/config';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -275,6 +276,8 @@ describe('integration: signing in with GitHub', () => {
  * (D-37). Without open join the second user has no way in at all.
  */
 describe('integration: open join on sign-in', () => {
+  const OPEN_SLUG = aUniqueSlug('phase-zero');
+
   const hubot = aGitHubAccount({ id: 2, login: 'hubot', name: 'Hubot', avatarUrl: null }, [
     { email: 'hubot@example.test', primary: true, verified: true },
   ]);
@@ -309,7 +312,7 @@ describe('integration: open join on sign-in', () => {
     const mona = sessionFrom(await startAndCallback(db, { config }));
     const created = await asJson(db, config, 'POST', '/api/workspaces', mona, {
       name: 'Phase zero',
-      slug: 'phase-zero',
+      slug: OPEN_SLUG,
     });
     expect(created.status).toBe(201);
     const workspaceId = ((await created.json()) as { id: string }).id;
@@ -333,7 +336,7 @@ describe('integration: open join on sign-in', () => {
 
   test('with the slug set, a second GitHub user lands in the workspace and can join its channel', async () => {
     await withRollback(async (db) => {
-      const config = testConfig({ WORKSPACE_OPEN_JOIN_SLUG: 'phase-zero' });
+      const config = testConfig({ WORKSPACE_OPEN_JOIN_SLUG: OPEN_SLUG });
       const { hubot: cookie, workspaceId, channelId } = await twoUsers(db, config);
 
       const mine = await asJson(db, config, 'GET', '/api/workspaces', cookie);
