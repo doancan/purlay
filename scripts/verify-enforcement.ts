@@ -74,6 +74,13 @@ const VIOLATIONS: readonly Violation[] = [
     source: "import { db } from '@purlay/db';\n\nexport const use = (): unknown => db;\n",
   },
   {
+    rule: 'layering: the browser may not climb into the API by a relative path (ARCHITECTURE.md §4)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/web/src/__enforcement__.ts',
+    source:
+      "import { systemClock } from '../../api/src/platform/clock';\n\nexport const use = (): unknown => systemClock;\n",
+  },
+  {
     rule: 'the browser may not reach for Bun APIs (ARCHITECTURE.md §4)',
     ruleId: 'no-restricted-globals',
     path: 'apps/web/src/__enforcement__.ts',
