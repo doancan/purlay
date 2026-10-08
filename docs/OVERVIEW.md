@@ -57,7 +57,7 @@ looking for the error codes to a file that does not have them.
 |---|---|
 | Every version in the stack | The manifest that installs it — `package.json` files, `docker-compose.yml`. `ARCHITECTURE.md` §2 names choices and never numbers (D-56) |
 | Repository layout and the enforced dependency direction | `docs/ARCHITECTURE.md` §4, enforced in `eslint.config.mjs` |
-| What is never logged | `docs/ARCHITECTURE.md` §10 |
+| What is never logged | `NEVER_LOGGED` in `apps/api/src/platform/logging.ts`, held to `ARCHITECTURE.md` §10 by a test |
 | What the database schema *is* | `packages/db/migrations/` — the types are generated from it, never written (D-45) |
 | The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
 | Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |

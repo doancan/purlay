@@ -13,16 +13,18 @@ import { loadConfig } from './platform/config';
 import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
+import { createLogger } from './platform/logging';
 import { openJoinNotice } from './modules/workspaces/open-join';
 
 const config = loadConfig(process.env);
+const log = createLogger({ level: config.LOG_LEVEL });
 
-// Which workspace is open, said before anything else (D-37). Written directly
-// because the structured logger does not exist yet; it moves there with #127.
-process.stdout.write(`${openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG)}\n`);
+// Which workspace is open, said before anything else (D-37).
+log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
 
 const app = createApp({
   config,
+  log,
   clock: systemClock,
   database: createDatabase({
     connectionString: config.DATABASE_URL,

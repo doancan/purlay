@@ -21,6 +21,7 @@ import { testDependencies } from '../ingress/http/testing';
 import { inProcessEventBus } from './bus';
 import { channelTopic } from '../platform/events';
 import { atomicallyOn } from '../platform/transactions';
+import { createLogger } from '../platform/logging';
 import { REPLAY_BYTES_MAX, replayPerChannel, routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
@@ -147,6 +148,7 @@ describe('integration: the frame router', () => {
         clock,
         bus,
         limiter,
+        log: createLogger({ level: 'silent' }),
         // The production boundary: inside the harness's transaction it joins it.
         atomically: atomicallyOn(db),
       },
@@ -574,6 +576,27 @@ describe('integration: the frame router', () => {
           ts: NOW.getTime(),
         });
         expect(delivered).toEqual([]);
+      });
+    });
+
+    test('a replay cursor that is not a v7 id is refused, naming the field', async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'rt-v4-cursor');
+        const channels = await manyChannels(db, alice, 1, 0);
+        const replies = await route(
+          db,
+          alice,
+          subscribeTo(channels, '0b1a8c9e-4f5d-4c3b-9a2e-1d0f3e4c5b6a'),
+        );
+        expect(replies).toMatchObject([
+          {
+            event: 'ERROR',
+            data: {
+              code: 'VALIDATION_FAILED',
+              details: { fields: { afterMessageId: 'is not a message id' } },
+            },
+          },
+        ]);
       });
     });
 

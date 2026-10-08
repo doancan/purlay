@@ -37,6 +37,7 @@ import { requireChannelById, requireChannelsById } from '../platform/channels';
 import { missedIn, send } from '../modules/messages/messages';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
+import type { Logger } from '../platform/logging';
 import type { RateLimiter } from './rate-limiter';
 
 /**
@@ -74,6 +75,7 @@ export interface RouterDependencies {
   readonly bus: EventBus;
   /** Keyed by connection (§5.5). */
   readonly limiter: RateLimiter;
+  readonly log: Logger;
 }
 
 export interface SocketIdentity {
@@ -170,6 +172,9 @@ export const routeFrame = async (
   // Counted before anything else, malformed frames included: if bytes that are
   // not a frame cost nothing, they are the cheapest flood there is.
   if (!(await limiter.consume(identity.socketId))) {
+    // Counted, because this is what closes O-4: how often legitimate use meets
+    // the budget, measured during dogfooding.
+    dependencies.log.info('frame refused: over the rate budget', { socketId: identity.socketId });
     return [
       errorFrame(
         new AppError({ code: 'RATE_LIMITED', message: 'Too many frames. Send it again shortly.' }),
@@ -286,6 +291,14 @@ export const routeFrame = async (
       }
     }
   } catch (error) {
+    if (!(error instanceof AppError)) {
+      // The client is told only INTERNAL; the cause is written here, once.
+      dependencies.log.error('frame failed', {
+        err: error,
+        op: parsed.op,
+        socketId: identity.socketId,
+      });
+    }
     return [errorFrame(error, clock, parsed.id)];
   }
 };

@@ -21,6 +21,7 @@
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
+import type { Logger } from '../platform/logging';
 import { resolveSession } from '../modules/auth/sessions';
 import { sessionTokenFrom } from '../ingress/http/cookies';
 import type { SocketIdentity } from './router';
@@ -113,10 +114,15 @@ interface Held {
   cancelExpiry?: () => void;
 }
 
+export interface HubOptions {
+  readonly log: Logger;
+  readonly timers?: Timers;
+}
+
 export const createSocketHub = (
   database: Executor,
   clock: Clock,
-  timers: Timers = systemTimers,
+  { log, timers = systemTimers }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
 
@@ -134,7 +140,13 @@ export const createSocketHub = (
     // A dropped frame, or a queue past the mark: this connection can no longer be
     // trusted to have everything, so it is told to reconnect and replay rather
     // than left open with a gap it cannot see (`ARCHITECTURE.md` §5.5).
-    if (written === 0 || socket.connection.buffered() > OUTBOUND_HIGH_WATER_MARK) {
+    const buffered = socket.connection.buffered();
+    if (written === 0 || buffered > OUTBOUND_HIGH_WATER_MARK) {
+      log.warn('socket fell behind and was closed to resync', {
+        socketId,
+        dropped: written === 0,
+        buffered,
+      });
       socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
     }
   };

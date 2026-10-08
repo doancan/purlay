@@ -20,6 +20,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { authorizeUrl, type GitHubClient } from '../../modules/auth/github';
 import { resolveIdentity } from '../../modules/auth/identity';
+import type { Logger } from '../../platform/logging';
 import { sessionTopic, type EventBus } from '../../platform/events';
 import { joinOpenWorkspace } from '../../modules/workspaces/open-join';
 import { issueState, verifyState } from '../../modules/auth/state';
@@ -44,6 +45,7 @@ export interface AuthDependencies {
   readonly database: Executor;
   readonly clock: Clock;
   readonly github: GitHubClient;
+  readonly log: Logger;
 }
 
 /** Signing out also reaches the sockets the revoked sessions hold. */
@@ -123,7 +125,12 @@ export const completeSignIn = async (
     github.emails(accessToken),
   ]);
 
-  const { userId } = await resolveIdentity(database, clock, profile, emails);
+  const { userId, usernameCollision } = await resolveIdentity(database, clock, profile, emails);
+  if (usernameCollision !== undefined) {
+    // D-38: the account exists under another name than the one GitHub gave, and
+    // somebody may need to know why.
+    dependencies.log.warn('username taken; stored with a suffix', { userId, ...usernameCollision });
+  }
   if (config.WORKSPACE_OPEN_JOIN_SLUG !== undefined) {
     // Every outcome is a success; which one it was is the boot notice's to explain (D-37).
     await joinOpenWorkspace(database, clock, config.WORKSPACE_OPEN_JOIN_SLUG, userId);

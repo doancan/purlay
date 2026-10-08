@@ -27,6 +27,12 @@ export const Environment = Type.Object({
   ),
   PORT: Type.Integer({ minimum: 1, maximum: 65_535, default: 3001 }),
 
+  /** How much the structured log writes (#127). */
+  LOG_LEVEL: Type.Union(
+    [Type.Literal('debug'), Type.Literal('info'), Type.Literal('warn'), Type.Literal('error')],
+    { default: 'info' },
+  ),
+
   /** The one public origin (D-61): the OAuth callback, and the `Origin` check on
    *  the socket upgrade that stops cross-site hijacking (D-39). There is no CORS. */
   APP_URL: Type.String({ format: 'uri' }),

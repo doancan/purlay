@@ -27,7 +27,7 @@
 | Layer | Choice | In the repo | Cost we accepted |
 |---|---|---|---|
 | Monorepo | Bun workspaces | built in | No task graph and no remote cache: a pipeline that repeats work is the trigger to add one (D-55) |
-| Logging | `pino` | not yet · `pino` | Named here because §10 mandates structured JSON logging and no document named the tool (D-44) |
+| Logging | `pino` | `pino` | Behind a facade in `platform/logging.ts`; `docs/spikes/pino.md` (D-44, D-71) |
 | i18n | typed message catalogues + `Intl` | none, on purpose | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
 | Runtime | Bun | built in | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
 | HTTP + WS | ElysiaJS | `elysia` | Smaller community than Express/Fastify; docs move fast. **The highest-risk choice now that the cloud carries an uptime commitment** — Hono is the written fallback with a four-week trigger (D-20) |
@@ -569,9 +569,15 @@ a free string — so a client can handle it exhaustively and adding a code break
 forgot it (D-47). Never leak internals to the client; never swallow an error to make a code path
 look clean. A caught error is either handled or re-thrown — logging and continuing is prohibited.
 
-**Logging.** Structured JSON (`pino`) with a request id that flows through HTTP, WS and service
-calls **from the first handler** — threading it through afterwards touches every signature (D-47).
-Never logged: session tokens, `access_token_encrypted`, message content, email addresses.
+**Logging.** One JSON line per event on standard output, written synchronously so a crash keeps
+the lines that explain it. Every HTTP request and every socket frame is a scope with its own id —
+the response carries it back as `x-request-id` — and every line written inside the scope carries
+it, however deep the call, without any signature taking it (D-47, D-71). A request writes one line
+when its response has gone; a failure the client is told nothing about is written with its cause.
+Never logged: session tokens, `access_token_encrypted`, message content, email addresses — a list
+in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
+written. A value interpolated into a message's text cannot be found that way, so a message is a
+constant and variables go in fields.
 
 **Executors are arguments.** Every service and repository takes its `Kysely<Database>` or
 `Transaction<Database>` as a parameter rather than reaching for a module-level handle. This is what

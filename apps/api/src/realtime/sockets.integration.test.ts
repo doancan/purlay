@@ -31,7 +31,7 @@ import { createApp, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { REPLAY_BYTES_MAX } from './router';
 import { createConnection } from 'node:net';
-import { testConfig, testDependencies } from '../ingress/http/testing';
+import { aRecordingLogger, testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../ingress/http/cookies';
@@ -52,12 +52,19 @@ let app: HttpApplication;
  */
 const origin = 'https://purlay.test';
 let server = '';
+/** What the server wrote, for the tests that assert it was written (#127). */
+const recorded = aRecordingLogger();
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
   app = createApp(
-    testDependencies({ database: db, clock, config: testConfig({ APP_URL: origin }) }),
+    testDependencies({
+      database: db,
+      clock,
+      config: testConfig({ APP_URL: origin }),
+      log: recorded.log,
+    }),
   );
   server = `http://localhost:${String(app.listen(0))}`;
 });
@@ -448,6 +455,10 @@ describe('integration: two real sockets', () => {
     const refused = answers.filter((f) => f?.event === 'ERROR');
     expect(new Set(refused.map((f) => f.data.code))).toEqual(new Set(['RATE_LIMITED' as const]));
     expect(refused).toHaveLength(5);
+    // Each refusal is counted in the log: the measurement O-4 waits for.
+    expect(
+      recorded.lines.filter((line) => line['msg'] === 'frame refused: over the rate budget').length,
+    ).toBeGreaterThanOrEqual(5);
 
     // The budget is the connection's: another connection of the same user starts full.
     const again = await connect(room.alice);
@@ -702,6 +713,11 @@ describe('integration: two real sockets', () => {
       ]);
       expect(outcome).toBe('closed');
       expect(closeCodeIn(Buffer.concat(received))).toBe(CLOSE_CODES.RESYNC);
+      expect(
+        recorded.lines.some(
+          (line) => line['msg'] === 'socket fell behind and was closed to resync',
+        ),
+      ).toBe(true);
     });
 
     /**

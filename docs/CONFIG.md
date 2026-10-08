@@ -20,7 +20,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `NODE_ENV` | — | `development` | `development` \| `test` \| `production` |
 | `PORT` | — | `3001` | API listen port |
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Must be `https://` in production. |
-| `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. Read once structured logging ships (#127) |
+| `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
 | `TRUST_PROXY` | — | `false` | Set `true` behind a reverse proxy so client IPs in `sessions.ip_address` are real. Not read yet: nothing records a session's address today |
 
 ## Database
