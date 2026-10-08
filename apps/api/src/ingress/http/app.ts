@@ -60,6 +60,8 @@ export interface Dependencies {
 export interface HttpApplication {
   readonly handle: (request: Request) => Promise<Response>;
   readonly listen: (port: number) => void;
+  /** Closes the listener and every open socket. What a test that listened must call. */
+  readonly stop: (closeActiveConnections?: boolean) => Promise<unknown>;
 }
 
 /** Liveness. Deliberately touches nothing. */

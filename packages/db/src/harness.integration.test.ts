@@ -6,7 +6,13 @@
  * sees the other's.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback } from './testing';
+import { sql } from 'kysely';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  integrationDatabase,
+  withRollback,
+} from './testing';
 
 const SLUG = 'harness-probe';
 
@@ -48,5 +54,31 @@ describe('integration harness', () => {
         .executeTakeFirstOrThrow();
       expect(Number(count.n)).toBe(1);
     });
+  });
+
+  /**
+   * The clone is for what a transaction cannot do, so its claims are different:
+   * it has the whole schema, a commit in it reaches nothing else, and dropping it
+   * leaves nothing behind (D-46).
+   */
+  test('a cloned database is migrated, separate, and gone once dropped', async () => {
+    const shared = integrationDatabase();
+    const { db, drop } = await cloneIntegrationDatabase();
+    const name = (await sql<{ name: string }>`select current_database() as name`.execute(db))
+      .rows[0]?.name;
+    expect(name).toMatch(/_[0-9a-f]{12}$/);
+
+    const slug = `clone-probe-${crypto.randomUUID().slice(0, 8)}`;
+    await db.insertInto('workspaces').values({ name: 'Clone', slug }).execute();
+    expect(
+      await db.selectFrom('workspaces').select('slug').where('slug', '=', slug).execute(),
+    ).toHaveLength(1);
+    expect(
+      await shared.selectFrom('workspaces').select('slug').where('slug', '=', slug).execute(),
+    ).toEqual([]);
+
+    await drop();
+    const left = await sql`select 1 from pg_database where datname = ${name ?? ''}`.execute(shared);
+    expect(left.rows).toEqual([]);
   });
 });

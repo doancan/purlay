@@ -1301,6 +1301,11 @@ anything that commits on purpose, the realtime tests that need two connections t
 other, and anything touching advisory locks. Cloning a template is milliseconds; migrating a fresh
 database per file is not.
 
+*Built 2026-10-08, with the first file that needed it (#31): `cloneIntegrationDatabase` in
+`packages/db/src/testing.ts`. The template is `<database>_template`, and it is migrated on every
+clone — a no-op when current, and the only thing stopping a template left by an older run from
+hiding a migration added since. The clone is dropped in `afterAll`.*
+
 **Rejected — truncating tables between tests.** Slower, and it leaves sequence state and ordering
 coupling behind, which is how a suite starts failing only when run in a different order.
 
