@@ -165,6 +165,10 @@ status, review decision. Cached in PostgreSQL (D-23). Workspace-level credential
 > **Stated plainly:** Phase 1 notifies **in-app only**. With the tab closed, Purlay is silent.
 > Web Push is Phase 2. Hiding this would fail dogfooding on day one. (D-12)
 
+**Where it is dogfooded.** On the team's own server, provisionally — an internal deployment of the
+same single-node shape a self-hoster runs, built so moving it is a move and not a rewrite. The
+public self-host path and its documentation stay in Phase 2. (D-73)
+
 ### Phase 2 — Community-ready (gates on S-2)
 
 `docker compose up` self-host path and operator documentation · GitHub webhook repo feeds ·
