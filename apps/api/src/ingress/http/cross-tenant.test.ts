@@ -10,6 +10,7 @@ import { createApp } from './app';
 import {
   CROSS_TENANT,
   UNSCOPED,
+  WORKSPACE_WIDE_READS,
   documentedEndpoints,
   endpointKey,
   type DocumentedEndpoint,
@@ -75,6 +76,26 @@ describe('every served endpoint has a cross-tenant case', () => {
         key: endpointKey(endpoint),
         served: true,
       });
+    }
+  });
+
+  test('nothing that names a channel opts out of the visibility axis', () => {
+    for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
+      if (key.includes(':channelId')) {
+        expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'channel' });
+      }
+    }
+  });
+
+  test('search and open questions are read as workspace-wide, once they exist', () => {
+    // Both must stay documented, or this check would be skipping them by name.
+    for (const key of WORKSPACE_WIDE_READS) {
+      expect({ key, documented: keys.has(key) }).toEqual({ key, documented: true });
+      expect({ key, unscoped: key in UNSCOPED }).toEqual({ key, unscoped: false });
+      const crossing = CROSS_TENANT[key];
+      if (crossing !== undefined) {
+        expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'workspace-wide' });
+      }
     }
   });
 });
