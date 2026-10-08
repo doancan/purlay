@@ -92,7 +92,7 @@ will. The cloud runs several nodes and swaps in the shared adapters behind the t
 │                                                          │
 │  ingress/http ──┐                                        │
 │                 ├──▶ modules/*  (all business rules)     │
-│  ingress/ws  ───┘         │                              │
+│  realtime/   ───┘         │                              │
 │                           ▼                              │
 │                     EventBus (in-process, D-7)           │
 │                           │                              │
@@ -120,8 +120,9 @@ purlay/
 │   │   └── src/
 │   │       ├── ingress/
 │   │       │   ├── http/        route definitions only — validate, delegate, serialize,
-│   │       │   │              plus the one error handler: AppError → its status, else INTERNAL
-│   │       │   └── ws/          frame router, connection lifecycle, backpressure
+│   │       │                  plus the one error handler: AppError → its status, else INTERNAL
+│   │       ├── realtime/        the socket door: frame router, hub (connection lifecycle,
+│   │       │                  backpressure), the in-process EventBus, the rate limiter
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line
 │   │       │   ├── auth/        GitHub OAuth, sessions (opaque token, SHA-256 at rest)
 │   │       │   ├── workspaces/  tenancy, membership, roles, Deep Work
@@ -133,9 +134,9 @@ purlay/
 │   │       │   ├── notifications/
 │   │       │   ├── search/
 │   │       │   └── integrations/github/  unfurl, link_previews cache
-│   │       ├── realtime/        EventBus + socket hub
-│   │       ├── platform/        db, storage, config, clock, logging, errors, tenancy,
-│   │       │                 channel visibility, uuid
+│   │       ├── platform/        the bottom layer: config, clock, errors, tenancy, channel
+│   │       │                  visibility, the EventBus seam, the transaction boundary
+│   │       ├── testing/         fixtures every layer's tests may use; never imported by code
 │   │       └── index.ts
 │   │
 │   └── web/
@@ -157,8 +158,9 @@ purlay/
 └── CONTRIBUTING.md
 ```
 
-**Dependency rule, enforced by lint:** `ingress → modules → platform`. A module never imports
-from `ingress`. `apps/web` never imports from `apps/api` — only from `packages/*`.
+**Dependency rule, enforced by lint:** the two doors — `ingress/http` and `realtime` — call
+`modules`, and `modules` call `platform`. A module never imports from either door, and `platform`
+imports from nothing above it. `apps/web` never imports from `apps/api` — only from `packages/*`.
 
 *(`apps/desktop` arrives in Phase 3. It is absent from Phase 0–2 on purpose — D-14.)*
 
@@ -181,41 +183,21 @@ word in a document.
 
 ### 5.2. Frames
 
-Discriminated unions, defined once in `@purlay/types/events.ts`.
+Discriminated unions, defined once in `packages/types/src/events.ts` — the frames, the close codes
+and the limits a client must know. Not restated here: the copy that was here listed twelve client
+operations against the contract's four and had lost a server event.
 
-```typescript
-export type ClientOp =
-  | 'MESSAGE_SEND' | 'MESSAGE_EDIT'  | 'MESSAGE_DELETE'
-  | 'THREAD_REPLY' | 'THREAD_RESOLVE'
-  | 'REACTION_ADD' | 'REACTION_REMOVE'
-  | 'TYPING_START' | 'CHANNEL_READ'
-  | 'SUBSCRIBE'    | 'UNSUBSCRIBE'
-  | 'PING';
+What the shape is for, which the types do not say:
 
-export interface ClientFrame<Op extends ClientOp, P> {
-  /** UUIDv7, generated client-side. For MESSAGE_SEND this IS the message id. (D-8) */
-  id: string;
-  op: Op;
-  payload: P;
-}
-
-export type ServerEvent =
-  | 'ACK'  | 'ERROR'
-  | 'MESSAGE_CREATED' | 'MESSAGE_UPDATED' | 'MESSAGE_DELETED'
-  | 'THREAD_REPLIED'  | 'THREAD_RESOLVED'
-  | 'REACTION_CHANGED'
-  | 'TYPING' | 'PRESENCE' | 'READ_STATE'
-  | 'PONG';
-
-export interface ServerFrame<E extends ServerEvent, D> {
-  /** Echoes ClientFrame.id when this frame answers a specific client frame. */
-  refId?: string;
-  event: E;
-  data: D;
-  /** Server clock, for drift correction only. Never used for ordering. (D-8) */
-  ts: number;
-}
-```
+- **A client frame is `{ id, op, payload }`.** `id` is a client-generated UUIDv7; for `MESSAGE_SEND`
+  it *is* the message id, so the optimistic row and the stored row never differ (D-8).
+- **A server frame is `{ event, data, ts, refId? }`.** `refId` echoes the client frame it answers,
+  which is how an optimistic send is reconciled. `ts` is the server clock, for drift correction and
+  never for ordering — ordering is the id (D-8).
+- **A frame exists when the feature that sends it is built.** Phase 0 sends messages, subscribes,
+  unsubscribes and pings. Editing, deleting, thread replies and resolution, reactions, typing and
+  read state arrive with their Phase 1 features — added to the union then, so an exhaustive switch
+  over it breaks where a case is unhandled rather than carrying stubs for features that do not exist.
 
 ### 5.3. Send and reconcile
 
@@ -600,27 +582,28 @@ layering rule. (D-46)
 
 **Testing (D-21).**
 
-| Layer | What it proves |
-|---|---|
-| Unit | Service rules and the invariants in `SCHEMA.md` §11 |
-| Integration | Real PostgreSQL, real migrations, one per endpoint |
-| **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** |
-| **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search and open questions (D-34)** |
-| Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) |
-| Permission | Every role-gated action, per role |
-| Realtime | Two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency |
-| Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) |
-| Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) |
-| Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) |
-| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); erasure never removes a message (I-11) |
-| **Accessibility** | **`axe` clean on every component and every screen. A violation is fixed, never waived (D-52)** |
-| **Keyboard path** | **Every action reachable by mouse is reached by key, per screen (`UX.md` §7)** |
-| **Screen states** | **Loading, error and empty each render, per view. A missing state is missing specified behaviour (`UX.md` §8, D-53)** |
-| Visual regression | A snapshot per component and screen, in every theme that exists (D-52) |
-| Budget | Bundle and idle RSS against `PRD.md` §5 block; latency budgets block on a regression against the previous commit (D-49) |
+| Layer | What it proves | Today |
+|---|---|---|
+| Unit | Service rules and the invariants in `SCHEMA.md` §11 | `*.test.ts` |
+| Integration | Real PostgreSQL, real migrations, one per endpoint | `*.integration.test.ts` |
+| **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** | `ingress/http/cross-tenant*`, from `API.md` (D-63) |
+| **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search and open questions (D-34)** | `ingress/http/channel-visibility*` (D-64) |
+| Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) | `message-id.test.ts`, `messages.integration.test.ts` |
+| Permission | Every role-gated action, per role | With the first role-gated action (#51, #74) |
+| Realtime | Two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency | `realtime/*.integration.test.ts` |
+| Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |
+| Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) | Lint and `scripts/`; the rest is #130 |
+| Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) | With the audit log (#69) |
+| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); erasure never removes a message (I-11) | Phase 2 |
+| **Accessibility** | **`axe` clean on every component and every screen. A violation is fixed, never waived (D-52)** | Before the first screen (#139) |
+| **Keyboard path** | **Every action reachable by mouse is reached by key, per screen (`UX.md` §7)** | With the screens (#139) |
+| **Screen states** | **Loading, error and empty each render, per view. A missing state is missing specified behaviour (`UX.md` §8, D-53)** | With the screens (#139) |
+| Visual regression | A snapshot per component and screen, in every theme that exists (D-52) | #139 |
+| Budget | Bundle and idle RSS against `PRD.md` §5 block; latency budgets block on a regression against the previous commit (D-49) | #140 |
 
-`typecheck` + `lint` + `test` gate every merge. No `any`. Every bug fix ships with a regression
-test.
+The gate is `bun run verify`, which CI runs too: typecheck with both compilers, lint, format, every
+test through `test:all` held to the per-file coverage floor in `bunfig.toml`, the enforcement
+demonstration and the document checks. No `any`. Every bug fix ships with a regression test.
 
 ---
 
@@ -644,16 +627,20 @@ sits inside the volume so that a later `pg_upgrade --link` does not cross a moun
 Mounting the data directory works perfectly until an operator's first major upgrade — a problem we
 would have created for them.
 
-**One public origin.** `APP_URL` is the origin the browser uses; the API serves the built client
-from it, and in development Vite proxies `/auth`, `/api` and `/ws` to the API process so the two
-look identical to a browser. There is therefore no CORS to configure, the socket's `Origin`
+**One public origin.** `APP_URL` is the origin the browser uses. In development Vite proxies
+`/auth`, `/api` and `/ws` to the API process so the two look identical to a browser — that is
+built. In a deployment the API serves the built client from the same origin; that arrives with the
+prerendered shell (#141). There is therefore no CORS to configure, the socket's `Origin`
 check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
 
-`docker compose` brings up `api`, `postgres`, `minio` and a **scheduler** container that
-runs the CLI jobs on a cron (D-30). The scheduler ships wired by default: the known failure mode
-of external scheduling is the cron nobody installed, and every run records its outcome in
-`job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job. Migrations
-run on start and are idempotent.
+**The deployment, as designed — most of it not built yet.** Today `docker compose` runs the
+development database and object storage, and nothing else; the deployable stack is the self-host
+path of Phase 2. When it ships, `docker compose` brings up `api`, `postgres`, object storage (#183)
+and a **scheduler** container that runs the CLI jobs on a cron (#72, D-30). The scheduler ships
+wired by default: the known failure mode of external scheduling is the cron nobody installed, and
+every run records its outcome in `job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:status` can report
+*last successful run* per job. Migrations will run on start and are idempotent; today they are run
+with `bun run db:migrate`.
 
 Phase 3 introduces multiple API nodes behind a sticky-session load balancer and swaps in
 `RedisEventBus`, `SharedPresenceRegistry` and `SharedRateLimiter`. Nothing above changes: the

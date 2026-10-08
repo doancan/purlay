@@ -20,6 +20,7 @@ import { sql, type Executor } from '@purlay/db';
 import {
   isMessageIdShape,
   isPlausibleMessageId,
+  PAGE_LIMIT,
   type Message,
   type MessagePage,
 } from '@purlay/types';
@@ -28,10 +29,6 @@ import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
 import { channelTopic, type EventBus } from '../../platform/events';
 import type { Atomically } from '../../platform/transactions';
-
-/** `API.md` §1: capped at 100, defaulting to 50. */
-const MAX_PAGE = 100;
-const DEFAULT_PAGE = 50;
 
 interface MessageRow {
   readonly id: string;
@@ -200,7 +197,7 @@ export const messageHistory = async (
     });
   }
 
-  const limit = Math.min(Math.max(query.limit ?? DEFAULT_PAGE, 1), MAX_PAGE);
+  const limit = Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max);
   const forwards = query.after !== undefined;
 
   let statement = executor

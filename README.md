@@ -11,9 +11,9 @@ it** for a flat price per workspace. Both are the same code — there is no paid
 held back from self-hosters, and there never will be. **Adding a teammate never costs more**, on
 either one.
 
-> **Status: pre-alpha. No code yet.** The design is complete and documented; Phase 0 has not
-> started. See [Project status](#project-status) before investing time. This README describes
-> what is being built, not what runs today.
+> **Status: pre-alpha, and not usable yet.** Work is in Phase 0; how far along it is lives on the
+> issue board, not here — see [Project status](#project-status). This README describes what is
+> being built, not what runs today.
 
 ---
 
@@ -50,13 +50,18 @@ than waste your afternoon.
 
 ## Project status
 
-| Phase | Goal | Done when | State |
-|---|---|---|---|
-| **0** | Walking skeleton | Two tabs, two GitHub users, a message in real time that survives an API restart | **Not started** |
-| **1** | MVP | The maintainer's own team stops opening Slack for 30 days | Not started |
-| **2** | Community-ready | A stranger self-hosts it from this README without opening an issue | Not started |
-| **2.5** | Cloud | A team pays for a workspace and stays a second month | Not started |
-| **3** | Polish | Desktop app, mobile | Not started |
+| Phase | Goal | Done when |
+|---|---|---|
+| **0** | Walking skeleton | Two tabs, two GitHub users, a message in real time that survives an API restart |
+| **1** | MVP | The maintainer's own team stops opening Slack for 30 days |
+| **2** | Community-ready | A stranger self-hosts it from this README without opening an issue |
+| **2.5** | Cloud | A team pays for a workspace and stays a second month |
+| **3** | Polish | Desktop app, mobile |
+
+Where each phase stands is the milestone of the same number on the issue board, and
+`bun run queue` prints what is startable now. Not a column here: a progress line in a document is
+wrong the day the next pull request merges — this one said *not started* about a phase whose server
+was nearly built.
 
 Self-hosting instructions land in Phase 2. Until then there is nothing to deploy.
 

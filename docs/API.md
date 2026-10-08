@@ -51,11 +51,12 @@ account for it. `message` is for humans and may change. (D-47)
 |---|---|
 | `400` | Validation failed — `details` names the fields. Never the submitted value and never the schema: a typo must not come back as a description of the server's own rules (`docs/spikes/elysia.md`) |
 | `401` | No session, or the session is expired or revoked |
-| `403` | Authenticated and in the workspace, but the role is insufficient |
+| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a socket upgrade from another origin, a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33) |
 | `413` | Upload exceeds `attachment_size_limit` |
 | `429` | Rate limited |
+| `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
 
 **Idempotency.** `POST` of a message carries a client-generated UUIDv7 as its `id`. Re-sending
 the same id **by the same sender in the same channel** is a no-op that returns the existing
@@ -71,14 +72,14 @@ without disclosing it. (D-33)
 |:-:|---|---|---|
 | ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
 | ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL` |
-
-Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
-and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id`.
-Neither case is linked silently. (D-38)
 | ○ | `POST` | `/auth/logout` | Revokes the current session |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user plus workspace memberships |
 | ② | `POST` | `/api/me/erase` | Anonymises the account and revokes every session. **Never cascades to messages** (D-27) |
+
+Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
+and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id`.
+Neither case is linked silently. (D-38)
 
 `state` verification is mandatory: without it the callback is a CSRF endpoint that signs
 victims into an attacker's account. (`ARCHITECTURE.md` §7.1)

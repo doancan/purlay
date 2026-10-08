@@ -6,6 +6,11 @@ fail loudly at startup, never at 3am on the first request that needs it.
 
 Variables marked **required** have no default. Anything holding a secret is never logged.
 
+**These tables are the whole set, built and planned.** The variables the application reads *today*
+are exactly the ones in `.env.example`, which is generated from the configuration loader and
+checked in CI — a variable is read when the feature that needs it is built, never before, because
+validating a value nothing acts on tells an operator a setting works when it does not.
+
 ---
 
 ## Core
@@ -15,8 +20,8 @@ Variables marked **required** have no default. Anything holding a secret is neve
 | `NODE_ENV` | — | `development` | `development` \| `test` \| `production` |
 | `PORT` | — | `3001` | API listen port |
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Must be `https://` in production. |
-| `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error` |
-| `TRUST_PROXY` | — | `false` | Set `true` behind a reverse proxy so client IPs in `sessions.ip_address` are real |
+| `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. Read once structured logging ships (#127) |
+| `TRUST_PROXY` | — | `false` | Set `true` behind a reverse proxy so client IPs in `sessions.ip_address` are real. Not read yet: nothing records a session's address today |
 
 ## Database
 
@@ -70,7 +75,7 @@ workspace membership is actually checked (`ARCHITECTURE.md` §9).
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `DEFAULT_LOCALE` | — | `en` | `en` \| `tr`. The fallback when the browser asks for neither (D-41) |
+| `DEFAULT_LOCALE` | — | `en` | `en` \| `tr`. The fallback when the browser asks for neither (D-41). Read once the interface is translated (#109) |
 
 ## Cloud only — Phase 2.5
 
@@ -94,13 +99,15 @@ configure what is not already a database constraint.
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `WS_RATE_LIMIT_PER_SECOND` | — | `10` | Provisional pending **O-4** |
-| `WS_RATE_LIMIT_BURST` | — | `20` | Provisional pending **O-4** |
-| `WS_MAX_FRAME_BYTES` | — | `65536` | 64 KB (`ARCHITECTURE.md` §5.5) |
 | `UNFURL_CACHE_TTL_SECONDS` | — | `300` | Positive cache (`ARCHITECTURE.md` §8.3) |
 | `UNFURL_NEGATIVE_TTL_SECONDS` | — | `3600` | Negative cache — without it one dead link re-hits the GitHub API forever |
 
-> Attachment size is **not** configurable here: it is enforced by the `attachment_size_limit`
+> The socket's limits are **not** configurable here. The frame cap is part of the wire contract —
+> `MAX_FRAME_BYTES` in `@purlay/types` — so an operator changing it would part the server from every
+> client built against it. The rate budget is one provisional number until **O-4** closes, in
+> `apps/api/src/realtime/rate-limiter.ts` (D-66).
+>
+> Attachment size is **not** configurable here either: it is enforced by the `attachment_size_limit`
 > CHECK constraint in `SCHEMA.md` §7.2. Changing it is a migration, deliberately — a limit the
 > database enforces cannot be silently widened by an environment variable.
 > Per-workspace storage quota is a column (`workspaces.storage_quota_bytes`), not an env var,
@@ -123,8 +130,9 @@ into a support ticket (`PRD.md` §3, S-2):
 | `MINIO_PORT` | `9000` | S3 API |
 | `MINIO_CONSOLE_PORT` | `9001` | MinIO console |
 
-A `.env.example` ships with Phase 0 and must list every variable above — a variable added to the
-loader without being added there is a bug.
+`.env.example` lists exactly the variables the loader reads. It is generated from the loader
+(`bun run config:example`), and CI fails if the committed file differs, so it cannot list a
+variable the application ignores or miss one it reads.
 
 **Database provisioning.** Identifier columns declare `COLLATE "C"` in the migrations, so the
 server locale cannot change how channel names or emails compare (D-40). `/health/ready` asserts

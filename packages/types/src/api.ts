@@ -43,12 +43,20 @@ export const Page = <T extends TSchema>(
 ): TObject<{ data: TArray<T>; nextCursor: TUnion<[TString, TNull]> }> =>
   Type.Object({ data: Type.Array(item), nextCursor: Type.Union([Uuid, Type.Null()]) });
 
+/**
+ * How long a page is: capped, with a default. One definition — the server's clamp
+ * and the contract's schema read it, and `API.md` §1 states it, bound by a test.
+ */
+export const PAGE_LIMIT = { max: 100, default: 50 } as const;
+
 export const PageQuery = FromClient({
   /** Older than this id. */
   before: Type.Optional(Uuid),
   /** Newer than this id. */
   after: Type.Optional(Uuid),
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 50 })),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
 });
 export type PageQuery = Static<typeof PageQuery>;
 

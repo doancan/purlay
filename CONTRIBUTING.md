@@ -120,7 +120,7 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
   is prohibited. **Zustand owns realtime and optimistic state** (socket, pending sends,
   presence). The boundary is in D-18 — if it arrived over HTTP it is Query's; if it arrived
   over the socket or has not been sent yet it is Zustand's.
-- Every screen handles **loading, error and empty** states, and a test asserts all four render.
+- Every screen handles **loading, error and empty** states, and a test asserts all three render.
   An empty channel is a designed state, not a blank div. **No screen merges with a state
   unhandled** — that is missing specified behaviour, not missing polish. (D-53)
 - **No raw visual values anywhere** — colour, spacing, type size, radius, shadow, motion duration

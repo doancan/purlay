@@ -1,18 +1,23 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { ERROR_STATUS, statusFor, type ErrorCode } from './errors';
 
 const codes = Object.keys(ERROR_STATUS) as ErrorCode[];
 /**
- * Not a second list of the statuses this API may return — that is `HttpStatus`
- * itself, and a copy here would be the drift `CONTRIBUTING.md` §6.1 forbids.
- * These are the ones `API.md` §1 tabulates, and the test below is that every
- * status a code produces is among them.
+ * The statuses `API.md` §1 tabulates, read from its table rather than copied —
+ * the copy that was here listed one the table did not (#201). Every status a
+ * code produces must be among them.
  */
-const allowed: readonly number[] = [400, 401, 403, 404, 409, 413, 429, 500];
+const allowed: readonly number[] = [
+  ...readFileSync('docs/API.md', 'utf8').matchAll(/^\| `(\d{3})` \|/gm),
+].map((match) => Number(match[1]));
 
 describe('the error contract', () => {
   test('every code has a status, and it is one API.md allows', () => {
     expect(codes.length).toBeGreaterThan(0);
+    // The table was read: a pattern that matched nothing would allow nothing and
+    // fail below, but for the wrong reason.
+    expect(allowed).toContain(404);
     for (const code of codes) {
       expect(allowed).toContain(statusFor(code));
     }

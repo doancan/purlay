@@ -34,8 +34,6 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   NODE_ENV: 'test',
   PORT: 3001,
   APP_URL: 'https://purlay.test',
-  LOG_LEVEL: 'info',
-  TRUST_PROXY: false,
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
   DATABASE_SSL: false,
@@ -43,7 +41,6 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   GITHUB_CLIENT_SECRET: 'client-secret',
   ENCRYPTION_KEY: 'ZGV2ZWxvcG1lbnQtb25seS10aGlydHktdHdvLWJ5dGVzIQ==',
   SESSION_TTL_DAYS: 30,
-  DEFAULT_LOCALE: 'en',
   ...overrides,
 });
 

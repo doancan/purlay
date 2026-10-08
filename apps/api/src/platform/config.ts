@@ -27,16 +27,9 @@ export const Environment = Type.Object({
   ),
   PORT: Type.Integer({ minimum: 1, maximum: 65_535, default: 3001 }),
 
-  /** Public origin of the web client. Used for OAuth redirects, CORS, and the
-   *  `Origin` check on the socket upgrade that stops cross-site hijacking (D-39). */
+  /** The one public origin (D-61): the OAuth callback, and the `Origin` check on
+   *  the socket upgrade that stops cross-site hijacking (D-39). There is no CORS. */
   APP_URL: Type.String({ format: 'uri' }),
-
-  LOG_LEVEL: Type.Union(
-    [Type.Literal('debug'), Type.Literal('info'), Type.Literal('warn'), Type.Literal('error')],
-    { default: 'info' },
-  ),
-  /** Behind a reverse proxy, so the address recorded on a session is the real one. */
-  TRUST_PROXY: Type.Boolean({ default: false }),
 
   DATABASE_URL: Type.String({ minLength: 1 }),
   DATABASE_POOL_MAX: Type.Integer({ minimum: 1, maximum: 100, default: 10 }),
@@ -53,8 +46,6 @@ export const Environment = Type.Object({
   /** Phase 0 has no invitations, so without this a second person cannot join a
    *  workspace and the phase cannot reach its own exit criterion (D-37). */
   WORKSPACE_OPEN_JOIN_SLUG: Type.Optional(Type.String({ minLength: 1 })),
-
-  DEFAULT_LOCALE: Type.Union([Type.Literal('en'), Type.Literal('tr')], { default: 'en' }),
 });
 
 export type Config = Static<typeof Environment>;

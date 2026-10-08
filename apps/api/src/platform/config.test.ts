@@ -28,14 +28,14 @@ describe('loading configuration', () => {
     const config = loadConfig(valid);
     expect(config.PORT).toBe(3001);
     expect(config.DATABASE_POOL_MAX).toBe(10);
-    expect(config.LOG_LEVEL).toBe('info');
-    expect(config.DEFAULT_LOCALE).toBe('en');
+    expect(config.SESSION_TTL_DAYS).toBe(30);
+    expect(config.DATABASE_SSL).toBe(false);
   });
 
   test('strings become the type they were declared as', () => {
-    const config = loadConfig({ ...valid, PORT: '8080', TRUST_PROXY: 'true' });
+    const config = loadConfig({ ...valid, PORT: '8080', DATABASE_SSL: 'true' });
     expect(config.PORT).toBe(8080);
-    expect(config.TRUST_PROXY).toBe(true);
+    expect(config.DATABASE_SSL).toBe(true);
   });
 
   test('a missing required variable refuses the whole configuration', () => {
@@ -108,7 +108,7 @@ describe('loading configuration', () => {
   });
 
   test('an invalid enumerated value is refused rather than coerced', () => {
-    expect(() => loadConfig({ ...valid, LOG_LEVEL: 'chatty' })).toThrow(ConfigurationError);
+    expect(() => loadConfig({ ...valid, NODE_ENV: 'staging' })).toThrow(ConfigurationError);
   });
 });
 
