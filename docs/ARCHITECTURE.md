@@ -377,7 +377,7 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
    refreshed from GitHub's `login` and is display-only; a collision caused by a rename is stored
    with a numeric suffix and logged.
 4. Generate a 32-byte random token. Store **only its SHA-256** in `sessions`. (D-11)
-5. Set `purlay_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, 30-day expiry.
+5. Set the session cookie — named, with its attributes, in `apps/api/src/ingress/http/cookies.ts`: `__Host-`-prefixed, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30-day expiry — and spend the `state` cookie, on this and every other outcome. (D-62)
 
 `state` verification is not optional — without it the callback is a CSRF endpoint that logs
 victims into an attacker's account. The cookie carrying it is **signed**, with a key derived from

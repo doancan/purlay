@@ -32,6 +32,7 @@ import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
+import { SESSION_COOKIE } from '../ingress/http/cookies';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -93,7 +94,7 @@ const aUser = async (name: string): Promise<{ id: string; cookie: string }> => {
     .returning('id')
     .executeTakeFirstOrThrow();
   const { token } = await issueSession(db, clock, row.id, 30);
-  return { id: row.id, cookie: `purlay_session=${token}` };
+  return { id: row.id, cookie: `${SESSION_COOKIE}=${token}` };
 };
 
 /** Alice owns a workspace with one channel; Bob is a member who has joined it. */
@@ -538,7 +539,7 @@ describe('integration: two real sockets', () => {
       const alice = await aUser('alice');
       const otherDevice = await issueSession(db, clock, alice.id, 30);
       const here = await connect(alice.cookie);
-      const there = await connect(`purlay_session=${otherDevice.token}`);
+      const there = await connect(`${SESSION_COOKIE}=${otherDevice.token}`);
       await stillServed(here);
 
       expect((await http('POST', '/auth/logout', alice.cookie)).status).toBe(204);
@@ -554,7 +555,7 @@ describe('integration: two real sockets', () => {
       const bob = await aUser('bob');
       const second = await issueSession(db, clock, alice.id, 30);
       const phone = await connect(alice.cookie);
-      const laptop = await connect(`purlay_session=${second.token}`);
+      const laptop = await connect(`${SESSION_COOKIE}=${second.token}`);
       const bystander = await connect(bob.cookie);
       await stillServed(phone);
 
@@ -577,7 +578,7 @@ describe('integration: two real sockets', () => {
         .set({ expires_at: new Date(NOW.getTime() + 300) })
         .where('user_id', '=', alice.id)
         .execute();
-      const socket = await connect(`purlay_session=${token}`);
+      const socket = await connect(`${SESSION_COOKIE}=${token}`);
       expect(await endedWith(socket, 'expired')).toMatchObject({ code: CLOSE_CODES.SESSION_ENDED });
     });
   });

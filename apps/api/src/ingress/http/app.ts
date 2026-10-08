@@ -21,12 +21,13 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
-import { Elysia } from 'elysia';
+import { Elysia, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
+import { clearedStateCookie } from './cookies';
 import { refusalFor } from './errors';
 import {
   createMyWorkspace,
@@ -78,16 +79,16 @@ const HEALTH = { status: 'ok' } as const;
  * cookie and a redirect are applied — once, rather than four times.
  */
 const respond = (
-  set: { status?: number | string; headers: Record<string, string | number | undefined> },
+  set: { status?: number | string; headers: HTTPHeaders },
   result: AuthResponse,
 ): string => {
-  set.headers['set-cookie'] = result.setCookie;
+  set.headers['set-cookie'] = [...result.setCookie];
   if (result.location === undefined) {
     set.status = 204;
     return '';
   }
   set.status = 302;
-  set.headers['location'] = result.location;
+  set.headers.location = result.location;
   return '';
 };
 
@@ -119,9 +120,13 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get('/health', () => HEALTH)
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
-    .get('/auth/github/callback', async ({ request, set }) =>
-      respond(set, await completeSignIn(dependencies, request)),
-    )
+    .get('/auth/github/callback', async ({ request, set }) => {
+      // Spent whatever happens next: set before the handler runs, so a refusal
+      // carries it too — measured, a header set before a throw survives into
+      // the error response (#199).
+      set.headers['set-cookie'] = clearedStateCookie();
+      return respond(set, await completeSignIn(dependencies, request));
+    })
     .post('/auth/logout', async ({ request, set }) =>
       respond(set, await signOut({ ...dependencies, bus }, request)),
     )

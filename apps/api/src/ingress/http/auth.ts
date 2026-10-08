@@ -29,31 +29,15 @@ import {
   revokeAllSessions,
   revokeSession,
 } from '../../modules/auth/sessions';
-import { clearedSessionCookie, sessionCookie, sessionTokenFrom } from './cookies';
-
-const STATE_COOKIE = 'purlay_oauth_state';
-
-/**
- * `Path=/auth` so it is sent to the callback and nowhere else, and a ten-minute
- * `Max-Age` so an abandoned sign-in does not leave one behind.
- */
-const stateCookie = (value: string): string =>
-  `${STATE_COOKIE}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=600`;
-
-const clearedStateCookie = (): string =>
-  `${STATE_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=0`;
-
-const cookieFrom = (header: string | null, name: string): string | undefined => {
-  if (header === null) return undefined;
-  for (const part of header.split(';')) {
-    const separator = part.indexOf('=');
-    if (separator === -1) continue;
-    if (part.slice(0, separator).trim() !== name) continue;
-    const value = part.slice(separator + 1).trim();
-    return value === '' ? undefined : value;
-  }
-  return undefined;
-};
+import {
+  clearedSessionCookie,
+  clearedStateCookie,
+  readCookie,
+  sessionCookie,
+  sessionTokenFrom,
+  stateCookie,
+  STATE_COOKIE,
+} from './cookies';
 
 export interface AuthDependencies {
   readonly config: Config;
@@ -88,7 +72,8 @@ const endConnections = async (
 
 /** What a handler decided. `location` set means a redirect; otherwise `204`. */
 export interface AuthResponse {
-  readonly setCookie: string;
+  /** Each a separate `Set-Cookie` header. */
+  readonly setCookie: readonly string[];
   readonly location?: string;
 }
 
@@ -96,7 +81,7 @@ export const startSignIn = async (dependencies: AuthDependencies): Promise<AuthR
   const { config, clock } = dependencies;
   const { state, cookieValue } = await issueState(config.ENCRYPTION_KEY, clock);
   return {
-    setCookie: stateCookie(cookieValue),
+    setCookie: [stateCookie(cookieValue)],
     location: authorizeUrl(
       {
         clientId: config.GITHUB_CLIENT_ID,
@@ -120,7 +105,7 @@ export const completeSignIn = async (
   const valid = await verifyState(
     config.ENCRYPTION_KEY,
     clock,
-    cookieFrom(request.headers.get('cookie'), STATE_COOKIE),
+    readCookie(request.headers.get('cookie'), STATE_COOKIE),
     returned,
   );
   if (!valid || code === undefined) {
@@ -147,7 +132,8 @@ export const completeSignIn = async (
     userAgent: request.headers.get('user-agent') ?? undefined,
   });
 
-  return { setCookie: sessionCookie(session), location: config.APP_URL };
+  // The state is spent: a callback consumes it, so it cannot be replayed (#199).
+  return { setCookie: [sessionCookie(session), clearedStateCookie()], location: config.APP_URL };
 };
 
 /** Signing out with no session is not an error: the outcome asked for is already true. */
@@ -160,7 +146,7 @@ export const signOut = async (
     const revoked = await revokeSession(dependencies.database, dependencies.clock, token);
     if (revoked !== undefined) await endConnections(dependencies, [revoked]);
   }
-  return { setCookie: clearedSessionCookie() };
+  return { setCookie: [clearedSessionCookie()] };
 };
 
 /** Signing out *everywhere* needs to know who you are, so it needs a live session. */
@@ -175,9 +161,7 @@ export const signOutEverywhere = async (
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
   }
   await endConnections(dependencies, await revokeAllSessions(database, clock, owner.userId));
-  return { setCookie: clearedSessionCookie() };
+  return { setCookie: [clearedSessionCookie()] };
 };
 
-/** Only for the state cookie's own tests; the name is not part of the contract. */
-export const STATE_COOKIE_NAME = STATE_COOKIE;
 export { clearedStateCookie };

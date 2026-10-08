@@ -10,7 +10,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
-import { SESSION_COOKIE } from './cookies';
+import { SESSION_COOKIE, STATE_COOKIE } from './cookies';
 import { NOW, aGitHubAccount, testConfig, testDependencies } from './testing';
 import type { Config } from '../../platform/config';
 
@@ -93,9 +93,58 @@ describe('integration: signing in with GitHub', () => {
       expect(location.searchParams.get('state')).toHaveLength(32);
 
       const cookie = response.headers.get('set-cookie') ?? '';
+      expect(cookie).toStartWith(`${STATE_COOKIE}=`);
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('SameSite=Lax');
-      expect(cookie).toContain('Path=/auth');
+    });
+  });
+
+  /**
+   * Regression for #199. A sibling subdomain can set a cookie for this origin
+   * unless its name carries `__Host-`, which a browser accepts only with `Secure`,
+   * `Path=/` and no `Domain`. Each of those is asserted, because dropping any one
+   * makes the browser ignore the prefix's guarantee — or the cookie itself.
+   */
+  test('both cookies are ones a sibling subdomain cannot plant', async () => {
+    await withRollback(async (db) => {
+      const started = await appFor(db).handle(new Request(`${ORIGIN}/auth/github`));
+      const signedIn = await startAndCallback(db);
+      const cookies = [...started.headers.getSetCookie(), ...signedIn.headers.getSetCookie()];
+      expect(cookies.map((c) => c.split('=')[0])).toEqual([
+        STATE_COOKIE,
+        SESSION_COOKIE,
+        STATE_COOKIE,
+      ]);
+      for (const cookie of cookies) {
+        const attributes = cookie
+          .split(';')
+          .slice(1)
+          .map((part) => part.trim());
+        expect({ cookie, prefixed: cookie.startsWith('__Host-') }).toEqual({
+          cookie,
+          prefixed: true,
+        });
+        expect(attributes).toContain('Secure');
+        expect(attributes).toContain('Path=/');
+        expect(attributes.some((a) => a.toLowerCase().startsWith('domain'))).toBe(false);
+      }
+    });
+  });
+
+  test('a callback spends its state whatever the outcome', async () => {
+    await withRollback(async (db) => {
+      const spent = (response: Response): boolean =>
+        response.headers
+          .getSetCookie()
+          .some((cookie) => cookie.startsWith(`${STATE_COOKIE}=;`) && cookie.includes('Max-Age=0'));
+
+      const signedIn = await startAndCallback(db);
+      expect(signedIn.status).toBe(302);
+      expect(spent(signedIn)).toBe(true);
+
+      const refused = await startAndCallback(db, { tamperState: true });
+      expect(refused.status).toBe(400);
+      expect(spent(refused)).toBe(true);
     });
   });
 

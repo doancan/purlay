@@ -1881,6 +1881,16 @@ rotates.
 the integration-token cipher cannot interact, and rotating the root invalidates in-flight sign-ins
 — a ten-minute window, which is the intended cost of rotating a root secret.
 
+**Corrected 2026-10-08 (#199): the signature does not stop cookie tossing, and the first paragraph
+said it did.** An attacker can ask `/auth/github` for a validly signed state of their own, plant that
+cookie from a sibling subdomain, and send the victim to the callback with their own code — the victim
+is signed into the attacker's account. The signature proves the server issued the state; it cannot
+prove the server issued it *to this browser*. What stops the planting is the cookie's name: both the
+state and the session cookie are `__Host-`-prefixed, which a browser accepts only from this origin,
+`Secure`, with `Path=/` and no `Domain`. The state is also spent by every callback, accepted or
+refused, so it cannot be replayed within its ten minutes. The signature stays: it is what keeps a
+cookie this server did not issue from being accepted at all.
+
 ---
 
 ### D-63. Which endpoints need a cross-tenant test is read from `API.md`, not remembered

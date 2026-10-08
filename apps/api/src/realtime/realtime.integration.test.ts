@@ -20,6 +20,7 @@ import { atomicallyOn } from '../platform/transactions';
 import { replayPerChannel, routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
+import { SESSION_COOKIE } from '../ingress/http/cookies';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -56,7 +57,7 @@ const signedIn = async (
     .returning('id')
     .executeTakeFirstOrThrow();
   const { token } = await issueSession(db, clock, row.id, 30);
-  return { userId: row.id, cookie: `purlay_session=${token}` };
+  return { userId: row.id, cookie: `${SESSION_COOKIE}=${token}` };
 };
 
 const aChannel = async (

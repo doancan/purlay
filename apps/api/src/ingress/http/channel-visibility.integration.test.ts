@@ -23,6 +23,7 @@ import { CROSS_TENANT, pathFor } from './cross-tenant';
 import { NOW, testDependencies } from './testing';
 import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
+import { SESSION_COOKIE } from './cookies';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -55,7 +56,7 @@ const aUser = async (db: Executor, name: string): Promise<{ id: string; cookie: 
     .returning('id')
     .executeTakeFirstOrThrow();
   const { token } = await issueSession(db, clock, row.id, 30);
-  return { id: row.id, cookie: `purlay_session=${token}` };
+  return { id: row.id, cookie: `${SESSION_COOKIE}=${token}` };
 };
 
 const created = async (response: Response): Promise<string> => {
