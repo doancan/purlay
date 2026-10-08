@@ -72,6 +72,11 @@ not add it. Closed by D-57 at the contract, not per route.
   `object`, not `string`. A non-JSON payload arrives as a string. The router accepts both, and the
   64 KB frame cap cannot be enforced from there for the JSON case (issue #174).
 - **`maxPayloadLength` was not verified.** The probe hung and was abandoned rather than guessed at.
+  *Measured 2026-10-08 (#174), Elysia 1.4.30, Bun 1.4.2, each step under its own timeout:* on the
+  `.ws()` route it is **ignored** — a 100 KB frame reached the handler with it set to 64 KB. On the
+  application (`new Elysia({ websocket: { maxPayloadLength } })`) it is enforced: the same frame
+  ended the connection (the client saw code 1006) and no handler ran, while 60 KB passed. Nothing
+  was loosened; the per-route form is simply not the one that works. (D-66)
 
 ## Two things worth knowing
 

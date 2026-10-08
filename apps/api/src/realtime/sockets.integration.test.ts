@@ -21,6 +21,8 @@ import { cloneIntegrationDatabase, type ClonedDatabase, type Executor } from '@p
 import { Value } from '@sinclair/typebox/value';
 import { MESSAGE_ID_SKEW, messageId, ServerFrame } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
+import { MAX_FRAME_BYTES } from './router';
+import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
@@ -121,12 +123,19 @@ interface Client {
     what: string,
   ) => Promise<void>;
   readonly close: () => Promise<void>;
+  /** Settles with the close code when the connection ends, whoever ended it. */
+  readonly ended: Promise<number>;
 }
 
 const connect = async (cookie: string): Promise<Client> => {
   const socket = new WebSocket(`${origin.replace('http', 'ws')}/ws`, {
     headers: { cookie, origin },
   } as unknown as string[]);
+  const ended = new Promise<number>((resolve) => {
+    socket.addEventListener('close', (event) => {
+      resolve(event.code);
+    });
+  });
   const frames: ServerFrame[] = [];
   // Every frame on the wire must be one the contract declares. The router builds
   // frames behind a cast, so the compiler cannot see a wrong one; this can. Kept
@@ -168,14 +177,10 @@ const connect = async (cookie: string): Promise<Client> => {
     },
     close: async (): Promise<void> => {
       conforms();
-      const closed = new Promise<void>((resolve) => {
-        socket.addEventListener('close', () => {
-          resolve();
-        });
-      });
       socket.close();
-      await closed;
+      await ended;
     },
+    ended,
   };
 };
 
@@ -360,12 +365,20 @@ describe('integration: two real sockets', () => {
   /** Regression: a replay longer than a page used to end without saying so. */
   test('a reconnect that missed more than a page is told where to continue', async () => {
     const room = await aRoom();
-    const alice = await connect(room.alice);
-    const seen = sendMessage(alice, room.channelId, 'before', at(0));
-    const missed = Array.from({ length: 150 }, (_, i) =>
-      sendMessage(alice, room.channelId, `m${String(i)}`, at(i + 1)),
-    );
-    await alice.until((frames) => missed.every((id) => ack(frames, id) !== undefined), 'the ACKs');
+    // Written over HTTP: a hundred and fifty frames from one socket would be
+    // refused by the rate limiter, which is a different test.
+    const post = async (content: string, offset: number): Promise<string> => {
+      const id = messageId(at(offset));
+      const response = await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+        id,
+        content,
+      });
+      expect(response.status).toBe(201);
+      return id;
+    };
+    const seen = await post('before', 0);
+    const missed: string[] = [];
+    for (let i = 0; i < 150; i += 1) missed.push(await post(`m${String(i)}`, i + 1));
 
     const bob = await connect(room.bob);
     const nextCursor = await subscribe(bob, room.channelId, seen);
@@ -386,7 +399,78 @@ describe('integration: two real sockets', () => {
       cursor = page.nextCursor;
     }
     expect(missedOnly(recovered, [seen])).toEqual(missed);
-    await alice.close();
     await bob.close();
+  });
+
+  /**
+   * §5.5's cap, refused by the running server rather than read from a config.
+   * The framework's per-route option of the same name is ignored; this is the
+   * test that would have noticed (`docs/spikes/elysia.md`).
+   */
+  test('a frame over 64 KB ends that connection, writes nothing, and nobody else notices', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+    const bob = await connect(room.bob);
+    await subscribe(bob, room.channelId);
+
+    const id = messageId(NOW);
+    alice.send({
+      id,
+      op: 'MESSAGE_SEND',
+      payload: { channelId: room.channelId, content: 'x'.repeat(MAX_FRAME_BYTES) },
+    });
+    const outcome = await Promise.race([alice.ended, Bun.sleep(5_000).then(() => 'still open')]);
+    expect(typeof outcome).toBe('number');
+    expect(ack(alice.frames, id)).toBeUndefined();
+    expect(await history(room.alice, room.channelId)).toEqual([]);
+
+    // The server is still serving everyone else.
+    const after = sendMessage(bob, room.channelId, 'still here');
+    await bob.until((frames) => ack(frames, after) !== undefined, 'the other socket to be served');
+
+    // And a frame just under the cap is not refused: the limit is the cap, not lower.
+    const fits = await connect(room.alice);
+    const near = messageId(at(1));
+    fits.send({
+      id: near,
+      op: 'MESSAGE_SEND',
+      payload: { channelId: room.channelId, content: 'y'.repeat(MAX_FRAME_BYTES - 1_024) },
+    });
+    await fits.until(
+      (frames) => ack(frames, near) !== undefined,
+      'a frame under the cap to be accepted',
+    );
+    await fits.close();
+    await bob.close();
+  });
+
+  test('a connection that sends past its budget is refused frame by frame, by id', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+    const sent = Array.from({ length: SOCKET_FRAME_BUDGET.burst + 5 }, (_, i) => {
+      const id = messageId(at(i));
+      alice.send({ id, op: 'PING', payload: {} });
+      return id;
+    });
+    await alice.until(
+      (frames) => sent.every((id) => frames.some((f) => f.refId === id)),
+      'an answer to every ping',
+    );
+    const answers = sent.map((id) => alice.frames.find((f) => f.refId === id));
+    expect(answers.filter((f) => f?.event === 'PONG')).toHaveLength(SOCKET_FRAME_BUDGET.burst);
+    const refused = answers.filter((f) => f?.event === 'ERROR');
+    expect(new Set(refused.map((f) => f.data.code))).toEqual(new Set(['RATE_LIMITED' as const]));
+    expect(refused).toHaveLength(5);
+
+    // The budget is the connection's: another connection of the same user starts full.
+    const again = await connect(room.alice);
+    const fresh = messageId(NOW);
+    again.send({ id: fresh, op: 'PING', payload: {} });
+    await again.until(
+      (frames) => frames.some((f) => f.refId === fresh && f.event === 'PONG'),
+      'a pong',
+    );
+    await alice.close();
+    await again.close();
   });
 });
