@@ -288,16 +288,16 @@ client continues over HTTP with `?after=` from there. (D-65)
 Every fan-out goes through one interface, so Phase 3's move to Redis is an adapter swap rather
 than a refactor. (D-7)
 
-```typescript
-export interface EventBus {
-  publish<E extends ServerEvent, D>(topic: Topic, frame: ServerFrame<E, D>): Promise<void>;
-  subscribe(topic: Topic, socketId: string): void;
-  unsubscribe(topic: Topic, socketId: string): void;
-}
+The interface and the topic names are `apps/api/src/platform/events.ts`; `Topic` itself is part of
+the wire contract in `@purlay/types`. Not restated here: the copy that was here had already lost a
+method and a topic. The interface sits in the bottom layer because both sides of it are above —
+services publish, the hub subscribes — and a service that publishes must not import the layer that
+imports it.
 
-/** `workspace:{id}` · `channel:{id}` · `user:{id}` */
-export type Topic = string;
-```
+**One send path.** `send` in `modules/messages` owns the order D-35 fixes — one transaction, publish
+after the commit, acknowledge after the publish — and both doors call it, so HTTP is a fallback
+with the same guarantees rather than a second implementation. Its boundary is `atomicallyOn`
+(`platform/transactions.ts`): a new transaction, or the caller's when there is one.
 
 - **Phase 0–2:** `InProcessEventBus` — a `Map<Topic, Set<socketId>>`. No network, no
   serialization, no broker to operate.

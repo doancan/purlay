@@ -14,7 +14,9 @@ import { fixedClock } from '../platform/clock';
 import { issueSession } from '../modules/auth/sessions';
 import { createApp } from '../ingress/http/app';
 import { testDependencies } from '../ingress/http/testing';
-import { channelTopic, inProcessEventBus } from './bus';
+import { inProcessEventBus } from './bus';
+import { channelTopic } from '../platform/events';
+import { atomicallyOn } from '../platform/transactions';
 import { routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
@@ -149,10 +151,8 @@ describe('integration: the frame router', () => {
         clock,
         bus,
         limiter,
-        // Already inside the transaction the harness will roll back, so this is
-        // where the boundary is. The shape under test — write, then publish, then
-        // acknowledge — is the same one production runs.
-        atomically: async (body) => await body(db),
+        // The production boundary: inside the harness's transaction it joins it.
+        atomically: atomicallyOn(db),
       },
       { socketId: 's1', sessionId: 'not-read-by-the-router', expiresAt: NOW, ...identity },
       raw,

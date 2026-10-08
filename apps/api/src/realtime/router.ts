@@ -34,8 +34,9 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { AppError } from '../platform/errors';
 import { requireChannelById } from '../platform/channels';
-import { messageHistory, sendMessage } from '../modules/messages/messages';
-import { channelTopic, type EventBus } from './bus';
+import { messageHistory, send } from '../modules/messages/messages';
+import { channelTopic, type EventBus } from '../platform/events';
+import type { Atomically } from '../platform/transactions';
 import type { RateLimiter } from './rate-limiter';
 
 /** How many missed messages a reconnect replays per channel before giving up on catching up. */
@@ -43,18 +44,8 @@ const REPLAY_LIMIT = 100;
 
 export interface RouterDependencies {
   readonly database: Executor;
-  /**
-   * How to run the write path atomically (D-35).
-   *
-   * A dependency rather than a call to `database.transaction()`, for the reason
-   * D-46 makes every executor an argument: a function that opens its own
-   * transaction cannot be run inside one, and the integration harness runs
-   * everything inside one it rolls back. Production supplies the real boundary;
-   * a test supplies the transaction it is already in. The *shape* — one
-   * transaction, publish after it returns — is identical either way, which is
-   * what the tests are checking.
-   */
-  readonly atomically: <T>(body: (executor: Executor) => Promise<T>) => Promise<T>;
+  /** The write path's transaction boundary (D-35, `platform/transactions.ts`). */
+  readonly atomically: Atomically;
   readonly clock: Clock;
   readonly bus: EventBus;
   /** Keyed by connection (§5.5). */
@@ -231,24 +222,12 @@ export const routeFrame = async (
           parsed.payload.channelId,
         );
 
-        // One transaction. Everything the write touches commits together or none
-        // of it does (D-35).
-        const message = await dependencies.atomically(
-          async (transaction) =>
-            await sendMessage(transaction, clock, context, {
-              id: parsed.id,
-              content: parsed.payload.content,
-            }),
-        );
-
-        // Published only after the commit returned, never before.
-        await bus.publish(
-          channelTopic(context.channelId),
-          frame('MESSAGE_CREATED', message, clock),
-        );
-
-        // And acknowledged after publishing, so the sender never learns of a
-        // message the room has not been told about.
+        // Written, committed and published by the one send path (D-35); the ACK
+        // comes after, so the sender is never ahead of the room.
+        const message = await send(dependencies, context, {
+          id: parsed.id,
+          content: parsed.payload.content,
+        });
         return [frame('ACK', { id: message.id }, clock, parsed.id)];
       }
     }
