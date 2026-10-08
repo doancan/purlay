@@ -71,6 +71,13 @@ export interface HttpApplication {
   readonly listen: (port: number) => number;
   /** Closes the listener and every open socket. What a test that listened must call. */
   readonly stop: (closeActiveConnections?: boolean) => Promise<unknown>;
+  /**
+   * The first half of a graceful shutdown (#220): readiness answers 503 from now
+   * on, every socket is closed with `RESTARTING` so its client reconnects and
+   * replays, and the listener stops accepting while requests already in flight
+   * finish. Resolves when they have.
+   */
+  readonly drain: () => Promise<void>;
 }
 
 /**
@@ -119,6 +126,8 @@ const respond = (
 
 export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
+  /** Set once, by `drain`; readiness reads it before anything else. */
+  let draining = false;
   const hub = createSocketHub(dependencies.database, dependencies.clock, { log });
   const bus = inProcessEventBus(hub.deliver);
   const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
@@ -171,7 +180,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      * discloses nothing about dependencies — and the reason to the log.
      */
     .get('/health/ready', async ({ set }) => {
-      const answer = await readiness(dependencies.database);
+      const answer = draining
+        ? ({ ready: false, reason: 'draining for shutdown' } as const)
+        : await readiness(dependencies.database);
       if (answer.ready) return { status: 'ready' } as const;
       log.warn('not ready', { reason: answer.reason });
       set.status = 503;
@@ -331,5 +342,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return bound;
     },
     stop: async (closeActiveConnections) => await app.stop(closeActiveConnections),
+    drain: async (): Promise<void> => {
+      draining = true;
+      hub.closeAll(CLOSE_CODES.RESTARTING, 'restarting');
+      // Not closing active connections: a request in flight finishes.
+      await app.stop(false);
+    },
   };
 };

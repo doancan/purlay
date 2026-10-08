@@ -103,6 +103,8 @@ export interface SocketHub {
   /** Who is on this connection, as resolved when it opened. */
   identity: (socketId: string) => Promise<SocketIdentity | undefined>;
   closed: (socketId: string) => void;
+  /** Closes every connection with this code — what a shutdown does to tell clients to come back. */
+  closeAll: (code: number, reason: string) => void;
   /** What the bus delivers through. */
   deliver: (socketId: string, frame: ServerFrame) => void;
   readonly size: () => number;
@@ -200,6 +202,10 @@ export const createSocketHub = (
     closed: (socketId: string): void => {
       held.get(socketId)?.cancelExpiry?.();
       held.delete(socketId);
+    },
+
+    closeAll: (code: number, reason: string): void => {
+      for (const socket of held.values()) socket.connection.close(code, reason);
     },
 
     deliver,

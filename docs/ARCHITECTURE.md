@@ -648,6 +648,12 @@ every run records its outcome in `job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:
 *last successful run* per job. Migrations will run on start and are idempotent; today they are run
 with `bun run db:migrate`.
 
+**A restart is a reconnect, not an outage.** On SIGTERM or SIGINT the process drains: readiness
+answers 503 at once, every socket is closed with `CLOSE_CODES.RESTARTING` (1012) so its client
+reconnects and replays from its cursor, the listener stops accepting while requests in flight
+finish, the pool closes, and the process exits — or, past a ten-second deadline, exits 1 and says
+what was still open. `apps/api/src/lifecycle.ts`. (D-72)
+
 Phase 3 introduces multiple API nodes behind a sticky-session load balancer and swaps in
 `RedisEventBus`, `SharedPresenceRegistry` and `SharedRateLimiter`. Nothing above changes: the
 three seams in §6 were placed for exactly this, and background work already runs outside the API
