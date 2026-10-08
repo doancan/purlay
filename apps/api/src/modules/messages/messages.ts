@@ -17,7 +17,12 @@
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
 import { sql, type Executor } from '@purlay/db';
-import { isPlausibleMessageId, type Message, type MessagePage } from '@purlay/types';
+import {
+  isMessageIdShape,
+  isPlausibleMessageId,
+  type Message,
+  type MessagePage,
+} from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
@@ -102,6 +107,16 @@ export const sendMessage = async (
   input: OutgoingMessage,
 ): Promise<Message> => {
   if (!isPlausibleMessageId(input.id, clock.now())) {
+    // A retry of a message that *was* written arrives late by nature: an outbox
+    // drained after a long disconnect. The window guards new ids (D-33), not the
+    // resend of one already stored, so the sender's own row in this channel is
+    // returned as any retry's is (D-8). Anything else — a stranger's row, or none
+    // — gets the same refusal for the same one query, so this path tells a prober
+    // nothing about which ids exist (#198).
+    const existing = isMessageIdShape(input.id) ? await readMessage(executor, input.id) : undefined;
+    if (existing?.sender_id === context.userId && existing.channel_id === context.channelId) {
+      return asMessage(existing);
+    }
     throw new AppError({
       code: 'INVALID_MESSAGE_ID',
       message: 'That message id is not a UUIDv7 carrying a plausible timestamp.',

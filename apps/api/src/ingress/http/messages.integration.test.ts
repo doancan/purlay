@@ -8,7 +8,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { MESSAGE_ID_SKEW, messageId } from '@purlay/types';
 import { createApp } from './app';
 import { testDependencies } from './testing';
 import { issueSession } from '../../modules/auth/sessions';
@@ -26,9 +26,14 @@ const call = async (
   db: Executor,
   method: string,
   path: string,
-  options: { cookie?: string; body?: unknown } = {},
+  options: { cookie?: string; body?: unknown; at?: Date } = {},
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock })).handle(
+  await createApp(
+    testDependencies({
+      database: db,
+      clock: options.at === undefined ? clock : fixedClock(options.at),
+    }),
+  ).handle(
     new Request(`${ORIGIN}${path}`, {
       method,
       headers: {
@@ -170,6 +175,54 @@ describe('integration: messages', () => {
       expect(again.status).toBe(201);
       expect(await again.json()).toEqual(await first.json());
       expect(await messagesIn(db, channelId)).toHaveLength(1);
+    });
+  });
+
+  /**
+   * Regression for #198. An outbox drained after a long disconnect resends ids
+   * minted before it; the plausibility window guards new ids, not the retry of a
+   * stored one. The sender's own retry succeeds however late; nobody else learns
+   * from a late id whether it exists.
+   */
+  test('a retry of a stored message succeeds however late it arrives, for its sender only', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'msg-late');
+      const bob = await signedIn(db, 'msg-late-bob');
+      const channelId = await aChannel(db, alice, 'msg-late-ws');
+      const bobsChannel = await aChannel(db, bob, 'msg-late-bob-ws');
+      const id = messageId(NOW);
+      const first = await send(db, alice.cookie, channelId, id, 'sent before the drop');
+      expect(first.status).toBe(201);
+
+      const later = new Date(NOW.getTime() + MESSAGE_ID_SKEW.behindMs + 1_000);
+      const retry = await call(db, 'POST', `/api/channels/${channelId}/messages`, {
+        cookie: alice.cookie,
+        body: { id, content: 'sent before the drop' },
+        at: later,
+      });
+      expect(retry.status).toBe(201);
+      expect(await retry.json()).toEqual(await first.json());
+      expect(await messagesIn(db, channelId)).toHaveLength(1);
+
+      const lateAt = async (cookie: string, channel: string, lateId: string): Promise<unknown> => {
+        const response = await call(db, 'POST', `/api/channels/${channel}/messages`, {
+          cookie,
+          body: { id: lateId, content: 'probe' },
+          at: later,
+        });
+        return { status: response.status, body: await response.json() };
+      };
+      const neverExisted = await lateAt(bob.cookie, bobsChannel, messageId(NOW));
+      expect(neverExisted).toMatchObject({
+        status: 400,
+        body: { error: { code: 'INVALID_MESSAGE_ID' } },
+      });
+      // Somebody else's stored id, and the sender's own id in another channel,
+      // are refused exactly as an id nobody ever used.
+      expect(await lateAt(bob.cookie, bobsChannel, id)).toEqual(neverExisted);
+      expect(await lateAt(alice.cookie, await aChannel(db, alice, 'msg-late-other'), id)).toEqual(
+        neverExisted,
+      );
     });
   });
 

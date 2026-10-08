@@ -825,6 +825,14 @@ the other two. The expensive failure is the poisoned cursor, and only the time b
 leaves the bad row, and the row is a primary key referenced by `mentions`, `reactions` and
 `channel_members.last_read_message_id`.
 
+**Amended 2026-10-08 (#198): the window guards new ids, not the retry of a stored one.** It was
+checked before the idempotency lookup, so an outbox drained after a long disconnect — the retry
+D-8 exists for — had its stored message refused as `INVALID_MESSAGE_ID` and marked failed. An id
+outside the window that matches the sender's own row in the same channel now returns that row. Any
+other id outside the window — a stranger's stored id, the sender's own in another channel, or one
+never used — is refused with the same body after the same one query, so the window still admits no
+new row and the late path is not an oracle.
+
 ### D-34. Channel visibility is a second branded context, not a discipline
 
 `WorkspaceContext` (`ARCHITECTURE.md` §7.3) makes the tenant filter structural, and D-21 argues
