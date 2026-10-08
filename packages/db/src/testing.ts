@@ -96,6 +96,8 @@ export const closeIntegrationDatabase = async (): Promise<void> => {
 
 export interface ClonedDatabase {
   readonly db: Kysely<DB>;
+  /** Where the clone lives — for a test that opens a pool of its own, as a restarted process would. */
+  readonly connectionString: string;
   /** Closes the pool and drops the database. What `afterAll` must call. */
   readonly drop: () => Promise<void>;
 }
@@ -138,9 +140,11 @@ export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
     await admin.destroy();
   }
 
-  const db = connect<DB>(onDatabase(source, clone), 4);
+  const connectionString = onDatabase(source, clone);
+  const db = connect<DB>(connectionString, 4);
   return {
     db,
+    connectionString,
     drop: async (): Promise<void> => {
       await db.destroy();
       const dropper = connect<unknown>(onDatabase(source, 'postgres'), 1);
