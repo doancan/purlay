@@ -20,6 +20,11 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Reading the pull request and the issues it names; nothing is written.
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -36,6 +41,15 @@ jobs:
       # triggers rather than failing on every merge to main. Passed as an
       # environment variable rather than interpolated into the shell, because a
       # branch name is attacker-controlled text.
+      # One task, of a reviewable size, touching what it is about (#126). Only a
+      # pull request has a body, labels and linked issues to judge.
+      - name: the pull request names its task, fits the budget, and stays in scope
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: bun run check:pr "$PULL_REQUEST"
+
       - name: the branch is named the way CONTRIBUTING.md §8 says
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}

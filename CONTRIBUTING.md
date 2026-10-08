@@ -79,6 +79,7 @@ and what CI runs, because the MinIO images `db:up` pulls are no longer published
 | Command | Does |
 |---|---|
 | `bun run queue` | What is startable now, and what each blocked issue waits on |
+| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, and touches only what its issues are about (D-74) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
