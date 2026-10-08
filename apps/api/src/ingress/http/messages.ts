@@ -10,14 +10,18 @@ import type { Executor } from '@purlay/db';
 import { PageQuery, SendMessageRequest, type Message, type MessagePage } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById } from '../../platform/channels';
-import { messageHistory, sendMessage } from '../../modules/messages/messages';
+import { messageHistory, send, type SendDependencies } from '../../modules/messages/messages';
 import { requireSession } from './session';
 import { validated } from './validate';
 
-export interface MessageDependencies {
+/** Reading needs the database and the clock, and nothing that publishes. */
+export interface HistoryDependencies {
   readonly database: Executor;
   readonly clock: Clock;
 }
+
+/** Sending needs the one send path's boundary and bus as well. */
+export interface MessageDependencies extends HistoryDependencies, SendDependencies {}
 
 /**
  * Query strings arrive as text. The contract's types are `integer` and `uuid`, so
@@ -36,7 +40,7 @@ const asPageQuery = (url: URL): unknown => {
 };
 
 export const readHistory = async (
-  dependencies: MessageDependencies,
+  dependencies: HistoryDependencies,
   request: Request,
   channelId: string,
 ): Promise<MessagePage> => {
@@ -57,5 +61,5 @@ export const postMessage = async (
   const { userId } = await requireSession(database, clock, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SendMessageRequest, body);
-  return await sendMessage(database, clock, context, input);
+  return await send(dependencies, context, input);
 };

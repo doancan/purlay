@@ -7,7 +7,8 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { ServerFrame } from '@purlay/types';
-import { channelTopic, inProcessEventBus, workspaceTopic } from './bus';
+import { inProcessEventBus } from './bus';
+import { channelTopic, workspaceTopic } from '../platform/events';
 
 const aFrame = (data: unknown): ServerFrame =>
   ({ event: 'MESSAGE_CREATED', data, ts: 1 }) as ServerFrame;

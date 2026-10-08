@@ -581,4 +581,28 @@ describe('integration: two real sockets', () => {
       expect(await endedWith(socket, 'expired')).toMatchObject({ code: CLOSE_CODES.SESSION_ENDED });
     });
   });
+
+  /**
+   * HTTP is the fallback when the socket is down, and the same service (§5.1).
+   * Before #195 it wrote outside a transaction and published nothing, so this
+   * message reached nobody until they reloaded.
+   */
+  test('a message sent over HTTP reaches a subscribed socket', async () => {
+    const room = await aRoom();
+    const bob = await connect(room.bob);
+    await subscribe(bob, room.channelId);
+
+    const id = messageId(NOW);
+    const response = await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+      id,
+      content: 'sent while my socket was down',
+    });
+    expect(response.status).toBe(201);
+    await bob.until((frames) => createdIds(frames).includes(id), 'the message on the socket');
+    expect(bob.frames.find((f) => f.event === 'MESSAGE_CREATED')?.data).toMatchObject({
+      id,
+      content: 'sent while my socket was down',
+    });
+    await bob.close();
+  });
 });

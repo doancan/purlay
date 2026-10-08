@@ -21,6 +21,8 @@ import { isPlausibleMessageId, type Message, type MessagePage } from '@purlay/ty
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
+import { channelTopic, type EventBus } from '../../platform/events';
+import type { Atomically } from '../../platform/transactions';
 
 /** `API.md` §1: capped at 100, defaulting to 50. */
 const MAX_PAGE = 100;
@@ -211,4 +213,40 @@ export const messageHistory = async (
     // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };
+};
+
+export interface SendDependencies {
+  readonly atomically: Atomically;
+  readonly clock: Clock;
+  readonly bus: EventBus;
+}
+
+/**
+ * Sends a message: the one way, whichever door it came through.
+ *
+ * The socket and HTTP are two entry points to this function, not two code paths
+ * (`ARCHITECTURE.md` §5.1). Before it existed the HTTP route wrote without a
+ * transaction and published nothing, so a message sent while a socket was down
+ * reached nobody until they reloaded.
+ *
+ * The order is load-bearing (D-35): everything the write touches commits
+ * together; the room is told only after the commit returned, so nobody receives a
+ * message that then rolls back; and the caller learns of it only after the room
+ * has, so a sender is never ahead of the conversation.
+ */
+export const send = async (
+  dependencies: SendDependencies,
+  context: ChannelContext,
+  input: OutgoingMessage,
+): Promise<Message> => {
+  const { atomically, clock, bus } = dependencies;
+  const message = await atomically(
+    async (transaction) => await sendMessage(transaction, clock, context, input),
+  );
+  await bus.publish(channelTopic(context.channelId), {
+    event: 'MESSAGE_CREATED',
+    data: message,
+    ts: clock.now().getTime(),
+  });
+  return message;
 };

@@ -37,7 +37,9 @@ import {
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 import { postMessage, readHistory } from './messages';
-import { inProcessEventBus, sessionTopic } from '../../realtime/bus';
+import { inProcessEventBus } from '../../realtime/bus';
+import { sessionTopic } from '../../platform/events';
+import { atomicallyOn } from '../../platform/transactions';
 import { createSocketHub } from '../../realtime/hub';
 import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
 import { routeFrame } from '../../realtime/router';
@@ -93,6 +95,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const hub = createSocketHub(dependencies.database, dependencies.clock);
   const bus = inProcessEventBus(hub.deliver);
   const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
+  // The transaction boundary both doors share: a new transaction per write, or
+  // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
+  const atomically = atomicallyOn(dependencies.database);
+  const sending = { ...dependencies, bus, atomically };
 
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
@@ -163,7 +169,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
       set.status = 201;
-      return await postMessage(dependencies, request, params.channelId, body);
+      return await postMessage(sending, request, params.channelId, body);
     })
 
     /**
@@ -223,7 +229,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
             bus,
             limiter,
             // The real boundary. D-35: one transaction, published after it returns.
-            atomically: async (body) => await dependencies.database.transaction().execute(body),
+            atomically,
           },
           identity,
           raw,

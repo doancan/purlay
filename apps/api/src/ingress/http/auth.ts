@@ -20,7 +20,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { authorizeUrl, type GitHubClient } from '../../modules/auth/github';
 import { resolveIdentity } from '../../modules/auth/identity';
-import { sessionTopic, type EventBus } from '../../realtime/bus';
+import { sessionTopic, type EventBus } from '../../platform/events';
 import { joinOpenWorkspace } from '../../modules/workspaces/open-join';
 import { issueState, verifyState } from '../../modules/auth/state';
 import {
