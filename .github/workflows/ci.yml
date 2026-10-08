@@ -106,7 +106,7 @@ jobs:
       # starting them here failed this job on every pull request for a service
       # no test uses. The storage choice is #183.
       - name: start the database
-        run: docker compose up -d --wait postgres
+        run: bun run db:up:postgres
 
       - name: the committed types are exactly what the migrations produce
         run: bun run db:check
