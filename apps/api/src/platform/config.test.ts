@@ -79,6 +79,34 @@ describe('loading configuration', () => {
     ).toBeDefined();
   });
 
+  /** Regression for #200: the socket compares `Origin` to this, exactly. */
+  test('APP_URL is an origin: a trailing slash is dropped, a path is refused', () => {
+    expect(loadConfig({ ...valid, APP_URL: 'https://chat.example.com/' }).APP_URL).toBe(
+      'https://chat.example.com',
+    );
+    expect(loadConfig({ ...valid, APP_URL: 'https://chat.example.com:8443' }).APP_URL).toBe(
+      'https://chat.example.com:8443',
+    );
+    const refusal = (url: string): string | undefined => {
+      try {
+        loadConfig({ ...valid, APP_URL: url });
+        return undefined;
+      } catch (error) {
+        return error instanceof ConfigurationError ? error.message : String(error);
+      }
+    };
+    for (const url of [
+      'https://example.com/chat',
+      'https://example.com/?team=a',
+      'https://example.com/#x',
+    ]) {
+      expect({ url, refused: refusal(url)?.includes('must be an origin') }).toEqual({
+        url,
+        refused: true,
+      });
+    }
+  });
+
   test('an invalid enumerated value is refused rather than coerced', () => {
     expect(() => loadConfig({ ...valid, LOG_LEVEL: 'chatty' })).toThrow(ConfigurationError);
   });

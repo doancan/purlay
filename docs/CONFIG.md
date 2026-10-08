@@ -14,7 +14,7 @@ Variables marked **required** have no default. Anything holding a secret is neve
 |---|---|---|---|
 | `NODE_ENV` | — | `development` | `development` \| `test` \| `production` |
 | `PORT` | — | `3001` | API listen port |
-| `APP_URL` | ✅ | — | Public origin of the web client. Used for OAuth redirects and CORS. Must be `https://` in production. |
+| `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error` |
 | `TRUST_PROXY` | — | `false` | Set `true` behind a reverse proxy so client IPs in `sessions.ip_address` are real |
 
