@@ -33,6 +33,13 @@ case "$branch" in
     echo "branch '${branch}' is named correctly"
     exit 0
     ;;
+  # The bot names its own branches and cannot be configured to use ours; its
+  # commits carry `chore` (.github/dependabot.yml). A named place, not a waiver
+  # — CONTRIBUTING.md §6.5 and §8.
+  dependabot/*)
+    echo "branch '${branch}' is dependabot's, whose commits are \`chore\`"
+    exit 0
+    ;;
   *)
     echo "branch '${branch}' does not start with one of:" >&2
     echo "  feat/  fix/  chore/  refactor/  docs/    (CONTRIBUTING.md §8)" >&2
