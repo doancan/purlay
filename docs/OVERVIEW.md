@@ -125,5 +125,4 @@ How much of it is done is deliberately not written here: a progress line is stal
 pull request merges, and a document that says "not started" about a repository with code in it
 teaches people to stop believing the documents. `bun run queue` computes it from the issues.
 
-No application code exists yet. The documents above are the specification it will be built
-against. What happens next is on the board, not in this repository (D-32).
+What happens next is on the board, not in this repository (D-32).
