@@ -44,7 +44,7 @@ second file is a number that will eventually disagree with itself.
 | The list of background jobs and how they are scheduled | `DECISIONS.md` D-30 |
 | Why any choice was made, and what was rejected | `DECISIONS.md` |
 | Stack and accepted costs · required tests · protocol | `ARCHITECTURE.md` §2, §10, §5 |
-| Tables, constraints, limits enforced by the database | `SCHEMA.md` |
+| Why each table, constraint and index exists; the invariants; the tables still to come | `SCHEMA.md` — its DDL for applied tables is bound to the migrations by `scripts/schema-document.test.ts` |
 | Layout, interaction, keyboard model, required states | `UX.md` |
 | HTTP endpoints | `API.md` |
 | Environment variables | `CONFIG.md` |
@@ -55,10 +55,10 @@ looking for the error codes to a file that does not have them.
 
 | Fact | Owner |
 |---|---|
-| Every version in the stack | `docs/ARCHITECTURE.md` §2 — the manifests and the pipeline are bound to it by tests |
+| Every version in the stack | The manifest that installs it — `package.json` files, `docker-compose.yml`. `ARCHITECTURE.md` §2 names choices and never numbers (D-56) |
 | Repository layout and the enforced dependency direction | `docs/ARCHITECTURE.md` §4, enforced in `eslint.config.mjs` |
 | What is never logged | `docs/ARCHITECTURE.md` §10 |
-| The database schema | `packages/db/migrations/` — the types are generated from it, never written (D-45) |
+| What the database schema *is* | `packages/db/migrations/` — the types are generated from it, never written (D-45) |
 | The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
 | Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |
 | What a message id is, and how a client makes one | `packages/types/src/message-id.ts` — the rule and the generator together, bound by a test (D-8, D-33) |
