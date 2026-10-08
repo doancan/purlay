@@ -54,9 +54,27 @@ const json = async (response: Response, what: string): Promise<unknown> => {
   return await response.json();
 };
 
-export const githubClient = (credentials: GitHubCredentials): GitHubClient => ({
+/**
+ * Where GitHub answers. A parameter so a test can stand a real HTTP server in
+ * its place — the client's handling of what GitHub sends back is the part worth
+ * testing, and a mocked `fetch` would test the mock.
+ */
+export interface GitHubEndpoints {
+  readonly oauth: string;
+  readonly api: string;
+}
+
+export const GITHUB_ENDPOINTS: GitHubEndpoints = {
+  oauth: 'https://github.com',
+  api: 'https://api.github.com',
+};
+
+export const githubClient = (
+  credentials: GitHubCredentials,
+  endpoints: GitHubEndpoints = GITHUB_ENDPOINTS,
+): GitHubClient => ({
   exchangeCode: async (code: string): Promise<string> => {
-    const response = await fetch('https://github.com/login/oauth/access_token', {
+    const response = await fetch(`${endpoints.oauth}/login/oauth/access_token`, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -76,7 +94,7 @@ export const githubClient = (credentials: GitHubCredentials): GitHubClient => ({
   },
 
   profile: async (accessToken: string): Promise<GitHubProfile> => {
-    const response = await fetch('https://api.github.com/user', {
+    const response = await fetch(`${endpoints.api}/user`, {
       headers: { authorization: `Bearer ${accessToken}`, accept: 'application/vnd.github+json' },
     });
     const body = (await json(response, 'profile')) as {
@@ -103,24 +121,19 @@ export const githubClient = (credentials: GitHubCredentials): GitHubClient => ({
    * `NOT NULL` (D-38).
    */
   emails: async (accessToken: string): Promise<readonly GitHubEmail[]> => {
-    const response = await fetch('https://api.github.com/user/emails', {
+    const response = await fetch(`${endpoints.api}/user/emails`, {
       headers: { authorization: `Bearer ${accessToken}`, accept: 'application/vnd.github+json' },
     });
-    const body = (await json(response, 'emails')) as readonly {
-      email?: unknown;
-      primary?: unknown;
-      verified?: unknown;
-    }[];
-    return body.flatMap((entry) =>
-      typeof entry.email === 'string'
-        ? [
-            {
-              email: entry.email,
-              primary: entry.primary === true,
-              verified: entry.verified === true,
-            },
-          ]
-        : [],
-    );
+    const body = await json(response, 'emails');
+    // Checked, not cast: an error object here would otherwise surface as a
+    // `TypeError` about `flatMap` instead of saying what GitHub sent.
+    if (!Array.isArray(body)) throw new Error('GitHub returned emails that are not a list');
+    return body.flatMap((entry: unknown) => {
+      if (typeof entry !== 'object' || entry === null) return [];
+      const { email, primary, verified } = entry as Record<string, unknown>;
+      return typeof email === 'string'
+        ? [{ email, primary: primary === true, verified: verified === true }]
+        : [];
+    });
   },
 });

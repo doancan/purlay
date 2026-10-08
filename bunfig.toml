@@ -1,0 +1,10 @@
+# Read by `bun test`. Only the coverage floor lives here.
+[test]
+# The floor `bun run test:all` holds the suite to when a database is reachable
+# (#202). Bun applies it to **every file**, not to the total — measured — so one
+# untested file fails the run however well the rest is covered. When it was
+# introduced seven files were under it; they were tested, not excused. The suite
+# then stood at 99.6 % of lines and 99.8 % of functions; the per-file floor leaves
+# a new file room for an honest first version without letting one in untested.
+# Never lowered to make a change pass (D-48).
+coverageThreshold = { lines = 0.95, functions = 0.93 }

@@ -229,6 +229,9 @@ describe('selecting the integration tests reliably', () => {
       for (const name of describes) {
         expect(name.startsWith('integration')).toBe(true);
       }
+      // A test outside every describe carries no marker: the fast run excludes the
+      // file and the integration run filters it out, so it runs in neither (#202).
+      expect(source.match(/^test(\.\w+)?\(/gm)).toBeNull();
     });
   }
 
