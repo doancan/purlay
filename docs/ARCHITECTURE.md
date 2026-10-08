@@ -247,7 +247,10 @@ receiving client has no way to learn it should forget it. Publish and ACK both f
   duplicate is naturally idempotent — no dedup table required. The existing row is then read back
   and its `sender_id` and `channel_id` compared with the requester: a match returns the same ACK,
   a mismatch returns `MESSAGE_ID_CONFLICT` with no ACK and no field of that row. Returning an ACK
-  unconditionally would make a send an existence oracle. (D-33)
+  unconditionally would make a send an existence oracle. A retry is late by nature, so the
+  plausibility window does not refuse it: an id outside the window that matches the sender's own
+  row in the channel returns that row, and any other id outside the window is refused identically
+  whether or not it exists. (D-33)
 - **Socket drops** → the buffer is preserved; on reconnect, pending sends are replayed and
   missed messages are fetched by keyset cursor (§5.4).
 - **Server rejects** → `ERROR` with `refId`; the optimistic row is marked failed and carries
