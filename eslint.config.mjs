@@ -52,6 +52,87 @@ const CONTEXT_SELECTORS = [
   },
 ];
 
+/**
+ * The escape hatches, made to cost something (CONTRIBUTING.md §1.13, D-48, #136).
+ *
+ * Local rules rather than a plugin: the rule this repository states — every
+ * exception names its rule, explains itself and links an issue — includes the
+ * link, which no published plugin checks, and three short rules are less to
+ * keep current than a dependency (CONTRIBUTING.md §1.12).
+ */
+const ISSUE_LINK = /#\d+/;
+const commentText = (comment) => comment.value.trim();
+
+const purlay = {
+  rules: {
+    'accountable-disable': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        return {
+          Program() {
+            for (const comment of context.sourceCode.getAllComments()) {
+              const match = /^eslint-disable(-next-line|-line)?(?:\s+([\s\S]*))?$/.exec(
+                commentText(comment),
+              );
+              if (match === null) continue;
+              const [, scope, rest = ''] = match;
+              const [rules = '', description = ''] = rest.split(/\s+--\s+/);
+              const problem =
+                scope === undefined
+                  ? 'A disable for a whole file or block hides every later violation in it. Disable one line, for one rule.'
+                  : rules.trim() === ''
+                    ? 'A disable names the rule it disables; a blanket one silences rules nobody chose to.'
+                    : !ISSUE_LINK.test(description)
+                      ? 'A disable explains itself after " -- " and links the issue that will remove it, so it can be counted (CONTRIBUTING.md §1.13).'
+                      : undefined;
+              if (problem !== undefined) context.report({ loc: comment.loc, message: problem });
+            }
+          },
+        };
+      },
+    },
+    'owned-debt': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        return {
+          Program() {
+            for (const comment of context.sourceCode.getAllComments()) {
+              const text = commentText(comment);
+              for (const marker of text.matchAll(/\b(TODO|FIXME|XXX|HACK)\b(\(#\d+\))?/g)) {
+                if (marker[2] === undefined) {
+                  context.report({
+                    loc: comment.loc,
+                    message: `${marker[1]} without an issue is debt nobody owns. Write it as ${marker[1]}(#123) (CONTRIBUTING.md §1.13).`,
+                  });
+                }
+              }
+            }
+          },
+        };
+      },
+    },
+    'owned-expected-error': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        return {
+          Program() {
+            for (const comment of context.sourceCode.getAllComments()) {
+              const text = commentText(comment);
+              if (text.startsWith('@ts-expect-error') && !ISSUE_LINK.test(text)) {
+                context.report({
+                  loc: comment.loc,
+                  message:
+                    'An expected type error in source is an exception like any other: link the issue that will remove it.',
+                });
+              }
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 export default defineConfig([
   // `.gitignore` is the single source for "build output and things not in the
   // repository". Repeating that list here is how one copy silently falls behind
@@ -63,6 +144,28 @@ export default defineConfig([
 
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
+
+  // A disable that no longer suppresses anything is an error, so the debt
+  // removes itself the day the code it excused is fixed (D-48).
+  { linterOptions: { reportUnusedDisableDirectives: 'error', reportUnusedInlineConfigs: 'error' } },
+
+  {
+    plugins: { purlay },
+    rules: {
+      'purlay/accountable-disable': 'error',
+      'purlay/owned-debt': 'error',
+      'purlay/owned-expected-error': 'error',
+    },
+  },
+
+  // A test's `@ts-expect-error` is an assertion — *this must not compile* — not
+  // an exception. The compiler already fails it if the error ever stops, and
+  // `ban-ts-comment` still requires it to say what it asserts. A place, not a
+  // waiver (CONTRIBUTING.md §6.5).
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx'],
+    rules: { 'purlay/owned-expected-error': 'off' },
+  },
 
   {
     languageOptions: {
@@ -164,10 +267,13 @@ export default defineConfig([
   },
 
   // This file configures the linter; it is not product code and has no tsconfig
-  // project of its own. Format and syntax still apply; type-aware rules do not.
+  // project of its own. Format and syntax still apply; type-aware rules do not,
+  // and neither does a rule asking for return-type annotations in a JavaScript
+  // file, which has no syntax to write one in.
   {
     files: ['eslint.config.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
+    rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
   },
 
   // A service takes its executor as an argument — a `Kysely` or a `Transaction`,

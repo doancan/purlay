@@ -49,10 +49,12 @@ the first four drafts of this project ended up contradicting each other at the s
     bad one. (D-52)
 13. **Exceptions are expensive and visible, never invisible.** Every `eslint-disable` names its
     rule, explains itself, and links an issue; a blanket or file-level disable is refused, and an
-    unused one fails the build. `@ts-expect-error` follows the same rule and `@ts-ignore` stays
-    banned. A `TODO` without an issue number is unowned debt and fails lint. Dead code is debt:
-    an export nothing imports is wired up or deleted. **The target is not zero exceptions — it is
-    zero exceptions nobody can count.** (D-48)
+    unused one fails the build. `@ts-expect-error` follows the same rule in source and
+    `@ts-ignore` stays banned; in a test it is an assertion — *this must not compile* — and needs
+    only to say what it asserts. A `TODO` without an issue number is unowned debt and fails lint;
+    write it `TODO(#123)`. Each of these is a lint rule, demonstrated by `verify:enforcement`.
+    Dead code is debt: an export nothing imports is wired up or deleted. **The target is not zero
+    exceptions — it is zero exceptions nobody can count.** (D-48)
 
 ---
 

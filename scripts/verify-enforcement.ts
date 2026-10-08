@@ -25,7 +25,20 @@ interface Violation {
   /** Path relative to the repository root — the layering rules are path-scoped. */
   readonly path: string;
   readonly source: string;
+  /**
+   * A control rather than a violation: the rule must stay **silent** here. It is
+   * what shows a rule is not simply refusing everything that looks like its
+   * target — a rule that cannot pass the right thing proves as little as one that
+   * cannot fail the wrong one.
+   */
+  readonly allowed?: true;
 }
+
+/**
+ * What ESLint reports, with no rule id, for a disable that suppressed nothing.
+ * Named so a violation can expect it like any rule.
+ */
+const UNUSED_DISABLE = 'unused-disable-directive';
 
 const VIOLATIONS: readonly Violation[] = [
   {
@@ -89,6 +102,54 @@ const VIOLATIONS: readonly Violation[] = [
     path: 'apps/api/src/modules/__enforcement__.ts',
     source: 'export const stamp = (): number => Date.now();\n',
   },
+  // The escape hatches cost something (CONTRIBUTING.md §1.13, #136).
+  {
+    rule: 'a disable explains itself and links an issue (CONTRIBUTING.md §1.13)',
+    ruleId: 'purlay/accountable-disable',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source:
+      '// eslint-disable-next-line @typescript-eslint/no-explicit-any -- needed for now\nexport const widen = (value: any): unknown => value;\n',
+  },
+  {
+    rule: 'a disable names the rule it disables (CONTRIBUTING.md §1.13)',
+    ruleId: 'purlay/accountable-disable',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source: '// eslint-disable-next-line\nexport const widen = (value: any): unknown => value;\n',
+  },
+  {
+    rule: 'no file-level disable (CONTRIBUTING.md §1.13)',
+    ruleId: 'purlay/accountable-disable',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source:
+      '/* eslint-disable @typescript-eslint/no-explicit-any -- the whole file (#136) */\nexport const widen = (value: any): unknown => value;\n',
+  },
+  {
+    rule: 'a disable that suppresses nothing fails the build (D-48)',
+    ruleId: UNUSED_DISABLE,
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source:
+      "// eslint-disable-next-line no-console -- printing is not done here (#136)\nexport const quiet = 'nothing to suppress';\n",
+  },
+  {
+    rule: 'a disable that names its rule, explains itself and links an issue is accepted',
+    ruleId: 'purlay/accountable-disable',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source:
+      '// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a stand-in until the contract types it (#136)\nexport const widen = (value: any): unknown => value;\n',
+    allowed: true,
+  },
+  {
+    rule: 'a TODO without an issue is refused (CONTRIBUTING.md §1.13)',
+    ruleId: 'purlay/owned-debt',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source: '// TODO make this faster\nexport const slow = 1;\n',
+  },
+  {
+    rule: 'an expected type error in source links an issue (CONTRIBUTING.md §1.13)',
+    ruleId: 'purlay/owned-expected-error',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source: "// @ts-expect-error a string is not a number\nexport const wrong: number = 'x';\n",
+  },
   // The type makes a context unforgeable; nothing in a type system stops an
   // assertion. This is the hole, and the rule that closes it. (D-21, D-54)
   {
@@ -102,6 +163,7 @@ const VIOLATIONS: readonly Violation[] = [
 
 interface EslintMessage {
   readonly ruleId: string | null;
+  readonly message: string;
 }
 interface EslintResult {
   readonly filePath: string;
@@ -154,7 +216,17 @@ try {
   const byFile = new Map(
     (JSON.parse(stdout) as readonly EslintResult[]).map((report) => [
       report.filePath,
-      new Set(report.messages.map((message) => message.ruleId).filter((id) => id !== null)),
+      new Set(
+        report.messages
+          .map(
+            (message) =>
+              message.ruleId ??
+              (message.message.startsWith('Unused eslint-disable directive')
+                ? UNUSED_DISABLE
+                : null),
+          )
+          .filter((id) => id !== null),
+      ),
     ]),
   );
 
@@ -165,6 +237,15 @@ try {
     if (reported === undefined) {
       failures += 1;
       console.log(`  NOT HELD ${violation.rule} — eslint did not lint ${violation.file}`);
+    } else if (violation.allowed === true) {
+      if (reported.has(violation.ruleId)) {
+        failures += 1;
+        console.log(
+          `  REFUSED  ${violation.rule} — ${violation.ruleId} fired on a case it must accept`,
+        );
+      } else {
+        console.log(`  ok       ${violation.rule}`);
+      }
     } else if (reported.has(violation.ruleId)) {
       console.log(`  ok       ${violation.rule}`);
     } else {

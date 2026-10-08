@@ -63,6 +63,11 @@ describe('lint rules in effect for API source (D-47)', () => {
     // context into existence. Which shapes it rejects is proved separately, by
     // `verify-enforcement.ts` writing one. (D-54)
     'no-restricted-syntax',
+    // The escape hatches: a disable is accountable, debt is owned, an expected
+    // type error in source links its issue (CONTRIBUTING.md §1.13, #136).
+    'purlay/accountable-disable',
+    'purlay/owned-debt',
+    'purlay/owned-expected-error',
   ] as const;
 
   const rules = apiConfig.rules;
