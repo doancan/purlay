@@ -11,7 +11,8 @@ import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
 import { SESSION_COOKIE } from './cookies';
-import { NOW, aGitHubAccount, testDependencies } from './testing';
+import { NOW, aGitHubAccount, testConfig, testDependencies } from './testing';
+import type { Config } from '../../platform/config';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -22,7 +23,8 @@ const ORIGIN = 'https://purlay.test';
 const appFor = (
   database: Executor,
   github = testDependencies().github,
-): ReturnType<typeof createApp> => createApp(testDependencies({ database, github }));
+  config = testDependencies().config,
+): ReturnType<typeof createApp> => createApp(testDependencies({ database, github, config }));
 
 /** Everything a browser would carry back from the redirect, in one place. */
 const startAndCallback = async (
@@ -31,9 +33,14 @@ const startAndCallback = async (
     code?: string;
     tamperState?: boolean;
     github?: ReturnType<typeof aGitHubAccount>;
+    config?: Config;
   } = {},
 ): Promise<Response> => {
-  const app = appFor(database, options.github ?? testDependencies().github);
+  const app = appFor(
+    database,
+    options.github ?? testDependencies().github,
+    options.config ?? testDependencies().config,
+  );
 
   const started = await app.handle(new Request(`${ORIGIN}/auth/github`));
   const stateCookie = started.headers.get('set-cookie') ?? '';
@@ -209,6 +216,95 @@ describe('integration: signing in with GitHub', () => {
         .executeTakeFirstOrThrow();
       const expected = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
       expect(new Date(session.expires_at).toISOString()).toBe(expected.toISOString());
+    });
+  });
+});
+
+/**
+ * Phase 0's exit criterion, up to the socket: two different GitHub users end up
+ * in one workspace through the real sign-in path, with no fixture and no bypass
+ * (D-37). Without open join the second user has no way in at all.
+ */
+describe('integration: open join on sign-in', () => {
+  const hubot = aGitHubAccount({ id: 2, login: 'hubot', name: 'Hubot', avatarUrl: null }, [
+    { email: 'hubot@example.test', primary: true, verified: true },
+  ]);
+
+  const sessionFrom = (response: Response): string =>
+    (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+
+  const asJson = async (
+    db: Executor,
+    config: Config,
+    method: string,
+    path: string,
+    cookie: string,
+    body?: unknown,
+  ): Promise<Response> =>
+    await appFor(db, undefined, config).handle(
+      new Request(`${ORIGIN}${path}`, {
+        method,
+        headers: {
+          cookie,
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    );
+
+  /** Mona signs in and creates the workspace; then Hubot signs in. */
+  const twoUsers = async (
+    db: Executor,
+    config: Config,
+  ): Promise<{ hubot: string; workspaceId: string; channelId: string }> => {
+    const mona = sessionFrom(await startAndCallback(db, { config }));
+    const created = await asJson(db, config, 'POST', '/api/workspaces', mona, {
+      name: 'Phase zero',
+      slug: 'phase-zero',
+    });
+    expect(created.status).toBe(201);
+    const workspaceId = ((await created.json()) as { id: string }).id;
+    const channel = await asJson(
+      db,
+      config,
+      'POST',
+      `/api/workspaces/${workspaceId}/channels`,
+      mona,
+      {
+        name: 'general',
+      },
+    );
+    expect(channel.status).toBe(201);
+    const channelId = ((await channel.json()) as { id: string }).id;
+
+    const signedIn = await startAndCallback(db, { config, github: hubot });
+    expect(signedIn.status).toBe(302);
+    return { hubot: sessionFrom(signedIn), workspaceId, channelId };
+  };
+
+  test('with the slug set, a second GitHub user lands in the workspace and can join its channel', async () => {
+    await withRollback(async (db) => {
+      const config = testConfig({ WORKSPACE_OPEN_JOIN_SLUG: 'phase-zero' });
+      const { hubot: cookie, workspaceId, channelId } = await twoUsers(db, config);
+
+      const mine = await asJson(db, config, 'GET', '/api/workspaces', cookie);
+      expect(await mine.json()).toMatchObject([{ workspace: { id: workspaceId }, role: 'member' }]);
+
+      const joined = await asJson(db, config, 'POST', `/api/channels/${channelId}/join`, cookie);
+      expect(joined.ok).toBe(true);
+    });
+  });
+
+  test('unset, the instance is closed: the same second user has no way in', async () => {
+    await withRollback(async (db) => {
+      const config = testConfig();
+      const { hubot: cookie, channelId } = await twoUsers(db, config);
+
+      const mine = await asJson(db, config, 'GET', '/api/workspaces', cookie);
+      expect(await mine.json()).toEqual([]);
+
+      const joined = await asJson(db, config, 'POST', `/api/channels/${channelId}/join`, cookie);
+      expect(joined.status).toBe(404);
     });
   });
 });

@@ -13,8 +13,13 @@ import { loadConfig } from './platform/config';
 import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
+import { openJoinNotice } from './modules/workspaces/open-join';
 
 const config = loadConfig(process.env);
+
+// Which workspace is open, said before anything else (D-37). Written directly
+// because the structured logger does not exist yet; it moves there with #127.
+process.stdout.write(`${openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG)}\n`);
 
 const app = createApp({
   config,

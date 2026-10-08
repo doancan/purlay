@@ -20,6 +20,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { authorizeUrl, type GitHubClient } from '../../modules/auth/github';
 import { resolveIdentity } from '../../modules/auth/identity';
+import { joinOpenWorkspace } from '../../modules/workspaces/open-join';
 import { issueState, verifyState } from '../../modules/auth/state';
 import {
   issueSession,
@@ -113,6 +114,10 @@ export const completeSignIn = async (
   ]);
 
   const { userId } = await resolveIdentity(database, clock, profile, emails);
+  if (config.WORKSPACE_OPEN_JOIN_SLUG !== undefined) {
+    // Every outcome is a success; which one it was is the boot notice's to explain (D-37).
+    await joinOpenWorkspace(database, clock, config.WORKSPACE_OPEN_JOIN_SLUG, userId);
+  }
   const session = await issueSession(database, clock, userId, config.SESSION_TTL_DAYS, {
     userAgent: request.headers.get('user-agent') ?? undefined,
   });

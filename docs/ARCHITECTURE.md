@@ -372,7 +372,7 @@ caller cannot learn from it whether a token was ever real or an account ever exi
 is refreshed at most once an hour rather than on every request. (D-60)
 
 **Open join.** When `WORKSPACE_OPEN_JOIN_SLUG` is set, a user who is not yet a member of that
-workspace is joined as `member` here. Unset by default; Phase 0 cannot reach its exit criterion
+workspace is joined as `member` here; an existing membership, whatever its role, is left as it is. Unset by default; Phase 0 cannot reach its exit criterion
 without it, because invitations are Phase 1. (D-37)
 
 ### 7.2. WebSocket upgrade

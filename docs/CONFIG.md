@@ -43,8 +43,13 @@ proxied so it matches (D-61). There is no separate API URL to configure.
 
 **On `WORKSPACE_OPEN_JOIN_SLUG`.** Phase 0 cannot reach its exit criterion without it —
 invitations are Phase 1, so a second user otherwise has no way into a workspace. The boot log
-states which workspace is open: an instance that quietly accepts anyone with a GitHub account is
-not something an operator should discover by accident.
+states which workspace is open, and says so when none is: an instance that quietly accepts anyone
+with a GitHub account is not something an operator should discover by accident.
+
+A slug that names no workspace yet admits nobody, and does not stop anyone signing in — it is the
+normal state before the operator creates the workspace. Whoever **first** creates a workspace with
+that slug owns the one everyone then joins, so create it before telling anyone the URL. An existing
+membership is never changed by signing in: the owner stays the owner.
 
 ## Object storage
 
