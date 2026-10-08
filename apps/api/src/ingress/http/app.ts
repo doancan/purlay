@@ -41,6 +41,7 @@ import { postMessage, readHistory } from './messages';
 import { inProcessEventBus } from '../../realtime/bus';
 import { sessionTopic } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
+import { currentRequest, enterRequest, withinRequest, type Logger } from '../../platform/logging';
 import { createSocketHub } from '../../realtime/hub';
 import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
 import { routeFrame } from '../../realtime/router';
@@ -53,6 +54,7 @@ export interface Dependencies {
   readonly database: Executor;
   readonly clock: Clock;
   readonly github: GitHubClient;
+  readonly log: Logger;
 }
 
 /**
@@ -115,7 +117,8 @@ const respond = (
 };
 
 export const createApp = (dependencies: Dependencies): HttpApplication => {
-  const hub = createSocketHub(dependencies.database, dependencies.clock);
+  const { log } = dependencies;
+  const hub = createSocketHub(dependencies.database, dependencies.clock, { log });
   const bus = inProcessEventBus(hub.deliver);
   const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
   // The transaction boundary both doors share: a new transaction per write, or
@@ -133,11 +136,32 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      * one place. `set.status` rather than a thrown response: a second way to
      * choose a status is a second place for two of them to disagree.
      */
-    .onError(({ code, error, set }) => {
+    /**
+     * Every request is one scope from its first hook: an id the response carries
+     * back as `x-request-id`, and which every line written while serving it
+     * carries too, however deep (D-71).
+     */
+    .onRequest(({ set }) => {
+      const requestId = crypto.randomUUID();
+      enterRequest({ requestId, startedAt: performance.now() });
+      set.headers['x-request-id'] = requestId;
+    })
+    .onError(({ code, error, set, path }) => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
+      // The client is told INTERNAL and nothing else; the cause is written here.
+      if (refusal.status === 500) log.error('request failed', { err: error, path });
       set.status = refusal.status;
       return refusal.body;
+    })
+    .onAfterResponse(({ request, path, set }) => {
+      const started = currentRequest()?.startedAt;
+      log.info('request', {
+        method: request.method,
+        path,
+        status: set.status,
+        ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
+      });
     })
     .get('/health', () => HEALTH)
 
@@ -240,7 +264,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           socket.data.request,
         );
         // Where the end of this session will be announced, on whichever node.
-        if (identity !== undefined) bus.subscribe(sessionTopic(identity.sessionId), socket.id);
+        if (identity !== undefined) {
+          bus.subscribe(sessionTopic(identity.sessionId), socket.id);
+          log.info('socket opened', { socketId: socket.id, userId: identity.userId });
+        }
       },
       message: async (socket, raw) => {
         const identity = await hub.identity(socket.id);
@@ -250,24 +277,32 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           socket.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
           return;
         }
-        for (const reply of await routeFrame(
-          {
-            database: dependencies.database,
-            clock: dependencies.clock,
-            bus,
-            limiter,
-            // The real boundary. D-35: one transaction, published after it returns.
-            atomically,
+        // Each frame is a request of its own: its own id on every line it writes.
+        await withinRequest(
+          { requestId: crypto.randomUUID(), startedAt: performance.now() },
+          async () => {
+            for (const reply of await routeFrame(
+              {
+                database: dependencies.database,
+                clock: dependencies.clock,
+                bus,
+                limiter,
+                log,
+                // The real boundary. D-35: one transaction, published after it returns.
+                atomically,
+              },
+              identity,
+              raw,
+            )) {
+              // Through the hub, so a replay burst is held to the same mark as the
+              // bus's fan-out rather than queued without limit.
+              hub.deliver(socket.id, reply);
+            }
           },
-          identity,
-          raw,
-        )) {
-          // Through the hub, so a replay burst is held to the same mark as the
-          // bus's fan-out rather than queued without limit.
-          hub.deliver(socket.id, reply);
-        }
+        );
       },
-      close: (socket) => {
+      close: (socket, code) => {
+        log.info('socket closed', { socketId: socket.id, code });
         bus.forget(socket.id);
         limiter.forget(socket.id);
         hub.closed(socket.id);

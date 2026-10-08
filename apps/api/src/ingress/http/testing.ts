@@ -10,6 +10,21 @@ import { fixedClock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import type { GitHubClient, GitHubEmail, GitHubProfile } from '../../modules/auth/github';
 import type { Dependencies } from './app';
+import { createLogger, type Logger } from '../../platform/logging';
+
+/** A logger whose lines a test can read back, parsed. */
+export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown>[] } => {
+  const lines: Record<string, unknown>[] = [];
+  return {
+    lines,
+    log: createLogger({
+      level: 'debug',
+      write: (line) => {
+        lines.push(JSON.parse(line) as Record<string, unknown>);
+      },
+    }),
+  };
+};
 
 /**
  * A database handle that fails loudly if anything touches it.
@@ -33,6 +48,7 @@ export const aDatabaseThatMustNotBeTouched = (): Executor =>
 export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   NODE_ENV: 'test',
   PORT: 3001,
+  LOG_LEVEL: 'info',
   APP_URL: 'https://purlay.test',
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
@@ -72,5 +88,7 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   github: aGitHubAccount({ id: 1, login: 'octocat', name: 'Mona', avatarUrl: null }, [
     { email: 'mona@example.test', primary: true, verified: true },
   ]),
+  // Silent unless a test asks to read what was written (`aRecordingLogger`).
+  log: createLogger({ level: 'silent' }),
   ...overrides,
 });

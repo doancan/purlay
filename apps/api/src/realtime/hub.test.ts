@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
 import { aDatabaseThatMustNotBeTouched } from '../ingress/http/testing';
 import { fixedClock } from '../platform/clock';
+import { createLogger } from '../platform/logging';
 import {
   after,
   createSocketHub,
@@ -78,6 +79,7 @@ describe('the end of a session, on a connection', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      { log: createLogger({ level: 'silent' }) },
     );
     const events: string[] = [];
     // Registered without resolving an identity: delivery does not depend on one.
@@ -123,6 +125,7 @@ describe('a connection that falls behind (#197)', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      { log: createLogger({ level: 'silent' }) },
     );
     void hub.opened('s', connection, new Request('https://purlay.test/ws')).catch(() => undefined);
     hub.deliver('s', { event: 'PONG', data: {}, ts: 0 });
