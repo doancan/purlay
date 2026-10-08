@@ -295,11 +295,16 @@ describe('integration: the frame router', () => {
         payload: { channels: [{ channelId, afterMessageId: ids[0] ?? null }] },
       });
 
-      expect(replies[0]?.event).toBe('ACK');
+      expect(replies[0]).toMatchObject({
+        event: 'ACK',
+        data: { channels: [{ channelId, nextCursor: null }] },
+      });
       const replayed = replies.slice(1);
-      expect(replayed.map((f) => f.event)).toEqual(['MESSAGE_CREATED', 'MESSAGE_CREATED']);
-      // Oldest first, so a client appending them ends up in the right order.
-      expect(replayed.map((f) => (f.data as { id: string }).id)).toEqual(ids.slice(1));
+      expect(replayed.every((f) => f.event === 'MESSAGE_CREATED')).toBe(true);
+      // Oldest first, so a client appending them ends up in the right order. The
+      // replay starts below the cursor (D-65), so the one the client named comes
+      // back too — and nothing it did not miss besides.
+      expect(replayed.map((f) => (f.data as { id: string }).id)).toEqual(ids);
     });
   });
 

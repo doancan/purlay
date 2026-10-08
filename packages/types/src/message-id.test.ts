@@ -11,9 +11,11 @@ import { Value } from '@sinclair/typebox/value';
 import { Uuid } from './models';
 import {
   MESSAGE_ID_SKEW,
+  REPLAY_OVERLAP_MS,
   isMessageIdShape,
   isPlausibleMessageId,
   messageId,
+  messageIdFloor,
   messageIdTime,
 } from './message-id';
 
@@ -108,5 +110,27 @@ describe('the rule', () => {
     expect(isPlausibleMessageId(at(-MESSAGE_ID_SKEW.behindMs - 1), NOW)).toBe(false);
     expect(isPlausibleMessageId(at(MESSAGE_ID_SKEW.aheadMs), NOW)).toBe(true);
     expect(isPlausibleMessageId(at(MESSAGE_ID_SKEW.aheadMs + 1), NOW)).toBe(false);
+  });
+});
+
+describe('the replay floor', () => {
+  test('sorts at or below every id made at its instant, and above every id made before it', () => {
+    const t = NOW.getTime();
+    const floor = messageIdFloor(t);
+    expect(isMessageIdShape(floor)).toBe(true);
+    expect(messageIdTime(floor)).toBe(t);
+    for (let i = 0; i < 200; i += 1) {
+      expect(messageId(new Date(t)) >= floor).toBe(true);
+      expect(messageId(new Date(t - 1)) < floor).toBe(true);
+    }
+  });
+
+  test('the overlap is the whole window the server accepts, so nothing written later sorts below it', () => {
+    // A message accepted at server time S has an id no older than S − behind; a
+    // cursor the client holds is no newer than S + ahead. (D-65)
+    expect(REPLAY_OVERLAP_MS).toBe(MESSAGE_ID_SKEW.behindMs + MESSAGE_ID_SKEW.aheadMs);
+    const cursor = messageId(new Date(NOW.getTime() + MESSAGE_ID_SKEW.aheadMs));
+    const oldestAcceptable = messageId(new Date(NOW.getTime() - MESSAGE_ID_SKEW.behindMs));
+    expect(oldestAcceptable > messageIdFloor(messageIdTime(cursor) - REPLAY_OVERLAP_MS)).toBe(true);
   });
 });
