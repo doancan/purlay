@@ -8,7 +8,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId, type ServerFrame } from '@purlay/types';
+import { messageId, SUBSCRIBE_MAX_CHANNELS, type ServerFrame } from '@purlay/types';
 import { AppError } from '../platform/errors';
 import { fixedClock } from '../platform/clock';
 import { issueSession } from '../modules/auth/sessions';
@@ -17,7 +17,7 @@ import { testDependencies } from '../ingress/http/testing';
 import { inProcessEventBus } from './bus';
 import { channelTopic } from '../platform/events';
 import { atomicallyOn } from '../platform/transactions';
-import { routeFrame } from './router';
+import { replayPerChannel, routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
 
@@ -353,8 +353,19 @@ describe('integration: the frame router', () => {
       const bus = inProcessEventBus((_socketId, frame) => {
         delivered.push(frame);
       });
+      const sendOne = async (content: string, at: number): Promise<readonly ServerFrame[]> =>
+        await route(
+          db,
+          alice,
+          {
+            id: messageId(new Date(NOW.getTime() + at)),
+            op: 'MESSAGE_SEND',
+            payload: { channelId, content },
+          },
+          bus,
+        );
 
-      await route(
+      const subscribed = await route(
         db,
         alice,
         {
@@ -364,29 +375,172 @@ describe('integration: the frame router', () => {
         },
         bus,
       );
-      await route(
+      expect(subscribed[0]?.event).toBe('ACK');
+
+      // The control: subscribed, a send is delivered. Without it, the empty list
+      // below would pass just as well if subscribing or sending did nothing.
+      expect((await sendOne('while listening', 1))[0]?.event).toBe('ACK');
+      expect(delivered.map((f) => f.event)).toEqual(['MESSAGE_CREATED']);
+
+      const left = await route(
         db,
         alice,
-        {
-          id: messageId(NOW),
-          op: 'UNSUBSCRIBE',
-          payload: { channelIds: [channelId] },
-        },
+        { id: messageId(NOW), op: 'UNSUBSCRIBE', payload: { channelIds: [channelId] } },
         bus,
       );
+      expect(left[0]).toMatchObject({ event: 'ACK', data: { channelIds: [channelId] } });
 
-      await route(
+      expect((await sendOne('after leaving', 2))[0]?.event).toBe('ACK');
+      expect(delivered.map((f) => f.event)).toEqual(['MESSAGE_CREATED']);
+    });
+  });
+
+  /**
+   * One subscription, bounded work, whatever it names (#196). Before, each channel
+   * cost its own authorisation and its own replay query; a frame naming hundreds
+   * was thousands of queries for one rate-limit token.
+   */
+  describe('a subscription naming many channels', () => {
+    /** Public channels in one workspace Alice owns, each with `missed` messages. */
+    const manyChannels = async (
+      db: Executor,
+      alice: { userId: string; cookie: string },
+      count: number,
+      missed: number,
+    ): Promise<string[]> => {
+      const { workspaceId } = await aChannel(
         db,
         alice,
-        {
-          id: messageId(NOW),
-          op: 'MESSAGE_SEND',
-          payload: { channelId, content: 'after leaving' },
-        },
-        bus,
+        `rt-many-${String(count)}-${String(missed)}`,
       );
+      const channels = await db
+        .insertInto('channels')
+        .values(
+          Array.from({ length: count }, (_, i) => ({
+            workspace_id: workspaceId,
+            name: `c${String(i)}`,
+            type: 'public' as const,
+            created_by: alice.userId,
+          })),
+        )
+        .returning('id')
+        .execute();
+      const messages = channels.flatMap(({ id }) =>
+        Array.from({ length: missed }, (_, i) => ({
+          id: messageId(new Date(NOW.getTime() + i)),
+          workspace_id: workspaceId,
+          channel_id: id,
+          sender_id: alice.userId,
+          content: `m${String(i)}`,
+          created_at: NOW,
+        })),
+      );
+      if (messages.length > 0) await db.insertInto('messages').values(messages).execute();
+      return channels.map(({ id }) => id);
+    };
 
-      expect(delivered).toEqual([]);
+    const subscribeTo = (
+      channelIds: readonly string[],
+      afterMessageId: string | null,
+    ): unknown => ({
+      id: messageId(NOW),
+      op: 'SUBSCRIBE',
+      payload: { channels: channelIds.map((channelId) => ({ channelId, afterMessageId })) },
+    });
+
+    test('costs the same number of queries for one channel as for thirty', async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'rt-cost');
+        const channels = await manyChannels(db, alice, 30, 3);
+        const cursor = messageId(new Date(NOW.getTime() - 1));
+
+        const queriesFor = async (channelIds: readonly string[]): Promise<number> => {
+          let queries = 0;
+          const counted = db.withPlugin({
+            transformQuery: (args) => {
+              queries += 1;
+              return args.node;
+            },
+            transformResult: async (args) => await Promise.resolve(args.result),
+          });
+          const replies = await route(counted, alice, subscribeTo(channelIds, cursor));
+          expect(replies[0]?.event).toBe('ACK');
+          return queries;
+        };
+
+        const one = await queriesFor(channels.slice(0, 1));
+        const thirty = await queriesFor(channels);
+        expect(one).toBeGreaterThan(0);
+        expect(thirty).toBe(one);
+      });
+    });
+
+    test('shares one replay budget, and says where each channel stopped', async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'rt-budget');
+        const channels = await manyChannels(db, alice, 20, 60);
+        const replies = await route(
+          db,
+          alice,
+          subscribeTo(channels, messageId(new Date(NOW.getTime() - 120_000))),
+        );
+
+        const ack = replies[0];
+        if (ack?.event !== 'ACK' || !('channels' in ack.data))
+          throw new Error('no subscription ACK');
+        const perChannel = replayPerChannel(20);
+        expect(perChannel).toBe(50);
+        expect(ack.data.channels).toHaveLength(20);
+        expect(ack.data.channels.every((state) => state.nextCursor !== null)).toBe(true);
+        expect(replies.slice(1)).toHaveLength(20 * perChannel);
+      });
+    });
+
+    test('one channel the caller cannot see refuses the frame, and nothing is subscribed', async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'rt-all-or-none');
+        const bob = await signedIn(db, 'rt-all-or-none-other');
+        const [visible = ''] = await manyChannels(db, alice, 1, 0);
+        const { channelId: hidden } = await aChannel(db, bob, 'rt-all-or-none-bob');
+
+        const delivered: ServerFrame[] = [];
+        const bus = inProcessEventBus((_socketId, frame) => {
+          delivered.push(frame);
+        });
+        const replies = await route(db, alice, subscribeTo([visible, hidden], null), bus);
+        expect(replies).toMatchObject([{ event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } }]);
+
+        await bus.publish(channelTopic(visible), {
+          event: 'PONG',
+          data: {},
+          ts: NOW.getTime(),
+        });
+        expect(delivered).toEqual([]);
+      });
+    });
+
+    test('a channel named twice, or more than the limit, is refused with the field', async () => {
+      await withRollback(async (db) => {
+        const alice = await signedIn(db, 'rt-limits');
+        const channels = await manyChannels(db, alice, 1, 0);
+        const twice = await route(db, alice, subscribeTo([...channels, ...channels], null));
+        expect(twice).toMatchObject([
+          {
+            event: 'ERROR',
+            data: {
+              code: 'VALIDATION_FAILED',
+              details: { fields: { 'payload/channels': 'names a channel more than once' } },
+            },
+          },
+        ]);
+
+        const tooMany = Array.from(
+          { length: SUBSCRIBE_MAX_CHANNELS + 1 },
+          (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+        );
+        const over = await route(db, alice, subscribeTo(tooMany, null));
+        expect(over[0]).toMatchObject({ event: 'ERROR', data: { code: 'VALIDATION_FAILED' } });
+      });
     });
   });
 });

@@ -41,6 +41,16 @@ export const MessageSendFrame = FromClient({
 });
 
 /**
+ * The most channels one `SUBSCRIBE` or `UNSUBSCRIBE` may name.
+ *
+ * A bound on the frame, not on the client: a client watching more sends more
+ * frames. One hundred is several times the channel count of the teams this is
+ * built for, so a reconnect is one frame; and it bounds the work one frame can
+ * ask for, which before #196 was unbounded for a single rate-limit token.
+ */
+export const SUBSCRIBE_MAX_CHANNELS = 100;
+
+/**
  * Resume. Per channel the client names the highest id it holds, and the server
  * returns what it may have missed by keyset scan — one indexed range query
  * rather than a timestamp comparison with clock-skew problems
@@ -51,8 +61,10 @@ export const SubscribeFrame = FromClient({
   id: Uuid,
   op: Type.Literal('SUBSCRIBE'),
   payload: FromClient({
+    /** Each channel at most once — the server refuses a repeat, naming the field. */
     channels: Type.Array(
       FromClient({ channelId: Uuid, afterMessageId: Type.Union([Uuid, Type.Null()]) }),
+      { minItems: 1, maxItems: SUBSCRIBE_MAX_CHANNELS },
     ),
   }),
 });
@@ -60,7 +72,13 @@ export const SubscribeFrame = FromClient({
 export const UnsubscribeFrame = FromClient({
   id: Uuid,
   op: Type.Literal('UNSUBSCRIBE'),
-  payload: FromClient({ channelIds: Type.Array(Uuid) }),
+  payload: FromClient({
+    channelIds: Type.Array(Uuid, {
+      minItems: 1,
+      maxItems: SUBSCRIBE_MAX_CHANNELS,
+      uniqueItems: true,
+    }),
+  }),
 });
 
 export const PingFrame = FromClient({
