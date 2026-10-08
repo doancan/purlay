@@ -270,14 +270,14 @@ client continues over HTTP with `?after=` from there. (D-65)
 
 ### 5.5. Backpressure and limits
 
-- Max frame size 64 KB. Attachments never traverse the socket — they go over HTTP and the
-  message carries their ids.
-- Per-connection sliding window, behind the `RateLimiter` seam (§6.2). In-process is the only
+- Max frame size 64 KB, enforced by the server for every connection: a frame over it ends that
+  connection before any handler runs. Attachments never traverse the socket — they go over HTTP and
+  the message carries their ids. (D-66)
+- Per-connection token bucket, behind the `RateLimiter` seam (§6.2). Over budget, the frame is
+  refused with `RATE_LIMITED` and its id; the connection stays open. In-process is the only
   implementation in Phase 0–2; the seam exists because an in-process limiter on N nodes grants
-  N times the quota (D-25). **The limit itself is not yet decided (O-4)** —
-  10 frames/second with a burst of 20 is the working starting point, to be confirmed against
-  real typing and paste behaviour during dogfooding. It is written here as a provisional value,
-  not as a settled requirement.
+  N times the quota (D-25). **The number is not yet decided (O-4)** — 10 frames/second with a
+  burst of 20 is what is enforced, as a provisional value, until dogfooding measures it.
 - If a client's outbound buffer exceeds its high-water mark, the connection is closed with a
   resync code rather than allowed to grow without bound.
 
@@ -331,10 +331,13 @@ Phase 0–2: `InMemoryPresenceRegistry`. Phase 3: the same interface over the sh
 export interface RateLimiter {
   /** Returns false when the caller is over budget. Never throws, never blocks. */
   consume(key: string, cost?: number): Promise<boolean>;
+  /** Drops what is held for a key nobody will use again — a closed connection's. */
+  forget(key: string): void;
 }
 ```
 
-Phase 0–2: an in-process sliding window that resets on restart, which is acknowledged in O-4.
+Phase 0–2: an in-process token bucket that resets on restart, which is acknowledged in O-4.
+`forget` exists because the key is a connection: without it every reconnect leaves a bucket behind.
 
 ### 6.3. Why these three and nothing else
 

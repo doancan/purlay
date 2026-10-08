@@ -22,6 +22,7 @@ import {
   isMessageIdShape,
   messageIdFloor,
   messageIdTime,
+  Uuid,
   type ServerFrame,
 } from '@purlay/types';
 import type { Executor } from '@purlay/db';
@@ -30,8 +31,17 @@ import { AppError } from '../platform/errors';
 import { requireChannelById } from '../platform/channels';
 import { messageHistory, sendMessage } from '../modules/messages/messages';
 import { channelTopic, type EventBus } from './bus';
+import type { RateLimiter } from './rate-limiter';
 
-/** `ARCHITECTURE.md` §5.5. Attachments never traverse the socket. */
+/**
+ * `ARCHITECTURE.md` §5.5. Attachments never traverse the socket.
+ *
+ * Enforced by the server before a frame reaches this file, not here: the
+ * framework has already parsed a JSON frame by the time the router sees it, so a
+ * check here would measure what had already been paid for. The framework's
+ * per-route option is silently ignored; the server-wide one is what refuses
+ * (`app.ts`, `docs/spikes/elysia.md`).
+ */
 export const MAX_FRAME_BYTES = 64 * 1024;
 
 /** How many missed messages a reconnect replays per channel before giving up on catching up. */
@@ -53,6 +63,8 @@ export interface RouterDependencies {
   readonly atomically: <T>(body: (executor: Executor) => Promise<T>) => Promise<T>;
   readonly clock: Clock;
   readonly bus: EventBus;
+  /** Keyed by connection (§5.5). */
+  readonly limiter: RateLimiter;
 }
 
 export interface SocketIdentity {
@@ -73,6 +85,17 @@ const frame = (
     ...(refId === undefined ? {} : { refId }),
   }) as ServerFrame;
 
+/**
+ * The id to echo back, if the frame had one that can be.
+ *
+ * Only a UUID: `refId` is one in the contract, and echoing whatever a malformed
+ * frame carried would answer a contract violation with another.
+ */
+const refIdOf = (raw: unknown): string | undefined =>
+  typeof raw === 'object' && raw !== null && 'id' in raw && Value.Check(Uuid, raw.id)
+    ? raw.id
+    : undefined;
+
 const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame => {
   const body =
     error instanceof AppError
@@ -92,7 +115,19 @@ export const routeFrame = async (
   identity: SocketIdentity,
   raw: unknown,
 ): Promise<readonly ServerFrame[]> => {
-  const { database, clock, bus } = dependencies;
+  const { database, clock, bus, limiter } = dependencies;
+
+  // Counted before anything else, malformed frames included: if bytes that are
+  // not a frame cost nothing, they are the cheapest flood there is.
+  if (!(await limiter.consume(identity.socketId))) {
+    return [
+      errorFrame(
+        new AppError({ code: 'RATE_LIMITED', message: 'Too many frames. Send it again shortly.' }),
+        clock,
+        refIdOf(raw),
+      ),
+    ];
+  }
 
   const refuse = (message: string, refId?: string): ServerFrame =>
     errorFrame(
@@ -106,7 +141,6 @@ export const routeFrame = async (
   // accepted, so the router is one function over either.
   let parsed: unknown = raw;
   if (typeof raw === 'string') {
-    if (Buffer.byteLength(raw, 'utf8') > MAX_FRAME_BYTES) return [refuse('Frame too large.')];
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -116,14 +150,7 @@ export const routeFrame = async (
   }
 
   if (!Value.Check(ClientFrame, parsed)) {
-    const refId =
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'id' in parsed &&
-      typeof parsed.id === 'string'
-        ? parsed.id
-        : undefined;
-    return [refuse('That frame did not match the contract.', refId)];
+    return [refuse('That frame did not match the contract.', refIdOf(parsed))];
   }
 
   try {

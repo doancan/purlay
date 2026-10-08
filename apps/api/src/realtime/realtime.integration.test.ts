@@ -17,6 +17,7 @@ import { testDependencies } from '../ingress/http/testing';
 import { channelTopic, inProcessEventBus } from './bus';
 import { routeFrame } from './router';
 import { admitSocket } from './upgrade';
+import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -139,12 +140,15 @@ describe('integration: the frame router', () => {
     identity: { userId: string },
     raw: unknown,
     bus = inProcessEventBus(() => undefined),
+    // A fresh bucket per call, so no test here is limited unless it means to be.
+    limiter: RateLimiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
   ): Promise<readonly ServerFrame[]> =>
     await routeFrame(
       {
         database: db,
         clock,
         bus,
+        limiter,
         // Already inside the transaction the harness will roll back, so this is
         // where the boundary is. The shape under test — write, then publish, then
         // acknowledge — is the same one production runs.
@@ -153,6 +157,38 @@ describe('integration: the frame router', () => {
       { socketId: 's1', ...identity },
       raw,
     );
+
+  test('a frame over budget is refused before it is read, and does nothing', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'rt-limited');
+      const { channelId } = await aChannel(db, alice, 'rt-limited-ws');
+      const spent: RateLimiter = {
+        consume: async () => await Promise.resolve(false),
+        forget: () => undefined,
+      };
+
+      const id = messageId(NOW);
+      const replies = await route(
+        db,
+        alice,
+        { id, op: 'MESSAGE_SEND', payload: { channelId, content: 'over budget' } },
+        undefined,
+        spent,
+      );
+      expect(replies).toMatchObject([
+        { event: 'ERROR', refId: id, data: { code: 'RATE_LIMITED' } },
+      ]);
+      expect(
+        await db.selectFrom('messages').select('id').where('channel_id', '=', channelId).execute(),
+      ).toEqual([]);
+
+      // Bytes that are not a frame spend the budget too, and get no refId to echo.
+      const garbage = await route(db, alice, 'not a frame', undefined, spent);
+      expect(garbage).toHaveLength(1);
+      expect(garbage[0]).toMatchObject({ event: 'ERROR', data: { code: 'RATE_LIMITED' } });
+      expect(garbage[0]?.refId).toBeUndefined();
+    });
+  });
 
   test('a ping is answered, and the answer names the frame it answers', async () => {
     await withRollback(async (db) => {

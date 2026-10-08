@@ -1984,6 +1984,36 @@ moved past *T*+1 — and it costs a column and an index on the hottest table.
 
 ---
 
+### D-66. The socket's two limits: a cap the server enforces, and a budget it refuses by frame
+
+§5.5 stated both limits and nothing enforced either (#174).
+
+**The 64 KB cap is server-wide, because the per-route option is ignored.** Measured, with Elysia
+1.4.30 on Bun 1.4.2: setting `maxPayloadLength` on the `.ws()` route let a 100 KB frame reach the
+handler; setting it on the application let the same frame end the connection before any handler ran,
+and a 60 KB frame through. The router's own size check was removed rather than kept beside it: by
+the time the router sees a JSON frame the framework has parsed it, so the check measured what had
+already been paid for. A connection that sends an oversized frame is dropped, which is the right
+answer to a client that ignored a published limit — and the wrong one for a person whose message
+is merely long, which is the open question about message length (#190).
+
+**The budget is a token bucket per connection, and over it a frame is refused, not the
+connection.** A bucket because §5.5 states a rate *and* a burst, which are exactly a bucket's two
+parameters; a sliding window has one. The refusal is an `ERROR` carrying `RATE_LIMITED` and the
+frame's id, so the client marks that one send failed and offers a retry, and a resend with the same
+id is idempotent (D-8). The budget is spent **before** the frame is parsed: if malformed bytes cost
+nothing, they are the cheapest flood there is. The number itself stays open (O-4).
+
+**Rejected: closing the connection over budget.** It turns one burst — a paste of several lines,
+each a frame — into a reconnect, a replay and a resubscribe, all of which cost more than the frames
+did.
+
+**Rejected: keying the budget by user.** Two tabs would share one budget and starve each other.
+The quota a user could multiply by opening connections is bounded by the connection count, which
+is an instance-level concern rather than this one.
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.
@@ -1996,11 +2026,13 @@ Recorded so they are not silently assumed. None block Phase 0.
   per-workspace window that defaults to infinite, erasure is two deliberately separate
   operations, and export is NDJSON plus the attachment blobs. Implementation is Phase 2; the
   decision is no longer open.
-- **O-4 · Rate limiting.** The earlier draft specified 5 frames/sec/user via Redis. With Redis
-  removed (D-7), in-process limiting is sufficient for one node but resets on restart.
-  *Decide when the limiter is written, Phase 1.* D-25 adds the `RateLimiter` seam so that a
-  shared implementation is later an adapter rather than a refactor — but the seam does not decide
-  the number, which is what this question is about.
+- **O-4 · Rate limiting — the number.** The limiter is written (D-66); the budget it enforces is
+  §5.5's working value, ten frames a second with a burst of twenty, per connection, and that value
+  is still a guess. Phase 0 sends little — messages, subscriptions, pings — so nothing it does can
+  confirm or refute the number; typing indicators (Phase 1) are the volume that will. *Closed by a
+  measurement during Phase 1 dogfooding:* the highest frame rate a connection reaches in normal
+  use, as the 99th percentile over a week, and the count of `RATE_LIMITED` refusals that week —
+  which must be zero for legitimate use. Recording both needs the structured logger (#127).
 - **O-7 · What the command palette is built on.** D-52 named a Radix combobox; Radix does not
   publish one (`docs/spikes/frontend-budget.md`). `cmdk` is built on Radix and is what the budget
   measurement used; a listbox hand-built on `@radix-ui/react-popover` is the alternative, and the

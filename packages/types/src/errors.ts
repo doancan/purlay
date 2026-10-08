@@ -12,13 +12,12 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 500;
+export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500;
 
 /**
- * `413` and `429` are in `API.md` §1's table and are **not** here: no code maps
- * to them yet, because uploads and the rate limiter are not built (#174). A
- * status this type permits but no code produces is a case a client is asked to
- * handle and will never see.
+ * `413` is in `API.md` §1's table and is **not** here: no code maps to it yet,
+ * because uploads are not built. A status this type permits but no code produces
+ * is a case a client is asked to handle and will never see.
  */
 
 /**
@@ -56,6 +55,12 @@ export const ErrorCode = Type.Union([
   Type.Literal('CHANNEL_NAME_TAKEN'),
   Type.Literal('MESSAGE_ID_CONFLICT'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
+  // Volume
+  /**
+   * Too many frames on one connection. The frame was not processed; sending it
+   * again later is safe, because a message id makes a resend idempotent (D-8).
+   */
+  Type.Literal('RATE_LIMITED'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -85,6 +90,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   CHANNEL_NAME_TAKEN: 409,
   MESSAGE_ID_CONFLICT: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
+
+  RATE_LIMITED: 429,
 
   INTERNAL: 500,
 };

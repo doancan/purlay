@@ -39,7 +39,8 @@ import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } 
 import { postMessage, readHistory } from './messages';
 import { inProcessEventBus } from '../../realtime/bus';
 import { createSocketHub } from '../../realtime/hub';
-import { routeFrame } from '../../realtime/router';
+import { MAX_FRAME_BYTES, routeFrame } from '../../realtime/router';
+import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { admitSocket } from '../../realtime/upgrade';
 
 export interface Dependencies {
@@ -90,8 +91,13 @@ const respond = (
 export const createApp = (dependencies: Dependencies): HttpApplication => {
   const hub = createSocketHub(dependencies.database, dependencies.clock);
   const bus = inProcessEventBus(hub.deliver);
+  const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
 
-  const app = new Elysia()
+  // Server-wide, because that is the one the framework passes on: the per-route
+  // option of the same name is silently ignored — measured, a 100 KB frame reached
+  // the handler with it set (`docs/spikes/elysia.md`). Over the cap, the server
+  // drops the connection before any handler runs. (§5.5)
+  const app = new Elysia({ websocket: { maxPayloadLength: MAX_FRAME_BYTES } })
     /**
      * One error handler for the whole surface, so a status is decided in exactly
      * one place. `set.status` rather than a thrown response: a second way to
@@ -199,6 +205,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
             database: dependencies.database,
             clock: dependencies.clock,
             bus,
+            limiter,
             // The real boundary. D-35: one transaction, published after it returns.
             atomically: async (body) => await dependencies.database.transaction().execute(body),
           },
@@ -210,6 +217,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       },
       close: (socket) => {
         bus.forget(socket.id);
+        limiter.forget(socket.id);
         hub.closed(socket.id);
       },
     });
