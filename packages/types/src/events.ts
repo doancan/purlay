@@ -134,6 +134,19 @@ export const MessageCreatedFrame = Type.Object({
   ...envelope,
 });
 
+/**
+ * The session behind this connection has ended, and the server closes it next
+ * with `CLOSE_CODES.SESSION_ENDED`. Sent first so the client knows why, rather
+ * than reconnecting into a refusal it has to interpret (#194).
+ */
+export const SessionEndedFrame = Type.Object({
+  event: Type.Literal('SESSION_ENDED'),
+  data: Type.Object({
+    reason: Type.Union([Type.Literal('signed-out'), Type.Literal('expired')]),
+  }),
+  ...envelope,
+});
+
 export const PongFrame = Type.Object({
   event: Type.Literal('PONG'),
   data: Type.Object({}),
@@ -146,10 +159,28 @@ export const ServerFrame = Type.Union([
   UnsubscribedFrame,
   ErrorFrame,
   MessageCreatedFrame,
+  SessionEndedFrame,
   PongFrame,
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;
 export type ServerEvent = ServerFrame['event'];
 
-/** `workspace:{id}` · `channel:{id}` · `user:{id}` (`ARCHITECTURE.md` §6). */
-export type Topic = `workspace:${string}` | `channel:${string}` | `user:${string}`;
+/**
+ * `workspace:{id}` · `channel:{id}` · `user:{id}` · `session:{id}` (`ARCHITECTURE.md` §6).
+ *
+ * `session:` carries the end of a session to every node holding one of its
+ * sockets, which is why revocation goes through the bus rather than a local call:
+ * on several nodes a local call reaches one of them (D-7, D-25).
+ */
+export type Topic =
+  `workspace:${string}` | `channel:${string}` | `user:${string}` | `session:${string}`;
+
+/**
+ * Why the server closed a socket, for the codes the application defines
+ * (4000–4999 are reserved for that by RFC 6455). A client reconnects on none of
+ * them without asking the person first: each means a reconnect would be refused.
+ */
+export const CLOSE_CODES = {
+  /** The session ended — signed out, signed out everywhere, or expired. */
+  SESSION_ENDED: 4401,
+} as const;

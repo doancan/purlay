@@ -112,7 +112,7 @@ describe('integration: sessions', () => {
       await revokeSession(db, clock, a.token);
 
       // Only the still-live one is counted: revoking twice must not inflate it.
-      expect(await revokeAllSessions(db, clock, userId)).toBe(1);
+      expect(await revokeAllSessions(db, clock, userId)).toHaveLength(1);
       expect(await resolveSession(db, clock, b.token)).toBeUndefined();
     });
   });

@@ -154,7 +154,7 @@ describe('integration: the frame router', () => {
         // acknowledge — is the same one production runs.
         atomically: async (body) => await body(db),
       },
-      { socketId: 's1', ...identity },
+      { socketId: 's1', sessionId: 'not-read-by-the-router', expiresAt: NOW, ...identity },
       raw,
     );
 

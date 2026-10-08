@@ -20,6 +20,7 @@ import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { authorizeUrl, type GitHubClient } from '../../modules/auth/github';
 import { resolveIdentity } from '../../modules/auth/identity';
+import { sessionTopic, type EventBus } from '../../realtime/bus';
 import { joinOpenWorkspace } from '../../modules/workspaces/open-join';
 import { issueState, verifyState } from '../../modules/auth/state';
 import {
@@ -60,6 +61,30 @@ export interface AuthDependencies {
   readonly clock: Clock;
   readonly github: GitHubClient;
 }
+
+/** Signing out also reaches the sockets the revoked sessions hold. */
+export interface SignOutDependencies extends AuthDependencies {
+  readonly bus: EventBus;
+}
+
+/**
+ * Announces the end of each revoked session on its topic, where every socket it
+ * holds is listening — on this node or another. The hub delivers the frame and
+ * closes the connection. Published after the revocation is written, so a socket
+ * is never closed for a sign-out that did not happen (#194).
+ */
+const endConnections = async (
+  { bus, clock }: SignOutDependencies,
+  sessionIds: readonly string[],
+): Promise<void> => {
+  for (const sessionId of sessionIds) {
+    await bus.publish(sessionTopic(sessionId), {
+      event: 'SESSION_ENDED',
+      data: { reason: 'signed-out' },
+      ts: clock.now().getTime(),
+    });
+  }
+};
 
 /** What a handler decided. `location` set means a redirect; otherwise `204`. */
 export interface AuthResponse {
@@ -127,19 +152,20 @@ export const completeSignIn = async (
 
 /** Signing out with no session is not an error: the outcome asked for is already true. */
 export const signOut = async (
-  dependencies: AuthDependencies,
+  dependencies: SignOutDependencies,
   request: Request,
 ): Promise<AuthResponse> => {
   const token = sessionTokenFrom(request.headers.get('cookie'));
   if (token !== undefined) {
-    await revokeSession(dependencies.database, dependencies.clock, token);
+    const revoked = await revokeSession(dependencies.database, dependencies.clock, token);
+    if (revoked !== undefined) await endConnections(dependencies, [revoked]);
   }
   return { setCookie: clearedSessionCookie() };
 };
 
 /** Signing out *everywhere* needs to know who you are, so it needs a live session. */
 export const signOutEverywhere = async (
-  dependencies: AuthDependencies,
+  dependencies: SignOutDependencies,
   request: Request,
 ): Promise<AuthResponse> => {
   const { database, clock } = dependencies;
@@ -148,7 +174,7 @@ export const signOutEverywhere = async (
   if (owner === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
   }
-  await revokeAllSessions(database, clock, owner.userId);
+  await endConnections(dependencies, await revokeAllSessions(database, clock, owner.userId));
   return { setCookie: clearedSessionCookie() };
 };
 

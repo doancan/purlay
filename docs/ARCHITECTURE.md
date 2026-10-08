@@ -392,6 +392,12 @@ The upgrade request carries the same cookie. The session is looked up **before**
 bound; an invalid or expired session is rejected at handshake, never after. There is no
 token-in-query-string path — query strings land in access logs.
 
+**After the handshake, a connection lives exactly as long as its session.** Signing out and signing
+out everywhere publish `SESSION_ENDED` on each revoked session's topic; expiry is a timer set from
+`expires_at` when the socket opens. Either way the frame is delivered first and the connection is
+then closed with `CLOSE_CODES.SESSION_ENDED`, so the client knows not to reconnect into a refusal.
+The session is **not** re-read per frame. (D-68)
+
 ### 7.3. The isolation mechanism
 
 The rule "every query filters on `workspace_id`" fails eventually if it depends on remembering.

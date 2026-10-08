@@ -10,14 +10,15 @@
  * no broker for a self-hosted instance to operate — which it will never need,
  * because one node serving thirty people does not (D-7, D-25).
  */
-import type { ServerFrame } from '@purlay/types';
+import type { ServerFrame, Topic } from '@purlay/types';
 
-/** `workspace:{id}` · `channel:{id}` · `user:{id}` */
-export type Topic = string;
+/** The contract's, not a second definition: the topic names cross nodes in Phase 3. */
+export type { Topic };
 
 export const workspaceTopic = (workspaceId: string): Topic => `workspace:${workspaceId}`;
 export const channelTopic = (channelId: string): Topic => `channel:${channelId}`;
 export const userTopic = (userId: string): Topic => `user:${userId}`;
+export const sessionTopic = (sessionId: string): Topic => `session:${sessionId}`;
 
 /** What the bus hands a frame to. The hub implements it; nothing else needs to. */
 export type Deliver = (socketId: string, frame: ServerFrame) => void;
