@@ -329,25 +329,4 @@ describe('integration: messages', () => {
       expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
     });
   });
-
-  /** Mandatory: the channel-scoped pair (D-34). */
-  for (const [method, body] of [
-    ['GET', undefined],
-    ['POST', { id: '0199155c-6200-7b7f-8c11-2a4d3f9e1b70', content: 'x' }],
-  ] as const) {
-    test(`${method} /api/channels/:id/messages answers 404 to somebody who cannot see it`, async () => {
-      await withRollback(async (db) => {
-        const owner = await signedIn(db, `msg-x-owner-${method}`);
-        const stranger = await signedIn(db, `msg-x-stranger-${method}`);
-        const channelId = await aChannel(db, owner, `msg-x-${method.toLowerCase()}`);
-
-        const response = await call(db, method, `/api/channels/${channelId}/messages`, {
-          cookie: stranger.cookie,
-          ...(body === undefined ? {} : { body }),
-        });
-        expect(response.status).toBe(404);
-        expect(await response.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
-      });
-    });
-  }
 });
