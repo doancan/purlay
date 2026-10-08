@@ -207,4 +207,9 @@ export const CLOSE_CODES = {
    * and the replay fills the gap — nothing was dropped without this close (#197).
    */
   RESYNC: 4408,
+  /**
+   * The server is restarting — RFC 6455's own code for it. Reconnect after a
+   * backoff and replay from the cursor; a deploy is a reconnect, not a loss (#220).
+   */
+  RESTARTING: 1012,
 } as const;

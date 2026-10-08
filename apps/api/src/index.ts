@@ -14,6 +14,7 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
+import { installShutdown } from './lifecycle';
 import { openJoinNotice } from './modules/workspaces/open-join';
 
 const config = loadConfig(process.env);
@@ -22,15 +23,17 @@ const log = createLogger({ level: config.LOG_LEVEL });
 // Which workspace is open, said before anything else (D-37).
 log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
 
+const database = createDatabase({
+  connectionString: config.DATABASE_URL,
+  poolSize: config.DATABASE_POOL_MAX,
+  ssl: config.DATABASE_SSL,
+});
+
 const app = createApp({
   config,
   log,
   clock: systemClock,
-  database: createDatabase({
-    connectionString: config.DATABASE_URL,
-    poolSize: config.DATABASE_POOL_MAX,
-    ssl: config.DATABASE_SSL,
-  }),
+  database,
   github: githubClient({
     clientId: config.GITHUB_CLIENT_ID,
     clientSecret: config.GITHUB_CLIENT_SECRET,
@@ -39,4 +42,15 @@ const app = createApp({
   }),
 });
 
-app.listen(config.PORT);
+log.info('listening', { port: app.listen(config.PORT) });
+
+// A restart is a reconnect, not an outage: drain, close the pool, exit (#220).
+installShutdown({
+  drain: app.drain,
+  closeDatabase: async () => {
+    await database.destroy();
+  },
+  log,
+  process,
+  deadlineMs: 10_000,
+});
