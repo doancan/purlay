@@ -108,7 +108,21 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     throw new ConfigurationError(problems);
   }
 
-  const config = coerced satisfies Config;
+  const loaded = coerced satisfies Config;
+
+  // An origin, not a URL. The socket's `Origin` check is an equality against it
+  // and the browser sends an origin — no path, no trailing slash — so
+  // `https://chat.example.com/` would refuse every connection. A trailing slash
+  // means the same place and is dropped; a path, a query or a fragment means a
+  // deployment this product does not support — one public origin, cookies at
+  // `Path=/` (D-61) — and is refused rather than silently cut off (#200).
+  const appUrl = new URL(loaded.APP_URL);
+  if (appUrl.pathname !== '/' || appUrl.search !== '' || appUrl.hash !== '') {
+    throw new ConfigurationError([
+      `APP_URL: must be an origin, without a path, query or fragment (${appUrl.origin})`,
+    ]);
+  }
+  const config: Config = { ...loaded, APP_URL: appUrl.origin };
 
   if (config.NODE_ENV === 'production' && !config.APP_URL.startsWith('https://')) {
     throw new ConfigurationError(['APP_URL: must be https:// in production']);
