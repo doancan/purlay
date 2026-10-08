@@ -15,6 +15,43 @@ const NO_TRANSPORT_TYPES = {
     'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
 };
 
+/**
+ * Reading the time directly makes behaviour that depends on it — expiry, drift
+ * correction, retention — untestable without waiting. Both ways of reading it
+ * are refused; `platform/clock.ts` is the one place that does, and every other
+ * caller takes a `Clock` (D-46). `Date.now()` was missing until #202.
+ */
+const CLOCK_MESSAGE =
+  'Take the clock as a dependency instead of reading it directly, so time can be controlled in a test.';
+const CLOCK_SELECTORS = [
+  { selector: "NewExpression[callee.name='Date'][arguments.length=0]", message: CLOCK_MESSAGE },
+  {
+    selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+    message: CLOCK_MESSAGE,
+  },
+];
+
+/**
+ * A branded context is unforgeable by construction — its brand key is a symbol
+ * its own module does not export — but no type system stops a deliberate
+ * assertion. This does, everywhere, with no exemption: the guard that mints one
+ * never needs a cast, so there is nowhere for a legitimate case to live. Named by
+ * the `Context` suffix, so every context — `WorkspaceContext`, `ChannelContext`
+ * and any later one — is covered without being listed. (D-21, D-54)
+ */
+const CONTEXT_MESSAGE =
+  'A context is minted by its guard, never asserted. Casting one bypasses the membership check it exists to prove. (D-21, D-54)';
+const CONTEXT_SELECTORS = [
+  {
+    selector: 'TSAsExpression > TSTypeReference > Identifier[name=/Context$/]',
+    message: CONTEXT_MESSAGE,
+  },
+  {
+    selector: 'TSTypeAssertion > TSTypeReference > Identifier[name=/Context$/]',
+    message: CONTEXT_MESSAGE,
+  },
+];
+
 export default defineConfig([
   // `.gitignore` is the single source for "build output and things not in the
   // repository". Repeating that list here is how one copy silently falls behind
@@ -69,31 +106,7 @@ export default defineConfig([
 
       'no-console': 'error', // logging goes through the structured logger (ARCHITECTURE.md §10)
       eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
-          message:
-            'Take the clock as a dependency instead of reading it directly, so time can be controlled in a test.',
-        },
-        // A branded context is unforgeable by construction — its brand key is a
-        // symbol its own module does not export — but no type system stops a
-        // deliberate assertion. This does, everywhere, with no exemption: the
-        // guard that mints one never needs a cast, so there is nowhere for a
-        // legitimate case to live. Named by convention so `ChannelContext` (D-34,
-        // issue #13) is covered the day it exists, rather than the day somebody
-        // remembers to add it here. (D-21, D-54)
-        {
-          selector: 'TSAsExpression > TSTypeReference > Identifier[name=/Context$/]',
-          message:
-            'A context is minted by its guard, never asserted. Casting one bypasses the membership check it exists to prove. (D-21, D-54)',
-        },
-        {
-          selector: 'TSTypeAssertion > TSTypeReference > Identifier[name=/Context$/]',
-          message:
-            'A context is minted by its guard, never asserted. Casting one bypasses the membership check it exists to prove. (D-21, D-54)',
-        },
-      ],
+      'no-restricted-syntax': ['error', ...CLOCK_SELECTORS, ...CONTEXT_SELECTORS],
     },
   },
 
@@ -212,6 +225,14 @@ export default defineConfig([
         },
       ],
     },
+  },
+
+  // The clock itself, and code that measures real elapsed time — a test's
+  // deadline, a script's timeout — read the time. Nothing else does. The context
+  // selectors stay: no file may forge a context.
+  {
+    files: ['apps/api/src/platform/clock.ts', '**/*.test.ts', '**/*.test.tsx', 'scripts/**/*.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...CONTEXT_SELECTORS] },
   },
 
   // Tests may reach further, but they may not weaken the type rules.
