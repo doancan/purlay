@@ -135,7 +135,7 @@ Creating a DM is idempotent: the same pair returns the same channel, never a sec
 | | Method | Path | Notes |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/channels/:channelId/messages` | Root messages, keyset, newest first (`SCHEMA.md` §6.3) |
-| ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND` |
+| ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND`. Content is `MessageContent` in `@purlay/types` — its length limit and the characters it refuses are defined there (D-67) |
 | ① | `GET` | `/api/messages/:messageId/thread` | Replies, keyset, oldest first |
 | ① | `PATCH` | `/api/messages/:messageId` | Author only — **window pending O-1** |
 | ① | `DELETE` | `/api/messages/:messageId` | Author or admin — tombstone, never erase (D-9) |

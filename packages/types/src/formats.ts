@@ -31,9 +31,29 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** An absolute URL with a scheme. `APP_URL` is the one that matters. */
 const URI = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/i;
 
+/**
+ * Everything JSON escapes to six bytes, in one pass: a C0 control character other
+ * than tab, line feed and carriage return, or a surrogate without its partner.
+ * Neither occurs in text a person typed or pasted.
+ *
+ * A pattern rather than `String.prototype.isWellFormed`, which is ES2024 and would
+ * move the whole repository's library target for one call — and one linear scan
+ * rather than two.
+ */
+const INFLATES_IN_JSON =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+/**
+ * Message text. Excluding exactly what JSON inflates to six bytes is what bounds
+ * a message on the wire at three bytes per code unit, so the length limit can be
+ * proven to fit the frame cap rather than hoped to (D-67).
+ */
+const isMessageContent = (value: string): boolean => !INFLATES_IN_JSON.test(value);
+
 FormatRegistry.Set('uuid', (value) => UUID.test(value));
 FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
 FormatRegistry.Set('uri', (value) => URI.test(value));
+FormatRegistry.Set('message-content', isMessageContent);
 
-export const REGISTERED_FORMATS = ['uuid', 'date-time', 'email', 'uri'] as const;
+export const REGISTERED_FORMATS = ['uuid', 'date-time', 'email', 'uri', 'message-content'] as const;

@@ -24,6 +24,7 @@ import {
   FromClient,
   Membership,
   Message,
+  MessageContent,
   User,
   UserRole,
   Uuid,
@@ -100,7 +101,7 @@ export type CreateChannelRequest = Static<typeof CreateChannelRequest>;
  */
 export const SendMessageRequest = FromClient({
   id: Uuid,
-  content: Type.String({ minLength: 1 }),
+  content: MessageContent,
 });
 export type SendMessageRequest = Static<typeof SendMessageRequest>;
 
