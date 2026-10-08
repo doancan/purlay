@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { DB } from './schema';
 import { sql, type Kysely } from 'kysely';
 // Kysely 0.29 moved migration support to its own subpath export.
 import {
@@ -62,3 +63,17 @@ export const migrateToLatest = async (
   db: Kysely<unknown>,
   directory = MIGRATIONS_DIRECTORY,
 ): Promise<MigrationResultSet> => await createMigrator(db, directory).migrateToLatest();
+
+/**
+ * The migrations in the directory this database has not applied, by name.
+ *
+ * What readiness asks before a process takes traffic: code ahead of its schema
+ * fails on the first query that touches what is missing (#108).
+ */
+export const pendingMigrations = async (
+  db: Kysely<DB>,
+  directory = MIGRATIONS_DIRECTORY,
+): Promise<readonly string[]> =>
+  (await createMigrator(db as Kysely<unknown>, directory).getMigrations())
+    .filter((migration) => migration.executedAt === undefined)
+    .map((migration) => migration.name);

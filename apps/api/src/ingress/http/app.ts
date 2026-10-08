@@ -41,6 +41,7 @@ import { postMessage, readHistory } from './messages';
 import { inProcessEventBus } from '../../realtime/bus';
 import { sessionTopic } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
+import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, withinRequest, type Logger } from '../../platform/logging';
 import { createSocketHub } from '../../realtime/hub';
 import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
@@ -164,6 +165,18 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       });
     })
     .get('/health', () => HEALTH)
+    /**
+     * Readiness: the database answers, every migration is applied, and the
+     * identifier columns compare byte-wise (#108). A word to the caller — health
+     * discloses nothing about dependencies — and the reason to the log.
+     */
+    .get('/health/ready', async ({ set }) => {
+      const answer = await readiness(dependencies.database);
+      if (answer.ready) return { status: 'ready' } as const;
+      log.warn('not ready', { reason: answer.reason });
+      set.status = 503;
+      return { status: 'not ready' } as const;
+    })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/auth/github/callback', async ({ request, set }) => {

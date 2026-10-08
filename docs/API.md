@@ -57,6 +57,7 @@ account for it. `message` is for humans and may change. (D-47)
 | `413` | Upload exceeds `attachment_size_limit` |
 | `429` | Rate limited |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
+| `503` | `/health/ready` only: this process should not receive traffic |
 
 **Idempotency.** `POST` of a message carries a client-generated UUIDv7 as its `id`. Re-sending
 the same id **by the same sender in the same channel** is a no-op that returns the existing
@@ -186,7 +187,7 @@ returned by any endpoint, at any role. (D-23)
 | | Method | Path | Auth |
 |:-:|---|---|---|
 | ○ | `GET` | `/health` | none — liveness |
-| ○ | `GET` | `/health/ready` | none — database reachable and migrations applied |
+| ○ | `GET` | `/health/ready` | none — `200 { status: 'ready' }` when the database answers, every migration is applied and the identifier columns are `COLLATE "C"`; otherwise `503 { status: 'not ready' }`, with the reason in the log only |
 | ○ | `GET` | `/ws` | cookie — WebSocket upgrade (`ARCHITECTURE.md` §7.2) |
 
 Health endpoints expose no version, no dependency detail and no counts — they answer only

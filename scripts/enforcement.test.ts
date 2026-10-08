@@ -585,18 +585,13 @@ describe('what API.md publishes for this phase is what the application serves', 
     ? ['GET /ws']
     : [];
 
-  /** Phase 0 rows for endpoints another issue is still building. */
-  const notYetBuilt = new Set(['GET /health/ready']);
-
   test('both sides were parsed, so this is not comparing two empty lists', () => {
     expect(documented.length).toBeGreaterThan(10);
     expect(served.length).toBeGreaterThan(10);
   });
 
   test('every Phase 0 endpoint in API.md is served', () => {
-    const missing = documented.filter(
-      (endpoint) => ![...served, ...sockets].includes(endpoint) && !notYetBuilt.has(endpoint),
-    );
+    const missing = documented.filter((endpoint) => ![...served, ...sockets].includes(endpoint));
     expect(missing).toEqual([]);
   });
 

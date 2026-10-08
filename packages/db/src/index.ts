@@ -11,7 +11,12 @@ export { createDatabase, type DatabaseOptions, type Executor } from './client';
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).
  */
 export { sql } from 'kysely';
-export { createMigrator, migrateToLatest, MIGRATIONS_DIRECTORY } from './migrator';
+export {
+  createMigrator,
+  migrateToLatest,
+  MIGRATIONS_DIRECTORY,
+  pendingMigrations,
+} from './migrator';
 export {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
