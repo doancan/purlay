@@ -986,6 +986,21 @@ authentication CVEs are written, and it would still not exercise the real path.
 **Reversibility:** free. One variable, one branch in the sign-in service. It survives into Phase 1
 as a legitimate operator convenience or is deleted; either is a small change.
 
+**Amended 2026-10-08, when it was built — two cases the paragraphs above did not decide.**
+
+*A slug with no workspace behind it is not an error.* It is the expected state at first: the operator
+signs in, then creates the workspace. Refusing sign-in would lock out the operator; refusing to boot
+would make the variable impossible to set before the workspace exists. So sign-in proceeds and nobody
+is joined. The cost is that the first person to create a workspace with that slug owns it, and the
+boot notice says exactly that rather than leaving it to be discovered.
+
+*Signing in never changes a membership that exists.* The join is an insert that does nothing on
+conflict, not an upsert. An upsert would write `member` over the owner on their next sign-in, and with
+one owner that breaks I-2 from an endpoint that has nothing to do with roles.
+
+The boot notice is written directly to standard output, because the structured logger is #127; it
+moves there with it.
+
 ### D-38. GitHub identity: scopes, the email anchor, and every collision named
 
 D-11 chose GitHub OAuth and made `email` the identity anchor, `NOT NULL UNIQUE`. No document ever
