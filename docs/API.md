@@ -197,6 +197,8 @@ Health endpoints expose no version, no dependency detail and no counts — they 
 
 1. Define the request and response types in `@purlay/types/api.ts` **first**.
 2. Add the row to the table above, with its phase marker and required role.
-3. Write the cross-tenant 404 test before the handler. (D-21)
+3. Add its cross-tenant case to `apps/api/src/ingress/http/cross-tenant.ts` before the handler —
+   or, if it names no workspace, its reason to `UNSCOPED`. Serving it with neither fails the
+   build. (D-21, D-63)
 4. The handler validates, calls exactly one service, and serializes. No business logic in
    ingress. (`ARCHITECTURE.md` §1)

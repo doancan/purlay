@@ -1,10 +1,9 @@
 /**
  * The channel endpoints, driven through real requests.
  *
- * Two mandates apply here rather than one. Every workspace-scoped endpoint
- * carries a cross-tenant test asserting `404` (D-21), and every channel-scoped
- * endpoint carries an intra-workspace visibility test asserting the same (D-34).
- * Both are `ARCHITECTURE.md` §10 requirements with no exceptions.
+ * Their cross-tenant tests are not here: every workspace-scoped endpoint is
+ * crossed in `cross-tenant.integration.test.ts`, from a list the build checks
+ * against `API.md` (D-21, D-63).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
@@ -194,58 +193,6 @@ describe('integration: channels', () => {
       expect(members).toHaveLength(1);
     });
   });
-
-  /** Mandatory: the workspace-scoped pair (D-21). */
-  for (const [method, suffix] of [
-    ['GET', ''],
-    ['POST', ''],
-  ] as const) {
-    test(`${method} /api/workspaces/:id/channels${suffix} answers 404 across a tenant boundary`, async () => {
-      await withRollback(async (db) => {
-        const owner = await signedIn(db, `chn-x-owner-${method}`);
-        const stranger = await signedIn(db, `chn-x-stranger-${method}`);
-        const theirs = await aWorkspace(db, owner.cookie, `chn-x-${method.toLowerCase()}`);
-
-        const response = await call(db, method, `/api/workspaces/${theirs}/channels`, {
-          cookie: stranger.cookie,
-          ...(method === 'POST' ? { body: { name: 'sneak' } } : {}),
-        });
-        expect(response.status).toBe(404);
-        expect(await response.json()).toMatchObject({ error: { code: 'WORKSPACE_NOT_FOUND' } });
-      });
-    });
-  }
-
-  /** Mandatory: the channel-scoped pair (D-34). */
-  for (const [method, path] of [
-    ['GET', ''],
-    ['POST', '/join'],
-  ] as const) {
-    test(`${method} /api/channels/:id${path} answers 404 to somebody who cannot see it`, async () => {
-      await withRollback(async (db) => {
-        const owner = await signedIn(db, `chn-v-owner-${method}`);
-        const stranger = await signedIn(db, `chn-v-stranger-${method}`);
-        const workspaceId = await aWorkspace(db, owner.cookie, `chn-v-${method.toLowerCase()}`);
-        const channelId = await aChannel(db, owner.cookie, workspaceId, 'general');
-
-        const response = await call(db, method, `/api/channels/${channelId}${path}`, {
-          cookie: stranger.cookie,
-        });
-        expect(response.status).toBe(404);
-        const body = await response.json();
-        expect(body).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
-
-        // Identical to a channel that does not exist at all.
-        const missing = await call(
-          db,
-          method,
-          `/api/channels/00000000-0000-4000-8000-000000000000${path}`,
-          { cookie: stranger.cookie },
-        );
-        expect(await missing.json()).toEqual(body);
-      });
-    });
-  }
 
   test('every one of these endpoints requires a session', async () => {
     await withRollback(async (db) => {

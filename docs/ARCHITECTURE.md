@@ -415,7 +415,8 @@ by construction rather than by two branches kept in step. A `:workspaceId` that 
 takes the same refusal: handed to PostgreSQL it raises on the cast, and the boundary would answer
 500 where it promised 404.
 
-Every workspace-scoped endpoint carries a cross-tenant test asserting 404. (D-21)
+Every workspace-scoped endpoint carries a cross-tenant test asserting 404 (D-21), and which
+endpoints those are is read from `API.md` and checked by the build rather than remembered (D-63).
 
 ### 7.4. Authorization
 

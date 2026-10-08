@@ -1,10 +1,9 @@
 /**
  * The workspace endpoints, driven through real requests.
  *
- * Two of these are mandatory rather than chosen. `ARCHITECTURE.md` §10 requires
- * **every** workspace-scoped endpoint to carry a cross-tenant test asserting
- * `404` — no exceptions — because tenant isolation is the one defect class here
- * that is silent, unbounded and unrecoverable (D-21).
+ * Their cross-tenant tests are not here: every workspace-scoped endpoint is
+ * crossed in `cross-tenant.integration.test.ts`, from a list the build checks
+ * against `API.md` (D-21, D-63).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
@@ -154,39 +153,6 @@ describe('integration: workspaces', () => {
       expect(members).toMatchObject([{ role: 'owner', user: { username: 'ws-member' } }]);
     });
   });
-
-  /**
-   * Mandatory, per `ARCHITECTURE.md` §10: every workspace-scoped endpoint carries
-   * one of these. A `403` would confirm the workspace exists, which is itself the
-   * disclosure (D-21).
-   */
-  for (const path of ['', '/members'] as const) {
-    test(`GET /api/workspaces/:id${path} answers 404 across a tenant boundary, never 403`, async () => {
-      await withRollback(async (db) => {
-        const owner = await signedIn(db, `x-owner${path.replace('/', '-')}`);
-        const stranger = await signedIn(db, `x-stranger${path.replace('/', '-')}`);
-        const theirs = await aWorkspace(db, owner.cookie, `closed${path.replace('/', '-')}`);
-
-        const response = await call(db, 'GET', `/api/workspaces/${theirs.id}${path}`, {
-          cookie: stranger.cookie,
-        });
-
-        expect(response.status).toBe(404);
-        const body = await response.json();
-        expect(body).toMatchObject({ error: { code: 'WORKSPACE_NOT_FOUND' } });
-
-        // And it is the same answer as for a workspace that does not exist at all.
-        const missing = await call(
-          db,
-          'GET',
-          `/api/workspaces/00000000-0000-4000-8000-000000000000${path}`,
-          { cookie: stranger.cookie },
-        );
-        expect(missing.status).toBe(404);
-        expect(await missing.json()).toEqual(body);
-      });
-    });
-  }
 
   test('every one of these endpoints requires a session', async () => {
     await withRollback(async (db) => {
