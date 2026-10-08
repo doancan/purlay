@@ -15,6 +15,7 @@ import { NOW, testDependencies } from './testing';
 import { fixedClock } from '../../platform/clock';
 import { issueSession } from '../../modules/auth/sessions';
 import { SESSION_COOKIE } from './cookies';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -46,7 +47,7 @@ const aChannel = async (
     expect(response.status).toBe(201);
     return ((await response.json()) as { id: string }).id;
   };
-  const workspaceId = await post('/api/workspaces', { name, slug: name });
+  const workspaceId = await post('/api/workspaces', { name, slug: aUniqueSlug(name) });
   const channelId = await post(`/api/workspaces/${workspaceId}/channels`, { name: 'general' });
   return { cookie, userId: user.id, workspaceId, channelId };
 };

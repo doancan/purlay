@@ -64,7 +64,8 @@ export interface Dependencies {
  */
 export interface HttpApplication {
   readonly handle: (request: Request) => Promise<Response>;
-  readonly listen: (port: number) => void;
+  /** Starts serving; returns the port bound, which is the OS's choice for `0`. */
+  readonly listen: (port: number) => number;
   /** Closes the listener and every open socket. What a test that listened must call. */
   readonly stop: (closeActiveConnections?: boolean) => Promise<unknown>;
 }
@@ -273,5 +274,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       },
     });
 
-  return app;
+  return {
+    handle: async (request) => await app.handle(request),
+    listen: (port: number): number => {
+      app.listen(port);
+      const bound = app.server?.port;
+      if (bound === undefined) throw new Error('the server did not report the port it bound');
+      return bound;
+    },
+    stop: async (closeActiveConnections) => await app.stop(closeActiveConnections),
+  };
 };

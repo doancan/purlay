@@ -22,9 +22,9 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { createApp } from './app';
 import { CROSS_TENANT, pathFor, type Ids } from './cross-tenant';
 import { NOW, testDependencies } from './testing';
-import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from './cookies';
+import { aSignedInUser } from './fixtures';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -50,15 +50,8 @@ const call = async (
     }),
   );
 
-const signedIn = async (db: Executor, name: string): Promise<string> => {
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${name}@example.test`, username: name, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, row.id, 30);
-  return `${SESSION_COOKIE}=${token}`;
-};
+const signedIn = async (db: Executor, name: string): Promise<string> =>
+  (await aSignedInUser(db, clock, name)).cookie;
 
 const created = async (response: Response): Promise<string> => {
   expect(response.status).toBe(201);
@@ -68,7 +61,7 @@ const created = async (response: Response): Promise<string> => {
 /** A workspace with one channel in it, owned by whoever `cookie` belongs to. */
 const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids> => {
   const workspaceId = await created(
-    await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug }),
+    await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug: aUniqueSlug(slug) }),
   );
   const channelId = await created(
     await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'general' }),

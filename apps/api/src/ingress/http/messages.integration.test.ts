@@ -11,9 +11,9 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { MESSAGE_ID_SKEW, messageId } from '@purlay/types';
 import { createApp } from './app';
 import { testDependencies } from './testing';
-import { issueSession } from '../../modules/auth/sessions';
 import { fixedClock } from '../../platform/clock';
-import { SESSION_COOKIE } from './cookies';
+import { aSignedInUser, type SignedInUser } from './fixtures';
+import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -45,18 +45,8 @@ const call = async (
     }),
   );
 
-const signedIn = async (
-  db: Executor,
-  name: string,
-): Promise<{ userId: string; cookie: string }> => {
-  const row = await db
-    .insertInto('users')
-    .values({ email: `${name}@example.test`, username: name, display_name: name })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, row.id, 30);
-  return { userId: row.id, cookie: `${SESSION_COOKIE}=${token}` };
-};
+const signedIn = async (db: Executor, name: string): Promise<SignedInUser> =>
+  await aSignedInUser(db, clock, name);
 
 /** A workspace with a channel, and whoever asked for it inside both. */
 const aChannel = async (
@@ -66,7 +56,7 @@ const aChannel = async (
 ): Promise<string> => {
   const workspace = await call(db, 'POST', '/api/workspaces', {
     cookie: who.cookie,
-    body: { name: slug, slug },
+    body: { name: slug, slug: aUniqueSlug(slug) },
   });
   const workspaceId = ((await workspace.json()) as { id: string }).id;
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, {
@@ -111,7 +101,7 @@ describe('integration: messages', () => {
       expect(response.status).toBe(201);
       const message = (await response.json()) as { id: string; sender: { username: string } };
       expect(message.id).toBe(id);
-      expect(message.sender.username).toBe('msg-alice');
+      expect(message.sender.username).toBe(alice.username);
 
       // And the sidebar can order channels without touching this table.
       const channel = await db
