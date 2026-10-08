@@ -101,8 +101,12 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # PostgreSQL only. Nothing the integration tests reach reads object storage
+      # yet, and the MinIO images `db:up` also pulls are no longer published:
+      # starting them here failed this job on every pull request for a service
+      # no test uses. The storage choice is #183.
       - name: start the database
-        run: bun run db:up
+        run: bun run db:up:postgres
 
       - name: the committed types are exactly what the migrations produce
         run: bun run db:check

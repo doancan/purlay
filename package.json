@@ -22,6 +22,7 @@
     "db:migrate": "bun run packages/db/src/cli/migrate.ts",
     "db:reset": "docker compose down -v && docker compose up -d --wait postgres minio && docker compose up --exit-code-from minio-bucket minio-bucket",
     "db:up": "docker compose up -d --wait postgres minio && docker compose up --exit-code-from minio-bucket minio-bucket",
+    "db:up:postgres": "docker compose up -d --wait postgres",
     "dev": "bun --filter '@purlay/api' --filter '@purlay/web' dev",
     "dev:api": "bun run --cwd apps/api dev",
     "dev:web": "bun run --cwd apps/web dev",
