@@ -461,7 +461,8 @@ of the whole tenant.
 Like §7.3, the answer across a boundary is **404**. Every channel-scoped endpoint carries an
 intra-workspace visibility test asserting it — and the guard raises **one value** for all four ways
 to be refused (another workspace, private and not yours, soft-deleted, never existed), so they
-cannot drift into telling them apart.
+cannot drift into telling them apart. Every scoped endpoint declares where it sits on this axis,
+and one that names a channel cannot declare itself outside it (D-64).
 
 **The rule is written whole, though Phase 0 creates only public channels.** A guard that is correct
 only for the case that exists today stops being one the day the next case arrives, and here that
