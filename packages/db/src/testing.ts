@@ -12,8 +12,9 @@
  * helper refuses; `bun run test` excludes these files, and `bun run
  * test:integration` is the command that runs them.
  */
-import { Kysely, PostgresDialect, type Transaction } from 'kysely';
+import { Kysely, PostgresDialect, sql, type Transaction } from 'kysely';
 import pg from 'pg';
+import { migrateToLatest } from './migrator';
 import type { DB } from './schema';
 
 class Rollback extends Error {
@@ -25,19 +26,33 @@ class Rollback extends Error {
 
 let shared: Kysely<DB> | undefined;
 
-/** One pool for the run. Refuses rather than skipping when there is nothing to connect to. */
-export const integrationDatabase = (): Kysely<DB> => {
+/** Refuses rather than skipping when there is nothing to connect to. */
+const integrationUrl = (): string => {
   const connectionString = process.env['DATABASE_URL'];
   if (connectionString === undefined || connectionString === '') {
     throw new Error(
       'DATABASE_URL is not set, so these tests would silently prove nothing.\n' +
         'Start the environment and run them with:\n' +
-        '  bun run db:up && bun run test:integration',
+        '  bun run db:up:postgres && bun run test:integration',
     );
   }
-  shared ??= new Kysely<DB>({
-    dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, max: 4 }) }),
-  });
+  return connectionString;
+};
+
+const connect = <T>(connectionString: string, max: number): Kysely<T> =>
+  new Kysely<T>({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, max }) }) });
+
+/** The same server, another database on it. */
+const onDatabase = (connectionString: string, name: string): string => {
+  const url = new URL(connectionString);
+  url.pathname = `/${name}`;
+  return url.toString();
+};
+
+/** One pool for the run. */
+export const integrationDatabase = (): Kysely<DB> => {
+  const connectionString = integrationUrl();
+  shared ??= connect<DB>(connectionString, 4);
   return shared;
 };
 
@@ -77,4 +92,63 @@ export const closeIntegrationDatabase = async (): Promise<void> => {
     await shared.destroy();
     shared = undefined;
   }
+};
+
+export interface ClonedDatabase {
+  readonly db: Kysely<DB>;
+  /** Closes the pool and drops the database. What `afterAll` must call. */
+  readonly drop: () => Promise<void>;
+}
+
+/**
+ * A database of this test file's own, cloned from a migrated template (D-46).
+ *
+ * For what one rolled-back transaction cannot do: commit on purpose, or let two
+ * connections observe each other. One transaction puts every query on a single
+ * connection, which serialises exactly the concurrency such a test exists to see.
+ *
+ * The template is brought up to date on every call. Migrating an applied
+ * template is a no-op; skipping it would let a template from an older run hide a
+ * migration added since, and the test would pass against a schema that no longer
+ * exists. Cloning needs nothing connected to the template, so its connection is
+ * closed before the clone is made.
+ */
+export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
+  const source = integrationUrl();
+  const base = new URL(source).pathname.slice(1);
+  const template = `${base}_template`;
+  const clone = `${base}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+
+  const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
+  try {
+    const exists = await sql`select 1 from pg_database where datname = ${template}`.execute(admin);
+    if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
+
+    const templateDb = connect<unknown>(onDatabase(source, template), 1);
+    try {
+      const { error } = await migrateToLatest(templateDb);
+      if (error !== undefined)
+        throw new Error('migrating the test template failed', { cause: error });
+    } finally {
+      await templateDb.destroy();
+    }
+
+    await sql`create database ${sql.id(clone)} template ${sql.id(template)}`.execute(admin);
+  } finally {
+    await admin.destroy();
+  }
+
+  const db = connect<DB>(onDatabase(source, clone), 4);
+  return {
+    db,
+    drop: async (): Promise<void> => {
+      await db.destroy();
+      const dropper = connect<unknown>(onDatabase(source, 'postgres'), 1);
+      try {
+        await sql`drop database ${sql.id(clone)} with (force)`.execute(dropper);
+      } finally {
+        await dropper.destroy();
+      }
+    },
+  };
 };
