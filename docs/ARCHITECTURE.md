@@ -584,7 +584,7 @@ constant and variables go in fields.
 makes one-transaction-per-test possible, and it is enforced by the same lint boundary as the
 layering rule. (D-46)
 
-**Health.** `/health` (liveness) and `/health/ready` (database reachable, migrations applied).
+**Health.** `/health` is liveness and touches nothing. `/health/ready` is readiness: the database answers, every migration is applied, and the identifier columns compare byte-wise (D-40); otherwise `503`, with the reason in the log and not in the response.
 
 **Testing (D-21).**
 
