@@ -34,6 +34,7 @@
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
     "knip": "knip",
     "lint": "eslint .",
+    "mutate": "bun run scripts/run-mutations.ts",
     "lint:fix": "eslint . --fix",
     "queue": "bun run scripts/queue.ts",
     "test": "bun test apps packages scripts --path-ignore-patterns '**/*.integration.test.ts'",
