@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a client's mistake is never a 500
+
+- A body that is not JSON, a lost race for a workspace slug or channel name, and a GitHub login or
+  display name longer than its column all answered `500`. They are now `400 VALIDATION_FAILED`,
+  `409 *_TAKEN` and a shortened stored name, mapped in `refusalFor` and the identity rules
+  (#233, D-78). A unique index nobody listed still answers `500`.
+
 ### Fix — 2026-10-09: a request that writes twice writes both or neither
 
 - Creating a workspace, creating a channel and signing in each made several writes on the pool, so a

@@ -34,6 +34,74 @@ export interface Refusal {
   readonly body: ErrorResponse;
 }
 
+/**
+ * What the driver reports about a statement the database refused: the SQLSTATE
+ * and, for a constraint, its name. Read by shape — this layer does not import the
+ * driver — and only ever *into* a contract code; nothing the driver wrote
+ * (the message, the detail, the offending value) is passed on.
+ */
+interface Violation {
+  readonly sqlstate: string;
+  readonly constraint: string | undefined;
+}
+
+const violationOf = (error: unknown): Violation | undefined => {
+  if (!(error instanceof Error) || !('code' in error) || typeof error.code !== 'string') {
+    return undefined;
+  }
+  const constraint = 'constraint' in error ? error.constraint : undefined;
+  return {
+    sqlstate: error.code,
+    constraint: typeof constraint === 'string' ? constraint : undefined,
+  };
+};
+
+/**
+ * The unique indexes that stand behind a code the contract already names. The
+ * existence check in a service is a courtesy that races; the index is the
+ * authority, and this is where losing the race becomes the same `409` the check
+ * would have given (#233). A unique index not listed here is a defect, not a
+ * client's mistake, and stays `INTERNAL`.
+ */
+const TAKEN_BY_INDEX: Readonly<Record<string, AppErrorBody>> = {
+  workspaces_slug_key: {
+    code: 'WORKSPACE_SLUG_TAKEN',
+    message: 'That workspace address is already in use.',
+  },
+  idx_channels_unique_name: {
+    code: 'CHANNEL_NAME_TAKEN',
+    message: 'A channel with that name already exists here.',
+  },
+  users_email_key: {
+    code: 'ACCOUNT_EMAIL_CONFLICT',
+    message: 'That email address already belongs to another Purlay account.',
+  },
+  messages_pkey: {
+    code: 'MESSAGE_ID_CONFLICT',
+    message: 'That message id is already in use.',
+  },
+};
+
+/** `unique_violation`, `string_data_right_truncation`, `check_violation`. */
+const UNIQUE = '23505';
+const TOO_LONG = '22001';
+const CHECK = '23514';
+
+/** The one mapping from a refused statement to a refusal, or `undefined` if it is not the client's doing. */
+const refusalForViolation = ({ sqlstate, constraint }: Violation): AppErrorBody | undefined => {
+  if (sqlstate === UNIQUE && constraint !== undefined) return TAKEN_BY_INDEX[constraint];
+  if (sqlstate === TOO_LONG || sqlstate === CHECK) {
+    // Which column, and which rule, is the schema's business. The client is told
+    // the request was not acceptable, not how the table is built.
+    return {
+      code: 'VALIDATION_FAILED',
+      message: 'The request did not match the contract.',
+      details: { fields: { body: 'is not acceptable' } },
+    };
+  }
+  return undefined;
+};
+
 const respond = (body: AppErrorBody): Refusal => ({
   status: statusFor(body.code),
   body: { error: body },
@@ -78,6 +146,20 @@ export const refusalFor = (
       details: { fields: fieldsFrom(issues) },
     });
   }
+
+  // A body that is not JSON never reaches a handler: the framework raises PARSE.
+  // It is the client's mistake like any other, and its message quotes the body.
+  if (code === 'PARSE') {
+    return respond({
+      code: 'VALIDATION_FAILED',
+      message: 'The request body is not valid JSON.',
+      details: { fields: { body: 'is not valid JSON' } },
+    });
+  }
+
+  const violation = violationOf(error);
+  const refused = violation === undefined ? undefined : refusalForViolation(violation);
+  if (refused !== undefined) return respond(refused);
 
   if (code === 'NOT_FOUND') {
     return respond({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
