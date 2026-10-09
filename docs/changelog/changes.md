@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Chore — 2026-10-09: every Action is pinned to a commit, and a test says so
+
+- `actions/checkout`, `oven-sh/setup-bun` and `actions/setup-python` were pinned to tags their
+  owners can move. Each is now a full SHA with its version in a comment, resolved and checked
+  against the tag with the API; `scripts/workflow-pins.test.ts` fails any `uses:` that is not
+  (#247, D-91). Dependabot's github-actions ecosystem keeps proposing the next SHA.
+
 ### Refactor — 2026-10-09: the `/api/me` query is a module's
 
 - `readMe` no longer holds a raw query; `meOf` in `modules/workspaces` does (#245, D-47).

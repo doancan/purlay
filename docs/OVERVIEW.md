@@ -68,6 +68,7 @@ looking for the error codes to a file that does not have them.
 | The event bus seam and the topic names | `apps/api/src/platform/events.ts` (D-7) |
 | The transaction boundary every write path shares | `apps/api/src/platform/transactions.ts` (D-35, D-46) |
 | The local environment: images, ports, credentials | `docker-compose.yml` |
+| What the supply chain is held to: pinned Actions, the audit gate, licences | `scripts/workflow-pins.test.ts`, `scripts/audit-gate.ts`, `scripts/licenses.ts` (D-91) |
 | Which rules the build enforces | `eslint.config.mjs`, demonstrated by `scripts/verify-enforcement.ts` |
 
 **How a fact stays owned.** Where a second copy is genuinely useful — the compose file *does* the
