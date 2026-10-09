@@ -466,6 +466,9 @@ SQL, outside the application, does not end an open socket — nothing publishes 
 or the process restarts (a drain, §11 / D-72). There is no command-line tool for it: the bus is in-process
 and another process cannot reach it (D-85).
 
+A socket subscribes to its topics **before** its session is confirmed by a second read, so a sign-out
+while it opens is seen by one or heard by the other (D-85, amended).
+
 ### 7.3. The isolation mechanism
 
 The rule "every query filters on `workspace_id`" fails eventually if it depends on remembering.

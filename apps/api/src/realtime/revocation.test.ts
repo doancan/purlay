@@ -44,6 +44,7 @@ const aNode = (backplane: ReturnType<typeof inProcessBackplane>): Node => {
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);
     },
+    listen: () => undefined,
   });
   const bus = backplane.node(hub.deliver, log);
   return {

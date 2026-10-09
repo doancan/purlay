@@ -65,6 +65,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
   const hub = createSocketHub(db, clock, {
     log: createLogger({ level: 'silent' }),
     leave: () => undefined,
+    listen: () => undefined,
   });
   const bus = inProcessEventBus(hub.deliver, createLogger({ level: 'silent' }));
   await hub.opened(

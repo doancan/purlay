@@ -3002,6 +3002,15 @@ the session expires or the process restarts, because the bus is in-process (D-7)
 another process and cannot reach this one's bus, and a network bus is not built for it (`CONTRIBUTING.md`
 §1.11). An operator who revokes by SQL restarts the node (a drain, D-72) to make it take effect.
 
+**Amended 2026-10-09 (second-round audit): a socket is listening before its session is confirmed.** The hub
+read the session and only afterwards did the socket subscribe to `session:` and `user:`, so a sign-out
+published between the two reached nobody and the socket stayed open and authenticated — a `MESSAGE_SEND`
+sent in that window was acknowledged and stored. The hub now reads the session, calls `listen` (which
+subscribes), and **reads it again**: a sign-out before the second read is seen by it, one after is heard on
+the topic, and no instant is in neither. Reproduced deterministically by a hook that runs the sign-out when
+the first read returns. **Rejected — subscribing to a topic named after the cookie's token:** the topic would
+carry a credential, and the session id is what the rest of the system names.
+
 ---
 
 ### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change

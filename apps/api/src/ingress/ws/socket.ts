@@ -117,6 +117,12 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);
     },
+    // Where the end of this session, of the account, or of one membership is
+    // announced, on whichever node — subscribed before the session is confirmed.
+    listen: (identity) => {
+      bus.subscribe(sessionTopic(identity.sessionId), identity.socketId);
+      bus.subscribe(userTopic(identity.userId), identity.socketId);
+    },
   });
   const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
   const limiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET);
@@ -177,11 +183,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
         socket.close(CLOSE_CODES.TOO_BUSY, 'too-many-connections');
         return;
       }
-      // Where the end of this session will be announced, on whichever node.
       if (identity !== undefined) {
-        bus.subscribe(sessionTopic(identity.sessionId), socket.id);
-        // And where the end of the account, or of one membership, is announced.
-        bus.subscribe(userTopic(identity.userId), socket.id);
         log.info('socket opened', { socketId: socket.id, userId: identity.userId });
       }
     },

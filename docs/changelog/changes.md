@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a sign-out while a socket opens no longer leaves it open
+
+- A sign-out between the hub reading the session and the socket subscribing to its end was published to
+  nobody; the socket stayed authenticated and a send on it was acknowledged. The socket now listens first
+  and confirms the session with a second read (D-85, amended).
+
 ### Fix — 2026-10-09: a user's sockets share one write budget, and the sockets are capped
 
 - One user opened 100 sockets and sent 20 messages on each: all 2,000 were acknowledged in eight seconds
