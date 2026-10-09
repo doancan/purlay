@@ -307,7 +307,9 @@ describe('the frames of one connection, in turn', () => {
   test('a frame that fails does not stop the ones behind it', async () => {
     const { hub } = rig();
     const ran: string[] = [];
-    hub.enqueue('s', async () => { await Promise.reject(new Error('one failed')); });
+    hub.enqueue('s', async () => {
+      await Promise.reject(new Error('one failed'));
+    });
     hub.enqueue('s', async () => {
       ran.push('second');
       await Promise.resolve();
@@ -320,7 +322,9 @@ describe('the frames of one connection, in turn', () => {
     const { hub } = rig();
     const ran: string[] = [];
     const slow = gate();
-    hub.enqueue('s', async () => { await slow.wait; });
+    hub.enqueue('s', async () => {
+      await slow.wait;
+    });
     hub.enqueue('s', async () => {
       ran.push('late');
       await Promise.resolve();
@@ -352,7 +356,9 @@ describe('the frames of one connection, in turn', () => {
     await Bun.sleep(1);
     // The control: at the bound, nothing is refused yet.
     expect(closes.includes(String(CLOSE_CODES.TOO_BUSY))).toBe(false);
-    hub.enqueue('s', async () => { await Promise.resolve(); });
+    hub.enqueue('s', async () => {
+      await Promise.resolve();
+    });
     expect(closes.includes(String(CLOSE_CODES.TOO_BUSY))).toBe(true);
     slow.open();
     await hub.settled();
