@@ -57,6 +57,12 @@ export const Environment = Type.Object({
   /** A PEM file to trust instead of the system roots, for a private or managed CA (D-87). */
   DATABASE_SSL_CA_FILE: Type.Optional(Type.String({ minLength: 1 })),
 
+  /** Apply pending migrations when the process starts. Several nodes starting together
+   *  are serialised by the migrator's own lock (D-93). Unset is off: a developer's
+   *  `dev:api` should not rewrite a database by being started. Optional rather than
+   *  defaulted so the test configuration needs no new field. */
+  MIGRATE_ON_START: Type.Optional(Type.Boolean()),
+
   GITHUB_CLIENT_ID: Type.String({ minLength: 1 }),
   GITHUB_CLIENT_SECRET: Type.String({ minLength: 1 }),
 

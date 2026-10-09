@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: the API migrates itself on start, once, however many nodes there are
+
+- `MIGRATE_ON_START=true` (off by default) makes the process apply pending migrations after its listener
+  opens; nodes started together take turns in the migrator's lock, and a node whose migration fails
+  exits 1 (#248, D-93).
+- Two real API processes started at the same instant against an empty database both become ready with
+  every migration recorded once. Run before the migrator polled for its lock, the same test deadlocked
+  (three in three); it now passes because of the migrator, and fails three in three if the migrator's
+  lock is taken out.
+
 ### Chore — 2026-10-09: lint refuses the door-to-door import and production code importing test code
 
 - `realtime` cannot import `ingress`; production code under `apps/api/src` cannot import a `testing/`

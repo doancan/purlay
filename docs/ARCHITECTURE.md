@@ -709,14 +709,19 @@ path of Phase 2. When it ships, `docker compose` brings up `api`, `postgres`, ob
 and a **scheduler** container that runs the CLI jobs on a cron (#72, D-30). The scheduler ships
 wired by default: the known failure mode of external scheduling is the cron nobody installed, and
 every run records its outcome in `job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:status` can report
-*last successful run* per job. Migrations will run on start and are idempotent; today they are run
-with `bun run db:migrate`.
+*last successful run* per job. Migrations are idempotent and `bun run db:migrate` runs them by hand.
 
 **The image.** The API builds into a two-stage image whose runtime stage is distroless and runs as
 a numeric non-root user with a read-only root filesystem (`Dockerfile`, D-92). `scripts/image-smoke.sh`
 runs it against the compose database in CI and checks liveness, readiness, the container's own health
 check and the absence of a shell; `image.yml` publishes from main with provenance and an SBOM. The
 client is not in it: that stage arrives with the prerendered shell (#141, #224).
+
+**Migrations on start, for any number of nodes.** With `MIGRATE_ON_START=true` the process calls the
+migrator after its listener opens. The migrator's advisory lock, polled without holding a transaction open
+(D-86), makes nodes started together take turns; the others stay not-ready — `/health/ready` answers 503
+while migrations are pending — until it is their turn and then find nothing to do. A migration that fails
+exits the node with 1 (`apps/api/src/platform/migrate-on-start.ts`, D-93).
 
 **A restart is a reconnect, not an outage.** On SIGTERM or SIGINT the process drains: readiness
 answers 503 at once, every socket is closed with `CLOSE_CODES.RESTARTING` (1012) so its client
