@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: the object store can be copied out and back, and compared
+
+- Nothing backed up the bucket. `scripts/bucket-copy.ts` exports every object with a manifest of its
+  size and SHA-256, imports into an **empty** bucket only, and verifies a bucket against a manifest;
+  the first of the backup work for D-95 (#248). It runs inside the API image, on the stack's network,
+  because the store is published nowhere.
+- Keys that would not map to exactly one file — an empty, `.` or `..` segment, a leading slash — are
+  refused at export instead of overwriting each other: `a//b` and `a/b` are one file on disk and two
+  objects in the bucket.
+
 ### Feature — 2026-10-09: a production compose file
 
 - `docker-compose.production.yml`: the API, PostgreSQL, Garage and Caddy behind one origin with
