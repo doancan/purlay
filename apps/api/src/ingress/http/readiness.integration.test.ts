@@ -50,6 +50,40 @@ describe('integration: readiness', () => {
     expect(String(answer.reasons[0])).toContain('0007_message_content_limit');
   });
 
+  test('a migration edited after it was applied is not ready', async () => {
+    const { db } = await aDatabase();
+    await sql`update kysely_migration set checksum = repeat('0', 64)
+      where name = '0003_workspaces'`.execute(db);
+    const answer = await ready(db);
+    expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
+    expect(String(answer.reasons[0])).toContain('0003_workspaces was edited after it was applied');
+  });
+
+  test('an applied migration whose file has gone is not ready', async () => {
+    const { db } = await aDatabase();
+    await sql`insert into kysely_migration (name, timestamp, checksum)
+      values ('0099_ghost', '2099-01-01T00:00:00.000Z', repeat('1', 64))`.execute(db);
+    const answer = await ready(db);
+    expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
+    expect(String(answer.reasons[0])).toContain('0099_ghost is missing');
+  });
+
+  test('migrations applied out of order are not ready', async () => {
+    const { db } = await aDatabase();
+    await sql`update kysely_migration set timestamp = '2099-01-01T00:00:00.000Z'
+      where name = '0002_identity'`.execute(db);
+    const answer = await ready(db);
+    expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
+    expect(String(answer.reasons[0])).toContain('must sort after the last applied one');
+  });
+
+  /** The state of a database the previous migrator left: no checksum column to compare. */
+  test('a database from before checksums existed is ready, not accused', async () => {
+    const { db } = await aDatabase();
+    await sql`alter table kysely_migration drop column checksum`.execute(db);
+    expect(await ready(db)).toEqual({ status: 200, body: { status: 'ready' }, reasons: [] });
+  });
+
   test('an identifier column that does not compare byte-wise is not ready', async () => {
     const { db } = await aDatabase();
     await sql`alter table users alter column email type text collate "POSIX"`.execute(db);

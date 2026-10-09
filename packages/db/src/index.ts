@@ -21,6 +21,7 @@ export { sql } from 'kysely';
 export {
   migrateToLatest,
   MIGRATIONS_DIRECTORY,
+  migrationHistoryProblem,
   pendingMigrations,
   readMigrationFiles,
   type MigrationFile,

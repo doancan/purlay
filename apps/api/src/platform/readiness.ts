@@ -1,10 +1,13 @@
 /**
  * Whether this process should receive traffic (`API.md` §8, #108).
  *
- * Liveness is "the process answers"; readiness is "it can do its job". Three
+ * Liveness is "the process answers"; readiness is "it can do its job". Four
  * things decide it, each a way a deployment can be up and still wrong:
  *
  * - **the database answers** — a pool that cannot reach it serves only errors;
+ * - **the applied migrations are the files this code ships** — an edited, missing
+ *   or out-of-order migration means the schema is not the one the code was written
+ *   against, which the migrator refuses to run past and readiness must not hide (D-86);
  * - **every migration is applied** — code ahead of its schema fails on the first
  *   query that touches what is missing;
  * - **the identifier columns compare byte-wise.** They declare `COLLATE "C"` so
@@ -16,7 +19,7 @@
  * The answer to the caller is a word; the reason is the log's. Health endpoints
  * disclose nothing about dependencies (`API.md` §8).
  */
-import { pendingMigrations, sql, type Executor } from '@purlay/db';
+import { migrationHistoryProblem, pendingMigrations, sql, type Executor } from '@purlay/db';
 
 /**
  * The columns the migrations declare `COLLATE "C"`. Repeated here because a
@@ -35,6 +38,9 @@ export type Readiness =
 
 export const readiness = async (database: Executor): Promise<Readiness> => {
   try {
+    const history = await migrationHistoryProblem(database);
+    if (history !== undefined) return { ready: false, reason: history };
+
     const pending = await pendingMigrations(database);
     if (pending.length > 0) {
       return { ready: false, reason: `migrations not applied: ${pending.join(', ')}` };
