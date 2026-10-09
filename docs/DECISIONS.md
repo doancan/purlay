@@ -2436,6 +2436,33 @@ nothing and answers `500`; the contract has no code for it and the fix is a diff
 (an upsert), not a mapping.
 
 **Reversibility:** free. A table and a function.
+### D-79. Configuration refuses an unsafe production, and names the variable without quoting it
+
+`ENCRYPTION_KEY` was checked for 44 characters, so 44 repeated letters passed, and the development
+key committed to this repository was accepted in production; `DATABASE_SSL` defaulted to `false`
+there; `APP_URL` accepted any scheme. The development key itself turned out to decode to 33 bytes,
+not 32 — the check that would have caught it did not exist.
+
+**Decided: the key is decoded.** Strict base64 of exactly 32 bytes, and not one repeated value
+(all-zero included, which is what `AAAA…` decodes to). `Buffer.from` ignores what it cannot read, so
+the shape is checked with a pattern first; a typo must not become a shorter key.
+
+**Decided: in production the public development key is refused** — `DEVELOPMENT_ENCRYPTION_KEY`
+lives in `platform/config.ts`, one home, imported by the test fixtures that use it. It is now a real
+32 bytes.
+
+**Decided: production refuses `DATABASE_SSL=false` (the default) unless `DATABASE_ALLOW_PLAINTEXT=true`.**
+A self-hoster whose database shares a private compose network has a legitimate reason; the
+acknowledgement makes that a sentence in their configuration rather than a silent default.
+**Decided: `APP_URL` is `http` or `https`.** Every refusal is collected, names its variable and
+never prints a value (`ARCHITECTURE.md` §10).
+
+*Rejected: refusing plaintext outright.* It would make the default compose deployment impossible to
+start. *Rejected: inferring TLS from `DATABASE_URL`'s `sslmode`* — a second source of truth for one
+fact. *Rejected: an entropy estimate* — it rejects honest keys and accepts clever bad ones; the
+checks above are the ones that are never wrong.
+
+**Reversibility:** free; nothing is stored. An operator on a bad key sees it at the next start.
 
 ---
 

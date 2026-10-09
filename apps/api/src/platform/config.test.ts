@@ -7,14 +7,36 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { CONFIGURED, ConfigurationError, loadConfig } from './config';
+import { CONFIGURED, ConfigurationError, DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from './config';
 
 const valid = {
   APP_URL: 'http://localhost:5173',
   DATABASE_URL: 'postgres://purlay:purlay@localhost:5432/purlay',
   GITHUB_CLIENT_ID: 'client-id',
   GITHUB_CLIENT_SECRET: 'client-secret',
-  ENCRYPTION_KEY: 'ZGV2ZWxvcG1lbnQtb25seS10aGlydHktdHdvLWJ5dGVzIQ==',
+  ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
+};
+
+/** A key that is a real 32 bytes, and not the development one. */
+const REAL_KEY = Buffer.from('0123456789abcdef0123456789ABCDEF').toString('base64');
+
+/** A production environment that is otherwise sound, so a test varies one thing. */
+const production = {
+  ...valid,
+  NODE_ENV: 'production',
+  APP_URL: 'https://purlay.app',
+  ENCRYPTION_KEY: REAL_KEY,
+  DATABASE_SSL: 'true',
+};
+
+const refusal = (environment: Record<string, string | undefined>): string => {
+  try {
+    loadConfig(environment);
+  } catch (error) {
+    if (error instanceof ConfigurationError) return error.message;
+    throw error;
+  }
+  throw new Error('the configuration was accepted');
 };
 
 describe('loading configuration', () => {
@@ -74,9 +96,7 @@ describe('loading configuration', () => {
 
   test('production insists on https, because the session cookie is Secure', () => {
     expect(() => loadConfig({ ...valid, NODE_ENV: 'production' })).toThrow(/https/);
-    expect(
-      loadConfig({ ...valid, NODE_ENV: 'production', APP_URL: 'https://purlay.app' }),
-    ).toBeDefined();
+    expect(loadConfig({ ...production, APP_URL: 'https://purlay.app' })).toBeDefined();
   });
 
   /** Regression for #200: the socket compares `Origin` to this, exactly. */
@@ -109,6 +129,95 @@ describe('loading configuration', () => {
 
   test('an invalid enumerated value is refused rather than coerced', () => {
     expect(() => loadConfig({ ...valid, NODE_ENV: 'staging' })).toThrow(ConfigurationError);
+  });
+});
+
+describe('a configuration that is unsafe is refused, by variable, without quoting a secret', () => {
+  test('a sound production environment is accepted (the baseline the refusals vary)', () => {
+    expect(loadConfig(production).NODE_ENV).toBe('production');
+  });
+
+  test('ENCRYPTION_KEY: 44 repeated letters are not a key', () => {
+    const message = refusal({ ...valid, ENCRYPTION_KEY: `${'a'.repeat(43)}=` });
+    expect(message).toContain('ENCRYPTION_KEY');
+    expect(message).not.toContain('aaaaaaaa');
+  });
+
+  test('ENCRYPTION_KEY: it must decode to exactly 32 bytes', () => {
+    for (const bytes of [16, 31, 33, 64]) {
+      const key = Buffer.alloc(bytes, 'xy').toString('base64');
+      expect(refusal({ ...valid, ENCRYPTION_KEY: key })).toContain('ENCRYPTION_KEY');
+    }
+    // 44 characters that are not base64 at all.
+    expect(refusal({ ...valid, ENCRYPTION_KEY: `${'!?'.repeat(21)}==` })).toContain(
+      'ENCRYPTION_KEY',
+    );
+  });
+
+  test('ENCRYPTION_KEY: 32 identical bytes, zero included, are refused', () => {
+    for (const byte of [0, 0x41, 0xff]) {
+      const key = Buffer.alloc(32, byte).toString('base64');
+      const message = refusal({ ...valid, ENCRYPTION_KEY: key });
+      expect(message).toContain('ENCRYPTION_KEY');
+      expect(message).not.toContain(key);
+    }
+  });
+
+  test('ENCRYPTION_KEY: a genuine key is accepted', () => {
+    expect(loadConfig({ ...valid, ENCRYPTION_KEY: REAL_KEY }).ENCRYPTION_KEY).toBe(REAL_KEY);
+  });
+
+  test('production refuses the development key, and does not print it', () => {
+    const message = refusal({ ...production, ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY });
+    expect(message).toContain('ENCRYPTION_KEY');
+    expect(message).toContain('development');
+    expect(message).not.toContain(DEVELOPMENT_ENCRYPTION_KEY);
+  });
+
+  test('outside production the development key is what tests and a laptop use', () => {
+    expect(loadConfig({ ...valid, NODE_ENV: 'test' }).ENCRYPTION_KEY).toBe(
+      DEVELOPMENT_ENCRYPTION_KEY,
+    );
+  });
+
+  test('production refuses plaintext database transport, by default and when set false', () => {
+    for (const ssl of [undefined, 'false']) {
+      const message = refusal({ ...production, DATABASE_SSL: ssl });
+      expect(message).toContain('DATABASE_SSL');
+      expect(message).toContain('DATABASE_ALLOW_PLAINTEXT');
+    }
+  });
+
+  test('production accepts plaintext transport only when it is explicitly acknowledged', () => {
+    const config = loadConfig({
+      ...production,
+      DATABASE_SSL: 'false',
+      DATABASE_ALLOW_PLAINTEXT: 'true',
+    });
+    expect(config.DATABASE_SSL).toBe(false);
+  });
+
+  test('the acknowledgement does not turn plaintext on, and is not needed in development', () => {
+    expect(loadConfig(valid).DATABASE_SSL).toBe(false);
+    expect(loadConfig({ ...valid, DATABASE_ALLOW_PLAINTEXT: 'true' }).DATABASE_SSL).toBe(false);
+  });
+
+  test('APP_URL: only http and https are schemes of an origin we serve', () => {
+    for (const url of ['ftp://example.com', 'javascript:alert(1)', 'file:///etc/passwd']) {
+      expect(refusal({ ...valid, APP_URL: url })).toContain('APP_URL');
+    }
+  });
+
+  test('every refusal in one production environment is reported at once', () => {
+    const message = refusal({
+      ...production,
+      ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
+      DATABASE_SSL: undefined,
+      APP_URL: 'http://purlay.app',
+    });
+    for (const name of ['ENCRYPTION_KEY', 'DATABASE_SSL', 'APP_URL']) {
+      expect(message).toContain(name);
+    }
   });
 });
 

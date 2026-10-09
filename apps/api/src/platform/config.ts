@@ -18,6 +18,13 @@ import { Value } from '@sinclair/typebox/value';
 // format it does not know — valid ones included — so this is not optional.
 import '@purlay/types';
 
+/**
+ * The key the tests and a developer's laptop use. It is public — it is in this
+ * repository — so a production that runs on it signs state and encrypts tokens
+ * with a key the whole world knows. `loadConfig` refuses it there (#236).
+ */
+export const DEVELOPMENT_ENCRYPTION_KEY = 'ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMhISE=';
+
 export const Environment = Type.Object({
   NODE_ENV: Type.Union(
     [Type.Literal('development'), Type.Literal('test'), Type.Literal('production')],
@@ -40,12 +47,16 @@ export const Environment = Type.Object({
   DATABASE_URL: Type.String({ minLength: 1 }),
   DATABASE_POOL_MAX: Type.Integer({ minimum: 1, maximum: 100, default: 10 }),
   DATABASE_SSL: Type.Boolean({ default: false }),
+  /** Production refuses a database connection without TLS unless this says the
+   *  operator knows: a database on the same private network, say (#236). */
+  DATABASE_ALLOW_PLAINTEXT: Type.Boolean({ default: false }),
 
   GITHUB_CLIENT_ID: Type.String({ minLength: 1 }),
   GITHUB_CLIENT_SECRET: Type.String({ minLength: 1 }),
 
   /** 32 bytes, base64. The root secret; the OAuth state signing key is derived
-   *  from it with domain separation rather than being a second variable (D-62). */
+   *  from it with domain separation rather than being a second variable (D-62).
+   *  Decoded and checked in `loadConfig`: a length says nothing about entropy. */
   ENCRYPTION_KEY: Type.String({ minLength: 44 }),
   SESSION_TTL_DAYS: Type.Integer({ minimum: 1, maximum: 365, default: 30 }),
 
@@ -106,6 +117,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   }
 
   const loaded = coerced satisfies Config;
+  const problems: string[] = [];
 
   // An origin, not a URL. The socket's `Origin` check is an equality against it
   // and the browser sends an origin — no path, no trailing slash — so
@@ -114,16 +126,51 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   // deployment this product does not support — one public origin, cookies at
   // `Path=/` (D-61) — and is refused rather than silently cut off (#200).
   const appUrl = new URL(loaded.APP_URL);
-  if (appUrl.pathname !== '/' || appUrl.search !== '' || appUrl.hash !== '') {
-    throw new ConfigurationError([
+  if (appUrl.protocol !== 'http:' && appUrl.protocol !== 'https:') {
+    problems.push('APP_URL: the scheme must be http or https');
+  } else if (appUrl.pathname !== '/' || appUrl.search !== '' || appUrl.hash !== '') {
+    problems.push(
       `APP_URL: must be an origin, without a path, query or fragment (${appUrl.origin})`,
-    ]);
+    );
   }
   const config: Config = { ...loaded, APP_URL: appUrl.origin };
+  const production = config.NODE_ENV === 'production';
 
-  if (config.NODE_ENV === 'production' && !config.APP_URL.startsWith('https://')) {
-    throw new ConfigurationError(['APP_URL: must be https:// in production']);
+  if (production && appUrl.protocol !== 'https:') {
+    problems.push('APP_URL: must be https:// in production');
   }
 
+  problems.push(...keyProblems(config.ENCRYPTION_KEY, production));
+
+  if (production && !config.DATABASE_SSL && !config.DATABASE_ALLOW_PLAINTEXT) {
+    problems.push(
+      'DATABASE_SSL: production refuses a database connection without TLS; set it to true, ' +
+        'or set DATABASE_ALLOW_PLAINTEXT=true to say the link is private',
+    );
+  }
+
+  if (problems.length > 0) throw new ConfigurationError(problems);
   return config;
+};
+
+/**
+ * What a 44-character string must also be to be a key. Never quotes the value.
+ *
+ * A length check accepts 44 repeated letters; this decodes. The regular
+ * expression is strict base64 because `Buffer.from` ignores what it cannot read,
+ * which would turn a typo into a shorter key without a word.
+ */
+const keyProblems = (key: string, production: boolean): string[] => {
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(key)) {
+    return ['ENCRYPTION_KEY: must be 32 bytes encoded as base64 (44 characters)'];
+  }
+  const bytes = Buffer.from(key, 'base64');
+  if (bytes.length !== 32) return ['ENCRYPTION_KEY: must decode to exactly 32 bytes'];
+  if (bytes.every((byte) => byte === bytes[0]) || new Set(key.slice(0, 43)).size === 1) {
+    return ['ENCRYPTION_KEY: must not be one repeated value; generate it with a CSPRNG'];
+  }
+  if (production && key === DEVELOPMENT_ENCRYPTION_KEY) {
+    return ['ENCRYPTION_KEY: production refuses the development key, which is public'];
+  }
+  return [];
 };
