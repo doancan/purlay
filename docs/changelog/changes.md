@@ -147,6 +147,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - `SECURITY.md` (private reporting, supported versions, response targets one maintainer can keep) and
   `.github/CODEOWNERS`.
 
+### Chore — 2026-10-09: CodeQL scans the code, with the least token it can have
+
+- A `codeql` workflow analyses JavaScript and TypeScript on every pull request, on main and weekly
+  (#247). The repository is private and code scanning needs Advanced Security there, so results are
+  kept as an artifact and the job fails if the SARIF has any result; they upload to the Security tab
+  as soon as the repository is public. `scripts/workflow-permissions.test.ts` fails a workflow whose
+  top-level token grants more than read.
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
