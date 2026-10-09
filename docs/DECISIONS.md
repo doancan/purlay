@@ -2644,7 +2644,7 @@ subscribe.** The bus is not transactional; a commit after the read is not blocke
 
 ---
 
-### D-79. A socket's frames are handled one at a time, in order, behind a bounded queue
+### D-80. A socket's frames are handled one at a time, in order, behind a bounded queue
 
 Elysia starts a `message` handler for each frame as it arrives and does not wait for the last. A
 `SUBSCRIBE` that waits on the database was therefore overtaken by an `UNSUBSCRIBE` sent after it and

@@ -310,7 +310,7 @@ neither. (D-83)
   own replay. (D-70)
 - **A connection's frames are handled one at a time, in the order they arrived**, behind a queue of
   at most `FRAME_QUEUE_MAX`. A connection that fills it is closed with `CLOSE_CODES.TOO_BUSY` and
-  reconnects; a drain waits for the frame being handled before the pool closes. (D-79)
+  reconnects; a drain waits for the frame being handled before the pool closes. (D-80)
 
 ---
 
