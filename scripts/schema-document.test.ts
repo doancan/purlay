@@ -64,11 +64,13 @@ const addedConstraints = (sql: string): [string, string][] =>
 const indexesIn = (sql: string): Map<string, Set<string>> => {
   const owner = new Map<string, string>();
   const statements =
-    /CREATE (?:UNIQUE )?INDEX (?:CONCURRENTLY )?(?:IF NOT EXISTS )?(\w+)\s+ON (\w+)|DROP INDEX (?:CONCURRENTLY )?(?:IF EXISTS )?(\w+)|ALTER INDEX (\w+) RENAME TO (\w+)/g;
+    /CREATE (?:UNIQUE )?INDEX (?:CONCURRENTLY )?(?:IF NOT EXISTS )?(\w+)\s+ON (\w+)|DROP INDEX (?:CONCURRENTLY )?(?:IF EXISTS )?(\w+)|ALTER INDEX (\w+) RENAME TO (\w+)|(?:UNIQUE|PRIMARY KEY) USING INDEX (\w+)/g;
   for (const match of withoutComments(sql).matchAll(statements)) {
-    const [, created, table, dropped, renamed, renamedTo] = match;
+    const [, created, table, dropped, renamed, renamedTo, attached] = match;
     if (created !== undefined && table !== undefined) owner.set(created, table);
     else if (dropped !== undefined) owner.delete(dropped);
+    // An index attached as a constraint is a constraint from then on, and the document lists it as one.
+    else if (attached !== undefined) owner.delete(attached);
     else if (renamed !== undefined && renamedTo !== undefined) {
       const was = owner.get(renamed);
       if (was === undefined)

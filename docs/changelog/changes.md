@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the database refuses a message in the wrong tenant
+
+- A message whose channel was in another workspace, a reply in another channel than its parent, a read
+  position in another channel, a message id that was not a UUIDv7, and a DM key of `garbage` were all
+  accepted. They are composite foreign keys and two CHECKs now, each with a test that attempts the violation
+  and expects the constraint by name. Added `NOT VALID` and validated outside the transaction: on 1,000,000
+  messages the slowest read during the migration was 6 ms and the slowest write 57 ms (#242, D-90).
+- `SCHEMA.md` §11 says which invariants stay with the service, and why.
+
 ### Fix — 2026-10-09: deleting a message or a channel is no longer a table scan per row
 
 - On 1,000,000 messages, deleting 100 took 4.8 s and deleting one channel did not finish in 60 s: the
