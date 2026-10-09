@@ -150,17 +150,27 @@ export const sendMessage = async (
     return asMessage(existing);
   }
 
-  // Denormalised so the sidebar can order channels without touching `messages`.
-  await executor
-    .updateTable('channels')
-    .set({ last_message_at: clock.now() })
-    .where('id', '=', context.channelId)
-    .execute();
-
   const written = await readMessage(executor, input.id);
   if (written === undefined) {
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
+
+  // Denormalised so the sidebar can order channels without touching `messages`.
+  //
+  // Monotonic by construction: the row is written only when this message is newer
+  // than what it holds, so two senders whose clocks disagree cannot move the
+  // channel back, and a message that is not the newest costs no write and no row
+  // lock. The column is in no index (migration 0008), so the write is a heap-only
+  // update, and it comes last so the row lock it takes lives as short a time as
+  // the transaction allows (D-88).
+  const sentAt = clock.now();
+  await executor
+    .updateTable('channels')
+    .set({ last_message_at: sentAt })
+    .where('id', '=', context.channelId)
+    .where((eb) => eb.or([eb('last_message_at', 'is', null), eb('last_message_at', '<', sentAt)]))
+    .execute();
+
   return asMessage(written);
 };
 
