@@ -13,6 +13,7 @@ import { Elysia } from 'elysia';
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
+import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import { createApp } from './app';
 import { refusalFor } from './errors';
@@ -103,6 +104,19 @@ describe('what a failure looks like from outside', () => {
     for (const secret of ['10.0.0.4', '5432', 'purlay', 'refused', 'Error']) {
       expect(text).not.toContain(secret);
     }
+  });
+
+  /** Pool exhaustion is the server being busy, not broken: a 503 a client may retry, carrying no detail. */
+  test('a pool with no connection to give is 503 and says nothing about why', () => {
+    const refusal = refusalFor(
+      'UNKNOWN',
+      new DatabaseUnavailableError(new Error('timeout exceeded when trying to connect')),
+      [],
+    );
+    expect(refusal.status).toBe(503);
+    expect(refusal.body).toEqual({
+      error: { code: 'DATABASE_UNAVAILABLE', message: 'The service is busy. Try again shortly.' },
+    });
   });
 
   /**

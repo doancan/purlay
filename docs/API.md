@@ -57,7 +57,7 @@ account for it. `message` is for humans and may change. (D-47)
 | `413` | A JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame — refused by the server before it is read), or an upload over `attachment_size_limit` |
 | `429` | Rate limited |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
-| `503` | `/health/ready` only: this process should not receive traffic — not ready, or draining for shutdown |
+| `503` | This process should not receive traffic — `/health/ready` while not ready or draining for shutdown — or, from any endpoint, `DATABASE_UNAVAILABLE`: no database connection within 3 s, nothing was changed, retry shortly (D-87) |
 
 **Idempotency.** `POST` of a message carries a client-generated UUIDv7 as its `id`. Re-sending
 the same id **by the same sender in the same channel** is a no-op that returns the existing

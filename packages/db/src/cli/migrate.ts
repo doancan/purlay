@@ -7,7 +7,7 @@
  * no rollback: a bad migration is fixed by another migration, and data loss is
  * recovered from point-in-time recovery (D-44). See `migrator.ts`.
  */
-import { createDatabase, sslFromEnvironment } from '../client';
+import { createDatabase, tlsFromEnvironment } from '../client';
 import { migrateToLatest } from '../migrator';
 
 const connectionString = process.env['DATABASE_URL'];
@@ -16,9 +16,20 @@ if (connectionString === undefined || connectionString === '') {
   process.exit(1);
 }
 
-// The same SSL setting as the application, so a managed database that refuses a
-// clear connection is migrated by the command that starts it (D-86).
-const db = createDatabase({ connectionString, poolSize: 1, ssl: sslFromEnvironment(process.env) });
+// The same TLS settings as the application, so a managed database that refuses a
+// clear connection is migrated by the command that starts it (D-86). No statement
+// timeout: an index build is meant to take as long as it takes, and a migration
+// cut off halfway is the worse outcome (D-87).
+const db = createDatabase({
+  connectionString,
+  poolSize: 1,
+  ...tlsFromEnvironment(process.env),
+  statementTimeoutMs: 0,
+  connectionTimeoutMs: 10_000,
+  onPoolError: (error) => {
+    console.error('database connection error:', error.message);
+  },
+});
 
 const { error, results } = await migrateToLatest(db);
 

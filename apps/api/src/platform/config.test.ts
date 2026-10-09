@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { sslFromEnvironment } from '@purlay/db';
+import { tlsFromEnvironment } from '@purlay/db';
 import { CONFIGURED, ConfigurationError, DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from './config';
 
 const valid = {
@@ -58,11 +58,25 @@ describe('loading configuration', () => {
   test('the migration CLI reads DATABASE_SSL exactly as the application does (D-86)', () => {
     for (const value of ['true', 'false', '1', '0', undefined]) {
       const environment = value === undefined ? {} : { DATABASE_SSL: value };
-      expect(sslFromEnvironment(environment)).toBe(
+      expect(tlsFromEnvironment(environment).ssl).toBe(
         loadConfig({ ...valid, ...environment }).DATABASE_SSL,
       );
     }
-    expect(() => sslFromEnvironment({ DATABASE_SSL: 'yes' })).toThrow('DATABASE_SSL must be');
+    expect(() => tlsFromEnvironment({ DATABASE_SSL: 'yes' })).toThrow('DATABASE_SSL must be');
+  });
+
+  test('a CA file needs TLS, in the application and in the migration CLI alike (D-87)', () => {
+    const certificate = new URL('../../../../packages/db/src/client.ts', import.meta.url).pathname;
+    const withCa = { DATABASE_SSL: 'true', DATABASE_SSL_CA_FILE: certificate };
+    expect(loadConfig({ ...valid, ...withCa }).DATABASE_SSL_CA_FILE).toBe(certificate);
+    expect(tlsFromEnvironment(withCa).sslCa).toContain('createDatabase');
+
+    const withoutTls = { DATABASE_SSL: 'false', DATABASE_SSL_CA_FILE: certificate };
+    expect(() => loadConfig({ ...valid, ...withoutTls })).toThrow('needs DATABASE_SSL=true');
+    expect(() => tlsFromEnvironment(withoutTls)).toThrow('needs DATABASE_SSL=true');
+    expect(() =>
+      tlsFromEnvironment({ DATABASE_SSL: 'true', DATABASE_SSL_CA_FILE: '/nonexistent/ca.pem' }),
+    ).toThrow('cannot be read');
   });
 
   test('strings become the type they were declared as', () => {

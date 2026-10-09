@@ -54,6 +54,8 @@ export const Environment = Type.Object({
   /** Production refuses a database connection without TLS unless this says the
    *  operator knows: a database on the same private network, say (#236). */
   DATABASE_ALLOW_PLAINTEXT: Type.Boolean({ default: false }),
+  /** A PEM file to trust instead of the system roots, for a private or managed CA (D-87). */
+  DATABASE_SSL_CA_FILE: Type.Optional(Type.String({ minLength: 1 })),
 
   GITHUB_CLIENT_ID: Type.String({ minLength: 1 }),
   GITHUB_CLIENT_SECRET: Type.String({ minLength: 1 }),
@@ -142,6 +144,10 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
 
   if (production && appUrl.protocol !== 'https:') {
     problems.push('APP_URL: must be https:// in production');
+  }
+
+  if (config.DATABASE_SSL_CA_FILE !== undefined && !config.DATABASE_SSL) {
+    problems.push('DATABASE_SSL_CA_FILE: needs DATABASE_SSL=true');
   }
 
   problems.push(...keyProblems(config.ENCRYPTION_KEY, production));

@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the connection pool fails fast and says what is wrong
+
+- With a pool of two, a third query waited **7,612 ms** for a connection to free. It now waits at most
+  3 s and fails with `DATABASE_UNAVAILABLE` (`503`), carrying no detail. Every connection also has a
+  30 s statement timeout, a 15 s idle-in-transaction timeout and `application_name = purlay-api`; an
+  idle connection the server drops is reported instead of ending the process (#243, D-87).
+- `DATABASE_SSL_CA_FILE` trusts a private or managed certificate authority.
+- `purgeDeadSessions` removes expired and revoked sessions in bounded batches. The scheduler is #71.
+
 ### Fix — 2026-10-09: readiness notices an edited or missing migration
 
 - `/health/ready` now answers 503 when an applied migration's file was edited, has gone, or sorts out of
