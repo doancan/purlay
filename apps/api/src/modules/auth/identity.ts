@@ -57,6 +57,17 @@ const DISPLAY_NAME_MAX = 128;
 const fitted = (value: string, max: number): string => Array.from(value).slice(0, max).join('');
 
 /**
+ * What GitHub's free-text `name` may not carry into a column: control characters
+ * (PostgreSQL cannot store a NUL), a lone surrogate, and the bidirectional
+ * overrides that make one name read as another. The same set a workspace or
+ * channel name is refused for; here it is removed, because sign-in never fails on
+ * a value GitHub controls (#233).
+ */
+const UNSAFE_IN_NAME =
+  /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const cleaned = (value: string): string => value.replace(UNSAFE_IN_NAME, '').trim();
+
+/**
  * GitHub lets an account be renamed and the freed name be taken by someone else,
  * so a refresh can collide with a live row. The incoming user takes a suffix;
  * identity is `github_id`, and `username` is display-only (D-38).
@@ -89,7 +100,10 @@ export const resolveIdentity = async (
   emails: readonly GitHubEmail[],
 ): Promise<ResolvedIdentity> => {
   const email = anchorEmail(emails);
-  const displayName = fitted(profile.name ?? profile.login, DISPLAY_NAME_MAX);
+  const displayName = fitted(
+    cleaned(profile.name ?? '') || cleaned(profile.login) || profile.login,
+    DISPLAY_NAME_MAX,
+  );
   const now = clock.now();
 
   const existing = await executor

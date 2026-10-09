@@ -27,6 +27,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   form cannot produce JSON" held for nothing. Any other body type is now `415`
   `UNSUPPORTED_MEDIA_TYPE`; requests with no body are unaffected (D-80, Part of #231).
 
+### Fix — 2026-10-09: a control character in a name is a 400, not a 500
+
+- A NUL in a workspace or channel name was an `INTERNAL` error and an error report. Names now refuse
+  control characters, separators, lone surrogates and bidirectional overrides at the contract;
+  topics refuse what PostgreSQL cannot store; GitHub's display name has them removed (D-40,
+  Part of #231).
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and

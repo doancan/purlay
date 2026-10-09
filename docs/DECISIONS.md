@@ -1220,6 +1220,21 @@ trigram index is the whole story.
 operator guide is a rule that holds until somebody uses a managed provider that does not offer it.
 A column-level collation travels with the schema.
 
+**Amended 2026-10-09: what a name may contain (second-round attack).** Identifier text handling had
+a collation and no alphabet: `{"name":"a\u0000b"}` on a workspace or channel was a `500` and an error
+report, because PostgreSQL cannot store a NUL and the contract did not say so (message content did).
+A **`name`** format now refuses, at the contract, in workspace and channel names: every control
+character (C0, DEL, C1 — a name is one line, so tab, line feed and carriage return too), the line
+and paragraph separators, a lone surrogate, and the **bidirectional embeddings, overrides and
+isolates (U+202A-202E, U+2066-2069)**. Bidi controls are refused rather than normalised because a
+name is an identifier people read and compare by eye: an override makes one name display as another
+(`gpj<RLO>exe.txt`), and an unclosed isolate reorders what follows it in the sidebar. The
+directional *marks* (U+200E/200F) stay, because a right-to-left name in a left-to-right interface
+needs one. A **`plain-text`** format covers a channel topic: multi-line is fine, what PostgreSQL
+cannot store is not. A workspace slug already was a whitelist (`^[a-z0-9][a-z0-9-]*$`) and never
+held any of this — tested. GitHub's `name` is not refused (sign-in never fails on a value GitHub
+controls, #233): the same set is *removed* and an emptied name falls back to the login.
+
 ---
 
 ### D-41. The interface ships in English and Turkish, with no i18n library
