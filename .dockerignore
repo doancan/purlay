@@ -1,0 +1,34 @@
+# What the build context excludes. The Dockerfile copies explicit paths, so this is
+# defence in depth plus speed: a secret never enters the daemon's context, and the
+# context is small enough that a build does not start by uploading node_modules.
+
+# Secrets and environment.
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+secrets/
+.secrets/
+
+# Reproducible, local, or somebody's tooling.
+node_modules
+**/node_modules
+.tsbuild
+dist
+coverage
+.git
+.github
+.claude
+.DS_Store
+
+# Not part of the API image. The web client contributes only its manifest, which the
+# lockfile needs to validate.
+apps/web/*
+!apps/web/package.json
+docs
+scripts
+docker
+docker-compose*.yml
+*.md

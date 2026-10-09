@@ -69,6 +69,7 @@ looking for the error codes to a file that does not have them.
 | The transaction boundary every write path shares | `apps/api/src/platform/transactions.ts` (D-35, D-46) |
 | The local environment: images, ports, credentials | `docker-compose.yml` |
 | What the supply chain is held to: pinned Actions, the audit gate, licences | `scripts/workflow-pins.test.ts`, `scripts/audit-gate.ts`, `scripts/licenses.ts` (D-91) |
+| The deployable image: bases, user, health check | `Dockerfile`, held by `scripts/dockerfile.test.ts` and `scripts/image-smoke.sh` (D-92) |
 | Which rules the build enforces | `eslint.config.mjs`, demonstrated by `scripts/verify-enforcement.ts` |
 
 **How a fact stays owned.** Where a second copy is genuinely useful — the compose file *does* the

@@ -3215,6 +3215,44 @@ and CodeQL are already in the platform we run on.
 
 ---
 
+### D-92. The API ships as a distroless image that runs the source, pinned by digest
+
+There was no Dockerfile, so "nothing assumes this server" (D-73) was a sentence about a deployment
+that could not yet be made (#248). The shape of the image decides what an attacker who reaches the
+process finds, and what an operator must trust.
+
+**Decided.** Two stages. The first (`oven/bun`, slim) installs production dependencies from the
+frozen lockfile and nothing else. The second (`oven/bun`, **distroless**) receives `node_modules` and
+the sources of the API and the two packages it uses, and runs as the numeric user `65532`. There is
+no shell, no package manager and no `curl` in it; the container's `HEALTHCHECK` is the Bun runtime
+asking `/health/ready`, so a process that is up but not ready — database away, migration pending,
+draining (D-72) — is reported unhealthy. Both bases are pinned by digest with the tag beside it, and
+Dependabot's docker ecosystem proposes the next digest, for the reason pins are CI-checked (D-91).
+It starts with `--read-only --cap-drop ALL --security-opt no-new-privileges`, which
+`scripts/image-smoke.sh` does on every pull request that touches it.
+
+**Nothing is compiled.** Bun runs the TypeScript the repository contains, which is also what the
+tests run, so there is no second artefact that could differ from the one that was tested. A
+pull request builds the image and runs it against the compose PostgreSQL, pushing nothing; a push to
+main publishes it to GHCR tagged by commit and by branch (never `latest`: an operator pins a commit
+or a release), with provenance and an SBOM attached as attestations. The publish job can be exercised
+for real only once it is on main.
+
+**What stays with #224.** This is the API. Serving the built client from the same origin waits for
+the prerendered shell (#141), and the image grows a stage for it then; the production compose
+assumes only that one origin fronts the API.
+
+**Rejected: an Alpine or Debian base.** A shell, a package manager and musl or glibc differences for
+no benefit to a program that needs only its runtime. **Rejected: `bun build --compile` into one
+binary.** It would be a second artefact the tests never ran, and the migrations are files read from
+disk. **Rejected: an init process (`tini`).** The process handles SIGTERM itself and drains
+(`lifecycle.ts`); an init adds a binary to a shell-less image to do what the code already does.
+**Rejected: a floating tag, even `1`.** The digest is the claim the documents make.
+
+**Reversibility:** free. Nothing is stored in the image; the volumes are the database and the bucket.
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

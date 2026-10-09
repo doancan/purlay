@@ -23,7 +23,15 @@ updates:
     commit-message:
       prefix: chore
 
-  # Actions are pinned to commit SHAs (D-86, scripts/workflow-pins.test.ts), so a
+  # The Dockerfile's bases are pinned by digest, which only moves when this does.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+
+  # Actions are pinned to commit SHAs (D-91, scripts/workflow-pins.test.ts), so a
   # new release can only arrive as a pull request from here. Removing this block
   # would freeze every action at the SHA it has today, silently.
   - package-ecosystem: github-actions

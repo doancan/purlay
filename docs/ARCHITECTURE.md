@@ -712,6 +712,12 @@ every run records its outcome in `job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:
 *last successful run* per job. Migrations will run on start and are idempotent; today they are run
 with `bun run db:migrate`.
 
+**The image.** The API builds into a two-stage image whose runtime stage is distroless and runs as
+a numeric non-root user with a read-only root filesystem (`Dockerfile`, D-92). `scripts/image-smoke.sh`
+runs it against the compose database in CI and checks liveness, readiness, the container's own health
+check and the absence of a shell; `image.yml` publishes from main with provenance and an SBOM. The
+client is not in it: that stage arrives with the prerendered shell (#141, #224).
+
 **A restart is a reconnect, not an outage.** On SIGTERM or SIGINT the process drains: readiness
 answers 503 at once, every socket is closed with `CLOSE_CODES.RESTARTING` (1012) so its client
 reconnects and replays from its cursor, the listener stops accepting while requests in flight
