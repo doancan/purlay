@@ -22,6 +22,7 @@
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { AppError } from '../platform/errors';
+import { isAppOrigin } from '../platform/origin';
 import { resolveSession } from '../modules/auth/sessions';
 import { sessionTokenFrom } from '../ingress/http/cookies';
 
@@ -47,7 +48,7 @@ export const admitSocket = async (
   request: Request,
 ): Promise<AdmittedSocket> => {
   const origin = request.headers.get('origin');
-  if (origin !== dependencies.appUrl) {
+  if (!isAppOrigin(origin, dependencies.appUrl)) {
     throw new AppError({ code: 'FORBIDDEN', message: 'That origin may not open a socket here.' });
   }
 

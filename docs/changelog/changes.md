@@ -21,6 +21,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   accept only a `Transaction` — the pool no longer compiles (#232, D-77).
 - The test that proves it makes the second write fail on a cloned database and finds the first gone;
   before the fix it found it still there.
+### Feature — 2026-10-09: the HTTP edge is bounded
+
+- A JSON body over 64 KiB is refused with `413` by the server before it is read (a 60 MB body was
+  parsed and answered `200`). A mutation from another origin is `FORBIDDEN`, logout included. Every
+  response carries `nosniff`, referrer, framing and cache policy, and HSTS over https. A well-formed
+  inbound `x-request-id` is kept as a label (D-80, #234).
+
 ### Fix — 2026-10-09: configuration refuses an unsafe production
 
 - `ENCRYPTION_KEY` is decoded: 32 bytes, not one repeated value. Production refuses the public
