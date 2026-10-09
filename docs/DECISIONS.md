@@ -2515,7 +2515,8 @@ state made the callback call GitHub three times; `POST /api/channels/:id/message
 (#235).
 
 **Decided: two limiters behind the existing `RateLimiter` seam (D-7, D-25), applied before the
-body is read or a handler runs.** `/auth/*` is keyed by client address: 30 requests at once, then
+handler runs, after the body — already capped at 64 KiB (D-80) — is parsed, so a malformed body is
+a 400 for everyone and costs no session lookup.** `/auth/*` is keyed by client address: 30 requests at once, then
 one every two seconds (a sign-in is two requests, and an office behind one NAT must be able to
 arrive together). Mutations under `/api/*` are keyed by the **signed-in user**: the socket's own
 budget, 10 a second with a burst of 20, so the two doors to `send()` cost the same. Reads are not

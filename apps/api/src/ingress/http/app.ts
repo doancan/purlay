@@ -186,7 +186,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       }
       return undefined;
     })
-    .onRequest(async ({ request, server, set }) => {
+    // Before the handler, after the body is parsed: the body is already bounded by the
+    // server (`edge.ts`), and a malformed one is a 400 whoever sends it, with no lookup.
+    .onBeforeHandle(async ({ request, server, set }) => {
       const wait = await admit(request, peerOf(server, request));
       if (wait === undefined) return;
       set.headers['retry-after'] = String(wait);
