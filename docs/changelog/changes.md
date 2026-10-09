@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: a production compose file
+
+- `docker-compose.production.yml`: the API, PostgreSQL, Garage and Caddy behind one origin with
+  automatic TLS. Only the proxy publishes ports (80 and 443); the API starts when its dependencies
+  are healthy and the proxy when the API is ready; every image but the API's is pinned by digest
+  (#248, D-94, D-73).
+- Its only inputs are the variables in `CONFIG.md` plus `PURLAY_IMAGE`, `POSTGRES_PASSWORD` and
+  `GARAGE_RPC_SECRET`; a missing one stops `docker compose` naming it. `scripts/production-init.sh`
+  creates the storage layout, bucket and key once. Brought up on an empty machine it migrated itself
+  and answered `https://localhost/health/ready` with 200 through Caddy's internal CA.
+
 ### Feature — 2026-10-09: the API migrates itself on start, once, however many nodes there are
 
 - `MIGRATE_ON_START=true` (off by default) makes the process apply pending migrations after its listener

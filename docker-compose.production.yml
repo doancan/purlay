@@ -1,0 +1,140 @@
+# The production deployment: the API, PostgreSQL, object storage, and one origin
+# behind TLS (#248, D-94, D-73).
+#
+#   docker compose -f docker-compose.production.yml --env-file production.env up -d --wait
+#   scripts/production-init.sh            # once: the storage layout, bucket and key
+#
+# **Its only inputs are variables.** The ones the application reads are the
+# tables in docs/CONFIG.md; the few the stack itself needs (the image, the
+# database password, the storage secret) are in its "Production deployment"
+# section. Nothing here names a host, a path on this machine, or an address — a
+# move to another server is the same file and another `production.env` (D-73).
+# A variable that is missing stops `docker compose` with its name, not the API at
+# 3am (`${VAR:?}`).
+#
+# Every image is pinned by digest, the tag kept beside it so a reader (and
+# Dependabot) can see what it is. Only the proxy publishes a port; the database,
+# the object store and the API are reachable from the stack's own network alone.
+#
+# This is a different Compose project from the development one (`docker-compose.yml`,
+# name `purlay`), so its volumes cannot be mistaken for, or mounted over, a
+# developer's.
+name: purlay-production
+
+services:
+  api:
+    image: ${PURLAY_IMAGE:?set PURLAY_IMAGE to the API image, ideally by digest (docs/CONFIG.md)}
+    restart: unless-stopped
+    # The process drains for up to ten seconds (D-72); give it a margin to exit
+    # before the runtime kills it.
+    stop_grace_period: 15s
+    # Read-only root filesystem, no capabilities, no privilege escalation: the
+    # image is built to run this way and `scripts/image-smoke.sh` runs it so.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      APP_URL: ${APP_URL:?set APP_URL to the one public https origin}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # The proxy is the only thing in front of it.
+      TRUST_PROXY: 'true'
+      DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      # Inside the stack's network; managed PostgreSQL is a different deployment.
+      # Production refuses an unencrypted database link unless told the network is
+      # private (D-79), and here it is: a compose network no other host can join.
+      DATABASE_SSL: 'false'
+      DATABASE_ALLOW_PLAINTEXT: 'true'
+      # One node, or several: one takes the lock and migrates, the rest wait (D-93).
+      MIGRATE_ON_START: 'true'
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?set GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      WORKSPACE_OPEN_JOIN_SLUG: ${WORKSPACE_OPEN_JOIN_SLUG:-}
+      # Object storage. Not read by the application yet (CONFIG.md); present so the
+      # deployment already has the shape attachments will need (#53).
+      STORAGE_DRIVER: s3
+      S3_ENDPOINT: http://garage:3900
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-purlay-attachments}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_healthy
+    # The image's own HEALTHCHECK (readiness) applies; compose adds nothing.
+
+  postgres:
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: purlay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: purlay
+      # Identifier columns declare COLLATE "C" (D-40) and readiness refuses a
+      # database that disagrees; initialise it the way development does.
+      POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+    volumes:
+      # /var/lib/postgresql, not .../data: PostgreSQL 18 and the later
+      # `pg_upgrade --link` (ARCHITECTURE.md §11).
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U purlay -d purlay']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # Garage: S3-compatible object storage (docs/spikes/object-storage.md). Its image
+  # has no shell, so the layout, bucket and key are created once by
+  # `scripts/production-init.sh`.
+  garage:
+    image: dxflrs/garage:v2.1.0@sha256:4c9b34c113e61358466e83fd6e7d66e6d18657ede14b776eb78a93ee8da7cf6a
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?set GARAGE_RPC_SECRET (64 hex characters)}
+    volumes:
+      - ./docker/garage.production.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+    healthcheck:
+      test: ['CMD', '/garage', 'status']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # One origin, TLS issued and renewed automatically. WebSockets pass through
+  # `reverse_proxy` unchanged. The site address is `APP_URL` itself, so the origin
+  # the proxy answers for and the one the API checks sockets against cannot differ.
+  proxy:
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      APP_URL: ${APP_URL:?set APP_URL to the one public https origin}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the account key: losing them re-issues, and re-issuing
+      # too often is rate-limited by the CA.
+      - proxy-data:/data
+      - proxy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  garage-data:
+  proxy-data:
+  proxy-config:

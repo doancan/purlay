@@ -159,6 +159,41 @@ variable the application ignores or miss one it reads.
 server locale cannot change how channel names or emails compare (D-40). `/health/ready` asserts
 this and refuses to report ready if the applied schema disagrees.
 
+## Production deployment
+
+`docker-compose.production.yml` brings up the API, PostgreSQL, Garage and a TLS proxy (Caddy) behind
+**one public origin** (D-94, D-73). Its inputs are variables in an env file — the ones in the tables
+above, plus the three the stack itself needs:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `PURLAY_IMAGE` | ✅ | The API image: `ghcr.io/<owner>/purlay-api@sha256:…` (a digest) or `:sha-<commit>`. Never a moving tag |
+| `POSTGRES_PASSWORD` | ✅ | **Secret.** Used as-is inside `DATABASE_URL`, so it must be URL-safe: `openssl rand -hex 16` |
+| `GARAGE_RPC_SECRET` | ✅ | **Secret.** 64 hex characters: `openssl rand -hex 32` |
+
+Production refuses an unsafe configuration at boot (D-79), so the stack sets what that asks of a
+private network and an operator must supply the rest. The stack sets `NODE_ENV=production`, `PORT`,
+`TRUST_PROXY=true` (Caddy is the one proxy and sets `X-Forwarded-For`, D-81), `DATABASE_URL` (from
+`POSTGRES_PASSWORD`), `DATABASE_SSL=false` with `DATABASE_ALLOW_PLAINTEXT=true` (the database is on the
+stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is therefore not set),
+`MIGRATE_ON_START=true` and `S3_ENDPOINT`. It passes through `APP_URL` (**`https://`**),
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ENCRYPTION_KEY` (**32 random bytes in base64**:
+`openssl rand -base64 32`; production refuses the development key and a repeated value),
+`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `DATABASE_POOL_MAX`,
+`SESSION_TTL_DAYS`, `WORKSPACE_OPEN_JOIN_SLUG`, `S3_REGION`, `S3_BUCKET` (optional). `docker compose`
+refuses to start with a required one missing, and names it. Garage wants its own key format:
+`S3_ACCESS_KEY_ID` is `GK` plus 24 hex digits (`echo GK$(openssl rand -hex 12)`) and
+`S3_SECRET_ACCESS_KEY` is 64 hex digits.
+
+```
+docker compose -f docker-compose.production.yml --env-file production.env up -d --wait
+scripts/production-init.sh            # once: the storage layout, bucket and key
+```
+
+`APP_URL` is also the proxy's site address, so the origin Caddy answers for and the one the API checks
+sockets against cannot differ; with a public name and ports 80 and 443 reachable, the certificate is
+issued and renewed automatically. Only the proxy publishes ports.
+
 **Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
 intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and
 backed up · `DATABASE_SSL=true` on managed PostgreSQL · `TRUST_PROXY=true` behind a proxy ·
