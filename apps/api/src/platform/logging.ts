@@ -43,6 +43,11 @@ const REDACTED = '[redacted]';
 /** Deep enough for any object this application logs; a cycle stops here rather than recursing. */
 const MAX_DEPTH = 8;
 
+const errorCode = (error: Error): { errorCode?: string | number } => {
+  const code: unknown = 'code' in error ? error.code : undefined;
+  return typeof code === 'string' || typeof code === 'number' ? { errorCode: code } : {};
+};
+
 /** A value made safe to write: secrets replaced, errors made legible, depth bounded. */
 export const clean = (value: unknown, depth = 0): unknown => {
   if (depth > MAX_DEPTH) return '[too deep]';
@@ -52,6 +57,14 @@ export const clean = (value: unknown, depth = 0): unknown => {
       message: value.message,
       ...(value.stack === undefined ? {} : { stack: value.stack }),
       ...(value.cause === undefined ? {} : { cause: clean(value.cause, depth + 1) }),
+      // `pg` throws an AggregateError with an empty message when a host resolves to
+      // several addresses and none answers; everything useful is in `errors`.
+      ...(value instanceof AggregateError
+        ? { errors: value.errors.map((inner: unknown) => clean(inner, depth + 1)) }
+        : {}),
+      // Under another name: the key `code` is on the never-logged list (an OAuth
+      // code), and a system error's code (ECONNREFUSED, 23505) is not that.
+      ...errorCode(value),
     };
   }
   if (value instanceof Date) return value.toISOString();

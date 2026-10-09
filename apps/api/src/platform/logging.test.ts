@@ -76,6 +76,39 @@ describe('what a line carries', () => {
     expect(String((lines[0]?.['err'] as { stack?: unknown }).stack)).toContain('TypeError');
   });
 
+  test('an AggregateError names every error inside it, with their codes, and still redacts', () => {
+    // What `pg` throws when a host resolves to several addresses and none answers:
+    // the message is empty and everything useful is in `errors`.
+    const refused = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), {
+      code: 'ECONNREFUSED',
+    });
+    const leaky = Object.assign(new Error('boom'), { token: 'do-not-write-me' });
+    const aggregate = new AggregateError([refused, leaky], '');
+    const { log, lines } = recording();
+    log.error('request failed', { err: aggregate });
+
+    expect(lines[0]).toMatchObject({
+      err: {
+        type: 'AggregateError',
+        errors: [
+          {
+            type: 'Error',
+            message: 'connect ECONNREFUSED 127.0.0.1:5432',
+            errorCode: 'ECONNREFUSED',
+          },
+          { type: 'Error', message: 'boom' },
+        ],
+      },
+    });
+    expect(JSON.stringify(lines)).not.toContain('do-not-write-me');
+  });
+
+  test('an error code is written for any error, as errorCode — the word `code` stays redacted', () => {
+    const { log, lines } = recording();
+    log.error('failed', { err: Object.assign(new Error('x'), { code: '23505' }), code: 'oauth' });
+    expect(lines[0]).toMatchObject({ err: { errorCode: '23505' }, code: '[redacted]' });
+  });
+
   test('a structure too deep, or with a cycle, is cut off rather than followed', () => {
     const cycle: Record<string, unknown> = {};
     cycle['self'] = cycle;
