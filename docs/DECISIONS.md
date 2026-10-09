@@ -3105,6 +3105,17 @@ and a migration cut off halfway leaves an invalid index.
 `DATABASE_UNAVAILABLE` `ERROR` frame, with the HTTP body word for word, instead of `INTERNAL`; the cause is
 still logged. A client that retries a refused request now has one code to recognise on either transport.
 
+*Amended 2026-10-09 — the migrator is not the application:* the 30 s statement limit belongs to the
+application's pool alone. A node migrating as it starts (D-93) ran `migrateToLatest` on that pool, so a
+migration with a 33 s statement was cancelled, the node exited, and its restart was cancelled at the same
+point; a large `CREATE INDEX CONCURRENTLY` or `VALIDATE` would have kept a node in that loop. Migrating now
+always opens a connection of its own through `createMigrationDatabase`, which `bun run db:migrate` uses too:
+one connection, no statement timeout, the idle-in-transaction limit kept (the runner is never idle inside its
+transaction). **Rejected — raising the application's limit:** it exists to bound a runaway request.
+**Rejected — `SET statement_timeout = 0` inside the migrator on the borrowed connection:** it would work
+until someone reused the connection, and leaves the pool's other users one forgotten reset from running
+unbounded.
+
 ---
 
 ### D-88. A send does not rewrite the channel row's indexes, and a retried send is announced again
@@ -3372,6 +3383,11 @@ election or a heartbeat table.** The database already provides a lock that disap
 test is what would show the migrator regressing.
 
 **Reversibility:** free. A variable and a function; migrations themselves are unchanged.
+
+*Amended 2026-10-09:* `migrateOnStart` takes the connection settings, not the application's pool, and
+opens and closes a connection of its own (D-87, amended): the pool's 30 s statement limit must not apply to a
+migration. A test has the migration record the `statement_timeout` its own session was given (`0`, where
+the application's pool shows `30s`) and counts sessions afterwards (none left, on success or failure).
 
 ---
 

@@ -7,6 +7,8 @@
  */
 export {
   createDatabase,
+  createMigrationDatabase,
+  type MigrationConnection,
   DatabaseUnavailableError,
   isTransaction,
   POOL_DEFAULTS,
