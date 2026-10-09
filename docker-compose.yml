@@ -24,7 +24,9 @@ services:
       # Overridable: 5432 is conventional and frequently already taken. A port
       # collision is exactly the friction that turns "self-hosts from the README"
       # into a support ticket (PRD.md §3, S-2).
-      - '${POSTGRES_PORT:-5432}:5432'
+      # Bound to the loopback address: the superuser's password is published in this file,
+      # and a mapping without an address listens on every interface of the machine.
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     volumes:
       # PostgreSQL 18+ wants a single mount at /var/lib/postgresql rather than at
       # .../data: the data directory then sits inside the volume, so a later
@@ -52,7 +54,7 @@ services:
     image: dxflrs/garage:v2.1.0
     restart: unless-stopped
     ports:
-      - '${STORAGE_PORT:-9000}:3900' # S3 API
+      - '127.0.0.1:${STORAGE_PORT:-9000}:3900' # S3 API
     volumes:
       - ./docker/garage.toml:/etc/garage.toml:ro
       - garage-data:/var/lib/garage

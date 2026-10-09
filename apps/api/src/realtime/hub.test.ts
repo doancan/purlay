@@ -81,7 +81,7 @@ describe('the end of a session, on a connection', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
-      { log: createLogger({ level: 'silent' }), leave: () => undefined },
+      { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
     const events: string[] = [];
     // Registered without resolving an identity: delivery does not depend on one.
@@ -127,7 +127,7 @@ describe('a connection that falls behind (#197)', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
-      { log: createLogger({ level: 'silent' }), leave: () => undefined },
+      { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
     void hub.opened('s', connection, new Request('https://purlay.test/ws')).catch(() => undefined);
     hub.deliver('s', { event: 'PONG', data: {}, ts: 0 });
@@ -165,7 +165,7 @@ describe('live frames held while a subscription replays', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
-      { log: createLogger({ level: 'silent' }), leave: () => undefined },
+      { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
     const events: string[] = [];
     void hub
@@ -232,7 +232,7 @@ describe('a connection with no identity', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
-      { log: createLogger({ level: 'silent' }), leave: () => undefined },
+      { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
     const closes: string[] = [];
     // No cookie: nothing to look up, so the database is not reached.
@@ -258,7 +258,7 @@ describe('the frames of one connection, in turn', () => {
     const hub = createSocketHub(
       aDatabaseThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
-      { log: createLogger({ level: 'silent' }), leave: () => undefined },
+      { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
     const closes: string[] = [];
     void hub

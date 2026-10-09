@@ -295,4 +295,136 @@ describe('integration: GitHub identity', () => {
       expect(row.display_name).toBe('n'.repeat(128));
     });
   });
+
+  /** GitHub controls this string; PostgreSQL cannot store a NUL, and sign-in never fails on a name. */
+  test('a display name with control characters is cleaned, not refused', async () => {
+    await withRollback(async (db) => {
+      const { userId } = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 8, login: 'nulled', name: 'Mo\u0000na \u202EgnoL\u0007 \uD800ok' }),
+        verified('nulled@example.test'),
+      );
+      const row = await db
+        .selectFrom('users')
+        .select('display_name')
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+      expect(row.display_name).toBe('Mona gnoL ok');
+    });
+  });
+
+  test('a name that is nothing but controls falls back to the login', async () => {
+    await withRollback(async (db) => {
+      const { userId } = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 9, login: 'blank', name: '\u0000\u0001' }),
+        verified('blank@example.test'),
+      );
+      const row = await db
+        .selectFrom('users')
+        .select('display_name')
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+      expect(row.display_name).toBe('blank');
+    });
+  });
+
+  /**
+   * GitHub does not issue a name with a NUL in it, but this is a value another
+   * system controls, and PostgreSQL refuses a NUL in text outright: the insert
+   * raised and sign-in answered 500. Control characters are removed, and what is
+   * left is stored — sign-in shortens and cleans what it is given, never fails on
+   * it (D-78).
+   */
+  describe('control characters from GitHub', () => {
+    const storedFor = async (
+      db: Parameters<Parameters<typeof withRollback>[0]>[0],
+      userId: string,
+    ): Promise<{ username: string; display_name: string }> =>
+      await db
+        .selectFrom('users')
+        .select(['username', 'display_name'])
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+
+    test('a login and a name with a NUL or another control character are cleaned', async () => {
+      await withRollback(async (db) => {
+        const { userId } = await resolveIdentity(
+          db,
+          clock,
+          account({ id: 11, login: 'oct\u0000o\u001Bcat\u007F', name: 'Mo\u0000na\u0085 Lisa' }),
+          verified('ctl@example.test'),
+        );
+        expect(await storedFor(db, userId)).toEqual({
+          username: 'octocat',
+          display_name: 'Mona Lisa',
+        });
+      });
+    });
+
+    test('a login that is nothing but control characters becomes a name made from the id', async () => {
+      await withRollback(async (db) => {
+        const { userId } = await resolveIdentity(
+          db,
+          clock,
+          account({ id: 12, login: '\u0000\u0000', name: '\u0000' }),
+          verified('nothing@example.test'),
+        );
+        expect(await storedFor(db, userId)).toEqual({
+          username: 'user-12',
+          display_name: 'user-12',
+        });
+      });
+    });
+
+    test('an address with a control character is not an address', async () => {
+      await withRollback(async (db) => {
+        const refused = await refusalFrom(
+          async () =>
+            await resolveIdentity(
+              db,
+              clock,
+              account({ id: 13 }),
+              verified('mona\u0000@example.test'),
+            ),
+        );
+        expect(refused.body.code).toBe('EMAIL_REQUIRED');
+      });
+    });
+  });
+
+  test('a deleted account is not signed back in, and not turned into a second one', async () => {
+    await withRollback(async (db) => {
+      const first = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 21, login: 'gone' }),
+        verified('gone@example.test'),
+      );
+      await db
+        .updateTable('users')
+        .set({ deleted_at: clock.now() })
+        .where('id', '=', first.userId)
+        .execute();
+
+      const refused = await refusalFrom(
+        async () =>
+          await resolveIdentity(
+            db,
+            clock,
+            account({ id: 21, login: 'gone' }),
+            verified('elsewhere@example.test'),
+          ),
+      );
+      expect(refused.body.code).toBe('INTERNAL');
+      const rows = await db
+        .selectFrom('users')
+        .select('id')
+        .where('github_id', '=', '21')
+        .execute();
+      expect(rows).toHaveLength(1);
+    });
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
-import { splitStatements } from './statements';
+import { executableText, splitStatements } from './statements';
 
 describe('splitStatements', () => {
   test('splits on semicolons and drops chunks that are only comments', () => {
@@ -52,5 +52,32 @@ describe('splitStatements', () => {
         expected,
       );
     }
+  });
+});
+
+describe('executableText', () => {
+  test('is the same for two files that differ only in their comments and layout', () => {
+    const before = "-- a\nALTER TABLE t  ADD x int; /* why */\nSELECT 'a -- b; c';";
+    const after =
+      "-- a different comment\n\nALTER TABLE t\n    ADD x int;\nSELECT 'a -- b; c'; -- trailing";
+    expect(executableText(after)).toBe(executableText(before));
+    expect(executableText(before)).toBe("ALTER TABLE t ADD x int;\nSELECT 'a -- b; c'");
+  });
+
+  test('differs when a statement, a string, or a quoted identifier does', () => {
+    const base = executableText('SELECT \'a\', "b";');
+    expect(executableText('SELECT \'a2\', "b";')).not.toBe(base);
+    expect(executableText('SELECT \'a\', "b2";')).not.toBe(base);
+    expect(executableText('SELECT \'a\', "b"; SELECT 1;')).not.toBe(base);
+  });
+
+  test('removes a nested block comment whole, and keeps a lone dollar sign', () => {
+    expect(executableText('SELECT /* a /* b */ still a comment */ $1, 2;')).toBe('SELECT $1, 2');
+  });
+
+  test('keeps a comment marker inside a dollar-quoted body', () => {
+    expect(executableText('SELECT $b$ -- not a comment; $b$;')).toBe(
+      'SELECT $b$ -- not a comment; $b$',
+    );
   });
 });

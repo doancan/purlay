@@ -95,6 +95,44 @@ describe('integration: the message length limit', () => {
     });
   });
 
+  /**
+   * The contract counts UTF-16 code units, so a character outside the Basic
+   * Multilingual Plane is two. The database used to count characters, which let a
+   * writer that is not a door store sixteen thousand emoji — thirty-two thousand
+   * units, sixty-four thousand bytes of content in a frame capped at 64 KiB, a
+   * message that could be read back and never sent on (D-67).
+   */
+  test('the database counts code units, as the contract does', async () => {
+    await withRollback(async (db) => {
+      const room = await aChannel(db, 'len-units');
+      const attempt = async (content: string): Promise<unknown> =>
+        await db
+          .insertInto('messages')
+          .values({
+            id: messageId(NOW),
+            workspace_id: room.workspaceId,
+            channel_id: room.channelId,
+            sender_id: room.userId,
+            content,
+            created_at: NOW,
+          })
+          .execute()
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          );
+
+      const emoji = '\u{1F600}';
+      expect(emoji).toHaveLength(2);
+      expect(await attempt(emoji.repeat(MESSAGE_CONTENT_MAX / 2))).toBeUndefined();
+      // A refused statement aborts the transaction, so this is the last one.
+      expect(await attempt(emoji.repeat(MESSAGE_CONTENT_MAX / 2 + 1))).toMatchObject({
+        code: '23514',
+        constraint: 'messages_content_length',
+      });
+    });
+  });
+
   test('over HTTP, the maximum is written and one more is refused with the field named', async () => {
     await withRollback(async (db) => {
       const room = await aChannel(db, 'len-http');

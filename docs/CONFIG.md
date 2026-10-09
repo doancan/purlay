@@ -21,7 +21,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `PORT` | — | `3001` | API listen port |
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Only `http`/`https`; must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
-| `ERROR_TRACKING_DSN` | — | — | A Sentry-compatible DSN (Sentry, GlitchTip). **Unset means off, and nothing leaves the process.** When set, whatever is logged at `error` is also reported, cleaned exactly as the log is (D-96). Must be `https://` in production; a malformed value refuses to start. **No telemetry is ever collected from a self-hosted deployment** (D-44): there is no default |
+| `ERROR_TRACKING_DSN` | — | — | A Sentry-compatible DSN (Sentry, GlitchTip). **Unset means off, and nothing leaves the process.** When set, whatever is logged at `error` is also reported, cleaned exactly as the log is (D-96). A report gives up after five seconds, is never redirected, and carries no absolute path of the machine. Must be `https://` in production; a malformed value refuses to start. **No telemetry is ever collected from a self-hosted deployment** (D-44): there is no default |
 | `TRUST_PROXY` | — | `false` | Set `true` behind **exactly one** reverse proxy that sets `X-Forwarded-For`; the last entry is then the client (D-81). Without it the socket's peer address is the client and the header is ignored, because anyone can write it. It keys the sign-in rate limit and fills `sessions.ip_address`. Wrong either way hurts: `false` behind a proxy puts every user in one bucket; `true` with none lets a caller choose its own address |
 
 ## Database
@@ -33,7 +33,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. Verifies the server's certificate. `bun run db:migrate` reads it too. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
 | `DATABASE_ALLOW_PLAINTEXT` | — | `false` | Production only: acknowledges that the database link is not encrypted because the network is private (a compose network, a unix socket). Without it production will not start on `DATABASE_SSL=false`. It does not turn TLS off by itself |
 | `DATABASE_SSL_CA_FILE` | — | — | Path to a PEM file of the certificate authority to trust instead of the system's, for a private or managed root. Needs `DATABASE_SSL=true`; a file that cannot be read stops the boot (D-87) |
-| `MIGRATE_ON_START` | — | unset (off) | Apply pending migrations when the process starts. Safe on any number of nodes: the migrator's lock makes them take turns, and the others report not ready until it is done (D-93). Set `true` in a deployment; leave it off in development, where `bun run db:migrate` is explicit |
+| `MIGRATE_ON_START` | — | unset (off) | Apply pending migrations when the process starts. Safe on any number of nodes: the migrator's lock makes them take turns, and the others report not ready until it is done (D-93). Under heavy write load a migration may be retried after a deadlock (logged at `warn`); migrate at low traffic (D-86). Set `true` in a deployment; leave it off in development, where `bun run db:migrate` is explicit |
 
 **The pool's limits are fixed, not configured** (D-87): a number an operator can lower into an outage is
 a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/db/src/client.ts`).
@@ -53,7 +53,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38) |
 | `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
-| `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; a key of one repeated value is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
+| `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
 | `WORKSPACE_OPEN_JOIN_SLUG` | — | — | When set, any authenticated user is joined to that workspace as `member` on sign-in. Unset means the instance is closed. (D-37) |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
@@ -151,6 +151,11 @@ into a support ticket (`PRD.md` §3, S-2):
 | `POSTGRES_PORT` | `5432` | Local development only; not read by the application |
 | `STORAGE_PORT` | `9000` | S3 API |
 
+Both are published on the **loopback address only** (`127.0.0.1`): the development database has a
+superuser whose password is in the repository and the object store a published key, so a port open to
+the network would be an open door on a developer's laptop or a shared CI host. To reach them from
+another machine, forward a port (`ssh -L`); do not edit the binding.
+
 `.env.example` lists exactly the variables the loader reads. It is generated from the loader
 (`bun run config:example`), and CI fails if the committed file differs, so it cannot list a
 variable the application ignores or miss one it reads.
@@ -185,17 +190,41 @@ refuses to start with a required one missing, and names it. Garage wants its own
 `S3_ACCESS_KEY_ID` is `GK` plus 24 hex digits (`echo GK$(openssl rand -hex 12)`) and
 `S3_SECRET_ACCESS_KEY` is 64 hex digits.
 
+`docker/production.env.example` is the file to start from: every required variable is in it, the
+secrets empty (so an unedited copy stops `docker compose` and names the first, instead of starting a stack
+with a default password), the optional ones commented with their defaults. A test keeps it and the
+compose file in step.
+
 ```
+cp docker/production.env.example production.env      # fill in the empty values; keep it private
 docker compose -f docker-compose.production.yml --env-file production.env up -d --wait
 scripts/production-init.sh            # once: the storage layout, bucket and key
 ```
 
+**Ports.** The proxy publishes 80 and 443 (and 443/udp for HTTP/3). `HTTP_PORT` and `HTTPS_PORT`
+(optional, defaults 80 and 443) move them on the host. The caveats are real: the HTTPS port is the same
+inside and outside the container, because Caddy listens on the port in its site address, which is
+`APP_URL`, so `HTTPS_PORT=8443` needs `APP_URL=https://host:8443`; and a certificate from a public CA is
+issued only if 80 and 443 can be reached from the internet, so moving them is for a host that already
+uses them, a deployment behind another proxy, or one with certificates of its own.
+
+**The proxy's access log** records the path and never the query string: an OAuth callback carries a
+one-time `code` and the signed `state` there, and a search carries what was searched for.
+
 `APP_URL` is also the proxy's site address, so the origin Caddy answers for and the one the API checks
 sockets against cannot differ; with a public name and ports 80 and 443 reachable, the certificate is
 issued and renewed automatically. Only the proxy publishes ports.
-Back up with `scripts/backup.sh`, restore with `scripts/restore.sh <dir>` (into a new database by
-default), and prove it with `scripts/compare-databases.sh` (D-95). `ENCRYPTION_KEY` is **not** in the
-backup, by design: keep it separately.
+Back up with `scripts/backup.sh`; restore with `scripts/restore.sh <dir>`, which by default restores
+into a **new** database and a **new** bucket (`purlay_restore`, `<S3_BUCKET>-restore`) and touches
+nothing live; prove it with `scripts/compare-databases.sh` (D-95). To recover over the live
+database, stop the API and run `scripts/restore.sh <dir> --database purlay --replace --bucket live`. `--no-bucket` restores the database alone, which is what rolling back an upgrade needs (attachments are only ever added).
+
+**Upgrading, rolling back and keeping `ENCRYPTION_KEY`:** `ARCHITECTURE.md` §11, "Upgrading and rolling back".
+
+**Who can read a backup:** only the user who ran `backup.sh` (directory `0700`, files `0600`,
+whatever the umask). It holds every message and every e-mail address in the clear, so where it is
+copied, and whether it is encrypted there, is the operator's decision. `ENCRYPTION_KEY` is **not** in
+the backup, by design: keep it separately.
 
 **Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
 intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and

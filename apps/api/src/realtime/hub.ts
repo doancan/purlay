@@ -149,6 +149,8 @@ export interface SocketHub {
   /** Resolves when no queued work is running — what a drain waits for before closing the pool. */
   settled: () => Promise<void>;
   readonly size: () => number;
+  /** How many open connections this user holds, whose identity has been resolved. */
+  readonly connectionsOf: (userId: string) => number;
 }
 
 /**
@@ -166,13 +168,21 @@ export const HELD_FRAMES_MAX = 1_000;
 
 interface Held {
   readonly connection: Connection;
-  readonly identity: Promise<SocketIdentity | undefined>;
+  identity: Promise<SocketIdentity | undefined>;
   cancelExpiry?: () => void;
   /** Present while a subscription is being replayed. */
   holding?: ServerFrame[] | undefined;
+  /**
+   * Channels whose access ended while the replay was being read. The replay was
+   * authorised before that and read after it, so it may carry messages written
+   * after the revocation; they are not written.
+   */
+  revokedWhileHolding?: Set<string> | undefined;
   /** The last queued frame's work; the next one starts when it settles. */
   tail: Promise<void>;
   queued: number;
+  /** Set once the identity is resolved, so the per-user count can be given back. */
+  userId?: string;
   /** Set when the hub closes the connection itself, so queued work stops at once. */
   ending: boolean;
 }
@@ -185,16 +195,26 @@ export interface HubOptions {
    * published it; the bus is not a dependency of the hub, so it is handed in.
    */
   readonly leave: (channelId: string, socketId: string) => void;
+  /**
+   * Called once a connection's identity is first read, **before** the session is read
+   * a second time to confirm it. The caller subscribes the connection to the topics
+   * its end is announced on. Subscribing after the only read leaves a window in which
+   * a sign-out is published to nobody and the connection stays open and authenticated
+   * (a send in that window was acknowledged and stored); with the confirming read
+   * after the subscription, a sign-out is either seen by the read or heard on the topic.
+   */
+  readonly listen: (identity: SocketIdentity) => void;
   readonly timers?: Timers;
 }
 
 export const createSocketHub = (
   database: Executor,
   clock: Clock,
-  { log, leave, timers = systemTimers }: HubOptions,
+  { log, leave, listen, timers = systemTimers }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
+  const byUser = new Map<string, number>();
 
   const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
     const written = socket.connection.send(JSON.stringify(frame));
@@ -232,7 +252,10 @@ export const createSocketHub = (
       // Takes effect now, even behind a replay: what was kept for these channels is
       // forgotten, and nothing published to them reaches this connection again. The
       // notice itself follows in order, so the client hears it after its replay.
-      for (const channelId of frame.data.channelIds) leave(channelId, socketId);
+      for (const channelId of frame.data.channelIds) {
+        leave(channelId, socketId);
+        socket.revokedWhileHolding?.add(channelId);
+      }
       purge(socket, new Set(frame.data.channelIds));
     }
     // The end of a session is never kept waiting behind a replay.
@@ -261,19 +284,29 @@ export const createSocketHub = (
 
   return {
     opened: async (socketId, connection, request): Promise<SocketIdentity | undefined> => {
-      // The promise is held, not its result, so two frames racing the first
-      // resolution share one read and one timer.
-      const pending = resolve(socketId, request);
       const entry: Held = {
         connection,
-        identity: pending,
+        identity: Promise.resolve(undefined),
         tail: Promise.resolve(),
         queued: 0,
         ending: false,
       };
       held.set(socketId, entry);
 
-      const identity = await pending;
+      // The promise is held, not its result, so two frames racing the resolution
+      // share its reads and its one timer.
+      entry.identity = (async (): Promise<SocketIdentity | undefined> => {
+        const first = await resolve(socketId, request);
+        // Closed, or no session: subscribe nothing for a connection that is gone.
+        if (first === undefined || held.get(socketId) !== entry) return undefined;
+        listen(first);
+        // Read again now that the end of this session would reach it: a sign-out
+        // before this read is seen here, one after it is heard on the topic.
+        const confirmed = await resolve(socketId, request);
+        return confirmed?.sessionId === first.sessionId ? first : undefined;
+      })();
+
+      const identity = await entry.identity;
       // Closed while its identity was being resolved: arm nothing for a
       // connection that is gone, or its timer and topic outlive it.
       if (held.get(socketId) !== entry) return undefined;
@@ -283,6 +316,8 @@ export const createSocketHub = (
         connection.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
         return undefined;
       }
+      entry.userId = identity.userId;
+      byUser.set(identity.userId, (byUser.get(identity.userId) ?? 0) + 1);
       entry.cancelExpiry = after(
         timers,
         identity.expiresAt.getTime() - clock.now().getTime(),
@@ -301,7 +336,14 @@ export const createSocketHub = (
       await (held.get(socketId)?.identity ?? Promise.resolve(undefined)),
 
     closed: (socketId: string): void => {
-      held.get(socketId)?.cancelExpiry?.();
+      const socket = held.get(socketId);
+      socket?.cancelExpiry?.();
+      if (socket?.userId !== undefined) {
+        const remaining = (byUser.get(socket.userId) ?? 1) - 1;
+        // An empty count is a leak that grows with every user who ever connected.
+        if (remaining <= 0) byUser.delete(socket.userId);
+        else byUser.set(socket.userId, remaining);
+      }
       held.delete(socketId);
     },
 
@@ -313,16 +355,22 @@ export const createSocketHub = (
 
     hold: (socketId: string): void => {
       const socket = held.get(socketId);
-      if (socket !== undefined) socket.holding = [];
+      if (socket === undefined) return;
+      socket.holding = [];
+      socket.revokedWhileHolding = new Set();
     },
 
     reply: (socketId: string, replies: readonly ServerFrame[]): void => {
       const socket = held.get(socketId);
       if (socket === undefined) return;
       const kept = socket.holding ?? [];
+      const revoked = socket.revokedWhileHolding ?? new Set<string>();
       socket.holding = undefined;
+      socket.revokedWhileHolding = undefined;
       const replayed = new Set<string>();
       for (const reply of replies) {
+        // Read after the revocation, so it may carry what was written since.
+        if (reply.event === 'MESSAGE_CREATED' && revoked.has(reply.data.channelId)) continue;
         if (reply.event === 'MESSAGE_CREATED') replayed.add(reply.data.id);
         write(socketId, socket, reply);
       }
@@ -377,5 +425,7 @@ export const createSocketHub = (
     },
 
     size: (): number => held.size,
+
+    connectionsOf: (userId: string): number => byUser.get(userId) ?? 0,
   };
 };

@@ -146,6 +146,98 @@ describe('the Origin check on state-changing requests', () => {
   });
 });
 
+describe('a body is JSON or it is refused', () => {
+  const withBody = async (
+    contentType: string | undefined,
+    body: string,
+    path = '/api/workspaces',
+  ): Promise<Response> =>
+    await app().handle(
+      new Request(`${APP}${path}`, {
+        method: 'POST',
+        headers: contentType === undefined ? {} : { 'content-type': contentType },
+        body,
+      }),
+    );
+
+  /**
+   * The attack: a cross-site form cannot send application/json, which is what
+   * D-39 item 2 rests on, but nothing refused the types it can send. With neither
+   * Origin nor Sec-Fetch-Site this created a workspace (201).
+   */
+  test('a form or plain-text body is 415 UNSUPPORTED_MEDIA_TYPE, before the session is looked up', async () => {
+    for (const type of [
+      'application/x-www-form-urlencoded',
+      'multipart/form-data; boundary=x',
+      'text/plain',
+      'text/plain;charset=UTF-8',
+      'application/xml',
+    ]) {
+      const response = await withBody(type, 'name=x&slug=y');
+      expect({ type, status: response.status, code: await code(response) }).toEqual({
+        type,
+        status: 415,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+      });
+    }
+  });
+
+  test('a body with no content type at all is refused too', async () => {
+    expect((await withBody(undefined, '{"name":"x"}')).status).toBe(415);
+  });
+
+  test('JSON passes, in any case and with parameters', async () => {
+    for (const type of [
+      'application/json',
+      'Application/JSON',
+      'application/json; charset=utf-8',
+    ]) {
+      const response = await withBody(type, '{}');
+      expect({ type, refused: response.status === 415 }).toEqual({ type, refused: false });
+    }
+  });
+
+  test('a request with no body is unaffected: logout and join carry none', async () => {
+    for (const path of ['/auth/logout', '/auth/logout-all']) {
+      const response = await app().handle(new Request(`${APP}${path}`, { method: 'POST' }));
+      expect({ path, refused: response.status === 415 }).toEqual({ path, refused: false });
+    }
+  });
+
+  /** `handle` builds the request itself; a real listener is what a browser's fetch meets. */
+  test('over a real socket a post with no body is not a body either', async () => {
+    const server = app();
+    const port = server.listen(0);
+    try {
+      const base = `http://localhost:${String(port)}`;
+      for (const path of ['/auth/logout', '/auth/logout-all']) {
+        const response = await fetch(`${base}${path}`, { method: 'POST' });
+        expect({ path, refused: response.status === 415 }).toEqual({ path, refused: false });
+      }
+      const form = await fetch(`${base}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: 'name=x&slug=y',
+      });
+      expect(form.status).toBe(415);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  test('an empty form post (no fields) is still a form, and is refused', async () => {
+    const response = await withBody('application/x-www-form-urlencoded', '', '/auth/logout-all');
+    expect(response.status).toBe(415);
+  });
+
+  test('reads are never subject to it', async () => {
+    const response = await app().handle(
+      new Request(`${APP}/health`, { headers: { 'content-type': 'text/plain' } }),
+    );
+    expect(response.status).toBe(200);
+  });
+});
+
 describe('response headers', () => {
   test('every response says what a browser should not do with it', async () => {
     for (const response of [

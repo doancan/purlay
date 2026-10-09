@@ -75,6 +75,24 @@ describe('integration: the log', () => {
     });
   });
 
+  test('health probes are written at debug, so a balancer polling them does not fill the log', async () => {
+    await withRollback(async (db) => {
+      const { log, lines } = aRecordingLogger();
+      const app = createApp(testDependencies({ database: db, clock, log }));
+      await app.handle(new Request('https://purlay.test/health'));
+      await app.handle(new Request('https://purlay.test/health/ready'));
+      const probes = ['/health', '/health/ready'];
+      for (const path of probes) {
+        const line = await written(lines, (l) => l['msg'] === 'request' && l['path'] === path);
+        expect(line['level']).toBe('debug');
+      }
+      // A request that is not a probe is still an info line.
+      await app.handle(new Request('https://purlay.test/api/me'));
+      const other = await written(lines, (l) => l['msg'] === 'request' && l['path'] === '/api/me');
+      expect(other['level']).toBe('info');
+    });
+  });
+
   test('a failure the client is told nothing about is written with its cause', async () => {
     const { log, lines } = aRecordingLogger();
     // A session cookie sends the request to the database, which here refuses.

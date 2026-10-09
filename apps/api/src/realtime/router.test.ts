@@ -34,6 +34,7 @@ const subscribeWith = async (
           clock,
           bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+          userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           log,
           socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
           atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),

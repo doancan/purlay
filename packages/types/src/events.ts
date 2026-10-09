@@ -305,4 +305,11 @@ export const CLOSE_CODES = {
    * that never got its `ACK` is retried like any other (D-3, `ARCHITECTURE.md` §5.5).
    */
   TOO_BUSY: 1013,
+  /**
+   * The server failed while opening the connection and could not say who was on
+   * it — RFC 6455's own code for it. An `ERROR` frame precedes it, so the client
+   * hears a frame from the contract rather than a body it cannot parse. Reconnect
+   * after a backoff.
+   */
+  INTERNAL: 1011,
 } as const;

@@ -6,6 +6,167 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the image smoke test brings its own database
+
+- It reached the development database through `host.docker.internal`; binding that database to the loopback
+  address (#299) made it unreachable from a container on a Linux runner, and the `image` check was red on main
+  for three commits. It now starts a PostgreSQL of its own on a private network, reached by container name,
+  with nothing published, and removes everything when it ends (#231, D-92 amended). A test fails if the
+  script references the host or the development port again.
+
+### Fix — 2026-10-09: the image ships no tests, and health probes stop filling the log
+
+- The image contained every `*.test.ts` (75 files, 83 with the test-only directory). They are left out in
+  `.dockerignore`, and `scripts/image-smoke.sh` asks the image itself: 83 before, 0 after (#231, D-92
+  amended).
+- `/health` and `/health/ready` request lines are written at `debug` instead of `info` (about twelve lines every ten
+  seconds, with a balancer and the container health check polling); a failing probe is still visible, because readiness writes its reason at `warn`.
+
+### Fix — 2026-10-09: a node that migrates as it starts is not cut off at 30 seconds
+
+- Migrating on start ran on the application's pool, which cancels a statement after 30 s: a migration with a
+  longer statement failed, the node exited, and its restart failed at the same point. It now opens a
+  connection of its own, the one `bun run db:migrate` uses, with no statement timeout (D-87, D-93, #231).
+
+### Fix — 2026-10-09: the database counts a message's length in the contract's unit
+
+- `messages_content_length` counted characters while the contract counts UTF-16 code units, so a writer
+  that is not a door could store sixteen thousand emoji — more than a frame can carry. `0011` counts
+  units; the limit a person sees is unchanged (D-67, amended).
+
+### Fix — 2026-10-09: a client watching thousands of channels subscribes in turn
+
+- 3,500 watched channels were 35 `SUBSCRIBE` frames sent in one burst: the server rate-limited some and
+  then closed with `TOO_BUSY`, on every reconnect. The client now sends one chunk, waits for its
+  acknowledgement, retries a `RATE_LIMITED` chunk with backoff, and waits longer after a `TOO_BUSY`
+  close (D-82, #231). `ARCHITECTURE.md` §5.4 also states that every reconnect replays about 65 s of
+  already-held messages, deliberately (D-65), and what that costs.
+
+### Fix — 2026-10-09: a socket that fails to open is told in a frame
+
+- An identity read that failed after the upgrade was admitted produced a raw error body that clients took
+  for malformed and reconnected into at once. It is now an `ERROR` frame and a close with `TOO_BUSY` or the
+  new `INTERNAL` (1011) (D-84, amended). D-88 records that a retried send publishes the stored row,
+  tombstone included.
+
+### Fix — 2026-10-09: a replay does not carry messages written after a revocation
+
+- A member removed between a subscription's authorisation and its replay read was sent messages written
+  after the removal, ahead of the notice. The hub drops replayed messages of channels revoked while the
+  replay was held (D-85, amended).
+
+### Fix — 2026-10-09: a sign-out while a socket opens no longer leaves it open
+
+- A sign-out between the hub reading the session and the socket subscribing to its end was published to
+  nobody; the socket stayed authenticated and a send on it was acknowledged. The socket now listens first
+  and confirms the session with a second read (D-85, amended).
+
+### Fix — 2026-10-09: a user's sockets share one write budget, and the sockets are capped
+
+- One user opened 100 sockets and sent 20 messages on each: all 2,000 were acknowledged in eight seconds
+  with no `RATE_LIMITED`, against HTTP's ten a second for the same person. `MESSAGE_SEND` is now charged
+  to a per-user bucket shared with HTTP's writes, and a user may hold 20 sockets and a node 2,000, refused
+  at the upgrade (`429` / `503`) and enforced again as upgrades bind. Provisional numbers (D-84, O-4).
+
+### Docs — 2026-10-09: an upgrade and rollback runbook, and the failure it rests on shown
+
+- `ARCHITECTURE.md` §11 now says how to upgrade (backup first, change `PURLAY_IMAGE`, expect `/health/ready`
+  to be 503 for the length of the migration), what happens when it goes wrong (a failed migration, or an older
+  image against a newer schema, stops the node with `migrating on start failed` and exit 1 — reproduced),
+  how to roll back (restore the backup taken first, `restore.sh --no-bucket`), and what losing or changing
+  `ENCRYPTION_KEY` costs (#231).
+
+### Fix — 2026-10-09: the migrator survives a deadlock against live traffic
+
+- At about 5,000 writes a second migration 0010 was ended with `deadlock detected` by sends taking the
+  same locks in the other order. A migration ended that way is now run again (five attempts, 250 ms to 2 s
+  apart, each logged); nothing else is retried. The 0010 header no longer says its lock is held "for an
+  instant", through a checked table of comment-only corrections that leaves the statements' checksum
+  rule intact (#231, D-86). Run migrations at low traffic.
+
+### Fix — 2026-10-09: sign-in survives what GitHub sends and a double-clicked callback
+
+- A NUL or other control character in a GitHub login or name failed sign-in; they are removed. Two
+  callbacks for one account at once answered 500 for the second; both now succeed and share one account
+  (D-78, amended).
+
+### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
+
+- A second-round attack changed the development key's last base64 character (same bytes, different
+  string) and passed; patterns like `abcd` repeated and bytes 0..31 passed too. The key must be
+  canonical base64, is compared to the development key as bytes, and is refused when it is a
+  pattern. `SESSION_TTL_DAYS=1.5` is refused instead of truncated (D-79, Part of #231).
+
+### Fix — 2026-10-09: the proxy no longer logs query strings, its ports can move, and there is a file to start from
+
+- Caddy's access log wrote `/auth/github/callback?code=...&state=...` in full. It now logs the path and
+  nothing after the `?` (#231, D-94 amended); shown on a real run below the pull request.
+- `HTTP_PORT` and `HTTPS_PORT` move the proxy's host ports; the HTTPS port is also in `APP_URL`, and the
+  caveat about public certificates is in `CONFIG.md`.
+- `docker/production.env.example`: every required variable, secrets empty so an unedited copy fails by name;
+  a test binds it to the compose file.
+
+### Chore — 2026-10-09: nothing may remove visibility without deciding what sockets are told
+
+- A test finds every production statement that revokes a session, soft-deletes a user, workspace or
+  channel, or deletes or updates a membership, and requires each to be mapped to the event it publishes,
+  or to a reason and an owner. A planted unlisted write fails it (#231, D-85).
+- Out-of-band SQL revocation is documented as not ending open sockets until expiry or a restart. A
+  command-line revoker is not provided: another process cannot reach the in-process bus.
+
+### Fix — 2026-10-09: a mutation's body must be JSON
+
+- A form post with no `Origin` and no `Sec-Fetch-Site` created a workspace, so D-39's "a cross-site
+  form cannot produce JSON" held for nothing. Any other body type is now `415`
+  `UNSUPPORTED_MEDIA_TYPE`; requests with no body are unaffected (D-80, Part of #231).
+
+### Fix — 2026-10-09: a send cannot commit after its session was revoked
+
+- A sign-out racing a send let one write commit after `revoked_at`, because the socket's identity is
+  cached. The send now takes a share lock on the session row in its own transaction: the write
+  commits before the revocation or is refused (D-85, Part of #231).
+
+### Fix — 2026-10-09: a control character in a name is a 400, not a 500
+
+- A NUL in a workspace or channel name was an `INTERNAL` error and an error report. Names now refuse
+  control characters, separators, lone surrogates and bidirectional overrides at the contract;
+  topics refuse what PostgreSQL cannot store; GitHub's display name has them removed (D-40,
+  Part of #231).
+
+### Fix — 2026-10-09: a restore reads the dump before it replaces anything, and a backup is private
+
+- `restore.sh --replace` dropped the live database before reading the dump: a truncated dump whose checksums
+  had been regenerated left the live database with 20 400 messages turned into 0. It now validates, restores
+  into a staging database, checks it, and swaps by renaming; a bad dump leaves the target exactly as it was
+  (#231, D-95 amended). The default restore now puts the bucket in a new place too and checks it before the
+  database is touched.
+- Backups are `0700`/`0600` instead of the caller's umask (any local user could read them), and a failed
+  backup removes its partial directory, saying to run `production-init.sh` when the object store was never
+  initialised. The weekly rehearsal asserts all of it.
+
+### Fix — 2026-10-09: the error reporter cannot be held hostage, and does not name the host
+
+- A collector that accepted connections and never answered held all ten report slots for ever: 25 failing
+  requests gave ten deliveries and then silence until restart, with nothing logged, and SIGTERM ran to the
+  ten-second deadline. A report now gives up after five seconds, drops are logged at `warn` at most once a
+  minute, a redirect is not followed, and shutdown waits for the reporter two seconds at most (#231, D-96
+  amended). Run against a real never-answering collector: ten delivered, one drop notice, the next five
+  delivered after the timeout, SIGTERM answered in two seconds.
+- Stack traces in a report no longer contain absolute paths of the machine (home directories, the build
+  directory): relative to the working directory, to the package in `node_modules`, or the file name alone.
+
+### Chore — 2026-10-09: the image and rehearsal checks run on every pull request, and the published image is the tested one
+
+- The `image` and `restore-rehearsal` workflows had path filters, so a pull request that broke the
+  Dockerfile or `backup.sh` ran no check and could merge, and a check that does not run cannot be required.
+  Both now run on every pull request and skip their work inside the job when nothing relevant changed
+  (`scripts/pr-touches.sh`, which fails closed on a listing it cannot read). Check names to require: `build`
+  and `rehearse` (#231).
+- On main the image is built once, pushed by digest, smoke-tested as that digest, and tagged — not rebuilt
+  between testing and publishing (D-92 amended).
+- No `actions/checkout` keeps the job token in `.git/config` any more (`persist-credentials: false`); a test
+  fails a checkout without it (D-91 amended).
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and
@@ -21,6 +182,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   nothing leaves the process. No vendor library; bounded, drops under a storm, never throws into the
   caller; a malformed DSN, or an `http://` one in production, refuses to start (#248, D-96, D-44).
 - Against a stand-in collector, one real 500 produced one envelope with the DSN set and none without.
+
+### Test — 2026-10-09: the audit's mutation survivors are killed
+
+- Of 21 mutations re-derived against the current code, 15 survived the tests as they were on main and
+  none survives now: a retry from another channel is a conflict, history and replay leave deleted messages
+  out and cap the page, the OAuth state's length check and a missing `code` are tested, `SESSION_TTL_DAYS`
+  is held to 1–365, the member list and `/api/me` leave tombstones out, the web connection ignores a replaced
+  socket's frames, and a send is announced only after its commit (a second connection reads the row at the
+  moment of publication). `bun run mutate` keeps all of them (#246, D-47).
 
 ### Feature — 2026-10-09: a mutation runner that never touches the working tree
 

@@ -3,26 +3,17 @@
 # `scripts/restore-rehearsal.sh` brings up a throwaway copy of the production stack,
 # fills it, backs it up, restores into a new database and bucket, and fails unless the
 # two are identical; then it destroys every volume and rebuilds from the backup alone.
-# Weekly, and on any change to the scripts or the stack they run against.
+# Weekly, and on any pull request that touches what it exercises.
+#
+# **Runs on every pull request, so that it can be a required check.** A workflow that a
+# path filter skips reports nothing, and a pull request that broke `backup.sh` could merge
+# without it. Whether the pull request touches anything the rehearsal exercises is decided
+# inside the job (scripts/pr-touches.sh); when it does not, the steps are skipped and the
+# job reports success in seconds. The weekly run and a push to main always run it.
 name: restore-rehearsal
 
 on:
   pull_request:
-    paths:
-      - scripts/backup.sh
-      - scripts/restore.sh
-      - scripts/compare-databases.sh
-      - scripts/ops-common.sh
-      - scripts/production-init.sh
-      - scripts/restore-rehearsal.sh
-      - scripts/rehearsal-*.ts
-      - scripts/bucket-*.ts
-      - docs/spikes/backup-restore.seed.sql
-      - docker-compose.production.yml
-      - docker/garage.production.toml
-      - Dockerfile
-      - packages/db/migrations/**
-      - .github/workflows/restore-rehearsal.yml
   schedule:
     # Weekly, Wednesday morning UTC.
     - cron: '23 5 * * 3'
@@ -34,11 +25,44 @@ jobs:
   rehearse:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      # To list the files of the pull request.
+      pull-requests: read
+    env:
+      # What the rehearsal builds, runs and restores.
+      PATTERN: '^(scripts/(backup|restore|compare-databases|ops-common|production-init|restore-rehearsal|pr-touches)\.sh|scripts/(rehearsal-|bucket-)[^/]*\.ts|docs/spikes/backup-restore\.seed\.sql|docker-compose\.production\.yml|docker/|Dockerfile|\.dockerignore|apps/api/|packages/(db|types)/|bun\.lock|\.github/workflows/restore-rehearsal\.yml)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # No job pushes; the token stays out of .git/config where later steps could read it.
+          persist-credentials: false
+
+      # A scheduled run has no pull request and always rehearses.
+      - id: changes
+        name: does this run have anything to rehearse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "relevant=true" | tee -a "$GITHUB_OUTPUT"
+          else
+            gh api --paginate "repos/$REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[].filename' \
+              | scripts/pr-touches.sh "$PATTERN" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.changes.outputs.relevant == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Builds the image itself, so the rehearsal runs against the code in this
       # commit. The secrets it generates are throwaway and die with the stack.
       - name: back up, restore into a fresh database and bucket, compare, then rebuild after a total loss
+        if: steps.changes.outputs.relevant == 'true'
         run: scripts/restore-rehearsal.sh
+
+      - name: nothing the rehearsal exercises changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "no change to the backup scripts, the production stack, the image or the schema; nothing to rehearse"

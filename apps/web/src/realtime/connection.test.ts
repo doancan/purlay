@@ -10,13 +10,14 @@ import {
   type ClientFrame,
   type ServerFrame,
 } from '@purlay/types';
-import { BACKOFF } from './backoff';
+import { BACKOFF, reconnectDelay } from './backoff';
 import type { Clock } from './clock';
 import {
   CHECK_SESSION_AFTER_FAILURES,
   PING_AFTER_IDLE_MS,
   PONG_DEADLINE_MS,
   STABLE_AFTER_MS,
+  TOO_BUSY_BACKOFF_STEP,
   createConnection,
   type Connection,
   type OpenSocket,
@@ -318,6 +319,60 @@ describe('reconnecting', () => {
   });
 });
 
+describe('a socket that has been replaced', () => {
+  /**
+   * A superseded socket can still deliver: its frames were in flight when the
+   * connection moved on. Folding one in would advance a cursor past messages the new
+   * connection's replay has yet to fetch — the gap `Connection` exists to close — and
+   * would hand the UI a frame from a connection it no longer has.
+   */
+  test('its late frames are neither shown nor remembered once a newer socket exists', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    h.connection.start();
+    const old = h.last();
+    old.handlers.opened();
+    old.handlers.closed(1006);
+    h.fireNext();
+    const current = h.last();
+    expect(current).not.toBe(old);
+
+    old.handlers.message(created(channel(1), idAt(9_000)));
+    expect(h.frames).toEqual([]);
+
+    // The control: the same frame on the current socket is shown.
+    current.handlers.opened();
+    current.handlers.message(created(channel(1), idAt(9_000)));
+    expect(h.frames).toHaveLength(1);
+  });
+
+  test('its late frames do not advance the cursor the next connection resumes from', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    h.connection.start();
+    const old = h.last();
+    old.handlers.opened();
+    old.handlers.closed(1006);
+    h.fireNext();
+    old.handlers.message(created(channel(1), idAt(9_000)));
+
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())[0]?.payload.channels).toEqual([
+      { channelId: channel(1), afterMessageId: null },
+    ]);
+  });
+
+  test('after stop, a frame from the old socket is dropped', () => {
+    const h = harness();
+    h.connection.start();
+    const old = h.last();
+    old.handlers.opened();
+    h.connection.stop();
+    old.handlers.message(created(channel(1), idAt(1_000)));
+    expect(h.frames).toEqual([]);
+  });
+});
+
 describe('replay by cursor', () => {
   test('a channel nothing was heard in resubscribes from null', () => {
     const h = harness();
@@ -366,6 +421,22 @@ describe('replay by cursor', () => {
     h.connection.start();
     h.last().handlers.opened();
 
+    // One at a time: the second leaves when the first is acknowledged (pacing, below).
+    const first = h.subscribes(h.last())[0];
+    if (first === undefined) throw new Error('no SUBSCRIBE was sent');
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACK',
+        ts: T0,
+        refId: first.id,
+        data: {
+          channels: first.payload.channels.map(({ channelId }) => ({
+            channelId,
+            nextCursor: null,
+          })),
+        },
+      }),
+    );
     const frames = h.subscribes(h.last());
     expect(frames.map((frame) => frame.payload.channels.length)).toEqual([
       SUBSCRIBE_MAX_CHANNELS,
@@ -866,5 +937,308 @@ describe('the cursor and a replay that was one page', () => {
     socket.handlers.message(subscribed(channel(1), idAt(2_000)));
     h.connection.unwatch(channel(1));
     expect(h.connection.pendingContinuations().size).toBe(0);
+  });
+});
+
+/** The wait before a chunk is sent again: the one live timer that is not the heartbeat's or the backoff's forgiveness. */
+const retryTimer = (h: Harness): Harness['timers'][number] | undefined =>
+  h.live().find((t) => ![STABLE_AFTER_MS, PONG_DEADLINE_MS, PING_AFTER_IDLE_MS].includes(t.ms));
+
+describe('pacing a large subscription', () => {
+  const ackFor = (chunk: SubscribeFrame): string =>
+    JSON.stringify({
+      event: 'ACK',
+      ts: T0,
+      refId: chunk.id,
+      data: {
+        channels: chunk.payload.channels.map(({ channelId }) => ({ channelId, nextCursor: null })),
+      },
+    });
+  const limited = (refId: string): string =>
+    JSON.stringify({
+      event: 'ERROR',
+      ts: T0,
+      refId,
+      data: { code: 'RATE_LIMITED', message: 'slow down' },
+    });
+  const watchMany = (h: Harness, total: number): void => {
+    for (let n = 1; n <= total; n += 1) h.connection.watch(channel(n));
+  };
+  const chunksOf = (total: number): number => Math.ceil(total / SUBSCRIBE_MAX_CHANNELS);
+
+  test('only one chunk is in flight; the next leaves when the last is acknowledged', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS * 3 + 5);
+    const socket = openOne(h);
+    expect(h.subscribes(socket)).toHaveLength(1);
+
+    for (let sent = 1; sent <= 3; sent += 1) {
+      const chunk = h.subscribes(socket)[sent - 1];
+      if (chunk === undefined) throw new Error('chunk missing');
+      socket.handlers.message(ackFor(chunk));
+      expect(h.subscribes(socket)).toHaveLength(sent + 1);
+    }
+    const sizes = h.subscribes(socket).map((frame) => frame.payload.channels.length);
+    expect(sizes).toEqual([
+      SUBSCRIBE_MAX_CHANNELS,
+      SUBSCRIBE_MAX_CHANNELS,
+      SUBSCRIBE_MAX_CHANNELS,
+      5,
+    ]);
+    const named = h
+      .subscribes(socket)
+      .flatMap((frame) => frame.payload.channels.map((c) => c.channelId));
+    expect(new Set(named).size).toBe(SUBSCRIBE_MAX_CHANNELS * 3 + 5);
+  });
+
+  test('a RATE_LIMITED answer is retried after a wait, with the same channels', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(limited(first.id));
+    expect(h.subscribes(socket)).toHaveLength(1); // not at once
+
+    const wait = retryTimer(h);
+    if (wait === undefined) throw new Error('no retry scheduled');
+    wait.live = false;
+    wait.fn();
+    const retry = h.subscribes(socket)[1];
+    expect(retry?.payload.channels).toEqual(first.payload.channels);
+    expect(retry?.id).not.toBe(first.id);
+  });
+
+  test('a database that is busy is retried the same way', () => {
+    const h = harness();
+    watchMany(h, 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(
+      JSON.stringify({
+        event: 'ERROR',
+        ts: T0,
+        refId: first.id,
+        data: { code: 'DATABASE_UNAVAILABLE', message: 'busy' },
+      }),
+    );
+    expect(retryTimer(h)).toBeDefined();
+  });
+
+  test('a channel unwatched during the wait is not sent when the wait ends', () => {
+    const h = harness();
+    watchMany(h, 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(limited(first.id));
+    h.connection.unwatch(channel(1));
+    const wait = retryTimer(h);
+    if (wait === undefined) throw new Error('no retry scheduled');
+    wait.live = false;
+    wait.fn();
+    expect(h.subscribes(socket)).toHaveLength(1);
+  });
+
+  test('an answer to something else does not release the chunk on the wire', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(ackFor({ ...first, id: idAt(88_000) }));
+    expect(h.subscribes(socket)).toHaveLength(1);
+  });
+
+  test('an acknowledgement starts the wait over', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(limited(first.id));
+    const wait = retryTimer(h);
+    if (wait === undefined) throw new Error('no retry scheduled');
+    wait.live = false;
+    wait.fn();
+    const second = h.subscribes(socket)[1];
+    if (second === undefined) throw new Error('retry missing');
+    socket.handlers.message(ackFor(second));
+    const third = h.subscribes(socket)[2];
+    if (third === undefined) throw new Error('next chunk missing');
+    socket.handlers.message(limited(third.id));
+    expect(retryTimer(h)?.ms).toBe(BACKOFF.baseMs / 2);
+  });
+
+  test('the wait grows while the answer stays RATE_LIMITED', () => {
+    const h = harness();
+    watchMany(h, 1);
+    const socket = openOne(h);
+    const waitsSeen: number[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const chunk = h.subscribes(socket).at(-1);
+      if (chunk === undefined) throw new Error('chunk missing');
+      socket.handlers.message(limited(chunk.id));
+      const timer = retryTimer(h);
+      if (timer === undefined) throw new Error('no retry scheduled');
+      waitsSeen.push(timer.ms);
+      timer.live = false;
+      timer.fn();
+    }
+    expect(waitsSeen).toEqual([BACKOFF.baseMs / 2, BACKOFF.baseMs, BACKOFF.baseMs * 2]);
+  });
+
+  test('another error for a chunk is not retried, and the rest still go', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(
+      JSON.stringify({
+        event: 'ERROR',
+        ts: T0,
+        refId: first.id,
+        data: { code: 'WORKSPACE_NOT_FOUND', message: 'no such channel' },
+      }),
+    );
+    expect(h.subscribes(socket)).toHaveLength(2);
+    expect(h.subscribes(socket)[1]?.payload.channels).toHaveLength(1);
+  });
+
+  test('a channel unwatched while it waits for its turn is not subscribed', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
+    const socket = openOne(h);
+    h.connection.unwatch(channel(SUBSCRIBE_MAX_CHANNELS + 1));
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(ackFor(first));
+    expect(h.subscribes(socket)).toHaveLength(1);
+  });
+
+  test('watching while a chunk is in flight waits behind it', () => {
+    const h = harness();
+    watchMany(h, 1);
+    const socket = openOne(h);
+    h.connection.watch(channel(500));
+    expect(h.subscribes(socket)).toHaveLength(1);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(ackFor(first));
+    expect(h.subscribes(socket)[1]?.payload.channels).toEqual([
+      { channelId: channel(500), afterMessageId: null },
+    ]);
+  });
+
+  test('a reconnect starts the whole subscription over, and a pending retry dies with the socket', () => {
+    const h = harness();
+    watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
+    const socket = openOne(h);
+    const first = h.subscribes(socket)[0];
+    if (first === undefined) throw new Error('chunk missing');
+    socket.handlers.message(limited(first.id));
+    socket.handlers.closed(1006);
+    expect(h.live().map((t) => t.ms)).toEqual([BACKOFF.baseMs / 2]);
+
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())).toHaveLength(1);
+    expect(h.subscribes(h.last())[0]?.payload.channels).toHaveLength(SUBSCRIBE_MAX_CHANNELS);
+    expect(h.subscribes(socket)).toHaveLength(1);
+  });
+
+  test('TOO_BUSY waits longer than an ordinary drop before reconnecting', () => {
+    const h = harness();
+    openOne(h).handlers.closed(CLOSE_CODES.TOO_BUSY);
+    expect(h.fireNext()).toBe(reconnectDelay(TOO_BUSY_BACKOFF_STEP, () => 0));
+    expect(reconnectDelay(TOO_BUSY_BACKOFF_STEP, () => 0)).toBeGreaterThan(BACKOFF.baseMs);
+  });
+
+  test('TOO_BUSY never shortens a wait the failures had already earned', () => {
+    const h = harness();
+    h.connection.start();
+    for (let i = 0; i < TOO_BUSY_BACKOFF_STEP + 2; i += 1) {
+      h.last().handlers.closed(1006);
+      h.fireNext();
+    }
+    h.last().handlers.closed(CLOSE_CODES.TOO_BUSY);
+    expect(h.fireNext()).toBe(reconnectDelay(TOO_BUSY_BACKOFF_STEP + 2, () => 0));
+  });
+
+  describe('against a server that limits and closes like the real one', () => {
+    // The real limits live in apps/api (`SOCKET_FRAME_BUDGET`, `FRAME_QUEUE_MAX`); the
+    // client must not import them, so this model states what it relies on: a burst
+    // of 20 that refills with time, and a close with 1013 when more than 32 frames
+    // are waiting to be handled at once.
+    const BURST = 20;
+    const QUEUE_MAX = 32;
+    const REFILL_PER_SECOND = 10;
+
+    const runAgainstServer = (total: number): { acked: Set<string>; tooBusy: number } => {
+      const h = harness();
+      watchMany(h, total);
+      const acked = new Set<string>();
+      let tooBusy = 0;
+      let tokens = BURST;
+      let handled = 0;
+
+      /** The server takes what has arrived: all of it at once, as the socket delivers it. */
+      const serve = (socket: FakeSocket): void => {
+        const arrived = socket.sent.slice(handled);
+        if (arrived.length > QUEUE_MAX) {
+          tooBusy += 1;
+          handled = socket.sent.length;
+          socket.handlers.closed(CLOSE_CODES.TOO_BUSY);
+          return;
+        }
+        handled = socket.sent.length;
+        for (const text of arrived) {
+          const frame: unknown = JSON.parse(text);
+          if (!isSubscribe(frame)) continue;
+          if (tokens < 1) {
+            socket.handlers.message(limited(frame.id));
+          } else {
+            tokens -= 1;
+            for (const { channelId } of frame.payload.channels) acked.add(channelId);
+            socket.handlers.message(ackFor(frame));
+          }
+        }
+        if (socket.sent.length > handled) serve(socket);
+      };
+
+      let socket = openOne(h);
+      tokens -= 1; // the PING sent as the socket opened
+      for (let turns = 0; turns < 400 && acked.size < total; turns += 1) {
+        serve(socket);
+        if (acked.size >= total) break;
+        const timer = retryTimer(h);
+        if (timer === undefined) break;
+        tokens = Math.min(BURST, tokens + (timer.ms / 1000) * REFILL_PER_SECOND);
+        const before = h.sockets.length;
+        timer.live = false;
+        timer.fn();
+        if (h.sockets.length > before) {
+          socket = h.last();
+          socket.handlers.opened();
+          handled = 0;
+        }
+      }
+      return { acked, tooBusy };
+    };
+
+    test('2,500 channels: every chunk is eventually acknowledged', () => {
+      const result = runAgainstServer(2_500);
+      expect(chunksOf(2_500)).toBe(25);
+      expect(result.acked.size).toBe(2_500);
+      expect(result.tooBusy).toBe(0);
+    });
+
+    test('3,500 channels: no close for being too busy, and every channel subscribed', () => {
+      const result = runAgainstServer(3_500);
+      expect(result.tooBusy).toBe(0);
+      expect(result.acked.size).toBe(3_500);
+    });
   });
 });

@@ -19,8 +19,8 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
-import { sessionTokenFrom } from '../../platform/cookies';
 import { AppError } from '../../platform/errors';
+import { sessionTokenFrom } from '../../platform/cookies';
 
 /** 32 bytes, hex-encoded. The cookie value. */
 const TOKEN_BYTES = 32;
@@ -36,6 +36,7 @@ const TOKEN_BYTES = 32;
 const LAST_USED_STALE_AFTER_MS = 60 * 60 * 1000;
 
 export interface IssuedSession {
+  readonly sessionId: string;
   /** The only place the raw token is ever returned. It is never stored. */
   readonly token: string;
   readonly expiresAt: Date;
@@ -75,7 +76,7 @@ export const issueSession = async (
   const now = clock.now();
   const expiresAt = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
 
-  await executor
+  const row = await executor
     .insertInto('sessions')
     .values({
       user_id: userId,
@@ -89,9 +90,10 @@ export const issueSession = async (
       ...(options.userAgent === undefined ? {} : { user_agent: options.userAgent }),
       ...(options.ipAddress === undefined ? {} : { ip_address: options.ipAddress }),
     })
-    .execute();
+    .returning('id')
+    .executeTakeFirstOrThrow();
 
-  return { token, expiresAt };
+  return { sessionId: row.id, token, expiresAt };
 };
 
 /**
@@ -133,6 +135,35 @@ export const resolveSession = async (
   }
 
   return { sessionId: row.sessionId, userId: row.userId, expiresAt: new Date(row.expires_at) };
+};
+
+/**
+ * Inside a transaction that is about to write on a session's behalf: the session
+ * must still be live, and stays live until this transaction ends.
+ *
+ * A socket authenticates once and keeps the identity. A sign-out that raced a
+ * send let a write commit *after* `revoked_at`. `FOR SHARE` closes that: the
+ * revocation updates this row, so it waits for the transaction that holds the
+ * lock — the write commits before the revocation does — and a revocation that
+ * committed first is seen here. One primary-key read, compatible with every
+ * other sender's share lock on the same session. (D-85)
+ */
+export const requireLiveSession = async (
+  transaction: Executor,
+  clock: Clock,
+  sessionId: string,
+): Promise<void> => {
+  const live = await transaction
+    .selectFrom('sessions')
+    .select('id')
+    .where('id', '=', sessionId)
+    .where('revoked_at', 'is', null)
+    .where('expires_at', '>', clock.now())
+    .forShare()
+    .executeTakeFirst();
+  if (live === undefined) {
+    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  }
 };
 
 /** Sign out, on this device. Revoking is a stamp, never a delete: the row is evidence. */

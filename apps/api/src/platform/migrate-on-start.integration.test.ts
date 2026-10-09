@@ -63,25 +63,78 @@ afterAll(async () => {
 
 describe('integration: migrate on start', () => {
   test('an empty database is migrated to the latest, and starting again changes nothing', async () => {
-    const { db } = await freshDatabase('one');
+    const { name, db } = await freshDatabase('one');
     try {
       const files = (await readMigrationFiles()).map((file) => file.name);
-      expect(await migrateOnStart(db)).toEqual(files);
+      expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual(files);
       expect(await recorded(db)).toEqual(files);
-      expect(await migrateOnStart(db)).toEqual([]);
+      expect(await migrateOnStart({ connectionString: urlFor(name) })).toEqual([]);
     } finally {
       await db.destroy();
     }
   });
 
   test('a migration that fails stops the start, naming it and keeping the cause', async () => {
-    const { db } = await freshDatabase('bad');
+    const { name, db } = await freshDatabase('bad');
     const directory = mkdtempSync(join(tmpdir(), 'migrations-'));
     writeFileSync(join(directory, '0001_broken.sql'), 'this is not sql;');
     try {
-      const failed = await failure(migrateOnStart(db, directory));
+      const failed = await failure(migrateOnStart({ connectionString: urlFor(name) }, directory));
       expect(failed.message).toContain('0001_broken');
       expect(failed.cause).toBeDefined();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+      await db.destroy();
+    }
+  });
+
+  /**
+   * The application's pool cancels a statement after 30 s (D-87), and the migrator is not
+   * the application: an index built on a table of millions of rows is meant to take as long
+   * as it takes, and a node whose migration is cancelled exits, restarts, and is cancelled
+   * at the same point again. Migrating on start uses a connection of its own, made as
+   * `bun run db:migrate` makes it, so the timeout is off. A migration that records what
+   * its own session was given shows it without needing one that runs for thirty seconds.
+   */
+  test('the migration runs on a session with no statement timeout, as the CLI gives it', async () => {
+    const { name, db } = await freshDatabase('timeout');
+    const directory = mkdtempSync(join(tmpdir(), 'migrations-'));
+    writeFileSync(
+      join(directory, '0001_seen.sql'),
+      "CREATE TABLE seen AS SELECT current_setting('statement_timeout') AS timeout,\n" +
+        "current_setting('application_name') AS application;",
+    );
+    try {
+      expect(await migrateOnStart({ connectionString: urlFor(name) }, directory)).toEqual([
+        '0001_seen',
+      ]);
+      const { rows } = await sql<{ timeout: string; application: string }>`
+        select timeout, application from seen`.execute(db);
+      expect(rows).toEqual([{ timeout: '0', application: 'purlay-api' }]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+      await db.destroy();
+    }
+  });
+
+  test('the connection it opens is closed when it is done, whether or not it succeeded', async () => {
+    const { name, db } = await freshDatabase('closed');
+    const directory = mkdtempSync(join(tmpdir(), 'migrations-'));
+    writeFileSync(join(directory, '0001_broken.sql'), 'this is not sql;');
+    const sessions = async (): Promise<number> =>
+      Number(
+        (
+          await sql<{ n: string }>`
+            select count(*) as n from pg_stat_activity
+            where datname = ${name} and pid <> pg_backend_pid()`.execute(admin)
+        ).rows[0]?.n,
+      );
+    try {
+      await failure(migrateOnStart({ connectionString: urlFor(name) }, directory));
+      expect(await sessions()).toBe(0);
+      writeFileSync(join(directory, '0001_broken.sql'), 'CREATE TABLE fine (id int);');
+      await migrateOnStart({ connectionString: urlFor(name) }, directory);
+      expect(await sessions()).toBe(0);
     } finally {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();

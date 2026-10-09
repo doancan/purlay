@@ -4,6 +4,7 @@
  *   bucket-copy.ts export <dir>   every object -> <dir>/objects/<key>, and <dir>/manifest.json
  *   bucket-copy.ts import <dir>   the objects back into an EMPTY bucket, verified against the manifest
  *   bucket-copy.ts verify <dir>   re-reads the bucket and compares it to the manifest
+ *   bucket-copy.ts count          how many objects the bucket holds
  *
  * It reads the bucket the application is configured with (`S3_*`, docs/CONFIG.md) and
  * uses the runtime's own S3 client, so it needs nothing the API image does not
@@ -67,8 +68,13 @@ const snapshot = async (): Promise<{
 };
 
 const [command, directory] = process.argv.slice(2);
+if (command === 'count') {
+  // How many objects the bucket holds: what a restore asks before it touches anything.
+  console.log(String((await listKeys()).length));
+  process.exit(0);
+}
 if (directory === undefined || !['export', 'import', 'verify'].includes(command ?? '')) {
-  console.error('usage: bucket-copy.ts export|import|verify <dir>');
+  console.error('usage: bucket-copy.ts export|import|verify <dir> | count');
   process.exit(2);
 }
 const manifestFile = join(directory, 'manifest.json');

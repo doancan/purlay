@@ -46,12 +46,30 @@ const tablesIn = (sql: string): Map<string, TableShape> => {
   return tables;
 };
 
-/** `ALTER TABLE t ADD CONSTRAINT c` — constraints a later migration adds. */
-const addedConstraints = (sql: string): [string, string][] =>
-  [...withoutComments(sql).matchAll(/ALTER TABLE (\w+)\s+ADD CONSTRAINT (\w+)/g)].map((match) => [
-    match[1] ?? '',
-    match[2] ?? '',
-  ]);
+/**
+ * What later migrations do to constraints, in order: `ADD CONSTRAINT`, `DROP
+ * CONSTRAINT [IF EXISTS]` and `RENAME CONSTRAINT a TO b`. Only the net result is
+ * what the document must describe, so a constraint a migration replaces (0011) is
+ * replayed rather than counted twice, and the re-runnable `DROP ... IF EXISTS` of
+ * a name never added changes nothing.
+ */
+type ConstraintChange =
+  | { readonly table: string; readonly add: string }
+  | { readonly table: string; readonly drop: string }
+  | { readonly table: string; readonly rename: string; readonly to: string };
+
+const constraintChanges = (sql: string): ConstraintChange[] => {
+  const statement =
+    /ALTER TABLE (\w+)\s+(?:ADD CONSTRAINT (\w+)|DROP CONSTRAINT (?:IF EXISTS )?(\w+)|RENAME CONSTRAINT (\w+) TO (\w+))/g;
+  return [...withoutComments(sql).matchAll(statement)].flatMap((match): ConstraintChange[] => {
+    const [, table = '', added, dropped, renamed, renamedTo] = match;
+    if (added !== undefined) return [{ table, add: added }];
+    if (dropped !== undefined) return [{ table, drop: dropped }];
+    if (renamed !== undefined && renamedTo !== undefined)
+      return [{ table, rename: renamed, to: renamedTo }];
+    return [];
+  });
+};
 
 /**
  * The indexes that exist after the SQL has run, by table.
@@ -96,9 +114,13 @@ const documentSql = [...readFileSync('docs/SCHEMA.md', 'utf8').matchAll(/```sql\
   .join('\n');
 
 const applied = tablesIn(migrationsSql);
-for (const [table, constraint] of addedConstraints(migrationsSql)) {
-  const shape = applied.get(table);
-  if (shape !== undefined) (shape.constraints as Set<string>).add(constraint);
+for (const change of constraintChanges(migrationsSql)) {
+  const constraints = applied.get(change.table)?.constraints as Set<string> | undefined;
+  if (constraints === undefined) continue;
+  if ('add' in change) constraints.add(change.add);
+  else if ('drop' in change) constraints.delete(change.drop);
+  else if (constraints.delete(change.rename)) constraints.add(change.to);
+  else throw new Error(`a migration renames ${change.rename}, which does not exist`);
 }
 const documented = tablesIn(documentSql);
 const appliedIndexes = indexesIn(migrationsSql);

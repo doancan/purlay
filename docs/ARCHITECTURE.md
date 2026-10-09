@@ -285,6 +285,22 @@ client does not know is ignored (a newer server is not a fault); a frame that is
 no string `event`, or is a known event with the wrong data, ends the connection. After `ended`,
 `start()` connects again. (D-82)
 
+**A large subscription is sent one chunk at a time.** A frame names at most `SUBSCRIBE_MAX_CHANNELS`
+channels, so 3,500 watched channels are 35 frames. Sent together they exceed the connection's frame
+budget (§5.5: the surplus is answered `RATE_LIMITED`, which nothing retried) and then its queue bound
+(the close `TOO_BUSY`, 1013, on every attempt, forever). The client sends the next chunk when the last
+is acknowledged, sends a chunk again after a growing wait when it is answered `RATE_LIMITED` or
+`DATABASE_UNAVAILABLE`, and begins the wait after a `TOO_BUSY` close part-way up the backoff ladder
+rather than at the bottom. It reads none of the server's limits; waiting for the answer needs none.
+(D-82)
+
+**Every reconnect replays what was already held, on purpose.** The scan starts `REPLAY_OVERLAP_MS`
+(65 s) below the cursor (D-65), so each subscription answers with up to 1,000 frames of messages the
+client already has and discards by id. That is the price of never missing a message that was written
+late: a storm of 300 sockets reconnecting at once pulled 90,000 frames. It is paid per reconnect, not
+per message, bounded by the replay's own caps (§5.5), and spread by the backoff's jitter (D-76). A
+narrower window would be cheaper and would lose the late send D-65 exists to catch.
+
 **A subscription is bounded, and costs the same whatever it names.** One frame names at most
 `SUBSCRIBE_MAX_CHANNELS`, each once. Every channel is authorised in one query before any is
 subscribed — one the caller cannot see refuses the frame, and nothing is left half-subscribed — and
@@ -306,6 +322,9 @@ neither. (D-83)
   implementation in Phase 0–2; the seam exists because an in-process limiter on N nodes grants
   N times the quota (D-25). **The number is not yet decided (O-4)** — 10 frames/second with a
   burst of 20 is what is enforced, as a provisional value, until dogfooding measures it.
+  **The budget is also the user's:** `MESSAGE_SEND` is charged to a per-user bucket shared with HTTP's
+  writes, and a user (20) and a node (2,000) may hold only so many sockets, refused at the upgrade with
+  `429` / `503` (D-84, amended; provisional, O-4).
 - HTTP has limits of its own behind the same seam: `/auth/*` per client address, mutations per signed-in
   user at the socket's budget, so `POST /messages` is no cheaper than a frame. A refusal is `429`
   with `Retry-After`. Provisional, as above (D-81).
@@ -456,6 +475,16 @@ unsubscribes the socket from those channels and the connection stays open. No vi
 per delivered frame. A subscription is made before its channels are authorised so a revocation
 cannot slip between the two. Phase 1's endpoints must publish these after they commit; the
 functions are in `platform/events.ts` and D-85 lists which endpoint calls which.
+
+`revocation-contract.test.ts` fails the build if a production write that removes visibility has no
+decision in its table. **Operators:** a session revoked, a membership deleted or a user soft-deleted by
+SQL, outside the application, does not end an open socket — nothing publishes — until the session expires
+or the process restarts (a drain, §11 / D-72). There is no command-line tool for it: the bus is in-process
+and another process cannot reach it (D-85).
+
+A socket subscribes to its topics **before** its session is confirmed by a second read, so a sign-out
+while it opens is seen by one or heard by the other (D-85, amended). A replay read after a revocation was observed does not
+write that channel's messages (D-85, amended).
 
 ### 7.3. The isolation mechanism
 
@@ -716,9 +745,48 @@ served from the API's origin, arrives with the prerendered shell (#141, #224).
 it is bounded, drops under a storm and can never throw into the caller
 (`apps/api/src/platform/error-tracking.ts`, D-96, D-44).
 
+**Upgrading and rolling back** (the one home of this runbook; `CONFIG.md` points here). Every step below
+was run, and the failure in the last-but-one paragraph was reproduced, not reasoned out.
+
+1. **Take a backup first, and keep it until the upgrade has proved itself.** `scripts/backup.sh`, then
+   check it the way a restore would: `scripts/restore.sh <dir>` into the default new database and bucket
+   and `scripts/compare-databases.sh purlay purlay_restore`. Write down the `PURLAY_IMAGE` that is running.
+2. **Upgrade by changing `PURLAY_IMAGE`** in `production.env` to the new digest (or commit tag) and running
+   `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait`. With
+   `MIGRATE_ON_START=true` the new API container migrates when it starts; the old one drains (D-72), so
+   clients reconnect rather than see an outage.
+3. **Expect `/health/ready` to answer 503 for as long as the migration takes** — measured, about 18 s for a
+   15 s migration with two replicas starting together. The proxy sends no traffic to a node that is not
+   ready, and `--wait` returns when the API reports healthy, which is when to look at the site. A migration
+   longer than the container's 30 s `start-period` shows the container as `unhealthy` while it runs; that is
+   a number to raise in the compose file for a big one, not a failure.
+4. **A migration that fails stops the node, loudly.** The API logs `migrating on start failed` with the
+   cause and exits 1; compose restarts it, and it fails the same way until someone acts. It does not serve
+   half a schema.
+5. **An older image against a newer schema does the same, by design.** Start the previous image on a
+   database that has since had a newer migration applied and it refuses: `corrupted migrations: previously
+   applied migration <name> is missing`, `migrating on start failed`, exit 1 — and, without
+   `MIGRATE_ON_START`, readiness stays 503 with the same reason. There is no down migration (D-86), so
+   **rolling back is restoring the backup taken in step 1**, not starting the old image.
+6. **To roll back:** stop the API (`docker compose … stop api`); restore the database alone —
+   `scripts/restore.sh <dir> --database purlay --replace --no-bucket` (`--no-bucket` because attachments
+   are only ever added and a schema migration does not touch them; the bucket is not empty, and a bucket
+   import refuses that); put the old image back in `production.env`; `up -d --wait`. The database that was
+   there is kept, renamed `purlay_before_restore_<time>`, until you drop it. Anything written after the
+   backup is not in the restored database — that is what a rollback costs, and why step 1 is first.
+7. **Key custody.** `ENCRYPTION_KEY` is in no backup, on purpose, and a restore onto a new server needs the
+   same one. Keep a copy somewhere other than the server and other than the backups (a password manager, a
+   sealed envelope). Lose it and the stored integration tokens (`github_integrations.access_token_encrypted`)
+   cannot be read: people are asked to link GitHub again, and nothing else is lost. Changing it on purpose
+   has the same consequence, and invalidates sign-ins in flight (the OAuth state is signed with a key derived
+   from it), so rotate it at a quiet hour and tell people. The database password and the storage secrets are
+   not custody problems: a rebuilt stack takes new ones from its `production.env`.
+
 **Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with
-a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` verifies the sums and
-restores it into a new database (and an empty bucket), and `scripts/compare-databases.sh` proves the
+a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` checks everything it can before it changes anything — the sums, that the dump
+reads back, the target database and bucket — restores into a staging database, checks that, and only
+then swaps it in by renaming, keeping what was there; by default into a new database and bucket. It
+It is `0700`/`0600` and a failed backup removes its partial directory. And `scripts/compare-databases.sh` proves the
 result is the same (D-95, D-44). `scripts/restore-rehearsal.sh` does all of it from nothing —
 including after destroying every volume — weekly in CI. What it does not give: point-in-time
 recovery, off-host copies, encryption.
@@ -731,8 +799,8 @@ those properties rather than trusting the YAML.
 
 **The image.** The API builds into a two-stage image whose runtime stage is distroless and runs as
 a numeric non-root user with a read-only root filesystem (`Dockerfile`, D-92). `scripts/image-smoke.sh`
-runs it against the compose database in CI and checks liveness, readiness, the container's own health
-check and the absence of a shell; `image.yml` publishes from main with provenance and an SBOM. The
+runs it against a PostgreSQL of its own on a private network in CI and checks liveness, readiness, the container's own health
+check and the absence of a shell; `image.yml` runs on every pull request (so it can be required), and on main builds the image once, pushes it by digest with provenance and an SBOM, smoke-tests that digest and only then tags it. The
 client is not in it: that stage arrives with the prerendered shell (#141, #224).
 
 **Migrations on start, for any number of nodes.** With `MIGRATE_ON_START=true` the process calls the
@@ -740,6 +808,12 @@ migrator after its listener opens. The migrator's advisory lock, polled without 
 (D-86), makes nodes started together take turns; the others stay not-ready — `/health/ready` answers 503
 while migrations are pending — until it is their turn and then find nothing to do. A migration that fails
 exits the node with 1 (`apps/api/src/platform/migrate-on-start.ts`, D-93).
+
+**Migrations and traffic.** A migration that alters a table takes a lock that has to be granted behind
+every transaction already using it, and a send takes `messages` and then `channels`. Under heavy write
+load the two can deadlock; the migrator retries a migration PostgreSQL ends that way, at most five
+attempts, and says so in the log, but a retry makes the deadlock survivable and not free. Run migrations
+at low traffic: a rolling deploy at a quiet hour, or `bun run db:migrate` before the new nodes take load (D-86).
 
 **A restart is a reconnect, not an outage.** On SIGTERM or SIGINT the process drains: readiness
 answers 503 at once, every socket is closed with `CLOSE_CODES.RESTARTING` (1012) so its client

@@ -91,3 +91,66 @@ export const splitStatements = (text: string): string[] => {
   push(text.length);
   return statements;
 };
+
+/**
+ * What a migration does, without what it says: every statement with its comments removed
+ * and its whitespace collapsed. Two files with the same answer here run identically, which
+ * is what allows the one sanctioned kind of edit to an applied migration, a corrected
+ * comment (D-86). A migration with an `E'…'` string is refused, as in `splitStatements`.
+ */
+export const executableText = (text: string): string =>
+  splitStatements(text)
+    .map((statement) => {
+      let code = '';
+      let i = 0;
+      while (i < statement.length) {
+        const char = statement[i];
+        const next = statement[i + 1];
+        if (char === '-' && next === '-') {
+          const eol = statement.indexOf('\n', i);
+          i = eol === -1 ? statement.length : eol;
+          code += ' ';
+        } else if (char === '/' && next === '*') {
+          let depth = 1;
+          i += 2;
+          while (i < statement.length && depth > 0) {
+            if (statement[i] === '/' && statement[i + 1] === '*') {
+              depth += 1;
+              i += 2;
+            } else if (statement[i] === '*' && statement[i + 1] === '/') {
+              depth -= 1;
+              i += 2;
+            } else i += 1;
+          }
+          code += ' ';
+        } else if (char === "'" || char === '"') {
+          const start = i;
+          i += 1;
+          while (i < statement.length) {
+            if (statement[i] === char) {
+              if (statement[i + 1] === char) i += 2;
+              else break;
+            } else i += 1;
+          }
+          i += 1;
+          code += statement.slice(start, i);
+        } else if (char === '$') {
+          const tag = DOLLAR_TAG.exec(statement.slice(i))?.[0];
+          if (tag === undefined) {
+            code += char;
+            i += 1;
+          } else {
+            const close = statement.indexOf(tag, i + tag.length);
+            const end = close === -1 ? statement.length : close + tag.length;
+            code += statement.slice(i, end);
+            i = end;
+          }
+        } else {
+          code += char ?? '';
+          i += 1;
+        }
+      }
+      return code.replace(/\s+/g, ' ').trim();
+    })
+    .filter((statement) => statement !== '')
+    .join(';\n');

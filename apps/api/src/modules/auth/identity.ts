@@ -27,12 +27,40 @@ export interface ResolvedIdentity {
 }
 
 /**
+ * C0, DEL and C1 control characters. PostgreSQL refuses a NUL in text outright, and
+ * the rest have no place in a name shown to other people.
+ */
+const CONTROL = /[\u0000-\u001F\u007F-\u009F]/;
+const CONTROLS = new RegExp(CONTROL.source, 'g');
+
+/**
+ * What GitHub said about the account, made safe to store. The values belong to
+ * another system, so sign-in cleans them and carries on rather than failing on them
+ * (D-78): control characters are removed, a login with nothing left becomes a name
+ * made from the immutable id, and an avatar address with one is dropped.
+ */
+const cleaned = (given: GitHubProfile): GitHubProfile => {
+  const login = given.login.replace(CONTROLS, '');
+  const name = given.name?.replace(CONTROLS, '') ?? '';
+  return {
+    id: given.id,
+    login: login === '' ? `user-${String(given.id)}` : login,
+    name: name === '' ? null : name,
+    avatarUrl: given.avatarUrl === null || CONTROL.test(given.avatarUrl) ? null : given.avatarUrl,
+  };
+};
+
+/**
  * The address that is both primary **and** verified. Anything else is refused:
  * an unverified address is a claim by whoever typed it, and the email is the
  * identity anchor Phase 2's magic links resolve against (D-11, D-38).
  */
 const anchorEmail = (emails: readonly GitHubEmail[]): string => {
-  const address = emails.find((entry) => entry.primary && entry.verified)?.email;
+  // An address with a control character is not an address, and is never repaired:
+  // stripping one would turn it into a different, possibly somebody else's.
+  const address = emails.find(
+    (entry) => entry.primary && entry.verified && !CONTROL.test(entry.email),
+  )?.email;
   if (address === undefined) {
     throw new AppError({
       code: 'EMAIL_REQUIRED',
@@ -55,6 +83,17 @@ const DISPLAY_NAME_MAX = 128;
  * value GitHub controls; it never fails on one (#233).
  */
 const fitted = (value: string, max: number): string => Array.from(value).slice(0, max).join('');
+
+/**
+ * What GitHub's free-text `name` may not carry into a column: control characters
+ * (PostgreSQL cannot store a NUL), a lone surrogate, and the bidirectional
+ * overrides that make one name read as another. The same set a workspace or
+ * channel name is refused for; here it is removed, because sign-in never fails on
+ * a value GitHub controls (#233).
+ */
+const UNSAFE_IN_NAME =
+  /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const cleanedName = (value: string): string => value.replace(UNSAFE_IN_NAME, '').trim();
 
 /**
  * GitHub lets an account be renamed and the freed name be taken by someone else,
@@ -85,11 +124,15 @@ const availableUsername = async (
 export const resolveIdentity = async (
   executor: Executor,
   clock: Clock,
-  profile: GitHubProfile,
+  given: GitHubProfile,
   emails: readonly GitHubEmail[],
 ): Promise<ResolvedIdentity> => {
+  const profile = cleaned(given);
   const email = anchorEmail(emails);
-  const displayName = fitted(profile.name ?? profile.login, DISPLAY_NAME_MAX);
+  const displayName = fitted(
+    cleanedName(profile.name ?? '') || cleanedName(profile.login) || profile.login,
+    DISPLAY_NAME_MAX,
+  );
   const now = clock.now();
 
   const existing = await executor
@@ -127,10 +170,14 @@ export const resolveIdentity = async (
    */
   const emailOwner = await executor
     .selectFrom('users')
-    .select('id')
+    .select(['github_id', 'deleted_at'])
     .where('email', '=', email)
     .executeTakeFirst();
-  if (emailOwner !== undefined) {
+  // The owner may be this very account, made a moment ago by the other half of a
+  // double-clicked callback: same GitHub id, so not a stranger and not a conflict.
+  const isThisAccount =
+    emailOwner?.github_id === String(profile.id) && emailOwner.deleted_at === null;
+  if (emailOwner !== undefined && !isThisAccount) {
     throw new AppError({
       code: 'ACCOUNT_EMAIL_CONFLICT',
       message: 'That email address already belongs to another Purlay account.',
@@ -138,6 +185,11 @@ export const resolveIdentity = async (
   }
 
   const username = await availableUsername(executor, profile.login, undefined);
+  // The lookup above and this insert race: the same GitHub account completing
+  // sign-in twice at once (a double-clicked callback) passes the lookup twice. The
+  // conflict is resolved by the statement, so whichever is second refreshes the row
+  // the first made rather than violating `users_github_id_key` (D-78). The
+  // username is left as the first stored it.
   const created = await executor
     .insertInto('users')
     .values({
@@ -147,8 +199,25 @@ export const resolveIdentity = async (
       display_name: displayName,
       avatar_url: profile.avatarUrl,
     })
+    .onConflict((conflict) =>
+      conflict
+        .column('github_id')
+        .doUpdateSet({
+          display_name: displayName,
+          avatar_url: profile.avatarUrl,
+          updated_at: now,
+        })
+        .where('users.deleted_at', 'is', null),
+    )
     .returning('id')
-    .executeTakeFirstOrThrow();
+    .executeTakeFirst();
+  if (created === undefined) {
+    // The account was deleted and its GitHub id is deliberately never reused
+    // (D-38), so there is no row to refresh and none to create. No Phase 0 path
+    // deletes a user; the contract has no code for this yet, and inventing one is
+    // not this change's to do.
+    throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
+  }
 
   return {
     userId: created.id,

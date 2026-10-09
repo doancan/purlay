@@ -51,6 +51,24 @@ export const isCrossSiteMutation = (request: Request, appUrl: string): boolean =
 };
 
 /**
+ * Whether a state-changing request carries a body that is not JSON (D-39 item 2).
+ *
+ * The defence against a cross-site form is that every mutation takes
+ * `application/json`, which a form cannot send. That is only true if something
+ * refuses the types a form *can* send — `application/x-www-form-urlencoded`,
+ * `multipart/form-data`, `text/plain` — and nothing did: with neither `Origin`
+ * nor `Sec-Fetch-Site`, such a post created a workspace. A type that is present
+ * must be JSON; a body with no type is refused too. A request with neither a
+ * type nor a body (logout, join) is not a body, and passes.
+ */
+export const hasUnsupportedMediaType = (request: Request): boolean => {
+  if (!STATE_CHANGING.has(request.method)) return false;
+  const type = request.headers.get('content-type');
+  if (type !== null) return type.split(';')[0]?.trim().toLowerCase() !== 'application/json';
+  return request.body !== null && request.headers.get('content-length') !== '0';
+};
+
+/**
  * Headers every response carries, decided once from `APP_URL`.
  *
  * - `nosniff`: a JSON body is never reinterpreted as script or markup.
@@ -86,12 +104,23 @@ export const inboundRequestId = (headers: Headers): string => {
   return header !== null && REQUEST_ID.test(header) ? header : crypto.randomUUID();
 };
 
-/** The refusal for a cross-site mutation, as a response the framework need not shape. */
-export const crossSiteResponse = (headers: Record<string, string>): Response => {
-  const refusal = refusalFor(
-    'FORBIDDEN',
-    new AppError({ code: 'FORBIDDEN', message: 'That origin may not make this request.' }),
-    [],
-  );
+/** A refusal made at the edge, as a response the framework need not shape. */
+const refused = (error: AppError, headers: Record<string, string>): Response => {
+  const refusal = refusalFor(error.body.code, error, []);
   return Response.json(refusal.body, { status: refusal.status, headers });
 };
+
+export const crossSiteResponse = (headers: Record<string, string>): Response =>
+  refused(
+    new AppError({ code: 'FORBIDDEN', message: 'That origin may not make this request.' }),
+    headers,
+  );
+
+export const unsupportedMediaTypeResponse = (headers: Record<string, string>): Response =>
+  refused(
+    new AppError({
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      message: 'A request body must be application/json.',
+    }),
+    headers,
+  );

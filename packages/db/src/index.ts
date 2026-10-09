@@ -7,6 +7,8 @@
  */
 export {
   createDatabase,
+  createMigrationDatabase,
+  type MigrationConnection,
   DatabaseUnavailableError,
   isTransaction,
   POOL_DEFAULTS,
@@ -24,6 +26,7 @@ export { purgeDeadSessions } from './sessions';
 export { sql } from 'kysely';
 export {
   migrateToLatest,
+  type MigrateOptions,
   MIGRATIONS_DIRECTORY,
   migrationHistoryProblem,
   pendingMigrations,

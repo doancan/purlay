@@ -14,7 +14,7 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
-import { createErrorTracker, withErrorTracking } from './platform/error-tracking';
+import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
 import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openJoinNotice } from './modules/workspaces/open-join';
@@ -29,13 +29,13 @@ const errorTracker = createErrorTracker({
   dsn: config.ERROR_TRACKING_DSN,
   environment: config.NODE_ENV,
   clock: systemClock,
-  send: async (url, init) => {
-    const response = await fetch(url, init);
-    return { ok: response.ok };
-  },
+  send: fetchDelivery,
   // At `warn`: a failed report must not be reported in turn.
   onFailure: (reason) => {
     plainLog.warn('an error report was not delivered', { err: reason });
+  },
+  onDropped: (total) => {
+    plainLog.warn('error reports are being dropped; the collector is not keeping up', { total });
   },
 });
 const log = withErrorTracking(plainLog, errorTracker);
@@ -43,18 +43,21 @@ const log = withErrorTracking(plainLog, errorTracker);
 // Which workspace is open, said before anything else (D-37).
 log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
 
-const database = createDatabase({
+// How to reach the database, for the application's pool and for the connection a
+// migration on start opens for itself (D-87): the same place, the same TLS.
+const connection = {
   connectionString: config.DATABASE_URL,
-  poolSize: config.DATABASE_POOL_MAX,
   ssl: config.DATABASE_SSL,
   ...(config.DATABASE_SSL_CA_FILE === undefined
     ? {}
     : { sslCa: readCaFile(config.DATABASE_SSL_CA_FILE) }),
   // Reported and carried on: the pool replaces the dead connection by itself.
-  onPoolError: (error) => {
+  onPoolError: (error: Error): void => {
     log.error('database pool error', { error });
   },
-});
+};
+
+const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
 
 const app = createApp({
   config,
@@ -90,7 +93,17 @@ installShutdown({
 // though it could.
 if (config.MIGRATE_ON_START === true) {
   try {
-    const applied = await migrateOnStart(database);
+    const applied = await migrateOnStart(connection, undefined, {
+      // A deadlock against live traffic ends the migration's attempt, not the start (D-86).
+      onRetry: (retry) => {
+        log.warn('a migration was ended as a deadlock victim and is being retried', {
+          migration: retry.migration,
+          attempt: retry.attempt,
+          pauseMilliseconds: retry.pauseMilliseconds,
+          err: retry.error,
+        });
+      },
+    });
     log.info('migrations are current', { applied });
   } catch (error) {
     log.error('migrating on start failed; exiting', { err: error });
