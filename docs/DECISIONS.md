@@ -2875,6 +2875,24 @@ the same function would then let a known event with garbage data through as well
 **Reversibility:** free for the numbers. The `parseServerMessage` rename is a contract change inside
 the monorepo, with one caller.
 
+**Amended 2026-10-09 — a large subscription is paced.** A second-round audit drove the real client
+against the real server: 2,500 watched channels (25 chunks) got 20 acknowledgements and five
+`RATE_LIMITED` errors nothing retried; 3,500 (35 chunks) got a close with `TOO_BUSY` (D-84) on every
+attempt, so the client looped for good. All chunks left in one synchronous burst.
+**Decided: one `SUBSCRIBE` in flight; the next leaves when the last is acknowledged** (matched by
+`refId`). A `RATE_LIMITED` or `DATABASE_UNAVAILABLE` answer to a chunk sends it again, with the channels
+still watched, after the reconnect ladder's wait (reset by any acknowledgement); any other error moves
+on, because waiting will not change it. A close with `TOO_BUSY` starts the reconnect wait at
+`TOO_BUSY_BACKOFF_STEP` (4–8 s), never lower than the failures already counted. Cursors are read when a
+chunk leaves, and a chunk is dropped if its channel was unwatched while it waited. **Rejected — a
+fixed number in flight, or a fixed gap between chunks:** either needs the server's budget (10 a second,
+burst 20, `FRAME_QUEUE_MAX` 32), which lives in `apps/api` and may change; waiting for the answer is
+correct at any budget and costs one round trip a chunk. **Rejected — importing the budget into the
+contract:** a client written against today's number is wrong the day it changes. **Rejected — only
+retrying `RATE_LIMITED`:** pacing alone cannot honour a budget that refills with time, and the
+fix for the close is to not cause it. Sustained pacing faster than the budget is still answered
+`RATE_LIMITED`; the retry is what makes that safe.
+
 ---
 
 ### D-83. A subscription is made before its replay is read, and live frames wait behind the replay
