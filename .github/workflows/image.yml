@@ -1,28 +1,24 @@
 # The API image: built and run on every pull request, published from main (#248, D-87).
 #
-# A pull request builds the image and runs it against the compose PostgreSQL —
-# `scripts/image-smoke.sh` — and pushes nothing. A push to main builds the same
-# thing and publishes it to GHCR with provenance and an SBOM attached as
-# attestations.
+# **Runs on every pull request, so that it can be a required check.** A workflow that a
+# path filter skips reports nothing, and a required check that never reports blocks the
+# merge or, worse, is not required at all. Whether a pull request touches anything the
+# image is made of is decided inside the job (scripts/pr-touches.sh); when it does not,
+# the job's steps are skipped and it reports success in seconds.
 #
-# The publish job can only be exercised for real after this workflow is on main:
-# a pull request has no GHCR credentials by design. What a pull request does prove
-# is that the image builds and starts.
+# A pull request builds the image and runs it against the compose PostgreSQL —
+# `scripts/image-smoke.sh` — and pushes nothing. A push to main builds the image ONCE,
+# pushes it by digest (untagged, with provenance and an SBOM attached as attestations),
+# runs the same smoke test against that exact digest, and only then gives it its tags.
+# What is tested is what is published: the digest is never rebuilt between the two.
+#
+# The publish job can only be exercised for real after this workflow is on main: a pull
+# request has no GHCR credentials by design. What a pull request does prove is that the
+# image builds and starts.
 name: image
 
 on:
   pull_request:
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - .github/workflows/image.yml
-      - apps/api/**
-      - packages/db/**
-      - packages/types/**
-      - bun.lock
-      - package.json
-      - scripts/image-smoke.sh
-      - docker-compose*.yml
   push:
     branches: [main]
 
@@ -35,13 +31,37 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # To list the files of the pull request.
+      pull-requests: read
+    env:
+      # What the image is made of; the same list the paths filter used to hold.
+      PATTERN: '^(Dockerfile|\.dockerignore|\.github/workflows/image\.yml|apps/api/|packages/(db|types)/|bun\.lock|package\.json|scripts/(image-smoke|pr-touches)\.sh|docker-compose[^/]*\.yml)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # No job pushes; the token stays out of .git/config where later steps could read it.
+          persist-credentials: false
+
+      - id: changes
+        name: does this pull request touch what the image is made of
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/$REPOSITORY/pulls/$PULL_REQUEST/files" --jq '.[].filename' \
+            | scripts/pr-touches.sh "$PATTERN" | tee -a "$GITHUB_OUTPUT"
+
+      - if: steps.changes.outputs.relevant == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: build the image (nothing is pushed)
+        if: steps.changes.outputs.relevant == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -53,20 +73,27 @@ jobs:
 
       # The smoke test starts a PostgreSQL of its own on a private network; nothing here has to.
       - name: the image starts read-only, answers liveness and readiness, and is not root
+        if: steps.changes.outputs.relevant == 'true'
         run: scripts/image-smoke.sh purlay-api:ci
 
+      - name: nothing the image is made of changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: echo "no change to the Dockerfile, the API, its packages or the lockfile; nothing to build"
+
   publish:
-    # Only from main, only after the build above has passed.
+    # Only from main. Builds once, tests that build, then tags it.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
       # Push the image to this repository's container registry.
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No job pushes; the token stays out of .git/config where later steps could read it.
+          persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -75,26 +102,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # Tags: the commit, and `main` for the latest build of the branch. No
-      # `latest`: an operator pins a commit or a release, never a moving word.
+      # A registry name is lower case; the repository's owner may not be.
+      - id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-api" >> "$GITHUB_OUTPUT"
+
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository }}-api
-          tags: |
-            type=sha,format=long
-            type=ref,event=branch
+          images: ${{ steps.image.outputs.name }}
           labels: |
             org.opencontainers.image.licenses=AGPL-3.0-or-later
 
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      # Pushed by digest, with no tag: it cannot be pulled by anyone who does not have the
+      # digest until the step below has seen it pass.
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
           # SLSA provenance describing how it was built, and the SBOM of what is in
           # it, attached to the image as attestations.
           provenance: mode=max
           sbom: true
           cache-from: type=gha
+
+      - name: start the database
+        run: docker compose up -d --wait postgres
+
+      - name: the digest that was pushed starts read-only, answers liveness and readiness, and is not root
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker pull "$IMAGE@$DIGEST"
+          scripts/image-smoke.sh "$IMAGE@$DIGEST"
+
+      # Promotion is giving the tested digest its names; nothing is rebuilt. The commit,
+      # and `main` for the latest build of the branch. No `latest`: an operator pins a
+      # commit or a release, never a moving word.
+      - name: tag the tested digest
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools create \
+            --tag "$IMAGE:sha-$GITHUB_SHA" --tag "$IMAGE:main" "$IMAGE@$DIGEST"
+          docker buildx imagetools inspect "$IMAGE:main" | tee -a "$GITHUB_STEP_SUMMARY"

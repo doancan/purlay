@@ -39,6 +39,30 @@ const yamlFiles = (directory: string): string[] => {
   }
 };
 
+/**
+ * The checkouts that leave the job's token in `.git/config`. `actions/checkout` stores the
+ * token there by default, where every later step of the job — an installed package's
+ * install script included — can read it. No job here pushes, so none keeps it.
+ */
+const checkoutsKeepingCredentials = (text: string): readonly string[] => {
+  const lines = text.split('\n');
+  return lines.flatMap((line, index) => {
+    const match = /^(\s*)(?:-\s+)?uses:\s*actions\/checkout@/.exec(line);
+    if (match === null) return [];
+    const indent = (match[1] ?? '').length;
+    // The step ends at the next line that starts a sibling step.
+    let end = index + 1;
+    while (
+      end < lines.length &&
+      !new RegExp(`^\\s{0,${String(indent)}}-\\s`).test(lines[end] ?? '')
+    ) {
+      end += 1;
+    }
+    const step = lines.slice(index, end).join('\n');
+    return /persist-credentials:\s*false\b/.test(step) ? [] : [`line ${String(index + 1)}`];
+  });
+};
+
 describe('workflow pins', () => {
   test('the checker sees a tag, a branch, a short SHA and a missing version comment', () => {
     const sha = 'a'.repeat(40);
@@ -58,6 +82,41 @@ describe('workflow pins', () => {
     expect(all.length).toBeGreaterThan(0);
     const offenders = all.flatMap((file) =>
       unpinnedUses(readFileSync(file, 'utf8')).map((use) => `${file}: ${use}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  test('the credentials checker sees a checkout that keeps them, and one that does not', () => {
+    const keeps = [
+      'jobs:',
+      '  a:',
+      '    steps:',
+      '      - uses: actions/checkout@aaa # v7',
+      '      - run: x',
+    ].join('\n');
+    const drops = [
+      '      - uses: actions/checkout@aaa # v7',
+      '        with:',
+      '          persist-credentials: false',
+      '      - run: x',
+    ].join('\n');
+    // `persist-credentials: false` belonging to the NEXT step does not count.
+    const next = [
+      '      - uses: actions/checkout@aaa # v7',
+      '      - uses: other/action@bbb # v1',
+      '        with:',
+      '          persist-credentials: false',
+    ].join('\n');
+    expect(checkoutsKeepingCredentials(keeps)).toEqual(['line 4']);
+    expect(checkoutsKeepingCredentials(drops)).toEqual([]);
+    expect(checkoutsKeepingCredentials(next)).toEqual(['line 1']);
+  });
+
+  test('no checkout leaves the job token in the working copy', () => {
+    const all = [...yamlFiles(WORKFLOWS), ...yamlFiles(ACTIONS)];
+    expect(all.length).toBeGreaterThan(0);
+    const offenders = all.flatMap((file) =>
+      checkoutsKeepingCredentials(readFileSync(file, 'utf8')).map((where) => `${file}: ${where}`),
     );
     expect(offenders).toEqual([]);
   });

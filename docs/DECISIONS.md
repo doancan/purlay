@@ -3397,6 +3397,12 @@ and CodeQL are already in the platform we run on.
 
 **Reversibility:** free. All of it is workflow and script; nothing is stored.
 
+
+*Amended 2026-10-09 (a second-round audit):* every `actions/checkout` left the job's token in
+`.git/config`, where any later step — an installed package's script included — can read it. No job pushes,
+so none keeps it: `persist-credentials: false` everywhere, and `scripts/workflow-pins.test.ts` fails a
+checkout without it (shown failing on nine before the change).
+
 ---
 
 ### D-92. The API ships as a distroless image that runs the source, pinned by digest
@@ -3454,6 +3460,16 @@ test-only directory, so nothing the process loads is among them. The image is 1 
 never size. Separately, the probes `/health` and `/health/ready` were most of the log (a balancer and the
 container's own check poll them every few seconds): they are written at `debug`, and a probe that fails is
 still visible because readiness writes its reason at `warn`.
+
+*Amended 2026-10-09 (a second-round audit):* the `image` workflow had a path filter, so a pull request that
+broke the Dockerfile ran no check at all, and a check that does not run cannot be required. It now runs on
+every pull request and decides inside the job (`scripts/pr-touches.sh`) whether there is anything to build;
+when there is not, its steps are skipped and it reports success. And the publish job **built a second time**
+instead of promoting what had been tested: on main the image is now built once, pushed **by digest** (untagged,
+with provenance and an SBOM), the same smoke test is run against that exact digest, and only then is it given
+its tags (`sha-<commit>` and `main`) by `imagetools create` — a retag, not a rebuild. Exercised locally against a
+registry: the digest the build reported is the digest `:main` resolves to, the attestation manifest is
+there, and the smoke test passed on the pulled digest. The check names to require: `build` (pull requests).
 
 ---
 
@@ -3603,6 +3619,11 @@ partial directory with no checksums; it now removes it and points at `scripts/pr
 (4) The default restore put the database in a new place and the bucket into the live one, which refused
 after the database was done; both now default to new names, `--bucket live` is the recovery spelling, and
 the bucket is checked **before** the database is touched. The rehearsal asserts each of them. `--no-bucket` restores the database alone, for rolling back an upgrade: the live bucket is not empty, and a schema migration does not touch attachments.
+
+
+*Amended 2026-10-09 (a second-round audit):* the `restore-rehearsal` workflow had the same path filter and
+now runs on every pull request, deciding inside the job whether the change touches what it exercises, so
+`rehearse` can be a required check. The weekly run and a push always rehearse.
 
 ---
 
