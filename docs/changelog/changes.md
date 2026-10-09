@@ -22,6 +22,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - `/health` and `/health/ready` request lines are written at `debug` instead of `info` (about twelve lines every ten
   seconds, with a balancer and the container health check polling); a failing probe is still visible, because readiness writes its reason at `warn`.
 
+### Fix — 2026-10-09: a node that migrates as it starts is not cut off at 30 seconds
+
+- Migrating on start ran on the application's pool, which cancels a statement after 30 s: a migration with a
+  longer statement failed, the node exited, and its restart failed at the same point. It now opens a
+  connection of its own, the one `bun run db:migrate` uses, with no statement timeout (D-87, D-93, #231).
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different

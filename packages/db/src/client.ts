@@ -101,6 +101,31 @@ const unavailableWhenEmpty = (pool: pg.Pool): PostgresPool => ({
   },
 });
 
+/** What a connection for migrating needs from the process; the limits are not its to choose. */
+export type MigrationConnection = Pick<
+  DatabaseOptions,
+  'connectionString' | 'ssl' | 'sslCa' | 'onPoolError'
+>;
+
+/**
+ * The connection a migration runs on, whoever starts it: `bun run db:migrate` and a node
+ * that migrates as it starts (D-93) both come here, so there is one place that says what a
+ * migrating session is.
+ *
+ * One connection, no statement timeout (D-87): an index build on a table of millions of
+ * rows is meant to take as long as it takes, and a migration cut off halfway is the worse
+ * outcome. Run on the application's pool it would be cancelled at thirty seconds, and a
+ * node that fails to migrate exits and starts again to be cancelled at the same point.
+ * The idle-in-transaction limit stays: the runner is never idle inside its transaction.
+ */
+export const createMigrationDatabase = (connection: MigrationConnection): Kysely<DB> =>
+  createDatabase({
+    ...connection,
+    poolSize: 1,
+    statementTimeoutMs: 0,
+    connectionTimeoutMs: 10_000,
+  });
+
 export const createDatabase = (options: DatabaseOptions): Kysely<DB> => {
   const pool = new pg.Pool({
     connectionString: options.connectionString,

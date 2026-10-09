@@ -43,18 +43,21 @@ const log = withErrorTracking(plainLog, errorTracker);
 // Which workspace is open, said before anything else (D-37).
 log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
 
-const database = createDatabase({
+// How to reach the database, for the application's pool and for the connection a
+// migration on start opens for itself (D-87): the same place, the same TLS.
+const connection = {
   connectionString: config.DATABASE_URL,
-  poolSize: config.DATABASE_POOL_MAX,
   ssl: config.DATABASE_SSL,
   ...(config.DATABASE_SSL_CA_FILE === undefined
     ? {}
     : { sslCa: readCaFile(config.DATABASE_SSL_CA_FILE) }),
   // Reported and carried on: the pool replaces the dead connection by itself.
-  onPoolError: (error) => {
+  onPoolError: (error: Error): void => {
     log.error('database pool error', { error });
   },
-});
+};
+
+const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
 
 const app = createApp({
   config,
@@ -90,7 +93,7 @@ installShutdown({
 // though it could.
 if (config.MIGRATE_ON_START === true) {
   try {
-    const applied = await migrateOnStart(database);
+    const applied = await migrateOnStart(connection);
     log.info('migrations are current', { applied });
   } catch (error) {
     log.error('migrating on start failed; exiting', { err: error });
