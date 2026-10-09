@@ -41,7 +41,7 @@
 | Styling | Tailwind CSS | `tailwindcss`, `@tailwindcss/vite` | Verbose markup; arbitrary values prohibited, extend the theme instead |
 | Server state | TanStack Query | not yet · `@tanstack/react-query` | (D-18) |
 | Realtime state | Zustand | not yet · `zustand` | (D-18) |
-| Object storage | S3-compatible (MinIO local) | `minio` | An extra service locally; filesystem driver exists for simple self-hosts |
+| Object storage | S3-compatible; Garage locally | `garage` | An extra service locally, set up by a script because its image has no shell; no console. Any S3-compatible store works in production, and a filesystem driver exists for simple self-hosts (D-20; `docs/spikes/object-storage.md`) |
 | Server markdown | `unified` / `remark` + sanitising serialiser | not yet · `unified` | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
 | Client markdown | a small CommonMark/GFM renderer | undecided · O-6 | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
 | Highlighting | Shiki, grammars loaded lazily | not yet · `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
