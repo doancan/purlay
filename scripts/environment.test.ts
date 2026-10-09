@@ -85,6 +85,24 @@ describe('the development environment', () => {
   });
 
   /**
+   * The development database has a superuser with a password the repository publishes,
+   * and the object store a key the same. A port published as `5432:5432` listens on
+   * every interface, so anyone on the same network could connect with them (found by an
+   * audit that ran `nc -z` against the machine's LAN address). Every mapping is bound
+   * to the loopback address, and a new service cannot be added without one.
+   */
+  test('every published port is bound to the loopback address', () => {
+    const mappings = [...compose.matchAll(/^\s+-\s+['"]?([^'"\s#]+:\d+(?:\/\w+)?)['"]?/gm)].map(
+      (match) => match[1] ?? '',
+    );
+    // The positive condition: there are mappings to judge, and both services have one.
+    expect(
+      mappings.filter((mapping) => /\$\{POSTGRES_PORT|\$\{STORAGE_PORT/.test(mapping)),
+    ).toHaveLength(2);
+    expect(mappings.filter((mapping) => !mapping.startsWith('127.0.0.1:'))).toEqual([]);
+  });
+
+  /**
    * The development credentials exist in the compose file; the schema check
    * defaults to them. Two places, bound rather than trusted — the sweep that
    * found this also found the Bun version pinned in five.
