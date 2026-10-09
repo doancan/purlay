@@ -18,8 +18,8 @@ const NO_TRANSPORT_TYPES = {
 /**
  * Reading the time directly makes behaviour that depends on it — expiry, drift
  * correction, retention — untestable without waiting. Both ways of reading it
- * are refused; `platform/clock.ts` is the one place that does, and every other
- * caller takes a `Clock` (D-46). `Date.now()` was missing until #202.
+ * are refused; `platform/clock.ts` and `apps/web/src/system-clock.ts` are the
+ * places that do, one per application, and every other caller takes a `Clock` (D-46). `Date.now()` was missing until #202.
  */
 const CLOCK_MESSAGE =
   'Take the clock as a dependency instead of reading it directly, so time can be controlled in a test.';
@@ -344,7 +344,13 @@ export default defineConfig([
   // deadline, a script's timeout — read the time. Nothing else does. The context
   // selectors stay: no file may forge a context.
   {
-    files: ['apps/api/src/platform/clock.ts', '**/*.test.ts', '**/*.test.tsx', 'scripts/**/*.ts'],
+    files: [
+      'apps/api/src/platform/clock.ts',
+      'apps/web/src/system-clock.ts',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      'scripts/**/*.ts',
+    ],
     rules: { 'no-restricted-syntax': ['error', ...CONTEXT_SELECTORS] },
   },
 

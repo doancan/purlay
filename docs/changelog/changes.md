@@ -15,6 +15,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - The test that proves it makes the second write fail on a cloned database and finds the first gone;
   before the fix it found it still there.
 
+### Chore — 2026-10-09: the browser has a place to read the clock
+
+- `apps/web/src/system-clock.ts` is the one file in the client that reads the time, exempted by name
+  in `eslint.config.mjs` the way `platform/clock.ts` is for the API; everything else takes a `Clock`.
+  `verify:enforcement` now also shows a neighbouring web file is still refused (#136).
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
