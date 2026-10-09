@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Chore — 2026-10-09: lint refuses the door-to-door import and production code importing test code
+
+- `realtime` cannot import `ingress`; production code under `apps/api/src` cannot import a `testing/`
+  directory or `*.testing.ts` file (`purlay/no-test-code-import`). Both have cases in
+  `verify:enforcement` (28 stated rules now), shown failing when the rule is switched off.
+- `bunfig.toml` leaves `apps/*/src/testing/**` out of coverage, which is safe because of the second
+  rule (#245, #136, D-47).
+
 ### Refactor — 2026-10-09: the socket lifecycle leaves the composition root
 
 - `ingress/http/app.ts` (438 lines) keeps the routes and edge hooks; admission, open, frame handling
