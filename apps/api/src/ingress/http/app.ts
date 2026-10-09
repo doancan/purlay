@@ -90,6 +90,19 @@ export interface HttpApplication {
    * finish. Resolves when they have.
    */
   readonly drain: () => Promise<void>;
+  /**
+   * What is held for open sockets, per place that holds some. Each must return to
+   * zero when its socket closes — a leak here grows with every reconnect — and a
+   * test asserts that on the sizes rather than on coverage.
+   */
+  readonly held: () => HeldByConnections;
+}
+
+export interface HeldByConnections {
+  readonly connections: number;
+  readonly busSockets: number;
+  readonly busTopics: number;
+  readonly rateBuckets: number;
 }
 
 /**
@@ -141,7 +154,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   /** Set once, by `drain`; readiness reads it before anything else. */
   let draining = false;
   const hub = createSocketHub(dependencies.database, dependencies.clock, { log });
-  const bus = inProcessEventBus(hub.deliver);
+  const bus = inProcessEventBus(hub.deliver, log);
   const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
   // The transaction boundary both doors share: a new transaction per write, or
   // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
@@ -389,6 +402,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return bound;
     },
     stop: async (closeActiveConnections) => await app.stop(closeActiveConnections),
+    held: () => ({
+      connections: hub.size(),
+      busSockets: bus.size().sockets,
+      busTopics: bus.size().topics,
+      rateBuckets: limiter.held(),
+    }),
     drain: async (): Promise<void> => {
       draining = true;
       hub.closeAll(CLOSE_CODES.RESTARTING, 'restarting');

@@ -797,4 +797,32 @@ describe('integration: two real sockets', () => {
       expect(response.status).toBe(101);
     });
   });
+
+  /**
+   * What is held for a socket is released when it closes, at every place that
+   * holds some — asserted on the sizes, through the running server, so the close
+   * handler's wiring is what is tested rather than the functions it calls.
+   */
+  describe('a socket that closes', () => {
+    test('leaves nothing in the hub, the bus or the limiter', async () => {
+      const room = await aRoom();
+      const before = app.held();
+
+      const alice = await connect(room.alice);
+      await subscribe(alice, room.channelId);
+      const open = app.held();
+      // The controls: each place did hold something while the socket was open.
+      expect(open.connections).toBe(before.connections + 1);
+      expect(open.busSockets).toBeGreaterThan(before.busSockets);
+      expect(open.busTopics).toBeGreaterThan(before.busTopics);
+      expect(open.rateBuckets).toBe(before.rateBuckets + 1);
+
+      await alice.close();
+      const deadline = Date.now() + 5_000;
+      while (app.held().connections !== before.connections && Date.now() < deadline) {
+        await Bun.sleep(10);
+      }
+      expect(app.held()).toEqual(before);
+    });
+  });
 });

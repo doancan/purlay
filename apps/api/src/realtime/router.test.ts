@@ -11,7 +11,7 @@ import {
   aTransactionThatMustNotBeTouched,
 } from '../ingress/http/testing';
 import { fixedClock } from '../platform/clock';
-import { withinRequest } from '../platform/logging';
+import { createLogger, withinRequest } from '../platform/logging';
 import { inProcessEventBus } from './bus';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { routeFrame } from './router';
@@ -30,7 +30,7 @@ describe('a frame that fails in a way nobody anticipated', () => {
           {
             database,
             clock,
-            bus: inProcessEventBus(() => undefined),
+            bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
             limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
             log,
             socket: { hold: () => undefined, isOpen: () => true },

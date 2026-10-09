@@ -225,3 +225,26 @@ describe('live frames held while a subscription replays', () => {
     expect(hub.isOpen('s')).toBe(false);
   });
 });
+
+describe('a connection with no identity', () => {
+  test('is told its session has ended and is closed, with nothing armed for it', async () => {
+    const hub = createSocketHub(
+      aDatabaseThatMustNotBeTouched(),
+      fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      { log: createLogger({ level: 'silent' }) },
+    );
+    const closes: string[] = [];
+    // No cookie: nothing to look up, so the database is not reached.
+    const identity = await hub.opened(
+      's',
+      {
+        send: () => 0,
+        buffered: () => 0,
+        close: (code, reason) => closes.push(`${String(code)} ${reason}`),
+      },
+      new Request('https://purlay.test/ws'),
+    );
+    expect(identity).toBeUndefined();
+    expect(closes).toEqual([`${String(CLOSE_CODES.SESSION_ENDED)} signed-out`]);
+  });
+});

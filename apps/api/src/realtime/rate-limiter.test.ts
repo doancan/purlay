@@ -87,4 +87,16 @@ describe('the in-process rate limiter', () => {
     await limiter.consume('trigger');
     expect(await limiter.consume('drained', SOCKET_FRAME_BUDGET.burst)).toBe(false);
   });
+
+  test('forgetting a key releases its bucket, so a reconnect leaves nothing behind', async () => {
+    const limiter = inProcessRateLimiter(movable(), SOCKET_FRAME_BUDGET);
+    await spend(limiter, 'a', 1);
+    await spend(limiter, 'b', 1);
+    expect(limiter.held()).toBe(2);
+    limiter.forget('a');
+    expect(limiter.held()).toBe(1);
+    limiter.forget('b');
+    limiter.forget('never-seen');
+    expect(limiter.held()).toBe(0);
+  });
 });
