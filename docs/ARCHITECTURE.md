@@ -739,7 +739,7 @@ those properties rather than trusting the YAML.
 
 **The image.** The API builds into a two-stage image whose runtime stage is distroless and runs as
 a numeric non-root user with a read-only root filesystem (`Dockerfile`, D-92). `scripts/image-smoke.sh`
-runs it against the compose database in CI and checks liveness, readiness, the container's own health
+runs it against a PostgreSQL of its own on a private network in CI and checks liveness, readiness, the container's own health
 check and the absence of a shell; `image.yml` publishes from main with provenance and an SBOM. The
 client is not in it: that stage arrives with the prerendered shell (#141, #224).
 
