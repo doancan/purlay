@@ -25,6 +25,7 @@ import {
   type MessagePage,
 } from '@purlay/types';
 import { AppError } from '../../platform/errors';
+import { requireLiveSession } from '../auth/sessions';
 import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
 import { channelTopic, type EventBus } from '../../platform/events';
@@ -328,11 +329,14 @@ export const send = async (
   dependencies: SendDependencies,
   context: ChannelContext,
   input: OutgoingMessage,
+  sessionId?: string,
 ): Promise<Message> => {
   const { atomically, clock, bus } = dependencies;
-  const message = await atomically(
-    async (transaction) => await sendMessage(transaction, clock, context, input),
-  );
+  const message = await atomically(async (transaction) => {
+    // The session the caller authenticated with, held live for this transaction (D-85).
+    if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
+    return await sendMessage(transaction, clock, context, input);
+  });
   await bus.publish(channelTopic(context.channelId), {
     event: 'MESSAGE_CREATED',
     data: message,

@@ -93,7 +93,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           atomically: atomicallyOn(db),
           ...overrides,
         },
-        { socketId, userId: who.userId, sessionId: 'x', expiresAt: NOW },
+        { socketId, userId: who.userId, sessionId: who.sessionId, expiresAt: NOW },
         raw,
       ),
   };

@@ -137,7 +137,7 @@ describe('integration: the socket handshake', () => {
 describe('integration: the frame router', () => {
   const route = async (
     db: Executor,
-    identity: { userId: string },
+    identity: { userId: string; sessionId: string },
     raw: unknown,
     bus = inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
     // A fresh bucket per call, so no test here is limited unless it means to be.
@@ -154,7 +154,7 @@ describe('integration: the frame router', () => {
         // The production boundary: inside the harness's transaction it joins it.
         atomically: atomicallyOn(db),
       },
-      { socketId: 's1', sessionId: 'not-read-by-the-router', expiresAt: NOW, ...identity },
+      { socketId: 's1', expiresAt: NOW, ...identity },
       raw,
     );
 
