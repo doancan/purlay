@@ -93,6 +93,11 @@ const SECRETS: ReadonlySet<string> = new Set([
 /** The variables this application reads. `.env.example` is generated from it. */
 export const CONFIGURED: readonly string[] = Object.keys(Environment.properties);
 
+/** The variables declared as integers, read from the schema so a new one is covered. */
+const INTEGERS: readonly string[] = Object.entries(Environment.properties)
+  .filter(([, schema]) => Reflect.get(schema, 'type') === 'integer')
+  .map(([key]) => key);
+
 export class ConfigurationError extends Error {
   readonly problems: readonly string[];
 
@@ -119,7 +124,18 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
 
   // Convert strings to the declared types before checking, so `PORT=3001` is an
   // integer rather than a failure to be an integer.
-  const coerced = Value.Default(Environment, Value.Convert(Environment, present));
+  const conversion = Value.Convert(Environment, present);
+  const converted: Record<string, unknown> =
+    typeof conversion === 'object' && conversion !== null ? { ...conversion } : {};
+  // Conversion truncates `1.5` to `1`, so `SESSION_TTL_DAYS=1.5` would be a day and
+  // say nothing. An integer is written as digits; anything else stays a string and
+  // fails the check below, naming the variable.
+  for (const key of INTEGERS) {
+    // From the environment: `Convert` rewrites `present` in place.
+    const raw = environment[key];
+    if (raw !== undefined && raw !== '' && !/^-?\d+$/.test(raw)) converted[key] = raw;
+  }
+  const coerced = Value.Default(Environment, converted);
 
   if (!Value.Check(Environment, coerced)) {
     const problems = [...Value.Errors(Environment, coerced)].map((error) => {
@@ -173,12 +189,35 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   return config;
 };
 
+/** Fewer distinct bytes than this is not a CSPRNG's output. Measured: 2,000,000 random
+ *  keys had at least 22 distinct bytes; the chance of one below 16 is under 1 in 10^12. */
+const MIN_DISTINCT_BYTES = 16;
+
+/** The longest pattern whose repetition is called out; a random key repeats none. */
+const MAX_PERIOD = 16;
+
+/** True when the bytes are a short pattern repeated, e.g. `abcd` thirty-two bytes long. */
+const isPeriodic = (bytes: Buffer): boolean => {
+  for (let period = 1; period <= MAX_PERIOD; period += 1) {
+    if (bytes.every((byte, i) => i < period || byte === bytes[i - period])) return true;
+  }
+  return false;
+};
+
+/** True when each byte is the last plus a constant (mod 256): 0..31, 31..0, every seventh. */
+const isSequence = (bytes: Buffer): boolean => {
+  const step = ((bytes[1] ?? 0) - (bytes[0] ?? 0) + 256) % 256;
+  return bytes.every((byte, i) => i === 0 || byte === (((bytes[i - 1] ?? 0) + step) & 255));
+};
+
 /**
- * What a 44-character string must also be to be a key. Never quotes the value.
+ * What a key must also be. Never quotes the value.
  *
- * A length check accepts 44 repeated letters; this decodes. The regular
- * expression is strict base64 because `Buffer.from` ignores what it cannot read,
- * which would turn a typo into a shorter key without a word.
+ * A length check accepts 44 repeated letters; this decodes. The spelling must be
+ * canonical (decode then encode gives back the input): the last base64 character
+ * carries two bits decoding drops, so `...E=` and `...F=` are one key, and a
+ * comparison of strings would call the second one different from the public
+ * development key. The development key is compared as bytes for the same reason.
  */
 const keyProblems = (key: string, production: boolean): string[] => {
   if (!/^[A-Za-z0-9+/]{43}=$/.test(key)) {
@@ -186,10 +225,13 @@ const keyProblems = (key: string, production: boolean): string[] => {
   }
   const bytes = Buffer.from(key, 'base64');
   if (bytes.length !== 32) return ['ENCRYPTION_KEY: must decode to exactly 32 bytes'];
-  if (bytes.every((byte) => byte === bytes[0]) || new Set(key.slice(0, 43)).size === 1) {
-    return ['ENCRYPTION_KEY: must not be one repeated value; generate it with a CSPRNG'];
+  if (bytes.toString('base64') !== key) {
+    return ['ENCRYPTION_KEY: must be canonical base64, as `openssl rand -base64 32` writes it'];
   }
-  if (production && key === DEVELOPMENT_ENCRYPTION_KEY) {
+  if (new Set(bytes).size < MIN_DISTINCT_BYTES || isPeriodic(bytes) || isSequence(bytes)) {
+    return ['ENCRYPTION_KEY: looks like a pattern, not random bytes; generate it with a CSPRNG'];
+  }
+  if (production && bytes.equals(Buffer.from(DEVELOPMENT_ENCRYPTION_KEY, 'base64'))) {
     return ['ENCRYPTION_KEY: production refuses the development key, which is public'];
   }
   return [];

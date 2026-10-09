@@ -19,7 +19,10 @@ const valid = {
 };
 
 /** A key that is a real 32 bytes, and not the development one. */
-const REAL_KEY = Buffer.from('0123456789abcdef0123456789ABCDEF').toString('base64');
+const REAL_KEY = Buffer.from(
+  '9f3ac1d27b05e84c61a9d03f5e2b7c84d1a6e90b3f58c27a4d6e1b09a3c75f82',
+  'hex',
+).toString('base64');
 
 /** A production environment that is otherwise sound, so a test varies one thing. */
 const production = {
@@ -28,6 +31,14 @@ const production = {
   APP_URL: 'https://purlay.app',
   ENCRYPTION_KEY: REAL_KEY,
   DATABASE_SSL: 'true',
+};
+
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** The same 32 bytes spelled differently: the last character's two unused low bits flipped. */
+const aliasOf = (key: string): string => {
+  const last = ALPHABET.indexOf(key.charAt(42));
+  return `${key.slice(0, 42)}${ALPHABET.charAt(last ^ 1)}=`;
 };
 
 const refusal = (environment: Record<string, string | undefined>): string => {
@@ -216,6 +227,46 @@ describe('a configuration that is unsafe is refused, by variable, without quotin
     expect(message).not.toContain(DEVELOPMENT_ENCRYPTION_KEY);
   });
 
+  /** Found by attack: the last base64 character carries two bits that decoding drops. */
+  test('a non-canonical spelling of the development key is the development key, not another key', () => {
+    const variants = [aliasOf(DEVELOPMENT_ENCRYPTION_KEY)];
+    // Same bytes, different string: the alias this closes.
+    expect(
+      Buffer.from(variants[0] ?? '', 'base64').equals(
+        Buffer.from(DEVELOPMENT_ENCRYPTION_KEY, 'base64'),
+      ),
+    ).toBe(true);
+    for (const key of variants) {
+      expect(refusal({ ...production, ENCRYPTION_KEY: key })).toContain('ENCRYPTION_KEY');
+    }
+  });
+
+  test('a key is its canonical spelling: decoding then encoding gives back what was set', () => {
+    const message = refusal({ ...valid, ENCRYPTION_KEY: aliasOf(REAL_KEY) });
+    expect(message).toContain('ENCRYPTION_KEY');
+    expect(message).not.toContain(REAL_KEY);
+  });
+
+  test('a low-entropy key is refused: a short pattern, a sequence, few distinct bytes', () => {
+    const keys: Record<string, Buffer> = {
+      'abcd repeated': Buffer.from('abcd'.repeat(8)),
+      'bytes 0..31': Buffer.from(Array.from({ length: 32 }, (_, i) => i)),
+      'bytes 31..0': Buffer.from(Array.from({ length: 32 }, (_, i) => 31 - i)),
+      'step of seven': Buffer.from(Array.from({ length: 32 }, (_, i) => (i * 7) % 256)),
+      'a 16-byte pattern twice': Buffer.concat([
+        Buffer.from(REAL_KEY, 'base64').subarray(0, 16),
+        Buffer.from(REAL_KEY, 'base64').subarray(0, 16),
+      ]),
+      'three distinct bytes': Buffer.from(Array.from({ length: 32 }, (_, i) => (i * i) % 3)),
+    };
+    for (const [name, bytes] of Object.entries(keys)) {
+      const key = bytes.toString('base64');
+      const message = refusal({ ...valid, ENCRYPTION_KEY: key });
+      expect({ name, named: message.includes('ENCRYPTION_KEY') }).toEqual({ name, named: true });
+      expect(message).not.toContain(key);
+    }
+  });
+
   test('outside production the development key is what tests and a laptop use', () => {
     expect(loadConfig({ ...valid, NODE_ENV: 'test' }).ENCRYPTION_KEY).toBe(
       DEVELOPMENT_ENCRYPTION_KEY,
@@ -260,6 +311,20 @@ describe('a configuration that is unsafe is refused, by variable, without quotin
     for (const name of ['ENCRYPTION_KEY', 'DATABASE_SSL', 'APP_URL']) {
       expect(message).toContain(name);
     }
+  });
+});
+
+describe('integers are integers', () => {
+  test('SESSION_TTL_DAYS=1.5 is refused rather than truncated to a day', () => {
+    for (const days of ['1.5', '0.5', '30.2']) {
+      expect(refusal({ ...valid, SESSION_TTL_DAYS: days })).toContain('SESSION_TTL_DAYS');
+    }
+    expect(loadConfig({ ...valid, SESSION_TTL_DAYS: '7' }).SESSION_TTL_DAYS).toBe(7);
+  });
+
+  test('the same for the other integers: PORT and DATABASE_POOL_MAX', () => {
+    expect(refusal({ ...valid, PORT: '3001.9' })).toContain('PORT');
+    expect(refusal({ ...valid, DATABASE_POOL_MAX: '10.5' })).toContain('DATABASE_POOL_MAX');
   });
 });
 
