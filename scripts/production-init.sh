@@ -51,9 +51,11 @@ fi
 garage bucket allow --read --write --owner "$BUCKET" --key "$ACCESS_KEY" >/dev/null
 
 # The store is not published to the host, so look at it from inside the network,
-# through the API container's own runtime: an anonymous read must be refused with
-# 403, not answered and not unreachable (CONTRIBUTING §6.4).
-status="$(compose exec -T api /usr/local/bin/bun -e \
+# through the API image's own runtime (a one-off container, so this works before the
+# API has ever started — a rebuild after a loss initialises storage first): an
+# anonymous read must be refused with 403, not answered and not unreachable
+# (CONTRIBUTING §6.4).
+status="$(compose run --rm --no-deps -T --entrypoint /usr/local/bin/bun api -e \
   "fetch('http://garage:3900/$BUCKET/probe').then((r) => console.log(r.status), () => console.log('unreachable'))")"
 if [ "$status" != "403" ]; then
   echo "an anonymous read of $BUCKET answered $status, not 403" >&2

@@ -193,6 +193,9 @@ scripts/production-init.sh            # once: the storage layout, bucket and key
 `APP_URL` is also the proxy's site address, so the origin Caddy answers for and the one the API checks
 sockets against cannot differ; with a public name and ports 80 and 443 reachable, the certificate is
 issued and renewed automatically. Only the proxy publishes ports.
+Back up with `scripts/backup.sh`, restore with `scripts/restore.sh <dir>` (into a new database by
+default), and prove it with `scripts/compare-databases.sh` (D-95). `ENCRYPTION_KEY` is **not** in the
+backup, by design: keep it separately.
 
 **Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
 intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and

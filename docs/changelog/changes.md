@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: backup, restore and a comparison that judges them
+
+- `scripts/backup.sh` writes a directory: a custom-format `pg_dump` (read back with `pg_restore --list`
+  before it counts), the bucket with a manifest, and `SHA256SUMS`. `scripts/restore.sh` checks the sums,
+  restores into a new database by default, refuses a target that has tables, refuses to replace the live
+  database while the API runs, and imports only into an empty bucket. `scripts/compare-databases.sh`
+  compares per-table counts and a checksum of every row (#248, D-95).
+- `production-init.sh` checks that an anonymous read is refused from a one-off container, so storage
+  can be initialised before the API has ever started — the order a rebuild after a loss needs.
+- Shell scripts are held by a test: they parse, are executable and stop at the first failure.
+
 ### Feature — 2026-10-09: the object store can be copied out and back, and compared
 
 - Nothing backed up the bucket. `scripts/bucket-copy.ts` exports every object with a manifest of its
