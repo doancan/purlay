@@ -8,3 +8,9 @@
 # a new file room for an honest first version without letting one in untested.
 # Never lowered to make a change pass (D-48).
 coverageThreshold = { lines = 0.95, functions = 0.93 }
+
+# Test-only code is not what ships, so it is not what the figures describe. Lint
+# keeps production from importing it (`purlay/no-test-code-import`), which is what
+# makes leaving it out safe: nothing that ships can hide there. The floor above
+# still holds for every file that does ship. (#245)
+coveragePathIgnorePatterns = ["apps/*/src/testing/**"]

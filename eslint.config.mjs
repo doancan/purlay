@@ -15,6 +15,15 @@ const NO_TRANSPORT_TYPES = {
     'A module never imports from ingress, and HTTP or WebSocket types never cross this line. (ARCHITECTURE.md §3, §4)',
 };
 
+// The two doors are peers: `ingress` composes `realtime`, never the other way,
+// so there is no cycle between them. What both need lives below them, in
+// `modules` or `platform`. (ARCHITECTURE.md §4, #245)
+const NO_INGRESS = {
+  group: ['**/ingress/**'],
+  message:
+    'realtime does not import from ingress: ingress composes realtime, and a shared need belongs in modules or platform, so the two doors never form a cycle. (ARCHITECTURE.md §4)',
+};
+
 /**
  * Reading the time directly makes behaviour that depends on it — expiry, drift
  * correction, retention — untestable without waiting. Both ways of reading it
@@ -108,6 +117,30 @@ const purlay = {
               }
             }
           },
+        };
+      },
+    },
+    'no-test-code-import': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        const TEST_ONLY = /(^|\/)testing(\/|$)|\.testing(\.ts)?$/;
+        const check = (node) => {
+          const source = node.source;
+          if (source !== null && source !== undefined && typeof source.value === 'string') {
+            if (TEST_ONLY.test(source.value)) {
+              context.report({
+                node: source,
+                message:
+                  'Production code does not import test-only code (a `testing/` directory or a `*.testing.ts` file). Move what it needs out of testing/, or the code in. (D-47)',
+              });
+            }
+          }
+        };
+        return {
+          ImportDeclaration: check,
+          ExportNamedDeclaration: check,
+          ExportAllDeclaration: check,
+          ImportExpression: check,
         };
       },
     },
@@ -305,6 +338,25 @@ export default defineConfig([
         },
       ],
     },
+  },
+
+  // The door that composes the other: realtime imports nothing from ingress. Its
+  // tests may — they stand up a whole application to drive a real socket — and so
+  // may `testing/`, which exists to be used by tests.
+  {
+    files: ['apps/api/src/realtime/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [NO_INGRESS] }] },
+  },
+  // Test-only code is for tests. Production code importing it would ship doubles
+  // that throw on use, and would put real logic where the coverage report does not
+  // look (`bunfig.toml` leaves `testing/` out). A rule of its own rather than a
+  // pattern in `no-restricted-imports`, which each layering block above replaces
+  // wholesale. (D-47, #245)
+  {
+    files: ['apps/api/src/**/*.ts'],
+    ignores: ['**/*.test.ts', 'apps/api/src/testing/**', '**/*.testing.ts'],
+    rules: { 'purlay/no-test-code-import': 'error' },
   },
 
   // Command-line entry points. Their output *is* their interface, so the ban on

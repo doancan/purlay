@@ -1541,6 +1541,21 @@ around (its type is invariant in its routes, `docs/spikes/elysia.md`), but funct
 keeps the routes, the edge hooks and `drain`. Behaviour is unchanged and the existing socket
 suites are the proof.
 
+**Amended 2026-10-09 (#245): two more things lint refuses, each demonstrated by `verify:enforcement`.**
+(1) `realtime` may not import from `ingress` (tests excepted — they stand up the whole application):
+ingress composes realtime and never the reverse, so the two doors cannot form a cycle; before this
+the hub read a cookie module out of `ingress/http` while `app.ts` imported the hub, and nothing
+objected. (2) Production code under `apps/api/src` may not import test-only code — a `testing/`
+directory or a `*.testing.ts` file — by a local rule, `purlay/no-test-code-import`, rather than a
+pattern in `no-restricted-imports`, because each layering block there replaces the rule wholesale
+and a pattern added to one would have been dropped by another. `bunfig.toml` leaves
+`apps/*/src/testing/**` out of the coverage figures: that is safe only because of (2) — nothing that
+ships can sit there to escape the per-file floor — and the floor still holds for every file that
+does ship (shown with a production file whose branch no test reached: 57 % of lines, refused).
+Rejected: keeping test code in the figures (the overall percentage then describes helpers, not
+the product), and a `*.testing.ts` naming convention alone (a directory is one rule to state and
+one glob to exclude).
+
 ---
 
 ### D-48. Escape hatches are expensive and visible, not closed
@@ -3235,7 +3250,6 @@ disk. **Rejected: an init process (`tini`).** The process handles SIGTERM itself
 **Rejected: a floating tag, even `1`.** The digest is the claim the documents make.
 
 **Reversibility:** free. Nothing is stored in the image; the volumes are the database and the bucket.
-
 
 ---
 

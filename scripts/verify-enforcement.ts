@@ -67,6 +67,73 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "import { thing } from '../ingress/http/routes';\n\nexport const use = (): unknown => thing;\n",
   },
+  // The two doors are peers, and ingress composes realtime, so the cycle that was
+  // there (realtime importing a cookie module out of ingress) cannot return. (#245)
+  {
+    rule: 'layering: realtime may not import from ingress, so the doors form no cycle (ARCHITECTURE.md §4)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/realtime/__enforcement__.ts',
+    source:
+      "import { thing } from '../ingress/http/cookies';\n\nexport const use = (): unknown => thing;\n",
+  },
+  {
+    rule: 'layering: ingress composing realtime is the allowed direction',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/ingress/http/__enforcement__.ts',
+    source:
+      "import { thing } from '../../realtime/hub';\n\nexport const use = (): unknown => thing;\n",
+    allowed: true,
+  },
+  {
+    rule: 'layering: a realtime test may stand up the application through ingress',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/realtime/__enforcement__.test.ts',
+    source:
+      "import { thing } from '../ingress/http/app';\n\nexport const use = (): unknown => thing;\n",
+    allowed: true,
+  },
+  // Test-only code stays out of what ships. (#245)
+  {
+    rule: 'production code may not import test-only code: ingress (#245)',
+    ruleId: 'purlay/no-test-code-import',
+    path: 'apps/api/src/ingress/http/__enforcement__.ts',
+    source:
+      "import { thing } from '../../testing/doubles';\n\nexport const use = (): unknown => thing;\n",
+  },
+  {
+    rule: 'production code may not import test-only code: a module (#245)',
+    ruleId: 'purlay/no-test-code-import',
+    path: 'apps/api/src/modules/__enforcement__.ts',
+    source:
+      "import { thing } from '../testing/users';\n\nexport const use = (): unknown => thing;\n",
+  },
+  {
+    rule: 'production code may not import test-only code: a *.testing.ts file, re-exported (#245)',
+    ruleId: 'purlay/no-test-code-import',
+    path: 'apps/api/src/realtime/__enforcement__.ts',
+    source: "export { thing } from './hub.testing';\n",
+  },
+  {
+    rule: 'production code may not import test-only code: a dynamic import (#245)',
+    ruleId: 'purlay/no-test-code-import',
+    path: 'apps/api/src/platform/__enforcement__.ts',
+    source: "export const load = async (): Promise<unknown> => await import('../testing/users');\n",
+  },
+  {
+    rule: 'a test may import test-only code',
+    ruleId: 'purlay/no-test-code-import',
+    path: 'apps/api/src/modules/__enforcement__.test.ts',
+    source:
+      "import { thing } from '../testing/users';\n\nexport const use = (): unknown => thing;\n",
+    allowed: true,
+  },
+  {
+    rule: 'test-only code may import test-only code',
+    ruleId: 'purlay/no-test-code-import',
+    path: 'apps/api/src/testing/__enforcement__.ts',
+    source: "import { thing } from './doubles';\n\nexport const use = (): unknown => thing;\n",
+    allowed: true,
+  },
   {
     rule: 'layering: the browser may not import the database (ARCHITECTURE.md §4)',
     ruleId: 'no-restricted-imports',

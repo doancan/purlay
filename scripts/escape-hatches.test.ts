@@ -97,3 +97,37 @@ describe('an expected type error in source has an owner', () => {
     ).toContain('purlay/owned-expected-error');
   });
 });
+
+/**
+ * Test-only code stays out of what ships (#245). Linted as a real production
+ * file so the path-scoped configuration and the type-aware parser both apply;
+ * the text replaces what is on disk.
+ */
+describe('production code does not import test-only code', () => {
+  const refused = async (code: string, filePath: string): Promise<boolean> => {
+    const [result] = await eslint.lintText(code, { filePath });
+    return (result?.messages ?? []).some((m) => m.ruleId === 'purlay/no-test-code-import');
+  };
+  const PRODUCTION = 'apps/api/src/ingress/http/validate.ts';
+
+  test('a static import, a re-export and a dynamic import are each refused', async () => {
+    expect(await refused("import { a } from '../../testing/doubles';\nvoid a;\n", PRODUCTION)).toBe(
+      true,
+    );
+    expect(await refused("export { a } from './x.testing';\n", PRODUCTION)).toBe(true);
+    expect(await refused("export * from '../../testing/users';\n", PRODUCTION)).toBe(true);
+    expect(await refused("await import('../../testing/users');\n", PRODUCTION)).toBe(true);
+  });
+
+  test('a path that merely holds the word, an export with no source and a computed import are not', async () => {
+    expect(await refused("import { a } from './attesting';\nvoid a;\n", PRODUCTION)).toBe(false);
+    expect(await refused('export const a = 1;\n', PRODUCTION)).toBe(false);
+    expect(await refused('await import(String(1));\n', PRODUCTION)).toBe(false);
+  });
+
+  test('a test and the testing directory itself may', async () => {
+    const code = "import { a } from '../../testing/doubles';\nvoid a;\n";
+    expect(await refused(code, 'apps/api/src/ingress/http/app.test.ts')).toBe(false);
+    expect(await refused(code, 'apps/api/src/testing/doubles.ts')).toBe(false);
+  });
+});
