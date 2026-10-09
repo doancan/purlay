@@ -3256,6 +3256,11 @@ and CodeQL are already in the platform we run on.
 
 **Reversibility:** free. All of it is workflow and script; nothing is stored.
 
+
+*Amended 2026-10-09 (a second-round audit):* every `actions/checkout` left the job's token in
+`.git/config`, where any later step — an installed package's script included — can read it. No job pushes,
+so none keeps it: `persist-credentials: false` everywhere, and `scripts/workflow-pins.test.ts` fails a
+checkout without it (shown failing on nine before the change).
 ---
 
 ### D-92. The API ships as a distroless image that runs the source, pinned by digest
@@ -3294,6 +3299,16 @@ disk. **Rejected: an init process (`tini`).** The process handles SIGTERM itself
 
 **Reversibility:** free. Nothing is stored in the image; the volumes are the database and the bucket.
 
+
+*Amended 2026-10-09 (a second-round audit):* the `image` workflow had a path filter, so a pull request that
+broke the Dockerfile ran no check at all, and a check that does not run cannot be required. It now runs on
+every pull request and decides inside the job (`scripts/pr-touches.sh`) whether there is anything to build;
+when there is not, its steps are skipped and it reports success. And the publish job **built a second time**
+instead of promoting what had been tested: on main the image is now built once, pushed **by digest** (untagged,
+with provenance and an SBOM), the same smoke test is run against that exact digest, and only then is it given
+its tags (`sha-<commit>` and `main`) by `imagetools create` — a retag, not a rebuild. Exercised locally against a
+registry: the digest the build reported is the digest `:main` resolves to, the attestation manifest is
+there, and the smoke test passed on the pulled digest. The check names to require: `build` (pull requests).
 ---
 
 ### D-93. Migrations run on start: every node calls the migrator, which makes starters take turns
@@ -3417,6 +3432,10 @@ off-host copies, a production schedule, and the `ENCRYPTION_KEY`, which a backup
 
 **Reversibility:** free. Scripts and a workflow; the format is `pg_dump`'s and a directory of files.
 
+
+*Amended 2026-10-09 (a second-round audit):* the `restore-rehearsal` workflow had the same path filter and
+now runs on every pull request, deciding inside the job whether the change touches what it exercises, so
+`rehearse` can be a required check. The weekly run and a push always rehearse.
 ---
 
 ### D-96. Error tracking is the logger's `error` lines, sent on if a DSN is set — no SDK, off by default

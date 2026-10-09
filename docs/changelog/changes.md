@@ -14,6 +14,18 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - Out-of-band SQL revocation is documented as not ending open sockets until expiry or a restart. A
   command-line revoker is not provided: another process cannot reach the in-process bus.
 
+### Chore — 2026-10-09: the image and rehearsal checks run on every pull request, and the published image is the tested one
+
+- The `image` and `restore-rehearsal` workflows had path filters, so a pull request that broke the
+  Dockerfile or `backup.sh` ran no check and could merge, and a check that does not run cannot be required.
+  Both now run on every pull request and skip their work inside the job when nothing relevant changed
+  (`scripts/pr-touches.sh`, which fails closed on a listing it cannot read). Check names to require: `build`
+  and `rehearse` (#231).
+- On main the image is built once, pushed by digest, smoke-tested as that digest, and tagged — not rebuilt
+  between testing and publishing (D-92 amended).
+- No `actions/checkout` keeps the job token in `.git/config` any more (`persist-credentials: false`); a test
+  fails a checkout without it (D-91 amended).
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and
