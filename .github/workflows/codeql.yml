@@ -1,0 +1,80 @@
+# Static analysis of the JavaScript and TypeScript (#247).
+#
+# Least privilege: nothing is writable except `security-events`, which is what
+# publishing results to the Security tab needs, and it is granted to the one job
+# that publishes. No cache, no secrets, no write to contents.
+#
+# **Code scanning is a GitHub Advanced Security feature on a private repository.**
+# While this repository is private and the feature is off, uploading results is
+# refused ("Code scanning is not enabled"), so the job still analyses, keeps the
+# SARIF as an artifact, and fails if the analysis found anything — the same gate
+# either way. Once the repository is public (it is AGPL-3.0 software, D-1), or if
+# Advanced Security is enabled, results are uploaded as well, with no change here
+# beyond the repository variable below being irrelevant.
+#
+# Enable upload on a private repository that has Advanced Security:
+#   gh variable set CODEQL_UPLOAD --body true
+# and reverse it with:
+#   gh variable delete CODEQL_UPLOAD
+#
+# The default setup for code scanning must stay off while this workflow exists:
+# the two would analyse the same code twice and report as one.
+name: codeql
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, Tuesday morning UTC. New queries ship without a commit.
+    - cron: '41 5 * * 2'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: javascript-typescript
+          # Interpreted languages need no build.
+          build-mode: none
+          queries: security-and-quality
+
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: /language:javascript-typescript
+          output: sarif-results
+          upload: ${{ (github.event.repository.private == false || vars.CODEQL_UPLOAD == 'true') && 'always' || 'never' }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: codeql-sarif
+          path: sarif-results
+          retention-days: 14
+          if-no-files-found: error
+
+      # The gate, independent of whether the results could be uploaded. Counting
+      # the SARIF's results makes "zero" an observation: the file must exist, or
+      # `if-no-files-found` above and `jq` here both fail (CONTRIBUTING §6.4).
+      - name: the analysis found nothing
+        run: |
+          set -euo pipefail
+          count=0
+          for file in sarif-results/*.sarif; do
+            n="$(jq '[.runs[].results[]?] | length' "$file")"
+            echo "$file: $n result(s)"
+            jq -r '.runs[].results[]? | "  \(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine) \(.message.text)"' "$file"
+            count=$((count + n))
+          done
+          test "$count" -eq 0
