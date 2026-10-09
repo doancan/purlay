@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Refactor — 2026-10-09: the socket lifecycle leaves the composition root
+
+- `ingress/http/app.ts` (438 lines) keeps the routes and edge hooks; admission, open, frame handling
+  and close are `ingress/ws/socket.ts`. No behaviour change (#245, D-47).
+
 ### Refactor — 2026-10-09: the `/api/me` query is a module's
 
 - `readMe` no longer holds a raw query; `meOf` in `modules/workspaces` does (#245, D-47).

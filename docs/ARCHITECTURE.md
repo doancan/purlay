@@ -121,6 +121,8 @@ purlay/
 │   │       ├── ingress/
 │   │       │   ├── http/        route definitions only — validate, delegate, serialize,
 │   │       │                  plus the one error handler: AppError → its status, else INTERNAL
+│   │       │   └── ws/          the socket's lifecycle — admit, open, frame, close — wired to
+│   │       │                  `/ws` by the composition root in `http/app.ts`
 │   │       ├── realtime/        the socket door: frame router, hub (connection lifecycle,
 │   │       │                  backpressure), the in-process EventBus, the rate limiter
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line

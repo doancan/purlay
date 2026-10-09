@@ -48,16 +48,11 @@ import {
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 import { postMessage, readHistory } from './messages';
-import { inProcessBackplane, type Backplane } from '../../realtime/bus';
-import { channelTopic, sessionTopic, userTopic } from '../../platform/events';
-import { atomicallyOn } from '../../platform/transactions';
 import { readiness } from '../../platform/readiness';
-import { currentRequest, enterRequest, withinRequest, type Logger } from '../../platform/logging';
-import { createSocketHub } from '../../realtime/hub';
-import { CLOSE_CODES, MAX_FRAME_BYTES, type ServerFrame } from '@purlay/types';
-import { routeFrame } from '../../realtime/router';
-import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
-import { admitSocket } from '../../realtime/upgrade';
+import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
+import { MAX_FRAME_BYTES } from '@purlay/types';
+import type { Backplane } from '../../realtime/bus';
+import { createSocketLifecycle, type HeldByConnections } from '../ws/socket';
 
 export interface Dependencies {
   readonly config: Config;
@@ -104,33 +99,7 @@ export interface HttpApplication {
   readonly held: () => HeldByConnections;
 }
 
-export interface HeldByConnections {
-  readonly connections: number;
-  readonly busSockets: number;
-  readonly busTopics: number;
-  readonly rateBuckets: number;
-}
-
-/**
- * How much a socket has queued and not yet written, read from Bun's own socket.
- *
- * Bun has it — measured (#197) — and the framework's copy of the socket's type
- * does not declare it. Checked rather than cast: if a runtime ever lacks it, the
- * first connection refuses loudly instead of every connection running with no
- * backpressure at all.
- */
-const outboundBufferOf = (raw: object): (() => number) => {
-  const read: unknown = Reflect.get(raw, 'getBufferedAmount');
-  if (typeof read !== 'function') {
-    throw new Error('the socket cannot report its outbound buffer, so backpressure cannot be held');
-  }
-  return () => {
-    const amount: unknown = Reflect.apply(read, raw, []);
-    // Unreadable is treated as full: the safe failure is a resync, not an
-    // unbounded queue.
-    return typeof amount === 'number' ? amount : Number.POSITIVE_INFINITY;
-  };
-};
+export type { HeldByConnections };
 
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
@@ -159,19 +128,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
   /** Set once, by `drain`; readiness reads it before anything else. */
   let draining = false;
-  const hub = createSocketHub(dependencies.database, dependencies.clock, {
-    log,
-    // Called from `hub.deliver`, which only runs after `bus` exists.
-    leave: (channelId, socketId) => {
-      bus.unsubscribe(channelTopic(channelId), socketId);
-    },
-  });
-  const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
-  const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
-  // The transaction boundary both doors share: a new transaction per write, or
-  // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
-  const atomically = atomicallyOn(dependencies.database);
-  const sending = { ...dependencies, bus, atomically };
+  const sockets = createSocketLifecycle(dependencies);
+  const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
 
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
@@ -266,10 +224,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return respond(set, await completeSignIn(dependencies, request, address));
     })
     .post('/auth/logout', async ({ request, set }) =>
-      respond(set, await signOut({ ...dependencies, bus }, request)),
+      respond(set, await signOut({ ...dependencies, bus: sockets.bus }, request)),
     )
     .post('/auth/logout-all', async ({ request, set }) =>
-      respond(set, await signOutEverywhere({ ...dependencies, bus }, request)),
+      respond(set, await signOutEverywhere({ ...dependencies, bus: sockets.bus }, request)),
     )
 
     .get('/api/me', async ({ request }) => await readMe(dependencies, request))
@@ -325,89 +283,19 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      */
     .ws('/ws', {
       beforeHandle: async ({ request, set }) => {
-        try {
-          await admitSocket(
-            {
-              database: dependencies.database,
-              clock: dependencies.clock,
-              appUrl: dependencies.config.APP_URL,
-            },
-            request,
-          );
-          return undefined;
-        } catch (error) {
-          const refusal = refusalFor('UPGRADE', error, []);
-          set.status = refusal.status;
-          return refusal.body;
-        }
+        const refusal = await sockets.admit(request);
+        if (refusal === undefined) return undefined;
+        set.status = refusal.status;
+        return refusal.body;
       },
       open: async (socket) => {
-        const identity = await hub.opened(
-          socket.id,
-          {
-            // The raw socket's answers, not the framework wrapper's: whether a
-            // frame was dropped and how much is queued (#197).
-            send: (payload) => socket.raw.send(payload),
-            buffered: outboundBufferOf(socket.raw),
-            close: (code, reason) => {
-              socket.close(code, reason);
-            },
-          },
-          socket.data.request,
-        );
-        // Where the end of this session will be announced, on whichever node.
-        if (identity !== undefined) {
-          bus.subscribe(sessionTopic(identity.sessionId), socket.id);
-          // And where the end of the account, or of one membership, is announced.
-          bus.subscribe(userTopic(identity.userId), socket.id);
-          log.info('socket opened', { socketId: socket.id, userId: identity.userId });
-        }
+        await sockets.open(socket);
       },
       message: (socket, raw) => {
-        // In order, one at a time, per connection: the framework starts a handler
-        // per frame and does not wait for the last one.
-        hub.enqueue(socket.id, async () => {
-          const identity = await hub.identity(socket.id);
-          if (identity === undefined) {
-            // Its session ended before the frame could be answered; the hub has
-            // already announced that, or is about to. Nothing here may be served.
-            socket.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
-            return;
-          }
-          // Each frame is a request of its own: its own id on every line it writes.
-          await withinRequest(
-            { requestId: crypto.randomUUID(), startedAt: performance.now() },
-            async () => {
-              let replies: readonly ServerFrame[] = [];
-              try {
-                replies = await routeFrame(
-                  {
-                    database: dependencies.database,
-                    clock: dependencies.clock,
-                    bus,
-                    limiter,
-                    log,
-                    // The real boundary. D-35: one transaction, published after it returns.
-                    atomically,
-                    socket: hub,
-                  },
-                  identity,
-                  raw,
-                );
-              } finally {
-                // Through the hub, so a replay burst is held to the same mark as the
-                // bus's fan-out, and the live frames kept during a subscription follow.
-                hub.reply(socket.id, replies);
-              }
-            },
-          );
-        });
+        sockets.message(socket, raw);
       },
       close: (socket, code) => {
-        log.info('socket closed', { socketId: socket.id, code });
-        bus.forget(socket.id);
-        limiter.forget(socket.id);
-        hub.closed(socket.id);
+        sockets.close(socket, code);
       },
     });
 
@@ -420,19 +308,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       return bound;
     },
     stop: async (closeActiveConnections) => await app.stop(closeActiveConnections),
-    held: () => ({
-      connections: hub.size(),
-      busSockets: bus.size().sockets,
-      busTopics: bus.size().topics,
-      rateBuckets: limiter.held(),
-    }),
+    held: sockets.held,
     drain: async (): Promise<void> => {
       draining = true;
-      hub.closeAll(CLOSE_CODES.RESTARTING, 'restarting');
+      sockets.closeAll();
       // Not closing active connections: a request in flight finishes, and so does a
       // frame being handled — the pool closes after this returns, so a handler still
       // reading it would fail on a connection that was pulled out from under it.
-      await Promise.all([app.stop(false), hub.settled()]);
+      await Promise.all([app.stop(false), sockets.settled()]);
     },
   };
 };
