@@ -19,8 +19,8 @@ const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
 
 const quietConnection = {
-  send: () => 0,
-  buffered: () => 0,
+  send: (): number => 0,
+  buffered: (): number => 0,
   close: (): void => undefined,
 };
 
@@ -30,11 +30,11 @@ const recorded = (): Timers & { armed: number[]; cleared: unknown[] } => {
   return {
     armed,
     cleared,
-    set: (_callback, ms) => {
+    set: (_callback, ms): number => {
       armed.push(ms);
       return armed.length;
     },
-    clear: (handle) => {
+    clear: (handle): void => {
       cleared.push(handle);
     },
   };
