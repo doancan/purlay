@@ -24,6 +24,7 @@ export { purgeDeadSessions } from './sessions';
 export { sql } from 'kysely';
 export {
   migrateToLatest,
+  type MigrateOptions,
   MIGRATIONS_DIRECTORY,
   migrationHistoryProblem,
   pendingMigrations,

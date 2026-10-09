@@ -29,14 +29,23 @@
 --
 -- Written for a table that has rows, and run outside the migrator's transaction (D-86):
 --   * the two unique constraints the keys point at are built as indexes CONCURRENTLY and
---     then attached, which takes the exclusive lock for an instant instead of for a build;
---   * every key and check is added NOT VALID, which checks new rows at once and takes
---     only a brief lock, and validated in the next statement, which scans without
---     blocking readers or writers. Had this run inside the transaction, the lock of the
+--     then attached, which takes the exclusive lock for the attach and not for a build;
+--   * every key and check is added NOT VALID, which checks new rows at once and takes a
+--     lock that lasts only as long as the statement, and validated in the next statement,
+--     which scans without blocking readers or writers. Had this run inside the transaction, the lock of the
 --     first statement would have been held across the scan: that is what 0007 did, with
 --     nothing to lose because the table was empty.
 --   * a lock wait is bounded, so a long transaction ahead of an ALTER fails this
 --     migration instead of queueing every query on the table behind it.
+--
+-- "Brief" is not "nothing". Each ALTER TABLE has to be granted its lock, which means waiting
+-- for every transaction already using the table, and a send holds `messages` and then
+-- `channels` where this file asks for them in the other order. Under load the two can wait
+-- for each other: at about 5,000 writes a second the migrator was ended with "deadlock
+-- detected" (at about 150 a second ten runs in ten were untouched). The migrator now runs a
+-- migration again when PostgreSQL ends it that way, which is safe here because of the next
+-- paragraph, and a migration like this one is still best run at low traffic (D-86).
+--
 -- It can be run again after a crash at any point: everything it adds is dropped first.
 -- A row that already breaks a rule fails the VALIDATE, loudly, and nothing is half-applied
 -- that would hide it: the constraint is present and unvalidated until someone fixes the row

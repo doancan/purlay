@@ -90,7 +90,17 @@ installShutdown({
 // though it could.
 if (config.MIGRATE_ON_START === true) {
   try {
-    const applied = await migrateOnStart(database);
+    const applied = await migrateOnStart(database, undefined, {
+      // A deadlock against live traffic ends the migration's attempt, not the start (D-86).
+      onRetry: (retry) => {
+        log.warn('a migration was ended as a deadlock victim and is being retried', {
+          migration: retry.migration,
+          attempt: retry.attempt,
+          pauseMilliseconds: retry.pauseMilliseconds,
+          err: retry.error,
+        });
+      },
+    });
     log.info('migrations are current', { applied });
   } catch (error) {
     log.error('migrating on start failed; exiting', { err: error });

@@ -3067,6 +3067,38 @@ exits one of two healthy starters, instead of making it wait its turn. **Rejecte
 the wait on separate connections without polling:** the waiting connection is the transaction the build
 waits for; only not being in a statement avoids it.
 
+*Amended 2026-10-09 — a deadlock against live traffic is retried, and "for an instant" was wrong:* a
+second-round audit ran migration 0010 against live sends. At about 150 writes a second ten runs in ten
+were untouched; at about 5,000 the migrator was ended with `deadlock detected`. An `ALTER TABLE` is granted its
+exclusive lock only after every transaction already using the table, and a send takes `messages` and then
+`channels` where the migration asks for them the other way round, so under load the two wait for each
+other and PostgreSQL ends one. The migration's header said the lock was held "for an instant"; it is held
+for as long as it takes to be granted.
+**Decided: a migration is run again when PostgreSQL ends it with SQLSTATE `40P01`**, at most five attempts
+in all, waiting 250, 500, 1000 and 2000 ms, each retry reported (`onRetry`: the CLI prints it, the API logs
+it at `warn`), and the last deadlock thrown as it was when the attempts run out. Nothing else is retried: a
+violation, a syntax error and a timeout belong to the migration or the data. **Why this is safe, for each
+kind of file.** A transactional migration is rolled back whole by the deadlock, so running it again starts
+from the state it started from the first time. A non-transactional migration may have committed earlier
+statements, and the unit of retry is the *file, from its top*, not the statement that was waiting: D-86
+already requires such a file to be safe to run again from the top, because a crash and a restart do exactly
+that. A single statement is not retried on its own, because the one that was ended might be a `CREATE INDEX
+CONCURRENTLY` that left an invalid index, which only its file's own `DROP INDEX IF EXISTS` clears.
+**Rejected — retrying a statement:** that. **Rejected — retrying every error:** it hides a bad migration
+behind a delay. **Rejected — taking the application's locks first, or locking the table up front:** it blocks
+every writer for the duration, which is the cost the non-transactional form exists to avoid.
+**Operators:** run migrations at low traffic. A retry makes a deadlock survivable, not cheap; a node migrating
+on start under heavy load may need several attempts, and the log says so.
+**A corrected comment in an applied migration is allowed, by a table in `migrator.ts`, not by editing
+silently.** The files are checksummed whole, so a corrected comment looks like an edited statement and
+would make every database that applied the migration refuse to start. `COMMENT_ONLY_EDITS` names the
+checksum those databases recorded and the checksum of what the file *does* (comments removed, whitespace
+collapsed, `executableText`); the edit is accepted only when both match, so a change to any statement is
+refused as before, and the new checksum is recorded on the next run. A test fails if an entry stops
+describing its file. The header of 0010 is the first use; 0007's earlier correction predates checksums and
+was adopted instead. **Rejected — ignoring comments in every checksum:** it would change what every
+recorded checksum means and makes any comment edit invisible, including a misleading one.
+
 ---
 
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged

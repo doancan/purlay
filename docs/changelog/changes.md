@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the migrator survives a deadlock against live traffic
+
+- At about 5,000 writes a second migration 0010 was ended with `deadlock detected` by sends taking the
+  same locks in the other order. A migration ended that way is now run again (five attempts, 250 ms to 2 s
+  apart, each logged); nothing else is retried. The 0010 header no longer says its lock is held "for an
+  instant", through a checked table of comment-only corrections that leaves the statements' checksum
+  rule intact (#231, D-86). Run migrations at low traffic.
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different

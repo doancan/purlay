@@ -10,7 +10,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
-import { migrateToLatest, pendingMigrations } from './migrator';
+import {
+  codeChecksum,
+  COMMENT_ONLY_EDITS,
+  migrateToLatest,
+  migrationHistoryProblem,
+  pendingMigrations,
+  readMigrationFiles,
+} from './migrator';
 import { closeIntegrationDatabase, integrationDatabase } from './testing';
 
 /**
@@ -24,12 +31,12 @@ import { closeIntegrationDatabase, integrationDatabase } from './testing';
  * check — the migrations table, the lock, the DDL — is the same in either; the
  * advisory lock is per database, and the tests run one after another.
  */
-const open = (schema: string, max = 1): Kysely<unknown> =>
+const open = (schema: string, max = 1, settings = ''): Kysely<unknown> =>
   new Kysely<unknown>({
     dialect: new PostgresDialect({
       pool: new pg.Pool({
         connectionString: process.env['DATABASE_URL'] ?? '',
-        options: `-c search_path=${schema}`,
+        options: `-c search_path=${schema} ${settings}`.trim(),
         max,
       }),
     }),
@@ -355,7 +362,9 @@ describe('integration: concurrent starters', () => {
       await holder.connection().execute(async (conn) => {
         await sql`select pg_advisory_lock(1886351481)`.execute(conn);
         const started = performance.now();
-        const { error, results } = await migrateToLatest(waiter, directory, 300);
+        const { error, results } = await migrateToLatest(waiter, directory, {
+          lockWaitMilliseconds: 300,
+        });
         expect(String(error)).toContain('held the migration lock');
         expect(performance.now() - started).toBeLessThan(2000);
         expect(results).toEqual([]);
@@ -379,7 +388,7 @@ describe('integration: concurrent starters', () => {
       try {
         const started = performance.now();
         const fixed = migrationsDirectory({ '0001_bad.sql': 'CREATE TABLE ok (id int);' });
-        const outcome = await migrateToLatest(other, fixed, 1000);
+        const outcome = await migrateToLatest(other, fixed, { lockWaitMilliseconds: 1000 });
         expect(outcome.error).toBeUndefined();
         expect(performance.now() - started).toBeLessThan(1000);
       } finally {
@@ -406,6 +415,162 @@ describe('integration: concurrent starters', () => {
       expect(applied.toSorted()).toEqual(['0001_a', '0002_slow', '0003_c']);
     } finally {
       for (const pool of pools) await pool.destroy();
+    }
+  });
+});
+
+describe('integration: a migration that is the victim of a deadlock', () => {
+  /**
+   * Migration 0010 took the exclusive lock of an `ALTER TABLE` on `messages` while a send,
+   * which locks `messages` and then `channels`, took the same two in the other order; at
+   * thousands of writes a second PostgreSQL ended the migrator with `deadlock detected`.
+   * The crossed locks are made here by hand and the order is fixed, so the migrator is the
+   * victim every time: a test session holds `b`, the migration takes `a` and waits for `b`,
+   * and only then does the test session ask for `a`. The migrator's `deadlock_timeout` is
+   * the shorter, so it is the one that runs the check and is ended.
+   *
+   * Both kinds of migration are tried: a transactional one is rolled back whole by the
+   * deadlock, a non-transactional one loses only the statement that was waiting.
+   */
+  const FILES = {
+    'transactional (rolled back whole)':
+      'LOCK TABLE a IN ACCESS EXCLUSIVE MODE;\nLOCK TABLE b IN ACCESS EXCLUSIVE MODE;\nCREATE TABLE done (n int);',
+    'non-transactional (the file runs again from its top)':
+      '-- purlay: no-transaction\nALTER TABLE a DROP CONSTRAINT IF EXISTS a_b_fkey;\n' +
+      'ALTER TABLE a ADD CONSTRAINT a_b_fkey FOREIGN KEY (b_id) REFERENCES b (id);',
+  } as const;
+
+  const waiters = async (): Promise<number> => {
+    const { rows } = await sql<{ n: string }>`
+      select count(*) as n from pg_locks where locktype = 'relation' and not granted`.execute(
+      integrationDatabase(),
+    );
+    return Number(rows[0]?.n);
+  };
+
+  for (const [kind, migration] of Object.entries(FILES)) {
+    test(`${kind}: the migrator retries and succeeds, saying so`, async () => {
+      const schema = await freshSchema();
+      const setup = open(schema);
+      const migrating = open(schema, 1, '-c deadlock_timeout=500ms');
+      const session = open(schema);
+      const base = {
+        '0001_tables.sql': 'CREATE TABLE b (id int PRIMARY KEY);\nCREATE TABLE a (b_id int);',
+      };
+      try {
+        expect((await migrateToLatest(setup, migrationsDirectory(base))).error).toBeUndefined();
+        const directory = migrationsDirectory({ ...base, '0002_crossed.sql': migration });
+
+        const retried: string[] = [];
+        let outcome: Awaited<ReturnType<typeof migrateToLatest>> | undefined;
+        await session.connection().execute(async (conn) => {
+          await sql`begin`.execute(conn);
+          await sql`lock table b in access exclusive mode`.execute(conn);
+          const running = migrateToLatest(migrating, directory, {
+            onRetry: (retry) => retried.push(`${retry.migration} #${String(retry.attempt)}`),
+          });
+          // Wait for the positive condition: the migration is waiting for `b`.
+          for (let waited = 0; (await waiters()) === 0 && waited < 5000; waited += 10) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          expect(await waiters()).toBeGreaterThan(0);
+          // Closes the cycle. Held until the migrator has been ended, then released.
+          await sql`lock table a in access exclusive mode`.execute(conn);
+          await sql`commit`.execute(conn);
+          outcome = await running;
+        });
+
+        expect(outcome?.error).toBeUndefined();
+        expect(retried).toEqual(['0002_crossed #1']);
+        expect(outcome?.results).toEqual([{ migrationName: '0002_crossed', status: 'Success' }]);
+      } finally {
+        await setup.destroy();
+        await migrating.destroy();
+        await session.destroy();
+      }
+    }, 30_000);
+  }
+});
+
+describe('integration: a corrected comment in an applied migration', () => {
+  const checksumOf = (text: string): string =>
+    new Bun.CryptoHasher('sha256').update(text).digest('hex');
+  const ORIGINAL = '-- says one thing\nCREATE TABLE t (id int);';
+  const CORRECTED = '-- says another, and at more length\nCREATE  TABLE t\n  (id int);';
+
+  const afterApplying = async (body: (db: Kysely<unknown>) => Promise<void>): Promise<void> => {
+    const schema = await freshSchema();
+    const db = open(schema);
+    try {
+      expect(
+        (await migrateToLatest(db, migrationsDirectory({ '0001_t.sql': ORIGINAL }))).error,
+      ).toBeUndefined();
+      await body(db);
+    } finally {
+      await db.destroy();
+    }
+  };
+
+  const listed = {
+    '0001_t': { previous: checksumOf(ORIGINAL), code: codeChecksum(ORIGINAL) },
+  };
+  const checksumRecorded = async (db: Kysely<unknown>): Promise<string | null | undefined> =>
+    (await sql<{ checksum: string | null }>`select checksum from kysely_migration`.execute(db))
+      .rows[0]?.checksum;
+
+  test('is accepted when the entry names the recorded checksum and the code is unchanged, and is recorded', async () => {
+    await afterApplying(async (db) => {
+      const directory = migrationsDirectory({ '0001_t.sql': CORRECTED });
+      const { error } = await migrateToLatest(db, directory, { commentOnlyEdits: listed });
+      expect(error).toBeUndefined();
+      expect(await checksumRecorded(db)).toBe(checksumOf(CORRECTED));
+      // From then on it is an ordinary applied file, and the entry is no longer needed.
+      const again = await migrateToLatest(db, directory, { commentOnlyEdits: {} });
+      expect(again.error).toBeUndefined();
+      expect(await migrationHistoryProblem(db, directory, {})).toBeUndefined();
+    });
+  });
+
+  test('is accepted by readiness before the migrator has recorded it', async () => {
+    await afterApplying(async (db) => {
+      const directory = migrationsDirectory({ '0001_t.sql': CORRECTED });
+      expect(await migrationHistoryProblem(db, directory, listed)).toBeUndefined();
+      expect(await migrationHistoryProblem(db, directory, {})).toContain('was edited');
+    });
+  });
+
+  test('is refused when the edit changed a statement, however the entry reads', async () => {
+    await afterApplying(async (db) => {
+      const changed = migrationsDirectory({
+        '0001_t.sql': '-- says another\nCREATE TABLE t (id int, extra int);',
+      });
+      const { error } = await migrateToLatest(db, changed, { commentOnlyEdits: listed });
+      expect(String(error)).toContain('was edited after it was applied');
+      expect(await checksumRecorded(db)).toBe(checksumOf(ORIGINAL));
+    });
+  });
+
+  test('is refused when the database recorded some other checksum than the one listed', async () => {
+    await afterApplying(async (db) => {
+      await sql`update kysely_migration set checksum = repeat('0', 64)`.execute(db);
+      const directory = migrationsDirectory({ '0001_t.sql': CORRECTED });
+      const { error } = await migrateToLatest(db, directory, { commentOnlyEdits: listed });
+      expect(String(error)).toContain('was edited after it was applied');
+    });
+  });
+
+  /**
+   * The table is code, and so is checked like code: each entry must still describe the
+   * file it names. An edit to a statement of 0010 would fail here before it failed anywhere
+   * a database had applied it.
+   */
+  test('every entry of the real table describes a real file whose code has not changed', async () => {
+    const files = await readMigrationFiles();
+    for (const [name, edit] of Object.entries(COMMENT_ONLY_EDITS)) {
+      const file = files.find((candidate) => candidate.name === name);
+      expect(file).toBeDefined();
+      expect(codeChecksum(file?.text ?? '')).toBe(edit.code);
+      expect(file?.checksum).not.toBe(edit.previous);
     }
   });
 });

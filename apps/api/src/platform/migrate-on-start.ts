@@ -15,13 +15,14 @@
  * readiness says 503 while it works, and a failure is an exception the caller turns
  * into an exit — a node that cannot migrate must not keep running as though it could.
  */
-import { migrateToLatest, type Executor } from '@purlay/db';
+import { migrateToLatest, type Executor, type MigrateOptions } from '@purlay/db';
 
 export const migrateOnStart = async (
   database: Executor,
   directory?: string,
+  options: Pick<MigrateOptions, 'onRetry'> = {},
 ): Promise<readonly string[]> => {
-  const { error, results } = await migrateToLatest(database, directory);
+  const { error, results } = await migrateToLatest(database, directory, options);
   if (error !== undefined) {
     const failed = (results ?? []).find((result) => result.status === 'Error');
     throw new Error(
