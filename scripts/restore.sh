@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Restore a backup made by scripts/backup.sh (#248, D-95).
 #
-#   scripts/restore.sh <backup-dir> [--database NAME] [--bucket NAME|live] [--replace]
+#   scripts/restore.sh <backup-dir> [--database NAME] [--bucket NAME|live | --no-bucket] [--replace]
 #
 # By default it restores into a NEW database, purlay_restore, and a NEW bucket, the
 # service's own name plus "-restore", which is how a backup is rehearsed without
@@ -11,6 +11,10 @@
 #   1. stop the API:          docker compose -f docker-compose.production.yml stop api
 #   2. restore over the live: scripts/restore.sh <dir> --database purlay --replace --bucket live
 #   3. start it again:        docker compose -f docker-compose.production.yml start api
+#
+# `--no-bucket` restores the database alone. It is for rolling back an upgrade: attachments are
+# only ever added, a schema migration does not touch them, and the live bucket is not empty,
+# which a bucket import refuses. (docs/ARCHITECTURE.md, "Upgrading and rolling back")
 #
 # The order is built so that nothing the operator has is lost to a backup that turns
 # out to be bad. Everything that can be checked is checked BEFORE anything is changed:
@@ -26,7 +30,7 @@ set -euo pipefail
 # shellcheck source=scripts/ops-common.sh
 . "$(dirname "$0")/ops-common.sh"
 
-USAGE="usage: restore.sh <backup-dir> [--database NAME] [--bucket NAME|live] [--replace]"
+USAGE="usage: restore.sh <backup-dir> [--database NAME] [--bucket NAME|live | --no-bucket] [--replace]"
 BACKUP="${1:-}"
 [ -d "$BACKUP" ] || die "$USAGE"
 BACKUP="$(cd "$BACKUP" && pwd)"
@@ -34,15 +38,18 @@ shift
 TARGET_DB="purlay_restore"
 TARGET_BUCKET=""
 REPLACE=0
+NO_BUCKET=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --database) TARGET_DB="${2:?--database needs a name}"; shift 2 ;;
     --bucket) TARGET_BUCKET="${2:?--bucket needs a name, or live}"; shift 2 ;;
     --replace) REPLACE=1; shift ;;
+    --no-bucket) NO_BUCKET=1; shift ;;
     -h|--help) echo "$USAGE"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
+[ "$NO_BUCKET" = 0 ] || [ -z "$TARGET_BUCKET" ] || die "--no-bucket and --bucket contradict each other"
 [[ "$TARGET_DB" =~ ^[a-z_][a-z0-9_]*$ ]] || die "database name must be lowercase letters, digits and underscores"
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -87,7 +94,9 @@ if [ -n "$exists" ]; then
 fi
 
 BUCKET_STEP=0
-if [ -d "$BACKUP/bucket" ] && has_api; then
+if [ "$NO_BUCKET" = 1 ]; then
+  echo "bucket: not restored (--no-bucket)"
+elif [ -d "$BACKUP/bucket" ] && has_api; then
   BUCKET_STEP=1
   bucket_env=()
   if [ "$TARGET_BUCKET" = "live" ]; then

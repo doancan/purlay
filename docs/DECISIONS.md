@@ -3448,7 +3448,7 @@ every message; it is `0700`/`0600`. (3) A backup on a stack whose object store w
 partial directory with no checksums; it now removes it and points at `scripts/production-init.sh`.
 (4) The default restore put the database in a new place and the bucket into the live one, which refused
 after the database was done; both now default to new names, `--bucket live` is the recovery spelling, and
-the bucket is checked **before** the database is touched. The rehearsal asserts each of them.
+the bucket is checked **before** the database is touched. The rehearsal asserts each of them. `--no-bucket` restores the database alone, for rolling back an upgrade: the live bucket is not empty, and a schema migration does not touch attachments.
 
 ---
 

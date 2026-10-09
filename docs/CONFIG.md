@@ -201,7 +201,7 @@ issued and renewed automatically. Only the proxy publishes ports.
 Back up with `scripts/backup.sh`; restore with `scripts/restore.sh <dir>`, which by default restores
 into a **new** database and a **new** bucket (`purlay_restore`, `<S3_BUCKET>-restore`) and touches
 nothing live; prove it with `scripts/compare-databases.sh` (D-95). To recover over the live
-database, stop the API and run `scripts/restore.sh <dir> --database purlay --replace --bucket live`.
+database, stop the API and run `scripts/restore.sh <dir> --database purlay --replace --bucket live`. `--no-bucket` restores the database alone, which is what rolling back an upgrade needs (attachments are only ever added).
 
 **Who can read a backup:** only the user who ran `backup.sh` (directory `0700`, files `0600`,
 whatever the umask). It holds every message and every e-mail address in the clear, so where it is

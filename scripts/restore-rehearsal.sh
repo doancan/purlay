@@ -104,6 +104,13 @@ grep -q 'already holds' "$WORK/refused.out" || { echo "refused for another reaso
   || { echo "the refused restore replaced the database anyway" >&2; exit 1; }
 compose exec -T postgres psql -U purlay -d purlay_restore -q -c 'drop table restore_marker'
 
+# Rolling back an upgrade restores the database and leaves the (non-empty, append-only) live
+# bucket alone: the flag must restore the database, import nothing, and not mind the bucket.
+echo "== the database alone can be restored with --no-bucket"
+scripts/restore.sh "$BACKUP" --database purlay_restore_nb --no-bucket | tee "$WORK/nobucket.out"
+grep -q 'not restored (--no-bucket)' "$WORK/nobucket.out"
+scripts/compare-databases.sh purlay purlay_restore_nb >/dev/null
+
 echo "== compare"
 scripts/compare-databases.sh purlay purlay_restore
 
