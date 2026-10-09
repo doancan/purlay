@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build:web": "bun run --cwd apps/web build",
+    "audit:gate": "bun run scripts/audit.ts --today $(date -u +%F)",
     "check:branch": "./scripts/check-branch.sh",
     "check:docs": "python3 scripts/check-docs.py",
     "check:pr": "bun run scripts/check-pr.ts",

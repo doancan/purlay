@@ -82,6 +82,7 @@ and what CI runs, because nothing the integration tests reach reads object stora
 | `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, and touches only what its issues are about (D-74) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:reset` | Throw the data away and start again |
+| `bun run audit:gate` | The dependency audit, blocking at high severity; a finding with no fix is allowed only by an expiring entry in `scripts/audit-allowlist.json` (#247) |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |

@@ -1,0 +1,8 @@
+[
+  {
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "reason": "Stack exhaustion on deeply nested brace patterns. Every released version (up to 3.0.3) is affected and the advisory lists no patched release. Reached only through kysely-codegen > micromatch, a development tool that globs this repository's own file names; it ships in no image and sees no user input. Revisit when braces publishes a fix, or drop kysely-codegen's micromatch.",
+    "expires": "2026-12-31"
+  }
+]

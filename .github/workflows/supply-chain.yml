@@ -1,0 +1,35 @@
+# What the dependency tree is allowed to contain (#247, D-77).
+#
+# Separate from ci.yml so a new advisory can fail a scheduled run without
+# touching the checks that gate every merge: an advisory published on a Tuesday
+# is not a defect in Tuesday's pull request, but it is one nobody should learn
+# about by accident.
+name: supply-chain
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, Monday morning UTC. Advisories arrive without a commit.
+    - cron: '17 5 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+
+      # Blocks at high severity. A finding with no fix is allowed only by an entry
+      # in scripts/audit-allowlist.json that names it, says why and expires; an
+      # expired or unmatched entry fails this step too (scripts/audit-gate.ts).
+      - name: no high-severity advisory is unfixed and unexplained
+        run: bun run audit:gate
