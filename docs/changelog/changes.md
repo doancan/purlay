@@ -27,6 +27,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   form cannot produce JSON" held for nothing. Any other body type is now `415`
   `UNSUPPORTED_MEDIA_TYPE`; requests with no body are unaffected (D-80, Part of #231).
 
+### Fix — 2026-10-09: a restore reads the dump before it replaces anything, and a backup is private
+
+- `restore.sh --replace` dropped the live database before reading the dump: a truncated dump whose checksums
+  had been regenerated left the live database with 20 400 messages turned into 0. It now validates, restores
+  into a staging database, checks it, and swaps by renaming; a bad dump leaves the target exactly as it was
+  (#231, D-95 amended). The default restore now puts the bucket in a new place too and checks it before the
+  database is touched.
+- Backups are `0700`/`0600` instead of the caller's umask (any local user could read them), and a failed
+  backup removes its partial directory, saying to run `production-init.sh` when the object store was never
+  initialised. The weekly rehearsal asserts all of it.
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and

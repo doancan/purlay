@@ -198,9 +198,15 @@ scripts/production-init.sh            # once: the storage layout, bucket and key
 `APP_URL` is also the proxy's site address, so the origin Caddy answers for and the one the API checks
 sockets against cannot differ; with a public name and ports 80 and 443 reachable, the certificate is
 issued and renewed automatically. Only the proxy publishes ports.
-Back up with `scripts/backup.sh`, restore with `scripts/restore.sh <dir>` (into a new database by
-default), and prove it with `scripts/compare-databases.sh` (D-95). `ENCRYPTION_KEY` is **not** in the
-backup, by design: keep it separately.
+Back up with `scripts/backup.sh`; restore with `scripts/restore.sh <dir>`, which by default restores
+into a **new** database and a **new** bucket (`purlay_restore`, `<S3_BUCKET>-restore`) and touches
+nothing live; prove it with `scripts/compare-databases.sh` (D-95). To recover over the live
+database, stop the API and run `scripts/restore.sh <dir> --database purlay --replace --bucket live`.
+
+**Who can read a backup:** only the user who ran `backup.sh` (directory `0700`, files `0600`,
+whatever the umask). It holds every message and every e-mail address in the clear, so where it is
+copied, and whether it is encrypted there, is the operator's decision. `ENCRYPTION_KEY` is **not** in
+the backup, by design: keep it separately.
 
 **Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
 intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and
