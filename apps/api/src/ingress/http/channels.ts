@@ -12,6 +12,7 @@ import { CreateChannelRequest, type Channel } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById } from '../../platform/channels';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { atomicallyOn } from '../../platform/transactions';
 import {
   channelIn,
   channelsVisibleIn,
@@ -47,7 +48,9 @@ export const createWorkspaceChannel = async (
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(CreateChannelRequest, body);
-  return await createChannel(database, clock, context, input);
+  return await atomicallyOn(database)(
+    async (transaction) => await createChannel(transaction, clock, context, input),
+  );
 };
 
 export const readChannel = async (

@@ -18,6 +18,7 @@ import type { Executor } from '@purlay/db';
 import type { Config } from '../../platform/config';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
+import { atomicallyOn } from '../../platform/transactions';
 import { authorizeUrl, type GitHubClient } from '../../modules/auth/github';
 import { resolveIdentity } from '../../modules/auth/identity';
 import type { Logger } from '../../platform/logging';
@@ -125,19 +126,35 @@ export const completeSignIn = async (
     github.emails(accessToken),
   ]);
 
-  const { userId, usernameCollision } = await resolveIdentity(database, clock, profile, emails);
+  // One boundary for the account, the open-join membership and the session: a
+  // failure on any of them leaves no half-made account to trip the next attempt.
+  const { userId, usernameCollision, session } = await atomicallyOn(database)(
+    async (transaction) => {
+      const identity = await resolveIdentity(transaction, clock, profile, emails);
+      if (config.WORKSPACE_OPEN_JOIN_SLUG !== undefined) {
+        // Every outcome is a success; which one it was is the boot notice's to explain (D-37).
+        await joinOpenWorkspace(
+          transaction,
+          clock,
+          config.WORKSPACE_OPEN_JOIN_SLUG,
+          identity.userId,
+        );
+      }
+      const issued = await issueSession(
+        transaction,
+        clock,
+        identity.userId,
+        config.SESSION_TTL_DAYS,
+        { userAgent: request.headers.get('user-agent') ?? undefined },
+      );
+      return { ...identity, session: issued };
+    },
+  );
   if (usernameCollision !== undefined) {
     // D-38: the account exists under another name than the one GitHub gave, and
     // somebody may need to know why.
     dependencies.log.warn('username taken; stored with a suffix', { userId, ...usernameCollision });
   }
-  if (config.WORKSPACE_OPEN_JOIN_SLUG !== undefined) {
-    // Every outcome is a success; which one it was is the boot notice's to explain (D-37).
-    await joinOpenWorkspace(database, clock, config.WORKSPACE_OPEN_JOIN_SLUG, userId);
-  }
-  const session = await issueSession(database, clock, userId, config.SESSION_TTL_DAYS, {
-    userAgent: request.headers.get('user-agent') ?? undefined,
-  });
 
   // The state is spent: a callback consumes it, so it cannot be replayed (#199).
   return { setCookie: [sessionCookie(session), clearedStateCookie()], location: config.APP_URL };

@@ -5,7 +5,11 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { messageId } from '@purlay/types';
-import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../ingress/http/testing';
+import {
+  aDatabaseThatMustNotBeTouched,
+  aRecordingLogger,
+  aTransactionThatMustNotBeTouched,
+} from '../ingress/http/testing';
 import { fixedClock } from '../platform/clock';
 import { withinRequest } from '../platform/logging';
 import { inProcessEventBus } from './bus';
@@ -29,7 +33,7 @@ describe('a frame that fails in a way nobody anticipated', () => {
             bus: inProcessEventBus(() => undefined),
             limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
             log,
-            atomically: async (body) => await body(database),
+            atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),
           },
           { socketId: 's1', userId: 'u1', sessionId: 'not-read', expiresAt: clock.now() },
           {

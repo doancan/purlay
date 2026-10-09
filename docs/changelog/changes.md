@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a request that writes twice writes both or neither
+
+- Creating a workspace, creating a channel and signing in each made several writes on the pool, so a
+  failure between them left an ownerless workspace (slug taken for good), a nameless channel, or an
+  account without a session. They now run in one transaction, and the services that write twice
+  accept only a `Transaction` — the pool no longer compiles (#232, D-77).
+- The test that proves it makes the second write fail on a cloned database and finds the first gone;
+  before the fix it found it still there.
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).

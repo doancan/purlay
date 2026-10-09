@@ -5,7 +5,7 @@
  * exactly what the route under test is allowed to use — and, more usefully,
  * supplies things that *object* if a route reaches for what it should not.
  */
-import type { Executor } from '@purlay/db';
+import type { Executor, Transaction } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import type { GitHubClient, GitHubEmail, GitHubProfile } from '../../modules/auth/github';
@@ -44,6 +44,13 @@ export const aDatabaseThatMustNotBeTouched = (): Executor =>
       },
     },
   ) as Executor;
+
+/**
+ * The same double, typed as the transaction `Atomically` hands its body. A test
+ * that stands in for the boundary needs one; it throws on any use all the same.
+ */
+export const aTransactionThatMustNotBeTouched = (): Transaction =>
+  aDatabaseThatMustNotBeTouched() as Transaction;
 
 export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   NODE_ENV: 'test',
