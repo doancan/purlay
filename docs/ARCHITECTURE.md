@@ -745,6 +745,43 @@ served from the API's origin, arrives with the prerendered shell (#141, #224).
 it is bounded, drops under a storm and can never throw into the caller
 (`apps/api/src/platform/error-tracking.ts`, D-96, D-44).
 
+**Upgrading and rolling back** (the one home of this runbook; `CONFIG.md` points here). Every step below
+was run, and the failure in the last-but-one paragraph was reproduced, not reasoned out.
+
+1. **Take a backup first, and keep it until the upgrade has proved itself.** `scripts/backup.sh`, then
+   check it the way a restore would: `scripts/restore.sh <dir>` into the default new database and bucket
+   and `scripts/compare-databases.sh purlay purlay_restore`. Write down the `PURLAY_IMAGE` that is running.
+2. **Upgrade by changing `PURLAY_IMAGE`** in `production.env` to the new digest (or commit tag) and running
+   `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait`. With
+   `MIGRATE_ON_START=true` the new API container migrates when it starts; the old one drains (D-72), so
+   clients reconnect rather than see an outage.
+3. **Expect `/health/ready` to answer 503 for as long as the migration takes** — measured, about 18 s for a
+   15 s migration with two replicas starting together. The proxy sends no traffic to a node that is not
+   ready, and `--wait` returns when the API reports healthy, which is when to look at the site. A migration
+   longer than the container's 30 s `start-period` shows the container as `unhealthy` while it runs; that is
+   a number to raise in the compose file for a big one, not a failure.
+4. **A migration that fails stops the node, loudly.** The API logs `migrating on start failed` with the
+   cause and exits 1; compose restarts it, and it fails the same way until someone acts. It does not serve
+   half a schema.
+5. **An older image against a newer schema does the same, by design.** Start the previous image on a
+   database that has since had a newer migration applied and it refuses: `corrupted migrations: previously
+   applied migration <name> is missing`, `migrating on start failed`, exit 1 — and, without
+   `MIGRATE_ON_START`, readiness stays 503 with the same reason. There is no down migration (D-86), so
+   **rolling back is restoring the backup taken in step 1**, not starting the old image.
+6. **To roll back:** stop the API (`docker compose … stop api`); restore the database alone —
+   `scripts/restore.sh <dir> --database purlay --replace --no-bucket` (`--no-bucket` because attachments
+   are only ever added and a schema migration does not touch them; the bucket is not empty, and a bucket
+   import refuses that); put the old image back in `production.env`; `up -d --wait`. The database that was
+   there is kept, renamed `purlay_before_restore_<time>`, until you drop it. Anything written after the
+   backup is not in the restored database — that is what a rollback costs, and why step 1 is first.
+7. **Key custody.** `ENCRYPTION_KEY` is in no backup, on purpose, and a restore onto a new server needs the
+   same one. Keep a copy somewhere other than the server and other than the backups (a password manager, a
+   sealed envelope). Lose it and the stored integration tokens (`github_integrations.access_token_encrypted`)
+   cannot be read: people are asked to link GitHub again, and nothing else is lost. Changing it on purpose
+   has the same consequence, and invalidates sign-ins in flight (the OAuth state is signed with a key derived
+   from it), so rotate it at a quiet hour and tell people. The database password and the storage secrets are
+   not custody problems: a rebuilt stack takes new ones from its `production.env`.
+
 **Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with
 a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` checks everything it can before it changes anything — the sums, that the dump
 reads back, the target database and bucket — restores into a staging database, checks that, and only
