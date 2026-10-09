@@ -22,6 +22,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   caller; a malformed DSN, or an `http://` one in production, refuses to start (#248, D-96, D-44).
 - Against a stand-in collector, one real 500 produced one envelope with the DSN set and none without.
 
+### Feature — 2026-10-09: a mutation runner that never touches the working tree
+
+- `bun run mutate` applies each mutation in `scripts/mutations.ts` to a copy of the repository, runs the
+  tests it names and reports caught, survived, stale or equivalent; it refuses to judge when the
+  unmutated tests already fail. Its own test shows a known survivor reported as survived and a known kill
+  as caught (#246, D-47).
+
 ### Fix — 2026-10-09: the integration suite no longer times out its own hooks
 
 - CI failed about every other run with "a beforeEach/afterEach hook timed out": the migrator test made

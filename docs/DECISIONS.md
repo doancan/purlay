@@ -1501,6 +1501,16 @@ signature.
 - **Pre-commit hooks as the authority.** Useful for speed, skippable by design. CI decides.
 - **A monorepo task runner.** Bun workspaces are the whole build orchestration (D-55).
 
+*Amended 2026-10-09 (#246): mutation testing was rejected as costing more than it bought, and the
+audit then ran 110 hand-written mutations and found 23 that no test noticed — among them the
+OAuth state's length check, which, removed, accepts an empty signature. A mutation tool with a
+generator is still the wrong size; a **list** of mutations is not. `scripts/mutations.ts` holds
+each as `{file, find, replace, tests}`, `bun run mutate` applies them one at a time to a copy of
+the repository (never the working tree) and reports caught or survived, a mutation whose `find`
+no longer occurs once is reported stale rather than skipped, and `scripts/mutate.test.ts` proves
+the runner tells a survivor from a kill. A new rule about behaviour a test could not see adds
+its mutation in the same change (`CONTRIBUTING.md` §5).*
+
 **The cost, stated:** roughly the first week produces no user-visible behaviour. That is the
 trade — and it is the trade this project has already made once, deliberately, by writing the
 specification before the code.

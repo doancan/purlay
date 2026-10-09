@@ -165,6 +165,12 @@ What belongs here is the discipline around them:
   first.
 - **Verify by running it.** Never claim something passes without the output in front of you, and
   CI is the only authority on whether it does.
+- **Coverage says a line ran, not that a test would notice if it were wrong.** `bun run mutate`
+  applies the hand-written mutations in `scripts/mutations.ts` (a guard removed, a limit raised, a
+  call moved) to a copy of the repository and reports which the named tests catch; it exits
+  non-zero on a survivor or on an entry that no longer applies. Add an entry for a guard whose
+  removal no existing test would fail on, and run it before touching the code it names. It needs
+  `DATABASE_URL` for the integration tests (D-47, amended).
 - **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
   budget regression is a defect, not a threshold to adjust.
 
