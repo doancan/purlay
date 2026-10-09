@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: the client generates ids against the server's clock
+
+- A laptop whose clock is 90 seconds slow was refused by D-33's window; one 10 seconds fast would have
+  pinned its messages above everyone's. The client now derives an offset from the first `PONG` and
+  generates against the corrected time (#21). Until that `PONG` arrives it uses the local clock,
+  and a send the server refuses surfaces as `failed` with a retry.
+
 ### Research — 2026-10-09: the image pipeline is already in the runtime
 
 - **`Bun.Image` makes thumbnails with nothing installed**, on macOS and in a Linux container, with

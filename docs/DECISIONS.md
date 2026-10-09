@@ -814,6 +814,15 @@ defined as "server clock, for drift correction only". The client derives an offs
 exists are rare — the handshake completes long before a person finishes typing — and a rejected
 frame surfaces as `failed` with retry, which is the path §5.3 already specifies.
 
+**Amended 2026-10-09 (#21): how the offset is measured.** The client takes the offset from the first
+`PONG`, as the paragraph above says, and places the server's `ts` at the **midpoint** of the round
+trip — the two directions are not measured separately, so the midpoint is the least biased guess. It
+is taken once and kept: a later sample would only move the clock mid-session, and a message already
+in the list was made against the earlier value. A `PONG` that arrives before its `PING` was sent is
+refused rather than averaged in. **Rejected — the lowest-latency of several samples:** more accurate
+by a few tens of milliseconds, against a window of 65 seconds; the accuracy buys nothing the window
+does not already forgive.
+
 **Rejected — generating ids on the server.** It removes the problem and the benefit together:
 D-8's entire payoff is that the optimistic row and the durable row share one id, so the message
 never moves in the list. Server ids bring back the temporary-id mapping table that D-8 deleted.
