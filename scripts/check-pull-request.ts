@@ -42,7 +42,7 @@ const UNMETERED = [
  * What each area label allows. A label not listed here — `infra`, `testing`,
  * `security` — is cross-cutting by nature and restricts nothing.
  */
-export const AREA_PATHS: Readonly<Record<string, readonly string[]>> = {
+const AREA_PATHS: Readonly<Record<string, readonly string[]>> = {
   web: ['apps/web/', 'packages/types/'],
   api: ['apps/api/', 'packages/types/', 'packages/db/'],
   realtime: ['apps/api/', 'packages/types/'],

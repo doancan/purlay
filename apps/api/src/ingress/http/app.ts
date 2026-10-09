@@ -99,8 +99,6 @@ export interface HttpApplication {
   readonly held: () => HeldByConnections;
 }
 
-export type { HeldByConnections };
-
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
 

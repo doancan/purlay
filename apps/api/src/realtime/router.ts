@@ -56,7 +56,7 @@ export interface RouterDependencies {
   readonly readReplay?: typeof missedIn;
 }
 
-export interface SocketGate {
+interface SocketGate {
   /** Live frames are kept, not written, until the hub's `reply` (subscribe before replay). */
   readonly hold: (socketId: string) => void;
   /** False once the connection has closed: nothing more may be subscribed for it. */

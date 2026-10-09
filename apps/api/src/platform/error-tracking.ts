@@ -69,7 +69,7 @@ export const parseDsn = (dsn: string): ParsedDsn => {
   };
 };
 
-export interface TrackedError {
+interface TrackedError {
   /** The log message: a constant, by the logger's own rule. */
   readonly message: string;
   /** Already cleaned. */
