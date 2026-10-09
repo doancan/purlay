@@ -1,0 +1,23 @@
+# Who is asked to review a change (#247).
+#
+# One maintainer today, so every line names the same account; the lines exist so
+# that the day a second maintainer joins, the sensitive paths can be given to
+# whoever owns them without a hunt through the tree. Branch protection does not
+# require a code-owner review (zero required approvals is a deliberate choice for
+# one maintainer, recorded in the supply-chain decision, #247); this file makes sure review is *requested*.
+# Later patterns win over earlier ones.
+
+*                       @doancan
+
+# What decides whether code can ship, and what it ships as.
+/.github/               @doancan
+/Dockerfile             @doancan
+/docker/                @doancan
+/docker-compose*.yml    @doancan
+/scripts/               @doancan
+/bun.lock               @doancan
+/SECURITY.md            @doancan
+
+# What decides who may see what.
+/apps/api/src/platform/tenancy.ts   @doancan
+/packages/db/migrations/            @doancan

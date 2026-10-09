@@ -119,6 +119,18 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   patched release at all — the advisory lists none. It is in `scripts/audit-allowlist.json` with the
   reason and an expiry; the gate fails on an expired entry and on an entry that matches nothing.
 
+### Chore — 2026-10-09: licences are checked, and the repository has a disclosure path
+
+- `bun run check:licenses` reads the installed dependency tree and fails on a licence that cannot
+  ship in an AGPL-3.0 distribution — an allow-list, so a licence nobody has heard of fails rather
+  than passes (243 packages today: MIT, Apache-2.0, BSD, ISC, MPL-2.0, Python-2.0, BlueOak). It is a
+  workflow of its own (#247).
+- Every workspace manifest now declares `AGPL-3.0-or-later`. That is what `NOTICE` grants ("version 3
+  ... or any later version"); `LICENSE` is the licence text and does not choose, and a test binds
+  the manifests to `NOTICE`.
+- `SECURITY.md` (private reporting, supported versions, response targets one maintainer can keep) and
+  `.github/CODEOWNERS`.
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
