@@ -264,10 +264,16 @@ CREATE UNIQUE INDEX idx_channels_unique_dm
     ON channels (workspace_id, dm_key)
     WHERE type = 'direct_message';
 
+-- Deliberately not ordered by last_message_at: every send writes that column, and a column
+-- in an index cannot be changed by a heap-only update. The sidebar sorts what this finds. Not
+-- partial, because it is also the index the foreign key to workspaces needs. (D-88)
 CREATE INDEX idx_channels_workspace
-    ON channels (workspace_id, last_message_at DESC NULLS LAST)
-    WHERE deleted_at IS NULL;
+    ON channels (workspace_id);
 ```
+
+`last_message_at` is only ever moved forward, and only by a send that is newer than the value it holds; a
+send that is not the newest writes nothing. It is the one column of this table that changes on the hot
+path, which is why it is in no index. (D-88)
 
 ### 5.2. `channel_members`
 
@@ -797,17 +803,18 @@ file that leaves its transaction runs statement by statement and must be safe to
 0005_messages.sql            messages + indexes
 0006_channel_members.sql     channel_members, incl. last_read_message_id FK
 0007_message_content_limit.sql   messages_content_length CHECK  (D-67)
-0008_engagement.sql          reactions, attachments, mentions, notifications
-0009_integrations.sql        github_integrations, link_previews
+0008_channel_activity_unindexed.sql   idx_channels_workspace without last_message_at  (D-88)
+0009_engagement.sql          reactions, attachments, mentions, notifications
+0010_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0010_administration.sql      audit_log, job_runs  (Phase 1)
+0011_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0011_github_feeds.sql`; Phase 2's magic links add `0012_email_auth.sql`.
+Phase 2 adds `0012_github_feeds.sql`; Phase 2's magic links add `0013_email_auth.sql`.
 
-Unapplied numbers have moved twice: up by one when the administration migration was inserted, and
-again when `0007_message_content_limit.sql` shipped in Phase 0. That is legal only because none of
+Unapplied numbers have moved three times: up by one when the administration migration was inserted,
+again when `0007_message_content_limit.sql` shipped in Phase 0, and again when `0008` shipped. That is legal only because none of
 them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

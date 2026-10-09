@@ -6,10 +6,20 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+<<<<<<< HEAD
 ### Fix — 2026-10-09: a socket frame that finds no database connection says so
 
 - A `MESSAGE_SEND` or `SUBSCRIBE` that waited out the pool was answered `INTERNAL`; it is now the
   `DATABASE_UNAVAILABLE` frame HTTP already used, so a client may retry it (D-87).
+=======
+### Fix — 2026-10-09: a send no longer rewrites the channel row's indexes
+
+- Every send updated `channels.last_message_at`, which was in `idx_channels_workspace`: of 2,000 sends, none
+  was a heap-only update and the indexes tripled. The column left the index (migration `0008`); the same
+  2,000 sends made 1,999 HOT updates and the indexes did not grow. The update is also monotonic now, and
+  skipped when the message is not the newest (#244, D-88).
+- A retried send announces the stored message again, on purpose, and a test says so.
+>>>>>>> 1197a56 (fix(messages): a send leaves the channel's indexes alone, and the update only moves forward)
 
 ### Fix — 2026-10-09: the connection pool fails fast and says what is wrong
 
