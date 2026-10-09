@@ -2552,6 +2552,62 @@ performs it does not exist yet. For a cloud this joins the data map D-28 promise
 
 **Reversibility:** free. Nothing is stored but the address, which can be nulled.
 
+### D-82. The client notices a dead socket, stops retrying a refusal, ignores what it does not know, and does not trust a cursor past an unfinished replay
+
+D-76 made reconnecting polite. Four ways the client still failed to come back, or came back wrong
+(#239).
+
+**Decided: a heartbeat, with any frame counting as proof of life.** After `PING_AFTER_IDLE_MS`
+(25 s) of silence the client sends `PING`; with no frame of any kind within `PONG_DEADLINE_MS` (15 s)
+it closes the socket and reconnects *without waiting for the `close` event* — a half-open socket's
+may be minutes away, and the late one is ignored by the generation. A busy connection is never
+pinged. The first `PING` leaves as the socket opens, and its `PONG` (matched by `refId`) feeds the
+server clock (D-33); a sample whose round trip is negative, because the local clock stepped back, is
+skipped and measured again at the next `PING`. The real clock is read in
+`apps/web/src/system-clock.ts` and nowhere else in the client.
+
+**Decided: refusal and outage are told apart by asking.** The browser hides a handshake's status, so a
+401 and a dead server both read as close code 1006. After `CHECK_SESSION_AFTER_FAILURES` (3)
+consecutive attempts that never reached `open`, the client calls an injected `checkSession()`
+(`GET /api/me`, written where the client is assembled) while the retry timer keeps running. `ended`
+means a 401 and only that; a network error, a 5xx or a rejected check means `unknown`, and retrying
+goes on — reading an outage as a sign-out would sign everyone out whenever the server restarts. An
+answer that arrives after the connection recovered, or after `stop`, is ignored. One check is in
+flight at a time.
+
+**Decided: an event the contract does not define is ignored, and still proves the peer is alive.**
+`parseServerMessage` replaces `parseServerFrame` with three outcomes: a frame, an `unknown` event
+(an object with a string `event` the contract lacks) and `malformed`. A known event with the wrong data
+stays malformed and ends the connection, so validation of what the client does understand is not
+weakened. Without this a rolling deploy that adds an event makes every older client loop
+close-and-reconnect.
+
+**Decided: the cursor is withheld while a replay's continuation is owed.** The cursor advances on any
+live frame, and that is unsafe in one case: a replay was one page, a live frame moves the cursor
+past the rest, and the socket drops again — the next `SUBSCRIBE` skips the gap silently. The
+connection records each channel's `nextCursor` from the `ACK` as pending and ignores live frames
+above it for the cursor (still delivering them) until the store calls `continuationDone(channelId,
+from)` with the cursor the continuation started from. A mismatching `from` is ignored, so an old
+continuation cannot release a newer replay's. Pages the store `observe`s meanwhile advance the
+cursor, being contiguous. Each connection discards what the last one owed.
+
+**Decided: `ended` is a state `start()` leaves.** Signing in again is how a session comes back, and
+the watched channels and cursors are still what to resume from. Entering `ended` forgets the failures,
+so the first retry after it is the shortest delay, not the cap earned by the last session.
+
+**Rejected — waiting for the browser's `close` event after a missed deadline:** that is the bug.
+**Rejected — a `PING` on a fixed interval regardless of traffic:** it spends frames, and rate-limit
+tokens (§5.5), on connections already proving themselves. **Rejected — ending on the first 1006:** a
+restart or a Wi-Fi change is a 1006. **Rejected — checking the session before the third failure:**
+every blip would cost a request. **Rejected — one global "unfinished replay" flag:** a hundred
+channels, one of them a page behind, would freeze every cursor. **Rejected — dropping live frames
+while a continuation is owed:** the user would see messages arrive late for no reason; only the
+cursor needs withholding. **Rejected — relaxing `parseServerFrame` to let unknown events through:**
+the same function would then let a known event with garbage data through as well.
+
+**Reversibility:** free for the numbers. The `parseServerMessage` rename is a contract change inside
+the monorepo, with one caller.
+
 ---
 
 ## Part D — Open, deliberately

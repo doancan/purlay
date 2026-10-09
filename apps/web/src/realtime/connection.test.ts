@@ -11,12 +11,19 @@ import {
   type ServerFrame,
 } from '@purlay/types';
 import { BACKOFF } from './backoff';
+import type { Clock } from './clock';
 import {
+  CHECK_SESSION_AFTER_FAILURES,
+  PING_AFTER_IDLE_MS,
+  PONG_DEADLINE_MS,
+  STABLE_AFTER_MS,
   createConnection,
   type Connection,
   type OpenSocket,
+  type SessionCheck,
   type SocketHandlers,
 } from './connection';
+import { createServerClock, type ServerClock } from './server-clock';
 
 const T0 = Date.parse('2026-10-09T12:00:00.000Z');
 const idAt = (offsetMs: number): string => messageId(new Date(T0 + offsetMs));
@@ -26,6 +33,9 @@ type SubscribeFrame = Extract<ClientFrame, { op: 'SUBSCRIBE' }>;
 
 const isSubscribe = (frame: unknown): frame is SubscribeFrame =>
   typeof frame === 'object' && frame !== null && 'op' in frame && frame.op === 'SUBSCRIBE';
+
+const isPing = (frame: unknown): frame is { id: string; op: 'PING' } =>
+  typeof frame === 'object' && frame !== null && 'op' in frame && frame.op === 'PING';
 
 interface FakeSocket {
   readonly handlers: SocketHandlers;
@@ -44,6 +54,14 @@ interface Harness {
   readonly last: () => FakeSocket;
   /** Fire the one timer that is waiting, and say how long it waited. */
   readonly fireNext: () => number;
+  /** Fire the live timer that waits `ms`. */
+  readonly fireWaiting: (ms: number) => void;
+  /** The local clock; `advance` moves it. */
+  readonly local: Clock & { advance: (ms: number) => void };
+  readonly serverClock: ServerClock;
+  /** One entry per `checkSession` call, in order; settle it to answer. */
+  readonly checks: { resolve: (check: SessionCheck) => void; reject: () => void }[];
+  readonly pings: (socket: FakeSocket) => { id: string; op: 'PING' }[];
 }
 
 const harness = (random = (): number => 0): Harness => {
@@ -52,6 +70,15 @@ const harness = (random = (): number => 0): Harness => {
   const frames: ServerFrame[] = [];
   const statuses: string[] = [];
   let counter = 0;
+  let localNow = T0;
+  const local = {
+    now: (): Date => new Date(localNow),
+    advance: (ms: number): void => {
+      localNow += ms;
+    },
+  };
+  const serverClock = createServerClock(local);
+  const checks: Harness['checks'] = [];
 
   const openSocket: OpenSocket = (_url, handlers) => {
     const socket: FakeSocket = { handlers, sent: [], closedByClient: false };
@@ -77,6 +104,17 @@ const harness = (random = (): number => 0): Harness => {
       };
     },
     random,
+    clock: local,
+    serverClock,
+    checkSession: () =>
+      new Promise<SessionCheck>((resolve, reject) => {
+        checks.push({
+          resolve,
+          reject: (): void => {
+            reject(new Error('offline'));
+          },
+        });
+      }),
     newId: () => idAt(counter++),
     onFrame: (frame) => {
       frames.push(frame);
@@ -106,7 +144,34 @@ const harness = (random = (): number => 0): Harness => {
     return timer.ms;
   };
 
-  return { connection, sockets, timers, frames, statuses, live, subscribes, last, fireNext };
+  const fireWaiting = (ms: number): void => {
+    const timer = live().find((candidate) => candidate.ms === ms);
+    if (timer === undefined) throw new Error(`no timer is waiting ${String(ms)} ms`);
+    timer.live = false;
+    timer.fn();
+  };
+  const pings = (socket: FakeSocket): { id: string; op: 'PING' }[] =>
+    socket.sent.flatMap((text) => {
+      const frame: unknown = JSON.parse(text);
+      return isPing(frame) ? [frame] : [];
+    });
+
+  return {
+    connection,
+    sockets,
+    timers,
+    frames,
+    statuses,
+    live,
+    subscribes,
+    last,
+    fireNext,
+    fireWaiting,
+    local,
+    serverClock,
+    checks,
+    pings,
+  };
 };
 
 const created = (channelId: string, id: string): string => {
@@ -228,6 +293,9 @@ describe('reconnecting', () => {
         return (): void => undefined;
       },
       random: () => 0,
+      clock: { now: (): Date => new Date(T0) },
+      serverClock: createServerClock({ now: (): Date => new Date(T0) }),
+      checkSession: () => Promise.resolve('active'),
       newId: () => idAt(0),
       onFrame: () => undefined,
     });
@@ -308,11 +376,11 @@ describe('replay by cursor', () => {
     expect(new Set(frames.map((frame) => frame.id)).size).toBe(2);
   });
 
-  test('nothing watched, nothing sent', () => {
+  test('nothing watched, nothing subscribed', () => {
     const h = harness();
     h.connection.start();
     h.last().handlers.opened();
-    expect(h.last().sent).toEqual([]);
+    expect(h.subscribes(h.last())).toEqual([]);
   });
 
   test('watching while open subscribes at once, and unwatching says so', () => {
@@ -374,7 +442,7 @@ describe('frames', () => {
     expect(h.connection.send(frame)).toBe(false);
     h.last().handlers.opened();
     expect(h.connection.send(frame)).toBe(true);
-    expect(JSON.parse(h.last().sent[0] ?? '{}')).toEqual(frame);
+    expect(JSON.parse(h.last().sent.at(-1) ?? '{}')).toEqual(frame);
   });
 
   test('status changes are reported once each, in order', () => {
@@ -384,5 +452,419 @@ describe('frames', () => {
     h.last().handlers.closed(1006);
     h.fireNext();
     expect(h.statuses).toEqual(['connecting', 'open', 'waiting', 'connecting']);
+  });
+});
+
+const pong = (refId: string | undefined, ts = T0): string =>
+  JSON.stringify(
+    refId === undefined ? { event: 'PONG', data: {}, ts } : { event: 'PONG', data: {}, ts, refId },
+  );
+
+/** Let a settled promise's continuation run. */
+const settle = async (): Promise<void> => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
+const openOne = (h: Harness): FakeSocket => {
+  h.connection.start();
+  h.last().handlers.opened();
+  return h.last();
+};
+
+const waits = (h: Harness): number[] => h.live().map((timer) => timer.ms);
+
+describe('the heartbeat', () => {
+  test('a PING leaves as soon as the socket opens, so the clock is measured early', () => {
+    const h = harness();
+    const socket = openOne(h);
+    expect(h.pings(socket)).toHaveLength(1);
+  });
+
+  test('silence past the deadline is a dead socket: closed, and reconnected without waiting for it', () => {
+    const h = harness();
+    const socket = openOne(h);
+    h.fireWaiting(PONG_DEADLINE_MS);
+    expect(socket.closedByClient).toBe(true);
+    expect(h.connection.status()).toBe('waiting');
+    expect(waits(h)).toEqual([BACKOFF.baseMs / 2]);
+
+    // A half-open socket may announce its close minutes later; that must change nothing.
+    socket.handlers.closed(1006);
+    expect(h.live()).toHaveLength(1);
+    h.fireNext();
+    expect(h.sockets).toHaveLength(2);
+  });
+
+  test('an answer inside the deadline keeps the socket, and the next PING waits for idleness', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(pong(h.pings(socket)[0]?.id));
+    expect(waits(h)).toEqual([STABLE_AFTER_MS, PING_AFTER_IDLE_MS]);
+
+    h.fireWaiting(PING_AFTER_IDLE_MS);
+    expect(h.pings(socket)).toHaveLength(2);
+    expect(waits(h)).toContain(PONG_DEADLINE_MS);
+  });
+
+  test('any frame at all is proof of life, not only a PONG', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(created(channel(1), idAt(1_000)));
+    expect(waits(h)).not.toContain(PONG_DEADLINE_MS);
+    expect(waits(h)).toContain(PING_AFTER_IDLE_MS);
+    expect(h.connection.status()).toBe('open');
+  });
+
+  test('an event this client does not know is also proof of life', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(JSON.stringify({ event: 'FROM_THE_FUTURE', data: {}, ts: T0 }));
+    expect(waits(h)).not.toContain(PONG_DEADLINE_MS);
+  });
+
+  test('a frame that is malformed is not proof of life', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message('garbage');
+    expect(waits(h)).toContain(PONG_DEADLINE_MS);
+  });
+
+  test('a dropped socket stops the heartbeat, and the next one starts its own', () => {
+    const h = harness();
+    const first = openOne(h);
+    first.handlers.closed(1006);
+    expect(waits(h)).toEqual([BACKOFF.baseMs / 2]);
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.pings(h.last())).toHaveLength(1);
+    expect(h.pings(first)).toHaveLength(1);
+  });
+
+  test('stop leaves no timer behind', () => {
+    const h = harness();
+    openOne(h);
+    h.connection.stop();
+    expect(h.live()).toHaveLength(0);
+  });
+
+  test('nothing is timed before the socket opens', () => {
+    const h = harness();
+    h.connection.start();
+    expect(h.live()).toHaveLength(0);
+  });
+});
+
+describe('the first PONG sets the server clock', () => {
+  test('its midpoint against the local clock becomes the offset', () => {
+    const h = harness();
+    const socket = openOne(h);
+    const ping = h.pings(socket)[0];
+    h.local.advance(200); // the round trip
+    socket.handlers.message(pong(ping?.id, T0 + 100 + 5_000));
+    expect(h.serverClock.corrected()).toBe(true);
+    expect(h.serverClock.now().getTime()).toBe(T0 + 200 + 5_000);
+  });
+
+  test('a PONG that answers no PING of ours is not a sample', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(pong(undefined, T0 + 9_000));
+    socket.handlers.message(pong(idAt(77_000), T0 + 9_000));
+    expect(h.serverClock.corrected()).toBe(false);
+  });
+
+  test('a local clock that ran backwards during the round trip is skipped, then measured again', () => {
+    const h = harness();
+    const socket = openOne(h);
+    h.local.advance(-1_000);
+    socket.handlers.message(pong(h.pings(socket)[0]?.id, T0));
+    expect(h.serverClock.corrected()).toBe(false);
+    expect(h.connection.status()).toBe('open');
+
+    h.fireWaiting(PING_AFTER_IDLE_MS);
+    h.local.advance(100);
+    socket.handlers.message(pong(h.pings(socket)[1]?.id, T0 + 3_000));
+    expect(h.serverClock.corrected()).toBe(true);
+  });
+
+  test('once corrected, a later PONG does not move it', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(pong(h.pings(socket)[0]?.id, T0 + 5_000));
+    const corrected = h.serverClock.now().getTime();
+    h.fireWaiting(PING_AFTER_IDLE_MS);
+    socket.handlers.message(pong(h.pings(socket)[1]?.id, T0 + 99_000));
+    expect(h.serverClock.now().getTime()).toBe(corrected);
+  });
+});
+
+describe('a refusal is not an outage', () => {
+  /** `times` handshakes in a row that never reached `open`. */
+  const failTimes = (h: Harness, times: number): void => {
+    h.connection.start();
+    for (let i = 0; i < times; i += 1) {
+      h.last().handlers.closed(1006);
+      if (i < times - 1) h.fireNext();
+    }
+  };
+
+  test('before enough failures, nobody is asked', () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES - 1);
+    expect(h.checks).toHaveLength(0);
+  });
+
+  test('after repeated failures that never reached open, the session is asked about', () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    expect(h.checks).toHaveLength(1);
+  });
+
+  test('a session that has ended stops the retrying', async () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    h.checks[0]?.resolve('ended');
+    await settle();
+    expect(h.connection.status()).toBe('ended');
+    expect(h.live()).toHaveLength(0);
+    expect(h.sockets).toHaveLength(CHECK_SESSION_AFTER_FAILURES);
+  });
+
+  test.each([
+    ['active', 'the session is fine, so this is an outage'],
+    ['unknown', 'the answer is a 5xx or a network error'],
+  ] as const)('%s: retrying goes on (%s)', async (answer) => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    h.checks[0]?.resolve(answer);
+    await settle();
+    expect(h.connection.status()).toBe('waiting');
+    expect(h.live()).toHaveLength(1);
+  });
+
+  test('a check that itself fails is an outage too', async () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    h.checks[0]?.reject();
+    await settle();
+    expect(h.connection.status()).toBe('waiting');
+    expect(h.live()).toHaveLength(1);
+  });
+
+  test('only one check is in flight at a time', () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES + 2);
+    expect(h.checks).toHaveLength(1);
+  });
+
+  test('having reached open once, the count starts over', () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES - 1);
+    h.fireNext();
+    h.last().handlers.opened();
+    h.last().handlers.closed(1006);
+    h.fireNext();
+    h.last().handlers.closed(1006);
+    expect(h.checks).toHaveLength(0);
+  });
+
+  test('an answer that arrives after the connection recovered is ignored', async () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    h.fireNext(); // the retry goes out while the check is still in flight
+    h.last().handlers.opened();
+    h.checks[0]?.resolve('ended');
+    await settle();
+    expect(h.connection.status()).toBe('open');
+  });
+
+  test('an answer that arrives after stop is ignored', async () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    h.connection.stop();
+    h.checks[0]?.resolve('ended');
+    await settle();
+    expect(h.connection.status()).toBe('idle');
+  });
+
+  test('once answered, a later failure asks again', async () => {
+    const h = harness();
+    failTimes(h, CHECK_SESSION_AFTER_FAILURES);
+    h.checks[0]?.resolve('active');
+    await settle();
+    h.fireNext();
+    h.last().handlers.closed(1006);
+    expect(h.checks).toHaveLength(2);
+  });
+});
+
+describe('an ended session', () => {
+  test('forgets its failures, and start works again from it', () => {
+    const h = harness();
+    h.connection.start();
+    for (let i = 0; i < 3; i += 1) {
+      h.last().handlers.closed(1006);
+      h.fireNext();
+    }
+    h.last().handlers.closed(CLOSE_CODES.SESSION_ENDED);
+    expect(h.connection.status()).toBe('ended');
+
+    h.connection.watch(channel(1));
+    h.connection.start();
+    expect(h.connection.status()).toBe('connecting');
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())).toHaveLength(1);
+
+    h.last().handlers.closed(1006);
+    expect(h.fireNext()).toBe(BACKOFF.baseMs / 2); // not 4 s: the old failures are gone
+  });
+
+  test('ended by a check, it too can be started again, with the count started over', async () => {
+    const h = harness();
+    h.connection.start();
+    for (let i = 0; i < CHECK_SESSION_AFTER_FAILURES; i += 1) {
+      h.last().handlers.closed(1006);
+      if (i < CHECK_SESSION_AFTER_FAILURES - 1) h.fireNext();
+    }
+    h.checks[0]?.resolve('ended');
+    await settle();
+    h.connection.start();
+    expect(h.connection.status()).toBe('connecting');
+    h.last().handlers.closed(1006);
+    expect(h.checks).toHaveLength(1);
+  });
+});
+
+describe('an event from a newer server', () => {
+  test('is ignored: not passed on, and the connection stays', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(JSON.stringify({ event: 'REACTION_ADDED', data: { x: 1 }, ts: T0 }));
+    expect(socket.closedByClient).toBe(false);
+    expect(h.frames).toEqual([]);
+    expect(h.connection.status()).toBe('open');
+  });
+
+  test('a known event with the wrong data still ends the connection', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(JSON.stringify({ event: 'ACK', data: { id: 5 }, ts: T0 }));
+    expect(socket.closedByClient).toBe(true);
+  });
+
+  test.each([
+    ['an object with no event', JSON.stringify({ data: {}, ts: T0 })],
+    ['a JSON array', '[]'],
+  ])('%s still ends the connection', (_name, text) => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(text);
+    expect(socket.closedByClient).toBe(true);
+  });
+});
+
+describe('the cursor and a replay that was one page', () => {
+  const subscribed = (channelId: string, nextCursor: string | null): string =>
+    JSON.stringify({ event: 'ACK', ts: T0, data: { channels: [{ channelId, nextCursor }] } });
+
+  test('a replay with more to come is reported as pending, with where to continue', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    const page = idAt(2_000);
+    socket.handlers.message(subscribed(channel(1), page));
+    expect([...h.connection.pendingContinuations()]).toEqual([[channel(1), page]]);
+  });
+
+  test('a replay that reached the present is not pending', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    socket.handlers.message(subscribed(channel(1), idAt(2_000)));
+    socket.handlers.message(subscribed(channel(1), null));
+    expect(h.connection.pendingContinuations().size).toBe(0);
+  });
+
+  test('while pending, a live frame beyond the page does not move the cursor', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    const page = idAt(2_000);
+    socket.handlers.message(subscribed(channel(1), page));
+    socket.handlers.message(created(channel(1), idAt(1_000)));
+    socket.handlers.message(created(channel(1), page));
+    socket.handlers.message(created(channel(1), idAt(9_000))); // live, past the gap
+
+    socket.handlers.closed(1006);
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())[0]?.payload.channels[0]?.afterMessageId).toBe(page);
+  });
+
+  test('the live frame is still delivered, only its place in the cursor is withheld', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    socket.handlers.message(subscribed(channel(1), idAt(2_000)));
+    socket.handlers.message(created(channel(1), idAt(9_000)));
+    expect(h.frames.filter((frame) => frame.event === 'MESSAGE_CREATED')).toHaveLength(1);
+  });
+
+  test('pages fetched over HTTP move the cursor, and finishing lets live frames count again', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    const page = idAt(2_000);
+    socket.handlers.message(subscribed(channel(1), page));
+
+    h.connection.observe(channel(1), idAt(5_000)); // the continuation, reaching the present
+    h.connection.continuationDone(channel(1), page);
+    expect(h.connection.pendingContinuations().size).toBe(0);
+
+    const live = idAt(9_000);
+    socket.handlers.message(created(channel(1), live));
+    socket.handlers.closed(1006);
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())[0]?.payload.channels[0]?.afterMessageId).toBe(live);
+  });
+
+  test('finishing a continuation that is not the current one changes nothing', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    const page = idAt(2_000);
+    socket.handlers.message(subscribed(channel(1), page));
+    h.connection.continuationDone(channel(1), idAt(1_000)); // an older replay's
+    expect(h.connection.pendingContinuations().get(channel(1))).toBe(page);
+  });
+
+  test('a new connection starts from what its own replay says, not the last one', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    socket.handlers.message(subscribed(channel(1), idAt(2_000)));
+    socket.handlers.closed(1006);
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.connection.pendingContinuations().size).toBe(0);
+
+    const live = idAt(9_000);
+    h.last().handlers.message(subscribed(channel(1), null));
+    h.last().handlers.message(created(channel(1), live));
+    h.last().handlers.closed(1006);
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())[0]?.payload.channels[0]?.afterMessageId).toBe(live);
+  });
+
+  test('a channel no longer watched has nothing pending', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    const socket = openOne(h);
+    socket.handlers.message(subscribed(channel(1), idAt(2_000)));
+    h.connection.unwatch(channel(1));
+    expect(h.connection.pendingContinuations().size).toBe(0);
   });
 });

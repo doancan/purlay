@@ -184,24 +184,51 @@ export const ServerFrame = Type.Union([
 export type ServerFrame = Static<typeof ServerFrame>;
 export type ServerEvent = ServerFrame['event'];
 
+/** What a text frame off the wire turned out to be. */
+export type ServerMessage =
+  | { readonly kind: 'frame'; readonly frame: ServerFrame }
+  /** An envelope with a string `event` that this client was not built to know. */
+  | { readonly kind: 'unknown'; readonly event: string }
+  | { readonly kind: 'malformed' };
+
+const KNOWN_SERVER_EVENTS: ReadonlySet<string> = new Set(
+  ServerFrame.anyOf.map((member) => member.properties.event.const),
+);
+
 /**
- * A frame off the wire, or `null` for anything that is not one.
+ * Classify a frame off the wire (D-82).
  *
  * The browser's trust boundary: a socket delivers text, and TypeScript's type for
- * it is a claim, not a check. `null` rather than a throw because a malformed
- * frame is the caller's decision — the client ends the connection and
- * reconnects, which a `try` around every read would bury. Never returns the
- * input's error detail: what a server frame failed to match is not something
- * to relay to a log that a stranger may read.
+ * it is a claim, not a check. Three outcomes rather than two, because a rolling
+ * deploy puts a server that sends an event the client does not know in front of
+ * clients built before it, and "I do not recognise this" must not look like "this
+ * is broken": the first is ignored, the second ends the connection.
+ *
+ * **Validation of an event the contract defines is not relaxed.** A known event
+ * whose data does not match is `malformed`. Only a name the contract does not
+ * define is `unknown`, and only when the rest of the envelope is an object with a
+ * string `event` — nothing else about an unknown event is read, so nothing about
+ * it can be trusted. Never returns the input's error detail: what a server frame
+ * failed to match is not something to relay to a log that a stranger may read.
  */
-export const parseServerFrame = (text: string): ServerFrame | null => {
+export const parseServerMessage = (text: string): ServerMessage => {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
-    return null;
+    return { kind: 'malformed' };
   }
-  return Value.Check(ServerFrame, value) ? value : null;
+  if (Value.Check(ServerFrame, value)) return { kind: 'frame', frame: value };
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'event' in value &&
+    typeof value.event === 'string' &&
+    !KNOWN_SERVER_EVENTS.has(value.event)
+  ) {
+    return { kind: 'unknown', event: value.event };
+  }
+  return { kind: 'malformed' };
 };
 
 /**

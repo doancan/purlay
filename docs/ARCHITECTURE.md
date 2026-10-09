@@ -254,6 +254,31 @@ it already holds by id. **The acknowledgement says where each channel's replay s
 `nextCursor` of `null` means it reached the present; anything else means it was one page, and the
 client continues over HTTP with `?after=` from there. (D-65)
 
+**The cursor advances on any live frame — which is safe only once that continuation is complete.**
+A replay that was one page ends at its `nextCursor`; everything between there and the present is
+still missing. If a live `MESSAGE_CREATED` then moved the cursor past the gap and the socket dropped
+again, the next `SUBSCRIBE` would resume from beyond it and the gap would be skipped for good, with
+nothing saying so. So the connection withholds a live frame's advance, for a channel, from the
+moment its `ACK` carries a `nextCursor` until the store reports the HTTP continuation has reached
+the present (`pendingContinuations`, `continuationDone`). The frame itself is still delivered; ids
+at or below `nextCursor` (the replayed page) still advance it, as do pages the store `observe`s
+while it continues, which are contiguous by construction. Each new connection discards what the
+last one owed, because its own replay answers afresh. The store's side of the contract: continue
+every pending channel from the `nextCursor`, `observe` each page, call `continuationDone` with the
+cursor it started from, and restart the continuation from the new `nextCursor` if the connection
+reconnects before it finishes. (D-82)
+
+**The connection checks that it is alive, and that it may retry.** While open it sends a `PING`
+after 25 s of silence and treats 15 s without *any* frame — a `PONG`, a message, an event it does
+not know — as a dead socket: it closes and reconnects without waiting for the operating system's
+own timeout, which for a half-open socket is minutes. The first `PONG` also measures the server's
+clock (D-33). A handshake the server refuses is indistinguishable in the browser from an outage, so
+after three consecutive attempts that never reached `open` the client asks the API whether the
+session still exists and stops on a 401; a network error or a 5xx keeps it retrying. An event the
+client does not know is ignored (a newer server is not a fault); a frame that is not JSON, or has
+no string `event`, or is a known event with the wrong data, ends the connection. After `ended`,
+`start()` connects again. (D-82)
+
 **A subscription is bounded, and costs the same whatever it names.** One frame names at most
 `SUBSCRIBE_MAX_CHANNELS`, each once. Every channel is authorised in one query before any is
 subscribed — one the caller cannot see refuses the frame, and nothing is left half-subscribed — and
