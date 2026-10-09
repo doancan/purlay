@@ -280,6 +280,34 @@ describe('integration: a membership that ends', () => {
     await bob.close();
   });
 
+  test('leaving one channel stops that channel and keeps the others on the same socket', async () => {
+    const room = await aRoom();
+    const second = (await (
+      await http('POST', `/api/workspaces/${room.workspaceId}/channels`, room.alice.cookie, {
+        name: 'random',
+      })
+    ).json()) as { id: string };
+    expect((await http('POST', `/api/channels/${second.id}/join`, room.bob.cookie)).ok).toBe(true);
+    const bob = await connect(room.bob.cookie);
+    await subscribe(bob, room.channelId);
+    await subscribe(bob, second.id);
+
+    await cloned.db
+      .deleteFrom('channel_members')
+      .where('channel_id', '=', room.channelId)
+      .where('user_id', '=', room.bob.userId)
+      .execute();
+    await publishAccessRevoked(publisher, clock, room.bob.userId, [room.channelId]);
+    await bob.until((frames) => frames.some((f) => f.event === 'ACCESS_REVOKED'), 'the notice');
+
+    await post(room.alice.cookie, room.channelId, 5);
+    const kept = await post(room.alice.cookie, second.id, 6);
+    await settle(bob);
+    // Only the channel Bob kept; the same socket, still open.
+    expect(created(bob.frames)).toEqual([kept]);
+    await bob.close();
+  });
+
   test('deleting a channel stops it for everyone watching it', async () => {
     const room = await aRoom();
     const alice = await connect(room.alice.cookie);
