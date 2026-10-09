@@ -17,7 +17,11 @@ export const requireSession = async (
   database: Executor,
   clock: Clock,
   request: Request,
-): Promise<{ readonly userId: string }> => {
-  const { userId } = await requireSessionFromCookie(database, clock, request.headers.get('cookie'));
-  return { userId };
+): Promise<{ readonly userId: string; readonly sessionId: string }> => {
+  const { userId, sessionId } = await requireSessionFromCookie(
+    database,
+    clock,
+    request.headers.get('cookie'),
+  );
+  return { userId, sessionId };
 };

@@ -2973,6 +2973,24 @@ would make the hub touch the database, which is the separation D-7 stands on.
 **Left:** `ACCESS_REVOKED` for a channel turning private is not published by anything yet; nothing
 makes a channel private in Phase 0–1's endpoints, and the event it needs is this one.
 
+**Amended 2026-10-09 (second-round attack): a send re-proves its session in the transaction that
+writes it.** A socket authenticates once and caches the identity; a sign-out racing a send let one
+write commit *after* `revoked_at` (found by attack: one write, zero frames reaching the closed
+socket). The guard query that runs per send cannot carry the session — it answers about the
+channel — so the send path adds one primary-key read of the session row, `FOR SHARE`, as the first
+statement of its transaction (`requireLiveSession`). Revocation updates that row, so it waits for the
+transaction holding the lock: **a write by a session commits before the session's revocation does,
+or is refused `UNAUTHENTICATED`; there is no third order.** Measured on a cloned database with real
+commits: a revocation held open while a send starts makes the send wait and then refuse, writing
+nothing (without the lock the same test commits the write); a send holding the session makes the
+revocation wait (it does not complete while the transaction is open). Cost: one indexed read per
+send, share locks being compatible with each other. Both doors use it — the socket's cached identity
+and the HTTP `POST /messages` — because they share `send()`. **Left, stated:** other HTTP writes
+(workspace, channel, join) resolve the session at the start of the request and are not locked, so
+their window is one request's duration; none writes into another member's view (a message is the
+only thing that reaches a room), and the cost of locking every write was not justified by a
+measurement. A socket frame other than a send only reads.
+
 **Reversibility:** one frame and one close behaviour; nothing is stored.
 
 **Amended 2026-10-09 (second-round audit): the contract is watched, and out-of-band SQL is not

@@ -11,6 +11,7 @@ import { SESSION_COOKIE } from '../platform/cookies';
 export interface SignedInUser extends TestUser {
   /** The `Cookie` header value a signed-in browser sends. */
   readonly cookie: string;
+  readonly sessionId: string;
 }
 
 export const aSignedInUser = async (
@@ -19,6 +20,6 @@ export const aSignedInUser = async (
   name: string,
 ): Promise<SignedInUser> => {
   const user = await aUserRow(executor, name);
-  const { token } = await issueSession(executor, clock, user.userId, 30);
-  return { ...user, cookie: `${SESSION_COOKIE}=${token}` };
+  const { token, sessionId } = await issueSession(executor, clock, user.userId, 30);
+  return { ...user, cookie: `${SESSION_COOKIE}=${token}`, sessionId };
 };

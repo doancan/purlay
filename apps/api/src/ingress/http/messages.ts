@@ -58,8 +58,8 @@ export const postMessage = async (
   body: unknown,
 ): Promise<Message> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId, sessionId } = await requireSession(database, clock, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SendMessageRequest, body);
-  return await send(dependencies, context, input);
+  return await send(dependencies, context, input, sessionId);
 };

@@ -27,6 +27,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   form cannot produce JSON" held for nothing. Any other body type is now `415`
   `UNSUPPORTED_MEDIA_TYPE`; requests with no body are unaffected (D-80, Part of #231).
 
+### Fix — 2026-10-09: a send cannot commit after its session was revoked
+
+- A sign-out racing a send let one write commit after `revoked_at`, because the socket's identity is
+  cached. The send now takes a share lock on the session row in its own transaction: the write
+  commits before the revocation or is refused (D-85, Part of #231).
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and

@@ -295,10 +295,13 @@ export const routeFrame = async (
 
         // Written, committed and published by the one send path (D-35); the ACK
         // comes after, so the sender is never ahead of the room.
-        const message = await send(dependencies, context, {
-          id: parsed.id,
-          content: parsed.payload.content,
-        });
+        const message = await send(
+          dependencies,
+          context,
+          { id: parsed.id, content: parsed.payload.content },
+          // The identity was cached at the upgrade; the write re-proves it (D-85).
+          identity.sessionId,
+        );
         return [frame({ event: 'ACK', data: { id: message.id } }, clock, parsed.id)];
       }
     }
