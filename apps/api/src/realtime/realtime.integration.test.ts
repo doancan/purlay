@@ -149,6 +149,7 @@ describe('integration: the frame router', () => {
         clock,
         bus,
         limiter,
+        userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         log: createLogger({ level: 'silent' }),
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
         // The production boundary: inside the harness's transaction it joins it.

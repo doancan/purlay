@@ -60,9 +60,13 @@ describe('integration: the hub’s expiry timer', () => {
       expect(timers.armed).toHaveLength(1);
       expect(timers.cleared).toEqual([]);
 
+      expect(hub.connectionsOf(alice.userId)).toBe(1);
+
       hub.closed('s');
       expect(timers.cleared).toEqual([1]);
       expect(hub.size()).toBe(0);
+      // Given back, and the entry with it: a count per user ever seen is a leak.
+      expect(hub.connectionsOf(alice.userId)).toBe(0);
     });
   });
 

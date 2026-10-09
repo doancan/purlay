@@ -2914,6 +2914,20 @@ direction, and the two want different diagnoses in a log.
 
 **Reversibility:** free. One constant and one close code.
 
+**Amended 2026-10-09 (second-round audit): the budget is the user's, and so is the number of sockets.** The
+per-connection bucket multiplied by the connections a user opened: one user with 100 sockets sent 20
+`MESSAGE_SEND` each, all 2,000 acknowledged in about eight seconds with no `RATE_LIMITED`, against HTTP's
+ten a second for the same person (D-81). `MESSAGE_SEND` is now also charged to a per-user bucket **shared
+with HTTP's write budget**, so a user's writes cost the same over either door and many sockets are one
+budget; the per-connection bucket still bounds every frame. A user may hold `SOCKET_CONNECTION_LIMITS.perUser`
+(20) sockets and a node `total` (2,000): over them the upgrade is refused before a socket is bound — `429
+RATE_LIMITED` for the user, `503` for the node. Upgrades that all passed that check at once are held to the
+cap when they bind, by closing the excess with `TOO_BUSY`. A socket that stops reading costs up to 4 MB before
+it is closed (D-70), so the node-wide cap is also a memory bound. **Provisional (O-4):** unmeasured, as every
+number in this family. **Rejected — one bucket per user in place of the per-connection one:** it would make a
+runaway tab starve the user's other tabs of pings and subscriptions. **Rejected — counting sockets in the
+database:** the hub already knows, and a query per upgrade is a read on the door.
+
 ---
 
 ### D-85. A change that removes visibility is a bus event: a membership is unsubscribed, a session or an account is closed

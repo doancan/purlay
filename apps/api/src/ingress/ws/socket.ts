@@ -22,9 +22,15 @@ import { withinRequest, type Logger } from '../../platform/logging';
 import { atomicallyOn, type Atomically } from '../../platform/transactions';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub } from '../../realtime/hub';
-import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
+import {
+  inProcessRateLimiter,
+  SOCKET_CONNECTION_LIMITS,
+  SOCKET_FRAME_BUDGET,
+  type RateLimiter,
+} from '../../realtime/rate-limiter';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
+import { AppError } from '../../platform/errors';
 import { refusalFor } from '../http/errors';
 
 export interface SocketDependencies {
@@ -33,6 +39,15 @@ export interface SocketDependencies {
   readonly clock: Clock;
   readonly log: Logger;
   readonly backplane?: Backplane | undefined;
+  /** The per-user write bucket, shared with HTTP's. */
+  readonly userWrites: RateLimiter;
+  /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
+  readonly connectionLimits?: ConnectionLimits | undefined;
+}
+
+export interface ConnectionLimits {
+  readonly perUser: number;
+  readonly total: number;
 }
 
 /** What the lifecycle reads of the framework's socket. */
@@ -95,6 +110,7 @@ const outboundBufferOf = (raw: object): (() => number) => {
 
 export const createSocketLifecycle = (dependencies: SocketDependencies): SocketLifecycle => {
   const { log, database, clock } = dependencies;
+  const limits = dependencies.connectionLimits ?? SOCKET_CONNECTION_LIMITS;
   const hub = createSocketHub(database, clock, {
     log,
     // Called from `hub.deliver`, which only runs after `bus` exists.
@@ -114,7 +130,25 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
 
     admit: async (request): Promise<UpgradeRefusal | undefined> => {
       try {
-        await admitSocket({ database, clock, appUrl: dependencies.config.APP_URL }, request);
+        const { userId } = await admitSocket(
+          { database, clock, appUrl: dependencies.config.APP_URL },
+          request,
+        );
+        // Before the socket is bound, so a refusal is a real status. Counts what is
+        // open now; sockets still opening are counted again when they are bound
+        // (`open`), which is what makes the cap hold under a burst of upgrades.
+        if (hub.size() >= limits.total) {
+          throw new AppError({
+            code: 'DATABASE_UNAVAILABLE',
+            message: 'The service is busy. Try again shortly.',
+          });
+        }
+        if (hub.connectionsOf(userId) >= limits.perUser) {
+          throw new AppError({
+            code: 'RATE_LIMITED',
+            message: 'Too many connections are open for this account.',
+          });
+        }
         return undefined;
       } catch (error) {
         return refusalFor('UPGRADE', error, []);
@@ -135,6 +169,14 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
         },
         socket.data.request,
       );
+      // The upgrade checks what is open; a burst of upgrades all pass that check
+      // before any is counted, so the cap is enforced again here, on the count
+      // that includes this connection.
+      if (identity !== undefined && hub.connectionsOf(identity.userId) > limits.perUser) {
+        log.warn('socket refused: too many open for this account', { socketId: socket.id });
+        socket.close(CLOSE_CODES.TOO_BUSY, 'too-many-connections');
+        return;
+      }
       // Where the end of this session will be announced, on whichever node.
       if (identity !== undefined) {
         bus.subscribe(sessionTopic(identity.sessionId), socket.id);
@@ -167,6 +209,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   clock,
                   bus,
                   limiter,
+                  userWrites: dependencies.userWrites,
                   log,
                   // The real boundary. D-35: one transaction, published after it returns.
                   atomically,

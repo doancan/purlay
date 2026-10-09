@@ -306,6 +306,9 @@ neither. (D-83)
   implementation in Phase 0–2; the seam exists because an in-process limiter on N nodes grants
   N times the quota (D-25). **The number is not yet decided (O-4)** — 10 frames/second with a
   burst of 20 is what is enforced, as a provisional value, until dogfooding measures it.
+  **The budget is also the user's:** `MESSAGE_SEND` is charged to a per-user bucket shared with HTTP's
+  writes, and a user (20) and a node (2,000) may hold only so many sockets, refused at the upgrade with
+  `429` / `503` (D-84, amended; provisional, O-4).
 - HTTP has limits of its own behind the same seam: `/auth/*` per client address, mutations per signed-in
   user at the socket's budget, so `POST /messages` is no cheaper than a frame. A refusal is `429`
   with `Retry-After`. Provisional, as above (D-81).

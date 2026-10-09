@@ -149,6 +149,8 @@ export interface SocketHub {
   /** Resolves when no queued work is running — what a drain waits for before closing the pool. */
   settled: () => Promise<void>;
   readonly size: () => number;
+  /** How many open connections this user holds, whose identity has been resolved. */
+  readonly connectionsOf: (userId: string) => number;
 }
 
 /**
@@ -173,6 +175,8 @@ interface Held {
   /** The last queued frame's work; the next one starts when it settles. */
   tail: Promise<void>;
   queued: number;
+  /** Set once the identity is resolved, so the per-user count can be given back. */
+  userId?: string;
   /** Set when the hub closes the connection itself, so queued work stops at once. */
   ending: boolean;
 }
@@ -195,6 +199,7 @@ export const createSocketHub = (
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
+  const byUser = new Map<string, number>();
 
   const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
     const written = socket.connection.send(JSON.stringify(frame));
@@ -283,6 +288,8 @@ export const createSocketHub = (
         connection.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
         return undefined;
       }
+      entry.userId = identity.userId;
+      byUser.set(identity.userId, (byUser.get(identity.userId) ?? 0) + 1);
       entry.cancelExpiry = after(
         timers,
         identity.expiresAt.getTime() - clock.now().getTime(),
@@ -301,7 +308,14 @@ export const createSocketHub = (
       await (held.get(socketId)?.identity ?? Promise.resolve(undefined)),
 
     closed: (socketId: string): void => {
-      held.get(socketId)?.cancelExpiry?.();
+      const socket = held.get(socketId);
+      socket?.cancelExpiry?.();
+      if (socket?.userId !== undefined) {
+        const remaining = (byUser.get(socket.userId) ?? 1) - 1;
+        // An empty count is a leak that grows with every user who ever connected.
+        if (remaining <= 0) byUser.delete(socket.userId);
+        else byUser.set(socket.userId, remaining);
+      }
       held.delete(socketId);
     },
 
@@ -377,5 +391,7 @@ export const createSocketHub = (
     },
 
     size: (): number => held.size,
+
+    connectionsOf: (userId: string): number => byUser.get(userId) ?? 0,
   };
 };
