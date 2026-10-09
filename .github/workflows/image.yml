@@ -6,8 +6,8 @@
 # image is made of is decided inside the job (scripts/pr-touches.sh); when it does not,
 # the job's steps are skipped and it reports success in seconds.
 #
-# A pull request builds the image and runs it against the compose PostgreSQL —
-# `scripts/image-smoke.sh` — and pushes nothing. A push to main builds the image ONCE,
+# A pull request builds the image and runs it against a PostgreSQL of its own on a
+# private network — `scripts/image-smoke.sh` — and pushes nothing. A push to main builds the image ONCE,
 # pushes it by digest (untagged, with provenance and an SBOM attached as attestations),
 # runs the same smoke test against that exact digest, and only then gives it its tags.
 # What is tested is what is published: the digest is never rebuilt between the two.
@@ -126,9 +126,6 @@ jobs:
           provenance: mode=max
           sbom: true
           cache-from: type=gha
-
-      - name: start the database
-        run: docker compose up -d --wait postgres
 
       - name: the digest that was pushed starts read-only, answers liveness and readiness, and is not root
         env:
