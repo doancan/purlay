@@ -51,10 +51,10 @@ account for it. `message` is for humans and may change. (D-47)
 |---|---|
 | `400` | Validation failed, or the body is not JSON — `details` names the fields. Never the submitted value and never the schema: a typo must not come back as a description of the server's own rules (`docs/spikes/elysia.md`) |
 | `401` | No session, or the session is expired or revoked |
-| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a socket upgrade from another origin, a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
+| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
-| `413` | Upload exceeds `attachment_size_limit` |
+| `413` | A JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame — refused by the server before it is read), or an upload over `attachment_size_limit` |
 | `429` | Rate limited |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
 | `503` | `/health/ready` only: this process should not receive traffic — not ready, or draining for shutdown |

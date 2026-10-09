@@ -28,6 +28,13 @@ import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
 import { clearedStateCookie } from './cookies';
+import {
+  JSON_BODY_MAX_BYTES,
+  crossSiteResponse,
+  inboundRequestId,
+  isCrossSiteMutation,
+  responseHeaders,
+} from './edge';
 import { refusalFor } from './errors';
 import {
   createMyWorkspace,
@@ -140,7 +147,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   // option of the same name is silently ignored — measured, a 100 KB frame reached
   // the handler with it set (`docs/spikes/elysia.md`). Over the cap, the server
   // drops the connection before any handler runs. (§5.5)
-  const app = new Elysia({ websocket: { maxPayloadLength: MAX_FRAME_BYTES } })
+  const edgeHeaders = responseHeaders(dependencies.config.APP_URL);
+  const app = new Elysia({
+    websocket: { maxPayloadLength: MAX_FRAME_BYTES },
+    // Refused by the server before the body is buffered or parsed (`edge.ts`).
+    serve: { maxRequestBodySize: JSON_BODY_MAX_BYTES },
+  })
     /**
      * One error handler for the whole surface, so a status is decided in exactly
      * one place. `set.status` rather than a thrown response: a second way to
@@ -151,10 +163,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      * back as `x-request-id`, and which every line written while serving it
      * carries too, however deep (D-71).
      */
-    .onRequest(({ set }) => {
-      const requestId = crypto.randomUUID();
+    .onRequest(({ request, set }) => {
+      // An id from the edge is kept when well-formed, as a label only (#234).
+      const requestId = inboundRequestId(request.headers);
       enterRequest({ requestId, startedAt: performance.now() });
-      set.headers['x-request-id'] = requestId;
+      const headers = { ...edgeHeaders, 'x-request-id': requestId };
+      Object.assign(set.headers, headers);
+      // Before the body is read or a session looked up (D-39 item 2).
+      if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
+        return crossSiteResponse(headers);
+      }
+      return undefined;
     })
     .onError(({ code, error, set, path }) => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
