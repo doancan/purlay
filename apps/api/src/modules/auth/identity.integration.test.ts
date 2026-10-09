@@ -193,4 +193,106 @@ describe('integration: GitHub identity', () => {
       expect(again.usernameCollision).toBeUndefined();
     });
   });
+
+  /**
+   * `users.username` is VARCHAR(39), GitHub's own limit, so a login that fills it
+   * cannot take a `-1` suffix without overflowing — and a login one longer than
+   * the limit must not be able to fail a sign-in either. Both raised 22001 and the
+   * person was told the server broke (#233).
+   */
+  describe('a login at the edge of the column', () => {
+    const THIRTY_NINE = 'a'.repeat(39);
+
+    test('a 39-character login that is taken is shortened to fit its suffix', async () => {
+      await withRollback(async (db) => {
+        await resolveIdentity(
+          db,
+          clock,
+          account({ id: 1, login: THIRTY_NINE }),
+          verified('one@example.test'),
+        );
+        const second = await resolveIdentity(
+          db,
+          clock,
+          account({ id: 2, login: THIRTY_NINE }),
+          verified('two@example.test'),
+        );
+
+        const row = await db
+          .selectFrom('users')
+          .select('username')
+          .where('id', '=', second.userId)
+          .executeTakeFirstOrThrow();
+        expect(row.username).toBe(`${'a'.repeat(37)}-1`);
+        expect(row.username).toHaveLength(39);
+        expect(second.usernameCollision).toEqual({ wanted: THIRTY_NINE, stored: row.username });
+      });
+    });
+
+    test('a 40-character login is truncated, never refused', async () => {
+      await withRollback(async (db) => {
+        const { userId } = await resolveIdentity(
+          db,
+          clock,
+          account({ id: 3, login: 'b'.repeat(40) }),
+          verified('long@example.test'),
+        );
+        const row = await db
+          .selectFrom('users')
+          .select('username')
+          .where('id', '=', userId)
+          .executeTakeFirstOrThrow();
+        expect(row.username).toBe('b'.repeat(39));
+      });
+    });
+
+    test('truncating onto a name that is taken still ends in a free one', async () => {
+      await withRollback(async (db) => {
+        await resolveIdentity(
+          db,
+          clock,
+          account({ id: 4, login: 'c'.repeat(39) }),
+          verified('c1@example.test'),
+        );
+        const { userId } = await resolveIdentity(
+          db,
+          clock,
+          account({ id: 5, login: 'c'.repeat(40) }),
+          verified('c2@example.test'),
+        );
+        const row = await db
+          .selectFrom('users')
+          .select('username')
+          .where('id', '=', userId)
+          .executeTakeFirstOrThrow();
+        expect(row.username).toBe(`${'c'.repeat(37)}-1`);
+      });
+    });
+
+    test('a refresh of an account whose login is 40 characters is not refused either', async () => {
+      await withRollback(async (db) => {
+        const profile = account({ id: 6, login: 'd'.repeat(40) });
+        const first = await resolveIdentity(db, clock, profile, verified('d@example.test'));
+        const again = await resolveIdentity(db, clock, profile, verified('d@example.test'));
+        expect(again.userId).toBe(first.userId);
+      });
+    });
+  });
+
+  test('a display name longer than the column is cut to fit, not refused', async () => {
+    await withRollback(async (db) => {
+      const { userId } = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 7, login: 'wordy', name: 'n'.repeat(300) }),
+        verified('wordy@example.test'),
+      );
+      const row = await db
+        .selectFrom('users')
+        .select('display_name')
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+      expect(row.display_name).toBe('n'.repeat(128));
+    });
+  });
 });

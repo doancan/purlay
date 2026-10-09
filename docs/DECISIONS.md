@@ -2405,6 +2405,38 @@ developer's own database keeps; a dropped clone leaves nothing.
 
 **Reversibility:** free. A type and a test.
 
+### D-78. A client's mistake is a 4xx whichever layer noticed it, and sign-in never fails on a long name
+
+Three requests a client can make answered `500` although nothing on the server was wrong (#233): a
+body that is not JSON (the framework's `PARSE`, which `refusalFor` did not know), two requests for
+one workspace slug or channel name at once (the existence check races; the index is the authority
+and nothing mapped its violation), and a sign-in whose GitHub login fills `VARCHAR(39)` and so cannot
+take a `-1` suffix, or whose display name passes 128 characters (`22001`).
+
+**Decided: `refusalFor` is the one place a failure becomes a response, and it now knows the
+database's.** `PARSE` is `400 VALIDATION_FAILED` with no echo of the body. A unique violation maps
+by **constraint name** to the code the contract already has — `workspaces_slug_key` to
+`WORKSPACE_SLUG_TAKEN`, `idx_channels_unique_name` to `CHANNEL_NAME_TAKEN`, `users_email_key` to
+`ACCOUNT_EMAIL_CONFLICT`, `messages_pkey` to `MESSAGE_ID_CONFLICT`. `22001` and `23514` are
+`VALIDATION_FAILED`. Nothing the driver says — message, detail, column, value — is passed on. A
+unique violation on an index not in the table stays `INTERNAL`: an unexpected collision is a defect
+to be logged, not a mistake to be explained.
+
+**Decided: sign-in truncates.** The login is shortened to leave room for its suffix, and the display
+name to 128 characters, counted as the database counts them. The value belongs to GitHub, so the
+only choices are to store a shortened one or to lock the person out of the product.
+
+**Rejected — catching `23505` in each service.** Every new unique index would need the same
+try/catch in a place that can forget it; the mapping table is one line per index and a test lists
+them. **Rejected — mapping on SQLSTATE alone:** it cannot choose between `WORKSPACE_SLUG_TAKEN` and
+`CHANNEL_NAME_TAKEN`. **Rejected — retrying the sign-in on a collision:** a name that is too long
+does not become shorter on the second attempt. **Left — a race between two first sign-ins of one
+GitHub account** (a double-clicked callback): it violates `users_github_id_key`, which maps to
+nothing and answers `500`; the contract has no code for it and the fix is a different mechanism
+(an upsert), not a mapping.
+
+**Reversibility:** free. A table and a function.
+
 ---
 
 ## Part D — Open, deliberately
