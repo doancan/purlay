@@ -190,10 +190,26 @@ refuses to start with a required one missing, and names it. Garage wants its own
 `S3_ACCESS_KEY_ID` is `GK` plus 24 hex digits (`echo GK$(openssl rand -hex 12)`) and
 `S3_SECRET_ACCESS_KEY` is 64 hex digits.
 
+`docker/production.env.example` is the file to start from: every required variable is in it, the
+secrets empty (so an unedited copy stops `docker compose` and names the first, instead of starting a stack
+with a default password), the optional ones commented with their defaults. A test keeps it and the
+compose file in step.
+
 ```
+cp docker/production.env.example production.env      # fill in the empty values; keep it private
 docker compose -f docker-compose.production.yml --env-file production.env up -d --wait
 scripts/production-init.sh            # once: the storage layout, bucket and key
 ```
+
+**Ports.** The proxy publishes 80 and 443 (and 443/udp for HTTP/3). `HTTP_PORT` and `HTTPS_PORT`
+(optional, defaults 80 and 443) move them on the host. The caveats are real: the HTTPS port is the same
+inside and outside the container, because Caddy listens on the port in its site address, which is
+`APP_URL`, so `HTTPS_PORT=8443` needs `APP_URL=https://host:8443`; and a certificate from a public CA is
+issued only if 80 and 443 can be reached from the internet, so moving them is for a host that already
+uses them, a deployment behind another proxy, or one with certificates of its own.
+
+**The proxy's access log** records the path and never the query string: an OAuth callback carries a
+one-time `code` and the signed `state` there, and a search carries what was searched for.
 
 `APP_URL` is also the proxy's site address, so the origin Caddy answers for and the one the API checks
 sockets against cannot differ; with a public name and ports 80 and 443 reachable, the certificate is
