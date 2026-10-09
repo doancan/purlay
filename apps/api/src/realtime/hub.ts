@@ -168,7 +168,7 @@ export const HELD_FRAMES_MAX = 1_000;
 
 interface Held {
   readonly connection: Connection;
-  readonly identity: Promise<SocketIdentity | undefined>;
+  identity: Promise<SocketIdentity | undefined>;
   cancelExpiry?: () => void;
   /** Present while a subscription is being replayed. */
   holding?: ServerFrame[] | undefined;
@@ -189,13 +189,22 @@ export interface HubOptions {
    * published it; the bus is not a dependency of the hub, so it is handed in.
    */
   readonly leave: (channelId: string, socketId: string) => void;
+  /**
+   * Called once a connection's identity is first read, **before** the session is read
+   * a second time to confirm it. The caller subscribes the connection to the topics
+   * its end is announced on. Subscribing after the only read leaves a window in which
+   * a sign-out is published to nobody and the connection stays open and authenticated
+   * (a send in that window was acknowledged and stored); with the confirming read
+   * after the subscription, a sign-out is either seen by the read or heard on the topic.
+   */
+  readonly listen: (identity: SocketIdentity) => void;
   readonly timers?: Timers;
 }
 
 export const createSocketHub = (
   database: Executor,
   clock: Clock,
-  { log, leave, timers = systemTimers }: HubOptions,
+  { log, leave, listen, timers = systemTimers }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
@@ -266,19 +275,29 @@ export const createSocketHub = (
 
   return {
     opened: async (socketId, connection, request): Promise<SocketIdentity | undefined> => {
-      // The promise is held, not its result, so two frames racing the first
-      // resolution share one read and one timer.
-      const pending = resolve(socketId, request);
       const entry: Held = {
         connection,
-        identity: pending,
+        identity: Promise.resolve(undefined),
         tail: Promise.resolve(),
         queued: 0,
         ending: false,
       };
       held.set(socketId, entry);
 
-      const identity = await pending;
+      // The promise is held, not its result, so two frames racing the resolution
+      // share its reads and its one timer.
+      entry.identity = (async (): Promise<SocketIdentity | undefined> => {
+        const first = await resolve(socketId, request);
+        // Closed, or no session: subscribe nothing for a connection that is gone.
+        if (first === undefined || held.get(socketId) !== entry) return undefined;
+        listen(first);
+        // Read again now that the end of this session would reach it: a sign-out
+        // before this read is seen here, one after it is heard on the topic.
+        const confirmed = await resolve(socketId, request);
+        return confirmed?.sessionId === first.sessionId ? first : undefined;
+      })();
+
+      const identity = await entry.identity;
       // Closed while its identity was being resolved: arm nothing for a
       // connection that is gone, or its timer and topic outlive it.
       if (held.get(socketId) !== entry) return undefined;
