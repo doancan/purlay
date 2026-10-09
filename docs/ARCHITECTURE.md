@@ -713,8 +713,9 @@ served from the API's origin, arrives with the prerendered shell (#141, #224).
 **Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with
 a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` verifies the sums and
 restores it into a new database (and an empty bucket), and `scripts/compare-databases.sh` proves the
-result is the same (D-95, D-44). What it does not give: point-in-time recovery, off-host copies,
-encryption.
+result is the same (D-95, D-44). `scripts/restore-rehearsal.sh` does all of it from nothing —
+including after destroying every volume — weekly in CI. What it does not give: point-in-time
+recovery, off-host copies, encryption.
 
 **The production stack.** `docker-compose.production.yml` runs the API, PostgreSQL, Garage and Caddy
 behind one origin with automatic TLS: only the proxy publishes ports, the API starts when its
