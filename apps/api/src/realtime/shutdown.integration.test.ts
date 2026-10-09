@@ -4,7 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
-import { CLOSE_CODES } from '@purlay/types';
+import { CLOSE_CODES, messageId } from '@purlay/types';
 import type { GitHubEmail } from '../modules/auth/github';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { aGitHubAccount, testConfig, testDependencies } from '../ingress/http/testing';
@@ -87,5 +87,58 @@ describe('integration: draining for shutdown', () => {
         () => 'refused',
       ),
     ).toBe('refused');
+  });
+
+  /**
+   * The pool closes right after the drain returns. A frame still being handled
+   * would then read from a pool pulled out from under it, so the drain waits for
+   * it — the frame's read here is held up by the database, not by a sleep in the
+   * code under test.
+   */
+  test('waits for a frame being handled, so the pool is not closed under it', async () => {
+    let slow = false;
+    let queryFinished = false;
+    const database = cloned.db.withPlugin({
+      transformQuery: (args) => args.node,
+      transformResult: async (args) => {
+        if (slow) {
+          await Bun.sleep(300);
+          queryFinished = true;
+        }
+        return args.result;
+      },
+    });
+    const app = createApp(
+      testDependencies({ database, clock, config: testConfig({ APP_URL: origin }) }),
+    );
+    const server = `http://localhost:${String(app.listen(0))}`;
+    const user = await aSignedInUser(cloned.db, clock, 'drain-frame');
+    const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
+      headers: { cookie: user.cookie, origin },
+    } as unknown as string[]);
+    await new Promise<void>((resolve) => {
+      socket.addEventListener('open', () => {
+        resolve();
+      });
+    });
+
+    slow = true;
+    socket.send(
+      JSON.stringify({
+        id: messageId(clock.now()),
+        op: 'SUBSCRIBE',
+        payload: {
+          channels: [{ channelId: '00000000-0000-4000-8000-000000000001', afterMessageId: null }],
+        },
+      }),
+    );
+    // Until the handler has reached the database, there is nothing in flight to wait for.
+    const deadline = Date.now() + 5_000;
+    while (app.held().connections === 0 && Date.now() < deadline) await Bun.sleep(5);
+    await Bun.sleep(100);
+    expect(queryFinished).toBe(false);
+
+    await app.drain();
+    expect(queryFinished).toBe(true);
   });
 });

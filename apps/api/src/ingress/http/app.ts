@@ -349,41 +349,45 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           log.info('socket opened', { socketId: socket.id, userId: identity.userId });
         }
       },
-      message: async (socket, raw) => {
-        const identity = await hub.identity(socket.id);
-        if (identity === undefined) {
-          // Its session ended before the frame could be answered; the hub has
-          // already announced that, or is about to. Nothing here may be served.
-          socket.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
-          return;
-        }
-        // Each frame is a request of its own: its own id on every line it writes.
-        await withinRequest(
-          { requestId: crypto.randomUUID(), startedAt: performance.now() },
-          async () => {
-            let replies: readonly ServerFrame[] = [];
-            try {
-              replies = await routeFrame(
-                {
-                  database: dependencies.database,
-                  clock: dependencies.clock,
-                  bus,
-                  limiter,
-                  log,
-                  // The real boundary. D-35: one transaction, published after it returns.
-                  atomically,
-                  socket: hub,
-                },
-                identity,
-                raw,
-              );
-            } finally {
-              // Through the hub, so a replay burst is held to the same mark as the
-              // bus's fan-out, and the live frames kept during a subscription follow.
-              hub.reply(socket.id, replies);
-            }
-          },
-        );
+      message: (socket, raw) => {
+        // In order, one at a time, per connection: the framework starts a handler
+        // per frame and does not wait for the last one.
+        hub.enqueue(socket.id, async () => {
+          const identity = await hub.identity(socket.id);
+          if (identity === undefined) {
+            // Its session ended before the frame could be answered; the hub has
+            // already announced that, or is about to. Nothing here may be served.
+            socket.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
+            return;
+          }
+          // Each frame is a request of its own: its own id on every line it writes.
+          await withinRequest(
+            { requestId: crypto.randomUUID(), startedAt: performance.now() },
+            async () => {
+              let replies: readonly ServerFrame[] = [];
+              try {
+                replies = await routeFrame(
+                  {
+                    database: dependencies.database,
+                    clock: dependencies.clock,
+                    bus,
+                    limiter,
+                    log,
+                    // The real boundary. D-35: one transaction, published after it returns.
+                    atomically,
+                    socket: hub,
+                  },
+                  identity,
+                  raw,
+                );
+              } finally {
+                // Through the hub, so a replay burst is held to the same mark as the
+                // bus's fan-out, and the live frames kept during a subscription follow.
+                hub.reply(socket.id, replies);
+              }
+            },
+          );
+        });
       },
       close: (socket, code) => {
         log.info('socket closed', { socketId: socket.id, code });
@@ -411,8 +415,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     drain: async (): Promise<void> => {
       draining = true;
       hub.closeAll(CLOSE_CODES.RESTARTING, 'restarting');
-      // Not closing active connections: a request in flight finishes.
-      await app.stop(false);
+      // Not closing active connections: a request in flight finishes, and so does a
+      // frame being handled — the pool closes after this returns, so a handler still
+      // reading it would fail on a connection that was pulled out from under it.
+      await Promise.all([app.stop(false), hub.settled()]);
     },
   };
 };

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a socket's frames are handled in order, and a drain waits for them
+
+- The framework started a handler per frame and did not wait for the last: a fast `UNSUBSCRIBE` was
+  overtaken by a slower `SUBSCRIBE` (reproduced: the client kept receiving), and a frame still reading
+  the database could meet a closed pool at shutdown. Frames now run one at a time behind a queue of 32;
+  a connection that fills it is closed with the new `TOO_BUSY` (1013) (#237, D-84).
+
 ### Fix — 2026-10-09: one socket's failure no longer costs the others a frame
 
 - The bus delivered in a bare loop: a send that threw stopped every later subscriber from receiving

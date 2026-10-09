@@ -121,8 +121,25 @@ export interface SocketHub {
   reply: (socketId: string, replies: readonly ServerFrame[]) => void;
   /** Whether the connection is still held: false once it has closed. */
   isOpen: (socketId: string) => boolean;
+  /**
+   * Runs one client frame's work after every earlier frame of this connection has
+   * finished. The framework starts handlers as frames arrive and does not wait for
+   * the last, so without this a slow `SUBSCRIBE` is overtaken by the `UNSUBSCRIBE`
+   * sent after it, and a continuation outlives the close that should have ended it.
+   * A queue past `FRAME_QUEUE_MAX` closes the connection; work still queued when it
+   * closes is dropped.
+   */
+  enqueue: (socketId: string, work: () => Promise<void>) => void;
+  /** Resolves when no queued work is running — what a drain waits for before closing the pool. */
+  settled: () => Promise<void>;
   readonly size: () => number;
 }
+
+/**
+ * How many frames of one connection may wait behind the one being handled. Above
+ * the rate limiter's burst, so a connection within its budget never meets it.
+ */
+export const FRAME_QUEUE_MAX = 32;
 
 /**
  * The most live frames kept for one connection while its subscription replays. A
@@ -137,6 +154,11 @@ interface Held {
   cancelExpiry?: () => void;
   /** Present while a subscription is being replayed. */
   holding?: ServerFrame[] | undefined;
+  /** The last queued frame's work; the next one starts when it settles. */
+  tail: Promise<void>;
+  queued: number;
+  /** Set when the hub closes the connection itself, so queued work stops at once. */
+  ending: boolean;
 }
 
 export interface HubOptions {
@@ -150,6 +172,7 @@ export const createSocketHub = (
   { log, timers = systemTimers }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
+  const running = new Set<Promise<void>>();
 
   const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
     const written = socket.connection.send(JSON.stringify(frame));
@@ -207,7 +230,13 @@ export const createSocketHub = (
       // The promise is held, not its result, so two frames racing the first
       // resolution share one read and one timer.
       const pending = resolve(socketId, request);
-      const entry: Held = { connection, identity: pending };
+      const entry: Held = {
+        connection,
+        identity: pending,
+        tail: Promise.resolve(),
+        queued: 0,
+        ending: false,
+      };
       held.set(socketId, entry);
 
       const identity = await pending;
@@ -274,6 +303,39 @@ export const createSocketHub = (
     },
 
     isOpen: (socketId: string): boolean => held.has(socketId),
+
+    enqueue: (socketId: string, work: () => Promise<void>): void => {
+      const socket = held.get(socketId);
+      if (socket === undefined || socket.ending) return;
+      if (socket.queued >= FRAME_QUEUE_MAX) {
+        log.warn('socket sent frames faster than they could be handled and was closed', {
+          socketId,
+        });
+        socket.ending = true;
+        socket.connection.close(CLOSE_CODES.TOO_BUSY, 'busy');
+        return;
+      }
+      socket.queued += 1;
+      const run: Promise<void> = socket.tail
+        .then(async () => {
+          // Closed while it waited its turn: nothing it would do can be answered.
+          if (held.get(socketId) !== socket || socket.ending) return;
+          await work();
+        })
+        .catch((error: unknown) => {
+          log.error('a frame handler failed', { socketId, err: error });
+        })
+        .finally(() => {
+          socket.queued -= 1;
+          running.delete(run);
+        });
+      socket.tail = run;
+      running.add(run);
+    },
+
+    settled: async (): Promise<void> => {
+      while (running.size > 0) await Promise.allSettled([...running]);
+    },
 
     size: (): number => held.size,
   };

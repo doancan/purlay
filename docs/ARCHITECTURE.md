@@ -308,6 +308,9 @@ neither. (D-83)
   cursor. Every frame to a socket — fan-out and replies alike — goes through that check. A replay is
   bounded in bytes as well as messages, below the mark, so a healthy reader is never closed by its
   own replay. (D-70)
+- **A connection's frames are handled one at a time, in the order they arrived**, behind a queue of
+  at most `FRAME_QUEUE_MAX`. A connection that fills it is closed with `CLOSE_CODES.TOO_BUSY` and
+  reconnects; a drain waits for the frame being handled before the pool closes. (D-84)
 
 ---
 
