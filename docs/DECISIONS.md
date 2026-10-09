@@ -1556,6 +1556,8 @@ Rejected: keeping test code in the figures (the overall percentage then describe
 the product), and a `*.testing.ts` naming convention alone (a directory is one rule to state and
 one glob to exclude).
 
+---
+
 ### D-48. Escape hatches are expensive and visible, not closed
 
 D-47 made the stated rules fail the build. It did not close the hatch that makes all of them
@@ -2968,6 +2970,24 @@ ready. A database that predates the checksum column has nothing to compare and i
 a process whose files had parted from its schema would pass readiness and fail on the first query that
 depended on the difference.
 
+*Amended 2026-10-09 — the lock is polled, not waited for:* with two processes starting on an empty database,
+one died with `deadlock detected` on every run (ten of ten in the test written for it). A blocking
+`pg_advisory_lock` is a statement, and a statement is a transaction to PostgreSQL while it waits;
+`CREATE INDEX CONCURRENTLY` (migration 0009) waits for every transaction that could see its table to end.
+The runner waited for the starter, the starter for the runner's lock, and PostgreSQL ended one. The
+earlier test of three starters had no concurrent index build and could not see it. The migrator now tries
+`pg_try_advisory_lock` and sleeps between attempts (25 ms, doubling to 500 ms, for at most 120 s, then an
+error that says another process held the lock). Between attempts the session is idle, which an index build
+has nothing to wait for. The lock is taken on the one session the run holds, is released on every path past
+acquiring it (a test fails a migration and then expects another starter to get the lock at once), and
+ends with the session if the process dies. Two `db:migrate` processes started together on a fresh database
+exit 0 five times in five, with all ten migrations applied once between them.
+**Rejected — a lock per migration:** the wait would still be a statement in a transaction, now repeated
+for every file. **Rejected — only a `lock_timeout`:** it turns the deadlock into a timeout error that
+exits one of two healthy starters, instead of making it wait its turn. **Rejected — running the build and
+the wait on separate connections without polling:** the waiting connection is the transaction the build
+waits for; only not being in a statement avoids it.
+
 ---
 
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
@@ -3047,6 +3067,8 @@ reclaimed the old versions on its own (1,999 of 2,000); a setting that was not n
 
 **Reversibility:** free. The old index is one `CREATE INDEX`.
 
+---
+
 ### D-89. Every foreign key has an index, and a test reads the catalogue to keep it so
 
 `SCHEMA.md` §1 said every workspace-scoped table has an indexed `workspace_id`, and `messages` did not (#241). On
@@ -3088,6 +3110,8 @@ predicate may be wrong already, and that is a decision for the thread feature, n
 nothing.
 
 **Reversibility:** free; each index is one statement either way.
+
+---
 
 ### D-90. Tenant integrity is a constraint where a constraint can say it
 
@@ -3139,6 +3163,55 @@ with the one that matters, and the default already skips an unset `parent_id`.
 
 **Reversibility:** each is one `DROP CONSTRAINT`. Once the keys exist, a writer that violates them fails, which is
 the point and is also what a bulk loader must be told.
+
+---
+
+### D-91. The supply chain is checked by the machine: pins, audit, scanning, licences
+
+The documents claimed every image and action was pinned; the workflow named `actions/checkout@v7`,
+a tag its owner can move to code that then runs with the repository's token (#247). The dependency
+tree carried five advisories (four high) that nothing reported, and nothing checked that a
+dependency's licence could ship inside an AGPL-3.0 distribution. Each of those is a rule that was
+true only while somebody remembered it.
+
+**Decided: each is a failing check.**
+
+- **Actions are pinned to a full commit SHA with a trailing `# vX.Y.Z` comment.**
+  `scripts/workflow-pins.test.ts` fails any `uses:` that is not 40 hex digits plus a version
+  comment, so it fails in the pull request. Dependabot's github-actions ecosystem stays on, so a
+  new SHA arrives as a reviewable bump instead of a silent tag move. The repository setting
+  `sha_pinning_required` is the second lock, applied by the maintainer, not by a pull request.
+- **`bun audit` blocks at high severity** (`scripts/audit-gate.ts`, run by `bun run audit:gate` in a
+  job of its own). A finding that cannot be fixed goes in `scripts/audit-allowlist.json` with an
+  advisory id, a reason and an **expiry date** no more than 180 days out; the gate fails on an
+  expired entry and on an entry that matches no finding, so an allowlist cannot become a place
+  findings are forgotten. It also runs weekly, because an advisory arrives without a commit. One
+  finding (`braces`, a development-time dependency with no patched release) is allowed this way
+  today.
+- **CodeQL scans JavaScript and TypeScript** on pull requests, on main and weekly, with read-only
+  permissions except the one write it needs to report. On a private repository without Advanced
+  Security it cannot upload results, so the job fails on any result in the SARIF itself.
+  `scripts/workflow-permissions.test.ts` holds every workflow's top-level token to read.
+- **A licence is checked against AGPL-3.0 distribution** (`scripts/licenses.ts`) over the installed
+  tree, as an **allow-list**: an unknown licence fails, and so does a package that declares none.
+  The workspace manifests state `AGPL-3.0-or-later` — what `NOTICE` grants ("version 3 ... or any
+  later version"); `LICENSE` is the licence text and does not choose, and a test binds the two.
+- **`SECURITY.md` and `CODEOWNERS`.** Reports go through GitHub's private vulnerability reporting
+  (a public-repository feature), and the response targets are the ones one maintainer can keep.
+  `CODEOWNERS` names the one maintainer so review is *requested* on every path. Branch protection
+  stays strict with `enforce_admins` and **zero required approvals** — deliberate for one
+  maintainer, since a required approval nobody else can give is a lock only the owner holds.
+  Repository settings (alerts, security updates, secret scanning, SHA-pinning required) are
+  applied by the maintainer, not by a pull request, and each is listed with its reversal.
+
+**Rejected: tag pins with Dependabot only.** It reports a moved tag never; it only proposes the next
+one. **Rejected: failing the build on any severity.** A moderate finding in a dev-time tool that has
+no fix would block every merge for something with no exploit path in the product; the threshold is
+a number in one file and moves down when the tree is clean. **Rejected: a third-party scanner
+service.** Another account, another token, and a dependency of the pipeline itself; `bun audit`
+and CodeQL are already in the platform we run on.
+
+**Reversibility:** free. All of it is workflow and script; nothing is stored.
 
 ---
 
