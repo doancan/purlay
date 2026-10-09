@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the database counts a message's length in the contract's unit
+
+- `messages_content_length` counted characters while the contract counts UTF-16 code units, so a writer
+  that is not a door could store sixteen thousand emoji — more than a frame can carry. `0011` counts
+  units; the limit a person sees is unchanged (D-67, amended).
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different
