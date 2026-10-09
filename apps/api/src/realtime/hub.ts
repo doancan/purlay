@@ -107,13 +107,36 @@ export interface SocketHub {
   closeAll: (code: number, reason: string) => void;
   /** What the bus delivers through. */
   deliver: (socketId: string, frame: ServerFrame) => void;
+  /**
+   * From now until `reply`, live frames for this connection are kept instead of
+   * written, so a subscription can be made **before** its replay is read without
+   * the live stream getting ahead of the acknowledgement (`ARCHITECTURE.md` §5.4).
+   */
+  hold: (socketId: string) => void;
+  /**
+   * Writes what a client frame is answered with, then the live frames kept since
+   * `hold` — minus any message the replay already carried, by id. Releases the
+   * hold whether or not there was one.
+   */
+  reply: (socketId: string, replies: readonly ServerFrame[]) => void;
+  /** Whether the connection is still held: false once it has closed. */
+  isOpen: (socketId: string) => boolean;
   readonly size: () => number;
 }
+
+/**
+ * The most live frames kept for one connection while its subscription replays. A
+ * replay is milliseconds; a channel that produces this many in that time is
+ * outrunning the connection, which is what a resync is for.
+ */
+export const HELD_FRAMES_MAX = 1_000;
 
 interface Held {
   readonly connection: Connection;
   readonly identity: Promise<SocketIdentity | undefined>;
   cancelExpiry?: () => void;
+  /** Present while a subscription is being replayed. */
+  holding?: ServerFrame[] | undefined;
 }
 
 export interface HubOptions {
@@ -128,12 +151,7 @@ export const createSocketHub = (
 ): SocketHub => {
   const held = new Map<string, Held>();
 
-  const deliver = (socketId: string, frame: ServerFrame): void => {
-    const socket = held.get(socketId);
-    // A frame for a connection that has gone is dropped, not queued. Delivery is
-    // best-effort by design: what a client missed it asks for on reconnect, by
-    // keyset (`ARCHITECTURE.md` §5.4).
-    if (socket === undefined) return;
+  const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
     const written = socket.connection.send(JSON.stringify(frame));
     if (frame.event === 'SESSION_ENDED') {
       socket.connection.close(CLOSE_CODES.SESSION_ENDED, frame.data.reason);
@@ -151,6 +169,26 @@ export const createSocketHub = (
       });
       socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
     }
+  };
+
+  const deliver = (socketId: string, frame: ServerFrame): void => {
+    const socket = held.get(socketId);
+    // A frame for a connection that has gone is dropped, not queued. Delivery is
+    // best-effort by design: what a client missed it asks for on reconnect, by
+    // keyset (`ARCHITECTURE.md` §5.4).
+    if (socket === undefined) return;
+    // The end of a session is never kept waiting behind a replay.
+    if (socket.holding !== undefined && frame.event !== 'SESSION_ENDED') {
+      if (socket.holding.length >= HELD_FRAMES_MAX) {
+        log.warn('socket fell behind during a replay and was closed to resync', { socketId });
+        socket.holding = undefined;
+        socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+        return;
+      }
+      socket.holding.push(frame);
+      return;
+    }
+    write(socketId, socket, frame);
   };
 
   const resolve = async (
@@ -209,6 +247,33 @@ export const createSocketHub = (
     },
 
     deliver,
+
+    hold: (socketId: string): void => {
+      const socket = held.get(socketId);
+      if (socket !== undefined) socket.holding = [];
+    },
+
+    reply: (socketId: string, replies: readonly ServerFrame[]): void => {
+      const socket = held.get(socketId);
+      if (socket === undefined) return;
+      const kept = socket.holding ?? [];
+      socket.holding = undefined;
+      const replayed = new Set<string>();
+      for (const reply of replies) {
+        if (reply.event === 'MESSAGE_CREATED') replayed.add(reply.data.id);
+        write(socketId, socket, reply);
+      }
+      // Live frames that arrived while the replay was read: a message committed
+      // after the subscription and before the read is in both, and is sent once.
+      for (const live of kept) {
+        if (live.event === 'MESSAGE_CREATED' && replayed.has(live.data.id)) continue;
+        // A write above may have closed the connection; stop writing to it.
+        if (!held.has(socketId)) return;
+        write(socketId, socket, live);
+      }
+    },
+
+    isOpen: (socketId: string): boolean => held.has(socketId),
 
     size: (): number => held.size,
   };

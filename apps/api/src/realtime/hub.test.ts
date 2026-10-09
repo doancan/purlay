@@ -11,6 +11,7 @@ import { createLogger } from '../platform/logging';
 import {
   after,
   createSocketHub,
+  HELD_FRAMES_MAX,
   MAX_TIMER_MS,
   OUTBOUND_HIGH_WATER_MARK,
   type Connection,
@@ -155,5 +156,72 @@ describe('a connection that falls behind (#197)', () => {
    */
   test('the mark exceeds the largest burst a healthy connection is sent', () => {
     expect(OUTBOUND_HIGH_WATER_MARK).toBeGreaterThan(REPLAY_BYTES_MAX + MAX_FRAME_BYTES);
+  });
+});
+
+describe('live frames held while a subscription replays', () => {
+  const rig = (): { hub: ReturnType<typeof createSocketHub>; events: string[] } => {
+    const hub = createSocketHub(
+      aDatabaseThatMustNotBeTouched(),
+      fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      { log: createLogger({ level: 'silent' }) },
+    );
+    const events: string[] = [];
+    void hub
+      .opened(
+        's',
+        {
+          send: (payload) =>
+            events.push(`send ${(JSON.parse(payload) as { event: string }).event}`),
+          buffered: () => 0,
+          close: (code) => events.push(`close ${String(code)}`),
+        },
+        new Request('https://purlay.test/ws'),
+      )
+      .catch(() => undefined);
+    return { hub, events };
+  };
+
+  test('nothing is written until the reply, which goes first', () => {
+    const { hub, events } = rig();
+    hub.hold('s');
+    hub.deliver('s', { event: 'PONG', data: {}, ts: 1 });
+    expect(events).toEqual([]);
+    hub.reply('s', [{ event: 'ACK', data: { channels: [] }, ts: 2 }]);
+    expect(events).toEqual(['send ACK', 'send PONG']);
+  });
+
+  test('after the reply, delivery is direct again', () => {
+    const { hub, events } = rig();
+    hub.hold('s');
+    hub.reply('s', []);
+    hub.deliver('s', { event: 'PONG', data: {}, ts: 1 });
+    expect(events).toEqual(['send PONG']);
+  });
+
+  test('the end of a session is not kept waiting', () => {
+    const { hub, events } = rig();
+    hub.hold('s');
+    hub.deliver('s', { event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: 1 });
+    expect(events).toEqual(['send SESSION_ENDED', `close ${String(CLOSE_CODES.SESSION_ENDED)}`]);
+  });
+
+  test('a connection outrun by its own replay is closed to resync, not grown without limit', () => {
+    const { hub, events } = rig();
+    hub.hold('s');
+    for (let i = 0; i <= HELD_FRAMES_MAX; i += 1) {
+      hub.deliver('s', { event: 'PONG', data: {}, ts: i });
+    }
+    expect(events).toEqual([`close ${String(CLOSE_CODES.RESYNC)}`]);
+  });
+
+  test('a closed connection keeps nothing', () => {
+    const { hub, events } = rig();
+    hub.hold('s');
+    hub.closed('s');
+    hub.deliver('s', { event: 'PONG', data: {}, ts: 1 });
+    hub.reply('s', [{ event: 'PONG', data: {}, ts: 2 }]);
+    expect(events).toEqual([]);
+    expect(hub.isOpen('s')).toBe(false);
   });
 });

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a subscription is made before its replay is read
+
+- A message committed between the replay read and the subscription was in neither, and the client's
+  cursor moved past it. The socket is now subscribed first, live frames are held until the replay is
+  written, and a message in both is sent once (#237, D-83). The bus also kept an empty entry for every
+  socket that unsubscribed; it no longer does.
+
 ### Fix — 2026-10-09: a client's mistake is never a 500
 
 - A body that is not JSON, a lost race for a workspace slug or channel name, and a GitHub login or

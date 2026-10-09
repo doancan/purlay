@@ -76,6 +76,20 @@ export interface RouterDependencies {
   /** Keyed by connection (§5.5). */
   readonly limiter: RateLimiter;
   readonly log: Logger;
+  /** What the router needs of the connection it is answering; the hub supplies it. */
+  readonly socket: SocketGate;
+  /**
+   * The replay read. A seam so a test can commit a message between the read and
+   * what follows it, deterministically; production passes nothing.
+   */
+  readonly readReplay?: typeof missedIn;
+}
+
+export interface SocketGate {
+  /** Live frames are kept, not written, until the hub's `reply` (subscribe before replay). */
+  readonly hold: (socketId: string) => void;
+  /** False once the connection has closed: nothing more may be subscribed for it. */
+  readonly isOpen: (socketId: string) => boolean;
 }
 
 export interface SocketIdentity {
@@ -231,40 +245,68 @@ export const routeFrame = async (
         // behind an error. One query, however many channels (#196).
         const contexts = await requireChannelsById(database, identity.userId, channelIds);
 
-        const replaying = contexts.flatMap((context, index) => {
-          const after = wanted[index]?.afterMessageId ?? null;
-          return after === null ? [] : [{ context, after: replayFloor(after) }];
-        });
-        const floors = new Map(replaying.map((entry) => [entry.context.channelId, entry.after]));
-        const replays = await missedIn(database, replaying, replayPerChannel(replaying.length));
+        // Gone while its channels were being authorised: subscribe nothing for a
+        // connection whose cleanup has already run, or its id outlives it.
+        if (!dependencies.socket.isOpen(identity.socketId)) return [];
 
-        const states: { channelId: string; nextCursor: string | null }[] = [];
-        const replayed: ServerFrame[] = [];
-        let bytes = 0;
+        // **Subscribed before the replay is read**, with live frames held until the
+        // acknowledgement and the replay are written. Read first, a message
+        // committed between the read and the subscription is in neither, and the
+        // client's cursor then moves past it for good.
+        dependencies.socket.hold(identity.socketId);
+        const fresh: string[] = [];
         for (const context of contexts) {
-          bus.subscribe(channelTopic(context.channelId), identity.socketId);
-          const replay = replays.get(context.channelId);
-          // Where this channel's replay continues if the byte budget stops it:
-          // after the last message sent, or from its start if none was.
-          let resumeFrom = floors.get(context.channelId) ?? null;
-          let cut = false;
-          for (const message of replay?.data ?? []) {
-            const created = frame('MESSAGE_CREATED', message, clock);
-            const size = Buffer.byteLength(JSON.stringify(created), 'utf8');
-            if (bytes + size > REPLAY_BYTES_MAX) {
-              cut = true;
-              break;
-            }
-            bytes += size;
-            replayed.push(created);
-            resumeFrom = message.id;
+          if (bus.subscribe(channelTopic(context.channelId), identity.socketId)) {
+            fresh.push(context.channelId);
           }
-          states.push({
-            channelId: context.channelId,
-            nextCursor: cut ? resumeFrom : (replay?.nextCursor ?? null),
-          });
         }
-        return [frame('ACK', { channels: states }, clock, parsed.id), ...replayed];
+
+        try {
+          const replaying = contexts.flatMap((context, index) => {
+            const after = wanted[index]?.afterMessageId ?? null;
+            return after === null ? [] : [{ context, after: replayFloor(after) }];
+          });
+          const floors = new Map(replaying.map((entry) => [entry.context.channelId, entry.after]));
+          const replays = await (dependencies.readReplay ?? missedIn)(
+            database,
+            replaying,
+            replayPerChannel(replaying.length),
+          );
+
+          const states: { channelId: string; nextCursor: string | null }[] = [];
+          const replayed: ServerFrame[] = [];
+          let bytes = 0;
+          for (const context of contexts) {
+            const replay = replays.get(context.channelId);
+            // Where this channel's replay continues if the byte budget stops it:
+            // after the last message sent, or from its start if none was.
+            let resumeFrom = floors.get(context.channelId) ?? null;
+            let cut = false;
+            for (const message of replay?.data ?? []) {
+              const created = frame('MESSAGE_CREATED', message, clock);
+              const size = Buffer.byteLength(JSON.stringify(created), 'utf8');
+              if (bytes + size > REPLAY_BYTES_MAX) {
+                cut = true;
+                break;
+              }
+              bytes += size;
+              replayed.push(created);
+              resumeFrom = message.id;
+            }
+            states.push({
+              channelId: context.channelId,
+              nextCursor: cut ? resumeFrom : (replay?.nextCursor ?? null),
+            });
+          }
+          return [frame('ACK', { channels: states }, clock, parsed.id), ...replayed];
+        } catch (error) {
+          // Nothing is left half-done behind an error: what this frame subscribed
+          // is undone, and what was held for it is released with the error.
+          for (const channelId of fresh) {
+            bus.unsubscribe(channelTopic(channelId), identity.socketId);
+          }
+          throw error;
+        }
       }
 
       case 'UNSUBSCRIBE': {

@@ -25,7 +25,8 @@ export type Deliver = (socketId: string, frame: ServerFrame) => void;
 
 export interface EventBus {
   readonly publish: (topic: Topic, frame: ServerFrame) => Promise<void>;
-  readonly subscribe: (topic: Topic, socketId: string) => void;
+  /** True when the socket was not already listening — what a failed frame has to undo. */
+  readonly subscribe: (topic: Topic, socketId: string) => boolean;
   readonly unsubscribe: (topic: Topic, socketId: string) => void;
   /** Everything this socket was listening to. Called once, when it closes. */
   readonly forget: (socketId: string) => void;

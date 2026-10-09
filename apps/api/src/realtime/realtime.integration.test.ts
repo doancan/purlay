@@ -149,6 +149,7 @@ describe('integration: the frame router', () => {
         bus,
         limiter,
         log: createLogger({ level: 'silent' }),
+        socket: { hold: () => undefined, isOpen: () => true },
         // The production boundary: inside the harness's transaction it joins it.
         atomically: atomicallyOn(db),
       },
