@@ -17,7 +17,7 @@ import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import { createApp } from './app';
 import { refusalFor } from './errors';
-import { testDependencies } from './testing';
+import { testDependencies } from '../../testing/doubles';
 
 const get = async (path: string): Promise<Response> =>
   await createApp(testDependencies()).handle(new Request(`http://localhost${path}`));

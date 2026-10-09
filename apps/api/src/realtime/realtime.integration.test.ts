@@ -17,7 +17,7 @@ import {
 import { AppError } from '../platform/errors';
 import { fixedClock } from '../platform/clock';
 import { createApp } from '../ingress/http/app';
-import { testDependencies } from '../ingress/http/testing';
+import { testDependencies } from '../testing/doubles';
 import { inProcessEventBus } from './bus';
 import { channelTopic } from '../platform/events';
 import { atomicallyOn } from '../platform/transactions';
@@ -25,7 +25,7 @@ import { createLogger } from '../platform/logging';
 import { REPLAY_BYTES_MAX, replayPerChannel, routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
-import { aSignedInUser, type SignedInUser } from '../ingress/http/fixtures';
+import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 
 afterAll(async () => {

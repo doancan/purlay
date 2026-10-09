@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ServerFrame } from '@purlay/types';
 import { inProcessEventBus } from './bus';
-import { aRecordingLogger } from '../ingress/http/testing';
+import { aRecordingLogger } from '../testing/doubles';
 import { createLogger } from '../platform/logging';
 import { channelTopic } from '../platform/events';
 

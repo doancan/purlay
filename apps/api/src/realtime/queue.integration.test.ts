@@ -9,8 +9,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { aSignedInUser } from '../ingress/http/fixtures';
-import { aRecordingLogger, testConfig, testDependencies } from '../ingress/http/testing';
+import { aSignedInUser } from '../testing/signed-in';
+import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import { FRAME_QUEUE_MAX } from './hub';
 

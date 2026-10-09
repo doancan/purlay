@@ -16,8 +16,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
 import { createApp } from './app';
-import { aSignedInUser } from './fixtures';
-import { NOW, aGitHubAccount, testDependencies } from './testing';
+import { aSignedInUser } from '../../testing/signed-in';
+import { NOW, aGitHubAccount, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
 

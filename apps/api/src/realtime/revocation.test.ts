@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
-import { aDatabaseThatMustNotBeTouched } from '../ingress/http/testing';
+import { aDatabaseThatMustNotBeTouched } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import {
   channelTopic,

@@ -20,10 +20,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor, type Ids } from './cross-tenant';
-import { NOW, testDependencies } from './testing';
+import { CROSS_TENANT, pathFor, type Ids } from '../../testing/cross-tenant';
+import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { aSignedInUser } from './fixtures';
+import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {

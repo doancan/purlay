@@ -1506,6 +1506,15 @@ transport type, and both doors need it — placing it in either door would have 
 import it, which is the cycle this removes. What stays in `ingress/http/auth.ts` is reading the
 request and writing `Set-Cookie` and `Location`.
 
+**Amended 2026-10-09 (#245): test scaffolding left the production tree.** The HTTP doubles
+(`testing.ts`), the signed-in-user fixture, the cross-tenant case table and the user rows sat in
+`ingress/http` and `src/testing` beside code that ships, counted toward coverage, and nothing
+stopped production code importing them. All four are now in `apps/api/src/testing/` — the
+directory `ARCHITECTURE.md` §4 already named as "never imported by code". The cross-tenant table
+read `docs/API.md` by a path relative to the working directory, so running the tests from anywhere
+but the repository root silently found no endpoints; it now resolves the document from its own
+location, and a test runs it from another directory.
+
 ### D-48. Escape hatches are expensive and visible, not closed
 
 D-47 made the stated rules fail the build. It did not close the hatch that makes all of them
@@ -2063,7 +2072,7 @@ was written to replace.
 
 **Decided: the list is the document's, and the build compares it.** Every `/api/` row in `API.md`
 that the application actually routes must appear in exactly one of two tables in
-`apps/api/src/ingress/http/cross-tenant.ts`: `CROSS_TENANT`, with the case that crosses it, or
+`apps/api/src/testing/cross-tenant.ts`: `CROSS_TENANT`, with the case that crosses it, or
 `UNSCOPED`, with the sentence saying why there is no tenant to cross. The check runs without a
 database, in `bun run verify`, so the omission is caught before the integration job.
 

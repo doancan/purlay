@@ -10,7 +10,7 @@
  *
  * Nine files carried a copy of this; it has one home now. Only the database is
  * known here, so a test in any layer may use it; the session cookie, an HTTP
- * concept, is added in `ingress/http/fixtures.ts`.
+ * concept, is added in `testing/signed-in.ts`.
  */
 import type { Executor } from '@purlay/db';
 

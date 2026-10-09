@@ -3,10 +3,10 @@
  * live session, carried the way a browser carries it.
  */
 import type { Executor } from '@purlay/db';
-import type { Clock } from '../../platform/clock';
-import { issueSession } from '../../modules/auth/sessions';
-import { aUserRow, type TestUser } from '../../testing/users';
-import { SESSION_COOKIE } from '../../platform/cookies';
+import type { Clock } from '../platform/clock';
+import { issueSession } from '../modules/auth/sessions';
+import { aUserRow, type TestUser } from './users';
+import { SESSION_COOKIE } from '../platform/cookies';
 
 export interface SignedInUser extends TestUser {
   /** The `Cookie` header value a signed-in browser sends. */

@@ -11,7 +11,7 @@ import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
 import { refusalFor } from './errors';
-import { testDependencies } from './testing';
+import { testDependencies } from '../../testing/doubles';
 
 /** Shaped like the driver's `DatabaseError`, which is all `refusalFor` may rely on. */
 const violation = (code: string, constraint?: string): Error =>

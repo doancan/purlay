@@ -14,8 +14,8 @@ import { CLOSE_CODES, messageId, type ServerFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { ServerFrame as ServerFrameSchema } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { aSignedInUser, type SignedInUser } from '../ingress/http/fixtures';
-import { testConfig, testDependencies } from '../ingress/http/testing';
+import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
+import { testConfig, testDependencies } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import {
   publishAccessRevoked,

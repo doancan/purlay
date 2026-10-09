@@ -11,7 +11,7 @@ import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
 import { SESSION_COOKIE, STATE_COOKIE } from '../../platform/cookies';
-import { NOW, aGitHubAccount, testConfig, testDependencies } from './testing';
+import { NOW, aGitHubAccount, testConfig, testDependencies } from '../../testing/doubles';
 import type { Config } from '../../platform/config';
 import { aUniqueSlug } from '../../testing/users';
 

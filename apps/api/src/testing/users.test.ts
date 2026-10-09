@@ -4,7 +4,7 @@
  * that names the column rather than the test.
  */
 import { describe, expect, test } from 'bun:test';
-import { aDatabaseThatMustNotBeTouched } from '../ingress/http/testing';
+import { aDatabaseThatMustNotBeTouched } from './doubles';
 import { aUniqueSlug, aUserRow } from './users';
 
 describe('test users', () => {

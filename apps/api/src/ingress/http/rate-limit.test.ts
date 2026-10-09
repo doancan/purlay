@@ -10,7 +10,12 @@ import { describe, expect, test } from 'bun:test';
 import { createApp } from './app';
 import { AUTH_BUDGET, WRITE_BUDGET, httpLimits, retryAfterSeconds } from './rate-limit';
 import { fixedClock } from '../../platform/clock';
-import { NOW, aDatabaseThatMustNotBeTouched, testConfig, testDependencies } from './testing';
+import {
+  NOW,
+  aDatabaseThatMustNotBeTouched,
+  testConfig,
+  testDependencies,
+} from '../../testing/doubles';
 
 const appWith = (trustProxy: boolean): ReturnType<typeof createApp> =>
   createApp(

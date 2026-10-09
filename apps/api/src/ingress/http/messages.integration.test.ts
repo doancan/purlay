@@ -10,9 +10,9 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { MESSAGE_ID_SKEW, messageId } from '@purlay/types';
 import { createApp } from './app';
-import { testDependencies } from './testing';
+import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { aSignedInUser, type SignedInUser } from './fixtures';
+import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {

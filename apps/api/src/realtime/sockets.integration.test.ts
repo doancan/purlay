@@ -31,11 +31,11 @@ import { createApp, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { REPLAY_BYTES_MAX } from './router';
 import { createConnection } from 'node:net';
-import { aRecordingLogger, testConfig, testDependencies } from '../ingress/http/testing';
+import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
-import { aSignedInUser } from '../ingress/http/fixtures';
+import { aSignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
