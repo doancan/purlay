@@ -2731,6 +2731,15 @@ mutation.* It would refuse every non-browser client for a threat that only exist
 *Rejected: a body limit per route in the handler,* which runs after the buffering it is meant to
 prevent. *Rejected: a larger limit "for headroom":* the frame is the bound the product already chose.
 
+**Amended 2026-10-09 (second-round attack): the JSON-only claim is now enforced.** D-39 item 2
+rests on every mutation being `application/json`, which a cross-site form cannot send — but nothing
+refused the types a form can: with neither `Origin` nor `Sec-Fetch-Site`, an
+`application/x-www-form-urlencoded` post created a workspace (`201`). A mutation whose body is not
+`application/json`, or has no content type, is now `415 UNSUPPORTED_MEDIA_TYPE`, at the edge, before
+a session is looked up or the body parsed. A request with no body at all (logout, join) is not
+affected; a form with no fields still carries its type and is refused. `415` joins the contract's
+statuses. *Rejected: also requiring `Origin`* — the same reasoning as above.
+
 **Reversibility:** free; nothing is stored.
 
 ---

@@ -21,6 +21,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - Out-of-band SQL revocation is documented as not ending open sockets until expiry or a restart. A
   command-line revoker is not provided: another process cannot reach the in-process bus.
 
+### Fix — 2026-10-09: a mutation's body must be JSON
+
+- A form post with no `Origin` and no `Sec-Fetch-Site` created a workspace, so D-39's "a cross-site
+  form cannot produce JSON" held for nothing. Any other body type is now `415`
+  `UNSUPPORTED_MEDIA_TYPE`; requests with no body are unaffected (D-80, Part of #231).
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and

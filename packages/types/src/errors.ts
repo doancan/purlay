@@ -12,7 +12,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503;
+export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 415 | 429 | 500 | 503;
 
 /**
  * `413` is in `API.md` §1's table and is **not** here: no code maps to it yet,
@@ -32,6 +32,8 @@ export const ErrorCode = Type.Union([
   // Validation
   Type.Literal('VALIDATION_FAILED'),
   Type.Literal('INVALID_MESSAGE_ID'),
+  /** A request body that is not `application/json`. Refused before it is read. (D-80) */
+  Type.Literal('UNSUPPORTED_MEDIA_TYPE'),
   // Authentication
   /**
    * Every reason a session does not resolve — absent, expired, revoked, or owned
@@ -95,6 +97,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   CHANNEL_NAME_TAKEN: 409,
   MESSAGE_ID_CONFLICT: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
+
+  UNSUPPORTED_MEDIA_TYPE: 415,
 
   RATE_LIMITED: 429,
 

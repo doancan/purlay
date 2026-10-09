@@ -55,6 +55,7 @@ account for it. `message` is for humans and may change. (D-47)
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
 | `413` | A JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame — refused by the server before it is read), or an upload over `attachment_size_limit` |
+| `415` | `UNSUPPORTED_MEDIA_TYPE` — a `POST`/`PUT`/`PATCH`/`DELETE` whose body is not `application/json` (a form, `text/plain`, or a body with no type). A request with no body at all, such as logout, is unaffected (D-80) |
 | `429` | Rate limited |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
 | `503` | This process should not receive traffic — `/health/ready` while not ready or draining for shutdown — or, from any endpoint, `DATABASE_UNAVAILABLE`: no database connection within 3 s, nothing was changed, retry shortly (D-87) |
