@@ -42,6 +42,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   close (D-82, #231). `ARCHITECTURE.md` §5.4 also states that every reconnect replays about 65 s of
   already-held messages, deliberately (D-65), and what that costs.
 
+### Fix — 2026-10-09: a user's sockets share one write budget, and the sockets are capped
+
+- One user opened 100 sockets and sent 20 messages on each: all 2,000 were acknowledged in eight seconds
+  with no `RATE_LIMITED`, against HTTP's ten a second for the same person. `MESSAGE_SEND` is now charged
+  to a per-user bucket shared with HTTP's writes, and a user may hold 20 sockets and a node 2,000, refused
+  at the upgrade (`429` / `503`) and enforced again as upgrades bind. Provisional numbers (D-84, O-4).
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different
