@@ -203,6 +203,8 @@ into a **new** database and a **new** bucket (`purlay_restore`, `<S3_BUCKET>-res
 nothing live; prove it with `scripts/compare-databases.sh` (D-95). To recover over the live
 database, stop the API and run `scripts/restore.sh <dir> --database purlay --replace --bucket live`. `--no-bucket` restores the database alone, which is what rolling back an upgrade needs (attachments are only ever added).
 
+**Upgrading, rolling back and keeping `ENCRYPTION_KEY`:** `ARCHITECTURE.md` §11, "Upgrading and rolling back".
+
 **Who can read a backup:** only the user who ran `backup.sh` (directory `0700`, files `0600`,
 whatever the umask). It holds every message and every e-mail address in the clear, so where it is
 copied, and whether it is encrypted there, is the operator's decision. `ENCRYPTION_KEY` is **not** in

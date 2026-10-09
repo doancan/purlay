@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-09: an upgrade and rollback runbook, and the failure it rests on shown
+
+- `ARCHITECTURE.md` §11 now says how to upgrade (backup first, change `PURLAY_IMAGE`, expect `/health/ready`
+  to be 503 for the length of the migration), what happens when it goes wrong (a failed migration, or an older
+  image against a newer schema, stops the node with `migrating on start failed` and exit 1 — reproduced),
+  how to roll back (restore the backup taken first, `restore.sh --no-bucket`), and what losing or changing
+  `ENCRYPTION_KEY` costs (#231).
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different
