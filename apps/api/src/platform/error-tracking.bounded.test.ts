@@ -218,6 +218,8 @@ describe('what a report says about the host', () => {
           stack: 'Error\n    at f (/Users/dev/purlay/apps/api/src/a.ts:1:2)',
         },
         file: '/home/alice/y.txt',
+        files: ['/home/alice/z.txt', 3, true, null],
+        nested: { list: ['/home/alice/w.txt'] },
       },
     });
     await tracker.flush();
