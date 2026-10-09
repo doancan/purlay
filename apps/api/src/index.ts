@@ -14,7 +14,7 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
-import { createErrorTracker, withErrorTracking } from './platform/error-tracking';
+import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
 import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openJoinNotice } from './modules/workspaces/open-join';
@@ -29,13 +29,13 @@ const errorTracker = createErrorTracker({
   dsn: config.ERROR_TRACKING_DSN,
   environment: config.NODE_ENV,
   clock: systemClock,
-  send: async (url, init) => {
-    const response = await fetch(url, init);
-    return { ok: response.ok };
-  },
+  send: fetchDelivery,
   // At `warn`: a failed report must not be reported in turn.
   onFailure: (reason) => {
     plainLog.warn('an error report was not delivered', { err: reason });
+  },
+  onDropped: (total) => {
+    plainLog.warn('error reports are being dropped; the collector is not keeping up', { total });
   },
 });
 const log = withErrorTracking(plainLog, errorTracker);

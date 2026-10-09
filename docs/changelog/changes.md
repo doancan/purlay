@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the error reporter cannot be held hostage, and does not name the host
+
+- A collector that accepted connections and never answered held all ten report slots for ever: 25 failing
+  requests gave ten deliveries and then silence until restart, with nothing logged, and SIGTERM ran to the
+  ten-second deadline. A report now gives up after five seconds, drops are logged at `warn` at most once a
+  minute, a redirect is not followed, and shutdown waits for the reporter two seconds at most (#231, D-96
+  amended). Run against a real never-answering collector: ten delivered, one drop notice, the next five
+  delivered after the timeout, SIGTERM answered in two seconds.
+- Stack traces in a report no longer contain absolute paths of the machine (home directories, the build
+  directory): relative to the working directory, to the package in `node_modules`, or the file name alone.
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and
