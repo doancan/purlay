@@ -1,6 +1,7 @@
 {
   "name": "purlay",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "packageManager": "bun@1.4.2",
   "workspaces": [
@@ -14,6 +15,7 @@
     "build:web": "bun run --cwd apps/web build",
     "audit:gate": "bun run scripts/audit.ts --today $(date -u +%F)",
     "check:branch": "./scripts/check-branch.sh",
+    "check:licenses": "bun run scripts/check-licenses.ts",
     "check:docs": "python3 scripts/check-docs.py",
     "check:pr": "bun run scripts/check-pr.ts",
     "config:example": "bun run apps/api/src/cli/write-env-example.ts",
