@@ -14,12 +14,31 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
+import { createErrorTracker, withErrorTracking } from './platform/error-tracking';
 import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openJoinNotice } from './modules/workspaces/open-join';
 
 const config = loadConfig(process.env);
-const log = createLogger({ level: config.LOG_LEVEL });
+const plainLog = createLogger({ level: config.LOG_LEVEL });
+
+// Off unless ERROR_TRACKING_DSN is set (D-96). A DSN that cannot be parsed refuses
+// to start, here, rather than failing quietly at the first error. Everything logged
+// at `error` below is also reported, cleaned the way the log is.
+const errorTracker = createErrorTracker({
+  dsn: config.ERROR_TRACKING_DSN,
+  environment: config.NODE_ENV,
+  clock: systemClock,
+  send: async (url, init) => {
+    const response = await fetch(url, init);
+    return { ok: response.ok };
+  },
+  // At `warn`: a failed report must not be reported in turn.
+  onFailure: (reason) => {
+    plainLog.warn('an error report was not delivered', { err: reason });
+  },
+});
+const log = withErrorTracking(plainLog, errorTracker);
 
 // Which workspace is open, said before anything else (D-37).
 log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
@@ -56,6 +75,8 @@ log.info('listening', { port: app.listen(config.PORT) });
 installShutdown({
   drain: app.drain,
   closeDatabase: async () => {
+    // Reports of the shutdown itself are still in flight.
+    await errorTracker.flush();
     await database.destroy();
   },
   log,

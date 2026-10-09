@@ -710,6 +710,11 @@ external scheduling is the cron nobody installed, and every run records its outc
 (`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job. The built client,
 served from the API's origin, arrives with the prerendered shell (#141, #224).
 
+**Error tracking.** Off unless `ERROR_TRACKING_DSN` is set. When it is, whatever the logger writes at
+`error` is also posted, cleaned as the log is, to a Sentry-compatible endpoint, with no vendor library;
+it is bounded, drops under a storm and can never throw into the caller
+(`apps/api/src/platform/error-tracking.ts`, D-96, D-44).
+
 **Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with
 a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` verifies the sums and
 restores it into a new database (and an empty bucket), and `scripts/compare-databases.sh` proves the

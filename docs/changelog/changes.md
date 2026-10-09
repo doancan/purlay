@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: errors can be reported, and by default are not
+
+- With `ERROR_TRACKING_DSN` set, whatever is logged at `error` is also posted to a Sentry-compatible
+  endpoint, cleaned exactly as the log is and carrying the request id; unset, nothing exists and
+  nothing leaves the process. No vendor library; bounded, drops under a storm, never throws into the
+  caller; a malformed DSN, or an `http://` one in production, refuses to start (#248, D-96, D-44).
+- Against a stand-in collector, one real 500 produced one envelope with the DSN set and none without.
+
 ### Feature — 2026-10-09: a backup that has been restored
 
 - A populated stack — 20 400 messages, awkward unicode, 44 objects up to 12 MiB — was backed up and

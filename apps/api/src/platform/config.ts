@@ -54,7 +54,7 @@ export const Environment = Type.Object({
   /** Production refuses a database connection without TLS unless this says the
    *  operator knows: a database on the same private network, say (#236). */
   DATABASE_ALLOW_PLAINTEXT: Type.Boolean({ default: false }),
-  /** A PEM file to trust instead of the system roots, for a private or managed CA (D-87). */
+  /** A PEM file to trust instead of the system roots, for a private or managed CA (D-92). */
   DATABASE_SSL_CA_FILE: Type.Optional(Type.String({ minLength: 1 })),
 
   /** Apply pending migrations when the process starts. Several nodes starting together
@@ -62,6 +62,10 @@ export const Environment = Type.Object({
    *  `dev:api` should not rewrite a database by being started. Optional rather than
    *  defaulted so the test configuration needs no new field. */
   MIGRATE_ON_START: Type.Optional(Type.Boolean()),
+
+  /** Where `error`-level lines are also reported, as a Sentry-compatible DSN. Unset
+   *  means off and nothing leaves the process; there is no default (D-44, D-96). */
+  ERROR_TRACKING_DSN: Type.Optional(Type.String({ minLength: 1 })),
 
   GITHUB_CLIENT_ID: Type.String({ minLength: 1 }),
   GITHUB_CLIENT_SECRET: Type.String({ minLength: 1 }),

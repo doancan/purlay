@@ -56,6 +56,8 @@ services:
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      # Off unless set; nothing is reported by default (D-44, D-96).
+      ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       WORKSPACE_OPEN_JOIN_SLUG: ${WORKSPACE_OPEN_JOIN_SLUG:-}
       # Object storage. Not read by the application yet (CONFIG.md); present so the
       # deployment already has the shape attachments will need (#53).

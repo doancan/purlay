@@ -55,6 +55,15 @@ describe('loading configuration', () => {
     expect(config.DATABASE_SSL).toBe(false);
   });
 
+  test('error tracking is off unless a DSN is given, and an empty one is the same as none', () => {
+    expect(loadConfig(valid).ERROR_TRACKING_DSN).toBeUndefined();
+    expect(loadConfig({ ...valid, ERROR_TRACKING_DSN: '' }).ERROR_TRACKING_DSN).toBeUndefined();
+    expect(
+      loadConfig({ ...valid, ERROR_TRACKING_DSN: 'https://k@errors.example.test/1' })
+        .ERROR_TRACKING_DSN,
+    ).toBe('https://k@errors.example.test/1');
+  });
+
   test('migrating on start is off unless asked for, and a bad value is refused', () => {
     expect(loadConfig(valid).MIGRATE_ON_START).toBeUndefined();
     expect(loadConfig({ ...valid, MIGRATE_ON_START: 'true' }).MIGRATE_ON_START).toBe(true);
@@ -63,7 +72,7 @@ describe('loading configuration', () => {
     );
   });
 
-  test('the migration CLI reads DATABASE_SSL exactly as the application does (D-86)', () => {
+  test('the migration CLI reads DATABASE_SSL exactly as the application does (D-91)', () => {
     for (const value of ['true', 'false', '1', '0', undefined]) {
       const environment = value === undefined ? {} : { DATABASE_SSL: value };
       expect(tlsFromEnvironment(environment).ssl).toBe(
@@ -73,7 +82,7 @@ describe('loading configuration', () => {
     expect(() => tlsFromEnvironment({ DATABASE_SSL: 'yes' })).toThrow('DATABASE_SSL must be');
   });
 
-  test('a CA file needs TLS, in the application and in the migration CLI alike (D-87)', () => {
+  test('a CA file needs TLS, in the application and in the migration CLI alike (D-92)', () => {
     const certificate = new URL('../../../../packages/db/src/client.ts', import.meta.url).pathname;
     const withCa = { DATABASE_SSL: 'true', DATABASE_SSL_CA_FILE: certificate };
     expect(loadConfig({ ...valid, ...withCa }).DATABASE_SSL_CA_FILE).toBe(certificate);

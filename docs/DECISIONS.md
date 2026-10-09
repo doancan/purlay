@@ -3377,6 +3377,47 @@ off-host copies, a production schedule, and the `ENCRYPTION_KEY`, which a backup
 
 ---
 
+### D-96. Error tracking is the logger's `error` lines, sent on if a DSN is set — no SDK, off by default
+
+D-44 specified error tracking for the cloud and it did not exist (#248). Left to grow, it would arrive
+as a vendor SDK, a second description of every error beside the log's, and a default someone forgot to
+turn off on a self-hosted instance.
+
+**Decided: the logger is the only seam.** `withErrorTracking` wraps it so that whatever is logged at
+`error` — a failed request, a failed socket frame, a failed shutdown — is also reported, and what is
+sent is the same value `clean` produced for the log: nothing on the never-logged list, at any depth, and
+the id of the request it happened in. There is no second place an error is described, so no second place
+a secret can leak from. A new `error` line anywhere is reported without being touched.
+
+**Off means absent.** With no `ERROR_TRACKING_DSN` the logger is returned as it came and no tracker
+exists; nothing leaves the process (D-44: no telemetry from a self-hosted deployment, so there is no
+default). A DSN that does not parse, or is not `https://` in production, **refuses to start**, naming the
+variable and never repeating the key — the alternative is a deployment that believes it is reporting.
+
+**No vendor library.** A Sentry-compatible envelope (accepted by Sentry and GlitchTip) is one `POST`
+over `fetch`. It can never make the process worse: a report that cannot be delivered is counted and
+handed to `onFailure`, logged at `warn` (an `error` there would be reported in turn), never retried in a
+loop; at most ten are in flight and a burst beyond that is dropped and counted rather than queued, because
+an error storm is when memory is least available; a bug in the tracker is caught, logged and ignored by the
+caller; shutdown waits for what is in flight.
+
+**Rejected: the vendor SDK.** A runtime dependency with its own supply chain and auto-instrumentation that
+patches `fetch` and the HTTP server, for one `POST`. **Rejected: reporting from `onError` in the
+framework.** It covers one path and describes errors a second way; the socket router, shutdown and every
+future call site would need their own. **Rejected: retrying failed reports.** The log has the line; a retry
+queue is memory held during the incident. **Rejected: grouping, sampling and breadcrumbs.** The receiving
+service does the first two, and breadcrumbs are request content, which the never-logged list exists to keep
+out.
+
+**Not done:** stack frames are sent as the stack text in `extra`, not parsed into frames, so the receiving
+service groups by message and type rather than by frame; source maps are not applicable to a server that
+runs its source. The client's errors (`apps/web`) are a separate surface and not covered.
+
+**Reversibility:** free. One module and one variable; unset it and the process is as it was.
+
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.
