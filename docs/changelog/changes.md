@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Refactor — 2026-10-09: the socket lifecycle leaves the composition root
+
+- `ingress/http/app.ts` (438 lines) keeps the routes and edge hooks; admission, open, frame handling
+  and close are `ingress/ws/socket.ts`. No behaviour change (#245, D-47).
+
 ### Chore — 2026-10-09: every Action is pinned to a commit, and a test says so
 
 - `actions/checkout`, `oven-sh/setup-bun` and `actions/setup-python` were pinned to tags their

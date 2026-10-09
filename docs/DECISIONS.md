@@ -1533,6 +1533,14 @@ inside an ingress handler. It is `meOf` in `modules/workspaces/workspaces.ts` be
 and the handler authenticates, calls it and returns. The stale "there is no logger yet" comment on
 `ResolvedIdentity` now says who logs the username collision (`sign-in.ts`, D-38).
 
+**Amended 2026-10-09 (#245): the composition root only composes.** `ingress/http/app.ts` was
+438 lines because it also held the socket's whole lifecycle (admission, open, per-frame handling,
+close, what is held). That is `ingress/ws/socket.ts` now (`createSocketLifecycle`), built from
+plain functions over a structural view of the framework's socket — a route group cannot be passed
+around (its type is invariant in its routes, `docs/spikes/elysia.md`), but functions can. `app.ts`
+keeps the routes, the edge hooks and `drain`. Behaviour is unchanged and the existing socket
+suites are the proof.
+
 ---
 
 ### D-48. Escape hatches are expensive and visible, not closed
