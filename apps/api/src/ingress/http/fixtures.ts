@@ -6,7 +6,7 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { issueSession } from '../../modules/auth/sessions';
 import { aUserRow, type TestUser } from '../../testing/users';
-import { SESSION_COOKIE } from './cookies';
+import { SESSION_COOKIE } from '../../platform/cookies';
 
 export interface SignedInUser extends TestUser {
   /** The `Cookie` header value a signed-in browser sends. */

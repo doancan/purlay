@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Refactor — 2026-10-09: sign-in and session resolution are modules; ingress only translates
+
+- `completeSignIn` and the session-end fan-out left `ingress/http` for
+  `modules/auth/sign-in.ts` and `platform/events.ts`. A cookie header becomes a session in
+  one function used by the HTTP guard, the hub and the socket admission, and the cookie definitions
+  moved to `platform/cookies.ts`, so `realtime` no longer imports `ingress` (#245, D-47). Behaviour unchanged.
+
 ### Fix — 2026-10-09: the database refuses a message in the wrong tenant
 
 - A message whose channel was in another workspace, a reply in another channel than its parent, a read

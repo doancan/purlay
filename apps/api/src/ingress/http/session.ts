@@ -11,19 +11,13 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
-import { AppError } from '../../platform/errors';
-import { resolveSession } from '../../modules/auth/sessions';
-import { sessionTokenFrom } from './cookies';
+import { requireSessionFromCookie } from '../../modules/auth/sessions';
 
 export const requireSession = async (
   database: Executor,
   clock: Clock,
   request: Request,
 ): Promise<{ readonly userId: string }> => {
-  const token = sessionTokenFrom(request.headers.get('cookie'));
-  const owner = token === undefined ? undefined : await resolveSession(database, clock, token);
-  if (owner === undefined) {
-    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
-  }
-  return { userId: owner.userId };
+  const { userId } = await requireSessionFromCookie(database, clock, request.headers.get('cookie'));
+  return { userId };
 };

@@ -11,7 +11,7 @@ import { aSignedInUser } from './fixtures';
 import { AUTH_BUDGET, WRITE_BUDGET } from './rate-limit';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
-import { STATE_COOKIE } from './cookies';
+import { STATE_COOKIE } from '../../platform/cookies';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

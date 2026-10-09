@@ -19,6 +19,8 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
+import { sessionTokenFrom } from '../../platform/cookies';
+import { AppError } from '../../platform/errors';
 
 /** 32 bytes, hex-encoded. The cookie value. */
 const TOKEN_BYTES = 32;
@@ -167,4 +169,37 @@ export const revokeAllSessions = async (
     .returning('id')
     .execute();
   return revoked.map((row) => row.id);
+};
+
+/**
+ * Who a request's `Cookie` header says is calling, or nobody.
+ *
+ * The one place a header becomes a session, for both doors: an HTTP request and
+ * a socket upgrade carry the same cookie and must resolve it the same way.
+ * Missing, malformed, expired and revoked all answer `undefined`.
+ */
+export const sessionFromCookie = async (
+  executor: Executor,
+  clock: Clock,
+  cookieHeader: string | null,
+): Promise<SessionOwner | undefined> => {
+  const token = sessionTokenFrom(cookieHeader);
+  return token === undefined ? undefined : await resolveSession(executor, clock, token);
+};
+
+/**
+ * The same, as a refusal. A missing cookie and an invalid one produce the same
+ * `401`: telling them apart would tell a caller whether a token they hold was
+ * ever real (D-60).
+ */
+export const requireSessionFromCookie = async (
+  executor: Executor,
+  clock: Clock,
+  cookieHeader: string | null,
+): Promise<SessionOwner> => {
+  const owner = await sessionFromCookie(executor, clock, cookieHeader);
+  if (owner === undefined) {
+    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  }
+  return owner;
 };

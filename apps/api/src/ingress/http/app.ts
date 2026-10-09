@@ -27,7 +27,7 @@ import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
-import { clearedStateCookie } from './cookies';
+import { clearedStateCookie } from '../../platform/cookies';
 import { clientAddress, peerOf } from './client-address';
 import { httpLimits, type HttpBudgets } from './rate-limit';
 import { AppError } from '../../platform/errors';

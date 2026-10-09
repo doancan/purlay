@@ -14,7 +14,7 @@ import { createApp } from './app';
 import { NOW, testDependencies } from './testing';
 import { fixedClock } from '../../platform/clock';
 import { issueSession } from '../../modules/auth/sessions';
-import { SESSION_COOKIE } from './cookies';
+import { SESSION_COOKIE } from '../../platform/cookies';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {

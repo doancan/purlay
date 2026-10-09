@@ -23,8 +23,7 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { AppError } from '../platform/errors';
 import { isAppOrigin } from '../platform/origin';
-import { resolveSession } from '../modules/auth/sessions';
-import { sessionTokenFrom } from '../ingress/http/cookies';
+import { requireSessionFromCookie } from '../modules/auth/sessions';
 
 export interface UpgradeDependencies {
   readonly database: Executor;
@@ -52,14 +51,10 @@ export const admitSocket = async (
     throw new AppError({ code: 'FORBIDDEN', message: 'That origin may not open a socket here.' });
   }
 
-  const token = sessionTokenFrom(request.headers.get('cookie'));
-  const owner =
-    token === undefined
-      ? undefined
-      : await resolveSession(dependencies.database, dependencies.clock, token);
-  if (owner === undefined) {
-    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
-  }
-
+  const owner = await requireSessionFromCookie(
+    dependencies.database,
+    dependencies.clock,
+    request.headers.get('cookie'),
+  );
   return { userId: owner.userId };
 };
