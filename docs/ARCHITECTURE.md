@@ -703,13 +703,18 @@ built. In a deployment the API serves the built client from the same origin; tha
 prerendered shell (#141). There is therefore no CORS to configure, the socket's `Origin`
 check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
 
-**The deployment, as designed — most of it not built yet.** Today `docker compose` runs the
-development database and object storage, and nothing else; the deployable stack is the self-host
-path of Phase 2. When it ships, `docker compose` brings up `api`, `postgres`, object storage (#183)
-and a **scheduler** container that runs the CLI jobs on a cron (#72, D-30). The scheduler ships
-wired by default: the known failure mode of external scheduling is the cron nobody installed, and
-every run records its outcome in `job_runs` (`SCHEMA.md` §9.2) so `purlay jobs:status` can report
-*last successful run* per job. Migrations are idempotent and `bun run db:migrate` runs them by hand.
+**Still to come in the deployment.** The development `docker compose` runs the database and object
+storage and nothing else; the deployable stack is below. A **scheduler** container that runs the CLI
+jobs on a cron (#72, D-30) is not there yet. It ships wired by default: the known failure mode of
+external scheduling is the cron nobody installed, and every run records its outcome in `job_runs`
+(`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job. The built client,
+served from the API's origin, arrives with the prerendered shell (#141, #224).
+
+**The production stack.** `docker-compose.production.yml` runs the API, PostgreSQL, Garage and Caddy
+behind one origin with automatic TLS: only the proxy publishes ports, the API starts when its
+dependencies are healthy and the proxy when the API is ready, and the file's only inputs are the
+variables in `CONFIG.md` (D-94, D-73). A test resolves it with `docker compose config` and checks
+those properties rather than trusting the YAML.
 
 **The image.** The API builds into a two-stage image whose runtime stage is distroless and runs as
 a numeric non-root user with a read-only root filesystem (`Dockerfile`, D-92). `scripts/image-smoke.sh`
