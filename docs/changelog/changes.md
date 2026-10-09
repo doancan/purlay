@@ -6,6 +6,21 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: the API has an image
+
+- A two-stage `Dockerfile`: production dependencies from the frozen lockfile, then a distroless
+  runtime that runs the source as user 65532 with a read-only root filesystem, no shell, and a health
+  check on `/health/ready`. Both bases are pinned by digest (#248, D-92).
+- Every pull request that touches it builds the image and runs it against the compose database
+  (`scripts/image-smoke.sh`); a push to main publishes it to GHCR with provenance and an SBOM.
+  The publish job can only be exercised once it is on main.
+
+### Chore — 2026-10-09: the browser has a place to read the clock
+
+- `apps/web/src/system-clock.ts` is the one file in the client that reads the time, exempted by name
+  in `eslint.config.mjs` the way `platform/clock.ts` is for the API; everything else takes a `Clock`.
+  `verify:enforcement` now also shows a neighbouring web file is still refused (#136).
+
 ### Refactor — 2026-10-09: the socket lifecycle leaves the composition root
 
 - `ingress/http/app.ts` (438 lines) keeps the routes and edge hooks; admission, open, frame handling
