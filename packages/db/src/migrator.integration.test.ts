@@ -13,21 +13,30 @@ import pg from 'pg';
 import { migrateToLatest, pendingMigrations } from './migrator';
 import { closeIntegrationDatabase, integrationDatabase } from './testing';
 
-const onDatabase = (name: string): string => {
-  const target = new URL(process.env['DATABASE_URL'] ?? '');
-  target.pathname = `/${name}`;
-  return target.toString();
-};
-
-const open = (name: string, max = 1): Kysely<unknown> =>
+/**
+ * A pool whose connections see one schema and nothing else.
+ *
+ * Each test migrates a schema of its own in the shared database rather than a
+ * database of its own. A database costs the server seven megabytes of copying and a
+ * checkpoint to drop, and a file that made thirteen of them spent more than a
+ * hook's five seconds in `afterAll` on a slow disk (the runner's: "a beforeEach/
+ * afterEach hook timed out"). A schema costs a catalogue row. What the tests
+ * check — the migrations table, the lock, the DDL — is the same in either; the
+ * advisory lock is per database, and the tests run one after another.
+ */
+const open = (schema: string, max = 1): Kysely<unknown> =>
   new Kysely<unknown>({
     dialect: new PostgresDialect({
-      pool: new pg.Pool({ connectionString: onDatabase(name), max }),
+      pool: new pg.Pool({
+        connectionString: process.env['DATABASE_URL'] ?? '',
+        options: `-c search_path=${schema}`,
+        max,
+      }),
     }),
   });
 
 const directories: string[] = [];
-const databases: string[] = [];
+const schemas: string[] = [];
 
 /** A directory of migrations, written from a name → SQL map. */
 const migrationsDirectory = (files: Record<string, string>): string => {
@@ -37,10 +46,10 @@ const migrationsDirectory = (files: Record<string, string>): string => {
   return directory;
 };
 
-const freshDatabase = async (): Promise<string> => {
-  const name = `purlay_mig_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
-  await sql`create database ${sql.id(name)}`.execute(integrationDatabase());
-  databases.push(name);
+const freshSchema = async (): Promise<string> => {
+  const name = `mig_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+  await sql`create schema ${sql.id(name)}`.execute(integrationDatabase());
+  schemas.push(name);
   return name;
 };
 
@@ -50,15 +59,14 @@ beforeAll(() => {
 
 afterAll(async () => {
   for (const directory of directories) rmSync(directory, { recursive: true, force: true });
-  const admin = integrationDatabase();
-  for (const name of databases)
-    await sql`drop database ${sql.id(name)} with (force)`.execute(admin);
+  for (const name of schemas)
+    await sql`drop schema ${sql.id(name)} cascade`.execute(integrationDatabase());
   await closeIntegrationDatabase();
 });
 
 describe('integration: a migration that leaves its transaction', () => {
   test('can create an index concurrently, which a transactional migration cannot', async () => {
-    const name = await freshDatabase();
+    const name = await freshSchema();
     const db = open(name);
     try {
       const directory = migrationsDirectory({
@@ -82,7 +90,7 @@ describe('integration: a migration that leaves its transaction', () => {
         '0001_t.sql': 'CREATE TABLE u (id int);',
         '0002_index.sql': 'CREATE INDEX CONCURRENTLY u_id ON u (id);',
       });
-      const other = open(await freshDatabase());
+      const other = open(await freshSchema());
       try {
         const attempt = await migrateToLatest(other, refused);
         expect(String(attempt.error)).toContain('cannot run inside a transaction block');
@@ -95,7 +103,7 @@ describe('integration: a migration that leaves its transaction', () => {
   });
 
   test('a transactional migration leaves nothing behind when it fails', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       const directory = migrationsDirectory({
         '0001_bad.sql': 'CREATE TABLE half (id int);\nSELECT 1/0;',
@@ -111,7 +119,7 @@ describe('integration: a migration that leaves its transaction', () => {
   });
 
   test('a non-transactional migration that fails is not recorded, so the next start runs it again', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       const directory = migrationsDirectory({
         '0001_partial.sql':
@@ -134,63 +142,80 @@ describe('integration: a migration that leaves its transaction', () => {
    * readers and writers through — but only if the first lock was released. Inside
    * one transaction it is held to the end, and every SELECT waits out the scan.
    *
-   * The scan is made slow on purpose (a few milliseconds a row), so the window is
-   * long enough to observe. The transactional run is measured too: a probe that
-   * never saw a blocked reader there would prove nothing about its absence below.
+   * The scan is held open by the test, not made slow: the constraint's function
+   * waits for an advisory lock the test holds, so the validation is in progress
+   * exactly as long as the test says and the reader is probed while it is. An
+   * earlier version made the scan slow with a sleep per row and counted the reads
+   * that were blocked in a window of two seconds; under load the window moved, the
+   * sample count with it, and the test ran past its five seconds (18 of 30 runs
+   * with fourteen busy processes beside it). The transactional run is probed too:
+   * a probe that never saw a blocked reader there would prove nothing about its
+   * absence below.
    */
-  const SLOW_VALIDATION = `
+  const HELD_KEY = 424_242;
+  const VALIDATION_HELD = `
     CREATE TABLE rows (id int, note text);
-    INSERT INTO rows SELECT g, 'x' FROM generate_series(1, 400) g;
-    CREATE FUNCTION slow_ok(v text) RETURNS boolean LANGUAGE plpgsql IMMUTABLE AS
-      $$ BEGIN PERFORM pg_sleep(0.005); RETURN v IS NOT NULL; END $$;
+    INSERT INTO rows VALUES (1, 'x');
+    CREATE FUNCTION held_ok(v text) RETURNS boolean LANGUAGE plpgsql IMMUTABLE AS
+      $$ BEGIN
+        PERFORM pg_advisory_lock(${String(HELD_KEY)});
+        PERFORM pg_advisory_unlock(${String(HELD_KEY)});
+        RETURN v IS NOT NULL;
+      END $$;
   `;
   const CONSTRAINT = `
-    ALTER TABLE rows ADD CONSTRAINT rows_note_ok CHECK (slow_ok(note)) NOT VALID;
+    ALTER TABLE rows ADD CONSTRAINT rows_note_ok CHECK (held_ok(note)) NOT VALID;
     ALTER TABLE rows VALIDATE CONSTRAINT rows_note_ok;
   `;
 
-  const blockedReads = async (name: string, constraint: string): Promise<number> => {
+  /** Whether a reader is refused while the validation of `constraint` is in progress. */
+  const readerIsBlocked = async (name: string, constraint: string): Promise<boolean> => {
     const migrating = open(name);
     const reader = open(name);
+    const holder = open(name);
     const directory = migrationsDirectory({
-      '0001_rows.sql': SLOW_VALIDATION,
+      '0001_rows.sql': VALIDATION_HELD,
       '0002_constraint.sql': constraint,
     });
     try {
       // The table exists before the run under test, as a populated table would.
-      await migrateToLatest(migrating, migrationsDirectory({ '0001_rows.sql': SLOW_VALIDATION }));
-      const state = { finished: false };
-      const run = migrateToLatest(migrating, directory).then((result) => {
-        state.finished = true;
-        return result;
-      });
-      let blocked = 0;
-      let reads = 0;
-      while (!state.finished) {
-        try {
-          await sql`set lock_timeout = '150ms'`.execute(reader);
-          await sql`select id from rows limit 1`.execute(reader);
-          reads += 1;
-        } catch {
-          blocked += 1;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 20));
+      await migrateToLatest(migrating, migrationsDirectory({ '0001_rows.sql': VALIDATION_HELD }));
+      await sql`select pg_advisory_lock(${HELD_KEY})`.execute(holder);
+      const run = migrateToLatest(migrating, directory);
+      // The validation has started when a backend of this database waits for the lock.
+      const deadline = Date.now() + 4_000;
+      for (;;) {
+        const { rows } = await sql<{ waiting: string }>`
+          select count(*) as waiting from pg_locks
+          where locktype = 'advisory' and not granted and objid = ${HELD_KEY}`.execute(holder);
+        if (Number(rows[0]?.waiting) > 0) break;
+        if (Date.now() > deadline) throw new Error('the validation never started');
+        await new Promise((resolve) => setTimeout(resolve, 5));
       }
-      const { error } = await run;
-      expect(error).toBeUndefined();
-      expect(reads + blocked).toBeGreaterThan(5);
+
+      let blocked = false;
+      try {
+        await sql`set lock_timeout = '200ms'`.execute(reader);
+        await sql`select id from rows limit 1`.execute(reader);
+      } catch {
+        blocked = true;
+      }
+
+      await sql`select pg_advisory_unlock(${HELD_KEY})`.execute(holder);
+      expect((await run).error).toBeUndefined();
       return blocked;
     } finally {
       await migrating.destroy();
       await reader.destroy();
+      await holder.destroy();
     }
   };
 
   test('validating a constraint inside the transaction blocks readers; outside it, it does not', async () => {
-    expect(await blockedReads(await freshDatabase(), CONSTRAINT)).toBeGreaterThan(0);
+    expect(await readerIsBlocked(await freshSchema(), CONSTRAINT)).toBe(true);
     expect(
-      await blockedReads(await freshDatabase(), `-- purlay: no-transaction\n${CONSTRAINT}`),
-    ).toBe(0);
+      await readerIsBlocked(await freshSchema(), `-- purlay: no-transaction\n${CONSTRAINT}`),
+    ).toBe(false);
   });
 });
 
@@ -198,7 +223,7 @@ describe('integration: checksums', () => {
   const v1 = { '0001_t.sql': 'CREATE TABLE t (id int);' };
 
   test('an edited migration is a failure before anything runs', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       expect((await migrateToLatest(db, migrationsDirectory(v1))).error).toBeUndefined();
 
@@ -216,7 +241,7 @@ describe('integration: checksums', () => {
   });
 
   test('a comment-only edit is still an edit — the file is the unit', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       await migrateToLatest(db, migrationsDirectory(v1));
       const { error } = await migrateToLatest(
@@ -230,7 +255,7 @@ describe('integration: checksums', () => {
   });
 
   test('a database migrated before checksums existed adopts them once, then detects an edit', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       // What the previous runner left behind: the table, rows, and no checksum column.
       await sql`create table kysely_migration (name varchar(255) primary key, timestamp varchar(255) not null)`.execute(
@@ -258,7 +283,7 @@ describe('integration: checksums', () => {
   });
 
   test('an applied migration whose file has gone is refused', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       await migrateToLatest(db, migrationsDirectory(v1));
       const { error } = await migrateToLatest(db, migrationsDirectory({}));
@@ -269,7 +294,7 @@ describe('integration: checksums', () => {
   });
 
   test('a new migration that sorts before an applied one is refused', async () => {
-    const db = open(await freshDatabase());
+    const db = open(await freshSchema());
     try {
       await migrateToLatest(db, migrationsDirectory({ '0002_t.sql': 'CREATE TABLE t (id int);' }));
       const { error } = await migrateToLatest(
@@ -299,7 +324,7 @@ describe('integration: concurrent starters', () => {
    * second starter to be waiting for the lock by then.
    */
   test('a starter waiting for the lock does not deadlock an index built concurrently', async () => {
-    const name = await freshDatabase();
+    const name = await freshSchema();
     const directory = migrationsDirectory({
       '0001_table.sql':
         'CREATE TABLE t (n int);\nINSERT INTO t SELECT g FROM generate_series(1, 1000) g;',
@@ -322,7 +347,7 @@ describe('integration: concurrent starters', () => {
   });
 
   test('a starter that cannot get the lock in time says so, and does not touch the database', async () => {
-    const name = await freshDatabase();
+    const name = await freshSchema();
     const holder = open(name);
     const waiter = open(name);
     const directory = migrationsDirectory({ '0001_a.sql': 'CREATE TABLE a (id int);' });
@@ -344,7 +369,7 @@ describe('integration: concurrent starters', () => {
   });
 
   test('the lock is released when a migration fails, so the next starter is not kept waiting', async () => {
-    const name = await freshDatabase();
+    const name = await freshSchema();
     const db = open(name);
     try {
       const failing = migrationsDirectory({ '0001_bad.sql': 'SELECT 1/0;' });
@@ -366,7 +391,7 @@ describe('integration: concurrent starters', () => {
   });
 
   test('three processes starting together apply every migration exactly once', async () => {
-    const name = await freshDatabase();
+    const name = await freshSchema();
     const directory = migrationsDirectory({
       '0001_a.sql': 'CREATE TABLE a (id int);',
       '0002_slow.sql':

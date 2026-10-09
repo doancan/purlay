@@ -94,6 +94,35 @@ export const closeIntegrationDatabase = async (): Promise<void> => {
   }
 };
 
+/**
+ * Drops databases the test run created — all at once, on purpose.
+ *
+ * `DROP DATABASE` makes the server run a checkpoint and wait for it, so that no
+ * dirty page of the dropped files is written later. A checkpoint costs what the
+ * run has written so far, and on a CI disk after a migration test that is seconds
+ * a drop. One after another, a file that made fifteen databases spent more than
+ * the 5 s a hook is allowed, and the run failed with "a beforeEach/afterEach hook
+ * timed out" (measured: fifteen drops requested fifteen checkpoints). Requests
+ * that arrive while one is running are served by it, so dropping together costs
+ * about one checkpoint, whatever the number.
+ */
+export const dropDatabases = async (names: readonly string[]): Promise<void> => {
+  if (names.length === 0) return;
+  const admin = connect<unknown>(
+    onDatabase(integrationUrl(), 'postgres'),
+    Math.min(names.length, 8),
+  );
+  try {
+    await Promise.all(
+      names.map(async (name) => {
+        await sql`drop database ${sql.id(name)} with (force)`.execute(admin);
+      }),
+    );
+  } finally {
+    await admin.destroy();
+  }
+};
+
 export interface ClonedDatabase {
   readonly db: Kysely<DB>;
   /** Where the clone lives — for a test that opens a pool of its own, as a restarted process would. */
@@ -103,38 +132,93 @@ export interface ClonedDatabase {
 }
 
 /**
+ * Brings the template database into being and up to date, and returns its name.
+ *
+ * The expensive part of a clone, and the one that must not happen inside a hook: a
+ * hook has five seconds, and building the template (creating a database, running
+ * every migration, concurrent index builds among them) took 3.3 s on a disk that
+ * writes 8 MB/s, against 0.12 s on a laptop. So `bunfig.toml` preloads
+ * `testing-preload.ts`, which calls this once per test process before the first
+ * test is collected, outside every timer; `cloneIntegrationDatabase` finds it done.
+ *
+ * It is brought up to date on every process. Migrating an applied template is a
+ * no-op; skipping it would let a template from an older run hide a migration added
+ * since, and the test would pass against a schema that no longer exists.
+ */
+export const buildIntegrationTemplate = async (name?: string): Promise<string> => {
+  const source = integrationUrl();
+  const template = name ?? `${new URL(source).pathname.slice(1)}_template`;
+  const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
+  try {
+    const exists = await sql`select 1 from pg_database where datname = ${template}`.execute(admin);
+    if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
+  } finally {
+    await admin.destroy();
+  }
+  const templateDb = connect<unknown>(onDatabase(source, template), 1);
+  try {
+    const { error } = await migrateToLatest(templateDb);
+    if (error !== undefined)
+      throw new Error('migrating the test template failed', { cause: error });
+  } finally {
+    await templateDb.destroy();
+  }
+  return template;
+};
+
+let prepared: Promise<string> | undefined;
+
+/**
+ * Once per process: the first caller builds the template, the rest wait for it. A
+ * failure is remembered too, so every file that wanted a clone fails at once with
+ * the one reason, instead of each of them trying the database again.
+ */
+export const prepareIntegrationTemplate = async (): Promise<string> => {
+  prepared ??= buildIntegrationTemplate();
+  return await prepared;
+};
+
+/**
+ * What the preload does: prepares the template when a database is configured, and
+ * says so when that fails.
+ *
+ * Without `DATABASE_URL` it does nothing, as `bun run test` is meant to; the
+ * integration helpers refuse by themselves when a test asks for a database. With
+ * one that does not answer it warns and lets the tests report it, rather than
+ * failing a run of unit tests that never wanted a database.
+ */
+export const prepareTemplateForRun = async (
+  prepare: () => Promise<unknown>,
+  warn: (message: string) => void,
+): Promise<void> => {
+  const url = process.env['DATABASE_URL'];
+  if (url === undefined || url === '') return;
+  try {
+    await prepare();
+  } catch (error) {
+    warn(
+      `testing-preload: the test template could not be prepared (${error instanceof Error ? error.message : String(error)}); the integration tests will report it\n`,
+    );
+  }
+};
+
+/**
  * A database of this test file's own, cloned from a migrated template (D-46).
  *
  * For what one rolled-back transaction cannot do: commit on purpose, or let two
  * connections observe each other. One transaction puts every query on a single
  * connection, which serialises exactly the concurrency such a test exists to see.
  *
- * The template is brought up to date on every call. Migrating an applied
- * template is a no-op; skipping it would let a template from an older run hide a
- * migration added since, and the test would pass against a schema that no longer
- * exists. Cloning needs nothing connected to the template, so its connection is
- * closed before the clone is made.
+ * Cloning needs nothing connected to the template, and nothing is: the template's
+ * connection is closed when it has been migrated.
  */
 export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
   const source = integrationUrl();
-  const base = new URL(source).pathname.slice(1);
-  const template = `${base}_template`;
-  const clone = `${base}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+  const template = await prepareIntegrationTemplate();
+  const clone = `${new URL(source).pathname.slice(1)}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
 
   const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
   try {
-    const exists = await sql`select 1 from pg_database where datname = ${template}`.execute(admin);
-    if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
-
-    const templateDb = connect<unknown>(onDatabase(source, template), 1);
-    try {
-      const { error } = await migrateToLatest(templateDb);
-      if (error !== undefined)
-        throw new Error('migrating the test template failed', { cause: error });
-    } finally {
-      await templateDb.destroy();
-    }
-
     await sql`create database ${sql.id(clone)} template ${sql.id(template)}`.execute(admin);
   } finally {
     await admin.destroy();
@@ -147,12 +231,7 @@ export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
     connectionString,
     drop: async (): Promise<void> => {
       await db.destroy();
-      const dropper = connect<unknown>(onDatabase(source, 'postgres'), 1);
-      try {
-        await sql`drop database ${sql.id(clone)} with (force)`.execute(dropper);
-      } finally {
-        await dropper.destroy();
-      }
+      await dropDatabases([clone]);
     },
   };
 };
