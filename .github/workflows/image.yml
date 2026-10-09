@@ -51,11 +51,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # The database comes from docker-compose.yml, as in the schema job, so its
-      # image is declared in exactly one place.
-      - name: start the database
-        run: docker compose up -d --wait postgres
-
+      # The smoke test starts a PostgreSQL of its own on a private network; nothing here has to.
       - name: the image starts read-only, answers liveness and readiness, and is not root
         run: scripts/image-smoke.sh purlay-api:ci
 

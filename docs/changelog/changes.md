@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the image smoke test brings its own database
+
+- It reached the development database through `host.docker.internal`; binding that database to the loopback
+  address (#299) made it unreachable from a container on a Linux runner, and the `image` check was red on main
+  for three commits. It now starts a PostgreSQL of its own on a private network, reached by container name,
+  with nothing published, and removes everything when it ends (#231, D-92 amended). A test fails if the
+  script references the host or the development port again.
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different

@@ -3330,6 +3330,15 @@ disk. **Rejected: an init process (`tini`).** The process handles SIGTERM itself
 
 **Reversibility:** free. Nothing is stored in the image; the volumes are the database and the bucket.
 
+
+*Amended 2026-10-09:* the smoke test ran the API container against the development compose database through
+`host.docker.internal`. When that database's port was bound to the loopback address (the superuser's password
+is in the repository, so it should be), a container on a Linux runner could no longer reach it, the log said
+`migrating on start failed`, and the `image` check was red on main for three commits, because it was not a
+required check. The smoke test now creates a throwaway network and a throwaway PostgreSQL of its own (the
+image named in `docker-compose.yml`, nothing published), runs the API on the same network by container name,
+and removes both when it ends; `scripts/image-smoke.test.ts` fails if it references the host again. It no
+longer depends on what any other file publishes.
 ---
 
 ### D-93. Migrations run on start: every node calls the migrator, which makes starters take turns
