@@ -249,10 +249,10 @@ export const routeFrame = async (
         // **Subscribed before anything is read**, with live frames held until the
         // acknowledgement and the replay are written. Read first, a message
         // committed between the read and the subscription is in neither, and the
-        // client's cursor then moves past it for good (D-79). Subscribed before the
+        // client's cursor then moves past it for good (D-83). Subscribed before the
         // channels are *authorised* too, so that a revocation published while the
         // authorisation is being read finds the subscription and ends it; made after,
-        // it would find nothing and the stale authorisation would then subscribe (D-81).
+        // it would find nothing and the stale authorisation would then subscribe (D-85).
         dependencies.socket.hold(identity.socketId);
         const fresh: string[] = [];
         for (const channelId of channelIds) {

@@ -71,7 +71,7 @@ export interface Dependencies {
   /**
    * The transport this node publishes through. One node needs none: it makes its
    * own. Two nodes in one process (a test) share one, which is how a revocation
-   * published on either is shown to reach the other's sockets (D-81).
+   * published on either is shown to reach the other's sockets (D-85).
    */
   readonly backplane?: Backplane;
 }

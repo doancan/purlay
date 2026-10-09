@@ -182,7 +182,7 @@ export const SessionEndedFrame = Type.Object({
 /**
  * The connection may no longer see these channels, and delivery for them has
  * stopped. The connection stays open: every other channel it watches is
- * unaffected, which is the reason this is not a close (D-81).
+ * unaffected, which is the reason this is not a close (D-85).
  *
  * Published when a membership or a channel goes away — a member removed, a
  * channel left, a channel deleted — on the topic that reaches the affected
@@ -273,7 +273,7 @@ export const parseServerMessage = (text: string): ServerMessage => {
  *   call: on several nodes a local call reaches one of them (D-7, D-25).
  * - `user:` is where every socket a user holds listens, whichever session it
  *   belongs to: the end of the account (`SESSION_ENDED`, `account-deleted`) and the
- *   removal of one member's access (`ACCESS_REVOKED`) are published here (D-81).
+ *   removal of one member's access (`ACCESS_REVOKED`) are published here (D-85).
  * - `workspace:` has no publisher yet; it is named for Phase 1.
  */
 export type Topic =

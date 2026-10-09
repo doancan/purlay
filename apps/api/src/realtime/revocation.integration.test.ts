@@ -1,5 +1,5 @@
 /**
- * Every way visibility ends, through real sockets on two nodes (#238, D-81).
+ * Every way visibility ends, through real sockets on two nodes (#238, D-85).
  *
  * Two applications share one database and one backplane in this process, which is
  * what two nodes behind a balancer are. A socket is held by node B; the change is

@@ -2677,7 +2677,7 @@ direction, and the two want different diagnoses in a log.
 
 ---
 
-### D-81. A change that removes visibility is a bus event: a membership is unsubscribed, a session or an account is closed
+### D-85. A change that removes visibility is a bus event: a membership is unsubscribed, a session or an account is closed
 
 A subscription is authorised once, at `SUBSCRIBE`. A user taken out of a workspace and a channel kept
 receiving the channel on an open socket while every HTTP read answered 404 (verified with the rows
@@ -2707,7 +2707,7 @@ costs no visibility query.
   *everything* is gone: a session, an account. It is what those two do.
 - *Unsubscribing* touches only what was lost and costs the client one frame, but it must be told
   (`ACCESS_REVOKED`) and it can race a `SUBSCRIBE` in flight. The race is closed by order, not by a
-  check: a subscription is made **before** its channels are authorised (extending D-79's
+  check: a subscription is made **before** its channels are authorised (extending D-83's
   subscribe-first), so a revocation published at any moment finds it and ends it, and a refused
   subscription undoes what it added and drops what was kept for it. It is what membership does.
 

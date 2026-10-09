@@ -23,7 +23,7 @@ export const sessionTopic = (sessionId: string): Topic => `session:${sessionId}`
 export const userTopic = (userId: string): Topic => `user:${userId}`;
 
 /**
- * What a change that removes visibility publishes (D-81). Each is called **after**
+ * What a change that removes visibility publishes (D-85). Each is called **after**
  * the change commits, by the service that made it, with the bus it was given — a
  * socket is never told it lost something that was then rolled back.
  *

@@ -12,7 +12,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   kept receiving a channel on an open socket while HTTP answered 404; a deleted user's sockets lived
   on (#238, #203). Three bus events now carry these: `SESSION_ENDED` on `session:` and `user:`
   (`account-deleted`), and the new `ACCESS_REVOKED`, which unsubscribes the channels and leaves the
-  connection open (D-81).
+  connection open (D-85).
 - Shown with two applications sharing one backplane and real sockets: sign-out on one closes the
   socket the other holds, and a removal published while a subscription is being authorised still
   ends it, because a subscription is now made before its channels are authorised.

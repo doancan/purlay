@@ -17,7 +17,7 @@
  * backplane is private to it. Two nodes sharing one backplane — what the tests
  * build — are exactly what Phase 3's Redis adapter provides across processes, so
  * "a revoked session closes its sockets on the other node too" is demonstrated
- * here rather than argued (D-81).
+ * here rather than argued (D-85).
  */
 import type { ServerFrame } from '@purlay/types';
 import type { Deliver, EventBus, Topic } from '../platform/events';

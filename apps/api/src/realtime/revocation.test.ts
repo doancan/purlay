@@ -2,7 +2,7 @@
  * Revocation across nodes, without a database or a socket: two hubs, each with its
  * own sockets, sharing one backplane — what Phase 3's Redis adapter gives two
  * processes. A change published from either node, or from a third that holds no
- * sockets, must end delivery on both (#238, D-81).
+ * sockets, must end delivery on both (#238, D-85).
  */
 import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';

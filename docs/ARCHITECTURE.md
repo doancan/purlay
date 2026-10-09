@@ -339,7 +339,7 @@ the type refuses the pool (D-77).
 - **Several nodes:** each node's bus is a view onto a `Backplane` (`realtime/bus.ts`): it holds only
   its own sockets' subscriptions, and a publish from any node reaches every node's subscribers.
   One process makes its own backplane; the tests share one between two applications, which is how
-  a revocation is shown to reach the other node's sockets (D-81).
+  a revocation is shown to reach the other node's sockets (D-85).
 - **Phase 3:** `RedisEventBus` — the same interface over Redis pub/sub, plus a
   `subscriberCount` check so a node does not publish to topics nobody local is watching.
 
@@ -449,7 +449,7 @@ channel being deleted — publishes `ACCESS_REVOKED` on `user:{id}` or `channel:
 unsubscribes the socket from those channels and the connection stays open. No visibility query runs
 per delivered frame. A subscription is made before its channels are authorised so a revocation
 cannot slip between the two. Phase 1's endpoints must publish these after they commit; the
-functions are in `platform/events.ts` and D-81 lists which endpoint calls which.
+functions are in `platform/events.ts` and D-85 lists which endpoint calls which.
 
 ### 7.3. The isolation mechanism
 
