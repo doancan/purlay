@@ -7,8 +7,7 @@
  * no rollback: a bad migration is fixed by another migration, and data loss is
  * recovered from point-in-time recovery (D-44). See `migrator.ts`.
  */
-import { Kysely, PostgresDialect } from 'kysely';
-import pg from 'pg';
+import { createDatabase, sslFromEnvironment } from '../client';
 import { migrateToLatest } from '../migrator';
 
 const connectionString = process.env['DATABASE_URL'];
@@ -17,8 +16,9 @@ if (connectionString === undefined || connectionString === '') {
   process.exit(1);
 }
 
-const pool = new pg.Pool({ connectionString, max: 1 });
-const db = new Kysely<unknown>({ dialect: new PostgresDialect({ pool }) });
+// The same SSL setting as the application, so a managed database that refuses a
+// clear connection is migrated by the command that starts it (D-86).
+const db = createDatabase({ connectionString, poolSize: 1, ssl: sslFromEnvironment(process.env) });
 
 const { error, results } = await migrateToLatest(db);
 

@@ -17,6 +17,19 @@ export interface DatabaseOptions {
   readonly ssl?: boolean;
 }
 
+/**
+ * `DATABASE_SSL` as the process environment spells it — the one reader the CLI
+ * and the API's configuration loader (`config.ts`) must agree on, and a test in
+ * the API binds the two. A value neither spelling recognises is refused: a
+ * migration run in the clear because of a typo is the quiet failure.
+ */
+export const sslFromEnvironment = (environment: Record<string, string | undefined>): boolean => {
+  const raw = environment['DATABASE_SSL'];
+  if (raw === undefined || raw === '' || raw === 'false' || raw === '0') return false;
+  if (raw === 'true' || raw === '1') return true;
+  throw new Error(`DATABASE_SSL must be true or false, not "${raw}". See docs/CONFIG.md.`);
+};
+
 export const createDatabase = (options: DatabaseOptions): Kysely<DB> =>
   new Kysely<DB>({
     dialect: new PostgresDialect({

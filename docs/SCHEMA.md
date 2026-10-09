@@ -359,7 +359,7 @@ CREATE TABLE messages (
     CONSTRAINT thread_reply_count_non_negative CHECK (thread_reply_count >= 0),
 
     -- The contract's MESSAGE_CONTENT_MAX, for every writer that is not one of the
-    -- two doors. Added by 0007, NOT VALID then validated. (D-67)
+    -- two doors. Added by 0007, NOT VALID then validated, in one transaction. (D-67, D-86)
     CONSTRAINT messages_content_length CHECK (char_length(content) <= 16000)
 );
 ```
@@ -778,7 +778,14 @@ Rules the schema cannot express. Each has a named test. (D-21)
 
 ## 12. Migration Order
 
-`packages/db/migrations/` — ordered, additive, never edited after being applied. (D-21)
+`packages/db/migrations/` — ordered, additive, never edited after being applied. (D-21) The migrator
+records each file's SHA-256 and refuses to start when an applied file has changed (D-86).
+
+**A migration is one transaction.** A migration that adds a constraint or an index to a table that has
+rows must leave it, with `-- purlay: no-transaction` in the file's leading comments (D-86): inside a
+transaction the lock of `ADD CONSTRAINT` is held until the end, so `NOT VALID` followed by `VALIDATE`
+blocks every other query on the table for the whole scan, and `CREATE INDEX CONCURRENTLY` is refused. A
+file that leaves its transaction runs statement by statement and must be safe to run again.
 
 ```
 0001_extensions.sql          pg_trgm, btree_gin, enum types  (citext deliberately absent, D-40)

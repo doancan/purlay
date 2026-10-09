@@ -2642,6 +2642,44 @@ subscribe.** The bus is not transactional; a commit after the read is not blocke
 
 **Reversibility:** free. The hold is one list in the hub.
 
+### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change
+
+Kysely's migrator ran every pending migration in one transaction and recorded nothing about the file. Two
+consequences were measured on 1,000,000 messages (#240). `0007` claimed that adding a constraint `NOT VALID`
+and then validating it "lets writes continue"; inside one transaction the `ACCESS EXCLUSIVE` lock of the
+`ADD CONSTRAINT` is held to the commit, and a concurrent `SELECT` hit its 2 s statement timeout while the
+validation scanned the table (the same migration, opted out, delayed no `SELECT` by more than 150 ms). And
+`CREATE INDEX CONCURRENTLY` is refused inside a transaction, so no index could be added to a large table
+without locking its writes.
+
+**Decided: the migrator is ours, and the opt-out is declared in the file.** A comment in the file's leading
+block, `-- purlay: no-transaction`, runs that migration statement by statement with no transaction around
+it. The default stays one transaction per file, with its record written in the same transaction, so a
+failed migration leaves nothing behind. A file that opts out gives that up and must be written to run again:
+`IF NOT EXISTS`, and `DROP INDEX CONCURRENTLY IF EXISTS` before a `CREATE INDEX CONCURRENTLY`, because a
+build that fails leaves an invalid index. Each statement is sent on its own, because PostgreSQL treats a
+string of several statements as one implicit transaction. Concurrent starters take a session advisory lock
+and run in turn; the third waits for the first and finds nothing to do.
+
+**Decided: each applied migration records the SHA-256 of its file**, and a mismatch, a missing file or an
+out-of-order name is a failure before any migration runs. A database migrated before checksums existed has
+none recorded for its rows; they are **adopted once**, from the files as they stand. That is trust on first
+use, and the cost is stated: an edit made before the first run of this migrator is not caught. The one edit
+this change itself makes to an applied file, the corrected `0007` comment, is of that kind.
+
+**The CLI reads `DATABASE_SSL`** like the application, through the same client, and refuses a value it
+cannot read rather than connecting in the clear.
+
+**Rejected — Kysely's `disableTransactions` for the whole run.** It is all or nothing: every migration
+loses its atomicity because one needs to leave the transaction. **Rejected — a separate directory or
+extension for non-transactional migrations:** the order of the migrations is one sequence, and a second
+place to look is a second place to forget. **Rejected — a checksum that ignores comments:** needs a SQL
+lexer to be right and decides what counts as a change; the file is the unit. **Rejected — refusing to
+adopt unchecksummed rows:** it would fail every existing database for a risk that cannot be measured.
+
+**Reversibility:** costly once migrations carry checksums, since the recorded values are the contract; the
+opt-out line is one comment and costs nothing to remove from a file that has not run.
+
 ---
 
 ### D-84. A socket's frames are handled one at a time, in order, behind a bounded queue

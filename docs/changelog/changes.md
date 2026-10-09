@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a migration can leave its transaction, and an edited migration is noticed
+
+- `0007` said `NOT VALID` then `VALIDATE` "lets writes continue". Inside the migrator's transaction it did
+  not: on 1,000,000 messages a concurrent `SELECT` hit its statement timeout while the validation ran.
+  A file can now opt out with `-- purlay: no-transaction`, and the same migration then delayed no `SELECT`.
+  `CREATE INDEX CONCURRENTLY` becomes possible (#240, D-86).
+- Each applied migration records its checksum; an edited, missing or out-of-order file stops the migrator
+  before anything runs. `db:migrate` reads `DATABASE_SSL` like the application.
+
 ### Feature — 2026-10-09: a membership or session change ends delivery on every node
 
 - A revoked session closed its sockets only on the node that handled the sign-out; a removed member
