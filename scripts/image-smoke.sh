@@ -104,6 +104,19 @@ identity="$(docker run --rm --read-only --entrypoint /usr/local/bin/bun "$IMAGE"
 echo "uid:       $identity"
 [ "$identity" != "0" ] || { echo "FAIL: the image runs as root" >&2; exit 1; }
 
+# No test ships in the image that runs in production (.dockerignore), and neither does the
+# code that only tests use. Asked of the image itself, not of the ignore file.
+untested="$(docker run --rm --read-only --entrypoint /usr/local/bin/bun "$IMAGE" -e '
+  let found = 0;
+  for (const root of ["/app/apps", "/app/packages"]) {
+    for (const file of new Bun.Glob("**/*.test.ts").scanSync({ cwd: root, followSymlinks: false })) found += 1;
+  }
+  found += [...new Bun.Glob("apps/api/src/testing/*").scanSync({ cwd: "/app" })].length;
+  console.log(found);
+')"
+echo "test files in the image: $untested"
+[ "$untested" = "0" ] || { echo "FAIL: the image ships $untested test files" >&2; exit 1; }
+
 # And nothing to reach for.
 if docker exec "$NAME" sh -c true >/dev/null 2>&1; then
   echo "FAIL: the image contains a shell" >&2

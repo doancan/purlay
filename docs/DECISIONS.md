@@ -3340,6 +3340,16 @@ image named in `docker-compose.yml`, nothing published), runs the API on the sam
 and removes both when it ends; `scripts/image-smoke.test.ts` fails if it references the host again. It no
 longer depends on what any other file publishes.
 
+*Amended 2026-10-09 (a second-round audit that opened the image):* it shipped every `*.test.ts` — 75 test
+files, 83 with the directory of test-only code beside them — because the Dockerfile copies the source
+directories whole. `.dockerignore` now leaves out `**/*.test.ts` and `apps/api/src/testing`, and the smoke
+test asks the **image** (not the ignore file) how many are in it and fails on any: 83 on the image as it
+was, 0 now, the rest of the smoke test unchanged. Lint already refuses production code importing the
+test-only directory, so nothing the process loads is among them. The image is 1 MB smaller; the point was
+never size. Separately, the probes `/health` and `/health/ready` were most of the log (a balancer and the
+container's own check poll them every few seconds): they are written at `debug`, and a probe that fails is
+still visible because readiness writes its reason at `warn`.
+
 ---
 
 ### D-93. Migrations run on start: every node calls the migrator, which makes starters take turns

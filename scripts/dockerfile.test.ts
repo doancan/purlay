@@ -58,12 +58,17 @@ describe('the Dockerfile', () => {
 });
 
 describe('.dockerignore', () => {
-  test.each(['.env', '.git', 'node_modules', '*.pem', '.claude'])(
-    'keeps %s out of the context',
-    (entry) => {
-      expect(dockerignore.split('\n')).toContain(entry);
-    },
-  );
+  test.each([
+    '.env',
+    '.git',
+    'node_modules',
+    '*.pem',
+    '.claude',
+    '**/*.test.ts',
+    'apps/api/src/testing',
+  ])('keeps %s out of the context', (entry) => {
+    expect(dockerignore.split('\n')).toContain(entry);
+  });
 
   test('does not exclude what the Dockerfile copies', () => {
     const excluded = dockerignore
