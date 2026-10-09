@@ -2303,6 +2303,19 @@ ceiling that also bounds what the trigram index digests per row. `MESSAGE_CONTEN
 an import is a writer too, and an integration test fails if the two part. `char_length` counts code
 points, never more than code units, so the database refuses nothing the contract accepts.
 
+*Amended 2026-10-09 (#231): the unit is code units **everywhere, and the database now counts them.**
+`char_length` counts code points, which is never more than code units — so it refused nothing the
+contract accepts and also accepted what the contract refuses: sixteen thousand emoji, which are
+thirty-two thousand units and sixty-four thousand bytes of content, that no 64 KiB frame can carry back
+out. `0011` replaces the `CHECK` with one that adds a unit for each character outside the Basic
+Multilingual Plane, and an integration test writes 8,000 and 8,001 emoji straight to the table. The
+cost is stated: a person who writes in emoji gets 8,000 of them, not 16,000, which is what `String.length`
+in their composer already says. **Rejected: counting code points in the contract** — the frame proof
+below is made per code unit, and four bytes a code point leaves 1,536 bytes for the envelope, under the
+4,096 the test requires. **Whitespace-only content is accepted:** neither `PRD.md` nor `UX.md` says a
+blank message is not a message, so refusing it would be inventing behaviour; whether the composer
+disables Send on blank is a UX decision for the composer.*
+
 **The frame cap is the reason for the character rule.** JSON escapes a C0 control character and an
 unpaired surrogate to six bytes, so without a rule a message's size on the wire is unbounded relative
 to its length, and no length limit could be shown to fit 64 KB. Those characters are refused — none
