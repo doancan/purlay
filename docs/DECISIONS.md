@@ -2718,6 +2718,10 @@ and a migration cut off halfway leaves an invalid index.
 
 **Reversibility:** free. The numbers are one constant each; the error code is the only part clients see.
 
+*Amended 2026-10-09:* a frame that fails for want of a connection is answered with the same
+`DATABASE_UNAVAILABLE` `ERROR` frame, with the HTTP body word for word, instead of `INTERNAL`; the cause is
+still logged. A client that retries a refused request now has one code to recognise on either transport.
+
 ---
 
 ### D-84. A socket's frames are handled one at a time, in order, behind a bounded queue
