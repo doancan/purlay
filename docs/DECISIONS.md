@@ -2966,6 +2966,19 @@ makes a channel private in Phase 0–1's endpoints, and the event it needs is th
 
 **Reversibility:** one frame and one close behaviour; nothing is stored.
 
+**Amended 2026-10-09 (second-round audit): the contract is watched, and out-of-band SQL is not
+covered.** The three publish functions had no caller, so nothing noticed when a path that removes
+visibility did not publish. `revocation-contract.test.ts` now finds every production statement that
+revokes a session, soft-deletes a user, workspace or channel, or deletes or updates a membership, and
+holds each to a table of the event it publishes (or, with an owner, why none): a new write path with no
+decision fails the build, and a row whose write has gone fails it too. Today's sites are all sessions —
+sign-out publishes after the write, and the dead-session purge removes only rows already announced or
+expired. Nothing existing needed wiring; no path soft-deletes a user, workspace or channel yet.
+**A write made outside the application** — SQL by hand, a script — **does not end open sockets** until
+the session expires or the process restarts, because the bus is in-process (D-7): a command-line tool is
+another process and cannot reach this one's bus, and a network bus is not built for it (`CONTRIBUTING.md`
+§1.11). An operator who revokes by SQL restarts the node (a drain, D-72) to make it take effect.
+
 ---
 
 ### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change

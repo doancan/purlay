@@ -318,6 +318,60 @@ describe('reconnecting', () => {
   });
 });
 
+describe('a socket that has been replaced', () => {
+  /**
+   * A superseded socket can still deliver: its frames were in flight when the
+   * connection moved on. Folding one in would advance a cursor past messages the new
+   * connection's replay has yet to fetch — the gap `Connection` exists to close — and
+   * would hand the UI a frame from a connection it no longer has.
+   */
+  test('its late frames are neither shown nor remembered once a newer socket exists', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    h.connection.start();
+    const old = h.last();
+    old.handlers.opened();
+    old.handlers.closed(1006);
+    h.fireNext();
+    const current = h.last();
+    expect(current).not.toBe(old);
+
+    old.handlers.message(created(channel(1), idAt(9_000)));
+    expect(h.frames).toEqual([]);
+
+    // The control: the same frame on the current socket is shown.
+    current.handlers.opened();
+    current.handlers.message(created(channel(1), idAt(9_000)));
+    expect(h.frames).toHaveLength(1);
+  });
+
+  test('its late frames do not advance the cursor the next connection resumes from', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    h.connection.start();
+    const old = h.last();
+    old.handlers.opened();
+    old.handlers.closed(1006);
+    h.fireNext();
+    old.handlers.message(created(channel(1), idAt(9_000)));
+
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())[0]?.payload.channels).toEqual([
+      { channelId: channel(1), afterMessageId: null },
+    ]);
+  });
+
+  test('after stop, a frame from the old socket is dropped', () => {
+    const h = harness();
+    h.connection.start();
+    const old = h.last();
+    old.handlers.opened();
+    h.connection.stop();
+    old.handlers.message(created(channel(1), idAt(1_000)));
+    expect(h.frames).toEqual([]);
+  });
+});
+
 describe('replay by cursor', () => {
   test('a channel nothing was heard in resubscribes from null', () => {
     const h = harness();

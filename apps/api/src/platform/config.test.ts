@@ -180,6 +180,25 @@ describe('loading configuration', () => {
     }
   });
 
+  /**
+   * A session is a credential that lives this long. Both ends are limits a person
+   * chose: a year is the longest a stolen cookie may be worth, and zero would mint
+   * sessions that are expired when issued.
+   */
+  test('SESSION_TTL_DAYS is a whole number of days from one to 365', () => {
+    expect(loadConfig({ ...valid, SESSION_TTL_DAYS: '1' }).SESSION_TTL_DAYS).toBe(1);
+    expect(loadConfig({ ...valid, SESSION_TTL_DAYS: '365' }).SESSION_TTL_DAYS).toBe(365);
+    const accepted = ['0', '366', '3650', '-1', 'a month'].filter((value) => {
+      try {
+        loadConfig({ ...valid, SESSION_TTL_DAYS: value });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    expect(accepted).toEqual([]);
+  });
+
   test('an invalid enumerated value is refused rather than coerced', () => {
     expect(() => loadConfig({ ...valid, NODE_ENV: 'staging' })).toThrow(ConfigurationError);
   });

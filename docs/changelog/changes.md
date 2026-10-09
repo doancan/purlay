@@ -13,6 +13,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   canonical base64, is compared to the development key as bytes, and is refused when it is a
   pattern. `SESSION_TTL_DAYS=1.5` is refused instead of truncated (D-79, Part of #231).
 
+### Chore — 2026-10-09: nothing may remove visibility without deciding what sockets are told
+
+- A test finds every production statement that revokes a session, soft-deletes a user, workspace or
+  channel, or deletes or updates a membership, and requires each to be mapped to the event it publishes,
+  or to a reason and an owner. A planted unlisted write fails it (#231, D-85).
+- Out-of-band SQL revocation is documented as not ending open sockets until expiry or a restart. A
+  command-line revoker is not provided: another process cannot reach the in-process bus.
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and
@@ -28,6 +36,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   nothing leaves the process. No vendor library; bounded, drops under a storm, never throws into the
   caller; a malformed DSN, or an `http://` one in production, refuses to start (#248, D-96, D-44).
 - Against a stand-in collector, one real 500 produced one envelope with the DSN set and none without.
+
+### Test — 2026-10-09: the audit's mutation survivors are killed
+
+- Of 21 mutations re-derived against the current code, 15 survived the tests as they were on main and
+  none survives now: a retry from another channel is a conflict, history and replay leave deleted messages
+  out and cap the page, the OAuth state's length check and a missing `code` are tested, `SESSION_TTL_DAYS`
+  is held to 1–365, the member list and `/api/me` leave tombstones out, the web connection ignores a replaced
+  socket's frames, and a send is announced only after its commit (a second connection reads the row at the
+  moment of publication). `bun run mutate` keeps all of them (#246, D-47).
 
 ### Feature — 2026-10-09: a mutation runner that never touches the working tree
 

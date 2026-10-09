@@ -151,6 +151,11 @@ into a support ticket (`PRD.md` §3, S-2):
 | `POSTGRES_PORT` | `5432` | Local development only; not read by the application |
 | `STORAGE_PORT` | `9000` | S3 API |
 
+Both are published on the **loopback address only** (`127.0.0.1`): the development database has a
+superuser whose password is in the repository and the object store a published key, so a port open to
+the network would be an open door on a developer's laptop or a shared CI host. To reach them from
+another machine, forward a port (`ssh -L`); do not edit the binding.
+
 `.env.example` lists exactly the variables the loader reads. It is generated from the loader
 (`bun run config:example`), and CI fails if the committed file differs, so it cannot list a
 variable the application ignores or miss one it reads.
