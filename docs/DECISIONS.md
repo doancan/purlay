@@ -3534,6 +3534,20 @@ runs its source. The client's errors (`apps/web`) are a separate surface and not
 
 **Reversibility:** free. One module and one variable; unset it and the process is as it was.
 
+
+*Amended 2026-10-09 (a second-round audit that pointed it at a collector that accepts and never answers):*
+"it can never make the process worse" was not true of three things. (1) A report had no timeout, so ten
+silent connections held every slot for ever: of 25 failing requests ten were delivered and no error was
+ever reported again until restart, nothing said reports were being dropped, and SIGTERM ran to the whole
+ten-second deadline. A report now gives up after five seconds; drops are announced at `warn`, at most once a
+minute, with the running total; and shutdown waits for the reporter two seconds at most and abandons what
+is left. A redirect is not followed (`redirect: 'manual'`): a report goes to the host in the DSN and
+nowhere else. (2) Stack traces named the machine — `/Users/…`, `/home/…`, the build directory. Absolute paths
+are made relative to the working directory, to the package inside `node_modules`, or to the file name
+alone, in the stack, the message and every string in the fields; a request path such as `/api/channels`
+is not a place on the machine and is left alone. Run again: 25 failing requests, ten delivered, one drop
+notice, the next five delivered after the timeout, SIGTERM answered in two seconds.
+
 ---
 
 ## Part D — Open, deliberately
