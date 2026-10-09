@@ -285,6 +285,11 @@ subscribed — one the caller cannot see refuses the frame, and nothing is left 
 every channel's replay is read in one more, sharing a fixed total so a hundred channels a page behind
 is not ten thousand frames from one. (D-69)
 
+**The subscription is made before the replay is read.** Live frames for the connection are held
+until the acknowledgement and the replay are written, then sent, minus any message the replay already
+carried by id. Read first, a message committed between the read and the subscription would be in
+neither. (D-83)
+
 ### 5.5. Backpressure and limits
 
 - Max frame size 64 KB, enforced by the server for every connection: a frame over it ends that

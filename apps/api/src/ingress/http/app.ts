@@ -54,7 +54,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, withinRequest, type Logger } from '../../platform/logging';
 import { createSocketHub } from '../../realtime/hub';
-import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
+import { CLOSE_CODES, MAX_FRAME_BYTES, type ServerFrame } from '@purlay/types';
 import { routeFrame } from '../../realtime/router';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { admitSocket } from '../../realtime/upgrade';
@@ -348,22 +348,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         await withinRequest(
           { requestId: crypto.randomUUID(), startedAt: performance.now() },
           async () => {
-            for (const reply of await routeFrame(
-              {
-                database: dependencies.database,
-                clock: dependencies.clock,
-                bus,
-                limiter,
-                log,
-                // The real boundary. D-35: one transaction, published after it returns.
-                atomically,
-              },
-              identity,
-              raw,
-            )) {
+            let replies: readonly ServerFrame[] = [];
+            try {
+              replies = await routeFrame(
+                {
+                  database: dependencies.database,
+                  clock: dependencies.clock,
+                  bus,
+                  limiter,
+                  log,
+                  // The real boundary. D-35: one transaction, published after it returns.
+                  atomically,
+                  socket: hub,
+                },
+                identity,
+                raw,
+              );
+            } finally {
               // Through the hub, so a replay burst is held to the same mark as the
-              // bus's fan-out rather than queued without limit.
-              hub.deliver(socket.id, reply);
+              // bus's fan-out, and the live frames kept during a subscription follow.
+              hub.reply(socket.id, replies);
             }
           },
         );

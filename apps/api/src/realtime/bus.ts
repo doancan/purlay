@@ -14,7 +14,12 @@
 import type { ServerFrame } from '@purlay/types';
 import type { Deliver, EventBus, Topic } from '../platform/events';
 
-export const inProcessEventBus = (deliver: Deliver): EventBus => {
+/** What a test may ask of the in-process bus beyond the interface: how much it holds. */
+export interface InspectableEventBus extends EventBus {
+  readonly size: () => { readonly topics: number; readonly sockets: number };
+}
+
+export const inProcessEventBus = (deliver: Deliver): InspectableEventBus => {
   const byTopic = new Map<Topic, Set<string>>();
   const bySocket = new Map<string, Set<Topic>>();
 
@@ -26,14 +31,16 @@ export const inProcessEventBus = (deliver: Deliver): EventBus => {
       await Promise.resolve();
     },
 
-    subscribe: (topic: Topic, socketId: string): void => {
+    subscribe: (topic: Topic, socketId: string): boolean => {
       const sockets = byTopic.get(topic) ?? new Set<string>();
+      const added = !sockets.has(socketId);
       sockets.add(socketId);
       byTopic.set(topic, sockets);
 
       const topics = bySocket.get(socketId) ?? new Set<Topic>();
       topics.add(topic);
       bySocket.set(socketId, topics);
+      return added;
     },
 
     unsubscribe: (topic: Topic, socketId: string): void => {
@@ -41,7 +48,10 @@ export const inProcessEventBus = (deliver: Deliver): EventBus => {
       sockets?.delete(socketId);
       // An empty set is a leak that grows with every channel anybody ever opened.
       if (sockets?.size === 0) byTopic.delete(topic);
-      bySocket.get(socketId)?.delete(topic);
+      const topics = bySocket.get(socketId);
+      topics?.delete(topic);
+      // The same leak the other way round: one entry per socket that ever unsubscribed.
+      if (topics?.size === 0) bySocket.delete(socketId);
     },
 
     forget: (socketId: string): void => {
@@ -52,5 +62,7 @@ export const inProcessEventBus = (deliver: Deliver): EventBus => {
       }
       bySocket.delete(socketId);
     },
+
+    size: () => ({ topics: byTopic.size, sockets: bySocket.size }),
   };
 };
