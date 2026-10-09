@@ -21,6 +21,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   order, the same states the migrator refuses to run past (D-86). A database from before checksums existed
   is still ready.
 
+### Fix — 2026-10-09: a connection failure is written with what failed
+
+- `pg` throws an `AggregateError` with an empty message when a host resolves to several addresses and
+  none answers, and the log wrote `"message": ""`. It now writes every nested error with its message,
+  and any error's system code (`ECONNREFUSED`, `23505`) as `errorCode` — not `code`, which stays on the
+  never-logged list.
+
 ### Fix — 2026-10-09: a migration can leave its transaction, and an edited migration is noticed
 
 - `0007` said `NOT VALID` then `VALIDATE` "lets writes continue". Inside the migrator's transaction it did
