@@ -2681,6 +2681,18 @@ checks above are the ones that are never wrong.
 
 **Reversibility:** free; nothing is stored. An operator on a bad key sees it at the next start.
 
+**Amended 2026-10-09 (second-round attack, all three verified against a real loader).**
+*Canonical spelling:* the last base64 character of a 32-byte key carries two bits decoding drops, so
+changing the public development key's final `E` to `F` produced the same bytes under a different
+string and passed the string comparison. The key must now re-encode to exactly what was set, and the
+development key is compared as **bytes**. *Low entropy:* a key that is a short pattern repeated
+(`abcd`), a constant-step sequence (bytes 0..31) or has fewer than 16 distinct bytes is refused.
+The threshold is measured: of 2,000,000 random keys the fewest distinct bytes was 22, and the
+chance of one below 16 is under one in 10^12, so it never rejects an honest `openssl rand`. This is
+a screen for patterns a person types, not an entropy proof — *rejected: estimating entropy*, as
+above. *Integers:* `Convert` truncates `1.5` to `1`, so `SESSION_TTL_DAYS=1.5` was a day, silently;
+every integer variable must now be written as digits.
+
 ---
 
 ### D-80. The HTTP edge is bounded before a handler runs
