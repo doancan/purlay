@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the proxy no longer logs query strings, its ports can move, and there is a file to start from
+
+- Caddy's access log wrote `/auth/github/callback?code=...&state=...` in full. It now logs the path and
+  nothing after the `?` (#231, D-94 amended); shown on a real run below the pull request.
+- `HTTP_PORT` and `HTTPS_PORT` move the proxy's host ports; the HTTPS port is also in `APP_URL`, and the
+  caveat about public certificates is in `CONFIG.md`.
+- `docker/production.env.example`: every required variable, secrets empty so an unedited copy fails by name;
+  a test binds it to the compose file.
+
 ### Chore — 2026-10-09: nothing may remove visibility without deciding what sockets are told
 
 - A test finds every production statement that revokes a session, soft-deletes a user, workspace or

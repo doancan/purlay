@@ -3380,6 +3380,14 @@ only after Phase 3 builds the shared adapters).
 
 **Reversibility:** free. The volumes (database, bucket, certificates) outlive the file.
 
+
+*Amended 2026-10-09 (a second-round audit that ran it):* (1) Caddy's access log recorded the full URI, so
+`/auth/github/callback?code=...&state=...` was written to a file that is shipped and kept; it now logs the
+path and removes everything from the `?` on, checked on a real run. (2) 80 and 443 were written into the
+file; `HTTP_PORT` and `HTTPS_PORT` move them, with the caveats in `CONFIG.md` (the HTTPS port must also be in
+`APP_URL`, and a public certificate needs the standard ports). (3) The variables were only in a table;
+`docker/production.env.example` is the file to copy, bound to the compose file by a test, with secrets
+left empty so an unedited copy fails by name instead of starting with a default.
 ---
 
 ### D-95. A backup is a directory that has been restored: a dump, a bucket copy, and a comparison
