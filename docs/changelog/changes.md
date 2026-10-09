@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Research — 2026-10-09: the image pipeline is already in the runtime
+
+- **`Bun.Image` makes thumbnails with nothing installed**, on macOS and in a Linux container, with
+  EXIF removed from every output and a decompression bomb refused by default. The spike was meant to
+  choose among native libraries and found none was needed (#6, D-75).
+- **`resize(width, height)` stretches.** Found with a half-red, half-blue source; a solid-colour one
+  looked correct. Thumbnails use `fit: 'inside'`.
+- **A truncated JPEG passes `metadata()`** and fails only when decoded, so an upload is validated by
+  producing its thumbnail, not by reading its header.
+
 ### Research — 2026-09-09: what the frontend stack costs, before a screen exists
 
 - **The declared stack is 69% of the declared budget with no product code**, imported eagerly.
