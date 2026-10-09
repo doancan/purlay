@@ -45,7 +45,11 @@ describe('integration: the hub’s expiry timer', () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'hub-timer');
       const timers = recorded();
-      const hub = createSocketHub(db, clock, { log: createLogger({ level: 'silent' }), timers });
+      const hub = createSocketHub(db, clock, {
+        log: createLogger({ level: 'silent' }),
+        leave: () => undefined,
+        timers,
+      });
       await hub.opened(
         's',
         quietConnection,
@@ -66,7 +70,11 @@ describe('integration: the hub’s expiry timer', () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'hub-timer-early');
       const timers = recorded();
-      const hub = createSocketHub(db, clock, { log: createLogger({ level: 'silent' }), timers });
+      const hub = createSocketHub(db, clock, {
+        log: createLogger({ level: 'silent' }),
+        leave: () => undefined,
+        timers,
+      });
       const opening = hub.opened(
         's',
         quietConnection,

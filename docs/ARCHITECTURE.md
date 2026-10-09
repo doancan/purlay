@@ -336,6 +336,10 @@ the type refuses the pool (D-77).
 
 - **Phase 0–2:** `InProcessEventBus` — a `Map<Topic, Set<socketId>>`. No network, no
   serialization, no broker to operate.
+- **Several nodes:** each node's bus is a view onto a `Backplane` (`realtime/bus.ts`): it holds only
+  its own sockets' subscriptions, and a publish from any node reaches every node's subscribers.
+  One process makes its own backplane; the tests share one between two applications, which is how
+  a revocation is shown to reach the other node's sockets (D-81).
 - **Phase 3:** `RedisEventBus` — the same interface over Redis pub/sub, plus a
   `subscriberCount` check so a node does not publish to topics nobody local is watching.
 
@@ -437,6 +441,15 @@ out everywhere publish `SESSION_ENDED` on each revoked session's topic; expiry i
 `expires_at` when the socket opens. Either way the frame is delivered first and the connection is
 then closed with `CLOSE_CODES.SESSION_ENDED`, so the client knows not to reconnect into a refusal.
 The session is **not** re-read per frame. (D-68)
+
+**The same is true of the account and of a membership, on every node.** Deleting a user publishes
+`SESSION_ENDED` (`account-deleted`) on `user:{id}`, where each of their sockets listens, and the
+connection closes. Losing a channel — removed from a workspace or a private channel, leaving, or the
+channel being deleted — publishes `ACCESS_REVOKED` on `user:{id}` or `channel:{id}`: the hub
+unsubscribes the socket from those channels and the connection stays open. No visibility query runs
+per delivered frame. A subscription is made before its channels are authorised so a revocation
+cannot slip between the two. Phase 1's endpoints must publish these after they commit; the
+functions are in `platform/events.ts` and D-81 lists which endpoint calls which.
 
 ### 7.3. The isolation mechanism
 

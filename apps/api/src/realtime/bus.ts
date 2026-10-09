@@ -10,6 +10,14 @@
  * Phase 0–2 is this: a map of topic to socket ids. No network, no serialisation,
  * no broker for a self-hosted instance to operate — which it will never need,
  * because one node serving thirty people does not (D-7, D-25).
+ *
+ * **A node is a view onto a backplane.** Each node holds its own sockets'
+ * subscriptions and delivers only to them; a publish from any node reaches every
+ * node's subscribers of that topic. In production there is one node and the
+ * backplane is private to it. Two nodes sharing one backplane — what the tests
+ * build — are exactly what Phase 3's Redis adapter provides across processes, so
+ * "a revoked session closes its sockets on the other node too" is demonstrated
+ * here rather than argued (D-81).
  */
 import type { ServerFrame } from '@purlay/types';
 import type { Deliver, EventBus, Topic } from '../platform/events';
@@ -20,16 +28,22 @@ export interface InspectableEventBus extends EventBus {
   readonly size: () => { readonly topics: number; readonly sockets: number };
 }
 
-export const inProcessEventBus = (deliver: Deliver, log: Logger): InspectableEventBus => {
+interface Subscriptions extends Omit<InspectableEventBus, 'publish'> {
+  readonly fanOut: (topic: Topic, frame: ServerFrame) => void;
+}
+
+/** One node's subscriptions: which of its sockets listen to which topic. */
+const subscriptionsOf = (deliver: Deliver, log: Logger): Subscriptions => {
   const byTopic = new Map<Topic, Set<string>>();
   const bySocket = new Map<string, Set<Topic>>();
 
   return {
-    publish: async (topic: Topic, frame: ServerFrame): Promise<void> => {
+    fanOut: (topic: Topic, frame: ServerFrame): void => {
       // A snapshot, and each delivery on its own: the message is already committed,
       // so one socket whose send throws must neither stop the rest from receiving
       // it nor surface as an error to the publisher. Logged with the socket's id
-      // and never the frame, which is somebody's message.
+      // and never the frame, which is somebody's message. (A snapshot also because
+      // delivering a revocation unsubscribes from the topic being walked.)
       for (const socketId of [...(byTopic.get(topic) ?? [])]) {
         try {
           deliver(socketId, frame);
@@ -37,9 +51,6 @@ export const inProcessEventBus = (deliver: Deliver, log: Logger): InspectableEve
           log.error('delivery to a socket failed', { socketId, topic, err: error });
         }
       }
-      // Asynchronous by interface, synchronous today. A caller that awaits it now
-      // keeps working when the implementation behind it does reach a network.
-      await Promise.resolve();
     },
 
     subscribe: (topic: Topic, socketId: string): boolean => {
@@ -77,3 +88,34 @@ export const inProcessEventBus = (deliver: Deliver, log: Logger): InspectableEve
     size: () => ({ topics: byTopic.size, sockets: bySocket.size }),
   };
 };
+
+/** The shared transport nodes publish through. Phase 3's Redis adapter is this, across processes. */
+export interface Backplane {
+  readonly node: (deliver: Deliver, log: Logger) => InspectableEventBus;
+}
+
+export const inProcessBackplane = (): Backplane => {
+  const nodes = new Set<(topic: Topic, frame: ServerFrame) => void>();
+  return {
+    node: (deliver, log): InspectableEventBus => {
+      const local = subscriptionsOf(deliver, log);
+      nodes.add(local.fanOut);
+      return {
+        publish: async (topic: Topic, frame: ServerFrame): Promise<void> => {
+          for (const fanOut of nodes) fanOut(topic, frame);
+          // Asynchronous by interface, synchronous today. A caller that awaits it now
+          // keeps working when the implementation behind it does reach a network.
+          await Promise.resolve();
+        },
+        subscribe: local.subscribe,
+        unsubscribe: local.unsubscribe,
+        forget: local.forget,
+        size: local.size,
+      };
+    },
+  };
+};
+
+/** One node on a backplane of its own: what a single process runs. */
+export const inProcessEventBus = (deliver: Deliver, log: Logger): InspectableEventBus =>
+  inProcessBackplane().node(deliver, log);

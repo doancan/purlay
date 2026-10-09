@@ -90,6 +90,8 @@ export interface SocketGate {
   readonly hold: (socketId: string) => void;
   /** False once the connection has closed: nothing more may be subscribed for it. */
   readonly isOpen: (socketId: string) => boolean;
+  /** Forgets frames kept for these channels (a refused subscription's). */
+  readonly drop: (socketId: string, channelIds: readonly string[]) => void;
 }
 
 export interface SocketIdentity {
@@ -240,28 +242,32 @@ export const routeFrame = async (
           ];
         }
 
-        // Authorised together, before anything is subscribed: one channel the
-        // caller cannot see refuses the frame, and nothing is left half-done
-        // behind an error. One query, however many channels (#196).
-        const contexts = await requireChannelsById(database, identity.userId, channelIds);
-
-        // Gone while its channels were being authorised: subscribe nothing for a
-        // connection whose cleanup has already run, or its id outlives it.
+        // Gone before it began: subscribe nothing for a connection whose cleanup has
+        // already run, or its id outlives it.
         if (!dependencies.socket.isOpen(identity.socketId)) return [];
 
-        // **Subscribed before the replay is read**, with live frames held until the
+        // **Subscribed before anything is read**, with live frames held until the
         // acknowledgement and the replay are written. Read first, a message
         // committed between the read and the subscription is in neither, and the
-        // client's cursor then moves past it for good.
+        // client's cursor then moves past it for good (D-79). Subscribed before the
+        // channels are *authorised* too, so that a revocation published while the
+        // authorisation is being read finds the subscription and ends it; made after,
+        // it would find nothing and the stale authorisation would then subscribe (D-81).
         dependencies.socket.hold(identity.socketId);
         const fresh: string[] = [];
-        for (const context of contexts) {
-          if (bus.subscribe(channelTopic(context.channelId), identity.socketId)) {
-            fresh.push(context.channelId);
-          }
+        for (const channelId of channelIds) {
+          if (bus.subscribe(channelTopic(channelId), identity.socketId)) fresh.push(channelId);
         }
 
         try {
+          // Authorised together: one channel the caller cannot see refuses the frame,
+          // and what was subscribed above is undone. One query, however many channels
+          // (#196).
+          const contexts = await requireChannelsById(database, identity.userId, channelIds);
+          // Gone while its channels were being authorised: the close already forgot
+          // every subscription, and nothing below adds one.
+          if (!dependencies.socket.isOpen(identity.socketId)) return [];
+
           const replaying = contexts.flatMap((context, index) => {
             const after = wanted[index]?.afterMessageId ?? null;
             return after === null ? [] : [{ context, after: replayFloor(after) }];
@@ -305,6 +311,9 @@ export const routeFrame = async (
           for (const channelId of fresh) {
             bus.unsubscribe(channelTopic(channelId), identity.socketId);
           }
+          // Frames that arrived for channels it was never allowed are not released
+          // with the error.
+          dependencies.socket.drop(identity.socketId, fresh);
           throw error;
         }
       }

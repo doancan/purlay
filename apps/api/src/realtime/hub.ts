@@ -122,6 +122,11 @@ export interface SocketHub {
   /** Whether the connection is still held: false once it has closed. */
   isOpen: (socketId: string) => boolean;
   /**
+   * Forgets frames kept for this connection that belong to these channels — what a
+   * subscription that was refused, after subscribing first, must not let through.
+   */
+  drop: (socketId: string, channelIds: readonly string[]) => void;
+  /**
    * Runs one client frame's work after every earlier frame of this connection has
    * finished. The framework starts handlers as frames arrive and does not wait for
    * the last, so without this a slow `SUBSCRIBE` is overtaken by the `UNSUBSCRIBE`
@@ -163,13 +168,19 @@ interface Held {
 
 export interface HubOptions {
   readonly log: Logger;
+  /**
+   * Stops a connection listening to a channel. The hub calls it when it delivers an
+   * `ACCESS_REVOKED`, so the revocation takes effect on this node whichever node
+   * published it; the bus is not a dependency of the hub, so it is handed in.
+   */
+  readonly leave: (channelId: string, socketId: string) => void;
   readonly timers?: Timers;
 }
 
 export const createSocketHub = (
   database: Executor,
   clock: Clock,
-  { log, timers = systemTimers }: HubOptions,
+  { log, leave, timers = systemTimers }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
@@ -194,12 +205,25 @@ export const createSocketHub = (
     }
   };
 
+  const purge = (socket: Held, channelIds: ReadonlySet<string>): void => {
+    socket.holding = socket.holding?.filter(
+      (kept) => kept.event !== 'MESSAGE_CREATED' || !channelIds.has(kept.data.channelId),
+    );
+  };
+
   const deliver = (socketId: string, frame: ServerFrame): void => {
     const socket = held.get(socketId);
     // A frame for a connection that has gone is dropped, not queued. Delivery is
     // best-effort by design: what a client missed it asks for on reconnect, by
     // keyset (`ARCHITECTURE.md` §5.4).
     if (socket === undefined) return;
+    if (frame.event === 'ACCESS_REVOKED') {
+      // Takes effect now, even behind a replay: what was kept for these channels is
+      // forgotten, and nothing published to them reaches this connection again. The
+      // notice itself follows in order, so the client hears it after its replay.
+      for (const channelId of frame.data.channelIds) leave(channelId, socketId);
+      purge(socket, new Set(frame.data.channelIds));
+    }
     // The end of a session is never kept waiting behind a replay.
     if (socket.holding !== undefined && frame.event !== 'SESSION_ENDED') {
       if (socket.holding.length >= HELD_FRAMES_MAX) {
@@ -303,6 +327,11 @@ export const createSocketHub = (
     },
 
     isOpen: (socketId: string): boolean => held.has(socketId),
+
+    drop: (socketId: string, channelIds: readonly string[]): void => {
+      const socket = held.get(socketId);
+      if (socket !== undefined) purge(socket, new Set(channelIds));
+    },
 
     enqueue: (socketId: string, work: () => Promise<void>): void => {
       const socket = held.get(socketId);

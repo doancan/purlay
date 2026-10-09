@@ -33,7 +33,7 @@ describe('a frame that fails in a way nobody anticipated', () => {
             bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
             limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
             log,
-            socket: { hold: () => undefined, isOpen: () => true },
+            socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
             atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),
           },
           { socketId: 's1', userId: 'u1', sessionId: 'not-read', expiresAt: clock.now() },

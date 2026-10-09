@@ -62,7 +62,10 @@ interface Rig {
 /** One hub holding one socket, 's1', with everything written to it recorded. */
 const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
   const written: ServerFrame[] = [];
-  const hub = createSocketHub(db, clock, { log: createLogger({ level: 'silent' }) });
+  const hub = createSocketHub(db, clock, {
+    log: createLogger({ level: 'silent' }),
+    leave: () => undefined,
+  });
   const bus = inProcessEventBus(hub.deliver, createLogger({ level: 'silent' }));
   await hub.opened(
     's1',
@@ -192,7 +195,7 @@ describe('integration: subscribe before replay', () => {
       const channelId = await aChannel(db, alice);
       const rig = await aRig(db, alice);
       const replies = await rig.route(subscribeFrame(channelId, BEFORE), {
-        socket: { hold: () => undefined, isOpen: () => false },
+        socket: { hold: () => undefined, isOpen: () => false, drop: () => undefined },
       });
       expect(replies).toEqual([]);
       expect(rig.bus.size()).toEqual({ topics: 0, sockets: 0 });

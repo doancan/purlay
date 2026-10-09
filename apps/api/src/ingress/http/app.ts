@@ -48,8 +48,8 @@ import {
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 import { postMessage, readHistory } from './messages';
-import { inProcessEventBus } from '../../realtime/bus';
-import { sessionTopic } from '../../platform/events';
+import { inProcessBackplane, type Backplane } from '../../realtime/bus';
+import { channelTopic, sessionTopic, userTopic } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, withinRequest, type Logger } from '../../platform/logging';
@@ -68,6 +68,12 @@ export interface Dependencies {
   readonly log: Logger;
   /** Absent in production, where the limits are the provisional ones (`rate-limit.ts`). */
   readonly rateBudgets?: HttpBudgets;
+  /**
+   * The transport this node publishes through. One node needs none: it makes its
+   * own. Two nodes in one process (a test) share one, which is how a revocation
+   * published on either is shown to reach the other's sockets (D-81).
+   */
+  readonly backplane?: Backplane;
 }
 
 /**
@@ -153,8 +159,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
   /** Set once, by `drain`; readiness reads it before anything else. */
   let draining = false;
-  const hub = createSocketHub(dependencies.database, dependencies.clock, { log });
-  const bus = inProcessEventBus(hub.deliver, log);
+  const hub = createSocketHub(dependencies.database, dependencies.clock, {
+    log,
+    // Called from `hub.deliver`, which only runs after `bus` exists.
+    leave: (channelId, socketId) => {
+      bus.unsubscribe(channelTopic(channelId), socketId);
+    },
+  });
+  const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
   const limiter = inProcessRateLimiter(dependencies.clock, SOCKET_FRAME_BUDGET);
   // The transaction boundary both doors share: a new transaction per write, or
   // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
@@ -346,6 +358,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         // Where the end of this session will be announced, on whichever node.
         if (identity !== undefined) {
           bus.subscribe(sessionTopic(identity.sessionId), socket.id);
+          // And where the end of the account, or of one membership, is announced.
+          bus.subscribe(userTopic(identity.userId), socket.id);
           log.info('socket opened', { socketId: socket.id, userId: identity.userId });
         }
       },

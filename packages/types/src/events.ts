@@ -98,6 +98,14 @@ export type ClientFrame = Static<typeof ClientFrame>;
 export type ClientOp = ClientFrame['op'];
 
 /**
+ * The most channels one `ACCESS_REVOKED` names. Removing a member from a workspace
+ * names every channel of it they could see; a publisher with more sends several
+ * frames. Bounded so a frame stays under `MAX_FRAME_BYTES` and a hostile or
+ * mistaken publisher cannot make the hub do unbounded work for one delivery.
+ */
+export const ACCESS_REVOKED_MAX_CHANNELS = 500;
+
+/**
  * Every server frame carries the server clock — **for drift correction only,
  * never for ordering** (D-8). The client derives an offset from it so the UUIDv7
  * it generates carries a plausible timestamp (D-33). `refId` echoes the client
@@ -161,7 +169,30 @@ export const MessageCreatedFrame = Type.Object({
 export const SessionEndedFrame = Type.Object({
   event: Type.Literal('SESSION_ENDED'),
   data: Type.Object({
-    reason: Type.Union([Type.Literal('signed-out'), Type.Literal('expired')]),
+    reason: Type.Union([
+      Type.Literal('signed-out'),
+      Type.Literal('expired'),
+      /** The user was deleted: every session they held ends, on every node (#238). */
+      Type.Literal('account-deleted'),
+    ]),
+  }),
+  ...envelope,
+});
+
+/**
+ * The connection may no longer see these channels, and delivery for them has
+ * stopped. The connection stays open: every other channel it watches is
+ * unaffected, which is the reason this is not a close (D-81).
+ *
+ * Published when a membership or a channel goes away — a member removed, a
+ * channel left, a channel deleted — on the topic that reaches the affected
+ * sockets on whichever node holds them. The client drops the channels from its
+ * view; nothing it already holds is recalled.
+ */
+export const AccessRevokedFrame = Type.Object({
+  event: Type.Literal('ACCESS_REVOKED'),
+  data: Type.Object({
+    channelIds: Type.Array(Uuid, { minItems: 1, maxItems: ACCESS_REVOKED_MAX_CHANNELS }),
   }),
   ...envelope,
 });
@@ -179,6 +210,7 @@ export const ServerFrame = Type.Union([
   ErrorFrame,
   MessageCreatedFrame,
   SessionEndedFrame,
+  AccessRevokedFrame,
   PongFrame,
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;
@@ -234,9 +266,15 @@ export const parseServerMessage = (text: string): ServerMessage => {
 /**
  * `workspace:{id}` · `channel:{id}` · `user:{id}` · `session:{id}` (`ARCHITECTURE.md` §6).
  *
- * `session:` carries the end of a session to every node holding one of its
- * sockets, which is why revocation goes through the bus rather than a local call:
- * on several nodes a local call reaches one of them (D-7, D-25).
+ * - `channel:` carries a channel's messages to the sockets watching it, and an
+ *   `ACCESS_REVOKED` when the channel itself goes away.
+ * - `session:` carries the end of one session to every node holding one of its
+ *   sockets, which is why revocation goes through the bus rather than a local
+ *   call: on several nodes a local call reaches one of them (D-7, D-25).
+ * - `user:` is where every socket a user holds listens, whichever session it
+ *   belongs to: the end of the account (`SESSION_ENDED`, `account-deleted`) and the
+ *   removal of one member's access (`ACCESS_REVOKED`) are published here (D-81).
+ * - `workspace:` has no publisher yet; it is named for Phase 1.
  */
 export type Topic =
   `workspace:${string}` | `channel:${string}` | `user:${string}` | `session:${string}`;

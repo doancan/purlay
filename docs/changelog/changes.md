@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-09: a membership or session change ends delivery on every node
+
+- A revoked session closed its sockets only on the node that handled the sign-out; a removed member
+  kept receiving a channel on an open socket while HTTP answered 404; a deleted user's sockets lived
+  on (#238, #203). Three bus events now carry these: `SESSION_ENDED` on `session:` and `user:`
+  (`account-deleted`), and the new `ACCESS_REVOKED`, which unsubscribes the channels and leaves the
+  connection open (D-81).
+- Shown with two applications sharing one backplane and real sockets: sign-out on one closes the
+  socket the other holds, and a removal published while a subscription is being authorised still
+  ends it, because a subscription is now made before its channels are authorised.
+
 ### Fix — 2026-10-09: a socket's frames are handled in order, and a drain waits for them
 
 - The framework started a handler per frame and did not wait for the last: a fast `UNSUBSCRIBE` was
