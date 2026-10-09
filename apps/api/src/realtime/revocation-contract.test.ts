@@ -16,7 +16,7 @@
  * delete-channel and delete-user endpoints (#51, #98).
  */
 import { describe, expect, test } from 'bun:test';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const ROOT = join(import.meta.dir, '..', '..', '..', '..');
@@ -108,9 +108,10 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
 
 const sourcesIn = (dir: string): Source[] => {
   const found: Source[] = [];
-  for (const entry of readdirSync(dir)) {
+  for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+    const entry = dirent.name;
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
+    if (dirent.isDirectory()) {
       if (entry === 'node_modules' || entry === 'testing') continue;
       found.push(...sourcesIn(full));
     } else if (
