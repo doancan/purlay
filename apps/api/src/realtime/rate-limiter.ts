@@ -49,8 +49,37 @@ interface Bucket {
  * Resets on restart, which O-4 acknowledges: a restart drops every connection,
  * and each one starts again with a full bucket.
  */
-export const inProcessRateLimiter = (clock: Clock, budget: RateBudget): RateLimiter => {
+/** How many keys may be held before a sweep drops the ones that have refilled. */
+const SWEEP_ABOVE = 10_000;
+
+export interface InProcessRateLimiter extends RateLimiter {
+  /** How many keys are held. For tests and for the day this needs a gauge. */
+  readonly held: () => number;
+}
+
+export const inProcessRateLimiter = (
+  clock: Clock,
+  budget: RateBudget,
+  sweepAbove = SWEEP_ABOVE,
+): InProcessRateLimiter => {
   const buckets = new Map<string, Bucket>();
+  let sweptAt = 0;
+
+  /**
+   * A bucket that has refilled to its burst is the same as no bucket, so it can
+   * go. Without this a key per client address grows with every address that ever
+   * knocked, which an attacker rotating IPv6 /64s controls. At most once a
+   * second, so a flood of live keys cannot make every call a full scan.
+   */
+  const sweep = (now: number): void => {
+    if (buckets.size <= sweepAbove || now - sweptAt < 1000) return;
+    sweptAt = now;
+    for (const [key, bucket] of buckets) {
+      const refilled =
+        bucket.tokens + (Math.max(0, now - bucket.refilledAt) / 1000) * budget.perSecond;
+      if (refilled >= budget.burst) buckets.delete(key);
+    }
+  };
 
   return {
     consume: async (key: string, cost = 1): Promise<boolean> => {
@@ -63,10 +92,12 @@ export const inProcessRateLimiter = (clock: Clock, budget: RateBudget): RateLimi
       const allowed = bucket.tokens >= cost;
       if (allowed) bucket.tokens -= cost;
       buckets.set(key, bucket);
+      sweep(now);
       return await Promise.resolve(allowed);
     },
     forget: (key: string): void => {
       buckets.delete(key);
     },
+    held: (): number => buckets.size,
   };
 };

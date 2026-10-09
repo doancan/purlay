@@ -270,6 +270,9 @@ is not ten thousand frames from one. (D-69)
   implementation in Phase 0–2; the seam exists because an in-process limiter on N nodes grants
   N times the quota (D-25). **The number is not yet decided (O-4)** — 10 frames/second with a
   burst of 20 is what is enforced, as a provisional value, until dogfooding measures it.
+- HTTP has limits of its own behind the same seam: `/auth/*` per client address, mutations per signed-in
+  user at the socket's budget, so `POST /messages` is no cheaper than a frame. A refusal is `429`
+  with `Retry-After`. Provisional, as above (D-81).
 - If a client's outbound buffer passes `OUTBOUND_HIGH_WATER_MARK`, or the transport drops a frame,
   the connection is closed with `CLOSE_CODES.RESYNC`; the client reconnects and replays from its
   cursor. Every frame to a socket — fan-out and replies alike — goes through that check. A replay is

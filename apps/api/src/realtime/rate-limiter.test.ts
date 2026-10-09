@@ -65,4 +65,26 @@ describe('the in-process rate limiter', () => {
     limiter.forget('a');
     expect(await limiter.consume('a')).toBe(true);
   });
+
+  /** A key per client address grows with every address that ever knocked. */
+  test('keys that have refilled are dropped once too many are held, and live ones are kept', async () => {
+    const clock = movable();
+    const limiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET, 100);
+    await limiter.consume('busy', SOCKET_FRAME_BUDGET.burst);
+    for (let i = 0; i < 150; i += 1) await limiter.consume(`once-${String(i)}`);
+    expect(limiter.held()).toBe(151);
+
+    clock.advance(5000);
+    await limiter.consume('next');
+    // The one-frame keys have long since refilled; 'busy' emptied its bucket 5 s
+    // ago at 10 a second and is full again too, so only the key just used remains.
+    expect(limiter.held()).toBeLessThan(10);
+
+    // A key still owed time is never dropped: it would be a free refill.
+    await limiter.consume('drained', SOCKET_FRAME_BUDGET.burst);
+    for (let i = 0; i < 150; i += 1) await limiter.consume(`more-${String(i)}`);
+    clock.advance(1000);
+    await limiter.consume('trigger');
+    expect(await limiter.consume('drained', SOCKET_FRAME_BUDGET.burst)).toBe(false);
+  });
 });
