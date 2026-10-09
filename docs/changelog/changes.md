@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Chore — 2026-10-09: nothing may remove visibility without deciding what sockets are told
+
+- A test finds every production statement that revokes a session, soft-deletes a user, workspace or
+  channel, or deletes or updates a membership, and requires each to be mapped to the event it publishes,
+  or to a reason and an owner. A planted unlisted write fails it (#231, D-85).
+- Out-of-band SQL revocation is documented as not ending open sockets until expiry or a restart. A
+  command-line revoker is not provided: another process cannot reach the in-process bus.
+
 ### Fix — 2026-10-09: an export nothing imports now fails the build
 
 - `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and
