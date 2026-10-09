@@ -710,6 +710,12 @@ external scheduling is the cron nobody installed, and every run records its outc
 (`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job. The built client,
 served from the API's origin, arrives with the prerendered shell (#141, #224).
 
+**Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with
+a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` verifies the sums and
+restores it into a new database (and an empty bucket), and `scripts/compare-databases.sh` proves the
+result is the same (D-95, D-44). What it does not give: point-in-time recovery, off-host copies,
+encryption.
+
 **The production stack.** `docker-compose.production.yml` runs the API, PostgreSQL, Garage and Caddy
 behind one origin with automatic TLS: only the proxy publishes ports, the API starts when its
 dependencies are healthy and the proxy when the API is ready, and the file's only inputs are the
