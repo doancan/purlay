@@ -8,7 +8,7 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
-import { createDatabase } from '@purlay/db';
+import { createDatabase, readCaFile } from '@purlay/db';
 import { loadConfig } from './platform/config';
 import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
@@ -27,6 +27,13 @@ const database = createDatabase({
   connectionString: config.DATABASE_URL,
   poolSize: config.DATABASE_POOL_MAX,
   ssl: config.DATABASE_SSL,
+  ...(config.DATABASE_SSL_CA_FILE === undefined
+    ? {}
+    : { sslCa: readCaFile(config.DATABASE_SSL_CA_FILE) }),
+  // Reported and carried on: the pool replaces the dead connection by itself.
+  onPoolError: (error) => {
+    log.error('database pool error', { error });
+  },
 });
 
 const app = createApp({

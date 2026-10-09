@@ -29,8 +29,20 @@ validating a value nothing acts on tells an operator a setting works when it doe
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | — | `postgres://user:pass@host:5432/purlay` |
 | `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling |
-| `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
+| `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. Verifies the server's certificate. `bun run db:migrate` reads it too. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
 | `DATABASE_ALLOW_PLAINTEXT` | — | `false` | Production only: acknowledges that the database link is not encrypted because the network is private (a compose network, a unix socket). Without it production will not start on `DATABASE_SSL=false`. It does not turn TLS off by itself |
+| `DATABASE_SSL_CA_FILE` | — | — | Path to a PEM file of the certificate authority to trust instead of the system's, for a private or managed root. Needs `DATABASE_SSL=true`; a file that cannot be read stops the boot (D-87) |
+
+**The pool's limits are fixed, not configured** (D-87): a number an operator can lower into an outage is
+a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/db/src/client.ts`).
+
+| Limit | Value | When it trips |
+|---|---|---|
+| Wait for a free connection | 3 s | The query fails with `DATABASE_UNAVAILABLE` (`503`) instead of queuing |
+| `statement_timeout` | 30 s | The server cancels the statement. Not applied to `db:migrate`, whose index builds take as long as they take |
+| `idle_in_transaction_session_timeout` | 15 s | The server ends a session that opened a transaction and stopped |
+| Idle connection | 30 s | The pool closes a connection nobody has used |
+| `application_name` | `purlay-api` | Shown in `pg_stat_activity`, so a stuck session can be traced to this service |
 
 ## Authentication
 

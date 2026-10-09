@@ -7,12 +7,16 @@
  */
 export {
   createDatabase,
+  DatabaseUnavailableError,
   isTransaction,
-  sslFromEnvironment,
+  POOL_DEFAULTS,
+  readCaFile,
+  tlsFromEnvironment,
   type DatabaseOptions,
   type Executor,
   type Transaction,
 } from './client';
+export { purgeDeadSessions } from './sessions';
 /**
  * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).

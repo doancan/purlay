@@ -140,6 +140,8 @@ CREATE INDEX idx_sessions_expiry  ON sessions (expires_at) WHERE revoked_at IS N
 
 `last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60)
 
+Expired and revoked rows are not kept: `purgeDeadSessions` removes them in bounded batches, called by the scheduler (#71). (D-87)
+
 ---
 
 ## 4. Workspaces & Membership

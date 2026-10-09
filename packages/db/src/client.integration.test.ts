@@ -9,7 +9,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
-import { createDatabase } from './client';
+import { createDatabase, DatabaseUnavailableError } from './client';
 import { migrateToLatest } from './migrator';
 import { integrationDatabase, closeIntegrationDatabase } from './testing';
 
@@ -57,6 +57,109 @@ describe('integration: the database client and the migrations', () => {
     } finally {
       await fresh.destroy();
       await sql`drop database ${sql.id(name)} with (force)`.execute(shared);
+    }
+  });
+
+  test('a pool with every connection busy fails promptly and says so, instead of waiting', async () => {
+    const database = createDatabase({
+      connectionString: url(),
+      poolSize: 2,
+      connectionTimeoutMs: 300,
+    });
+    try {
+      // Two connections held by queries that outlive the wait below.
+      const held = [
+        sql`select pg_sleep(1.5)`.execute(database),
+        sql`select pg_sleep(1.5)`.execute(database),
+      ];
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const started = performance.now();
+      const outcome = await sql`select 1`.execute(database).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      const waited = performance.now() - started;
+
+      expect(outcome).toBeInstanceOf(DatabaseUnavailableError);
+      expect(waited).toBeLessThan(1500);
+      await Promise.allSettled(held);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  /**
+   * The development database does not speak TLS, so a client that insists on it —
+   * with or without a CA of its own — must be refused, and the refusal must say
+   * why. A client that quietly fell back to the clear would connect.
+   */
+  test('a client asked for TLS does not fall back to a server that has none', async () => {
+    for (const sslCa of [undefined, 'not a certificate']) {
+      const database = createDatabase({
+        connectionString: url(),
+        poolSize: 1,
+        ssl: true,
+        ...(sslCa === undefined ? {} : { sslCa }),
+      });
+      try {
+        const outcome = await sql`select 1`.execute(database).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(outcome).toBeInstanceOf(DatabaseUnavailableError);
+        const cause = outcome instanceof DatabaseUnavailableError ? String(outcome.cause) : '';
+        expect(cause).toContain('SSL');
+      } finally {
+        await database.destroy();
+      }
+    }
+  });
+
+  test('every connection carries the timeouts and a name an operator can find it by', async () => {
+    const database = createDatabase({ connectionString: url(), poolSize: 1 });
+    try {
+      const { rows } = await sql<{ name: string; value: string }>`
+        select name, setting || coalesce(unit, '') as value from pg_settings
+        where name in ('statement_timeout', 'idle_in_transaction_session_timeout', 'application_name')
+        order by name`.execute(database);
+      expect(rows).toEqual([
+        { name: 'application_name', value: 'purlay-api' },
+        { name: 'idle_in_transaction_session_timeout', value: '15000ms' },
+        { name: 'statement_timeout', value: '30000ms' },
+      ]);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  /**
+   * An idle connection the server drops emits `error` on the pool, and an event
+   * emitter with no listener for `error` throws — taking the process down for a
+   * connection nothing was using. The handler is reached by terminating the
+   * backend of a connection that is idle in the pool.
+   */
+  test('a connection the server drops while idle is reported, not fatal', async () => {
+    const reported: Error[] = [];
+    const database = createDatabase({
+      connectionString: url(),
+      poolSize: 1,
+      onPoolError: (error) => reported.push(error),
+    });
+    try {
+      const { rows } = await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(database);
+      const pid = rows[0]?.pid ?? 0;
+      expect(pid).toBeGreaterThan(0);
+      await sql`select pg_terminate_backend(${pid})`.execute(integrationDatabase());
+
+      for (let waited = 0; reported.length === 0 && waited < 3000; waited += 50) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(reported).toHaveLength(1);
+      // The pool drops the dead connection and the next query opens a new one.
+      expect((await sql`select 1 as one`.execute(database)).rows).toEqual([{ one: 1 }]);
+    } finally {
+      await database.destroy();
     }
   });
 });

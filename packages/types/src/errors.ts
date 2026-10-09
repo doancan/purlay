@@ -12,7 +12,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500;
+export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503;
 
 /**
  * `413` is in `API.md` §1's table and is **not** here: no code maps to it yet,
@@ -61,6 +61,11 @@ export const ErrorCode = Type.Union([
    * again later is safe, because a message id makes a resend idempotent (D-8).
    */
   Type.Literal('RATE_LIMITED'),
+  /**
+   * No database connection could be had within the wait: the server is busy, not
+   * broken. The request changed nothing and may be retried. (D-87)
+   */
+  Type.Literal('DATABASE_UNAVAILABLE'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -94,6 +99,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   RATE_LIMITED: 429,
 
   INTERNAL: 500,
+  DATABASE_UNAVAILABLE: 503,
 };
 
 /** Which field failed, and why, in language a person can act on. */

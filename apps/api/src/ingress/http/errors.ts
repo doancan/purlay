@@ -20,6 +20,7 @@
  */
 import type { AppErrorBody, ErrorResponse, HttpStatus } from '@purlay/types';
 import { statusFor } from '@purlay/types';
+import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 
 /** What a validation failure looks like coming out of the framework. */
@@ -138,6 +139,13 @@ export const refusalFor = (
   issues: readonly FrameworkIssue[],
 ): Refusal => {
   if (error instanceof AppError) return respond(error.body);
+
+  if (error instanceof DatabaseUnavailableError) {
+    return respond({
+      code: 'DATABASE_UNAVAILABLE',
+      message: 'The service is busy. Try again shortly.',
+    });
+  }
 
   if (code === 'VALIDATION') {
     return respond({
