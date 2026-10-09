@@ -202,6 +202,34 @@ else:
             if number not in sections:
                 problems["a section number disappeared"].append(f"{f} §{number} ({title})")
 
+# ---- a merge left markers behind, or the decisions are out of order -----------
+# #268 reached main with an unresolved conflict in two documents, and every gate
+# was green: nothing in this repository read for the markers, and the numbering
+# check counts decisions without looking at where they sit. Both are cheap to see.
+_skip = {'.git', '.agents', '.claude', 'node_modules', '.tsbuild', 'dist', 'coverage'}
+_binary = {'.png', '.jpg', '.gif', '.ico', '.woff', '.woff2', '.lock'}
+_marker = re.compile(r'^(<{7}|>{7})( |$)|^={7}$', re.M)
+_scanned = 0
+for _p in sorted(pathlib.Path('.').rglob('*')):
+    if _skip & set(_p.parts) or not _p.is_file() or _p.suffix in _binary:
+        continue
+    try:
+        _text = _p.read_text()
+    except UnicodeDecodeError:
+        continue
+    _scanned += 1
+    for _m in _marker.finditer(_text):
+        problems['unresolved merge conflict marker'].append(f"{_p.as_posix()}:{_text.count(chr(10), 0, _m.start()) + 1}")
+        break
+# A scan that read nothing found nothing for the wrong reason (CONTRIBUTING §6.4).
+if _scanned < 50:
+    problems['the marker scan read almost nothing'].append(f"{_scanned} files")
+
+_order = [int(n) for n in re.findall(r'^### D-(\d+)\. ', docs.get('docs/DECISIONS.md', ''), re.M)]
+for _a, _b in zip(_order, _order[1:]):
+    if _b < _a:
+        problems['decisions are out of order'].append(f"D-{_b} comes after D-{_a}")
+
 print(f"decisions D-1..D-{max(defined['D'])} · invariants I-1..I-{max(defined['I'])} · open questions O-1..O-{max(defined['O'])}")
 print(f"migrations {mig[0]}..{mig[-1]}")
 print(f"{len(resolved)} cross-document references resolved\n")
