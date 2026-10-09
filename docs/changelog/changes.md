@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a socket frame that finds no database connection says so
+
+- A `MESSAGE_SEND` or `SUBSCRIBE` that waited out the pool was answered `INTERNAL`; it is now the
+  `DATABASE_UNAVAILABLE` frame HTTP already used, so a client may retry it (D-87).
+
 ### Fix — 2026-10-09: the connection pool fails fast and says what is wrong
 
 - With a pool of two, a third query waited **7,612 ms** for a connection to free. It now waits at most

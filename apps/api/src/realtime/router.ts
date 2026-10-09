@@ -32,6 +32,7 @@ import {
 } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
+import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../platform/errors';
 import { requireChannelById, requireChannelsById } from '../platform/channels';
 import { missedIn, send } from '../modules/messages/messages';
@@ -136,7 +137,13 @@ const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame =
   const body =
     error instanceof AppError
       ? error.body
-      : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
+      : error instanceof DatabaseUnavailableError
+        ? // The same body HTTP answers with (`refusalFor`), so a client handles one code (D-87).
+          {
+            code: 'DATABASE_UNAVAILABLE' as const,
+            message: 'The service is busy. Try again shortly.',
+          }
+        : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
   return frame('ERROR', body, clock, refId);
 };
 

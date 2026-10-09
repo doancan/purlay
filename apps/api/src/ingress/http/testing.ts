@@ -34,13 +34,17 @@ export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown
  * name: not by asserting that it did not query, but by making a query impossible.
  * The assertion lives in the double, so it holds for every test that uses it.
  */
-export const aDatabaseThatMustNotBeTouched = (): Executor =>
+export const aDatabaseThatMustNotBeTouched = (failure?: Error): Executor =>
   new Proxy(
     {},
     {
       get(_target, property): never {
-        throw new Error(
-          `the database was reached (\`${String(property)}\`) by something that must not touch it`,
+        // A test of how a failure is reported hands the failure it wants reported.
+        throw (
+          failure ??
+          new Error(
+            `the database was reached (\`${String(property)}\`) by something that must not touch it`,
+          )
         );
       },
     },
