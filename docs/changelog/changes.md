@@ -16,6 +16,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - **A truncated JPEG passes `metadata()`** and fails only when decoded, so an upload is validated by
   producing its thumbnail, not by reading its header.
 
+### Feature — 2026-10-09: the client reconnects, and catches up from where it stopped
+
+- A dropped socket is reopened after a jittered, capped backoff, and every reconnect resubscribes
+  with the highest message id heard per channel, so the server returns only what was missed (#22).
+  More than 100 watched channels are split across frames. A session that has ended is not retried.
+- `parseServerFrame` in `@purlay/types`: the browser's check that what arrived is a frame the
+  contract defines. A frame that is not one ends the connection rather than being guessed at.
+- Not in this change, deliberately: the optimistic buffer and its ACK deadline, continuing a replay
+  that was one page (`nextCursor`), and a heartbeat. Each belongs to the store above this layer.
+
 ### Research — 2026-09-09: what the frontend stack costs, before a screen exists
 
 - **The declared stack is 69% of the declared budget with no product code**, imported eagerly.

@@ -240,7 +240,8 @@ receiving client has no way to learn it should forget it. Publish and ACK both f
 
 ### 5.4. Reconnect and replay
 
-Exponential backoff with jitter: 1s, 2s, 4s, 8s, capped at 30s. On reconnect the client sends
+Exponential backoff with jitter: 1s, 2s, 4s, 8s, capped at 30s, each drawn from the upper half of
+its step and started over only by a connection that held for ten seconds (D-76). On reconnect the client sends
 `SUBSCRIBE` with the highest message id it holds per channel; the server returns what it may have
 missed by keyset scan. Because ids are time-ordered, "what did I miss" is a single indexed range
 query per channel — not a timestamp comparison with clock-skew problems.
