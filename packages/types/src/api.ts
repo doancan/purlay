@@ -72,7 +72,7 @@ export type MeResponse = Static<typeof MeResponse>;
 // ── Workspaces ──────────────────────────────────────────────────────────────
 
 export const CreateWorkspaceRequest = FromClient({
-  name: Type.String({ minLength: 1, maxLength: 64 }),
+  name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
   /** Lowercase, and an identifier rather than prose — hence `COLLATE "C"` (D-40). */
   slug: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
 });
@@ -89,8 +89,8 @@ export type WorkspaceMember = Static<typeof WorkspaceMember>;
 // ── Channels ────────────────────────────────────────────────────────────────
 
 export const CreateChannelRequest = FromClient({
-  name: Type.String({ minLength: 1, maxLength: 64 }),
-  topic: Type.Optional(Type.String()),
+  name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
+  topic: Type.Optional(Type.String({ format: 'plain-text' })),
 });
 export type CreateChannelRequest = Static<typeof CreateChannelRequest>;
 

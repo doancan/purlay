@@ -1220,6 +1220,21 @@ trigram index is the whole story.
 operator guide is a rule that holds until somebody uses a managed provider that does not offer it.
 A column-level collation travels with the schema.
 
+**Amended 2026-10-09: what a name may contain (second-round attack).** Identifier text handling had
+a collation and no alphabet: `{"name":"a\u0000b"}` on a workspace or channel was a `500` and an error
+report, because PostgreSQL cannot store a NUL and the contract did not say so (message content did).
+A **`name`** format now refuses, at the contract, in workspace and channel names: every control
+character (C0, DEL, C1 — a name is one line, so tab, line feed and carriage return too), the line
+and paragraph separators, a lone surrogate, and the **bidirectional embeddings, overrides and
+isolates (U+202A-202E, U+2066-2069)**. Bidi controls are refused rather than normalised because a
+name is an identifier people read and compare by eye: an override makes one name display as another
+(`gpj<RLO>exe.txt`), and an unclosed isolate reorders what follows it in the sidebar. The
+directional *marks* (U+200E/200F) stay, because a right-to-left name in a left-to-right interface
+needs one. A **`plain-text`** format covers a channel topic: multi-line is fine, what PostgreSQL
+cannot store is not. A workspace slug already was a whitelist (`^[a-z0-9][a-z0-9-]*$`) and never
+held any of this — tested. GitHub's `name` is not refused (sign-in never fails on a value GitHub
+controls, #233): the same set is *removed* and an emptied name falls back to the login.
+
 ---
 
 ### D-41. The interface ships in English and Turkish, with no i18n library
@@ -3455,6 +3470,18 @@ plainly that the directory is plaintext.
 off-host copies, a production schedule, and the `ENCRYPTION_KEY`, which a backup must never carry.
 
 **Reversibility:** free. Scripts and a workflow; the format is `pg_dump`'s and a directory of files.
+
+*Amended 2026-10-09 (a second-round audit that ran it):* four things the first rehearsal could not see.
+(1) `restore.sh --replace` dropped the live database **before** reading the dump, so a truncated dump with
+regenerated checksums left it with its tables and none of its rows; it now checks the dump reads back and
+the target and bucket will accept it, restores into a **staging** database, checks that, and swaps by
+renaming, keeping the old one as `<name>_before_restore_<time>`. A failure drops the staging database and
+leaves the target as it was. (2) A backup was written with the caller's umask and any local user could read
+every message; it is `0700`/`0600`. (3) A backup on a stack whose object store was never initialised left a
+partial directory with no checksums; it now removes it and points at `scripts/production-init.sh`.
+(4) The default restore put the database in a new place and the bucket into the live one, which refused
+after the database was done; both now default to new names, `--bucket live` is the recovery spelling, and
+the bucket is checked **before** the database is touched. The rehearsal asserts each of them. `--no-bucket` restores the database alone, for rolling back an upgrade: the live bucket is not empty, and a schema migration does not touch attachments.
 
 ---
 

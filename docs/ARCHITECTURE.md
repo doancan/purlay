@@ -723,8 +723,10 @@ it is bounded, drops under a storm and can never throw into the caller
 (`apps/api/src/platform/error-tracking.ts`, D-96, D-44).
 
 **Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with
-a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` verifies the sums and
-restores it into a new database (and an empty bucket), and `scripts/compare-databases.sh` proves the
+a manifest of sizes and checksums, and a `SHA256SUMS`. `scripts/restore.sh` checks everything it can before it changes anything — the sums, that the dump
+reads back, the target database and bucket — restores into a staging database, checks that, and only
+then swaps it in by renaming, keeping what was there; by default into a new database and bucket. It
+It is `0700`/`0600` and a failed backup removes its partial directory. And `scripts/compare-databases.sh` proves the
 result is the same (D-95, D-44). `scripts/restore-rehearsal.sh` does all of it from nothing —
 including after destroying every volume — weekly in CI. What it does not give: point-in-time
 recovery, off-host copies, encryption.
