@@ -109,6 +109,14 @@ const VIOLATIONS: readonly Violation[] = [
     path: 'apps/api/src/modules/__enforcement__.ts',
     source: 'export const stamp = (): number => Date.now();\n',
   },
+  // The browser has its own clock module, and only that one: a neighbour in
+  // `apps/web` reading the time is refused like anywhere else. (#136)
+  {
+    rule: 'the clock is a dependency: Date.now() in apps/web outside system-clock.ts (D-46)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/web/src/realtime/__enforcement__.ts',
+    source: 'export const stamp = (): number => Date.now();\n',
+  },
   // The escape hatches cost something (CONTRIBUTING.md §1.13, #136).
   {
     rule: 'a disable explains itself and links an issue (CONTRIBUTING.md §1.13)',
