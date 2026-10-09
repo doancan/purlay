@@ -13,7 +13,7 @@ phase is not built.
 
 ## 1. Conventions
 
-**Auth.** Every `/api/*` endpoint requires a valid session cookie (`__Host-purlay_session`, defined in `apps/api/src/ingress/http/cookies.ts`). There is no bearer
+**Auth.** Every `/api/*` endpoint requires a valid session cookie (`__Host-purlay_session`, defined in `apps/api/src/platform/cookies.ts`). There is no bearer
 token and no API key in Phase 0–2.
 
 **Tenant scope.** Endpoints under `/api/workspaces/:workspaceId/…` resolve a `WorkspaceContext`

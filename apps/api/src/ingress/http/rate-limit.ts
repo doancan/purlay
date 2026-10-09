@@ -12,7 +12,7 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
-import { sessionTokenFrom } from './cookies';
+import { sessionTokenFrom } from '../../platform/cookies';
 import { resolveSession } from '../../modules/auth/sessions';
 import {
   inProcessRateLimiter,

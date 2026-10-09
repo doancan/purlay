@@ -22,8 +22,7 @@ import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import type { Logger } from '../platform/logging';
-import { resolveSession } from '../modules/auth/sessions';
-import { sessionTokenFrom } from '../ingress/http/cookies';
+import { sessionFromCookie } from '../modules/auth/sessions';
 import type { SocketIdentity } from './router';
 
 /** How a connection is reached and ended. The transport supplies both. */
@@ -242,8 +241,7 @@ export const createSocketHub = (
     socketId: string,
     request: Request,
   ): Promise<SocketIdentity | undefined> => {
-    const token = sessionTokenFrom(request.headers.get('cookie'));
-    const owner = token === undefined ? undefined : await resolveSession(database, clock, token);
+    const owner = await sessionFromCookie(database, clock, request.headers.get('cookie'));
     return owner === undefined
       ? undefined
       : { socketId, userId: owner.userId, sessionId: owner.sessionId, expiresAt: owner.expiresAt };

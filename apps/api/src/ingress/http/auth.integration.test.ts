@@ -10,7 +10,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
-import { SESSION_COOKIE, STATE_COOKIE } from './cookies';
+import { SESSION_COOKIE, STATE_COOKIE } from '../../platform/cookies';
 import { NOW, aGitHubAccount, testConfig, testDependencies } from './testing';
 import type { Config } from '../../platform/config';
 import { aUniqueSlug } from '../../testing/users';

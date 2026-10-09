@@ -34,7 +34,7 @@ import { createConnection } from 'node:net';
 import { aRecordingLogger, testConfig, testDependencies } from '../ingress/http/testing';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
-import { SESSION_COOKIE } from '../ingress/http/cookies';
+import { SESSION_COOKIE } from '../platform/cookies';
 import { aSignedInUser } from '../ingress/http/fixtures';
 import { aUniqueSlug } from '../testing/users';
 

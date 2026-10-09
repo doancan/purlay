@@ -12,7 +12,16 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
-import { issueSession, resolveSession, revokeAllSessions, revokeSession } from './sessions';
+import { AppError } from '../../platform/errors';
+import { SESSION_COOKIE } from '../../platform/cookies';
+import {
+  issueSession,
+  requireSessionFromCookie,
+  resolveSession,
+  revokeAllSessions,
+  revokeSession,
+  sessionFromCookie,
+} from './sessions';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -160,6 +169,27 @@ describe('integration: sessions', () => {
       const tomorrow = later(1);
       await resolveSession(db, tomorrow, token);
       expect((await readBack()).getTime()).toBe(tomorrow.now().getTime());
+    });
+  });
+
+  /** Both doors resolve a cookie through these, so the refusals must agree. */
+  test('a cookie header resolves like its token, and every bad one is the same refusal', async () => {
+    await withRollback(async (db) => {
+      const userId = await addUser(db, 'cookie-owner');
+      const { token } = await issueSession(db, clock, userId, 30);
+      const header = `other=1; ${SESSION_COOKIE}=${token}`;
+
+      expect(await sessionFromCookie(db, clock, header)).toMatchObject({ userId });
+      expect(await requireSessionFromCookie(db, clock, header)).toMatchObject({ userId });
+
+      for (const bad of [null, '', `${SESSION_COOKIE}=not-a-session`, `x=${token}`]) {
+        expect(await sessionFromCookie(db, clock, bad)).toBeUndefined();
+        const refusal = await requireSessionFromCookie(db, clock, bad).catch(
+          (error: unknown) => error,
+        );
+        expect(refusal).toBeInstanceOf(AppError);
+        expect(refusal).toMatchObject({ body: { code: 'UNAUTHENTICATED' } });
+      }
     });
   });
 });

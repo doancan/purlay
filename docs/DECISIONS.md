@@ -1495,6 +1495,17 @@ specification before the code.
 
 ---
 
+**Amended 2026-10-09 (#245): "thin ingress" was a sentence, and the code had drifted from it.**
+`completeSignIn` (identity, open join, session) and the fan-out that ends a revoked session's
+sockets lived in `ingress/http`, and a cookie became a session three times (the HTTP guard, the
+hub, the socket admission). The orchestration is now `modules/auth/sign-in.ts`, the fan-out is
+`publishSessionsEnded` beside its siblings in `platform/events.ts`, and the cookie header becomes a session in exactly one function,
+`sessionFromCookie` (and `requireSessionFromCookie`, its refusal) in `modules/auth/sessions.ts`.
+The cookie names and attributes moved to `platform/cookies.ts`: a header is a string, not a
+transport type, and both doors need it — placing it in either door would have made the other
+import it, which is the cycle this removes. What stays in `ingress/http/auth.ts` is reading the
+request and writing `Set-Cookie` and `Location`.
+
 ### D-48. Escape hatches are expensive and visible, not closed
 
 D-47 made the stated rules fail the build. It did not close the hatch that makes all of them
