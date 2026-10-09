@@ -25,3 +25,4 @@ A spike that only reports "it works" has not been written down. (D-57)
 | [`frontend-budget.md`](frontend-budget.md) | 2026-09-09 | The declared stack is 69% of the budget eagerly, 43% split — and Radix has no combobox |
 | [`image-pipeline.md`](image-pipeline.md) | 2026-10-09 | `Bun.Image` works on macOS and Linux with nothing installed — and `resize(w, h)` stretches |
 | [`object-storage.md`](object-storage.md) | 2026-10-09 | Garage and RustFS pass every attachment operation; MinIO cannot be pulled — Garage chosen, set up by a script |
+| [`backup-restore.md`](backup-restore.md) | 2026-10-09 | A backup restores and compares identical, including after a total loss — and the rebuild path found two defects the first restore could not |
