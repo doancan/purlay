@@ -20,7 +20,7 @@
  * where it can be tested against something that actually tries.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import type { Membership, Workspace, WorkspaceMember } from '@purlay/types';
+import type { MeResponse, Membership, Workspace, WorkspaceMember } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
@@ -126,6 +126,30 @@ export const membershipsOf = async (
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
   }));
+};
+
+/**
+ * Who this user is, and what they belong to: the only shape that carries an
+ * email address, and only ever to its owner (`models.ts`).
+ */
+export const meOf = async (executor: Executor, userId: string): Promise<MeResponse> => {
+  const user = await executor
+    .selectFrom('users')
+    .select(['id', 'username', 'display_name', 'avatar_url', 'email'])
+    .where('id', '=', userId)
+    .where('deleted_at', 'is', null)
+    .executeTakeFirstOrThrow();
+
+  return {
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+      email: user.email,
+    },
+    memberships: [...(await membershipsOf(executor, userId))],
+  };
 };
 
 /** The workspace the context was minted for. There is no other one it could return. */

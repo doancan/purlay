@@ -22,6 +22,7 @@ import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import {
   createWorkspace,
+  meOf,
   membersIn,
   membershipsOf,
   workspaceIn,
@@ -47,23 +48,7 @@ export const readMe = async (
 ): Promise<MeResponse> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
-  const user = await database
-    .selectFrom('users')
-    .select(['id', 'username', 'display_name', 'avatar_url', 'email'])
-    .where('id', '=', userId)
-    .where('deleted_at', 'is', null)
-    .executeTakeFirstOrThrow();
-
-  return {
-    user: {
-      id: user.id,
-      username: user.username,
-      displayName: user.display_name,
-      avatarUrl: user.avatar_url,
-      email: user.email,
-    },
-    memberships: [...(await membershipsOf(database, userId))],
-  };
+  return await meOf(database, userId);
 };
 
 export const listMyWorkspaces = async (

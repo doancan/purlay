@@ -18,9 +18,10 @@ export interface ResolvedIdentity {
   readonly userId: string;
   /**
    * Set when the incoming `login` was already taken by somebody else and this
-   * user was stored with a suffix. D-38 requires it to be logged; there is no
-   * logger yet (#127), so it is returned rather than dropped — a fact with
-   * nowhere to go is a fact that quietly stops existing.
+   * user was stored with a suffix. D-38 requires it to be logged. It is returned
+   * rather than logged here, so this stays a decision over values, and
+   * `sign-in.ts` writes the line — a fact with nowhere to go is a fact that
+   * quietly stops existing.
    */
   readonly usernameCollision?: { readonly wanted: string; readonly stored: string };
 }

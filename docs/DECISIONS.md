@@ -1526,6 +1526,13 @@ one member of the union, so an event paired with another event's data does not c
 `Timers<Handle>`. `joinChannel`'s "unreachable" branch is reachable — a member of a private
 channel or a DM is in it, so the guard hands them a context — and had no test; it has one.
 
+
+
+**Amended 2026-10-09 (#245): the `/api/me` read is a module's.** `readMe` ran a raw Kysely query
+inside an ingress handler. It is `meOf` in `modules/workspaces/workspaces.ts` beside `membershipsOf`,
+and the handler authenticates, calls it and returns. The stale "there is no logger yet" comment on
+`ResolvedIdentity` now says who logs the username collision (`sign-in.ts`, D-38).
+
 ### D-48. Escape hatches are expensive and visible, not closed
 
 D-47 made the stated rules fail the build. It did not close the hatch that makes all of them
