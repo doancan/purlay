@@ -161,7 +161,7 @@ purlay/
 **Dependency rule, enforced by lint:** the two doors — `ingress/http` and `realtime` — call
 `modules`, and `modules` call `platform`. A module never imports from either door, and `platform`
 imports from nothing above it. A route handler or frame handler validates, calls one service and
-serializes: sign-in and the fan-out that ends a session's sockets are in `modules` and
+serializes: sign-in, the `/me` read and the fan-out that ends a session's sockets are in `modules` and
 `platform/events.ts` (D-47). `apps/web` never imports from `apps/api` — only from `packages/*`.
 
 *(`apps/desktop` arrives in Phase 3. It is absent from Phase 0–2 on purpose — D-14.)*
