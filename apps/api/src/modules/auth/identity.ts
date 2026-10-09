@@ -44,6 +44,17 @@ const anchorEmail = (emails: readonly GitHubEmail[]): string => {
   return address.toLowerCase();
 };
 
+/** The columns' widths (`SCHEMA.md` §users): `username` is GitHub's own limit. */
+const USERNAME_MAX = 39;
+const DISPLAY_NAME_MAX = 128;
+
+/**
+ * Cut to the column, by characters as the database counts them — not by UTF-16
+ * units, which would split a pair and store a lone surrogate. Sign-in shortens a
+ * value GitHub controls; it never fails on one (#233).
+ */
+const fitted = (value: string, max: number): string => Array.from(value).slice(0, max).join('');
+
 /**
  * GitHub lets an account be renamed and the freed name be taken by someone else,
  * so a refresh can collide with a live row. The incoming user takes a suffix;
@@ -55,7 +66,9 @@ const availableUsername = async (
   selfId: string | undefined,
 ): Promise<string> => {
   for (let suffix = 0; suffix < 100; suffix += 1) {
-    const candidate = suffix === 0 ? wanted : `${wanted}-${String(suffix)}`;
+    // The suffix is part of the 39, so the name gives up room for it.
+    const tail = suffix === 0 ? '' : `-${String(suffix)}`;
+    const candidate = `${fitted(wanted, USERNAME_MAX - tail.length)}${tail}`;
     const taken = await executor
       .selectFrom('users')
       .select('id')
@@ -75,7 +88,7 @@ export const resolveIdentity = async (
   emails: readonly GitHubEmail[],
 ): Promise<ResolvedIdentity> => {
   const email = anchorEmail(emails);
-  const displayName = profile.name ?? profile.login;
+  const displayName = fitted(profile.name ?? profile.login, DISPLAY_NAME_MAX);
   const now = clock.now();
 
   const existing = await executor
