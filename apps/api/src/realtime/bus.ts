@@ -13,19 +13,30 @@
  */
 import type { ServerFrame } from '@purlay/types';
 import type { Deliver, EventBus, Topic } from '../platform/events';
+import type { Logger } from '../platform/logging';
 
 /** What a test may ask of the in-process bus beyond the interface: how much it holds. */
 export interface InspectableEventBus extends EventBus {
   readonly size: () => { readonly topics: number; readonly sockets: number };
 }
 
-export const inProcessEventBus = (deliver: Deliver): InspectableEventBus => {
+export const inProcessEventBus = (deliver: Deliver, log: Logger): InspectableEventBus => {
   const byTopic = new Map<Topic, Set<string>>();
   const bySocket = new Map<string, Set<Topic>>();
 
   return {
     publish: async (topic: Topic, frame: ServerFrame): Promise<void> => {
-      for (const socketId of byTopic.get(topic) ?? []) deliver(socketId, frame);
+      // A snapshot, and each delivery on its own: the message is already committed,
+      // so one socket whose send throws must neither stop the rest from receiving
+      // it nor surface as an error to the publisher. Logged with the socket's id
+      // and never the frame, which is somebody's message.
+      for (const socketId of [...(byTopic.get(topic) ?? [])]) {
+        try {
+          deliver(socketId, frame);
+        } catch (error) {
+          log.error('delivery to a socket failed', { socketId, topic, err: error });
+        }
+      }
       // Asynchronous by interface, synchronous today. A caller that awaits it now
       // keeps working when the implementation behind it does reach a network.
       await Promise.resolve();

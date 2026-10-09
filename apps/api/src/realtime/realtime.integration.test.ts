@@ -138,7 +138,7 @@ describe('integration: the frame router', () => {
     db: Executor,
     identity: { userId: string },
     raw: unknown,
-    bus = inProcessEventBus(() => undefined),
+    bus = inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
     // A fresh bucket per call, so no test here is limited unless it means to be.
     limiter: RateLimiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
   ): Promise<readonly ServerFrame[]> =>
@@ -246,9 +246,12 @@ describe('integration: the frame router', () => {
       const { channelId } = await aChannel(db, alice, 'rt-send-ws');
 
       const delivered: ServerFrame[] = [];
-      const bus = inProcessEventBus((_socketId, frame) => {
-        delivered.push(frame);
-      });
+      const bus = inProcessEventBus(
+        (_socketId, frame) => {
+          delivered.push(frame);
+        },
+        createLogger({ level: 'silent' }),
+      );
       bus.subscribe(channelTopic(channelId), 'listener');
 
       const id = messageId(NOW);
@@ -282,9 +285,12 @@ describe('integration: the frame router', () => {
       const { channelId } = await aChannel(db, alice, 'rt-refused-ws');
 
       const delivered: ServerFrame[] = [];
-      const bus = inProcessEventBus((_socketId, frame) => {
-        delivered.push(frame);
-      });
+      const bus = inProcessEventBus(
+        (_socketId, frame) => {
+          delivered.push(frame);
+        },
+        createLogger({ level: 'silent' }),
+      );
       bus.subscribe(channelTopic(channelId), 'listener');
 
       // A v4 id: refused by the id rule (D-33), so the write never happens.
@@ -349,9 +355,12 @@ describe('integration: the frame router', () => {
       const { channelId } = await aChannel(db, alice, 'rt-unsub-ws');
 
       const delivered: ServerFrame[] = [];
-      const bus = inProcessEventBus((_socketId, frame) => {
-        delivered.push(frame);
-      });
+      const bus = inProcessEventBus(
+        (_socketId, frame) => {
+          delivered.push(frame);
+        },
+        createLogger({ level: 'silent' }),
+      );
       const sendOne = async (content: string, at: number): Promise<readonly ServerFrame[]> =>
         await route(
           db,
@@ -565,9 +574,12 @@ describe('integration: the frame router', () => {
         const { channelId: hidden } = await aChannel(db, bob, 'rt-all-or-none-bob');
 
         const delivered: ServerFrame[] = [];
-        const bus = inProcessEventBus((_socketId, frame) => {
-          delivered.push(frame);
-        });
+        const bus = inProcessEventBus(
+          (_socketId, frame) => {
+            delivered.push(frame);
+          },
+          createLogger({ level: 'silent' }),
+        );
         const replies = await route(db, alice, subscribeTo([visible, hidden], null), bus);
         expect(replies).toMatchObject([{ event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } }]);
 

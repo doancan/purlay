@@ -8,6 +8,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { ServerFrame } from '@purlay/types';
 import { inProcessEventBus } from './bus';
+import { aRecordingLogger } from '../ingress/http/testing';
+import { createLogger } from '../platform/logging';
 import { channelTopic } from '../platform/events';
 
 const aFrame = (data: unknown): ServerFrame =>
@@ -18,9 +20,12 @@ const collecting = (): {
   sent: { socketId: string; data: unknown }[];
 } => {
   const sent: { socketId: string; data: unknown }[] = [];
-  const bus = inProcessEventBus((socketId, frame) => {
-    sent.push({ socketId, data: frame.data });
-  });
+  const bus = inProcessEventBus(
+    (socketId, frame) => {
+      sent.push({ socketId, data: frame.data });
+    },
+    createLogger({ level: 'silent' }),
+  );
   return { bus, sent };
 };
 
@@ -75,5 +80,46 @@ describe('the event bus', () => {
     bus.subscribe(channelTopic('c1'), 'a');
     await bus.publish(channelTopic('c1'), aFrame('once'));
     expect(sent).toHaveLength(1);
+  });
+
+  /**
+   * The message is already committed when the bus fans it out, so one socket whose
+   * send throws must not cost the others the frame, and must not turn the
+   * publisher's success into an error.
+   */
+  test('a delivery that throws is logged by socket, and the rest still receive the frame', async () => {
+    const { log, lines } = aRecordingLogger();
+    const received: string[] = [];
+    const bus = inProcessEventBus((socketId) => {
+      if (socketId === 'broken') throw new Error('the socket is gone');
+      received.push(socketId);
+    }, log);
+    for (const id of ['a', 'broken', 'c']) bus.subscribe(channelTopic('c1'), id);
+
+    await bus.publish(channelTopic('c1'), aFrame('private words'));
+
+    expect(received.sort()).toEqual(['a', 'c']);
+    const failure = lines.find((line) => line['msg'] === 'delivery to a socket failed');
+    expect(failure).toMatchObject({ level: 'error', socketId: 'broken' });
+    // Never the message: it is somebody's.
+    expect(JSON.stringify(lines)).not.toContain('private words');
+  });
+
+  test('a socket that unsubscribes or is forgotten leaves nothing behind', () => {
+    const { bus } = collecting();
+    bus.subscribe(channelTopic('c1'), 'a');
+    bus.subscribe(channelTopic('c2'), 'a');
+    bus.subscribe(channelTopic('c1'), 'b');
+    expect(bus.size()).toEqual({ topics: 2, sockets: 2 });
+
+    bus.unsubscribe(channelTopic('c1'), 'a');
+    bus.unsubscribe(channelTopic('c2'), 'a');
+    expect(bus.size()).toEqual({ topics: 1, sockets: 1 });
+
+    bus.forget('b');
+    expect(bus.size()).toEqual({ topics: 0, sockets: 0 });
+    // Forgetting what is not there is not an error.
+    bus.forget('never-subscribed');
+    expect(bus.size()).toEqual({ topics: 0, sockets: 0 });
   });
 });

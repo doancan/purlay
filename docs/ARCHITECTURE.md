@@ -336,6 +336,11 @@ the type refuses the pool (D-77).
 - **Phase 3:** `RedisEventBus` — the same interface over Redis pub/sub, plus a
   `subscriberCount` check so a node does not publish to topics nobody local is watching.
 
+**Delivery is isolated per subscriber.** The message is committed before the bus fans it out, so a
+send that throws for one socket is logged with that socket's id (never the frame) and the rest still
+receive it; the publisher is not told. A closed socket is `forget`-ed from the bus, the limiter and the
+hub, and a test asserts all three sizes return to zero.
+
 Services publish; they never touch a socket. The socket hub subscribes; it never touches the
 database. That separation is what makes the Phase 3 swap a one-file change.
 

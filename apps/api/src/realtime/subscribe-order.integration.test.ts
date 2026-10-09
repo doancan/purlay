@@ -63,7 +63,7 @@ interface Rig {
 const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
   const written: ServerFrame[] = [];
   const hub = createSocketHub(db, clock, { log: createLogger({ level: 'silent' }) });
-  const bus = inProcessEventBus(hub.deliver);
+  const bus = inProcessEventBus(hub.deliver, createLogger({ level: 'silent' }));
   await hub.opened(
     's1',
     {

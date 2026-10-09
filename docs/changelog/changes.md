@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: one socket's failure no longer costs the others a frame
+
+- The bus delivered in a bare loop: a send that threw stopped every later subscriber from receiving
+  a message that was already committed, and surfaced as an error to the publisher. Each delivery is
+  now isolated and a failure is logged with the socket's id, never the frame (#237).
+- What a closed socket leaves behind is asserted on sizes: the hub, the bus and the limiter return to
+  zero through the running server, and the expiry timer is shown cancelled on close. (The timer was
+  already cancelled; it had no test.)
+
 ### Fix — 2026-10-09: a subscription is made before its replay is read
 
 - A message committed between the replay read and the subscription was in neither, and the client's
