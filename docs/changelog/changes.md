@@ -48,6 +48,19 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   in `eslint.config.mjs` the way `platform/clock.ts` is for the API; everything else takes a `Clock`.
   `verify:enforcement` now also shows a neighbouring web file is still refused (#136).
 
+### Fix — 2026-10-09: the client notices a dead socket and stops retrying a refusal
+
+- A half-open socket (sleeping laptop, dead NAT) read `open` for minutes. The client now pings after
+  25 s of silence and treats 15 s without any frame as dead, reconnecting at once (D-82, #239).
+- A signed-out user retried every 30 s forever, because a refused handshake is a 1006 like any outage.
+  After three attempts that never opened, the client asks `GET /api/me` and stops on a 401.
+- An event the client does not know is ignored instead of looping the connection through close and
+  reconnect during a rolling deploy; `parseServerMessage` replaces `parseServerFrame`.
+- The first `PONG` now feeds the server clock, and `start()` works again after `ended`.
+- `ARCHITECTURE.md` §5.4 states the cursor caveat: a live frame does not move the cursor past a
+  replay whose HTTP continuation is unfinished; the connection exposes `pendingContinuations` and
+  `continuationDone` so the store can honour it.
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
