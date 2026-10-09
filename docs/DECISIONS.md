@@ -2680,6 +2680,12 @@ adopt unchecksummed rows:** it would fail every existing database for a risk tha
 **Reversibility:** costly once migrations carry checksums, since the recorded values are the contract; the
 opt-out line is one comment and costs nothing to remove from a file that has not run.
 
+*Amended 2026-10-09:* readiness asks the same question the migrator asks before it runs
+(`migrationHistoryProblem`), read-only, and reports an edited, missing or out-of-order migration as not
+ready. A database that predates the checksum column has nothing to compare and is not accused. Without it,
+a process whose files had parted from its schema would pass readiness and fail on the first query that
+depended on the difference.
+
 ---
 
 ### D-84. A socket's frames are handled one at a time, in order, behind a bounded queue

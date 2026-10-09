@@ -195,6 +195,42 @@ export const migrateToLatest = async <T>(
 };
 
 /**
+ * Why the history of this database no longer matches the files, or `undefined`.
+ *
+ * The check the migrator runs before it applies anything, asked read-only: an applied
+ * migration whose file was edited, a file that has gone, or a new migration that sorts
+ * before an applied one. Readiness uses it, so a process whose code and schema have
+ * parted says so instead of serving until a query finds out (D-86).
+ */
+export const migrationHistoryProblem = async (
+  db: QueryExecutorProvider,
+  directory = MIGRATIONS_DIRECTORY,
+): Promise<string | undefined> => {
+  const present = await sql<{ table: boolean; checksum: boolean }>`
+    select to_regclass(${TABLE}) is not null as "table",
+           exists (select 1 from information_schema.columns
+                   where table_schema = current_schema() and table_name = ${TABLE}
+                     and column_name = 'checksum') as checksum`.execute(db);
+  if (present.rows[0]?.table !== true) return undefined;
+  const files = await readMigrationFiles(directory);
+  // A database migrated before checksums existed has no column: every row is unchecked.
+  const recorded = present.rows[0].checksum
+    ? await readRecorded(db)
+    : (
+        await sql<Recorded>`
+            select name, null as checksum from ${sql.table(TABLE)} order by timestamp, name`.execute(
+          db,
+        )
+      ).rows;
+  try {
+    verify(files, recorded);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+
+/**
  * The migrations in the directory this database has not applied, by name.
  *
  * What readiness asks before a process takes traffic: code ahead of its schema
