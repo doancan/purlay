@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
+
+- A second-round attack changed the development key's last base64 character (same bytes, different
+  string) and passed; patterns like `abcd` repeated and bytes 0..31 passed too. The key must be
+  canonical base64, is compared to the development key as bytes, and is refused when it is a
+  pattern. `SESSION_TTL_DAYS=1.5` is refused instead of truncated (D-79, Part of #231).
+
 ### Chore — 2026-10-09: nothing may remove visibility without deciding what sockets are told
 
 - A test finds every production statement that revokes a session, soft-deletes a user, workspace or

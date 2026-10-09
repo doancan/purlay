@@ -53,7 +53,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38) |
 | `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
-| `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; a key of one repeated value is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
+| `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
 | `WORKSPACE_OPEN_JOIN_SLUG` | — | — | When set, any authenticated user is joined to that workspace as `member` on sign-in. Unset means the instance is closed. (D-37) |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
