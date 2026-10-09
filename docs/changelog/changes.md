@@ -22,6 +22,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   caller; a malformed DSN, or an `http://` one in production, refuses to start (#248, D-96, D-44).
 - Against a stand-in collector, one real 500 produced one envelope with the DSN set and none without.
 
+### Test — 2026-10-09: the audit's mutation survivors are killed
+
+- Of 21 mutations re-derived against the current code, 15 survived the tests as they were on main and
+  none survives now: a retry from another channel is a conflict, history and replay leave deleted messages
+  out and cap the page, the OAuth state's length check and a missing `code` are tested, `SESSION_TTL_DAYS`
+  is held to 1–365, the member list and `/api/me` leave tombstones out, the web connection ignores a replaced
+  socket's frames, and a send is announced only after its commit (a second connection reads the row at the
+  moment of publication). `bun run mutate` keeps all of them (#246, D-47).
+
 ### Feature — 2026-10-09: a mutation runner that never touches the working tree
 
 - `bun run mutate` applies each mutation in `scripts/mutations.ts` to a copy of the repository, runs the
