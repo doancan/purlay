@@ -13,6 +13,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   against the tag with the API; `scripts/workflow-pins.test.ts` fails any `uses:` that is not
   (#247, D-91). Dependabot's github-actions ecosystem keeps proposing the next SHA.
 
+### Fix — 2026-10-09: two processes migrating at once no longer deadlock
+
+- A starter waiting for the migration lock was a transaction to PostgreSQL, and `CREATE INDEX CONCURRENTLY`
+  waits for those: one of two simultaneous starters died with `deadlock detected`, every time. The lock is
+  now polled with `pg_try_advisory_lock`, so a waiting starter is idle between attempts. Reproduced first
+  (10 of 10 runs red), then 20 of 20 green; replacing the poll with the blocking lock turns it red again
+  (D-86, #231).
+
 ### Refactor — 2026-10-09: the `/api/me` query is a module's
 
 - `readMe` no longer holds a raw query; `meOf` in `modules/workspaces` does (#245, D-47).

@@ -39,6 +39,9 @@ export const MIGRATIONS_DIRECTORY = join(dirname(fileURLToPath(import.meta.url))
 const MIGRATION_LOCK_KEY = sql.lit(1886351481);
 /** How long a starter waits for another to finish before giving up. */
 const LOCK_WAIT_MILLISECONDS = 120_000;
+/** Between two attempts at the lock: short at first, since most waits are a few milliseconds. */
+const LOCK_POLL_FIRST_MILLISECONDS = 25;
+const LOCK_POLL_MAX_MILLISECONDS = 500;
 
 const TABLE = 'kysely_migration';
 const OPT_OUT = /^--\s*purlay:\s*no-transaction\s*$/;
@@ -144,22 +147,52 @@ const apply = async <T>(conn: Kysely<T>, file: MigrationFile): Promise<void> => 
   await record(conn);
 };
 
+/**
+ * Takes the migration lock, trying rather than waiting.
+ *
+ * A blocking `pg_advisory_lock` is a statement, and a statement is a transaction to
+ * PostgreSQL for as long as it waits. `CREATE INDEX CONCURRENTLY` waits for every
+ * transaction that could see its table to finish, so the runner building an index waited
+ * for the starter waiting for the runner's lock, and PostgreSQL ended one of them with
+ * `deadlock detected` (D-86, amended). Each attempt here is a statement of its own that
+ * returns at once, and between attempts the session is idle, which is nothing for an
+ * index build to wait for.
+ */
+const acquireMigrationLock = async (
+  conn: QueryExecutorProvider,
+  waitMilliseconds: number,
+): Promise<void> => {
+  const deadline = performance.now() + waitMilliseconds;
+  let pause = LOCK_POLL_FIRST_MILLISECONDS;
+  for (;;) {
+    const { rows } = await sql<{ locked: boolean }>`
+      select pg_try_advisory_lock(${MIGRATION_LOCK_KEY}) as locked`.execute(conn);
+    if (rows[0]?.locked === true) return;
+    if (performance.now() + pause > deadline) {
+      throw new Error(
+        `another process held the migration lock for ${String(waitMilliseconds / 1000)} s; ` +
+          'is a migration stuck? (pg_locks, application_name)',
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, pause));
+    pause = Math.min(pause * 2, LOCK_POLL_MAX_MILLISECONDS);
+  }
+};
+
 /** Idempotent: applying an already-applied migration is a no-op. */
 export const migrateToLatest = async <T>(
   db: Kysely<T>,
   directory = MIGRATIONS_DIRECTORY,
+  lockWaitMilliseconds = LOCK_WAIT_MILLISECONDS,
 ): Promise<MigrationResultSet> => {
   const results: MigrationResult[] = [];
   try {
     const files = await readMigrationFiles(directory);
     await db.connection().execute(async (conn) => {
-      await sql`select set_config('lock_timeout', ${String(LOCK_WAIT_MILLISECONDS)}, false)`.execute(
-        conn,
-      );
-      await sql`select pg_advisory_lock(${MIGRATION_LOCK_KEY})`.execute(conn);
+      // One session for the whole run: the lock belongs to it, and ends with it if the
+      // process dies. Released below on every path that gets past acquiring it.
+      await acquireMigrationLock(conn, lockWaitMilliseconds);
       try {
-        // Back to unbounded, so a long index build is not cut off by the wait for the lock.
-        await sql`reset lock_timeout`.execute(conn);
         await sql`
           create table if not exists ${sql.table(TABLE)} (
             name varchar(255) primary key, timestamp varchar(255) not null)`.execute(conn);
