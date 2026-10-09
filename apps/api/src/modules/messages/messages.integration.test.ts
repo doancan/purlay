@@ -5,7 +5,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
-import { messageId, type ServerFrame } from '@purlay/types';
+import { isMessageIdShape, messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { requireChannelById, type ChannelContext } from '../../platform/channels';
 import type { EventBus } from '../../platform/events';
@@ -191,4 +191,45 @@ describe('integration: a retried send', () => {
       expect(frames).toHaveLength(1);
     });
   });
+});
+
+describe('integration: the database and the contract agree on what a message id is', () => {
+  /**
+   * `messages_id_is_uuidv7` repeats the contract's `isMessageIdShape` in SQL so a writer
+   * that skips the application check is still stopped (D-90). Two copies are drift
+   * waiting, so they are compared: for each of these ids the table must accept it
+   * exactly when the contract does.
+   */
+  const samples = [
+    messageId(NOW),
+    '0199155c-6200-4b7f-8c11-2a4d3f9e1b70', // version 4
+    '0199155c-6200-7b7f-c811-2a4d3f9e1b70', // version 7, variant bits 11
+    '0199155c-6200-6b7f-8c11-2a4d3f9e1b70', // version 6
+    '0199155c-6200-7b7f-8c11-2a4d3f9e1b70', // version 7, variant 10
+    '00000000-0000-0000-0000-000000000000',
+    'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  ];
+
+  for (const id of samples) {
+    test(id, async () => {
+      await withRollback(async (db) => {
+        const channel = await aChannel(db);
+        const outcome = await db
+          .insertInto('messages')
+          .values({
+            id,
+            workspace_id: channel.workspaceId,
+            channel_id: channel.channelId,
+            sender_id: channel.userId,
+            content: 'x',
+          })
+          .execute()
+          .then(
+            () => 'accepted',
+            () => 'refused',
+          );
+        expect(outcome).toBe(isMessageIdShape(id) ? 'accepted' : 'refused');
+      });
+    });
+  }
 });

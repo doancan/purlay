@@ -256,7 +256,17 @@ CREATE TABLE channels (
     ),
     CONSTRAINT dm_key_iff_dm CHECK (
         (type = 'direct_message') = (dm_key IS NOT NULL)
-    )
+    ),
+
+    -- Two lower-case member ids, the first not above the second byte-wise, joined with ':'.
+    -- Added by 0010, NOT VALID then validated. (I-5, D-90)
+    CONSTRAINT dm_key_form CHECK (dm_key IS NULL
+        OR (dm_key ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND split_part(dm_key, ':', 1) COLLATE "C" <= split_part(dm_key, ':', 2) COLLATE "C")),
+
+    -- The target of the composite keys below: a message names its channel *and* the
+    -- channel's workspace, and the database checks that they belong together. (D-90)
+    CONSTRAINT channels_id_workspace_id_key UNIQUE (id, workspace_id)
 );
 
 -- Channel names are unique per workspace, case-insensitively, and only among
@@ -294,7 +304,8 @@ CREATE TABLE channel_members (
     channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
     user_id    UUID NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
 
-    last_read_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    -- Keyed together with channel_id below: a read position is a message of *this* channel.
+    last_read_message_id UUID,
 
     -- Maintained on write. A COUNT(*) per channel per sidebar render is the
     -- N+1 the project rules forbid. (D-13)
@@ -308,7 +319,13 @@ CREATE TABLE channel_members (
 
     UNIQUE (channel_id, user_id),
     CONSTRAINT unread_counts_non_negative
-        CHECK (unread_count >= 0 AND unread_mention_count >= 0)
+        CHECK (unread_count >= 0 AND unread_mention_count >= 0),
+
+    -- I-3. SET NULL names its column: the plain form would also null `channel_id`, which a
+    -- membership cannot exist without. Added by 0010, NOT VALID then validated. (D-90)
+    CONSTRAINT channel_members_last_read_channel_fkey
+        FOREIGN KEY (last_read_message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE SET NULL (last_read_message_id)
 );
 
 CREATE INDEX idx_channel_members_user ON channel_members (user_id);
@@ -337,14 +354,17 @@ CREATE TABLE messages (
     id           UUID PRIMARY KEY,
 
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    channel_id   UUID NOT NULL REFERENCES channels(id)   ON DELETE CASCADE,
+
+    -- Keyed together with workspace_id below: a message is in the workspace of its channel.
+    channel_id   UUID NOT NULL,
 
     -- RESTRICT, because users are soft-deleted and authorship must survive. (D-22)
     sender_id    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
     -- Threads are exactly two levels deep: a root message and its replies.
     -- A reply may not itself be a parent. Enforced in the message service.
-    parent_id    UUID REFERENCES messages(id) ON DELETE RESTRICT,
+    -- Keyed together with channel_id below: a reply is in its parent's channel.
+    parent_id    UUID,
 
     -- Denormalized thread summary, so rendering a feed of 50 root messages
     -- does not become 50 extra queries.
@@ -381,7 +401,22 @@ CREATE TABLE messages (
 
     -- The contract's MESSAGE_CONTENT_MAX, for every writer that is not one of the
     -- two doors. Added by 0007, NOT VALID then validated, in one transaction. (D-67, D-86)
-    CONSTRAINT messages_content_length CHECK (char_length(content) <= 16000)
+    CONSTRAINT messages_content_length CHECK (char_length(content) <= 16000),
+
+    -- Version 7 and the RFC variant: the contract's isMessageIdShape, for a writer that skips it.
+    -- The timestamp inside is not checked here (a CHECK must be immutable); the service does. (D-8, D-33, D-90)
+    CONSTRAINT messages_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+
+    -- The tenant keys, added by 0010 (NOT VALID, then validated). Each contains, and so replaces,
+    -- the single-column key it was written beside. (I-1 in part, I-3, I-4, D-90)
+    CONSTRAINT messages_id_channel_id_key UNIQUE (id, channel_id),
+    CONSTRAINT messages_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE,
+    CONSTRAINT messages_parent_channel_fkey
+        FOREIGN KEY (parent_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE RESTRICT
 );
 ```
 
@@ -811,17 +846,37 @@ Rules the schema cannot express. Each has a named test. (D-21)
 
 | # | Invariant | Enforced in |
 |---|---|---|
-| I-1 | Threads are at most two levels deep: a reply's `parent_id` must point at a message whose own `parent_id` is `NULL`. | `messages.service` |
+| I-1 | Threads are at most two levels deep: a reply's `parent_id` must point at a message whose own `parent_id` is `NULL`. The database enforces that a reply is in its parent's channel (and so workspace); depth is the service's. | `messages.service`, in part `messages_parent_channel_fkey` |
 | I-2 | Every workspace has at least one `owner`. The last owner cannot be demoted or removed. | `members.service` |
-| I-3 | `channel_members.last_read_message_id` must belong to that channel. | `read-state.service` |
-| I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | `messages.service` |
-| I-5 | `dm_key` is the workspace's two member UUIDs, sorted ascending and joined with `:`. | `channels.service` |
+| I-3 | `channel_members.last_read_message_id` must belong to that channel. | the database: `channel_members_last_read_channel_fkey` |
+| I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | the database: `messages_channel_workspace_fkey` |
+| I-5 | `dm_key` is the workspace's two member UUIDs, sorted ascending and joined with `:`. The database enforces the form and the order; that the two are members of the workspace is the service's. | `channels.service`, in part `dm_key_form` |
 | I-6 | `unread_count` ≥ `unread_mention_count` for every membership row. | `read-state.service` |
 | I-7 | `workspaces.storage_used_bytes` equals the sum of live attachment sizes. Reconciled nightly. | `storage.service` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit.service` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry. | `retention.service` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
+
+**What the database enforces, and what stays with the service.** I-3 and I-4 are constraints now, and I-1
+and I-5 are constraints in part (D-90). Four things stay service-level on purpose:
+
+- **Thread depth (I-1, the rest).** A reply's parent must itself be a root. A foreign key cannot say
+  "the row I point at has a null column"; it takes a trigger, or a stored generated column on a table of
+  millions of rows (a rewrite under an exclusive lock). The tenant half of I-1, that a reply never leaves its
+  parent's channel, is the part a leak depends on, and that is in the database.
+- **Counters kept equal to other rows (`thread_reply_count`, I-7, I-8).** A maintained count equal to a count
+  of other rows is a trigger, and a trigger on the hottest table is a cost this schema has not been shown to
+  need. The service maintains them in the send's transaction; a nightly reconcile is the check. A
+  `thread_reply_count` of 999 on a message with no replies is accepted by the database, and the audit was
+  right to say so.
+- **I-6** compares two columns of one row and could be a `CHECK`. It is not one yet because the read-state
+  service that defines when a mention is counted does not exist, and a constraint written before the rule is
+  settled would decide it. It becomes one with that service.
+- **The timestamp inside a message id.** A `CHECK` must be immutable, and "not from the future" is not. The
+  service refuses it (D-33); the database refuses a wrong version and variant.
+- **That a DM's two ids are members of its workspace**, and that a channel member is a workspace member.
+  Neither is a column of the table that holds the pair.
 
 ---
 
@@ -846,17 +901,18 @@ file that leaves its transaction runs statement by statement and must be safe to
 0007_message_content_limit.sql   messages_content_length CHECK  (D-67)
 0008_channel_activity_unindexed.sql   idx_channels_workspace without last_message_at  (D-88)
 0009_foreign_key_indexes.sql   every foreign key column indexed, built CONCURRENTLY; idx_workspaces_slug dropped  (D-89)
-0010_engagement.sql          reactions, attachments, mentions, notifications
-0011_integrations.sql        github_integrations, link_previews
+0010_tenant_integrity.sql    composite tenant keys, messages_id_is_uuidv7, dm_key_form  (D-90)
+0011_engagement.sql          reactions, attachments, mentions, notifications
+0012_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0012_administration.sql      audit_log, job_runs  (Phase 1)
+0013_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0013_github_feeds.sql`; Phase 2's magic links add `0014_email_auth.sql`.
+Phase 2 adds `0014_github_feeds.sql`; Phase 2's magic links add `0015_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, and again with each hardening migration
-(`0008`, `0009`). That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+(`0008`, `0009`, `0010`). That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)
