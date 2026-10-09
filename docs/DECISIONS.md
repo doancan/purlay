@@ -3453,6 +3453,18 @@ off-host copies, a production schedule, and the `ENCRYPTION_KEY`, which a backup
 
 **Reversibility:** free. Scripts and a workflow; the format is `pg_dump`'s and a directory of files.
 
+*Amended 2026-10-09 (a second-round audit that ran it):* four things the first rehearsal could not see.
+(1) `restore.sh --replace` dropped the live database **before** reading the dump, so a truncated dump with
+regenerated checksums left it with its tables and none of its rows; it now checks the dump reads back and
+the target and bucket will accept it, restores into a **staging** database, checks that, and swaps by
+renaming, keeping the old one as `<name>_before_restore_<time>`. A failure drops the staging database and
+leaves the target as it was. (2) A backup was written with the caller's umask and any local user could read
+every message; it is `0700`/`0600`. (3) A backup on a stack whose object store was never initialised left a
+partial directory with no checksums; it now removes it and points at `scripts/production-init.sh`.
+(4) The default restore put the database in a new place and the bucket into the live one, which refused
+after the database was done; both now default to new names, `--bucket live` is the recovery spelling, and
+the bucket is checked **before** the database is touched. The rehearsal asserts each of them. `--no-bucket` restores the database alone, for rolling back an upgrade: the live bucket is not empty, and a schema migration does not touch attachments.
+
 ---
 
 ### D-96. Error tracking is the logger's `error` lines, sent on if a DSN is set — no SDK, off by default
