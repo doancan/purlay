@@ -24,3 +24,4 @@ A spike that only reports "it works" has not been written down. (D-57)
 | [`web-client.md`](web-client.md) | 2026-09-09 | Works, nothing loosened — the shipped skeleton costs 25% of the bundle budget |
 | [`frontend-budget.md`](frontend-budget.md) | 2026-09-09 | The declared stack is 69% of the budget eagerly, 43% split — and Radix has no combobox |
 | [`image-pipeline.md`](image-pipeline.md) | 2026-10-09 | `Bun.Image` works on macOS and Linux with nothing installed — and `resize(w, h)` stretches |
+| [`object-storage.md`](object-storage.md) | 2026-10-09 | Garage and RustFS pass every attachment operation; MinIO cannot be pulled — Garage chosen, set up by a script |

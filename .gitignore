@@ -71,14 +71,14 @@ playwright-report/
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Local infrastructure state
-#    docker compose brings up PostgreSQL and MinIO; their volumes are local data,
+#    docker compose brings up PostgreSQL and Garage; their volumes are local data,
 #    never repository content.
 # ─────────────────────────────────────────────────────────────────────────────
 .docker/
 docker-data/
 pgdata/
 postgres-data/
-minio-data/
+garage-data/
 .volumes/
 
 # STORAGE_DRIVER=filesystem writes uploads to STORAGE_LOCAL_PATH (docs/CONFIG.md).

@@ -41,49 +41,28 @@ services:
       retries: 30
       start_period: 5s
 
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+  # Garage: S3-compatible object storage for attachments (docs/spikes/object-storage.md).
+  #
+  # It has no console and its image has no shell, so the layout, the bucket and
+  # the development key are created by `scripts/storage-init.sh`, which
+  # `bun run db:up` runs once this reports healthy. Attachments are stored under
+  # opaque keys and never served as public URLs — downloads are brokered by the
+  # API so membership is actually checked (D-16, ARCHITECTURE.md §9).
+  garage:
+    image: dxflrs/garage:v2.1.0
     restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: purlay
-      MINIO_ROOT_PASSWORD: purlay-development # development only
     ports:
-      - '${MINIO_PORT:-9000}:9000' # S3 API
-      - '${MINIO_CONSOLE_PORT:-9001}:9001' # console
+      - '${STORAGE_PORT:-9000}:3900' # S3 API
     volumes:
-      - minio-data:/data
+      - ./docker/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
     healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
+      test: ['CMD', '/garage', 'status']
       interval: 3s
       timeout: 3s
       retries: 20
-      start_period: 5s
-
-  # One-shot: creates the bucket and exits.
-  #
-  # It is deliberately not part of `--wait`, which considers a container that has
-  # exited to be a failure however cleanly it exited. `bun run db:up` waits on the
-  # long-running services and then runs this one to completion, so its exit code
-  # is still the answer to "did the bucket get created".
-  #
-  # Attachments are stored under opaque
-  # keys and never served as public URLs — downloads are brokered by the API so
-  # membership is actually checked (D-16, ARCHITECTURE.md §9), so the bucket
-  # stays private.
-  minio-bucket:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 purlay purlay-development &&
-      mc mb --ignore-existing local/purlay-attachments &&
-      mc anonymous set none local/purlay-attachments
-      "
-    restart: 'no'
+      start_period: 3s
 
 volumes:
   postgres-data:
-  minio-data:
+  garage-data:

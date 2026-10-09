@@ -62,7 +62,7 @@ the first four drafts of this project ended up contradicting each other at the s
 
 Start the local environment with `bun run db:up` (PostgreSQL and object storage, waits for both to
 be healthy). `bun run db:up:postgres` starts the database alone — all the integration tests need,
-and what CI runs, because the MinIO images `db:up` pulls are no longer published (#183).
+and what CI runs, because nothing the integration tests reach reads object storage yet.
 
 **Two verification commands, and the difference matters:**
 

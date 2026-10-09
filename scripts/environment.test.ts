@@ -16,7 +16,7 @@ const images = [...compose.matchAll(/^\s+image:\s*(\S+)$/gm)].map((m) => m[1] ??
 
 describe('the development environment', () => {
   test('declares images at all', () => {
-    expect(images.length).toBeGreaterThanOrEqual(3);
+    expect(images.length).toBeGreaterThanOrEqual(2);
   });
 
   /**
@@ -60,10 +60,17 @@ describe('the development environment', () => {
    * Attachments are stored under opaque keys and never served as public URLs;
    * downloads are brokered by the API so membership is actually checked.
    * (D-16, ARCHITECTURE.md §9)
+   *
+   * Garage's image has no shell, so the bucket is made by a script on the host.
+   * The script is what is bound: it creates the bucket, never enables a website
+   * on it, and fails if the published port does not refuse an anonymous read.
    */
-  test('the attachment bucket is created private', () => {
-    expect(compose).toContain('mc mb --ignore-existing local/purlay-attachments');
-    expect(compose).toContain('mc anonymous set none local/purlay-attachments');
+  test('the attachment bucket is created by the script, and never made public', () => {
+    const script = readFileSync('scripts/storage-init.sh', 'utf8');
+    expect(script).toContain('garage bucket create "$BUCKET"');
+    expect(script).toContain('403');
+    expect(script).not.toContain('bucket website');
+    expect(readFileSync('package.json', 'utf8')).toContain('./scripts/storage-init.sh');
   });
 
   /**
@@ -72,7 +79,7 @@ describe('the development environment', () => {
    * into a support ticket. (`PRD.md` §3, S-2)
    */
   test('host ports can be overridden without editing the file', () => {
-    for (const variable of ['POSTGRES_PORT', 'MINIO_PORT', 'MINIO_CONSOLE_PORT']) {
+    for (const variable of ['POSTGRES_PORT', 'STORAGE_PORT']) {
       expect(compose).toContain(`\${${variable}:-`);
     }
   });
@@ -124,7 +131,7 @@ describe('the development environment', () => {
    */
   test('the documented port defaults are the ones the compose file uses', () => {
     const config = readFileSync('docs/CONFIG.md', 'utf8');
-    for (const variable of ['POSTGRES_PORT', 'MINIO_PORT', 'MINIO_CONSOLE_PORT']) {
+    for (const variable of ['POSTGRES_PORT', 'STORAGE_PORT']) {
       const used = new RegExp(`\\$\\{${variable}:-(\\d+)\\}`).exec(compose)?.[1];
       expect(used).toBeDefined();
       expect(config).toContain(`\`${variable}\` | \`${used ?? ''}\``);
@@ -136,8 +143,6 @@ describe('the development environment', () => {
       .split(/\n  (?=[a-z])/)
       .filter((block) => block.includes('image:'));
     for (const block of services) {
-      // The one-shot bucket container exits; readiness is meaningless for it.
-      if (block.includes('minio/mc')) continue;
       expect(block).toContain('healthcheck:');
     }
   });

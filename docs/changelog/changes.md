@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
+
+- MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
+  Garage replaces it after three stores were run against the operations attachments need; two passed.
+  Its image has no shell, so `scripts/storage-init.sh` creates the layout, the bucket and the
+  development key, and fails if the published port does not refuse an anonymous read.
+- `MINIO_PORT` and `MINIO_CONSOLE_PORT` become `STORAGE_PORT`; there is no console.
+
 ### Feature — 2026-10-09: the client generates ids against the server's clock
 
 - A laptop whose clock is 90 seconds slow was refused by D-33's window; one 10 seconds fast would have

@@ -62,7 +62,7 @@ membership is never changed by signing in: the owner stays the owner.
 |---|---|---|---|
 | `STORAGE_DRIVER` | — | `s3` | `s3` \| `filesystem` |
 | `STORAGE_LOCAL_PATH` | driver=filesystem | — | Absolute path; must survive container restarts |
-| `S3_ENDPOINT` | driver=s3 | — | MinIO locally, any S3-compatible endpoint in production |
+| `S3_ENDPOINT` | driver=s3 | — | Garage locally, any S3-compatible endpoint in production |
 | `S3_REGION` | driver=s3 | `us-east-1` | |
 | `S3_BUCKET` | driver=s3 | — | |
 | `S3_ACCESS_KEY_ID` | driver=s3 | — | **Secret** |
@@ -117,8 +117,10 @@ configure what is not already a database constraint.
 
 ## Local development
 
-`docker compose` provides PostgreSQL and MinIO. `bun run db:up` starts them and waits for both to
-report healthy; `bun run db:reset` throws the data away and starts again.
+`docker compose` provides PostgreSQL and Garage, an S3-compatible object store. `bun run db:up`
+starts them, waits for both to report healthy, and runs `scripts/storage-init.sh` to create the
+bucket and the development key (`S3_ACCESS_KEY_ID` `GK000000000000000000000001`, secret in the
+script); `bun run db:reset` throws the data away and starts again.
 
 **Host ports are overridable**, because 5432 and 9000 are conventional and frequently already
 taken — and a port collision is exactly the friction that turns *self-hosts it from the README*
@@ -127,8 +129,7 @@ into a support ticket (`PRD.md` §3, S-2):
 | Variable | Default | For |
 |---|---|---|
 | `POSTGRES_PORT` | `5432` | Local development only; not read by the application |
-| `MINIO_PORT` | `9000` | S3 API |
-| `MINIO_CONSOLE_PORT` | `9001` | MinIO console |
+| `STORAGE_PORT` | `9000` | S3 API |
 
 `.env.example` lists exactly the variables the loader reads. It is generated from the loader
 (`bun run config:example`), and CI fails if the committed file differs, so it cannot list a
