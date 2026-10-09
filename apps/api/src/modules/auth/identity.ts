@@ -93,7 +93,7 @@ const fitted = (value: string, max: number): string => Array.from(value).slice(0
  */
 const UNSAFE_IN_NAME =
   /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
-const cleaned = (value: string): string => value.replace(UNSAFE_IN_NAME, '').trim();
+const cleanedName = (value: string): string => value.replace(UNSAFE_IN_NAME, '').trim();
 
 /**
  * GitHub lets an account be renamed and the freed name be taken by someone else,
@@ -130,7 +130,7 @@ export const resolveIdentity = async (
   const profile = cleaned(given);
   const email = anchorEmail(emails);
   const displayName = fitted(
-    cleaned(profile.name ?? '') || cleaned(profile.login) || profile.login,
+    cleanedName(profile.name ?? '') || cleanedName(profile.login) || profile.login,
     DISPLAY_NAME_MAX,
   );
   const now = clock.now();
