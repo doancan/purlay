@@ -8,10 +8,14 @@
 -- which are never more — so this refuses nothing the contract accepts, and an
 -- integration test fails if the two numbers part (D-67).
 --
--- Added NOT VALID and validated separately: adding a validated CHECK holds an
--- exclusive lock for the whole scan of existing rows, while VALIDATE takes a lock
--- that lets writes continue. Trivial on an empty table, and the shape every later
--- constraint on a large table should copy.
+-- Added NOT VALID and validated separately, which on a large table is only half the
+-- technique: ADD CONSTRAINT takes an ACCESS EXCLUSIVE lock, and inside a transaction
+-- (as this file runs) that lock is held until commit, so the VALIDATE that follows
+-- scans every row while every other query on the table waits. It is harmless here
+-- because the table was empty. A constraint on a table that has rows must go in a
+-- file that opts out of its transaction (`-- purlay: no-transaction`, D-86), where
+-- the lock is released after the instant ADD CONSTRAINT takes and VALIDATE lets reads
+-- and writes continue. This file does not show that shape, and it is not to be copied.
 --
 -- Append-only: never edited after it has been applied. The migrations are the
 -- single source for the data model; packages/db/src/schema.ts is generated from

@@ -8,6 +8,7 @@
 export {
   createDatabase,
   isTransaction,
+  sslFromEnvironment,
   type DatabaseOptions,
   type Executor,
   type Transaction,
@@ -18,10 +19,13 @@ export {
  */
 export { sql } from 'kysely';
 export {
-  createMigrator,
   migrateToLatest,
   MIGRATIONS_DIRECTORY,
   pendingMigrations,
+  readMigrationFiles,
+  type MigrationFile,
+  type MigrationResult,
+  type MigrationResultSet,
 } from './migrator';
 export {
   cloneIntegrationDatabase,

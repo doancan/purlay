@@ -7,6 +7,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { sslFromEnvironment } from '@purlay/db';
 import { CONFIGURED, ConfigurationError, DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from './config';
 
 const valid = {
@@ -52,6 +53,16 @@ describe('loading configuration', () => {
     expect(config.DATABASE_POOL_MAX).toBe(10);
     expect(config.SESSION_TTL_DAYS).toBe(30);
     expect(config.DATABASE_SSL).toBe(false);
+  });
+
+  test('the migration CLI reads DATABASE_SSL exactly as the application does (D-86)', () => {
+    for (const value of ['true', 'false', '1', '0', undefined]) {
+      const environment = value === undefined ? {} : { DATABASE_SSL: value };
+      expect(sslFromEnvironment(environment)).toBe(
+        loadConfig({ ...valid, ...environment }).DATABASE_SSL,
+      );
+    }
+    expect(() => sslFromEnvironment({ DATABASE_SSL: 'yes' })).toThrow('DATABASE_SSL must be');
   });
 
   test('strings become the type they were declared as', () => {
