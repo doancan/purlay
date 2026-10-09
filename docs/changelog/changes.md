@@ -21,6 +21,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   accept only a `Transaction` — the pool no longer compiles (#232, D-77).
 - The test that proves it makes the second write fail on a cloned database and finds the first gone;
   before the fix it found it still there.
+### Fix — 2026-10-09: configuration refuses an unsafe production
+
+- `ENCRYPTION_KEY` is decoded: 32 bytes, not one repeated value. Production refuses the public
+  development key (which was itself 33 bytes), `DATABASE_SSL=false` without
+  `DATABASE_ALLOW_PLAINTEXT=true`, and an `APP_URL` that is not `http`/`https`. Every refusal names
+  its variable and never prints a value (D-79, #236).
 
 ### Chore — 2026-10-09: the browser has a place to read the clock
 

@@ -8,9 +8,10 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { fixedClock } from '../../platform/clock';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { issueState, verifyState } from './state';
 
-const KEY = 'ZGV2ZWxvcG1lbnQtb25seS10aGlydHktdHdvLWJ5dGVzIQ==';
+const KEY = DEVELOPMENT_ENCRYPTION_KEY;
 const OTHER_KEY = 'YW5vdGhlci1kZXZlbG9wbWVudC1vbmx5LWtleS0zMi1ieQ==';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const at = (minutes: number): ReturnType<typeof fixedClock> =>

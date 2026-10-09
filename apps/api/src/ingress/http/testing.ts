@@ -7,7 +7,7 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
-import type { Config } from '../../platform/config';
+import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../../platform/config';
 import type { GitHubClient, GitHubEmail, GitHubProfile } from '../../modules/auth/github';
 import type { Dependencies } from './app';
 import { createLogger, type Logger } from '../../platform/logging';
@@ -60,9 +60,10 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
   DATABASE_SSL: false,
+  DATABASE_ALLOW_PLAINTEXT: false,
   GITHUB_CLIENT_ID: 'client-id',
   GITHUB_CLIENT_SECRET: 'client-secret',
-  ENCRYPTION_KEY: 'ZGV2ZWxvcG1lbnQtb25seS10aGlydHktdHdvLWJ5dGVzIQ==',
+  ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
   SESSION_TTL_DAYS: 30,
   ...overrides,
 });
