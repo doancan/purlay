@@ -25,12 +25,6 @@ trap cleanup EXIT
 # The key is generated here: nothing in the repository is a usable secret.
 ENCRYPTION_KEY="$(head -c 32 /dev/urandom | base64)"
 
-# Until the process migrates itself on start, the image's own CLI does it first.
-docker run --rm --read-only --cap-drop ALL \
-  --add-host host.docker.internal:host-gateway \
-  -e DATABASE_URL="${DATABASE_URL//localhost/host.docker.internal}" \
-  --entrypoint /usr/local/bin/bun "$IMAGE" packages/db/src/cli/migrate.ts
-
 # The link to the compose database is private and unencrypted, and production
 # (which the image is) refuses that unless told it is so (DATABASE_ALLOW_PLAINTEXT).
 docker run -d --name "$NAME" \
@@ -42,6 +36,7 @@ docker run -d --name "$NAME" \
   -e GITHUB_CLIENT_ID=smoke -e GITHUB_CLIENT_SECRET=smoke \
   -e DATABASE_ALLOW_PLAINTEXT=true \
   -e ENCRYPTION_KEY="$ENCRYPTION_KEY" \
+  -e MIGRATE_ON_START=true \
   "$IMAGE" >/dev/null
 
 # Wait for a positive condition — a 200 — not for the absence of an error: a

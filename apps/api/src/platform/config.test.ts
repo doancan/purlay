@@ -55,6 +55,14 @@ describe('loading configuration', () => {
     expect(config.DATABASE_SSL).toBe(false);
   });
 
+  test('migrating on start is off unless asked for, and a bad value is refused', () => {
+    expect(loadConfig(valid).MIGRATE_ON_START).toBeUndefined();
+    expect(loadConfig({ ...valid, MIGRATE_ON_START: 'true' }).MIGRATE_ON_START).toBe(true);
+    expect(() => loadConfig({ ...valid, MIGRATE_ON_START: 'sometimes' })).toThrow(
+      ConfigurationError,
+    );
+  });
+
   test('the migration CLI reads DATABASE_SSL exactly as the application does (D-86)', () => {
     for (const value of ['true', 'false', '1', '0', undefined]) {
       const environment = value === undefined ? {} : { DATABASE_SSL: value };

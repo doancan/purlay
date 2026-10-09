@@ -15,6 +15,7 @@ import { githubClient } from './modules/auth/github';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
 import { installShutdown } from './lifecycle';
+import { migrateOnStart } from './platform/migrate-on-start';
 import { openJoinNotice } from './modules/workspaces/open-join';
 
 const config = loadConfig(process.env);
@@ -61,3 +62,17 @@ installShutdown({
   process,
   deadlineMs: 10_000,
 });
+
+// After the listener is open, so liveness answers during a long migration and
+// readiness says 503 until it finishes (D-93). Nodes started together take turns
+// in the migrator's own lock. A node that cannot migrate must not keep running as
+// though it could.
+if (config.MIGRATE_ON_START === true) {
+  try {
+    const applied = await migrateOnStart(database);
+    log.info('migrations are current', { applied });
+  } catch (error) {
+    log.error('migrating on start failed; exiting', { err: error });
+    process.exit(1);
+  }
+}
