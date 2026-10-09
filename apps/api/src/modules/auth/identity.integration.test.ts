@@ -295,4 +295,39 @@ describe('integration: GitHub identity', () => {
       expect(row.display_name).toBe('n'.repeat(128));
     });
   });
+
+  /** GitHub controls this string; PostgreSQL cannot store a NUL, and sign-in never fails on a name. */
+  test('a display name with control characters is cleaned, not refused', async () => {
+    await withRollback(async (db) => {
+      const { userId } = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 8, login: 'nulled', name: 'Mo\u0000na \u202EgnoL\u0007 \uD800ok' }),
+        verified('nulled@example.test'),
+      );
+      const row = await db
+        .selectFrom('users')
+        .select('display_name')
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+      expect(row.display_name).toBe('Mona gnoL ok');
+    });
+  });
+
+  test('a name that is nothing but controls falls back to the login', async () => {
+    await withRollback(async (db) => {
+      const { userId } = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 9, login: 'blank', name: '\u0000\u0001' }),
+        verified('blank@example.test'),
+      );
+      const row = await db
+        .selectFrom('users')
+        .select('display_name')
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+      expect(row.display_name).toBe('blank');
+    });
+  });
 });

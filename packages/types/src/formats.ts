@@ -50,10 +50,40 @@ const INFLATES_IN_JSON =
  */
 const isMessageContent = (value: string): boolean => !INFLATES_IN_JSON.test(value);
 
+/**
+ * What a name may not contain: every control character (C0, DEL, C1 — a name is
+ * one line, so tab, line feed and carriage return go too, and NUL, which
+ * PostgreSQL cannot store, with them), the line and paragraph separators, a
+ * lone surrogate, and the bidirectional embeddings, overrides and isolates
+ * (U+202A-202E, U+2066-2069).
+ *
+ * The last are refused because a name is an identifier people read and compare by
+ * eye: `gpj<RLO>exe.txt` displays as `gpjtxt.exe`-style spoofs, and an isolate
+ * left open reorders the text around it. The directional *marks* (U+200E/200F)
+ * stay: a right-to-left name in a left-to-right sidebar legitimately needs one.
+ */
+const FORBIDDEN_IN_NAME =
+  /[\u0000-\u001F\u007F-\u009F\u2028\u2029\u202A-\u202E\u2066-\u2069]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+/** Free text that may span lines (a topic): what PostgreSQL stores, nothing more. */
+const NOT_STORABLE =
+  /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+const isPlainText = (value: string): boolean => !NOT_STORABLE.test(value);
+
 FormatRegistry.Set('uuid', (value) => UUID.test(value));
 FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
 FormatRegistry.Set('uri', (value) => URI.test(value));
 FormatRegistry.Set('message-content', isMessageContent);
+FormatRegistry.Set('name', (value) => !FORBIDDEN_IN_NAME.test(value));
+FormatRegistry.Set('plain-text', isPlainText);
 
-export const REGISTERED_FORMATS = ['uuid', 'date-time', 'email', 'uri', 'message-content'] as const;
+export const REGISTERED_FORMATS = [
+  'uuid',
+  'date-time',
+  'email',
+  'uri',
+  'message-content',
+  'name',
+  'plain-text',
+] as const;
