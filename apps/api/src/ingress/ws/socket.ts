@@ -162,19 +162,40 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
 
     open: async (socket): Promise<void> => {
-      const identity = await hub.opened(
-        socket.id,
-        {
-          // The raw socket's answers, not the framework wrapper's: whether a
-          // frame was dropped and how much is queued (#197).
-          send: (payload) => socket.raw.send(payload),
-          buffered: outboundBufferOf(socket.raw),
-          close: (code, reason) => {
-            socket.close(code, reason);
+      let identity: Awaited<ReturnType<typeof hub.opened>>;
+      try {
+        identity = await hub.opened(
+          socket.id,
+          {
+            // The raw socket's answers, not the framework wrapper's: whether a
+            // frame was dropped and how much is queued (#197).
+            send: (payload) => socket.raw.send(payload),
+            buffered: outboundBufferOf(socket.raw),
+            close: (code, reason) => {
+              socket.close(code, reason);
+            },
           },
-        },
-        socket.data.request,
-      );
+          socket.data.request,
+        );
+      } catch (error) {
+        // The identity read failed after the upgrade was admitted. Left to throw, the
+        // framework answers with a raw `{"error":…}` body that is not a frame, which
+        // a client takes for a malformed one and reconnects into at once. Say it in
+        // the contract and close with the code that says why.
+        log.error('socket failed to open', { socketId: socket.id, err: error });
+        const refusal = refusalFor('UPGRADE', error, []);
+        const frame: ServerFrame = {
+          event: 'ERROR',
+          data: refusal.body.error,
+          ts: clock.now().getTime(),
+        };
+        socket.raw.send(JSON.stringify(frame));
+        socket.close(
+          refusal.status === 503 ? CLOSE_CODES.TOO_BUSY : CLOSE_CODES.INTERNAL,
+          'failed-to-open',
+        );
+        return;
+      }
       // The upgrade checks what is open; a burst of upgrades all pass that check
       // before any is counted, so the cap is enforced again here, on the count
       // that includes this connection.

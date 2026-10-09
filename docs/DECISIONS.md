@@ -2928,6 +2928,12 @@ number in this family. **Rejected — one bucket per user in place of the per-co
 runaway tab starve the user's other tabs of pings and subscriptions. **Rejected — counting sockets in the
 database:** the hub already knows, and a query per upgrade is a read on the door.
 
+**Amended 2026-10-09 (second-round audit): a socket that cannot say who is on it is told in a frame.** When
+the identity read on open failed after the upgrade was admitted, the framework answered with a raw
+`{"error":…}` body that is not a `ServerFrame`; the client took it for malformed and reconnected into the
+same failure at once. The open now catches it, writes the cause to the log once, sends an `ERROR` frame from
+the contract and closes: `CLOSE_CODES.TOO_BUSY` when the database had no connection to give, the new
+`CLOSE_CODES.INTERNAL` (1011) otherwise. The client reconnects with its backoff either way.
 ---
 
 ### D-85. A change that removes visibility is a bus event: a membership is unsubscribed, a session or an account is closed
@@ -3161,6 +3167,13 @@ sidebar read for a problem the index change already removes. **Rejected — `fil
 reclaimed the old versions on its own (1,999 of 2,000); a setting that was not needed is not added.
 
 **Reversibility:** free. The old index is one `CREATE INDEX`.
+
+**Amended 2026-10-09 (second-round audit): what a retry publishes is the stored row as it is now.** Once
+messages can be deleted, a retried send of an id the database already holds would, if it published what the
+retry carried, republish the original content of a message that has since been tombstoned (D-9). The
+constraint on the retry's publish: **it reads the stored row and publishes that — tombstone included — and
+never the content the retry sent.** Today's `send()` returns the stored row on a repeated id; the delete
+endpoint's work is to keep it so, and its test must retry a send of a deleted message and see a tombstone.
 
 ---
 

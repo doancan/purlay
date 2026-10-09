@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a socket that fails to open is told in a frame
+
+- An identity read that failed after the upgrade was admitted produced a raw error body that clients took
+  for malformed and reconnected into at once. It is now an `ERROR` frame and a close with `TOO_BUSY` or the
+  new `INTERNAL` (1011) (D-84, amended). D-88 records that a retried send publishes the stored row,
+  tombstone included.
+
 ### Fix — 2026-10-09: a replay does not carry messages written after a revocation
 
 - A member removed between a subscription's authorisation and its replay read was sent messages written
