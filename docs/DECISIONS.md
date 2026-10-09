@@ -3011,6 +3011,14 @@ the topic, and no instant is in neither. Reproduced deterministically by a hook 
 the first read returns. **Rejected — subscribing to a topic named after the cookie's token:** the topic would
 carry a credential, and the session id is what the rest of the system names.
 
+**Amended 2026-10-09 (second-round audit): a replay never outlives a revocation seen while it was read.** A
+subscription is authorised, the member is removed and `ACCESS_REVOKED` published, a message commits, and
+the replay — read after the removal — carried that message to the socket ahead of the notice. The hub now
+remembers which channels were revoked while a connection's frames were being held, and does not write
+replayed messages of those channels; the notice still follows. Deterministic: the replay read's seam
+publishes the revocation and commits a message before reading. **Rejected — authorising again after the
+read:** a second query on every subscription for a race the hub already hears about as an event.
+
 ---
 
 ### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change
