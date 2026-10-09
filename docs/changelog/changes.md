@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: deleting a message or a channel is no longer a table scan per row
+
+- On 1,000,000 messages, deleting 100 took 4.8 s and deleting one channel did not finish in 60 s: the
+  foreign keys on `messages` and `channel_members` had no index to be enforced with. Every foreign key
+  column now has one (built concurrently): the same deletes take 8.7 ms and 90 ms. A test reads the catalogue,
+  so a future table cannot forget (#241, D-89).
+- `idx_workspaces_slug`, which duplicated the unique constraint's index, is gone. The search index's cost
+  was measured and is written down: 15 to 25 microseconds a message, and it stays.
+
 ### Fix — 2026-10-09: a send no longer rewrites the channel row's indexes
 
 - Every send updated `channels.last_message_at`, which was in `idx_channels_workspace`: of 2,000 sends, none

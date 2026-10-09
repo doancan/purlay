@@ -53,13 +53,33 @@ const addedConstraints = (sql: string): [string, string][] =>
     match[2] ?? '',
   ]);
 
-/** `CREATE [UNIQUE] INDEX name ON table`, by table. */
+/**
+ * The indexes that exist after the SQL has run, by table.
+ *
+ * Replayed in order, because a migration may build an index CONCURRENTLY, drop
+ * one, or rename the replacement over it (0008), and only the net result is what
+ * the document must describe. A `DROP INDEX IF EXISTS` of a name never created is
+ * the re-runnable form of a migration and changes nothing.
+ */
 const indexesIn = (sql: string): Map<string, Set<string>> => {
-  const indexes = new Map<string, Set<string>>();
-  for (const match of withoutComments(sql).matchAll(/CREATE (?:UNIQUE )?INDEX (\w+)\s+ON (\w+)/g)) {
-    const [, index = '', table = ''] = match;
-    indexes.set(table, (indexes.get(table) ?? new Set()).add(index));
+  const owner = new Map<string, string>();
+  const statements =
+    /CREATE (?:UNIQUE )?INDEX (?:CONCURRENTLY )?(?:IF NOT EXISTS )?(\w+)\s+ON (\w+)|DROP INDEX (?:CONCURRENTLY )?(?:IF EXISTS )?(\w+)|ALTER INDEX (\w+) RENAME TO (\w+)/g;
+  for (const match of withoutComments(sql).matchAll(statements)) {
+    const [, created, table, dropped, renamed, renamedTo] = match;
+    if (created !== undefined && table !== undefined) owner.set(created, table);
+    else if (dropped !== undefined) owner.delete(dropped);
+    else if (renamed !== undefined && renamedTo !== undefined) {
+      const was = owner.get(renamed);
+      if (was === undefined)
+        throw new Error(`a migration renames ${renamed}, which does not exist`);
+      owner.delete(renamed);
+      owner.set(renamedTo, was);
+    }
   }
+  const indexes = new Map<string, Set<string>>();
+  for (const [index, table] of owner)
+    indexes.set(table, (indexes.get(table) ?? new Set()).add(index));
   return indexes;
 };
 

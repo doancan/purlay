@@ -12,7 +12,8 @@
 ## 1. Storage Rules
 
 1. **Tenant isolation is structural.** Every workspace-scoped table carries an indexed
-   `workspace_id`, and every query against those tables filters on it. There are no exceptions
+   `workspace_id` (a test checks that every foreign key has an index, §6.2), and every query against those
+   tables filters on it. There are no exceptions
    — which is precisely what makes the rule enforceable. (D-3, D-6)
 2. **Content is soft-deleted, and soft deletion never cascades.** `deleted_at` is set and
    `content` is replaced with a tombstone. A deleted parent message does not take its thread
@@ -134,6 +135,7 @@ CREATE TABLE sessions (
 
 CREATE INDEX idx_sessions_user    ON sessions (user_id);
 CREATE INDEX idx_sessions_expiry  ON sessions (expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS NOT NULL;
 ```
 
 `ip_address` is the client address at sign-in (the socket's peer, or the proxy-reported one under `TRUST_PROXY`; null if unknown). It is personal data: erasure nulls it with the session (D-27, D-81).
@@ -179,7 +181,11 @@ CREATE TABLE workspaces (
         CHECK (retention_days IS NULL OR retention_days >= 30)
 );
 
-CREATE INDEX idx_workspaces_slug ON workspaces (slug) WHERE deleted_at IS NULL;
+-- No index on `slug`: the UNIQUE constraint above already is one, and a second, partial one
+-- only made every write to this table pay twice. Dropped by 0009. (D-89)
+
+-- The foreign key's index (see §6.2).
+CREATE INDEX idx_workspaces_created_by ON workspaces (created_by) WHERE created_by IS NOT NULL;
 ```
 
 ### 4.2. `workspace_members`
@@ -269,6 +275,9 @@ CREATE UNIQUE INDEX idx_channels_unique_dm
 -- partial, because it is also the index the foreign key to workspaces needs. (D-88)
 CREATE INDEX idx_channels_workspace
     ON channels (workspace_id);
+
+-- The foreign key's index (see §6.2).
+CREATE INDEX idx_channels_created_by ON channels (created_by) WHERE created_by IS NOT NULL;
 ```
 
 `last_message_at` is only ever moved forward, and only by a send that is newer than the value it holds; a
@@ -303,6 +312,10 @@ CREATE TABLE channel_members (
 );
 
 CREATE INDEX idx_channel_members_user ON channel_members (user_id);
+
+-- Deleting a message asks which memberships last read it (ON DELETE SET NULL). (D-89)
+CREATE INDEX idx_channel_members_last_read
+    ON channel_members (last_read_message_id) WHERE last_read_message_id IS NOT NULL;
 ```
 
 > **Ordering note.** `channel_members` references `messages`, and `messages` references
@@ -400,7 +413,35 @@ CREATE INDEX idx_messages_sender ON messages (sender_id);
 CREATE INDEX idx_messages_unresolved
     ON messages (workspace_id, id DESC)
     WHERE parent_id IS NULL AND resolved_at IS NULL AND deleted_at IS NULL;
+
+-- The foreign keys. The indexes above are partial, and the query that enforces a foreign key
+-- filters on the column alone, so none of them can answer it. Without these, deleting 100 of
+-- 1,000,000 messages took 4.9 s and deleting a channel did not finish in 60 s. (D-89)
+CREATE INDEX idx_messages_channel     ON messages (channel_id);
+CREATE INDEX idx_messages_workspace   ON messages (workspace_id);
+CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
+CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
 ```
+
+**Every foreign key column leads an index the planner can use for it**, and a test reads the catalogue to
+prove it, so a table added later cannot forget one. A nullable column is indexed only where it is set,
+which is all a lookup by value needs. Measured on 1,000,000 messages (10 workspaces, 200 channels,
+200 users):
+
+| | before | after |
+|---|---|---|
+| `DELETE` of 100 messages | 4,756 ms | 8.7 ms |
+| `DELETE` of one channel (5,000 messages, cascading) | did not finish in 60 s | 90 ms |
+| the four new `messages` indexes, on disk | | 14 MB over 376 MB of indexes |
+| 20,000 single-row inserts | 1,107 ms | 1,168 ms (+5 %) |
+
+**The search index is the expensive one, and it stays.** `idx_messages_search` is 206 MB of the 376 MB the
+table's indexes occupy, and removing it made 20,000 single-row inserts 1.8 times as fast on
+high-entropy text (1,107 ms against 613 ms) and 1.45 to 1.6 times on prose (892 and 1,036 ms against 607
+and 651). That is about 15 to 25 µs a message, which is invisible at the rate a team sends and is the price
+of substring search (D-10) without a second system. It is written down so that it is a choice: it is
+reopened when insert latency shows up in a measurement of the send path, or when search moves out of
+the database.
 
 ### 6.3. Pagination Contract
 
@@ -804,17 +845,18 @@ file that leaves its transaction runs statement by statement and must be safe to
 0006_channel_members.sql     channel_members, incl. last_read_message_id FK
 0007_message_content_limit.sql   messages_content_length CHECK  (D-67)
 0008_channel_activity_unindexed.sql   idx_channels_workspace without last_message_at  (D-88)
-0009_engagement.sql          reactions, attachments, mentions, notifications
-0010_integrations.sql        github_integrations, link_previews
+0009_foreign_key_indexes.sql   every foreign key column indexed, built CONCURRENTLY; idx_workspaces_slug dropped  (D-89)
+0010_engagement.sql          reactions, attachments, mentions, notifications
+0011_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0011_administration.sql      audit_log, job_runs  (Phase 1)
+0012_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0012_github_feeds.sql`; Phase 2's magic links add `0013_email_auth.sql`.
+Phase 2 adds `0013_github_feeds.sql`; Phase 2's magic links add `0014_email_auth.sql`.
 
-Unapplied numbers have moved three times: up by one when the administration migration was inserted,
-again when `0007_message_content_limit.sql` shipped in Phase 0, and again when `0008` shipped. That is legal only because none of
-them had been applied — **a migration that has run is never renumbered and never edited.**
+Unapplied numbers have moved several times: up by one when the administration migration was inserted,
+again when `0007_message_content_limit.sql` shipped in Phase 0, and again with each hardening migration
+(`0008`, `0009`). That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

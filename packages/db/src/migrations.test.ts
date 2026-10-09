@@ -15,7 +15,66 @@ const files = readdirSync('packages/db/migrations')
   .filter((f) => f.endsWith('.sql'))
   .sort();
 
+/**
+ * What would lock `messages` for writers if it ran on a table with rows in it.
+ *
+ * A migration that creates the table is exempt, since there is nothing to lock. Any
+ * other that builds an index on it must do so CONCURRENTLY, which PostgreSQL allows
+ * only outside a transaction, so the file must also say it leaves its own (D-86). The
+ * problems come back as sentences, so the test can show it catches what it claims to.
+ */
+const unsafeOnLargeTable = (text: string, table: string): string[] => {
+  const code = text.replace(/--[^\n]*/g, '');
+  if (new RegExp(`CREATE TABLE ${table}\\b`).test(code)) return [];
+  const problems: string[] = [];
+  const builds = [
+    ...code.matchAll(
+      new RegExp(`CREATE (?:UNIQUE )?INDEX (CONCURRENTLY )?[^;]*?\\bON ${table}\\b`, 'g'),
+    ),
+  ];
+  for (const build of builds) {
+    if (build[1] === undefined) problems.push(`builds an index on ${table} without CONCURRENTLY`);
+  }
+  if (builds.length > 0 && !/^--\s*purlay:\s*no-transaction\s*$/m.test(text)) {
+    problems.push(`builds an index on ${table} inside the migrator's transaction`);
+  }
+  return problems;
+};
+
 describe('migrations', () => {
+  test('an index on messages is built CONCURRENTLY, outside a transaction, or the table is being created', () => {
+    for (const file of files) {
+      const text = readFileSync(`packages/db/migrations/${file}`, 'utf8');
+      expect({ file, problems: unsafeOnLargeTable(text, 'messages') }).toEqual({
+        file,
+        problems: [],
+      });
+    }
+  });
+
+  test('...and that check does catch each way of getting it wrong', () => {
+    const plain = 'CREATE INDEX idx_x ON messages (sender_id);';
+    expect(unsafeOnLargeTable(plain, 'messages')).toHaveLength(2);
+    const concurrentlyInTransaction = 'CREATE INDEX CONCURRENTLY idx_x ON messages (sender_id);';
+    expect(unsafeOnLargeTable(concurrentlyInTransaction, 'messages')).toEqual([
+      "builds an index on messages inside the migrator's transaction",
+    ]);
+    const outOfTransactionNotConcurrent =
+      '-- purlay: no-transaction\nCREATE UNIQUE INDEX idx_x ON messages (sender_id);';
+    expect(unsafeOnLargeTable(outOfTransactionNotConcurrent, 'messages')).toEqual([
+      'builds an index on messages without CONCURRENTLY',
+    ]);
+    const right =
+      '-- purlay: no-transaction\nCREATE INDEX CONCURRENTLY idx_x ON messages (sender_id);';
+    expect(unsafeOnLargeTable(right, 'messages')).toEqual([]);
+    expect(
+      unsafeOnLargeTable(
+        'CREATE TABLE messages (id int);\nCREATE INDEX i ON messages (id);',
+        'messages',
+      ),
+    ).toEqual([]);
+  });
+
   test('are numbered from 0001 without a gap', () => {
     expect(files.length).toBeGreaterThan(0);
     files.forEach((file, index) => {
