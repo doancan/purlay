@@ -2644,10 +2644,18 @@ only choices are to store a shortened one or to lock the person out of the produ
 try/catch in a place that can forget it; the mapping table is one line per index and a test lists
 them. **Rejected — mapping on SQLSTATE alone:** it cannot choose between `WORKSPACE_SLUG_TAKEN` and
 `CHANNEL_NAME_TAKEN`. **Rejected — retrying the sign-in on a collision:** a name that is too long
-does not become shorter on the second attempt. **Left — a race between two first sign-ins of one
-GitHub account** (a double-clicked callback): it violates `users_github_id_key`, which maps to
-nothing and answers `500`; the contract has no code for it and the fix is a different mechanism
-(an upsert), not a mapping.
+does not become shorter on the second attempt. **Closed — a race between two first sign-ins of one GitHub account** (a double-clicked callback). It
+violated `users_github_id_key` and answered `500`; the insert is now `ON CONFLICT (github_id) DO UPDATE`,
+which refreshes the display fields and keeps the first username, and the email-owner check no longer
+counts the same account as a stranger. Two simultaneous callbacks are two sessions and one user, tested
+on a cloned database. Still `500`, deliberately: a soft-deleted account signing in again (its GitHub id is
+never reused, D-38, and the contract has no code for it), and two *different* accounts racing for one
+username (`users_username_key` maps to no code).
+
+*Amended 2026-10-09 (#231): sign-in also removes control characters from the login, the display name and
+the avatar address — PostgreSQL refuses a NUL in text, so GitHub sending one failed sign-in. A login left
+empty becomes `user-<id>`; an email address with one is not an address and is never repaired, since
+stripping would make it someone else's.*
 
 **Reversibility:** free. A table and a function.
 

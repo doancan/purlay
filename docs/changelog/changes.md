@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: sign-in survives what GitHub sends and a double-clicked callback
+
+- A NUL or other control character in a GitHub login or name failed sign-in; they are removed. Two
+  callbacks for one account at once answered 500 for the second; both now succeed and share one account
+  (D-78, amended).
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different
