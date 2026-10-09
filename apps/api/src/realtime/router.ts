@@ -23,10 +23,6 @@ import {
   SubscribeFrame,
   UnsubscribeFrame,
   type ClientOp,
-  REPLAY_OVERLAP_MS,
-  isMessageIdShape,
-  messageIdFloor,
-  messageIdTime,
   Uuid,
   type ServerFrame,
 } from '@purlay/types';
@@ -35,38 +31,12 @@ import type { Clock } from '../platform/clock';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../platform/errors';
 import { requireChannelById, requireChannelsById } from '../platform/channels';
-import { missedIn, send } from '../modules/messages/messages';
+import { send, type missedIn } from '../modules/messages/messages';
+import { replaySince } from '../modules/messages/replay';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { Logger } from '../platform/logging';
 import type { RateLimiter } from './rate-limiter';
-
-/**
- * How much one subscription replays, at most, across every channel it names.
- *
- * A hundred channels each a page behind was ten thousand frames from one frame
- * (#196). The total is fixed and shared: one channel gets a full page, many get a
- * smaller one each, never fewer than `REPLAY_PER_CHANNEL_MIN`. Whatever is left
- * is continued over HTTP from the `nextCursor` the acknowledgement carries (D-65).
- */
-const REPLAY_TOTAL = 1_000;
-
-/**
- * And at most this many bytes, because a count does not bound a burst: a
- * thousand of the longest messages is 48 MB. The outbound high-water mark must
- * exceed this, or a healthy reader would be closed by its own replay and loop
- * (`OUTBOUND_HIGH_WATER_MARK`, bound by a test).
- */
-export const REPLAY_BYTES_MAX = 1024 * 1024;
-const REPLAY_PER_CHANNEL_MAX = 100;
-const REPLAY_PER_CHANNEL_MIN = 10;
-
-/** The page each replaying channel gets when `count` of them share the total. */
-export const replayPerChannel = (count: number): number =>
-  Math.min(
-    REPLAY_PER_CHANNEL_MAX,
-    Math.max(REPLAY_PER_CHANNEL_MIN, Math.floor(REPLAY_TOTAL / Math.max(1, count))),
-  );
 
 export interface RouterDependencies {
   readonly database: Executor;
@@ -103,18 +73,23 @@ export interface SocketIdentity {
   readonly expiresAt: Date;
 }
 
-const frame = (
-  event: ServerFrame['event'],
-  data: unknown,
-  clock: Clock,
-  refId?: string,
-): ServerFrame =>
-  ({
-    event,
-    data,
-    ts: clock.now().getTime(),
-    ...(refId === undefined ? {} : { refId }),
-  }) as ServerFrame;
+/** A server frame without the fields every one carries: which kind it is, and its data. */
+type FrameBody = ServerFrame extends infer Member
+  ? Member extends ServerFrame
+    ? Omit<Member, 'ts' | 'refId'>
+    : never
+  : never;
+
+/**
+ * Stamps a frame with the server clock and the id it answers. The body is one
+ * member of the contract's union, so an event paired with another event's data
+ * does not compile.
+ */
+const frame = (body: FrameBody, clock: Clock, refId?: string): ServerFrame => ({
+  ...body,
+  ts: clock.now().getTime(),
+  ...(refId === undefined ? {} : { refId }),
+});
 
 /**
  * The id to echo back, if the frame had one that can be.
@@ -144,7 +119,7 @@ const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame =
             message: 'The service is busy. Try again shortly.',
           }
         : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
-  return frame('ERROR', body, clock, refId);
+  return frame({ event: 'ERROR', data: body }, clock, refId);
 };
 
 /**
@@ -234,7 +209,7 @@ export const routeFrame = async (
   try {
     switch (parsed.op) {
       case 'PING':
-        return [frame('PONG', {}, clock, parsed.id)];
+        return [frame({ event: 'PONG', data: {} }, clock, parsed.id)];
 
       case 'SUBSCRIBE': {
         const wanted = parsed.payload.channels;
@@ -275,43 +250,16 @@ export const routeFrame = async (
           // every subscription, and nothing below adds one.
           if (!dependencies.socket.isOpen(identity.socketId)) return [];
 
-          const replaying = contexts.flatMap((context, index) => {
-            const after = wanted[index]?.afterMessageId ?? null;
-            return after === null ? [] : [{ context, after: replayFloor(after) }];
-          });
-          const floors = new Map(replaying.map((entry) => [entry.context.channelId, entry.after]));
-          const replays = await (dependencies.readReplay ?? missedIn)(
+          const { states, frames } = await replaySince(
             database,
-            replaying,
-            replayPerChannel(replaying.length),
+            clock,
+            contexts.map((context, index) => ({
+              context,
+              afterMessageId: wanted[index]?.afterMessageId ?? null,
+            })),
+            dependencies.readReplay,
           );
-
-          const states: { channelId: string; nextCursor: string | null }[] = [];
-          const replayed: ServerFrame[] = [];
-          let bytes = 0;
-          for (const context of contexts) {
-            const replay = replays.get(context.channelId);
-            // Where this channel's replay continues if the byte budget stops it:
-            // after the last message sent, or from its start if none was.
-            let resumeFrom = floors.get(context.channelId) ?? null;
-            let cut = false;
-            for (const message of replay?.data ?? []) {
-              const created = frame('MESSAGE_CREATED', message, clock);
-              const size = Buffer.byteLength(JSON.stringify(created), 'utf8');
-              if (bytes + size > REPLAY_BYTES_MAX) {
-                cut = true;
-                break;
-              }
-              bytes += size;
-              replayed.push(created);
-              resumeFrom = message.id;
-            }
-            states.push({
-              channelId: context.channelId,
-              nextCursor: cut ? resumeFrom : (replay?.nextCursor ?? null),
-            });
-          }
-          return [frame('ACK', { channels: states }, clock, parsed.id), ...replayed];
+          return [frame({ event: 'ACK', data: { channels: states } }, clock, parsed.id), ...frames];
         } catch (error) {
           // Nothing is left half-done behind an error: what this frame subscribed
           // is undone, and what was held for it is released with the error.
@@ -329,7 +277,13 @@ export const routeFrame = async (
         for (const channelId of parsed.payload.channelIds) {
           bus.unsubscribe(channelTopic(channelId), identity.socketId);
         }
-        return [frame('ACK', { channelIds: parsed.payload.channelIds }, clock, parsed.id)];
+        return [
+          frame(
+            { event: 'ACK', data: { channelIds: parsed.payload.channelIds } },
+            clock,
+            parsed.id,
+          ),
+        ];
       }
 
       case 'MESSAGE_SEND': {
@@ -345,7 +299,7 @@ export const routeFrame = async (
           id: parsed.id,
           content: parsed.payload.content,
         });
-        return [frame('ACK', { id: message.id }, clock, parsed.id)];
+        return [frame({ event: 'ACK', data: { id: message.id } }, clock, parsed.id)];
       }
     }
   } catch (error) {
@@ -359,22 +313,4 @@ export const routeFrame = async (
     }
     return [errorFrame(error, clock, parsed.id)];
   }
-};
-
-/**
- * Where a channel's replay starts: `REPLAY_OVERLAP_MS` below the id the client
- * holds, not at it — a message written after the client stopped listening can
- * sort below that id, and starting at the cursor loses it for good (D-65).
- */
-const replayFloor = (afterMessageId: string): string => {
-  if (!isMessageIdShape(afterMessageId)) {
-    // Its timestamp is what the overlap is measured from; a cursor that is not a
-    // v7 id has none, and guessing would replay from an arbitrary point.
-    throw new AppError({
-      code: 'VALIDATION_FAILED',
-      message: 'A replay cursor is a message id.',
-      details: { fields: { afterMessageId: 'is not a message id' } },
-    });
-  }
-  return messageIdFloor(messageIdTime(afterMessageId) - REPLAY_OVERLAP_MS);
 };

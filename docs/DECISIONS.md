@@ -1515,6 +1515,17 @@ read `docs/API.md` by a path relative to the working directory, so running the t
 but the repository root silently found no endpoints; it now resolves the document from its own
 location, and a test runs it from another directory.
 
+**Amended 2026-10-09 (#245): the replay budget is a module's, and two casts went.** The byte and
+per-channel caps and the cursor floor were in `realtime/router.ts`; they decide how a reconnecting
+client catches up, not how a socket behaves, and nothing in them touches a connection. They are
+`modules/messages/replay.ts` (`replaySince`), and the router sends what it returns. The two
+"casts that defeat the exhaustive union" were checked first: the `ServerFrame` one was real
+(`frame()` asserted `{event, data}` into the union), and is now built from a body that is itself
+one member of the union, so an event paired with another event's data does not compile; the
+`hub.ts` one was the timer handle (`as ReturnType<typeof setTimeout>`), now typed by a generic
+`Timers<Handle>`. `joinChannel`'s "unreachable" branch is reachable — a member of a private
+channel or a DM is in it, so the guard hands them a context — and had no test; it has one.
+
 ### D-48. Escape hatches are expensive and visible, not closed
 
 D-47 made the stated rules fail the build. It did not close the hatch that makes all of them

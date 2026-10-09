@@ -29,7 +29,7 @@ import {
 } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
-import { REPLAY_BYTES_MAX } from './router';
+import { REPLAY_BYTES_MAX } from '../modules/messages/replay';
 import { createConnection } from 'node:net';
 import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import { issueSession } from '../modules/auth/sessions';

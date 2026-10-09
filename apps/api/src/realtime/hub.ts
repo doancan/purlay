@@ -47,22 +47,30 @@ export interface Connection {
  *
  * It must exceed the largest burst a healthy connection receives at once, or a
  * fast reader would be closed by its own replay and loop: that is the replay's
- * byte budget, and a test binds the two (`REPLAY_BYTES_MAX` in `router.ts`).
+ * byte budget, and a test binds the two (`REPLAY_BYTES_MAX` in `modules/messages/replay.ts`).
  */
 export const OUTBOUND_HIGH_WATER_MARK = 4 * 1024 * 1024;
 
-/** A timer, injected so a thirty-day expiry can be tested without thirty days. */
-export interface Timers {
-  readonly set: (callback: () => void, ms: number) => unknown;
-  readonly clear: (handle: unknown) => void;
+/**
+ * A timer, injected so a thirty-day expiry can be tested without thirty days.
+ *
+ * `clear` is a method so a timer whose handle is more specific than `unknown`
+ * (the runtime's) is accepted where any is: the handle only ever goes back to the
+ * `Timers` that made it.
+ */
+export interface Timers<Handle = unknown> {
+  set(callback: () => void, ms: number): Handle;
+  clear(handle: Handle): void;
 }
 
-export const systemTimers: Timers = {
+const runtimeTimers: Timers<ReturnType<typeof setTimeout>> = {
   set: (callback, ms) => setTimeout(callback, ms),
   clear: (handle) => {
-    clearTimeout(handle as ReturnType<typeof setTimeout>);
+    clearTimeout(handle);
   },
 };
+
+export const systemTimers: Timers = runtimeTimers;
 
 /**
  * The longest single delay a JavaScript timer honours: 2³¹−1 ms, about 24.8 days.
@@ -75,8 +83,12 @@ export const MAX_TIMER_MS = 2 ** 31 - 1;
  * Calls `callback` after `ms`, however long that is, by chaining timers no longer
  * than `MAX_TIMER_MS`. Returns how to cancel whichever link is pending.
  */
-export const after = (timers: Timers, ms: number, callback: () => void): (() => void) => {
-  let handle: unknown;
+export const after = <Handle>(
+  timers: Timers<Handle>,
+  ms: number,
+  callback: () => void,
+): (() => void) => {
+  let handle: Handle;
   const step = (remaining: number): void => {
     if (remaining <= MAX_TIMER_MS) {
       handle = timers.set(callback, Math.max(0, remaining));

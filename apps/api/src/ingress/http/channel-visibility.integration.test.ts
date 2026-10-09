@@ -212,4 +212,20 @@ describe('integration: channel visibility', () => {
       });
     }
   }
+
+  /**
+   * "Join" is for public channels. A member of a private channel or a DM can see it,
+   * so the guard hands them a context — and the endpoint still says no, with the
+   * same answer a stranger gets, rather than a `204` that suggests it did something.
+   */
+  test('joining a channel that is not public is 404 even for somebody already in it', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      for (const channelId of [world.hidden.private, world.hidden['direct message']]) {
+        const response = await call(db, 'POST', `/api/channels/${channelId}/join`, world.owner);
+        expect(response.status).toBe(404);
+        expect(await response.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
+      }
+    });
+  });
 });
