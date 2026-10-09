@@ -1416,6 +1416,18 @@ database per file is not.
 *Amended 2026-10-09 (D-77): the template-database clone is also where a write that must commit is
 tested — atomicity of a multi-write request, which a rolled-back transaction cannot observe.*
 
+*Amended 2026-10-09 (#246): a hook has five seconds, and the harness must stay far inside them. The
+template is built once per process by a preload (`bunfig.toml` → `packages/db/src/testing-preload.ts`),
+outside every timer, so a clone is a `CREATE DATABASE` and nothing else. Every `DROP DATABASE` makes
+the server run a checkpoint, and the checkpoint costs what the run has written: a file that made
+thirteen databases (the migrator's) spent its `afterAll` on thirteen checkpoints and the CI job failed
+with "a beforeEach/afterEach hook timed out", twice in a run. Reproduced on a disk throttled to 8 MB/s
+(`docker run --device-write-bps`): 2 hook timeouts per full run before, 0 in 10 runs after. So: a test
+that only needs to break the schema does it in a rolled-back transaction (readiness), one that needs
+a place of its own for the migrator takes a schema, and a clone is for what must commit. A guard in
+`harness.integration.test.ts` holds template build, clone and drop to budgets (2.5 s, 1 s, 1 s;
+measured 0.12 s, 0.03 s, 0.01 s on a laptop).*
+
 *Built 2026-10-08, with the first file that needed it (#31): `cloneIntegrationDatabase` in
 `packages/db/src/testing.ts`. The template is `<database>_template`, and it is migrated on every
 clone — a no-op when current, and the only thing stopping a template left by an older run from

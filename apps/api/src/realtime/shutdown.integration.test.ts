@@ -23,15 +23,44 @@ afterAll(async () => {
   await cloned.drop();
 });
 
-/** GitHub, taking its time: a sign-in through it is a request still in flight. */
-const aSlowGitHub = (): ReturnType<typeof aGitHubAccount> => {
+/**
+ * A thing that waits until it is told to go, and says when it has started waiting.
+ *
+ * What these tests hold in flight is held by this and not by a sleep: a sleep is a
+ * guess about how soon the other side gets there, and a loaded machine makes it a
+ * wrong one — the drain then begins before the work it is meant to find, and the
+ * test passes or fails on the scheduler instead of the drain.
+ */
+interface Gate {
+  readonly reached: Promise<void>;
+  readonly wait: () => Promise<void>;
+  readonly release: () => void;
+}
+
+const aGate = (): Gate => {
+  const reached = Promise.withResolvers<undefined>();
+  const released = Promise.withResolvers<undefined>();
+  return {
+    reached: reached.promise,
+    wait: async (): Promise<void> => {
+      reached.resolve(undefined);
+      await released.promise;
+    },
+    release: (): void => {
+      released.resolve(undefined);
+    },
+  };
+};
+
+/** GitHub, held up until the test lets it go: a sign-in through it is a request still in flight. */
+const aSlowGitHub = (gate: Gate): ReturnType<typeof aGitHubAccount> => {
   const fast = aGitHubAccount({ id: 9001, login: 'slow-signin', name: null, avatarUrl: null }, [
     { email: 'slow-signin@example.test', primary: true, verified: true } satisfies GitHubEmail,
   ]);
   return {
     ...fast,
     exchangeCode: async (code: string): Promise<string> => {
-      await Bun.sleep(300);
+      await gate.wait();
       return await fast.exchangeCode(code);
     },
   };
@@ -39,11 +68,12 @@ const aSlowGitHub = (): ReturnType<typeof aGitHubAccount> => {
 
 describe('integration: draining for shutdown', () => {
   test('finishes what is in flight, tells sockets to reconnect, and takes nothing new', async () => {
+    const github = aGate();
     const app: HttpApplication = createApp(
       testDependencies({
         database: cloned.db,
         clock,
-        github: aSlowGitHub(),
+        github: aSlowGitHub(github),
         config: testConfig({ APP_URL: origin }),
       }),
     );
@@ -72,10 +102,15 @@ describe('integration: draining for shutdown', () => {
       headers: { cookie: stateCookie },
       redirect: 'manual',
     });
-    await Bun.sleep(50);
+    await github.reached;
 
     const drained = app.drain();
     expect(await closed).toBe(CLOSE_CODES.RESTARTING);
+    // The drain is waiting for the request: it has not finished while GitHub is held.
+    expect(
+      await Promise.race([drained.then(() => 'drained'), Bun.sleep(100).then(() => 'waiting')]),
+    ).toBe('waiting');
+    github.release();
     expect((await inFlight).status).toBe(302);
     await drained;
 
@@ -98,11 +133,12 @@ describe('integration: draining for shutdown', () => {
   test('waits for a frame being handled, so the pool is not closed under it', async () => {
     let slow = false;
     let queryFinished = false;
+    const query = aGate();
     const database = cloned.db.withPlugin({
       transformQuery: (args) => args.node,
       transformResult: async (args) => {
         if (slow) {
-          await Bun.sleep(300);
+          await query.wait();
           queryFinished = true;
         }
         return args.result;
@@ -133,12 +169,17 @@ describe('integration: draining for shutdown', () => {
       }),
     );
     // Until the handler has reached the database, there is nothing in flight to wait for.
-    const deadline = Date.now() + 5_000;
-    while (app.held().connections === 0 && Date.now() < deadline) await Bun.sleep(5);
-    await Bun.sleep(100);
+    await query.reached;
     expect(queryFinished).toBe(false);
 
-    await app.drain();
+    const drained = app.drain();
+    // The drain is waiting for the frame: it has not finished while the read is held.
+    expect(
+      await Promise.race([drained.then(() => 'drained'), Bun.sleep(100).then(() => 'waiting')]),
+    ).toBe('waiting');
+    expect(queryFinished).toBe(false);
+    query.release();
+    await drained;
     expect(queryFinished).toBe(true);
   });
 });

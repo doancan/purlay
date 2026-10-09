@@ -133,8 +133,8 @@ interface Client {
   readonly ended: Promise<number>;
 }
 
-const connect = async (cookie: string): Promise<Client> => {
-  const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
+const connect = async (cookie: string, listening = server): Promise<Client> => {
+  const socket = new WebSocket(`${listening.replace('http', 'ws')}/ws`, {
     headers: { cookie, origin },
   } as unknown as string[]);
   const ended = new Promise<number>((resolve) => {
@@ -689,35 +689,52 @@ describe('integration: two real sockets', () => {
       );
       await seen(subscribeId);
 
-      // Stop reading, then send it far more than the mark.
+      // Stop reading, then send until the server gives up on the socket. How many
+      // messages that takes is the machine's business — the kernel's buffers on
+      // loopback are not a constant — so the loop watches for the event itself,
+      // instead of sending a fixed number that is slow where the buffers are
+      // large and too few where they are larger still. Posted in batches: the
+      // sequence is not what is under test, the buffer filling is.
       socket.pause();
       const long = 'x'.repeat(MESSAGE_CONTENT_MAX);
-      for (let i = 0; i < 600; i += 1) {
-        const response = await http(
-          'POST',
-          `/api/channels/${room.channelId}/messages`,
-          room.alice,
-          {
-            id: messageId(at(i)),
-            content: long,
-          },
+      const logged = (): number =>
+        recorded.lines.filter(
+          (line) => line['msg'] === 'socket fell behind and was closed to resync',
+        ).length;
+      const alreadyLogged = logged();
+      const fellBehind = (): boolean => logged() > alreadyLogged;
+      const BATCH = 20;
+      const MOST_BATCHES = 100;
+      let sent = 0;
+      while (!fellBehind()) {
+        if (sent >= BATCH * MOST_BATCHES) {
+          throw new Error(
+            `${String(sent)} messages of ${String(long.length)} bytes and the socket never fell behind`,
+          );
+        }
+        const responses = await Promise.all(
+          Array.from(
+            { length: BATCH },
+            async (_, i) =>
+              await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+                id: messageId(at(sent + i)),
+                content: long,
+              }),
+          ),
         );
-        expect(response.status).toBe(201);
+        for (const response of responses) expect(response.status).toBe(201);
+        sent += BATCH;
       }
 
       // Read again: what was queued drains, and then the server's close arrives.
       socket.resume();
       const outcome = await Promise.race([
         closed.then(() => 'closed'),
-        Bun.sleep(10_000).then(() => 'still open'),
+        Bun.sleep(3_000).then(() => 'still open'),
       ]);
       expect(outcome).toBe('closed');
       expect(closeCodeIn(Buffer.concat(received))).toBe(CLOSE_CODES.RESYNC);
-      expect(
-        recorded.lines.some(
-          (line) => line['msg'] === 'socket fell behind and was closed to resync',
-        ),
-      ).toBe(true);
+      expect(fellBehind()).toBe(true);
     });
 
     /**
@@ -806,23 +823,44 @@ describe('integration: two real sockets', () => {
   describe('a socket that closes', () => {
     test('leaves nothing in the hub, the bus or the limiter', async () => {
       const room = await aRoom();
-      const before = app.held();
+      // A server of its own. The shared one still holds whatever the previous test's
+      // sockets have not finished closing — the client's `close()` resolves when the
+      // client's side is done, the server's cleanup lands later, and how much later
+      // depends on the load — so a `before` read from it is a count that can change
+      // between two reads. Nothing else connects here, so every number is this test's.
+      const own = createApp(
+        testDependencies({
+          database: db,
+          clock,
+          config: testConfig({ APP_URL: origin }),
+          log: recorded.log,
+        }),
+      );
+      const listening = `http://localhost:${String(own.listen(0))}`;
+      try {
+        const before = own.held();
+        expect(before).toEqual({ connections: 0, busSockets: 0, busTopics: 0, rateBuckets: 0 });
 
-      const alice = await connect(room.alice);
-      await subscribe(alice, room.channelId);
-      const open = app.held();
-      // The controls: each place did hold something while the socket was open.
-      expect(open.connections).toBe(before.connections + 1);
-      expect(open.busSockets).toBeGreaterThan(before.busSockets);
-      expect(open.busTopics).toBeGreaterThan(before.busTopics);
-      expect(open.rateBuckets).toBe(before.rateBuckets + 1);
+        const alice = await connect(room.alice, listening);
+        await subscribe(alice, room.channelId);
+        const open = own.held();
+        // The controls: each place did hold something while the socket was open.
+        expect(open.connections).toBe(1);
+        expect(open.busSockets).toBe(1);
+        expect(open.busTopics).toBeGreaterThan(0);
+        expect(open.rateBuckets).toBe(1);
 
-      await alice.close();
-      const deadline = Date.now() + 5_000;
-      while (app.held().connections !== before.connections && Date.now() < deadline) {
-        await Bun.sleep(10);
+        await alice.close();
+        // All four, not the first to reach its old value: the bus and the limiter are
+        // released by the same handler, but nothing orders them for the reader.
+        const deadline = Date.now() + 5_000;
+        while (JSON.stringify(own.held()) !== JSON.stringify(before) && Date.now() < deadline) {
+          await Bun.sleep(10);
+        }
+        expect(own.held()).toEqual(before);
+      } finally {
+        await own.stop(true);
       }
-      expect(app.held()).toEqual(before);
     });
   });
 

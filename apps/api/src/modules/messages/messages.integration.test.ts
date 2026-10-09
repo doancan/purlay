@@ -4,7 +4,13 @@
  * Inside a transaction that is rolled back (D-46).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  type Executor,
+} from '@purlay/db';
 import { isMessageIdShape, messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { requireChannelById, type ChannelContext } from '../../platform/channels';
@@ -107,21 +113,35 @@ describe('integration: a send and the channel row', () => {
    * read here are the transaction's own, so the answer is this test's and not the
    * database's history. Kept under the number of row versions one page holds, since
    * an open transaction cannot prune its own versions.
+   *
+   * **On a database of its own, because a HOT update needs room on the row's page**
+   * and the shared database cannot promise any: the rows other tests insert and roll
+   * back stay on their pages as dead versions until something prunes them, so the
+   * channel row can land on a page with room for nineteen more versions and the
+   * twentieth update is a plain one. Measured on the shared database with the rest
+   * of the suite running beside it: 6 failures in 20 runs, each on a page already
+   * full of earlier tests' dead versions. A clone starts with empty pages, and the
+   * versions one test writes fit one with room to spare.
    */
   test('a send updates the channel row without touching its indexes (HOT)', async () => {
-    await withRollback(async (db) => {
-      const channel = await aChannel(db);
-      const started = await updateCounts(db);
-      for (let n = 1; n <= 20; n += 1) {
-        await sendMessage(db, fixedClock(later(n)), channel, {
-          id: messageId(later(n)),
-          content: `message ${String(n)}`,
-        });
-      }
-      const finished = await updateCounts(db);
-      expect(finished.updated - started.updated).toBe(20);
-      expect(finished.hot - started.hot).toBe(20);
-    });
+    const cloned = await cloneIntegrationDatabase();
+    try {
+      await cloned.db.transaction().execute(async (db) => {
+        const channel = await aChannel(db);
+        const started = await updateCounts(db);
+        for (let n = 1; n <= 20; n += 1) {
+          await sendMessage(db, fixedClock(later(n)), channel, {
+            id: messageId(later(n)),
+            content: `message ${String(n)}`,
+          });
+        }
+        const finished = await updateCounts(db);
+        expect(finished.updated - started.updated).toBe(20);
+        expect(finished.hot - started.hot).toBe(20);
+      });
+    } finally {
+      await cloned.drop();
+    }
   });
 
   test('a send that is not newer than the channel does not write the row at all', async () => {
