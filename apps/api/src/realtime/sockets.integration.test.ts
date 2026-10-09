@@ -825,4 +825,59 @@ describe('integration: two real sockets', () => {
       expect(app.held()).toEqual(before);
     });
   });
+
+  /**
+   * The framework starts a handler per frame and does not wait for the last. A
+   * `SUBSCRIBE` that waits on the database used to be overtaken by the
+   * `UNSUBSCRIBE` sent right after it, and then subscribed anyway: the client had
+   * asked to stop and kept receiving.
+   */
+  describe('the frames of one socket', () => {
+    test('are handled in the order they were sent, so a fast UNSUBSCRIBE is not overtaken', async () => {
+      const room = await aRoom();
+      const alice = await connect(room.alice);
+      const subscribeId = messageId(NOW);
+      const unsubscribeId = messageId(at(1));
+      alice.send({
+        id: subscribeId,
+        op: 'SUBSCRIBE',
+        payload: { channels: [{ channelId: room.channelId, afterMessageId: null }] },
+      });
+      alice.send({
+        id: unsubscribeId,
+        op: 'UNSUBSCRIBE',
+        payload: { channelIds: [room.channelId] },
+      });
+      await alice.until((frames) => ack(frames, unsubscribeId) !== undefined, 'both answers');
+      expect(alice.frames.filter((f) => f.event === 'ACK').map((f) => f.refId)).toEqual([
+        subscribeId,
+        unsubscribeId,
+      ]);
+
+      // Bob's post is delivered before it returns; alice's later PING is answered
+      // after anything delivered to her, so quiet by then is real.
+      expect(
+        (
+          await http('POST', `/api/channels/${room.channelId}/messages`, room.bob, {
+            id: messageId(at(2)),
+            content: 'after you left',
+          })
+        ).status,
+      ).toBe(201);
+      const pingId = messageId(at(3));
+      alice.send({ id: pingId, op: 'PING', payload: {} });
+      await alice.until((frames) => frames.some((f) => f.refId === pingId), 'the PONG');
+      expect(createdIds(alice.frames)).toEqual([]);
+      await alice.close();
+    });
+
+    test('a flood past the queue closes the connection with TOO_BUSY', async () => {
+      const room = await aRoom();
+      const alice = await connect(room.alice);
+      for (let i = 0; i < 500; i += 1) {
+        alice.send({ id: messageId(at(i)), op: 'PING', payload: {} });
+      }
+      expect(await alice.ended).toBe(CLOSE_CODES.TOO_BUSY);
+    });
+  });
 });

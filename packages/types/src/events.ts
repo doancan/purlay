@@ -260,4 +260,11 @@ export const CLOSE_CODES = {
    * backoff and replay from the cursor; a deploy is a reconnect, not a loss (#220).
    */
   RESTARTING: 1012,
+  /**
+   * The connection sent frames faster than the server could take them in turn,
+   * and the queue behind it was full — RFC 6455's own code for *try again later*.
+   * Reconnect after a backoff; frames that were queued were dropped, so a send
+   * that never got its `ACK` is retried like any other (D-3, `ARCHITECTURE.md` §5.5).
+   */
+  TOO_BUSY: 1013,
 } as const;

@@ -2644,6 +2644,39 @@ subscribe.** The bus is not transactional; a commit after the read is not blocke
 
 ---
 
+### D-79. A socket's frames are handled one at a time, in order, behind a bounded queue
+
+Elysia starts a `message` handler for each frame as it arrives and does not wait for the last. A
+`SUBSCRIBE` that waits on the database was therefore overtaken by an `UNSUBSCRIBE` sent after it and
+then subscribed anyway, and a continuation that outlived `close` could add a dead socket back to the
+bus, which then kept receiving `deliver` calls (#237).
+
+**Decided: the hub runs one connection's frames as a promise chain.** `hub.enqueue(socketId, work)`
+starts a frame's work when the previous one has settled; a frame that fails is logged and the chain
+goes on; work still queued when the connection closes never runs. This is the "socket generation": a
+connection's id is unique, the hub's entry for it is the generation, and everything a continuation does
+afterwards is checked against it (`isOpen`, `held.get(id) === entry`) before it can subscribe.
+
+- **The queue is bounded at `FRAME_QUEUE_MAX` (32)**, above the limiter's burst of 20, so a connection
+  inside its budget never meets it. Past it the connection is closed with the new
+  `CLOSE_CODES.TOO_BUSY` (1013, *try again later*) and what was queued is dropped. A client reconnects,
+  and a send that was never acknowledged is retried like any other.
+- **The drain waits.** `hub.settled()` resolves when no queued work is running, and `drain` awaits it
+  beside the listener's own stop, so the pool is not closed under a frame being handled. The shutdown's
+  existing deadline bounds it.
+
+**Rejected — a mutex per frame handler, taken inside it.** Ordering would then depend on the order
+the framework happens to call handlers, which is the thing that is not promised. **Rejected — an
+unbounded queue.** A flood becomes memory. **Rejected — RATE_LIMITED for the overflow, as an error
+frame.** The limiter already answers a flood that the server keeps up with; a queue that is full is
+a server that cannot, and refusing frames one by one leaves the client sending into it.
+**Rejected — `RESYNC` (4408).** That says the client fell behind what it was *sent*; this is the other
+direction, and the two want different diagnoses in a log.
+
+**Reversibility:** free. One constant and one close code.
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

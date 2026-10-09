@@ -11,6 +11,7 @@ import { createLogger } from '../platform/logging';
 import {
   after,
   createSocketHub,
+  FRAME_QUEUE_MAX,
   HELD_FRAMES_MAX,
   MAX_TIMER_MS,
   OUTBOUND_HIGH_WATER_MARK,
@@ -246,5 +247,130 @@ describe('a connection with no identity', () => {
     );
     expect(identity).toBeUndefined();
     expect(closes).toEqual([`${String(CLOSE_CODES.SESSION_ENDED)} signed-out`]);
+  });
+});
+
+describe('the frames of one connection, in turn', () => {
+  const rig = (): {
+    hub: ReturnType<typeof createSocketHub>;
+    closes: string[];
+  } => {
+    const hub = createSocketHub(
+      aDatabaseThatMustNotBeTouched(),
+      fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      { log: createLogger({ level: 'silent' }) },
+    );
+    const closes: string[] = [];
+    void hub
+      .opened(
+        's',
+        {
+          send: () => 0,
+          buffered: () => 0,
+          close: (code) => closes.push(String(code)),
+        },
+        // No cookie: the connection is closed as signed out, which the tests ignore.
+        new Request('https://purlay.test/ws'),
+      )
+      .catch(() => undefined);
+    return { hub, closes };
+  };
+
+  const gate = (): { open: () => void; wait: Promise<void> } => {
+    let open = (): void => undefined;
+    const wait = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return { open, wait };
+  };
+
+  test('a frame does not start until the one before it has finished, however slow', async () => {
+    const { hub } = rig();
+    const events: string[] = [];
+    const slow = gate();
+    hub.enqueue('s', async () => {
+      events.push('first starts');
+      await slow.wait;
+      events.push('first ends');
+    });
+    hub.enqueue('s', async () => {
+      events.push('second runs');
+      await Promise.resolve();
+    });
+    await Bun.sleep(5);
+    expect(events).toEqual(['first starts']);
+    slow.open();
+    await hub.settled();
+    expect(events).toEqual(['first starts', 'first ends', 'second runs']);
+  });
+
+  test('a frame that fails does not stop the ones behind it', async () => {
+    const { hub } = rig();
+    const ran: string[] = [];
+    hub.enqueue('s', async () => { await Promise.reject(new Error('one failed')); });
+    hub.enqueue('s', async () => {
+      ran.push('second');
+      await Promise.resolve();
+    });
+    await hub.settled();
+    expect(ran).toEqual(['second']);
+  });
+
+  test('work still queued when the connection closes never runs', async () => {
+    const { hub } = rig();
+    const ran: string[] = [];
+    const slow = gate();
+    hub.enqueue('s', async () => { await slow.wait; });
+    hub.enqueue('s', async () => {
+      ran.push('late');
+      await Promise.resolve();
+    });
+    hub.closed('s');
+    slow.open();
+    await hub.settled();
+    expect(ran).toEqual([]);
+    // And a frame for a connection that has gone is dropped, not queued.
+    hub.enqueue('s', async () => {
+      ran.push('after');
+      await Promise.resolve();
+    });
+    await hub.settled();
+    expect(ran).toEqual([]);
+  });
+
+  test('a queue past its bound closes the connection, TOO_BUSY, and drops what was queued', async () => {
+    const { hub, closes } = rig();
+    const ran: number[] = [];
+    const slow = gate();
+    for (let i = 0; i < FRAME_QUEUE_MAX; i += 1) {
+      hub.enqueue('s', async () => {
+        ran.push(i);
+        await slow.wait;
+      });
+    }
+    // The first frame is under way; the other thirty-one wait behind it.
+    await Bun.sleep(1);
+    // The control: at the bound, nothing is refused yet.
+    expect(closes.includes(String(CLOSE_CODES.TOO_BUSY))).toBe(false);
+    hub.enqueue('s', async () => { await Promise.resolve(); });
+    expect(closes.includes(String(CLOSE_CODES.TOO_BUSY))).toBe(true);
+    slow.open();
+    await hub.settled();
+    // Only the frame already being handled finished; the rest were dropped.
+    expect(ran).toEqual([0]);
+  });
+
+  test('settled waits for work in flight, and is immediate with none', async () => {
+    const { hub } = rig();
+    await hub.settled();
+    let finished = false;
+    const slow = gate();
+    hub.enqueue('s', async () => {
+      await slow.wait;
+      finished = true;
+    });
+    const waiting = hub.settled().then(() => finished);
+    slow.open();
+    expect(await waiting).toBe(true);
   });
 });
