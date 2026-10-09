@@ -71,6 +71,27 @@ describe('the document check', () => {
     expect(output).toContain('D-numbering has a gap');
   });
 
+  test('fails on an unresolved merge conflict, in any tracked file', () => {
+    const root = aCopy();
+    // Built from pieces so this file does not itself contain what the check refuses.
+    const marker = `${'<'.repeat(7)} HEAD`;
+    edit(root, 'docs/CONFIG.md', (text) => `${text}\n${marker}\nours\n`);
+    const { status, output } = run(root);
+    expect(status).toBe(1);
+    expect(output).toContain('unresolved merge conflict marker');
+    expect(output).toContain('docs/CONFIG.md');
+  });
+
+  test('fails when decisions are out of order, which the count cannot see', () => {
+    const root = aCopy();
+    edit(root, 'docs/DECISIONS.md', (text) =>
+      text.replace(/^## Part D/m, '### D-1. A late copy\n\n## Part D'),
+    );
+    const { status, output } = run(root);
+    expect(status).toBe(1);
+    expect(output).toContain('decisions are out of order');
+  });
+
   test('fails when a migration file is missing from SCHEMA.md', () => {
     const root = aCopy();
     edit(root, 'docs/SCHEMA.md', (text) =>

@@ -72,6 +72,8 @@ the free one. One repository, one schema, feature flags where behaviour genuinel
 and survives untouched. Adding the cloud later would have been cheap too; multi-tenancy (D-3) was
 retained precisely to keep this door open, and that bet paid.
 
+---
+
 ### D-2. The wedge is *subtraction*, not features
 
 Purlay wins on four axes, in this order:
@@ -100,6 +102,8 @@ Purlay wins on four axes, in this order:
 5–30 person engineering team that resents paying for Slack and loses knowledge to its
 history limit.
 
+---
+
 ### D-3. One instance, multiple workspaces
 
 A single deployment hosts multiple workspaces. A user has one identity across them and
@@ -115,6 +119,8 @@ built in, expensive to retrofit.
 ---
 
 ## Part B — Scope
+
+---
 
 ### D-4. Four phases, each gated on a demonstrated exit criterion, plus a permanent non-goal list
 
@@ -134,6 +140,8 @@ before adding" tenet (D-2) enforceable rather than aspirational.
 > lives in `PRD.md` §6. The task-level breakdown lives in GitHub Issues (D-32). This decision records
 > only *why the shape is this way* — it deliberately does not restate them.
 
+---
+
 ### D-5. Cut from the previous PRD
 
 | Removed | Reason | Where it went |
@@ -152,6 +160,8 @@ before adding" tenet (D-2) enforceable rather than aspirational.
 
 ## Part C — Technical Decisions
 
+---
+
 ### D-6. Direct messages are workspace-scoped
 
 A DM is a `channel` with `type = 'direct_message'` and a real `workspace_id`. It has no name;
@@ -161,6 +171,8 @@ exceptions**, which is what makes it enforceable.
 **Fixes:** the `UNIQUE(workspace_id, name)` constraint that would have collided on the second
 DM — `name` becomes nullable, and uniqueness is enforced by a partial index that applies only
 to named channels. A separate unique index on the sorted member pair prevents duplicate DMs.
+
+---
 
 ### D-7. Real-time fan-out is in-process for now, behind an interface
 
@@ -181,6 +193,8 @@ on one box will never need it, and making them install Redis to use free softwar
 betrayal of the third audience. One interface, two deployments, and the decision to run a broker
 belongs to whoever operates the instance.
 
+---
+
 ### D-8. Message primary keys are UUIDv7 (time-ordered)
 
 `gen_random_uuid()` (v4) is replaced by v7 for `messages`. Pagination is keyset on `id` alone.
@@ -198,6 +212,8 @@ channel); composite `(created_at, id)` cursor (works, but inflates every index).
 
 **Reversibility:** free today. After the first production message, a painful migration.
 
+---
+
 ### D-9. Soft delete never cascades
 
 `messages.parent_id` becomes `ON DELETE RESTRICT`. The previous `ON DELETE CASCADE` directly
@@ -206,6 +222,8 @@ destroyed an entire resolved thread — exactly the knowledge loss Purlay exists
 
 Deleting a message sets `deleted_at` and clears `content` to a tombstone. Threads survive
 their parent. Hard deletion happens only via an explicit operator-run purge job.
+
+---
 
 ### D-10. Search is honest and scoped
 
@@ -221,6 +239,8 @@ their parent. Hard deletion happens only via an explicit operator-run purge job.
   search speed.
 
 Real code search across repositories is a **different product**. Not in scope.
+
+---
 
 ### D-11. Identity: GitHub OAuth only, database-backed sessions
 
@@ -238,6 +258,8 @@ Real code search across repositories is a **different product**. Not in scope.
 whose users are engineering teams this is acceptable in Phase 1, but it *does* exclude
 designers, PMs and QA — which is why magic links are Phase 2 and not "never".
 
+---
+
 ### D-12. Notifications are explicit and quiet by default
 
 New tables: `mentions` (parsed at write time, one row per mentioned user) and `notifications`
@@ -249,11 +271,15 @@ New tables: `mentions` (parsed at write time, one row per mentioned user) and `n
 - Phase 1 delivers in-app only. Web Push is Phase 2. **We will state plainly that Phase 1
   goes silent when the tab is closed** — pretending otherwise would fail dogfooding on day one.
 
+---
+
 ### D-13. Unread counts are denormalized
 
 `channel_members` keeps `last_read_message_id` **and** a maintained `unread_count` /
 `unread_mention_count`. Computing unread with a `COUNT(*)` per channel on every sidebar render
 is the N+1 the project rules already forbid.
+
+---
 
 ### D-14. Desktop is Phase 3, and the memory target is replaced
 
@@ -267,6 +293,8 @@ shell; a React 19 app with a tokenizer and a live socket inside WKWebView realis
 at 80–150MB. A requirement that fails on first measurement teaches the team to ignore the
 documents. Replaced by D-17.
 
+---
+
 ### D-15. Deep Work is a server-side state, not a client toggle
 
 Previously `is_deep_work_active` existed in the schema with no definition anywhere.
@@ -277,6 +305,8 @@ client silences sounds and badges. It is stored server-side precisely so it hold
 devices and so the *server* stops pushing — a purely client-side mute would still wake a phone
 in Phase 2. Optional auto-expiry timestamp so it cannot be left on forever.
 
+---
+
 ### D-16. Attachments ship in Phase 1
 
 A chat tool you cannot paste a screenshot into is not usable, so this cannot be deferred.
@@ -286,6 +316,8 @@ A chat tool you cannot paste a screenshot into is not usable, so this cannot be 
   filesystem for the simplest self-host.
 - Per-file limit lowered **50MB → 25MB**. Images are downscaled and thumbnailed on upload.
 - Per-workspace quota enforced, because self-hosters pay for the disk.
+
+---
 
 ### D-17. Performance budgets that can actually be measured
 
@@ -300,6 +332,8 @@ enforced in CI does not belong in a document.
 
 > **Single source of truth:** the budget table lives in `PRD.md` §5.
 
+---
+
 ### D-18. Client data ownership is split, deliberately
 
 - **TanStack Query** owns HTTP/server state: hydration, channel lists, history pages, search.
@@ -310,12 +344,16 @@ enforced in CI does not belong in a document.
 The boundary: *if it arrives over HTTP it belongs to Query; if it arrives over the socket or
 hasn't been sent yet, it belongs to Zustand.* Query's cache is updated from socket events.
 
+---
+
 ### D-19. "Local-first" is dropped as a claim
 
 The earlier `OVERVIEW.md` called Zustand "local-first optimistic state". Zustand lives in
 memory — closing the tab loses everything. The accurate term is **optimistic**, which is what
 we are building. Genuine local-first (IndexedDB persistence, offline queue, sync/merge on
 reconnect) is a large, separate undertaking and is **not planned**.
+
+---
 
 ### D-20. Stack confirmed, and its costs written down where they can be seen
 
@@ -403,6 +441,8 @@ than four weeks, the ingress layer moves. It is one layer by design (`ARCHITECTU
 **Named because the documents required the behaviour and never named the tool:** `pino` for the
 structured JSON logging `ARCHITECTURE.md` §10 mandates (D-44).
 
+---
+
 ### D-21. Testing floor, with tenant isolation as the non-negotiable
 
 Inherited from the owner's standing engineering rules, with one addition specific to this
@@ -426,6 +466,8 @@ remembering.
 > discipline around the tests: write it first, verify by running it, and fix a violation rather
 > than waiving it.
 
+---
+
 ### D-22. Workspace ownership lives in the membership row, not on the workspace
 
 The earlier draft had `workspaces.owner_id ... ON DELETE RESTRICT`, which makes a user who owns
@@ -440,6 +482,8 @@ kept purely for audit and is `ON DELETE SET NULL`.
 messages survives; `messages.sender_id` therefore stays `ON DELETE RESTRICT`. Anonymising a
 departed user is a profile-level operation, not a row deletion.
 
+---
+
 ### D-23. Removing Redis moves the unfurl cache into PostgreSQL
 
 `ARCHITECTURE.md` previously cached GitHub unfurl responses in Redis with a 300s TTL. D-7
@@ -453,6 +497,8 @@ Redis and entirely fast enough at our scale.
 **Also decided:** GitHub API credentials are **workspace-level**, not per-user. Unfurling with
 the viewer's own token would leak which private repositories a given member can see, based on
 whether the card renders. One workspace token means every member sees the same card or no card.
+
+---
 
 ### D-24. AGPL-3.0, with a contributor licence agreement
 
@@ -500,6 +546,8 @@ wrong side of that trade.
 
 **Reversibility:** forward relicensing stays possible only while copyright is consolidated. The
 CLA is the thing that keeps it true, which is why it ships before contributions open.
+
+---
 
 ### D-25. Capacity ceiling is multi-node; the system is built single-node until a measurement says otherwise
 
@@ -559,6 +607,8 @@ never. **Two deployments, one codebase:** the cloud runs several nodes behind a 
 balancer with the shared adapters; a self-hoster runs one process with the in-process ones, and
 nothing about that path gets harder because the cloud exists.
 
+---
+
 ### D-26. Administrative actions are recorded in an append-only audit log
 
 A deployment carrying a thousand accounts and a retention policy (D-27) must be able to answer
@@ -584,6 +634,8 @@ the thing it describes.
 **Rejected:** logging to stdout only. Structured logs are rotated, shipped and eventually
 dropped by whoever operates the box; an audit trail that a log-retention setting can silently
 erase is not an audit trail.
+
+---
 
 ### D-27. Retention, erasure and export — resolves O-3
 
@@ -623,6 +675,8 @@ disk is ours, so retention becomes an attribute of the plan — the mechanism is
 side where it was made**: a self-hoster is never told what to throw away. And under D-28 the cloud
 now *performs* erasure as a contractual obligation rather than documenting how an operator would.
 
+---
+
 ### D-28. In the cloud we are the processor; a self-hoster remains their own controller
 
 Amended 2026-09-09. The original decision said the project processes nobody's data and would not
@@ -656,6 +710,8 @@ and the self-hoster's at once would be wrong in both directions: it would promis
 guarantees we cannot give about their own server, and it would let cloud customers think our
 obligations end at documentation.
 
+---
+
 ### D-29. Notifications include thread participation — revises D-12
 
 D-12 restricted notifications to a direct `@username` or a DM, while `SCHEMA.md` shipped a
@@ -683,6 +739,8 @@ is one indexed lookup per reply — not a scan.
 **Rejected:** notifying only the root author. In a three-person discussion the second and third
 participants would silently lose the conversation they are in, which reproduces the original bug
 one seat over.
+
+---
 
 ### D-30. Background work runs as CLI commands under an external scheduler
 
@@ -712,6 +770,8 @@ absent.
 none of these six jobs needs them — they are idempotent sweeps that are simply run again
 tomorrow. `CONTRIBUTING.md` §1.11 forbids the infrastructure until a measurement forces it.
 
+---
+
 ### D-31. SSO moves from permanent non-goal to Phase 3, gated on demand
 
 `PRD.md` §6 lists SSO/SAML as permanent. D-25's ceiling and D-26's audit log describe an
@@ -733,6 +793,8 @@ someone actually asks — but the expectation is that it arrives sooner than Pha
 the point at which D-11's hand-rolled session layer stops being the obvious choice: a library that
 owns OIDC is worth a dependency, and `better-auth` is the current candidate. `lucia`, a plausible
 alternative when D-11 was written, has since been deprecated.
+
+---
 
 ### D-32. Work is tracked in GitHub Issues and Projects
 
@@ -777,6 +839,8 @@ what is in flight.
 
 `CONTRIBUTING.md` §8 is unchanged and still binding: **no issue or ticket reference appears in a commit
 message.** Linkage lives in the pull request body, where it belongs.
+
+---
 
 ### D-33. A client-supplied message id is validated at the boundary, and a conflict is never an ACK
 
@@ -842,6 +906,8 @@ other id outside the window — a stranger's stored id, the sender's own in anot
 never used — is refused with the same body after the same one query, so the window still admits no
 new row and the late path is not an oracle.
 
+---
+
 ### D-34. Channel visibility is a second branded context, not a discipline
 
 `WorkspaceContext` (`ARCHITECTURE.md` §7.3) makes the tenant filter structural, and D-21 argues
@@ -896,6 +962,8 @@ feature; searching your own DMs is a normal thing to want.
 tens of ids and inlines comfortably. Past a few hundred channels per member it becomes a
 subquery instead of a parameter — a change of shape, not of design.
 
+---
+
 ### D-35. The message write path is one transaction, and the event is published after it commits
 
 `ARCHITECTURE.md` §5.3 described the send path as `INSERT → publish → ACK`. A message write is
@@ -928,6 +996,8 @@ this statement, that is the measurement D-7 requires. Not before.
 **Rejected — computing unread with a bounded `COUNT(*)`.** It is defensible and it is a second
 mechanism for a fact that already has one. `channel_members.unread_count` is the value; deriving
 it somewhere else too is the duplication `OVERVIEW.md`'s ownership rule exists to prevent.
+
+---
 
 ### D-36. Markdown is the only stored representation; the parse-once claim is corrected
 
@@ -969,6 +1039,8 @@ the highlighter already spend most of.
 
 **Rejected — highlighting in a Web Worker by default.** Unchanged from §8.2: for a clamped
 12-line block the `postMessage` round-trip costs more than the highlight.
+
+---
 
 ### D-37. Phase 0 gets one explicit open-join variable, because its exit criterion is otherwise unreachable
 
@@ -1018,6 +1090,8 @@ one owner that breaks I-2 from an endpoint that has nothing to do with roles.
 The boot notice is written directly to standard output, because the structured logger is #127; it
 moves there with it.
 
+---
+
 ### D-38. GitHub identity: scopes, the email anchor, and every collision named
 
 D-11 chose GitHub OAuth and made `email` the identity anchor, `NOT NULL UNIQUE`. No document ever
@@ -1057,6 +1131,8 @@ follows. Invariant I-11 is extended accordingly.
 **Reversibility:** the scopes and the email rule are free to change before the first sign-in and
 expensive afterwards — a stored anchor that turns out to be wrong is a migration over live
 accounts.
+
+---
 
 ### D-39. Browser and transport security posture
 
@@ -1108,6 +1184,8 @@ never named the algorithm, which is how two call sites end up encrypting differe
 **Reversibility:** items 1 and 6 are free now and expensive after the first session and the first
 stored token. The rest arrive with the features they protect.
 
+---
+
 ### D-40. The database is created with a deterministic collation, and `citext` is dropped
 
 Migration `0001` runs in Phase 0, and two identifier rules in `SCHEMA.md` quietly depend on the
@@ -1141,6 +1219,8 @@ trigram index is the whole story.
 **Rejected — leaving it to documentation.** "Create the database with `LC_COLLATE=C`" in an
 operator guide is a rule that holds until somebody uses a managed provider that does not offer it.
 A column-level collation travels with the schema.
+
+---
 
 ### D-41. The interface ships in English and Turkish, with no i18n library
 
@@ -1178,6 +1258,8 @@ Turkish text also runs longer than English, so layouts are built to wrap rather 
 **Related:** the Turkish locale is exactly why D-40 pins the database collation. The interface
 language must never reach identifier comparison.
 
+---
+
 ### D-42. The cloud stays shared-database multi-tenant
 
 A paid cloud raises a question a single-team self-host never had to answer: does every customer get
@@ -1203,6 +1285,8 @@ the business rests on.
 **Noisy neighbours** are handled by limits that already exist — per-workspace storage quota (D-16)
 and the connection rate limiter (D-25's `RateLimiter` seam) — extended with a per-workspace query
 budget **only if a measurement shows one customer degrading another** (`CONTRIBUTING.md` §1.11).
+
+---
 
 ### D-43. Cloud pricing is per workspace, not per seat, and sold through a merchant of record
 
@@ -1235,6 +1319,8 @@ expensive would be an odd way to compete on cost (D-2).
 **Metering is per workspace and per month**, and the numbers that matter are already columns:
 `storage_used_bytes` (D-16) and the member count. No new usage-tracking subsystem.
 
+---
+
 ### D-44. Operating the cloud: backups, observability and incidents
 
 D-1 previously refused all of this. It is now the product, so it gets specified rather than
@@ -1260,6 +1346,8 @@ customers to trend. `CONTRIBUTING.md` §1.11 applies to us.
 **Incidents.** A written severity scale, a status-page update before a root-cause analysis, and a
 public post-incident note for anything customer-visible. Written now, while it is cheap and
 nobody is angry.
+
+---
 
 ### D-45. The Kysely types are generated from the applied migrations, not written by hand
 
@@ -1303,6 +1391,8 @@ of it is a migration of its own. In exchange, an entire defect class disappears.
 
 **Reversibility:** free today, since neither the migrations nor the types exist yet.
 
+---
+
 ### D-46. Integration tests run against a real database, in a transaction, rolled back
 
 `ARCHITECTURE.md` §10 requires integration tests against real PostgreSQL and real migrations, and
@@ -1342,6 +1432,8 @@ misunderstanding of them is self-consistent.
 day it is noticed and either fixed or deleted within one working day. A suite people learn to
 re-run is a suite that has stopped being a gate, and every enforcement decision in this document
 rests on the gate holding.
+
+---
 
 ### D-47. A rule that is not mechanically enforced is not a rule
 
@@ -1401,6 +1493,8 @@ signature.
 trade — and it is the trade this project has already made once, deliberately, by writing the
 specification before the code.
 
+---
+
 ### D-48. Escape hatches are expensive and visible, not closed
 
 D-47 made the stated rules fail the build. It did not close the hatch that makes all of them
@@ -1437,6 +1531,8 @@ invisible exceptions**.
 **Accepted cost:** filing an issue for a one-line exception is friction. That is the point. The
 friction is what makes the count stay near zero.
 
+---
+
 ### D-49. Deterministic budgets block; noisy ones block on regression
 
 `PRD.md` §5 lists seven performance budgets and calls every one CI-enforceable. **None was being
@@ -1471,6 +1567,8 @@ answers already written.
 it renders; it is slow because of how much it ships and how much it holds. The remedy is these two
 numbers, enforced from the first build — not a different rendering architecture (D-50).
 
+---
+
 ### D-50. The client stays a single-page application, with a prerendered shell
 
 Making load speed a first-class constraint reopens the question D-20 settled: React + Vite as a
@@ -1497,6 +1595,8 @@ that fails the build when any of that slips.
 **Trigger to revisit:** if the cold-load budget cannot be met with code splitting and a prerendered
 shell, server rendering returns to the table — with a measurement behind it. Switching now would
 trade a proven interaction model for an unmeasured fear.
+
+---
 
 ### D-51. Desktop and mobile are the same client in a shell, and the bar is polish rather than nativeness
 
@@ -1535,6 +1635,8 @@ business decision with revenue behind it (D-1), not an engineering preference.
 **Consistent with:** D-1's stated size — a small operation funded by its users — and D-2's
 *subtract before adding*. Three clients maintained by one person is the most reliable way to have
 three mediocre clients.
+
+---
 
 ### D-52. The frontend architecture: constraint, evidence and friction
 
@@ -1592,6 +1694,8 @@ identity that is not ours and a bundle we do not control, and the interface is t
 is a fortnight, and it will still be wrong in a way nobody notices until somebody using a screen
 reader tries the command palette.
 
+---
+
 ### D-53. "Production-ready" is a per-screen definition of done, not a phase
 
 The requirement was stated directly: no output that feels like a prototype, production quality from
@@ -1621,6 +1725,8 @@ behaviour, not polish.
 **What this does not mean.** It does not mean building Phase 1 features during Phase 0. The walking
 skeleton ships *few* screens; each is finished. A small excellent product is what the interface
 exemplars in D-51 all are.
+
+---
 
 ### D-54. A context is branded by a module-private symbol key, and asserting one is a lint error
 
@@ -1783,6 +1889,8 @@ free. The spike produces the knowledge without taking on the debt.
 **Rejected: a checklist item.** A box beside "did you actually run it" is the theatre `CONTRIBUTING.md`
 §6.2 forbids. The mechanism is that the record has to exist and say what it cost.
 
+---
+
 ### D-58. What the client sends refuses what it did not declare
 
 Measured, not assumed (`docs/spikes/elysia.md`): a request body carrying an undeclared property
@@ -1902,6 +2010,8 @@ proxy before signing in has met the friction `PRD.md` §3 exists to remove.
 
 **Reversibility:** changing to two origins later is configuration plus a CORS layer, not a
 migration. Cheap to reverse, which is why it is decided now rather than escalated.
+
+---
 
 ### D-62. The state cookie is signed with a key derived from `ENCRYPTION_KEY`
 
@@ -2350,6 +2460,8 @@ function, so replacing it is a change to that function.
 **Reversibility:** free until thumbnails are stored; after that, existing thumbnails stay valid whatever
 produced them.
 
+---
+
 ### D-76. Reconnect waits in the upper half of each step, and forgives only a connection that held
 
 `ARCHITECTURE.md` §5.4 said *exponential backoff with jitter, capped at 30 s* and left two things
@@ -2377,6 +2489,8 @@ above. **Rejected — resetting on the subscription's ACK:** a client watching n
 receives one, so its backoff would never recover.
 
 **Reversibility:** free. Nothing is stored; the numbers are one constant each.
+
+---
 
 ### D-77. A service that writes twice takes a `Transaction`, and a test can see it fail
 
@@ -2410,6 +2524,8 @@ developer's own database keeps; a dropped clone leaves nothing.
 
 **Reversibility:** free. A type and a test.
 
+---
+
 ### D-78. A client's mistake is a 4xx whichever layer noticed it, and sign-in never fails on a long name
 
 Three requests a client can make answered `500` although nothing on the server was wrong (#233): a
@@ -2441,6 +2557,9 @@ nothing and answers `500`; the contract has no code for it and the fix is a diff
 (an upsert), not a mapping.
 
 **Reversibility:** free. A table and a function.
+
+---
+
 ### D-79. Configuration refuses an unsafe production, and names the variable without quoting it
 
 `ENCRYPTION_KEY` was checked for 44 characters, so 44 repeated letters passed, and the development
@@ -2468,6 +2587,8 @@ fact. *Rejected: an entropy estimate* — it rejects honest keys and accepts cle
 checks above are the ones that are never wrong.
 
 **Reversibility:** free; nothing is stored. An operator on a bad key sees it at the next start.
+
+---
 
 ### D-80. The HTTP edge is bounded before a handler runs
 
@@ -2506,6 +2627,8 @@ mutation.* It would refuse every non-browser client for a threat that only exist
 prevent. *Rejected: a larger limit "for headroom":* the frame is the bound the product already chose.
 
 **Reversibility:** free; nothing is stored.
+
+---
 
 ### D-81. HTTP is rate limited by client address for sign-in and by user for writes, and a client is only who the socket says
 
@@ -2551,6 +2674,8 @@ account erasure of D-27 must null it when it revokes sessions — recorded here 
 performs it does not exist yet. For a cloud this joins the data map D-28 promises.
 
 **Reversibility:** free. Nothing is stored but the address, which can be nulled.
+
+---
 
 ### D-82. The client notices a dead socket, stops retrying a refusal, ignores what it does not know, and does not trust a cursor past an unfinished replay
 
@@ -2641,127 +2766,6 @@ subscribe.** The bus is not transactional; a commit after the read is not blocke
 `ACK`, reversing the order D-35 fixes (published, then acknowledged).
 
 **Reversibility:** free. The hold is one list in the hub.
-
-### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change
-
-Kysely's migrator ran every pending migration in one transaction and recorded nothing about the file. Two
-consequences were measured on 1,000,000 messages (#240). `0007` claimed that adding a constraint `NOT VALID`
-and then validating it "lets writes continue"; inside one transaction the `ACCESS EXCLUSIVE` lock of the
-`ADD CONSTRAINT` is held to the commit, and a concurrent `SELECT` hit its 2 s statement timeout while the
-validation scanned the table (the same migration, opted out, delayed no `SELECT` by more than 150 ms). And
-`CREATE INDEX CONCURRENTLY` is refused inside a transaction, so no index could be added to a large table
-without locking its writes.
-
-**Decided: the migrator is ours, and the opt-out is declared in the file.** A comment in the file's leading
-block, `-- purlay: no-transaction`, runs that migration statement by statement with no transaction around
-it. The default stays one transaction per file, with its record written in the same transaction, so a
-failed migration leaves nothing behind. A file that opts out gives that up and must be written to run again:
-`IF NOT EXISTS`, and `DROP INDEX CONCURRENTLY IF EXISTS` before a `CREATE INDEX CONCURRENTLY`, because a
-build that fails leaves an invalid index. Each statement is sent on its own, because PostgreSQL treats a
-string of several statements as one implicit transaction. Concurrent starters take a session advisory lock
-and run in turn; the third waits for the first and finds nothing to do.
-
-**Decided: each applied migration records the SHA-256 of its file**, and a mismatch, a missing file or an
-out-of-order name is a failure before any migration runs. A database migrated before checksums existed has
-none recorded for its rows; they are **adopted once**, from the files as they stand. That is trust on first
-use, and the cost is stated: an edit made before the first run of this migrator is not caught. The one edit
-this change itself makes to an applied file, the corrected `0007` comment, is of that kind.
-
-**The CLI reads `DATABASE_SSL`** like the application, through the same client, and refuses a value it
-cannot read rather than connecting in the clear.
-
-**Rejected — Kysely's `disableTransactions` for the whole run.** It is all or nothing: every migration
-loses its atomicity because one needs to leave the transaction. **Rejected — a separate directory or
-extension for non-transactional migrations:** the order of the migrations is one sequence, and a second
-place to look is a second place to forget. **Rejected — a checksum that ignores comments:** needs a SQL
-lexer to be right and decides what counts as a change; the file is the unit. **Rejected — refusing to
-adopt unchecksummed rows:** it would fail every existing database for a risk that cannot be measured.
-
-**Reversibility:** costly once migrations carry checksums, since the recorded values are the contract; the
-opt-out line is one comment and costs nothing to remove from a file that has not run.
-
-*Amended 2026-10-09:* readiness asks the same question the migrator asks before it runs
-(`migrationHistoryProblem`), read-only, and reports an edited, missing or out-of-order migration as not
-ready. A database that predates the checksum column has nothing to compare and is not accused. Without it,
-a process whose files had parted from its schema would pass readiness and fail on the first query that
-depended on the difference.
-
-### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
-
-`createDatabase` set a pool size and nothing else (#243). With a pool of two, a third query waited 7,612 ms
-for a connection to free: no timeout, so under load every request queues behind the slowest query and the
-client sees a hang. A dropped idle connection emitted `error` on a pool with no listener, which ends the
-process. TLS was `rejectUnauthorized: true` and nothing more, so a database behind a private or managed
-root could not be reached with verification on.
-
-**Decided: fixed limits, in code, published in `CONFIG.md`.** A 3 s wait for a connection; a 30 s
-`statement_timeout`; a 15 s `idle_in_transaction_session_timeout`; a 30 s idle connection; and an
-`application_name`. Running out of connections raises `DatabaseUnavailableError`, which the HTTP boundary
-maps to a new code, `DATABASE_UNAVAILABLE`, with status `503` and no detail: it is the server being busy,
-the request changed nothing, and a client may retry. The wait is bounded at the moment the connection is
-asked for, in the pool wrapper, so no caller has to remember to classify a driver error by its text. A
-pool error is handed to a callback, and the composition root logs it.
-
-**Decided: `DATABASE_SSL_CA_FILE`, a path.** A mounted file is how a deployment already carries a
-certificate, and it keeps a multi-line PEM out of an environment variable. It needs `DATABASE_SSL=true` and
-a file that cannot be read stops the boot; the migration CLI reads the same two variables.
-
-**Decided: `purgeDeadSessions(db, now, batch)`.** Deletes at most `batch` expired or revoked sessions per
-call and returns the count; a scheduler (#71) calls it until it returns zero.
-
-**Rejected — configurable limits (`DATABASE_*_TIMEOUT`).** Each is a way to lower a safety into an outage
-and a line of operator documentation to get wrong; the three numbers are defaults a deployment has no
-measured reason to change. They become variables when one does. **Rejected — matching the driver's
-`timeout exceeded when trying to connect` text:** it is a string in another package's source. **Rejected — a
-statement timeout for the migrator:** an index build on a large table is meant to take as long as it takes,
-and a migration cut off halfway leaves an invalid index.
-
-**Reversibility:** free. The numbers are one constant each; the error code is the only part clients see.
-
-<<<<<<< HEAD
-*Amended 2026-10-09:* a frame that fails for want of a connection is answered with the same
-`DATABASE_UNAVAILABLE` `ERROR` frame, with the HTTP body word for word, instead of `INTERNAL`; the cause is
-still logged. A client that retries a refused request now has one code to recognise on either transport.
-=======
-### D-88. A send does not rewrite the channel row's indexes, and a retried send is announced again
-
-`sendMessage` updated `channels.last_message_at` on every send, and that column was the second key of
-`idx_channels_workspace` (#244). Measured on 2,000 sends to one channel: **0 of 2,000 updates were HOT**, and the
-channel's indexes grew from 57,344 to 155,648 bytes, in step with traffic instead of with channels. The write
-came from the application's clock with nothing to stop it going backwards, so two concurrent senders, or two
-nodes whose clocks differ, could move the channel's recency back. It also took the channel's row lock for
-the rest of the transaction.
-
-**Decided: the column leaves the index.** Migration `0008` rebuilds `idx_channels_workspace` on
-`workspace_id` alone (concurrently, in the way the migrator allows, D-86). A workspace has tens or hundreds
-of channels, so sorting what the index finds costs nothing next to the write it removes. The same 2,000
-sends then made **1,999 HOT updates, and the indexes stayed at 57,344 bytes**.
-
-**Decided: the update is monotonic and skipped when it would not advance.** `where last_message_at is null
-or last_message_at < $sent_at`: a send whose clock is behind the channel's writes nothing and takes no lock,
-and one that is ahead cannot be undone by a slower neighbour. It is the last statement of the send, so the
-row lock it takes lasts as little of the transaction as possible. `updated_at` is deliberately not touched;
-it records edits to the channel, not traffic through it.
-
-**Decided: a retried send publishes `MESSAGE_CREATED` again.** `send()` announces the stored message every
-time it is called with an id it already holds. The failure that makes this correct: the write commits, the
-publish fails, the sender is told so and retries. If the retry stayed silent the room would never hear of a
-message that is in the database, and nothing else would tell it while its sockets stay open. The cost is one
-frame that changes nothing, because clients de-duplicate by id (D-65), and a retry is rare and backed off.
-Both behaviours have a test.
-
-**Rejected — publishing only when the row was inserted.** It makes the failure above permanent, and it
-trades a duplicate frame that is harmless for a lost one that is not. It becomes right if a delivery
-guarantee exists elsewhere (a transactional outbox), and the reopening condition is that. **Rejected — a
-`GREATEST(...)` in the `SET`:** it is monotonic as well, but it still writes the row, takes the lock and
-leaves the old tuple behind when nothing advanced. **Rejected — rounding `last_message_at` to the minute so
-most sends skip the write:** the sidebar's order between two busy channels would then be wrong. **Rejected —
-a separate `channel_activity` table:** moves the same write to another row, and costs a join on every
-sidebar read for a problem the index change already removes. **Rejected — `fillfactor`:** HOT pruning
-reclaimed the old versions on its own (1,999 of 2,000); a setting that was not needed is not added.
-
-**Reversibility:** free. The old index is one `CREATE INDEX`.
->>>>>>> 1197a56 (fix(messages): a send leaves the channel's indexes alone, and the update only moves forward)
 
 ---
 
@@ -2856,6 +2860,131 @@ would make the hub touch the database, which is the separation D-7 stands on.
 makes a channel private in Phase 0–1's endpoints, and the event it needs is this one.
 
 **Reversibility:** one frame and one close behaviour; nothing is stored.
+
+---
+
+### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change
+
+Kysely's migrator ran every pending migration in one transaction and recorded nothing about the file. Two
+consequences were measured on 1,000,000 messages (#240). `0007` claimed that adding a constraint `NOT VALID`
+and then validating it "lets writes continue"; inside one transaction the `ACCESS EXCLUSIVE` lock of the
+`ADD CONSTRAINT` is held to the commit, and a concurrent `SELECT` hit its 2 s statement timeout while the
+validation scanned the table (the same migration, opted out, delayed no `SELECT` by more than 150 ms). And
+`CREATE INDEX CONCURRENTLY` is refused inside a transaction, so no index could be added to a large table
+without locking its writes.
+
+**Decided: the migrator is ours, and the opt-out is declared in the file.** A comment in the file's leading
+block, `-- purlay: no-transaction`, runs that migration statement by statement with no transaction around
+it. The default stays one transaction per file, with its record written in the same transaction, so a
+failed migration leaves nothing behind. A file that opts out gives that up and must be written to run again:
+`IF NOT EXISTS`, and `DROP INDEX CONCURRENTLY IF EXISTS` before a `CREATE INDEX CONCURRENTLY`, because a
+build that fails leaves an invalid index. Each statement is sent on its own, because PostgreSQL treats a
+string of several statements as one implicit transaction. Concurrent starters take a session advisory lock
+and run in turn; the third waits for the first and finds nothing to do.
+
+**Decided: each applied migration records the SHA-256 of its file**, and a mismatch, a missing file or an
+out-of-order name is a failure before any migration runs. A database migrated before checksums existed has
+none recorded for its rows; they are **adopted once**, from the files as they stand. That is trust on first
+use, and the cost is stated: an edit made before the first run of this migrator is not caught. The one edit
+this change itself makes to an applied file, the corrected `0007` comment, is of that kind.
+
+**The CLI reads `DATABASE_SSL`** like the application, through the same client, and refuses a value it
+cannot read rather than connecting in the clear.
+
+**Rejected — Kysely's `disableTransactions` for the whole run.** It is all or nothing: every migration
+loses its atomicity because one needs to leave the transaction. **Rejected — a separate directory or
+extension for non-transactional migrations:** the order of the migrations is one sequence, and a second
+place to look is a second place to forget. **Rejected — a checksum that ignores comments:** needs a SQL
+lexer to be right and decides what counts as a change; the file is the unit. **Rejected — refusing to
+adopt unchecksummed rows:** it would fail every existing database for a risk that cannot be measured.
+
+**Reversibility:** costly once migrations carry checksums, since the recorded values are the contract; the
+opt-out line is one comment and costs nothing to remove from a file that has not run.
+
+*Amended 2026-10-09:* readiness asks the same question the migrator asks before it runs
+(`migrationHistoryProblem`), read-only, and reports an edited, missing or out-of-order migration as not
+ready. A database that predates the checksum column has nothing to compare and is not accused. Without it,
+a process whose files had parted from its schema would pass readiness and fail on the first query that
+depended on the difference.
+
+---
+
+### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
+
+`createDatabase` set a pool size and nothing else (#243). With a pool of two, a third query waited 7,612 ms
+for a connection to free: no timeout, so under load every request queues behind the slowest query and the
+client sees a hang. A dropped idle connection emitted `error` on a pool with no listener, which ends the
+process. TLS was `rejectUnauthorized: true` and nothing more, so a database behind a private or managed
+root could not be reached with verification on.
+
+**Decided: fixed limits, in code, published in `CONFIG.md`.** A 3 s wait for a connection; a 30 s
+`statement_timeout`; a 15 s `idle_in_transaction_session_timeout`; a 30 s idle connection; and an
+`application_name`. Running out of connections raises `DatabaseUnavailableError`, which the HTTP boundary
+maps to a new code, `DATABASE_UNAVAILABLE`, with status `503` and no detail: it is the server being busy,
+the request changed nothing, and a client may retry. The wait is bounded at the moment the connection is
+asked for, in the pool wrapper, so no caller has to remember to classify a driver error by its text. A
+pool error is handed to a callback, and the composition root logs it.
+
+**Decided: `DATABASE_SSL_CA_FILE`, a path.** A mounted file is how a deployment already carries a
+certificate, and it keeps a multi-line PEM out of an environment variable. It needs `DATABASE_SSL=true` and
+a file that cannot be read stops the boot; the migration CLI reads the same two variables.
+
+**Decided: `purgeDeadSessions(db, now, batch)`.** Deletes at most `batch` expired or revoked sessions per
+call and returns the count; a scheduler (#71) calls it until it returns zero.
+
+**Rejected — configurable limits (`DATABASE_*_TIMEOUT`).** Each is a way to lower a safety into an outage
+and a line of operator documentation to get wrong; the three numbers are defaults a deployment has no
+measured reason to change. They become variables when one does. **Rejected — matching the driver's
+`timeout exceeded when trying to connect` text:** it is a string in another package's source. **Rejected — a
+statement timeout for the migrator:** an index build on a large table is meant to take as long as it takes,
+and a migration cut off halfway leaves an invalid index.
+
+**Reversibility:** free. The numbers are one constant each; the error code is the only part clients see.
+
+*Amended 2026-10-09:* a frame that fails for want of a connection is answered with the same
+`DATABASE_UNAVAILABLE` `ERROR` frame, with the HTTP body word for word, instead of `INTERNAL`; the cause is
+still logged. A client that retries a refused request now has one code to recognise on either transport.
+
+---
+
+### D-88. A send does not rewrite the channel row's indexes, and a retried send is announced again
+
+`sendMessage` updated `channels.last_message_at` on every send, and that column was the second key of
+`idx_channels_workspace` (#244). Measured on 2,000 sends to one channel: **0 of 2,000 updates were HOT**, and the
+channel's indexes grew from 57,344 to 155,648 bytes, in step with traffic instead of with channels. The write
+came from the application's clock with nothing to stop it going backwards, so two concurrent senders, or two
+nodes whose clocks differ, could move the channel's recency back. It also took the channel's row lock for
+the rest of the transaction.
+
+**Decided: the column leaves the index.** Migration `0008` rebuilds `idx_channels_workspace` on
+`workspace_id` alone (concurrently, in the way the migrator allows, D-86). A workspace has tens or hundreds
+of channels, so sorting what the index finds costs nothing next to the write it removes. The same 2,000
+sends then made **1,999 HOT updates, and the indexes stayed at 57,344 bytes**.
+
+**Decided: the update is monotonic and skipped when it would not advance.** `where last_message_at is null
+or last_message_at < $sent_at`: a send whose clock is behind the channel's writes nothing and takes no lock,
+and one that is ahead cannot be undone by a slower neighbour. It is the last statement of the send, so the
+row lock it takes lasts as little of the transaction as possible. `updated_at` is deliberately not touched;
+it records edits to the channel, not traffic through it.
+
+**Decided: a retried send publishes `MESSAGE_CREATED` again.** `send()` announces the stored message every
+time it is called with an id it already holds. The failure that makes this correct: the write commits, the
+publish fails, the sender is told so and retries. If the retry stayed silent the room would never hear of a
+message that is in the database, and nothing else would tell it while its sockets stay open. The cost is one
+frame that changes nothing, because clients de-duplicate by id (D-65), and a retry is rare and backed off.
+Both behaviours have a test.
+
+**Rejected — publishing only when the row was inserted.** It makes the failure above permanent, and it
+trades a duplicate frame that is harmless for a lost one that is not. It becomes right if a delivery
+guarantee exists elsewhere (a transactional outbox), and the reopening condition is that. **Rejected — a
+`GREATEST(...)` in the `SET`:** it is monotonic as well, but it still writes the row, takes the lock and
+leaves the old tuple behind when nothing advanced. **Rejected — rounding `last_message_at` to the minute so
+most sends skip the write:** the sidebar's order between two busy channels would then be wrong. **Rejected —
+a separate `channel_activity` table:** moves the same write to another row, and costs a join on every
+sidebar read for a problem the index change already removes. **Rejected — `fillfactor`:** HOT pruning
+reclaimed the old versions on its own (1,999 of 2,000); a setting that was not needed is not added.
+
+**Reversibility:** free. The old index is one `CREATE INDEX`.
 
 ---
 
