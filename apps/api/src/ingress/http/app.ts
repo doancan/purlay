@@ -35,7 +35,9 @@ import {
   JSON_BODY_MAX_BYTES,
   crossSiteResponse,
   inboundRequestId,
+  hasUnsupportedMediaType,
   isCrossSiteMutation,
+  unsupportedMediaTypeResponse,
   responseHeaders,
 } from './edge';
 import { refusalFor } from './errors';
@@ -165,6 +167,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
         return crossSiteResponse(headers);
       }
+      if (hasUnsupportedMediaType(request)) return unsupportedMediaTypeResponse(headers);
       return undefined;
     })
     // Before the handler, after the body is parsed: the body is already bounded by the
