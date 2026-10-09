@@ -3,7 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql, type Kysely, type QueryExecutorProvider } from 'kysely';
-import { splitStatements } from './statements';
+import { DEADLOCK_RETRY, retryOnDeadlock, type Retry, type RetryPolicy } from './retry';
+import { executableText, splitStatements } from './statements';
 
 export const MIGRATIONS_DIRECTORY = join(dirname(fileURLToPath(import.meta.url)), '../migrations');
 
@@ -103,8 +104,41 @@ const readRecorded = async (db: QueryExecutorProvider): Promise<Recorded[]> => {
   return rows;
 };
 
+/**
+ * A correction to the comments of a migration that had already been applied, and nothing else.
+ *
+ * The files are checksummed whole, so a corrected comment looks exactly like an edited
+ * statement, and every database that applied the migration would refuse to start. The one
+ * way through is explicit and checkable, and costs a line here for each use: the checksum
+ * the databases recorded (`previous`), and the checksum of what the file does, comments
+ * stripped and whitespace collapsed (`code`). The edit is accepted only when the database
+ * recorded `previous` and the file's code still hashes to `code`, so an edit that changed a
+ * statement is refused as before, whatever else it did to the comments. The new checksum is
+ * recorded on the next run and the entry stays as history (D-86).
+ */
+export interface CommentOnlyEdit {
+  readonly previous: string;
+  readonly code: string;
+}
+
+export const COMMENT_ONLY_EDITS: Readonly<Record<string, CommentOnlyEdit>> = {
+  // The header said the lock was held "for an instant"; it is held for as long as it takes to
+  // get it, which under load includes a deadlock the migrator now retries (D-86).
+  '0010_tenant_integrity': {
+    previous: '56ad2d20c68a5e5982567a558033052536c3e01f70a5b30881cd5c21e867338b',
+    code: '9d370b8dd116a93e90e8e03a3869c78f3ed4ba88dcae0f08a0598d4f06695ed4',
+  },
+};
+
+export const codeChecksum = (text: string): string =>
+  createHash('sha256').update(executableText(text)).digest('hex');
+
 /** Refuses a history the files no longer describe. Runs before anything is applied. */
-const verify = (files: readonly MigrationFile[], recorded: readonly Recorded[]): Recorded[] => {
+const verify = (
+  files: readonly MigrationFile[],
+  recorded: readonly Recorded[],
+  edits: Readonly<Record<string, CommentOnlyEdit>> = COMMENT_ONLY_EDITS,
+): Recorded[] => {
   const adopt: Recorded[] = [];
   recorded.forEach((row, index) => {
     const file = files.find((f) => f.name === row.name);
@@ -117,8 +151,15 @@ const verify = (files: readonly MigrationFile[], recorded: readonly Recorded[]):
           `found ${files[index]?.name ?? 'nothing'}. A new migration must sort after the last applied one.`,
       );
     }
+    const edit = edits[row.name];
     if (row.checksum === null) adopt.push(row);
-    else if (row.checksum !== file.checksum) {
+    else if (
+      row.checksum !== file.checksum &&
+      edit?.previous === row.checksum &&
+      codeChecksum(file.text) === edit.code
+    ) {
+      adopt.push(row);
+    } else if (row.checksum !== file.checksum) {
       throw new Error(
         `migration ${row.name} was edited after it was applied: recorded checksum ` +
           `${row.checksum.slice(0, 12)}…, file is ${file.checksum.slice(0, 12)}…. ` +
@@ -179,12 +220,24 @@ const acquireMigrationLock = async (
   }
 };
 
+export interface MigrateOptions {
+  /** How long to wait for another process's migration to finish. */
+  readonly lockWaitMilliseconds?: number;
+  /** Called before a migration is run again after PostgreSQL ended it as a deadlock victim. */
+  readonly onRetry?: (retry: Retry & { readonly migration: string }) => void;
+  /** Attempts and waits for that; the default is `DEADLOCK_RETRY`. */
+  readonly deadlockRetry?: RetryPolicy;
+  /** Comment corrections to accept; the default is `COMMENT_ONLY_EDITS`. For tests. */
+  readonly commentOnlyEdits?: Readonly<Record<string, CommentOnlyEdit>>;
+}
+
 /** Idempotent: applying an already-applied migration is a no-op. */
 export const migrateToLatest = async <T>(
   db: Kysely<T>,
   directory = MIGRATIONS_DIRECTORY,
-  lockWaitMilliseconds = LOCK_WAIT_MILLISECONDS,
+  options: MigrateOptions = {},
 ): Promise<MigrationResultSet> => {
+  const lockWaitMilliseconds = options.lockWaitMilliseconds ?? LOCK_WAIT_MILLISECONDS;
   const results: MigrationResult[] = [];
   try {
     const files = await readMigrationFiles(directory);
@@ -201,7 +254,7 @@ export const migrateToLatest = async <T>(
         );
 
         const recorded = await readRecorded(conn);
-        for (const row of verify(files, recorded)) {
+        for (const row of verify(files, recorded, options.commentOnlyEdits)) {
           const file = files.find((f) => f.name === row.name);
           await sql`update ${sql.table(TABLE)} set checksum = ${file?.checksum ?? null}
             where name = ${row.name}`.execute(conn);
@@ -210,7 +263,17 @@ export const migrateToLatest = async <T>(
         const done = new Set(recorded.map((row) => row.name));
         for (const file of files.filter((f) => !done.has(f.name))) {
           try {
-            await apply(conn, file);
+            // A deadlock ends the migration's transaction or its waiting statement, never
+            // part of one that is half-applied: a transactional file is rolled back whole,
+            // and a non-transactional file is required to run again from its top (D-86), so
+            // running it again is the same thing a crash and a restart would do.
+            await retryOnDeadlock(
+              async () => {
+                await apply(conn, file);
+              },
+              options.deadlockRetry ?? DEADLOCK_RETRY,
+              (retry) => options.onRetry?.({ ...retry, migration: file.name }),
+            );
           } catch (error) {
             results.push({ migrationName: file.name, status: 'Error' });
             throw error;
@@ -238,6 +301,7 @@ export const migrateToLatest = async <T>(
 export const migrationHistoryProblem = async (
   db: QueryExecutorProvider,
   directory = MIGRATIONS_DIRECTORY,
+  commentOnlyEdits: Readonly<Record<string, CommentOnlyEdit>> = COMMENT_ONLY_EDITS,
 ): Promise<string | undefined> => {
   const present = await sql<{ table: boolean; checksum: boolean }>`
     select to_regclass(${TABLE}) is not null as "table",
@@ -256,7 +320,7 @@ export const migrationHistoryProblem = async (
         )
       ).rows;
   try {
-    verify(files, recorded);
+    verify(files, recorded, commentOnlyEdits);
     return undefined;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);

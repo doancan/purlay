@@ -809,6 +809,12 @@ migrator after its listener opens. The migrator's advisory lock, polled without 
 while migrations are pending — until it is their turn and then find nothing to do. A migration that fails
 exits the node with 1 (`apps/api/src/platform/migrate-on-start.ts`, D-93).
 
+**Migrations and traffic.** A migration that alters a table takes a lock that has to be granted behind
+every transaction already using it, and a send takes `messages` and then `channels`. Under heavy write
+load the two can deadlock; the migrator retries a migration PostgreSQL ends that way, at most five
+attempts, and says so in the log, but a retry makes the deadlock survivable and not free. Run migrations
+at low traffic: a rolling deploy at a quiet hour, or `bun run db:migrate` before the new nodes take load (D-86).
+
 **A restart is a reconnect, not an outage.** On SIGTERM or SIGINT the process drains: readiness
 answers 503 at once, every socket is closed with `CLOSE_CODES.RESTARTING` (1012) so its client
 reconnects and replays from its cursor, the listener stops accepting while requests in flight

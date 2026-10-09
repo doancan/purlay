@@ -27,7 +27,14 @@ const db = createMigrationDatabase({
   },
 });
 
-const { error, results } = await migrateToLatest(db);
+const { error, results } = await migrateToLatest(db, undefined, {
+  onRetry: (retry) => {
+    console.warn(
+      `  retrying ${retry.migration}: attempt ${String(retry.attempt)} was ended as a deadlock victim; ` +
+        `waiting ${String(retry.pauseMilliseconds)} ms`,
+    );
+  },
+});
 
 for (const result of results ?? []) {
   const mark = result.status === 'Success' ? 'applied ' : 'FAILED  ';
