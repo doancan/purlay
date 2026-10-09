@@ -11,13 +11,14 @@ import {
   withRollback,
   type Executor,
 } from '@purlay/db';
-import { isMessageIdShape, messageId, type ServerFrame } from '@purlay/types';
+import { isMessageIdShape, messageId, PAGE_LIMIT, type ServerFrame } from '@purlay/types';
+import { AppError } from '../../platform/errors';
 import { fixedClock } from '../../platform/clock';
 import { requireChannelById, type ChannelContext } from '../../platform/channels';
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
-import { aUniqueSlug, aUserRow } from '../../testing/users';
-import { send, sendMessage } from './messages';
+import { aChannel } from '../../testing/channels';
+import { messageHistory, missedIn, send, sendMessage } from './messages';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -25,26 +26,6 @@ afterAll(async () => {
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const later = (seconds: number): Date => new Date(NOW.getTime() + seconds * 1000);
-
-/** A signed-in member of a workspace with one public channel. */
-const aChannel = async (db: Executor): Promise<ChannelContext> => {
-  const user = await aUserRow(db, 'send-user');
-  const workspace = await db
-    .insertInto('workspaces')
-    .values({ name: 'Send', slug: aUniqueSlug('send') })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  await db
-    .insertInto('workspace_members')
-    .values({ workspace_id: workspace.id, user_id: user.userId, role: 'owner' })
-    .execute();
-  const channel = await db
-    .insertInto('channels')
-    .values({ workspace_id: workspace.id, name: 'general', type: 'public' })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  return await requireChannelById(db, user.userId, channel.id);
-};
 
 const lastMessageAt = async (db: Executor, channelId: string): Promise<string | null> => {
   const row = await db
@@ -252,4 +233,134 @@ describe('integration: the database and the contract agree on what a message id 
       });
     });
   }
+});
+
+/** A second channel in the same workspace, for the same member. */
+const anotherChannel = async (db: Executor, first: ChannelContext): Promise<ChannelContext> => {
+  const channel = await db
+    .insertInto('channels')
+    .values({ workspace_id: first.workspaceId, name: 'random', type: 'public' })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return await requireChannelById(db, first.userId, channel.id);
+};
+
+const refusal = async (attempt: Promise<unknown>): Promise<string> =>
+  await attempt.then(
+    () => 'accepted',
+    (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
+  );
+
+describe('integration: a retry is idempotent in its own channel only', () => {
+  /**
+   * D-8: the same sender re-sending the same id gets the stored message back. The
+   * channel is part of "the same": an id already used in another channel is a
+   * collision, and acknowledging it would tell the client its message was stored
+   * here when it was stored somewhere else — and that the id exists there.
+   */
+  test('the same sender, the same id, another channel is a conflict, not an acknowledgement', async () => {
+    await withRollback(async (db) => {
+      const here = await aChannel(db);
+      const there = await anotherChannel(db, here);
+      const clock = fixedClock(later(1));
+      const id = messageId(later(1));
+
+      const stored = await sendMessage(db, clock, here, { id, content: 'hello' });
+      // The control: in its own channel the retry is the stored message.
+      expect(await sendMessage(db, clock, here, { id, content: 'hello' })).toEqual(stored);
+
+      expect(await refusal(sendMessage(db, clock, there, { id, content: 'hello' }))).toBe(
+        'MESSAGE_ID_CONFLICT',
+      );
+      const inThere = await db
+        .selectFrom('messages')
+        .select('id')
+        .where('channel_id', '=', there.channelId)
+        .execute();
+      expect(inThere).toEqual([]);
+    });
+  });
+
+  test('and a retry that arrives after the id’s window is refused in another channel too', async () => {
+    await withRollback(async (db) => {
+      const here = await aChannel(db);
+      const there = await anotherChannel(db, here);
+      const id = messageId(later(1));
+      const stored = await sendMessage(db, fixedClock(later(1)), here, { id, content: 'hello' });
+
+      const late = fixedClock(later(3_600));
+      // The control: late, in its own channel, it is still the stored message (D-8).
+      expect(await sendMessage(db, late, here, { id, content: 'hello' })).toEqual(stored);
+      expect(await refusal(sendMessage(db, late, there, { id, content: 'hello' }))).toBe(
+        'INVALID_MESSAGE_ID',
+      );
+    });
+  });
+});
+
+describe('integration: what a page and a replay leave out and cap', () => {
+  const insertMessages = async (
+    db: Executor,
+    channel: ChannelContext,
+    count: number,
+    deleted: readonly number[] = [],
+  ): Promise<string[]> => {
+    const ids = Array.from({ length: count }, (_, n) => messageId(later(n + 1)));
+    await db
+      .insertInto('messages')
+      .values(
+        ids.map((id, n) => ({
+          id,
+          workspace_id: channel.workspaceId,
+          channel_id: channel.channelId,
+          sender_id: channel.userId,
+          content: `message ${String(n)}`,
+          created_at: later(n + 1),
+          deleted_at: deleted.includes(n) ? later(n + 1) : null,
+        })),
+      )
+      .execute();
+    return ids;
+  };
+
+  test('history leaves a deleted message out and still returns the ones around it', async () => {
+    await withRollback(async (db) => {
+      const channel = await aChannel(db);
+      const ids = await insertMessages(db, channel, 5, [2]);
+      const page = await messageHistory(db, channel);
+      expect(page.data.map((m) => m.id)).toEqual(ids.filter((_, n) => n !== 2).reverse());
+    });
+  });
+
+  test('a replay leaves a deleted message out too', async () => {
+    await withRollback(async (db) => {
+      const channel = await aChannel(db);
+      const ids = await insertMessages(db, channel, 5, [2]);
+      const replays = await missedIn(db, [{ context: channel, after: messageId(later(0)) }], 10);
+      expect(replays.get(channel.channelId)?.data.map((m) => m.id)).toEqual(
+        ids.filter((_, n) => n !== 2),
+      );
+    });
+  });
+
+  test('a page is never longer than the maximum, whatever was asked', async () => {
+    await withRollback(async (db) => {
+      const channel = await aChannel(db);
+      await insertMessages(db, channel, PAGE_LIMIT.max + 5);
+      const asked = await messageHistory(db, channel, { limit: 10_000 });
+      expect(asked.data).toHaveLength(PAGE_LIMIT.max);
+      expect(asked.nextCursor).not.toBeNull();
+      // And the default applies when nothing was asked, so the cap is not the only number.
+      expect((await messageHistory(db, channel)).data).toHaveLength(PAGE_LIMIT.default);
+    });
+  });
+
+  test('a page is never shorter than one, whatever was asked', async () => {
+    await withRollback(async (db) => {
+      const channel = await aChannel(db);
+      await insertMessages(db, channel, 3);
+      expect((await messageHistory(db, channel, { limit: 0 })).data).toHaveLength(1);
+      expect((await messageHistory(db, channel, { limit: -7 })).data).toHaveLength(1);
+    });
+  });
 });

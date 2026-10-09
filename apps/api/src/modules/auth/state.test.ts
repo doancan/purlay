@@ -67,6 +67,29 @@ describe('the OAuth state', () => {
     expect(await verifyState(KEY, at(0), cookieValue, other.state)).toBe(false);
   });
 
+  /**
+   * The comparison walks the length of its first argument, so without the length
+   * check a value that is a *prefix* of the right one compares equal — and the empty
+   * string is a prefix of everything. An attacker who can write the cookie would
+   * need no signature at all.
+   */
+  test('a signature that is only the start of the right one is refused, the empty one included', async () => {
+    const { state, cookieValue } = await issueState(KEY, at(0));
+    const [, expiresAt, signature] = cookieValue.split('.') as [string, string, string];
+    expect(await verifyState(KEY, at(0), cookieValue, state)).toBe(true);
+    for (const cut of [0, 1, 16, signature.length - 1]) {
+      const truncated = `${state}.${expiresAt}.${signature.slice(0, cut)}`;
+      expect(await verifyState(KEY, at(0), truncated, state)).toBe(false);
+    }
+  });
+
+  test('a returned state that is only the start of the right one is refused', async () => {
+    const { state, cookieValue } = await issueState(KEY, at(0));
+    expect(await verifyState(KEY, at(0), cookieValue, state.slice(0, 31))).toBe(false);
+    expect(await verifyState(KEY, at(0), cookieValue, '')).toBe(false);
+    expect(await verifyState(KEY, at(0), cookieValue, `${state}0`)).toBe(false);
+  });
+
   test('a missing half is refused rather than assumed', async () => {
     const { state, cookieValue } = await issueState(KEY, at(0));
     expect(await verifyState(KEY, at(0), undefined, state)).toBe(false);

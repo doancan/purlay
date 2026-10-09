@@ -8,8 +8,10 @@ preload = ["./packages/db/src/testing-preload.ts"]
 # introduced seven files were under it; they were tested, not excused. The suite
 # then stood at 99.6 % of lines and 99.8 % of functions; the per-file floor leaves
 # a new file room for an honest first version without letting one in untested.
-# Never lowered to make a change pass (D-48).
-coverageThreshold = { lines = 0.95, functions = 0.93 }
+# Raised 2026-10-09 (#246) from 0.95 / 0.93 to the lowest any file measured then
+# (96.94 % of lines, 95.24 % of functions), rounded down. Never lowered to make a
+# change pass (D-48).
+coverageThreshold = { lines = 0.96, functions = 0.95 }
 
 # Test-only code is not what ships, so it is not what the figures describe. Lint
 # keeps production from importing it (`purlay/no-test-code-import`), which is what
