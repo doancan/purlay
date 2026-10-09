@@ -21,6 +21,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   accept only a `Transaction` — the pool no longer compiles (#232, D-77).
 - The test that proves it makes the second write fail on a cloned database and finds the first gone;
   before the fix it found it still there.
+### Feature — 2026-10-09: HTTP routes are rate limited, and a session records where it started
+
+- `/auth/*` is limited per client address and every mutation under `/api/*` per signed-in user, at
+  the socket's budget, so `POST /messages` is no longer the unthrottled way in. A refusal is `429`
+  with `RATE_LIMITED` and `Retry-After`. Numbers provisional (O-4). `TRUST_PROXY` is read: without
+  it `X-Forwarded-For` is ignored. `sessions.ip_address` is written at sign-in (D-81, #235).
+
 ### Feature — 2026-10-09: the HTTP edge is bounded
 
 - A JSON body over 64 KiB is refused with `413` by the server before it is read (a 60 MB body was

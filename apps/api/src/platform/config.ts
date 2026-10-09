@@ -44,6 +44,10 @@ export const Environment = Type.Object({
    *  the socket upgrade that stops cross-site hijacking (D-39). There is no CORS. */
   APP_URL: Type.String({ format: 'uri' }),
 
+  /** Behind exactly one reverse proxy that sets `X-Forwarded-For`. Without it the
+   *  socket's peer is the client and the header is ignored — anyone can write it. */
+  TRUST_PROXY: Type.Boolean({ default: false }),
+
   DATABASE_URL: Type.String({ minLength: 1 }),
   DATABASE_POOL_MAX: Type.Integer({ minimum: 1, maximum: 100, default: 10 }),
   DATABASE_SSL: Type.Boolean({ default: false }),

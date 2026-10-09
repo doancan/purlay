@@ -28,6 +28,9 @@ import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
 import { clearedStateCookie } from './cookies';
+import { clientAddress, peerOf } from './client-address';
+import { httpLimits, type HttpBudgets } from './rate-limit';
+import { AppError } from '../../platform/errors';
 import {
   JSON_BODY_MAX_BYTES,
   crossSiteResponse,
@@ -63,6 +66,8 @@ export interface Dependencies {
   readonly clock: Clock;
   readonly github: GitHubClient;
   readonly log: Logger;
+  /** Absent in production, where the limits are the provisional ones (`rate-limit.ts`). */
+  readonly rateBudgets?: HttpBudgets;
 }
 
 /**
@@ -147,6 +152,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   // option of the same name is silently ignored — measured, a 100 KB frame reached
   // the handler with it set (`docs/spikes/elysia.md`). Over the cap, the server
   // drops the connection before any handler runs. (§5.5)
+  const admit = httpLimits({
+    database: dependencies.database,
+    clock: dependencies.clock,
+    trustProxy: dependencies.config.TRUST_PROXY,
+    ...(dependencies.rateBudgets === undefined ? {} : { budgets: dependencies.rateBudgets }),
+  });
   const edgeHeaders = responseHeaders(dependencies.config.APP_URL);
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
@@ -174,6 +185,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         return crossSiteResponse(headers);
       }
       return undefined;
+    })
+    .onRequest(async ({ request, server, set }) => {
+      const wait = await admit(request, peerOf(server, request));
+      if (wait === undefined) return;
+      set.headers['retry-after'] = String(wait);
+      throw new AppError({ code: 'RATE_LIMITED', message: 'Too many requests. Slow down.' });
     })
     .onError(({ code, error, set, path }) => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
@@ -209,12 +226,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
-    .get('/auth/github/callback', async ({ request, set }) => {
+    .get('/auth/github/callback', async ({ request, set, server }) => {
       // Spent whatever happens next: set before the handler runs, so a refusal
       // carries it too — measured, a header set before a throw survives into
       // the error response (#199).
       set.headers['set-cookie'] = clearedStateCookie();
-      return respond(set, await completeSignIn(dependencies, request));
+      const address = clientAddress(
+        peerOf(server, request),
+        request.headers,
+        dependencies.config.TRUST_PROXY,
+      );
+      return respond(set, await completeSignIn(dependencies, request, address));
     })
     .post('/auth/logout', async ({ request, set }) =>
       respond(set, await signOut({ ...dependencies, bus }, request)),

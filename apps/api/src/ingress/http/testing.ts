@@ -10,6 +10,7 @@ import { fixedClock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../../platform/config';
 import type { GitHubClient, GitHubEmail, GitHubProfile } from '../../modules/auth/github';
 import type { Dependencies } from './app';
+import type { RateBudget } from '../../realtime/rate-limiter';
 import { createLogger, type Logger } from '../../platform/logging';
 
 /** A logger whose lines a test can read back, parsed. */
@@ -59,6 +60,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   APP_URL: 'https://purlay.test',
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
+  TRUST_PROXY: false,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,
   GITHUB_CLIENT_ID: 'client-id',
@@ -89,6 +91,8 @@ export const aGitHubAccount = (
 
 export const NOW = new Date('2026-09-09T12:00:00.000Z');
 
+const ROOMY: RateBudget = { perSecond: 1000, burst: 100_000 };
+
 export const testDependencies = (overrides: Partial<Dependencies> = {}): Dependencies => ({
   config: testConfig(),
   database: aDatabaseThatMustNotBeTouched(),
@@ -98,5 +102,9 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   ]),
   // Silent unless a test asks to read what was written (`aRecordingLogger`).
   log: createLogger({ level: 'silent' }),
+  // Tests seed rows over HTTP by the hundred and share a clock that never moves,
+  // so the production budget would refuse them. The tests of the limits say so
+  // explicitly, and `rate-limit.test.ts` pins that the default is the real one.
+  rateBudgets: { auth: ROOMY, writes: ROOMY },
   ...overrides,
 });

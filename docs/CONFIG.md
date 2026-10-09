@@ -21,7 +21,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `PORT` | — | `3001` | API listen port |
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Only `http`/`https`; must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
-| `TRUST_PROXY` | — | `false` | Set `true` behind a reverse proxy so client IPs in `sessions.ip_address` are real. Not read yet: nothing records a session's address today |
+| `TRUST_PROXY` | — | `false` | Set `true` behind **exactly one** reverse proxy that sets `X-Forwarded-For`; the last entry is then the client (D-81). Without it the socket's peer address is the client and the header is ignored, because anyone can write it. It keys the sign-in rate limit and fills `sessions.ip_address`. Wrong either way hurts: `false` behind a proxy puts every user in one bucket; `true` with none lets a caller choose its own address |
 
 ## Database
 
@@ -103,6 +103,12 @@ configure what is not already a database constraint.
 | `UNFURL_CACHE_TTL_SECONDS` | — | `300` | Positive cache (`ARCHITECTURE.md` §8.3) |
 | `UNFURL_NEGATIVE_TTL_SECONDS` | — | `3600` | Negative cache — without it one dead link re-hits the GitHub API forever |
 
+> **HTTP limits are not configurable here either, and are provisional (O-4, D-81).** Sign-in: 30
+> requests per client address at once, then one every two seconds. Writes: 10 a second with a burst
+> of 20 per signed-in user, the socket's own budget. A refusal is `429` with `Retry-After`. The
+> numbers live in `apps/api/src/ingress/http/rate-limit.ts`. The largest JSON body is 64 KiB, the
+> socket's frame (D-80).
+>
 > The socket's limits are **not** configurable here. The frame cap is part of the wire contract —
 > `MAX_FRAME_BYTES` in `@purlay/types` — so an operator changing it would part the server from every
 > client built against it. The rate budget is one provisional number until **O-4** closes, in

@@ -99,6 +99,7 @@ export const startSignIn = async (dependencies: AuthDependencies): Promise<AuthR
 export const completeSignIn = async (
   dependencies: AuthDependencies,
   request: Request,
+  ipAddress?: string,
 ): Promise<AuthResponse> => {
   const { config, database, clock, github } = dependencies;
   const url = new URL(request.url);
@@ -145,7 +146,7 @@ export const completeSignIn = async (
         clock,
         identity.userId,
         config.SESSION_TTL_DAYS,
-        { userAgent: request.headers.get('user-agent') ?? undefined },
+        { userAgent: request.headers.get('user-agent') ?? undefined, ipAddress },
       );
       return { ...identity, session: issued };
     },
