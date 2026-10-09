@@ -17,6 +17,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   falls-behind test (sends until the server gives up) and the HOT-update test (a clone's empty pages)
   (#246, D-46).
 
+### Feature — 2026-10-09: a backup that has been restored
+
+- A populated stack — 20 400 messages, awkward unicode, 44 objects up to 12 MiB — was backed up and
+  restored into a fresh database and bucket and compared identical; then every volume was destroyed
+  and the stack rebuilt from the backup alone (#248, D-95, D-73). Record, commands and what it does not
+  show: `docs/spikes/backup-restore.md`.
+- The rebuild found two defects the first restore could not: storage initialisation needed a running
+  API, and an empty array under `set -u` on macOS's Bash 3.2.
+- `scripts/restore-rehearsal.sh` is that, as a command, and runs weekly in CI (D-44).
+
 ### Feature — 2026-10-09: backup, restore and a comparison that judges them
 
 - `scripts/backup.sh` writes a directory: a custom-format `pg_dump` (read back with `pg_restore --list`

@@ -3305,6 +3305,7 @@ election or a heartbeat table.** The database already provides a lock that disap
 test is what would show the migrator regressing.
 
 **Reversibility:** free. A variable and a function; migrations themselves are unchanged.
+
 ---
 
 ### D-94. The production stack is one compose file, one proxy, and nothing that names a server
@@ -3348,7 +3349,6 @@ only after Phase 3 builds the shared adapters).
 
 **Reversibility:** free. The volumes (database, bucket, certificates) outlive the file.
 
-
 ---
 
 ### D-95. A backup is a directory that has been restored: a dump, a bucket copy, and a comparison
@@ -3385,7 +3385,6 @@ plainly that the directory is plaintext.
 off-host copies, a production schedule, and the `ENCRYPTION_KEY`, which a backup must never carry.
 
 **Reversibility:** free. Scripts and a workflow; the format is `pg_dump`'s and a directory of files.
-
 
 ---
 
