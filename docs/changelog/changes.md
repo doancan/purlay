@@ -119,6 +119,27 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   replay whose HTTP continuation is unfinished; the connection exposes `pendingContinuations` and
   `continuationDone` so the store can honour it.
 
+### Chore — 2026-10-09: the dependency audit blocks, and four of the five findings are fixed
+
+- `bun audit fix` moved `brace-expansion` 5.0.9 to 5.0.12 and `source-map-js` 1.2.1 to 1.2.2, within
+  range, which clears three high and the moderate finding (#247). The audit is a job of its own that
+  fails at high severity (`bun run audit:gate`), weekly as well as on every change.
+- **The fifth cannot be fixed.** `braces` (through `kysely-codegen`, a development tool) has no
+  patched release at all — the advisory lists none. It is in `scripts/audit-allowlist.json` with the
+  reason and an expiry; the gate fails on an expired entry and on an entry that matches nothing.
+
+### Chore — 2026-10-09: licences are checked, and the repository has a disclosure path
+
+- `bun run check:licenses` reads the installed dependency tree and fails on a licence that cannot
+  ship in an AGPL-3.0 distribution — an allow-list, so a licence nobody has heard of fails rather
+  than passes (243 packages today: MIT, Apache-2.0, BSD, ISC, MPL-2.0, Python-2.0, BlueOak). It is a
+  workflow of its own (#247).
+- Every workspace manifest now declares `AGPL-3.0-or-later`. That is what `NOTICE` grants ("version 3
+  ... or any later version"); `LICENSE` is the licence text and does not choose, and a test binds
+  the manifests to `NOTICE`.
+- `SECURITY.md` (private reporting, supported versions, response targets one maintainer can keep) and
+  `.github/CODEOWNERS`.
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
