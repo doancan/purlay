@@ -871,13 +871,25 @@ describe('integration: two real sockets', () => {
       await alice.close();
     });
 
-    test('a flood past the queue closes the connection with TOO_BUSY', async () => {
+    /**
+     * The close code itself is asserted on the hub (`hub.test.ts`): a client still
+     * writing when the server closes may see the connection reset instead of the
+     * code, so over a real socket what is asserted is that the server decided to.
+     */
+    test('a flood past the queue is cut off, and the server says why', async () => {
       const room = await aRoom();
       const alice = await connect(room.alice);
-      for (let i = 0; i < 500; i += 1) {
+      for (let i = 0; i < 200; i += 1) {
         alice.send({ id: messageId(at(i)), op: 'PING', payload: {} });
       }
-      expect(await alice.ended).toBe(CLOSE_CODES.TOO_BUSY);
+      const deadline = Date.now() + 5_000;
+      const said = (): boolean =>
+        recorded.lines.some(
+          (line) =>
+            line['msg'] === 'socket sent frames faster than they could be handled and was closed',
+        );
+      while (!said() && Date.now() < deadline) await Bun.sleep(10);
+      expect(said()).toBe(true);
     });
   });
 });
