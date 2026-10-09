@@ -104,6 +104,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   replay whose HTTP continuation is unfinished; the connection exposes `pendingContinuations` and
   `continuationDone` so the store can honour it.
 
+### Chore — 2026-10-09: the dependency audit blocks, and four of the five findings are fixed
+
+- `bun audit fix` moved `brace-expansion` 5.0.9 to 5.0.12 and `source-map-js` 1.2.1 to 1.2.2, within
+  range, which clears three high and the moderate finding (#247). The audit is a job of its own that
+  fails at high severity (`bun run audit:gate`), weekly as well as on every change.
+- **The fifth cannot be fixed.** `braces` (through `kysely-codegen`, a development tool) has no
+  patched release at all — the advisory lists none. It is in `scripts/audit-allowlist.json` with the
+  reason and an expiry; the gate fails on an expired entry and on an entry that matches nothing.
+
 ### Fix — 2026-10-09: the local object store is Garage, and `bun run db:up` works on a clean machine
 
 - MinIO's images are no longer published, so `db:up` failed anywhere they were not cached (#183).
