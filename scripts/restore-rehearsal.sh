@@ -47,10 +47,25 @@ GITHUB_CLIENT_ID=rehearsal
 GITHUB_CLIENT_SECRET=rehearsal
 EOF
 
-compose() { docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
+# shellcheck source=scripts/ops-common.sh
+. scripts/ops-common.sh
 
 echo "== stack: api, postgres, garage (no proxy)"
 compose up -d --wait api
+
+# A stack whose object store was never initialised reports ready, and a backup of it
+# must fail, say what to do, and leave nothing that looks like a backup.
+echo "== a backup before the object store is initialised fails cleanly"
+if scripts/backup.sh "$WORK/early" >"$WORK/early.out" 2>&1; then
+  echo "backup.sh succeeded on a stack whose object store was never initialised" >&2
+  exit 1
+fi
+grep -q 'production-init.sh' "$WORK/early.out" || { echo "the failure does not point at production-init.sh" >&2; cat "$WORK/early.out" >&2; exit 1; }
+if [ -n "$(ls -A "$WORK/early")" ]; then
+  echo "a failed backup left something behind: $(ls "$WORK/early")" >&2
+  exit 1
+fi
+
 scripts/production-init.sh
 
 echo "== data: a database and a bucket worth restoring"
@@ -63,8 +78,38 @@ echo "== backup"
 OUT="$WORK/backups"
 BACKUP="$(scripts/backup.sh "$OUT" | tail -n 1)"
 
-echo "== restore into a new database and a new bucket"
-scripts/restore.sh "$BACKUP" --bucket purlay-restore
+# Every message is in it, in the clear: nobody but the user who ran it may read it, whatever
+# that user's umask. Single permission bits, so the test is the same on macOS and Linux.
+echo "== the backup is readable by its owner alone"
+exposed="$(find "$BACKUP" "$OUT" \( -perm -040 -o -perm -020 -o -perm -010 -o -perm -004 -o -perm -002 -o -perm -001 \) | head -n 5)"
+if [ -n "$exposed" ]; then
+  echo "the backup is readable or writable by others:" >&2
+  echo "$exposed" >&2
+  exit 1
+fi
+
+echo "== restore with the defaults: a new database and a new bucket"
+scripts/restore.sh "$BACKUP"
+
+# The bucket now holds the objects, so a second restore must refuse for that reason
+# BEFORE it swaps the database: the marker table is in the database it would replace.
+echo "== a restore that cannot import its bucket does not touch the database"
+compose exec -T postgres psql -U purlay -d purlay_restore -q -c 'create table restore_marker (n int)'
+if scripts/restore.sh "$BACKUP" --replace >"$WORK/refused.out" 2>&1; then
+  echo "a restore into a non-empty bucket went ahead" >&2
+  exit 1
+fi
+grep -q 'already holds' "$WORK/refused.out" || { echo "refused for another reason:" >&2; cat "$WORK/refused.out" >&2; exit 1; }
+[ "$(compose exec -T postgres psql -U purlay -d purlay_restore -Atc "select count(*) from information_schema.tables where table_name = 'restore_marker'")" = 1 ] \
+  || { echo "the refused restore replaced the database anyway" >&2; exit 1; }
+compose exec -T postgres psql -U purlay -d purlay_restore -q -c 'drop table restore_marker'
+
+# Rolling back an upgrade restores the database and leaves the (non-empty, append-only) live
+# bucket alone: the flag must restore the database, import nothing, and not mind the bucket.
+echo "== the database alone can be restored with --no-bucket"
+scripts/restore.sh "$BACKUP" --database purlay_restore_nb --no-bucket | tee "$WORK/nobucket.out"
+grep -q 'not restored (--no-bucket)' "$WORK/nobucket.out"
+scripts/compare-databases.sh purlay purlay_restore_nb >/dev/null
 
 echo "== compare"
 scripts/compare-databases.sh purlay purlay_restore
@@ -79,6 +124,30 @@ compose run --rm --no-deps -T \
   -v "$PWD/scripts/rehearsal-ready.ts:/ops/ready.ts:ro" \
   --entrypoint /usr/local/bin/bun api /ops/ready.ts
 
+# A dump that has been cut short, with its checksums regenerated to match, as a careless
+# edit or a full disk would leave it. Restoring it over the LIVE database must fail, say why,
+# and leave the live database exactly as it was: nothing is dropped until the dump is known good.
+echo "== a damaged backup leaves the live database untouched"
+BAD="$WORK/bad"
+cp -R "$BACKUP" "$BAD"
+head -c $(($(wc -c <"$BACKUP/database.dump") / 2)) "$BACKUP/database.dump" >"$BAD/database.dump"
+(cd "$BAD" && find . -type f ! -name SHA256SUMS | sort | while IFS= read -r file; do sha256_check "$file"; done >SHA256SUMS)
+scripts/compare-databases.sh purlay purlay >"$WORK/live-before.txt"
+compose stop api
+if scripts/restore.sh "$BAD" --database purlay --replace --bucket live >"$WORK/damaged.out" 2>&1; then
+  echo "a truncated dump was restored over the live database" >&2
+  exit 1
+fi
+scripts/compare-databases.sh purlay purlay >"$WORK/live-after.txt" \
+  || { echo "the live database is gone or unreadable after a refused restore" >&2; cat "$WORK/damaged.out" >&2; exit 1; }
+diff "$WORK/live-before.txt" "$WORK/live-after.txt" >/dev/null \
+  || { echo "the live database changed under a refused restore" >&2; exit 1; }
+leftover="$(compose exec -T postgres psql -U purlay -d postgres -Atc "select datname from pg_database where datname like '%\_incoming\_%' or datname like '%before_restore%'")"
+[ -z "$leftover" ] || { echo "a refused restore left databases behind: $leftover" >&2; exit 1; }
+echo "  refused, and the live database is as it was"
+compose start api
+compose up -d --wait api
+
 # The case a backup is for: the server is gone. Record what the live database
 # looks like, destroy every volume, rebuild the stack empty, and restore from the
 # backup directory alone — over the database the stack created for itself, with the
@@ -88,7 +157,7 @@ scripts/compare-databases.sh purlay purlay >"$WORK/before.txt"
 compose down --volumes
 compose up -d --wait postgres garage
 scripts/production-init.sh
-scripts/restore.sh "$BACKUP" --database purlay --replace
+scripts/restore.sh "$BACKUP" --database purlay --replace --bucket live
 compose up -d --wait api
 scripts/compare-databases.sh purlay purlay >"$WORK/after.txt"
 diff "$WORK/before.txt" "$WORK/after.txt" || {
