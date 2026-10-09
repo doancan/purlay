@@ -21,6 +21,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `PORT` | — | `3001` | API listen port |
 | `APP_URL` | ✅ | — | The one public origin (D-61). Used for the OAuth callback and the socket's `Origin` check — there is no CORS. An origin, not a URL: a trailing slash is dropped, a path, query or fragment is refused. Only `http`/`https`; must be `https://` in production. |
 | `LOG_LEVEL` | — | `info` | `debug` \| `info` \| `warn` \| `error`. One JSON line per event on standard output; what is never logged is a list in `apps/api/src/platform/logging.ts` |
+| `ERROR_TRACKING_DSN` | — | — | A Sentry-compatible DSN (Sentry, GlitchTip). **Unset means off, and nothing leaves the process.** When set, whatever is logged at `error` is also reported, cleaned exactly as the log is (D-96). Must be `https://` in production; a malformed value refuses to start. **No telemetry is ever collected from a self-hosted deployment** (D-44): there is no default |
 | `TRUST_PROXY` | — | `false` | Set `true` behind **exactly one** reverse proxy that sets `X-Forwarded-For`; the last entry is then the client (D-81). Without it the socket's peer address is the client and the header is ignored, because anyone can write it. It keys the sign-in rate limit and fills `sessions.ip_address`. Wrong either way hurts: `false` behind a proxy puts every user in one bucket; `true` with none lets a caller choose its own address |
 
 ## Database
@@ -104,7 +105,6 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 | `BILLING_PROVIDER_KEY` | cloud | — | **Secret.** Merchant of record (D-43) |
 | `BILLING_WEBHOOK_SECRET` | cloud | — | **Secret.** Signature verification on subscription events |
 | `SMTP_URL` | cloud | — | **Secret.** Transactional email: invitations, receipts, and Phase 2 magic links |
-| `ERROR_TRACKING_DSN` | cloud | — | Sentry-compatible. **No telemetry is ever collected from a self-hosted deployment** (D-44) |
 
 ## Limits
 
@@ -179,7 +179,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `MIGRATE_ON_START=true` and `S3_ENDPOINT`. It passes through `APP_URL` (**`https://`**),
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
-`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `DATABASE_POOL_MAX`,
+`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
 `SESSION_TTL_DAYS`, `WORKSPACE_OPEN_JOIN_SLUG`, `S3_REGION`, `S3_BUCKET` (optional). `docker compose`
 refuses to start with a required one missing, and names it. Garage wants its own key format:
 `S3_ACCESS_KEY_ID` is `GK` plus 24 hex digits (`echo GK$(openssl rand -hex 12)`) and
