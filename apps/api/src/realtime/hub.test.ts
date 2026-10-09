@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
-import { aDatabaseThatMustNotBeTouched } from '../ingress/http/testing';
+import { aDatabaseThatMustNotBeTouched } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
 import {

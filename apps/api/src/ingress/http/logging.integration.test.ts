@@ -13,8 +13,8 @@ import {
   aGitHubAccount,
   aRecordingLogger,
   testDependencies,
-} from './testing';
-import { aSignedInUser } from './fixtures';
+} from '../../testing/doubles';
+import { aSignedInUser } from '../../testing/signed-in';
 import { fixedClock } from '../../platform/clock';
 import { aUserRow } from '../../testing/users';
 

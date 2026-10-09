@@ -6,7 +6,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
-import { aSignedInUser } from '../ingress/http/fixtures';
+import { aSignedInUser } from '../testing/signed-in';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
 import { createSocketHub, type Timers } from './hub';

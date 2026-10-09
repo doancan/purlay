@@ -7,8 +7,8 @@ import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
 import { CLOSE_CODES, messageId } from '@purlay/types';
 import type { GitHubEmail } from '../modules/auth/github';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { aGitHubAccount, testConfig, testDependencies } from '../ingress/http/testing';
-import { aSignedInUser } from '../ingress/http/fixtures';
+import { aGitHubAccount, testConfig, testDependencies } from '../testing/doubles';
+import { aSignedInUser } from '../testing/signed-in';
 import { fixedClock } from '../platform/clock';
 
 const origin = 'https://purlay.test';

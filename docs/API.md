@@ -199,7 +199,7 @@ Health endpoints expose no version, no dependency detail and no counts — they 
 
 1. Define the request and response types in `@purlay/types/api.ts` **first**.
 2. Add the row to the table above, with its phase marker and required role.
-3. Add its cross-tenant case to `apps/api/src/ingress/http/cross-tenant.ts` before the handler —
+3. Add its cross-tenant case to `apps/api/src/testing/cross-tenant.ts` before the handler —
    or, if it names no workspace, its reason to `UNSCOPED`. Serving it with neither fails the
    build. The case also says whether it names a channel, reads across channels, or neither, and
    that decides its channel-visibility test. (D-21, D-34, D-63, D-64)

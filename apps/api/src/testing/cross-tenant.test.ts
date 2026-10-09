@@ -5,8 +5,9 @@
  * the integration job is reached. The crossings themselves are in
  * `cross-tenant.integration.test.ts`. (D-21, D-63)
  */
+import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'bun:test';
-import { createApp } from './app';
+import { createApp } from '../ingress/http/app';
 import {
   CROSS_TENANT,
   UNSCOPED,
@@ -15,7 +16,7 @@ import {
   endpointKey,
   type DocumentedEndpoint,
 } from './cross-tenant';
-import { testDependencies } from './testing';
+import { testDependencies } from './doubles';
 
 const SOME_ID = '00000000-0000-4000-8000-000000000000';
 
@@ -36,6 +37,20 @@ const isServed = async (endpoint: DocumentedEndpoint): Promise<boolean> => {
   const body = (await response.json()) as { error?: { code?: string } };
   return body.error?.code !== 'ROUTE_NOT_FOUND';
 };
+
+describe('the endpoint list is read from the repository, not from the working directory', () => {
+  test('the same endpoints are found from a directory that is not the repository root', () => {
+    const here = documentedEndpoints();
+    const original = process.cwd();
+    process.chdir(tmpdir());
+    try {
+      expect(documentedEndpoints()).toEqual(here);
+    } finally {
+      process.chdir(original);
+    }
+    expect(here.length).toBeGreaterThan(10);
+  });
+});
 
 describe('every served endpoint has a cross-tenant case', () => {
   const documented = documentedEndpoints();

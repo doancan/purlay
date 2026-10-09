@@ -11,7 +11,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { MESSAGE_CONTENT_MAX, messageId } from '@purlay/types';
 import { createApp } from './app';
-import { NOW, testDependencies } from './testing';
+import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { issueSession } from '../../modules/auth/sessions';
 import { SESSION_COOKIE } from '../../platform/cookies';

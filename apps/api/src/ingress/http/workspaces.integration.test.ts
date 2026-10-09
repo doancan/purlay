@@ -10,9 +10,9 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
-import { testDependencies } from './testing';
+import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { aSignedInUser, type SignedInUser } from './fixtures';
+import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {

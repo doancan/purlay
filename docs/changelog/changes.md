@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Refactor — 2026-10-09: test scaffolding moves to `src/testing/`
+
+- `ingress/http/testing.ts`, `fixtures.ts` and `cross-tenant.ts` are now `testing/doubles.ts`,
+  `signed-in.ts` and `cross-tenant.ts`. The cross-tenant table finds `docs/API.md` from its own
+  location instead of the working directory (#245, D-47).
+
 ### Refactor — 2026-10-09: sign-in and session resolution are modules; ingress only translates
 
 - `completeSignIn` and the session-end fan-out left `ingress/http` for

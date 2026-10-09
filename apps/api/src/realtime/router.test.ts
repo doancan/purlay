@@ -10,7 +10,7 @@ import {
   aDatabaseThatMustNotBeTouched,
   aRecordingLogger,
   aTransactionThatMustNotBeTouched,
-} from '../ingress/http/testing';
+} from '../testing/doubles';
 import { refusalFor } from '../ingress/http/errors';
 import { fixedClock } from '../platform/clock';
 import { createLogger, withinRequest, type Logger } from '../platform/logging';

@@ -21,6 +21,7 @@
  * `channel-visibility.integration.test.ts`. (D-64)
  */
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { messageId, type ErrorCode } from '@purlay/types';
 
 export interface DocumentedEndpoint {
@@ -35,9 +36,16 @@ export const endpointKey = (endpoint: DocumentedEndpoint): string =>
 /** A row of an `API.md` endpoint table: phase marker, method, path. */
 const ROW = /^\|\s*[^|]*\|\s*`(GET|POST|PUT|PATCH|DELETE)`\s*\|\s*`(\/api\/[^`]+)`\s*\|/;
 
+/**
+ * `docs/API.md`, found from this file rather than from wherever the process was
+ * started: `bun test` from a subdirectory, or a script run with another working
+ * directory, must read the same document or the list silently shrinks to nothing.
+ */
+const API_DOCUMENT = fileURLToPath(new URL('../../../../docs/API.md', import.meta.url));
+
 /** Every `/api/` endpoint `API.md` documents, in every phase. */
 export const documentedEndpoints = (): readonly DocumentedEndpoint[] =>
-  readFileSync('docs/API.md', 'utf8')
+  readFileSync(API_DOCUMENT, 'utf8')
     .split('\n')
     .flatMap((line) => {
       const match = ROW.exec(line);

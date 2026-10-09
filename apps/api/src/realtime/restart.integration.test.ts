@@ -11,8 +11,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, createDatabase, type ClonedDatabase } from '@purlay/db';
 import { CLOSE_CODES, messageId, type ServerFrame } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
-import { aSignedInUser } from '../ingress/http/fixtures';
-import { testConfig, testDependencies } from '../ingress/http/testing';
+import { aSignedInUser } from '../testing/signed-in';
+import { testConfig, testDependencies } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import { aUniqueSlug } from '../testing/users';
 

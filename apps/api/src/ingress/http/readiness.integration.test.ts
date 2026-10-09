@@ -8,7 +8,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, sql, type ClonedDatabase, type Executor } from '@purlay/db';
 import { createApp } from './app';
-import { aDatabaseThatMustNotBeTouched, aRecordingLogger, testDependencies } from './testing';
+import {
+  aDatabaseThatMustNotBeTouched,
+  aRecordingLogger,
+  testDependencies,
+} from '../../testing/doubles';
 
 const clones: ClonedDatabase[] = [];
 

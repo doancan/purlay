@@ -64,7 +64,7 @@ looking for the error codes to a file that does not have them.
 | What a message id is, and how a client makes one | `packages/types/src/message-id.ts` — the rule and the generator together, bound by a test (D-8, D-33) |
 | The variables the application reads | `apps/api/src/platform/config.ts` — `.env.example` is generated from it |
 | The tenant boundary: what mints a `WorkspaceContext`, and what a stranger gets instead | `apps/api/src/platform/tenancy.ts` (D-21, D-54) |
-| Which endpoints are tenant-scoped, where each sits on the channel-visibility axis, and how a test crosses each one | `apps/api/src/ingress/http/cross-tenant.ts` (D-63, D-64) |
+| Which endpoints are tenant-scoped, where each sits on the channel-visibility axis, and how a test crosses each one | `apps/api/src/testing/cross-tenant.ts` (D-63, D-64) |
 | The event bus seam and the topic names | `apps/api/src/platform/events.ts` (D-7) |
 | The transaction boundary every write path shares | `apps/api/src/platform/transactions.ts` (D-35, D-46) |
 | The local environment: images, ports, credentials | `docker-compose.yml` |

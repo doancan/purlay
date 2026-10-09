@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import { MAX_FRAME_BYTES } from '@purlay/types';
 import { createApp } from './app';
 import { JSON_BODY_MAX_BYTES, inboundRequestId } from './edge';
-import { testConfig, testDependencies } from './testing';
+import { testConfig, testDependencies } from '../../testing/doubles';
 
 const APP = 'https://purlay.test';
 

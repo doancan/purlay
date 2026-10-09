@@ -6,12 +6,12 @@
  * supplies things that *object* if a route reaches for what it should not.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import { fixedClock } from '../../platform/clock';
-import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../../platform/config';
-import type { GitHubClient, GitHubEmail, GitHubProfile } from '../../modules/auth/github';
-import type { Dependencies } from './app';
-import type { RateBudget } from '../../realtime/rate-limiter';
-import { createLogger, type Logger } from '../../platform/logging';
+import { fixedClock } from '../platform/clock';
+import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../platform/config';
+import type { GitHubClient, GitHubEmail, GitHubProfile } from '../modules/auth/github';
+import type { Dependencies } from '../ingress/http/app';
+import type { RateBudget } from '../realtime/rate-limiter';
+import { createLogger, type Logger } from '../platform/logging';
 
 /** A logger whose lines a test can read back, parsed. */
 export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown>[] } => {

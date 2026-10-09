@@ -653,7 +653,7 @@ layering rule. (D-46)
 |---|---|---|
 | Unit | Service rules and the invariants in `SCHEMA.md` §11 | `*.test.ts` |
 | Integration | Real PostgreSQL, real migrations, one per endpoint | `*.integration.test.ts` |
-| **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** | `ingress/http/cross-tenant*`, from `API.md` (D-63) |
+| **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** | `testing/cross-tenant*`, from `API.md` (D-63) |
 | **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search and open questions (D-34)** | `ingress/http/channel-visibility*` (D-64) |
 | Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) | `message-id.test.ts`, `messages.integration.test.ts` |
 | Permission | Every role-gated action, per role | With the first role-gated action (#51, #74) |
