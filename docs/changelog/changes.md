@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: a client watching thousands of channels subscribes in turn
+
+- 3,500 watched channels were 35 `SUBSCRIBE` frames sent in one burst: the server rate-limited some and
+  then closed with `TOO_BUSY`, on every reconnect. The client now sends one chunk, waits for its
+  acknowledgement, retries a `RATE_LIMITED` chunk with backoff, and waits longer after a `TOO_BUSY`
+  close (D-82, #231). `ARCHITECTURE.md` §5.4 also states that every reconnect replays about 65 s of
+  already-held messages, deliberately (D-65), and what that costs.
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different

@@ -107,6 +107,18 @@ export const CHECK_SESSION_AFTER_FAILURES = 3;
  */
 export type SessionCheck = 'active' | 'ended' | 'unknown';
 
+/**
+ * Where on the backoff ladder a `TOO_BUSY` close starts the wait.
+ *
+ * The server closes with 1013 — *try again later* — when it was handed more than
+ * it could take in turn. Coming back after the first rung (half a second to a
+ * second) is coming back into the same pile; the fourth (4–8 s) lets the queue
+ * that caused it drain. It only ever raises the failures already counted, so a
+ * long outage keeps its longer wait. Pacing (`subscribe`) is what keeps a healthy
+ * client from earning this at all. (D-82)
+ */
+export const TOO_BUSY_BACKOFF_STEP = 3;
+
 export interface ConnectionOptions {
   readonly url: string;
   readonly openSocket: OpenSocket;
@@ -187,9 +199,12 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     cancelRetry?.();
     cancelStable?.();
     cancelBeat?.();
+    cancelResend?.();
     cancelRetry = null;
     cancelStable = null;
     cancelBeat = null;
+    cancelResend = null;
+    inFlight = null;
   };
 
   const write = (frame: ClientFrame): boolean => {
@@ -198,18 +213,74 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     return true;
   };
 
-  const subscribe = (channelIds: readonly string[]): void => {
-    for (let from = 0; from < channelIds.length; from += SUBSCRIBE_MAX_CHANNELS) {
-      write({
-        id: options.newId(),
-        op: 'SUBSCRIBE',
-        payload: {
-          channels: channelIds.slice(from, from + SUBSCRIBE_MAX_CHANNELS).map((channelId) => ({
-            channelId,
-            afterMessageId: cursors.get(channelId),
-          })),
-        },
-      });
+  // Channels waiting for a SUBSCRIBE, the one chunk on the wire, and the pause
+  // before it is sent again after the server said RATE_LIMITED.
+  let queue: string[] = [];
+  let inFlight: { readonly id: string; readonly channelIds: readonly string[] } | null = null;
+  let limitedTimes = 0;
+  let cancelResend: (() => void) | null = null;
+
+  /**
+   * Send the next chunk, if none is on the wire. **One at a time**, the next
+   * after the last is answered: a hundred channels per frame, thirty-five frames
+   * for 3,500 channels, sent together, exceed the server's frame budget (answered
+   * `RATE_LIMITED`, which nothing retried) and then its queue bound (the close
+   * `TOO_BUSY`, on every attempt). The numbers are the server's to own
+   * (`SOCKET_FRAME_BUDGET`, `FRAME_QUEUE_MAX`); waiting for the answer needs none
+   * of them. Cursors are read when a chunk leaves, not when it was queued. (D-82)
+   */
+  const pump = (): void => {
+    if (inFlight !== null || status !== 'open') return;
+    const chunk: string[] = [];
+    while (chunk.length < SUBSCRIBE_MAX_CHANNELS) {
+      const next = queue.shift();
+      if (next === undefined) break;
+      chunk.push(next);
+    }
+    if (chunk.length > 0) sendChunk(chunk);
+  };
+
+  const sendChunk = (channelIds: readonly string[]): void => {
+    const live = channelIds.filter((channelId) => watched.has(channelId));
+    if (live.length === 0) {
+      inFlight = null;
+      pump();
+      return;
+    }
+    const id = options.newId();
+    inFlight = { id, channelIds: live };
+    write({
+      id,
+      op: 'SUBSCRIBE',
+      payload: {
+        channels: live.map((channelId) => ({ channelId, afterMessageId: cursors.get(channelId) })),
+      },
+    });
+  };
+
+  /** The answer to the chunk on the wire: go on, or send it again after a wait. */
+  const answered = (frame: ServerFrame): void => {
+    if (inFlight === null || frame.refId !== inFlight.id) return;
+    if (frame.event === 'ACK' && 'channels' in frame.data) {
+      inFlight = null;
+      limitedTimes = 0;
+      pump();
+    } else if (frame.event === 'ERROR') {
+      if (frame.data.code === 'RATE_LIMITED' || frame.data.code === 'DATABASE_UNAVAILABLE') {
+        const again = inFlight.channelIds;
+        cancelResend = options.schedule(
+          () => {
+            cancelResend = null;
+            sendChunk(again);
+          },
+          reconnectDelay(limitedTimes, options.random),
+        );
+        limitedTimes += 1;
+      } else {
+        // Refused for a reason waiting will not change; the store sees the ERROR.
+        inFlight = null;
+        pump();
+      }
     }
   };
 
@@ -248,8 +319,11 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     pingSent = null;
     cancelStable?.();
     cancelBeat?.();
+    cancelResend?.();
     cancelStable = null;
     cancelBeat = null;
+    cancelResend = null;
+    inFlight = null;
     setStatus('waiting');
     cancelRetry = options.schedule(connect, reconnectDelay(failures, options.random));
     failures += 1;
@@ -321,7 +395,9 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         cancelStable = options.schedule(() => {
           failures = 0;
         }, STABLE_AFTER_MS);
-        subscribe([...watched]);
+        queue = [...watched];
+        limitedTimes = 0;
+        pump();
         ping();
       },
       message: (data): void => {
@@ -341,6 +417,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         const { frame } = message;
         measureClock(frame);
         noteReplay(frame);
+        answered(frame);
         if (frame.event === 'MESSAGE_CREATED') advance(frame.data.channelId, frame.data.id);
         options.onFrame(frame);
       },
@@ -350,6 +427,8 @@ export const createConnection = (options: ConnectionOptions): Connection => {
           end();
           return;
         }
+        // Told to come back later: begin the wait part-way up the ladder.
+        if (code === CLOSE_CODES.TOO_BUSY) failures = Math.max(failures, TOO_BUSY_BACKOFF_STEP);
         lost();
       },
     };
@@ -381,7 +460,8 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     watch: (channelId): void => {
       if (watched.has(channelId)) return;
       watched.add(channelId);
-      subscribe([channelId]);
+      queue.push(channelId);
+      pump();
     },
     unwatch: (channelId): void => {
       if (!watched.delete(channelId)) return;

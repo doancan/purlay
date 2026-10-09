@@ -285,6 +285,22 @@ client does not know is ignored (a newer server is not a fault); a frame that is
 no string `event`, or is a known event with the wrong data, ends the connection. After `ended`,
 `start()` connects again. (D-82)
 
+**A large subscription is sent one chunk at a time.** A frame names at most `SUBSCRIBE_MAX_CHANNELS`
+channels, so 3,500 watched channels are 35 frames. Sent together they exceed the connection's frame
+budget (§5.5: the surplus is answered `RATE_LIMITED`, which nothing retried) and then its queue bound
+(the close `TOO_BUSY`, 1013, on every attempt, forever). The client sends the next chunk when the last
+is acknowledged, sends a chunk again after a growing wait when it is answered `RATE_LIMITED` or
+`DATABASE_UNAVAILABLE`, and begins the wait after a `TOO_BUSY` close part-way up the backoff ladder
+rather than at the bottom. It reads none of the server's limits; waiting for the answer needs none.
+(D-82)
+
+**Every reconnect replays what was already held, on purpose.** The scan starts `REPLAY_OVERLAP_MS`
+(65 s) below the cursor (D-65), so each subscription answers with up to 1,000 frames of messages the
+client already has and discards by id. That is the price of never missing a message that was written
+late: a storm of 300 sockets reconnecting at once pulled 90,000 frames. It is paid per reconnect, not
+per message, bounded by the replay's own caps (§5.5), and spread by the backoff's jitter (D-76). A
+narrower window would be cheaper and would lose the late send D-65 exists to catch.
+
 **A subscription is bounded, and costs the same whatever it names.** One frame names at most
 `SUBSCRIBE_MAX_CHANNELS`, each once. Every channel is authorised in one query before any is
 subscribed — one the caller cannot see refuses the frame, and nothing is left half-subscribed — and
