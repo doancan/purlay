@@ -45,7 +45,7 @@
 | Server markdown | `unified` / `remark` + sanitising serialiser | not yet · `unified` | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
 | Client markdown | a small CommonMark/GFM renderer | undecided · O-6 | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
 | Highlighting | Shiki, grammars loaded lazily | not yet · `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
-| Thumbnails | `Bun.Image`, built into the runtime | built in | A young API, and its decoder differs by platform — `docs/spikes/image-pipeline.md`; thumbnails must use `fit: 'inside'`, because the two-dimension form stretches (D-75) |
+| Thumbnails | `Bun.Image`, built into the runtime | built in | A young API, and its decoder differs by platform — `docs/spikes/image-pipeline.md`; thumbnails must use `fit: 'inside'`, because the two-dimension form stretches (D-76) |
 
 Full rationale and rejected alternatives: `DECISIONS.md` D-20.
 
@@ -240,7 +240,8 @@ receiving client has no way to learn it should forget it. Publish and ACK both f
 
 ### 5.4. Reconnect and replay
 
-Exponential backoff with jitter: 1s, 2s, 4s, 8s, capped at 30s. On reconnect the client sends
+Exponential backoff with jitter: 1s, 2s, 4s, 8s, capped at 30s, each drawn from the upper half of
+its step and started over only by a connection that held for ten seconds (D-76). On reconnect the client sends
 `SUBSCRIBE` with the highest message id it holds per channel; the server returns what it may have
 missed by keyset scan. Because ids are time-ordered, "what did I miss" is a single indexed range
 query per channel — not a timestamp comparison with clock-skew problems.

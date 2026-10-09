@@ -8,6 +8,7 @@
  * rule the error codes follow.
  */
 import { Type, type Static } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody } from './errors';
 import { FromClient, Message, MessageContent, Uuid } from './models';
 
@@ -182,6 +183,26 @@ export const ServerFrame = Type.Union([
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;
 export type ServerEvent = ServerFrame['event'];
+
+/**
+ * A frame off the wire, or `null` for anything that is not one.
+ *
+ * The browser's trust boundary: a socket delivers text, and TypeScript's type for
+ * it is a claim, not a check. `null` rather than a throw because a malformed
+ * frame is the caller's decision — the client ends the connection and
+ * reconnects, which a `try` around every read would bury. Never returns the
+ * input's error detail: what a server frame failed to match is not something
+ * to relay to a log that a stranger may read.
+ */
+export const parseServerFrame = (text: string): ServerFrame | null => {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return Value.Check(ServerFrame, value) ? value : null;
+};
 
 /**
  * `workspace:{id}` · `channel:{id}` · `user:{id}` · `session:{id}` (`ARCHITECTURE.md` §6).
