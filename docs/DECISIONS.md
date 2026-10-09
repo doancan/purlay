@@ -2927,6 +2927,24 @@ ready. A database that predates the checksum column has nothing to compare and i
 a process whose files had parted from its schema would pass readiness and fail on the first query that
 depended on the difference.
 
+*Amended 2026-10-09 — the lock is polled, not waited for:* with two processes starting on an empty database,
+one died with `deadlock detected` on every run (ten of ten in the test written for it). A blocking
+`pg_advisory_lock` is a statement, and a statement is a transaction to PostgreSQL while it waits;
+`CREATE INDEX CONCURRENTLY` (migration 0009) waits for every transaction that could see its table to end.
+The runner waited for the starter, the starter for the runner's lock, and PostgreSQL ended one. The
+earlier test of three starters had no concurrent index build and could not see it. The migrator now tries
+`pg_try_advisory_lock` and sleeps between attempts (25 ms, doubling to 500 ms, for at most 120 s, then an
+error that says another process held the lock). Between attempts the session is idle, which an index build
+has nothing to wait for. The lock is taken on the one session the run holds, is released on every path past
+acquiring it (a test fails a migration and then expects another starter to get the lock at once), and
+ends with the session if the process dies. Two `db:migrate` processes started together on a fresh database
+exit 0 five times in five, with all ten migrations applied once between them.
+**Rejected — a lock per migration:** the wait would still be a statement in a transaction, now repeated
+for every file. **Rejected — only a `lock_timeout`:** it turns the deadlock into a timeout error that
+exits one of two healthy starters, instead of making it wait its turn. **Rejected — running the build and
+the wait on separate connections without polling:** the waiting connection is the transaction the build
+waits for; only not being in a statement avoids it.
+
 ---
 
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged

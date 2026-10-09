@@ -287,6 +287,84 @@ describe('integration: checksums', () => {
 });
 
 describe('integration: concurrent starters', () => {
+  /**
+   * A starter that waits for the lock must not be a transaction while it waits. A
+   * blocking `pg_advisory_lock` is one statement, and a statement is a transaction to
+   * PostgreSQL; `CREATE INDEX CONCURRENTLY` waits for every transaction that could see the
+   * table to finish. The runner then waits for the waiter, the waiter for the runner's
+   * lock, and PostgreSQL ends one of them with `deadlock detected` (D-86).
+   *
+   * The earlier test of three starters had no concurrent index build, so it could not see
+   * this. Here the first migration to run builds one after a pause long enough for the
+   * second starter to be waiting for the lock by then.
+   */
+  test('a starter waiting for the lock does not deadlock an index built concurrently', async () => {
+    const name = await freshDatabase();
+    const directory = migrationsDirectory({
+      '0001_table.sql':
+        'CREATE TABLE t (n int);\nINSERT INTO t SELECT g FROM generate_series(1, 1000) g;',
+      '0002_index.sql':
+        '-- purlay: no-transaction\nSELECT pg_sleep(0.5);\n' +
+        'DROP INDEX CONCURRENTLY IF EXISTS t_n;\nCREATE INDEX CONCURRENTLY t_n ON t (n);',
+    });
+    const pools = [open(name), open(name)];
+    try {
+      const outcomes = await Promise.all(pools.map((pool) => migrateToLatest(pool, directory)));
+      expect(outcomes.map((o) => (o.error instanceof Error ? o.error.message : 'none'))).toEqual([
+        'none',
+        'none',
+      ]);
+      const applied = outcomes.flatMap((o) => (o.results ?? []).map((r) => r.migrationName));
+      expect(applied.toSorted()).toEqual(['0001_table', '0002_index']);
+    } finally {
+      for (const pool of pools) await pool.destroy();
+    }
+  });
+
+  test('a starter that cannot get the lock in time says so, and does not touch the database', async () => {
+    const name = await freshDatabase();
+    const holder = open(name);
+    const waiter = open(name);
+    const directory = migrationsDirectory({ '0001_a.sql': 'CREATE TABLE a (id int);' });
+    try {
+      await holder.connection().execute(async (conn) => {
+        await sql`select pg_advisory_lock(1886351481)`.execute(conn);
+        const started = performance.now();
+        const { error, results } = await migrateToLatest(waiter, directory, 300);
+        expect(String(error)).toContain('held the migration lock');
+        expect(performance.now() - started).toBeLessThan(2000);
+        expect(results).toEqual([]);
+        await sql`select pg_advisory_unlock(1886351481)`.execute(conn);
+      });
+      expect((await sql`select to_regclass('a') as t`.execute(waiter)).rows).toEqual([{ t: null }]);
+    } finally {
+      await holder.destroy();
+      await waiter.destroy();
+    }
+  });
+
+  test('the lock is released when a migration fails, so the next starter is not kept waiting', async () => {
+    const name = await freshDatabase();
+    const db = open(name);
+    try {
+      const failing = migrationsDirectory({ '0001_bad.sql': 'SELECT 1/0;' });
+      expect(String((await migrateToLatest(db, failing)).error)).toContain('division by zero');
+      // A second starter, on another session, must get the lock at once.
+      const other = open(name);
+      try {
+        const started = performance.now();
+        const fixed = migrationsDirectory({ '0001_bad.sql': 'CREATE TABLE ok (id int);' });
+        const outcome = await migrateToLatest(other, fixed, 1000);
+        expect(outcome.error).toBeUndefined();
+        expect(performance.now() - started).toBeLessThan(1000);
+      } finally {
+        await other.destroy();
+      }
+    } finally {
+      await db.destroy();
+    }
+  });
+
   test('three processes starting together apply every migration exactly once', async () => {
     const name = await freshDatabase();
     const directory = migrationsDirectory({
