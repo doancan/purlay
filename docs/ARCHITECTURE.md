@@ -457,6 +457,12 @@ per delivered frame. A subscription is made before its channels are authorised s
 cannot slip between the two. Phase 1's endpoints must publish these after they commit; the
 functions are in `platform/events.ts` and D-85 lists which endpoint calls which.
 
+`revocation-contract.test.ts` fails the build if a production write that removes visibility has no
+decision in its table. **Operators:** a session revoked, a membership deleted or a user soft-deleted by
+SQL, outside the application, does not end an open socket — nothing publishes — until the session expires
+or the process restarts (a drain, §11 / D-72). There is no command-line tool for it: the bus is in-process
+and another process cannot reach it (D-85).
+
 ### 7.3. The isolation mechanism
 
 The rule "every query filters on `workspace_id`" fails eventually if it depends on remembering.
