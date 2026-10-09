@@ -22,9 +22,15 @@ import { withinRequest, type Logger } from '../../platform/logging';
 import { atomicallyOn, type Atomically } from '../../platform/transactions';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub } from '../../realtime/hub';
-import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
+import {
+  inProcessRateLimiter,
+  SOCKET_CONNECTION_LIMITS,
+  SOCKET_FRAME_BUDGET,
+  type RateLimiter,
+} from '../../realtime/rate-limiter';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
+import { AppError } from '../../platform/errors';
 import { refusalFor } from '../http/errors';
 
 export interface SocketDependencies {
@@ -33,6 +39,15 @@ export interface SocketDependencies {
   readonly clock: Clock;
   readonly log: Logger;
   readonly backplane?: Backplane | undefined;
+  /** The per-user write bucket, shared with HTTP's. */
+  readonly userWrites: RateLimiter;
+  /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
+  readonly connectionLimits?: ConnectionLimits | undefined;
+}
+
+export interface ConnectionLimits {
+  readonly perUser: number;
+  readonly total: number;
 }
 
 /** What the lifecycle reads of the framework's socket. */
@@ -95,11 +110,18 @@ const outboundBufferOf = (raw: object): (() => number) => {
 
 export const createSocketLifecycle = (dependencies: SocketDependencies): SocketLifecycle => {
   const { log, database, clock } = dependencies;
+  const limits = dependencies.connectionLimits ?? SOCKET_CONNECTION_LIMITS;
   const hub = createSocketHub(database, clock, {
     log,
     // Called from `hub.deliver`, which only runs after `bus` exists.
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);
+    },
+    // Where the end of this session, of the account, or of one membership is
+    // announced, on whichever node — subscribed before the session is confirmed.
+    listen: (identity) => {
+      bus.subscribe(sessionTopic(identity.sessionId), identity.socketId);
+      bus.subscribe(userTopic(identity.userId), identity.socketId);
     },
   });
   const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
@@ -114,7 +136,25 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
 
     admit: async (request): Promise<UpgradeRefusal | undefined> => {
       try {
-        await admitSocket({ database, clock, appUrl: dependencies.config.APP_URL }, request);
+        const { userId } = await admitSocket(
+          { database, clock, appUrl: dependencies.config.APP_URL },
+          request,
+        );
+        // Before the socket is bound, so a refusal is a real status. Counts what is
+        // open now; sockets still opening are counted again when they are bound
+        // (`open`), which is what makes the cap hold under a burst of upgrades.
+        if (hub.size() >= limits.total) {
+          throw new AppError({
+            code: 'DATABASE_UNAVAILABLE',
+            message: 'The service is busy. Try again shortly.',
+          });
+        }
+        if (hub.connectionsOf(userId) >= limits.perUser) {
+          throw new AppError({
+            code: 'RATE_LIMITED',
+            message: 'Too many connections are open for this account.',
+          });
+        }
         return undefined;
       } catch (error) {
         return refusalFor('UPGRADE', error, []);
@@ -122,24 +162,49 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
 
     open: async (socket): Promise<void> => {
-      const identity = await hub.opened(
-        socket.id,
-        {
-          // The raw socket's answers, not the framework wrapper's: whether a
-          // frame was dropped and how much is queued (#197).
-          send: (payload) => socket.raw.send(payload),
-          buffered: outboundBufferOf(socket.raw),
-          close: (code, reason) => {
-            socket.close(code, reason);
+      let identity: Awaited<ReturnType<typeof hub.opened>>;
+      try {
+        identity = await hub.opened(
+          socket.id,
+          {
+            // The raw socket's answers, not the framework wrapper's: whether a
+            // frame was dropped and how much is queued (#197).
+            send: (payload) => socket.raw.send(payload),
+            buffered: outboundBufferOf(socket.raw),
+            close: (code, reason) => {
+              socket.close(code, reason);
+            },
           },
-        },
-        socket.data.request,
-      );
-      // Where the end of this session will be announced, on whichever node.
+          socket.data.request,
+        );
+      } catch (error) {
+        // The identity read failed after the upgrade was admitted. Left to throw, the
+        // framework answers with a raw `{"error":…}` body that is not a frame, which
+        // a client takes for a malformed one and reconnects into at once. Say it in
+        // the contract and close with the code that says why.
+        log.error('socket failed to open', { socketId: socket.id, err: error });
+        const refusal = refusalFor('UPGRADE', error, []);
+        const frame: ServerFrame = {
+          event: 'ERROR',
+          data: refusal.body.error,
+          ts: clock.now().getTime(),
+        };
+        socket.raw.send(JSON.stringify(frame));
+        socket.close(
+          refusal.status === 503 ? CLOSE_CODES.TOO_BUSY : CLOSE_CODES.INTERNAL,
+          'failed-to-open',
+        );
+        return;
+      }
+      // The upgrade checks what is open; a burst of upgrades all pass that check
+      // before any is counted, so the cap is enforced again here, on the count
+      // that includes this connection.
+      if (identity !== undefined && hub.connectionsOf(identity.userId) > limits.perUser) {
+        log.warn('socket refused: too many open for this account', { socketId: socket.id });
+        socket.close(CLOSE_CODES.TOO_BUSY, 'too-many-connections');
+        return;
+      }
       if (identity !== undefined) {
-        bus.subscribe(sessionTopic(identity.sessionId), socket.id);
-        // And where the end of the account, or of one membership, is announced.
-        bus.subscribe(userTopic(identity.userId), socket.id);
         log.info('socket opened', { socketId: socket.id, userId: identity.userId });
       }
     },
@@ -167,6 +232,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   clock,
                   bus,
                   limiter,
+                  userWrites: dependencies.userWrites,
                   log,
                   // The real boundary. D-35: one transaction, published after it returns.
                   atomically,

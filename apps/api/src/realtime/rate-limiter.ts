@@ -33,6 +33,20 @@ export interface RateBudget {
 /** §5.5's working value. Provisional until O-4 is closed by a measurement. */
 export const SOCKET_FRAME_BUDGET: RateBudget = { perSecond: 10, burst: 20 };
 
+/**
+ * How many sockets may be open (D-84, amended). The frame budget above is per
+ * connection, so a user with a hundred sockets had a hundred budgets; writes are
+ * now also charged to the user (`WRITE_BUDGET`), and these bound what a user — and
+ * the node — can hold open. A stalled reader costs up to `OUTBOUND_HIGH_WATER_MARK`
+ * (4 MB) before it is closed, so the node-wide number is also a memory bound.
+ *
+ * Twenty per user is several browser tabs on several devices. Two thousand per node
+ * is far above a team of thirty and far below what the pool and memory carry; the
+ * hosted product, which is several nodes, reads it per node (D-25). **Provisional
+ * (O-4):** nothing has been measured, and they say so rather than looking decided.
+ */
+export const SOCKET_CONNECTION_LIMITS = { perUser: 20, total: 2_000 } as const;
+
 interface Bucket {
   tokens: number;
   refilledAt: number;

@@ -15,13 +15,29 @@
  * readiness says 503 while it works, and a failure is an exception the caller turns
  * into an exit — a node that cannot migrate must not keep running as though it could.
  */
-import { migrateToLatest, type Executor } from '@purlay/db';
+import {
+  createMigrationDatabase,
+  migrateToLatest,
+  type MigrateOptions,
+  type MigrationConnection,
+} from '@purlay/db';
 
+/**
+ * Opens a connection of its own, the one `bun run db:migrate` uses (D-87), and closes it
+ * again. It does not take the application's pool: that pool cancels a statement after
+ * 30 s, which would cut off an index build and put the node in a loop of restarts.
+ */
 export const migrateOnStart = async (
-  database: Executor,
+  connection: MigrationConnection,
   directory?: string,
+  options: Pick<MigrateOptions, 'onRetry'> = {},
 ): Promise<readonly string[]> => {
-  const { error, results } = await migrateToLatest(database, directory);
+  const database = createMigrationDatabase(connection);
+  const { error, results } = await migrateToLatest(database, directory, options).finally(
+    async () => {
+      await database.destroy();
+    },
+  );
   if (error !== undefined) {
     const failed = (results ?? []).find((result) => result.status === 'Error');
     throw new Error(

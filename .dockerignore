@@ -32,3 +32,12 @@ scripts
 docker
 docker-compose*.yml
 *.md
+
+# Tests and what only tests use stay out of the image that runs in production: 75 test files
+# were shipped, and code that exists to forge a signed-in user and a database that must not
+# be touched has no business in an image. (Lint refuses production code importing the
+# test-only directory, so nothing the process loads is among them; the smoke test would
+# fail if it were.)
+**/*.test.ts
+**/*.test.tsx
+apps/api/src/testing

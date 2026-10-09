@@ -18,6 +18,7 @@ import {
   inProcessRateLimiter,
   SOCKET_FRAME_BUDGET,
   type RateBudget,
+  type RateLimiter,
 } from '../../realtime/rate-limiter';
 import { clientAddress, limitKeyFor } from './client-address';
 
@@ -55,6 +56,11 @@ export interface HttpLimitDependencies {
   readonly trustProxy: boolean;
   /** Defaults to the provisional numbers above. */
   readonly budgets?: HttpBudgets;
+  /**
+   * The per-user write bucket. Passed in when the socket door charges the same one,
+   * so a user's writes cost the same over either door; made here otherwise.
+   */
+  readonly writes?: RateLimiter;
 }
 
 /**
@@ -70,7 +76,7 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
   const { database, clock, trustProxy } = dependencies;
   const budgets = dependencies.budgets ?? { auth: AUTH_BUDGET, writes: WRITE_BUDGET };
   const auth = inProcessRateLimiter(clock, budgets.auth);
-  const writes = inProcessRateLimiter(clock, budgets.writes);
+  const writes = dependencies.writes ?? inProcessRateLimiter(clock, budgets.writes);
 
   return async (request, peer) => {
     const { pathname } = new URL(request.url);

@@ -120,9 +120,14 @@ services:
     image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     restart: unless-stopped
     ports:
-      - '80:80'
-      - '443:443'
-      - '443:443/udp'
+      # Movable for a host that already uses 80 or 443, with the caveat in CONFIG.md: the
+      # HTTPS port is the same inside and out because Caddy listens on the port in the site
+      # address (APP_URL), and a certificate from a public CA needs 80 and 443 reachable
+      # from outside, so moving them is for a deployment behind another proxy or one using
+      # its own certificates.
+      - '${HTTP_PORT:-80}:80'
+      - '${HTTPS_PORT:-443}:${HTTPS_PORT:-443}'
+      - '${HTTPS_PORT:-443}:${HTTPS_PORT:-443}/udp'
     environment:
       APP_URL: ${APP_URL:?set APP_URL to the one public https origin}
     volumes:

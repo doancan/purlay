@@ -46,6 +46,12 @@ export interface RouterDependencies {
   readonly bus: EventBus;
   /** Keyed by connection (§5.5). */
   readonly limiter: RateLimiter;
+  /**
+   * Keyed by user, and shared with HTTP's write budget: a user's sockets and
+   * requests are one person's writes, so many connections are not many budgets
+   * (D-84, amended).
+   */
+  readonly userWrites: RateLimiter;
   readonly log: Logger;
   /** What the router needs of the connection it is answering; the hub supplies it. */
   readonly socket: SocketGate;
@@ -287,6 +293,21 @@ export const routeFrame = async (
       }
 
       case 'MESSAGE_SEND': {
+        if (!(await dependencies.userWrites.consume(identity.userId))) {
+          dependencies.log.info('send refused: over the user write budget', {
+            socketId: identity.socketId,
+          });
+          return [
+            errorFrame(
+              new AppError({
+                code: 'RATE_LIMITED',
+                message: 'Too many messages. Send it again shortly.',
+              }),
+              clock,
+              parsed.id,
+            ),
+          ];
+        }
         const context = await requireChannelById(
           database,
           identity.userId,
@@ -295,10 +316,13 @@ export const routeFrame = async (
 
         // Written, committed and published by the one send path (D-35); the ACK
         // comes after, so the sender is never ahead of the room.
-        const message = await send(dependencies, context, {
-          id: parsed.id,
-          content: parsed.payload.content,
-        });
+        const message = await send(
+          dependencies,
+          context,
+          { id: parsed.id, content: parsed.payload.content },
+          // The identity was cached at the upgrade; the write re-proves it (D-85).
+          identity.sessionId,
+        );
         return [frame({ event: 'ACK', data: { id: message.id } }, clock, parsed.id)];
       }
     }

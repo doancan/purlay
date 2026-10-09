@@ -2303,6 +2303,19 @@ ceiling that also bounds what the trigram index digests per row. `MESSAGE_CONTEN
 an import is a writer too, and an integration test fails if the two part. `char_length` counts code
 points, never more than code units, so the database refuses nothing the contract accepts.
 
+*Amended 2026-10-09 (#231): the unit is code units **everywhere, and the database now counts them.**
+`char_length` counts code points, which is never more than code units — so it refused nothing the
+contract accepts and also accepted what the contract refuses: sixteen thousand emoji, which are
+thirty-two thousand units and sixty-four thousand bytes of content, that no 64 KiB frame can carry back
+out. `0011` replaces the `CHECK` with one that adds a unit for each character outside the Basic
+Multilingual Plane, and an integration test writes 8,000 and 8,001 emoji straight to the table. The
+cost is stated: a person who writes in emoji gets 8,000 of them, not 16,000, which is what `String.length`
+in their composer already says. **Rejected: counting code points in the contract** — the frame proof
+below is made per code unit, and four bytes a code point leaves 1,536 bytes for the envelope, under the
+4,096 the test requires. **Whitespace-only content is accepted:** neither `PRD.md` nor `UX.md` says a
+blank message is not a message, so refusing it would be inventing behaviour; whether the composer
+disables Send on blank is a UX decision for the composer.*
+
 **The frame cap is the reason for the character rule.** JSON escapes a C0 control character and an
 unpaired surrogate to six bytes, so without a rule a message's size on the wire is unbounded relative
 to its length, and no length limit could be shown to fit 64 KB. Those characters are refused — none
@@ -2659,10 +2672,18 @@ only choices are to store a shortened one or to lock the person out of the produ
 try/catch in a place that can forget it; the mapping table is one line per index and a test lists
 them. **Rejected — mapping on SQLSTATE alone:** it cannot choose between `WORKSPACE_SLUG_TAKEN` and
 `CHANNEL_NAME_TAKEN`. **Rejected — retrying the sign-in on a collision:** a name that is too long
-does not become shorter on the second attempt. **Left — a race between two first sign-ins of one
-GitHub account** (a double-clicked callback): it violates `users_github_id_key`, which maps to
-nothing and answers `500`; the contract has no code for it and the fix is a different mechanism
-(an upsert), not a mapping.
+does not become shorter on the second attempt. **Closed — a race between two first sign-ins of one GitHub account** (a double-clicked callback). It
+violated `users_github_id_key` and answered `500`; the insert is now `ON CONFLICT (github_id) DO UPDATE`,
+which refreshes the display fields and keeps the first username, and the email-owner check no longer
+counts the same account as a stranger. Two simultaneous callbacks are two sessions and one user, tested
+on a cloned database. Still `500`, deliberately: a soft-deleted account signing in again (its GitHub id is
+never reused, D-38, and the contract has no code for it), and two *different* accounts racing for one
+username (`users_username_key` maps to no code).
+
+*Amended 2026-10-09 (#231): sign-in also removes control characters from the login, the display name and
+the avatar address — PostgreSQL refuses a NUL in text, so GitHub sending one failed sign-in. A login left
+empty becomes `user-<id>`; an email address with one is not an address and is never repaired, since
+stripping would make it someone else's.*
 
 **Reversibility:** free. A table and a function.
 
@@ -2862,6 +2883,24 @@ the same function would then let a known event with garbage data through as well
 **Reversibility:** free for the numbers. The `parseServerMessage` rename is a contract change inside
 the monorepo, with one caller.
 
+**Amended 2026-10-09 — a large subscription is paced.** A second-round audit drove the real client
+against the real server: 2,500 watched channels (25 chunks) got 20 acknowledgements and five
+`RATE_LIMITED` errors nothing retried; 3,500 (35 chunks) got a close with `TOO_BUSY` (D-84) on every
+attempt, so the client looped for good. All chunks left in one synchronous burst.
+**Decided: one `SUBSCRIBE` in flight; the next leaves when the last is acknowledged** (matched by
+`refId`). A `RATE_LIMITED` or `DATABASE_UNAVAILABLE` answer to a chunk sends it again, with the channels
+still watched, after the reconnect ladder's wait (reset by any acknowledgement); any other error moves
+on, because waiting will not change it. A close with `TOO_BUSY` starts the reconnect wait at
+`TOO_BUSY_BACKOFF_STEP` (4–8 s), never lower than the failures already counted. Cursors are read when a
+chunk leaves, and a chunk is dropped if its channel was unwatched while it waited. **Rejected — a
+fixed number in flight, or a fixed gap between chunks:** either needs the server's budget (10 a second,
+burst 20, `FRAME_QUEUE_MAX` 32), which lives in `apps/api` and may change; waiting for the answer is
+correct at any budget and costs one round trip a chunk. **Rejected — importing the budget into the
+contract:** a client written against today's number is wrong the day it changes. **Rejected — only
+retrying `RATE_LIMITED`:** pacing alone cannot honour a budget that refills with time, and the
+fix for the close is to not cause it. Sustained pacing faster than the budget is still answered
+`RATE_LIMITED`; the retry is what makes that safe.
+
 ---
 
 ### D-83. A subscription is made before its replay is read, and live frames wait behind the replay
@@ -2929,6 +2968,27 @@ direction, and the two want different diagnoses in a log.
 
 **Reversibility:** free. One constant and one close code.
 
+**Amended 2026-10-09 (second-round audit): the budget is the user's, and so is the number of sockets.** The
+per-connection bucket multiplied by the connections a user opened: one user with 100 sockets sent 20
+`MESSAGE_SEND` each, all 2,000 acknowledged in about eight seconds with no `RATE_LIMITED`, against HTTP's
+ten a second for the same person (D-81). `MESSAGE_SEND` is now also charged to a per-user bucket **shared
+with HTTP's write budget**, so a user's writes cost the same over either door and many sockets are one
+budget; the per-connection bucket still bounds every frame. A user may hold `SOCKET_CONNECTION_LIMITS.perUser`
+(20) sockets and a node `total` (2,000): over them the upgrade is refused before a socket is bound — `429
+RATE_LIMITED` for the user, `503` for the node. Upgrades that all passed that check at once are held to the
+cap when they bind, by closing the excess with `TOO_BUSY`. A socket that stops reading costs up to 4 MB before
+it is closed (D-70), so the node-wide cap is also a memory bound. **Provisional (O-4):** unmeasured, as every
+number in this family. **Rejected — one bucket per user in place of the per-connection one:** it would make a
+runaway tab starve the user's other tabs of pings and subscriptions. **Rejected — counting sockets in the
+database:** the hub already knows, and a query per upgrade is a read on the door.
+
+**Amended 2026-10-09 (second-round audit): a socket that cannot say who is on it is told in a frame.** When
+the identity read on open failed after the upgrade was admitted, the framework answered with a raw
+`{"error":…}` body that is not a `ServerFrame`; the client took it for malformed and reconnected into the
+same failure at once. The open now catches it, writes the cause to the log once, sends an `ERROR` frame from
+the contract and closes: `CLOSE_CODES.TOO_BUSY` when the database had no connection to give, the new
+`CLOSE_CODES.INTERNAL` (1011) otherwise. The client reconnects with its backoff either way.
+
 ---
 
 ### D-85. A change that removes visibility is a bus event: a membership is unsubscribed, a session or an account is closed
@@ -2988,6 +3048,24 @@ would make the hub touch the database, which is the separation D-7 stands on.
 **Left:** `ACCESS_REVOKED` for a channel turning private is not published by anything yet; nothing
 makes a channel private in Phase 0–1's endpoints, and the event it needs is this one.
 
+**Amended 2026-10-09 (second-round attack): a send re-proves its session in the transaction that
+writes it.** A socket authenticates once and caches the identity; a sign-out racing a send let one
+write commit *after* `revoked_at` (found by attack: one write, zero frames reaching the closed
+socket). The guard query that runs per send cannot carry the session — it answers about the
+channel — so the send path adds one primary-key read of the session row, `FOR SHARE`, as the first
+statement of its transaction (`requireLiveSession`). Revocation updates that row, so it waits for the
+transaction holding the lock: **a write by a session commits before the session's revocation does,
+or is refused `UNAUTHENTICATED`; there is no third order.** Measured on a cloned database with real
+commits: a revocation held open while a send starts makes the send wait and then refuse, writing
+nothing (without the lock the same test commits the write); a send holding the session makes the
+revocation wait (it does not complete while the transaction is open). Cost: one indexed read per
+send, share locks being compatible with each other. Both doors use it — the socket's cached identity
+and the HTTP `POST /messages` — because they share `send()`. **Left, stated:** other HTTP writes
+(workspace, channel, join) resolve the session at the start of the request and are not locked, so
+their window is one request's duration; none writes into another member's view (a message is the
+only thing that reaches a room), and the cost of locking every write was not justified by a
+measurement. A socket frame other than a send only reads.
+
 **Reversibility:** one frame and one close behaviour; nothing is stored.
 
 **Amended 2026-10-09 (second-round audit): the contract is watched, and out-of-band SQL is not
@@ -3002,6 +3080,23 @@ expired. Nothing existing needed wiring; no path soft-deletes a user, workspace 
 the session expires or the process restarts, because the bus is in-process (D-7): a command-line tool is
 another process and cannot reach this one's bus, and a network bus is not built for it (`CONTRIBUTING.md`
 §1.11). An operator who revokes by SQL restarts the node (a drain, D-72) to make it take effect.
+
+**Amended 2026-10-09 (second-round audit): a socket is listening before its session is confirmed.** The hub
+read the session and only afterwards did the socket subscribe to `session:` and `user:`, so a sign-out
+published between the two reached nobody and the socket stayed open and authenticated — a `MESSAGE_SEND`
+sent in that window was acknowledged and stored. The hub now reads the session, calls `listen` (which
+subscribes), and **reads it again**: a sign-out before the second read is seen by it, one after is heard on
+the topic, and no instant is in neither. Reproduced deterministically by a hook that runs the sign-out when
+the first read returns. **Rejected — subscribing to a topic named after the cookie's token:** the topic would
+carry a credential, and the session id is what the rest of the system names.
+
+**Amended 2026-10-09 (second-round audit): a replay never outlives a revocation seen while it was read.** A
+subscription is authorised, the member is removed and `ACCESS_REVOKED` published, a message commits, and
+the replay — read after the removal — carried that message to the socket ahead of the notice. The hub now
+remembers which channels were revoked while a connection's frames were being held, and does not write
+replayed messages of those channels; the notice still follows. Deterministic: the replay read's seam
+publishes the revocation and commits a message before reading. **Rejected — authorising again after the
+read:** a second query on every subscription for a race the hub already hears about as an event.
 
 ---
 
@@ -3067,6 +3162,38 @@ exits one of two healthy starters, instead of making it wait its turn. **Rejecte
 the wait on separate connections without polling:** the waiting connection is the transaction the build
 waits for; only not being in a statement avoids it.
 
+*Amended 2026-10-09 — a deadlock against live traffic is retried, and "for an instant" was wrong:* a
+second-round audit ran migration 0010 against live sends. At about 150 writes a second ten runs in ten
+were untouched; at about 5,000 the migrator was ended with `deadlock detected`. An `ALTER TABLE` is granted its
+exclusive lock only after every transaction already using the table, and a send takes `messages` and then
+`channels` where the migration asks for them the other way round, so under load the two wait for each
+other and PostgreSQL ends one. The migration's header said the lock was held "for an instant"; it is held
+for as long as it takes to be granted.
+**Decided: a migration is run again when PostgreSQL ends it with SQLSTATE `40P01`**, at most five attempts
+in all, waiting 250, 500, 1000 and 2000 ms, each retry reported (`onRetry`: the CLI prints it, the API logs
+it at `warn`), and the last deadlock thrown as it was when the attempts run out. Nothing else is retried: a
+violation, a syntax error and a timeout belong to the migration or the data. **Why this is safe, for each
+kind of file.** A transactional migration is rolled back whole by the deadlock, so running it again starts
+from the state it started from the first time. A non-transactional migration may have committed earlier
+statements, and the unit of retry is the *file, from its top*, not the statement that was waiting: D-86
+already requires such a file to be safe to run again from the top, because a crash and a restart do exactly
+that. A single statement is not retried on its own, because the one that was ended might be a `CREATE INDEX
+CONCURRENTLY` that left an invalid index, which only its file's own `DROP INDEX IF EXISTS` clears.
+**Rejected — retrying a statement:** that. **Rejected — retrying every error:** it hides a bad migration
+behind a delay. **Rejected — taking the application's locks first, or locking the table up front:** it blocks
+every writer for the duration, which is the cost the non-transactional form exists to avoid.
+**Operators:** run migrations at low traffic. A retry makes a deadlock survivable, not cheap; a node migrating
+on start under heavy load may need several attempts, and the log says so.
+**A corrected comment in an applied migration is allowed, by a table in `migrator.ts`, not by editing
+silently.** The files are checksummed whole, so a corrected comment looks like an edited statement and
+would make every database that applied the migration refuse to start. `COMMENT_ONLY_EDITS` names the
+checksum those databases recorded and the checksum of what the file *does* (comments removed, whitespace
+collapsed, `executableText`); the edit is accepted only when both match, so a change to any statement is
+refused as before, and the new checksum is recorded on the next run. A test fails if an entry stops
+describing its file. The header of 0010 is the first use; 0007's earlier correction predates checksums and
+was adopted instead. **Rejected — ignoring comments in every checksum:** it would change what every
+recorded checksum means and makes any comment edit invisible, including a misleading one.
+
 ---
 
 ### D-87. The pool waits a bounded time and says what is wrong; a session that cannot authenticate can be purged
@@ -3104,6 +3231,17 @@ and a migration cut off halfway leaves an invalid index.
 *Amended 2026-10-09:* a frame that fails for want of a connection is answered with the same
 `DATABASE_UNAVAILABLE` `ERROR` frame, with the HTTP body word for word, instead of `INTERNAL`; the cause is
 still logged. A client that retries a refused request now has one code to recognise on either transport.
+
+*Amended 2026-10-09 — the migrator is not the application:* the 30 s statement limit belongs to the
+application's pool alone. A node migrating as it starts (D-93) ran `migrateToLatest` on that pool, so a
+migration with a 33 s statement was cancelled, the node exited, and its restart was cancelled at the same
+point; a large `CREATE INDEX CONCURRENTLY` or `VALIDATE` would have kept a node in that loop. Migrating now
+always opens a connection of its own through `createMigrationDatabase`, which `bun run db:migrate` uses too:
+one connection, no statement timeout, the idle-in-transaction limit kept (the runner is never idle inside its
+transaction). **Rejected — raising the application's limit:** it exists to bound a runaway request.
+**Rejected — `SET statement_timeout = 0` inside the migrator on the borrowed connection:** it would work
+until someone reused the connection, and leaves the pool's other users one forgotten reset from running
+unbounded.
 
 ---
 
@@ -3145,6 +3283,13 @@ sidebar read for a problem the index change already removes. **Rejected — `fil
 reclaimed the old versions on its own (1,999 of 2,000); a setting that was not needed is not added.
 
 **Reversibility:** free. The old index is one `CREATE INDEX`.
+
+**Amended 2026-10-09 (second-round audit): what a retry publishes is the stored row as it is now.** Once
+messages can be deleted, a retried send of an id the database already holds would, if it published what the
+retry carried, republish the original content of a message that has since been tombstoned (D-9). The
+constraint on the retry's publish: **it reads the stored row and publishes that — tombstone included — and
+never the content the retry sent.** Today's `send()` returns the stored row on a repeated id; the delete
+endpoint's work is to keep it so, and its test must retry a send of a deleted message and see a tombstone.
 
 ---
 
@@ -3292,6 +3437,12 @@ and CodeQL are already in the platform we run on.
 
 **Reversibility:** free. All of it is workflow and script; nothing is stored.
 
+
+*Amended 2026-10-09 (a second-round audit):* every `actions/checkout` left the job's token in
+`.git/config`, where any later step — an installed package's script included — can read it. No job pushes,
+so none keeps it: `persist-credentials: false` everywhere, and `scripts/workflow-pins.test.ts` fails a
+checkout without it (shown failing on nine before the change).
+
 ---
 
 ### D-92. The API ships as a distroless image that runs the source, pinned by digest
@@ -3329,6 +3480,36 @@ disk. **Rejected: an init process (`tini`).** The process handles SIGTERM itself
 **Rejected: a floating tag, even `1`.** The digest is the claim the documents make.
 
 **Reversibility:** free. Nothing is stored in the image; the volumes are the database and the bucket.
+
+
+*Amended 2026-10-09:* the smoke test ran the API container against the development compose database through
+`host.docker.internal`. When that database's port was bound to the loopback address (the superuser's password
+is in the repository, so it should be), a container on a Linux runner could no longer reach it, the log said
+`migrating on start failed`, and the `image` check was red on main for three commits, because it was not a
+required check. The smoke test now creates a throwaway network and a throwaway PostgreSQL of its own (the
+image named in `docker-compose.yml`, nothing published), runs the API on the same network by container name,
+and removes both when it ends; `scripts/image-smoke.test.ts` fails if it references the host again. It no
+longer depends on what any other file publishes.
+
+*Amended 2026-10-09 (a second-round audit that opened the image):* it shipped every `*.test.ts` — 75 test
+files, 83 with the directory of test-only code beside them — because the Dockerfile copies the source
+directories whole. `.dockerignore` now leaves out `**/*.test.ts` and `apps/api/src/testing`, and the smoke
+test asks the **image** (not the ignore file) how many are in it and fails on any: 83 on the image as it
+was, 0 now, the rest of the smoke test unchanged. Lint already refuses production code importing the
+test-only directory, so nothing the process loads is among them. The image is 1 MB smaller; the point was
+never size. Separately, the probes `/health` and `/health/ready` were most of the log (a balancer and the
+container's own check poll them every few seconds): they are written at `debug`, and a probe that fails is
+still visible because readiness writes its reason at `warn`.
+
+*Amended 2026-10-09 (a second-round audit):* the `image` workflow had a path filter, so a pull request that
+broke the Dockerfile ran no check at all, and a check that does not run cannot be required. It now runs on
+every pull request and decides inside the job (`scripts/pr-touches.sh`) whether there is anything to build;
+when there is not, its steps are skipped and it reports success. And the publish job **built a second time**
+instead of promoting what had been tested: on main the image is now built once, pushed **by digest** (untagged,
+with provenance and an SBOM), the same smoke test is run against that exact digest, and only then is it given
+its tags (`sha-<commit>` and `main`) by `imagetools create` — a retag, not a rebuild. Exercised locally against a
+registry: the digest the build reported is the digest `:main` resolves to, the attestation manifest is
+there, and the smoke test passed on the pulled digest. The check names to require: `build` (pull requests).
 
 ---
 
@@ -3373,6 +3554,11 @@ test is what would show the migrator regressing.
 
 **Reversibility:** free. A variable and a function; migrations themselves are unchanged.
 
+*Amended 2026-10-09:* `migrateOnStart` takes the connection settings, not the application's pool, and
+opens and closes a connection of its own (D-87, amended): the pool's 30 s statement limit must not apply to a
+migration. A test has the migration record the `statement_timeout` its own session was given (`0`, where
+the application's pool shows `30s`) and counts sessions afterwards (none left, on success or failure).
+
 ---
 
 ### D-94. The production stack is one compose file, one proxy, and nothing that names a server
@@ -3415,6 +3601,15 @@ compose file is the single-node shape, and a second node is `--scale api=2` behi
 only after Phase 3 builds the shared adapters).
 
 **Reversibility:** free. The volumes (database, bucket, certificates) outlive the file.
+
+
+*Amended 2026-10-09 (a second-round audit that ran it):* (1) Caddy's access log recorded the full URI, so
+`/auth/github/callback?code=...&state=...` was written to a file that is shipped and kept; it now logs the
+path and removes everything from the `?` on, checked on a real run. (2) 80 and 443 were written into the
+file; `HTTP_PORT` and `HTTPS_PORT` move them, with the caveats in `CONFIG.md` (the HTTPS port must also be in
+`APP_URL`, and a public certificate needs the standard ports). (3) The variables were only in a table;
+`docker/production.env.example` is the file to copy, bound to the compose file by a test, with secrets
+left empty so an unedited copy fails by name instead of starting with a default.
 
 ---
 
@@ -3465,6 +3660,11 @@ partial directory with no checksums; it now removes it and points at `scripts/pr
 after the database was done; both now default to new names, `--bucket live` is the recovery spelling, and
 the bucket is checked **before** the database is touched. The rehearsal asserts each of them. `--no-bucket` restores the database alone, for rolling back an upgrade: the live bucket is not empty, and a schema migration does not touch attachments.
 
+
+*Amended 2026-10-09 (a second-round audit):* the `restore-rehearsal` workflow had the same path filter and
+now runs on every pull request, deciding inside the job whether the change touches what it exercises, so
+`rehearse` can be a required check. The weekly run and a push always rehearse.
+
 ---
 
 ### D-96. Error tracking is the logger's `error` lines, sent on if a DSN is set — no SDK, off by default
@@ -3504,6 +3704,20 @@ service groups by message and type rather than by frame; source maps are not app
 runs its source. The client's errors (`apps/web`) are a separate surface and not covered.
 
 **Reversibility:** free. One module and one variable; unset it and the process is as it was.
+
+
+*Amended 2026-10-09 (a second-round audit that pointed it at a collector that accepts and never answers):*
+"it can never make the process worse" was not true of three things. (1) A report had no timeout, so ten
+silent connections held every slot for ever: of 25 failing requests ten were delivered and no error was
+ever reported again until restart, nothing said reports were being dropped, and SIGTERM ran to the whole
+ten-second deadline. A report now gives up after five seconds; drops are announced at `warn`, at most once a
+minute, with the running total; and shutdown waits for the reporter two seconds at most and abandons what
+is left. A redirect is not followed (`redirect: 'manual'`): a report goes to the host in the DSN and
+nowhere else. (2) Stack traces named the machine — `/Users/…`, `/home/…`, the build directory. Absolute paths
+are made relative to the working directory, to the package inside `node_modules`, or to the file name
+alone, in the stack, the message and every string in the fields; a request path such as `/api/channels`
+is not a place on the machine and is left alone. Run again: 25 failing requests, ten delivered, one drop
+notice, the next five delivered after the timeout, SIGTERM answered in two seconds.
 
 ---
 

@@ -400,8 +400,14 @@ CREATE TABLE messages (
     CONSTRAINT thread_reply_count_non_negative CHECK (thread_reply_count >= 0),
 
     -- The contract's MESSAGE_CONTENT_MAX, for every writer that is not one of the
-    -- two doors. Added by 0007, NOT VALID then validated, in one transaction. (D-67, D-86)
-    CONSTRAINT messages_content_length CHECK (char_length(content) <= 16000),
+    -- two doors, in UTF-16 code units as the contract counts them: characters, plus one more
+    -- for each outside the Basic Multilingual Plane. Added by 0007 as characters and replaced
+    -- by 0011 with the units. (D-67, D-86)
+    CONSTRAINT messages_content_length CHECK (
+        char_length(content)
+        + char_length(regexp_replace(content, '[^\U00010000-\U0010FFFF]', '', 'g'))
+        <= 16000
+    ),
 
     -- Version 7 and the RFC variant: the contract's isMessageIdShape, for a writer that skips it.
     -- The timestamp inside is not checked here (a CHECK must be immutable); the service does. (D-8, D-33, D-90)
@@ -902,17 +908,18 @@ file that leaves its transaction runs statement by statement and must be safe to
 0008_channel_activity_unindexed.sql   idx_channels_workspace without last_message_at  (D-88)
 0009_foreign_key_indexes.sql   every foreign key column indexed, built CONCURRENTLY; idx_workspaces_slug dropped  (D-89)
 0010_tenant_integrity.sql    composite tenant keys, messages_id_is_uuidv7, dm_key_form  (D-90)
-0011_engagement.sql          reactions, attachments, mentions, notifications
-0012_integrations.sql        github_integrations, link_previews
+0011_message_content_units.sql   messages_content_length counts code units, as the contract does  (D-67)
+0012_engagement.sql          reactions, attachments, mentions, notifications
+0013_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0013_administration.sql      audit_log, job_runs  (Phase 1)
+0014_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0014_github_feeds.sql`; Phase 2's magic links add `0015_email_auth.sql`.
+Phase 2 adds `0015_github_feeds.sql`; Phase 2's magic links add `0016_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, and again with each hardening migration
-(`0008`, `0009`, `0010`). That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+(`0008` to `0011`). That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

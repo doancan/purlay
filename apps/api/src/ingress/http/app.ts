@@ -29,7 +29,8 @@ import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
 import { clearedStateCookie } from '../../platform/cookies';
 import { clientAddress, peerOf } from './client-address';
-import { httpLimits, type HttpBudgets } from './rate-limit';
+import { httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
+import { inProcessRateLimiter } from '../../realtime/rate-limiter';
 import { AppError } from '../../platform/errors';
 import {
   JSON_BODY_MAX_BYTES,
@@ -54,7 +55,7 @@ import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
-import { createSocketLifecycle, type HeldByConnections } from '../ws/socket';
+import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 
 export interface Dependencies {
   readonly config: Config;
@@ -65,6 +66,8 @@ export interface Dependencies {
   readonly log: Logger;
   /** Absent in production, where the limits are the provisional ones (`rate-limit.ts`). */
   readonly rateBudgets?: HttpBudgets;
+  /** Absent in production, where the limits are the provisional ones (`rate-limiter.ts`). */
+  readonly connectionLimits?: ConnectionLimits;
   /**
    * The transport this node publishes through. One node needs none: it makes its
    * own. Two nodes in one process (a test) share one, which is how a revocation
@@ -128,7 +131,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
   /** Set once, by `drain`; readiness reads it before anything else. */
   let draining = false;
-  const sockets = createSocketLifecycle(dependencies);
+  // One bucket per user for writes, charged by both doors to `send()`.
+  const userWrites = inProcessRateLimiter(
+    dependencies.clock,
+    dependencies.rateBudgets?.writes ?? WRITE_BUDGET,
+  );
+  const sockets = createSocketLifecycle({ ...dependencies, userWrites });
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
 
   // Server-wide, because that is the one the framework passes on: the per-route
@@ -138,6 +146,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const admit = httpLimits({
     database: dependencies.database,
     clock: dependencies.clock,
+    writes: userWrites,
     trustProxy: dependencies.config.TRUST_PROXY,
     ...(dependencies.rateBudgets === undefined ? {} : { budgets: dependencies.rateBudgets }),
   });
@@ -188,7 +197,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .onAfterResponse(({ request, path, set }) => {
       const started = currentRequest()?.startedAt;
-      log.info('request', {
+      // A balancer and the container's own health check poll these every few seconds; at
+      // info they were most of the log. A probe that FAILS is not lost: readiness writes the
+      // reason at warn.
+      const write = path === '/health' || path === '/health/ready' ? log.debug : log.info;
+      write('request', {
         method: request.method,
         path,
         status: set.status,

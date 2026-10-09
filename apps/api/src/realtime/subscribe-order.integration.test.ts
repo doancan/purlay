@@ -15,6 +15,7 @@ import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { testDependencies } from '../testing/doubles';
 import { missedIn } from '../modules/messages/messages';
 import { fixedClock } from '../platform/clock';
+import { channelTopic, publishAccessRevoked, userTopic } from '../platform/events';
 import { createLogger } from '../platform/logging';
 import { atomicallyOn } from '../platform/transactions';
 import { aUniqueSlug } from '../testing/users';
@@ -64,7 +65,10 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
   const written: ServerFrame[] = [];
   const hub = createSocketHub(db, clock, {
     log: createLogger({ level: 'silent' }),
-    leave: () => undefined,
+    leave: (channelId, socketId) => {
+      bus.unsubscribe(channelTopic(channelId), socketId);
+    },
+    listen: () => undefined,
   });
   const bus = inProcessEventBus(hub.deliver, createLogger({ level: 'silent' }));
   await hub.opened(
@@ -88,12 +92,13 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           clock,
           bus,
           limiter,
+          userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           log: createLogger({ level: 'silent' }),
           socket: hub,
           atomically: atomicallyOn(db),
           ...overrides,
         },
-        { socketId, userId: who.userId, sessionId: 'x', expiresAt: NOW },
+        { socketId, userId: who.userId, sessionId: who.sessionId, expiresAt: NOW },
         raw,
       ),
   };
@@ -221,6 +226,41 @@ describe('integration: subscribe before replay', () => {
         await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: failing }),
       );
       expect(rig.bus.size()).toEqual({ topics: 1, sockets: 1 });
+      rig.hub.closed('s1');
+    });
+  });
+
+  /**
+   * The subscription is authorised, then the member is removed and told, then the
+   * replay is read: it can carry what was written after the removal. It must not
+   * reach the socket — and the notice, which is queued behind the replay, still does.
+   */
+  test('a replay read after a revocation does not carry that channel’s messages to the socket', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'order-revoked');
+      const channelId = await aChannel(db, alice);
+      const rig = await aRig(db, alice);
+      rig.bus.subscribe(userTopic(alice.userId), 's1');
+
+      const before = messageId(new Date(NOW.getTime() + 1));
+      await rig.route(sendFrame(channelId, before));
+      const afterRevocation = messageId(new Date(NOW.getTime() + 2));
+      const hooked: typeof missedIn = async (...args) => {
+        // Removed, and told, between authorising the subscription and reading its replay.
+        await publishAccessRevoked(rig.bus, clock, alice.userId, [channelId]);
+        // A message written after the removal; the read below sees it.
+        await rig.route(sendFrame(channelId, afterRevocation), {}, 'other');
+        return await missedIn(...args);
+      };
+
+      const replies = await rig.route(subscribeFrame(channelId, BEFORE), { readReplay: hooked });
+      // The control: the replay as read does hold both messages.
+      expect(idsOf(replies)).toEqual([before, afterRevocation]);
+      rig.written.length = 0;
+      rig.hub.reply('s1', replies);
+
+      expect(idsOf(rig.written)).toEqual([]);
+      expect(rig.written.map((f) => f.event)).toEqual(['ACK', 'ACCESS_REVOKED']);
       rig.hub.closed('s1');
     });
   });
