@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Refactor — 2026-10-09: the `/api/me` query is a module's
+
+- `readMe` no longer holds a raw query; `meOf` in `modules/workspaces` does (#245, D-47).
+
+### Refactor — 2026-10-09: replay budgeting is a module; the casts that hid the frame union are gone
+
+- Replay caps and the cursor floor moved from `realtime/router.ts` to `modules/messages/replay.ts`.
+  `frame()` can no longer pair an event with another event's data, and the timer handle is typed.
+- Joining a private channel or a DM you are in answers 404; that branch is now tested (#245, D-47).
+
 ### Refactor — 2026-10-09: test scaffolding moves to `src/testing/`
 
 - `ingress/http/testing.ts`, `fixtures.ts` and `cross-tenant.ts` are now `testing/doubles.ts`,

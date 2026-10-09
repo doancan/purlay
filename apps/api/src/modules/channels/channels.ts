@@ -142,9 +142,9 @@ export const joinChannel = async (
   context: ChannelContext,
 ): Promise<void> => {
   if (context.channelType !== 'public') {
-    // Not reachable through the guard today — a non-public channel is only visible
-    // to somebody already in it — but the endpoint says *public only*, so it says
-    // so here rather than relying on that remaining true.
+    // Reachable: a member of a private channel or a DM is *in* it, so the guard
+    // hands them a context. The endpoint is *public only*, so it refuses them with
+    // the answer a stranger gets (`channel-visibility.integration.test.ts`).
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   }
   await executor
