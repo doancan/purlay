@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: readiness notices an edited or missing migration
+
+- `/health/ready` now answers 503 when an applied migration's file was edited, has gone, or sorts out of
+  order, the same states the migrator refuses to run past (D-86). A database from before checksums existed
+  is still ready.
+
 ### Fix — 2026-10-09: a migration can leave its transaction, and an edited migration is noticed
 
 - `0007` said `NOT VALID` then `VALIDATE` "lets writes continue". Inside the migrator's transaction it did
