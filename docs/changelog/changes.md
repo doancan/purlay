@@ -42,6 +42,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   close (D-82, #231). `ARCHITECTURE.md` §5.4 also states that every reconnect replays about 65 s of
   already-held messages, deliberately (D-65), and what that costs.
 
+### Fix — 2026-10-09: a replay does not carry messages written after a revocation
+
+- A member removed between a subscription's authorisation and its replay read was sent messages written
+  after the removal, ahead of the notice. The hub drops replayed messages of channels revoked while the
+  replay was held (D-85, amended).
+
 ### Fix — 2026-10-09: a sign-out while a socket opens no longer leaves it open
 
 - A sign-out between the hub reading the session and the socket subscribing to its end was published to

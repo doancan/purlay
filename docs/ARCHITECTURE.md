@@ -483,7 +483,8 @@ or the process restarts (a drain, §11 / D-72). There is no command-line tool fo
 and another process cannot reach it (D-85).
 
 A socket subscribes to its topics **before** its session is confirmed by a second read, so a sign-out
-while it opens is seen by one or heard by the other (D-85, amended).
+while it opens is seen by one or heard by the other (D-85, amended). A replay read after a revocation was observed does not
+write that channel's messages (D-85, amended).
 
 ### 7.3. The isolation mechanism
 

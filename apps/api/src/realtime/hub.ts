@@ -172,6 +172,12 @@ interface Held {
   cancelExpiry?: () => void;
   /** Present while a subscription is being replayed. */
   holding?: ServerFrame[] | undefined;
+  /**
+   * Channels whose access ended while the replay was being read. The replay was
+   * authorised before that and read after it, so it may carry messages written
+   * after the revocation; they are not written.
+   */
+  revokedWhileHolding?: Set<string> | undefined;
   /** The last queued frame's work; the next one starts when it settles. */
   tail: Promise<void>;
   queued: number;
@@ -246,7 +252,10 @@ export const createSocketHub = (
       // Takes effect now, even behind a replay: what was kept for these channels is
       // forgotten, and nothing published to them reaches this connection again. The
       // notice itself follows in order, so the client hears it after its replay.
-      for (const channelId of frame.data.channelIds) leave(channelId, socketId);
+      for (const channelId of frame.data.channelIds) {
+        leave(channelId, socketId);
+        socket.revokedWhileHolding?.add(channelId);
+      }
       purge(socket, new Set(frame.data.channelIds));
     }
     // The end of a session is never kept waiting behind a replay.
@@ -346,16 +355,22 @@ export const createSocketHub = (
 
     hold: (socketId: string): void => {
       const socket = held.get(socketId);
-      if (socket !== undefined) socket.holding = [];
+      if (socket === undefined) return;
+      socket.holding = [];
+      socket.revokedWhileHolding = new Set();
     },
 
     reply: (socketId: string, replies: readonly ServerFrame[]): void => {
       const socket = held.get(socketId);
       if (socket === undefined) return;
       const kept = socket.holding ?? [];
+      const revoked = socket.revokedWhileHolding ?? new Set<string>();
       socket.holding = undefined;
+      socket.revokedWhileHolding = undefined;
       const replayed = new Set<string>();
       for (const reply of replies) {
+        // Read after the revocation, so it may carry what was written since.
+        if (reply.event === 'MESSAGE_CREATED' && revoked.has(reply.data.channelId)) continue;
         if (reply.event === 'MESSAGE_CREATED') replayed.add(reply.data.id);
         write(socketId, socket, reply);
       }
