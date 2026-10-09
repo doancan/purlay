@@ -100,5 +100,3 @@ export const signOutEverywhere = async (
   await signOutEverywhereOf(dependencies, userId);
   return { setCookie: [clearedSessionCookie()] };
 };
-
-export { clearedStateCookie };

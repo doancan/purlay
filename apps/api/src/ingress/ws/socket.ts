@@ -36,7 +36,7 @@ export interface SocketDependencies {
 }
 
 /** What the lifecycle reads of the framework's socket. */
-export interface SocketHandle {
+interface SocketHandle {
   readonly id: string;
   readonly raw: object & { readonly send: (payload: string) => number };
   readonly data: { readonly request: Request };
@@ -44,7 +44,7 @@ export interface SocketHandle {
 }
 
 /** A refusal at the upgrade: the HTTP status and body the handshake answers with. */
-export interface UpgradeRefusal {
+interface UpgradeRefusal {
   readonly status: number;
   readonly body: unknown;
 }

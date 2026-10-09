@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: an export nothing imports now fails the build
+
+- `knip` was promised in D-48 and never ran. It runs in `verify` and in CI, and
+  `verify:enforcement` plants an unused export to show it fail (29 stated rules now). Its first
+  run found 19 things: eight exports and types made private, two re-exports and the `happy-dom`
+  pin deleted; three container scripts and the browser realtime client are named in `knip.jsonc`
+  with a reason, the latter until the client store lands (#136, #26).
+
 ### Feature — 2026-10-09: errors can be reported, and by default are not
 
 - With `ERROR_TRACKING_DSN` set, whatever is logged at `error` is also posted to a Sentry-compatible

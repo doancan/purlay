@@ -343,10 +343,49 @@ try {
   for (const violation of placed) rmSync(violation.file, { force: true });
 }
 
+/**
+ * An export nothing imports is wired up or deleted (#136). Knip is not a lint
+ * rule, so it is demonstrated here the same way: plant the violation, require the
+ * build to name it, and first require a clean run with the plant's *used* export
+ * alone — otherwise "knip failed" could be any unrelated finding or a crash.
+ */
+const KNIP_RULE = 'an export nothing imports fails the build (#136)';
+const knipModule = 'apps/api/src/platform/__enforcement_knip__.ts';
+const knipImporter = 'apps/api/src/platform/__enforcement_knip__.test.ts';
+const knipReport = (): { readonly code: number; readonly report: string } => {
+  const result = Bun.spawnSync(['bun', 'x', 'knip', '--reporter', 'json'], {
+    cwd: process.cwd(),
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  return { code: result.exitCode, report: result.stdout.toString() };
+};
+try {
+  writeFileSync(knipModule, 'export const used = 1;\n');
+  writeFileSync(knipImporter, "import { used } from './__enforcement_knip__';\nvoid used;\n");
+  const control = knipReport();
+  writeFileSync(knipModule, 'export const used = 1;\nexport const unused = 2;\n');
+  const planted = knipReport();
+  if (control.code !== 0) {
+    failures += 1;
+    console.log(
+      `  NOT HELD ${KNIP_RULE} — knip was not clean before the plant:\n${control.report}`,
+    );
+  } else if (planted.code === 0 || !planted.report.includes('"unused"')) {
+    failures += 1;
+    console.log(`  NOT HELD ${KNIP_RULE} — knip exited ${String(planted.code)}, naming nothing`);
+  } else {
+    console.log(`  ok       ${KNIP_RULE}`);
+  }
+} finally {
+  rmSync(knipModule, { force: true });
+  rmSync(knipImporter, { force: true });
+}
+
 if (failures > 0) {
   console.log(
     `\n${String(failures)} rule(s) the documents state are no longer enforced by the build.`,
   );
   process.exit(1);
 }
-console.log(`\nAll ${String(VIOLATIONS.length)} stated rules are enforced by the build.`);
+console.log(`\nAll ${String(VIOLATIONS.length + 1)} stated rules are enforced by the build.`);

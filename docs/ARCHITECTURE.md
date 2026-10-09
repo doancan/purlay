@@ -27,6 +27,7 @@
 | Layer | Choice | In the repo | Cost we accepted |
 |---|---|---|---|
 | Monorepo | Bun workspaces | built in | No task graph and no remote cache: a pipeline that repeats work is the trigger to add one (D-55) |
+| Dead code | `knip`, pinned | `knip` | Fails the build on an export nothing imports; its few exemptions are named in `knip.jsonc` with a reason and an issue. `docs/spikes/knip.md` (D-48) |
 | Logging | `pino` | `pino` | Behind a facade in `platform/logging.ts`; `docs/spikes/pino.md` (D-44, D-71) |
 | i18n | typed message catalogues + `Intl` | none, on purpose | No library: two catalogues to keep in step by hand, in exchange for keeping the 250 KB budget (D-41) |
 | Runtime | Bun | built in | Young ecosystem; fewer battle-tested libraries; fewer managed hosts |
@@ -36,7 +37,7 @@
 | Validation | TypeBox | `@sinclair/typebox` | Shared with Elysia's schema layer, so one definition validates and types |
 | Web | React + Vite, single-page with a **prerendered shell** | `react`, `react-dom`, `vite` | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
 | UI primitives | Radix, for dialog · menu · tooltip · popover only — the command palette is **undecided**, because Radix publishes no combobox | not yet · `@radix-ui/*`, and O-7 for the palette | One package per primitive so only what is used ships; everything else is written here (D-52) |
-| Component tests | `bun test` + `happy-dom` + Testing Library | `happy-dom`, `@happy-dom/global-registrator`, `@testing-library/react` | Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
+| Component tests | `bun test` + `happy-dom` + Testing Library | `@happy-dom/global-registrator`, `@testing-library/react` | `happy-dom` arrives as the registrator's own dependency, not a separate pin (nothing imports it; knip). Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
 | Browser tests | Playwright + `@axe-core/playwright` | not yet · `playwright`, `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
 | Styling | Tailwind CSS | `tailwindcss`, `@tailwindcss/vite` | Verbose markup; arbitrary values prohibited, extend the theme instead |
 | Server state | TanStack Query | not yet · `@tanstack/react-query` | (D-18) |

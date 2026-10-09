@@ -84,7 +84,7 @@ export const pathFor = (path: string, ids: Ids): string =>
  *   `query` is what the read needs to return anything at all — search needs `q`.
  * - `none`: it names no channel and returns nothing from one, and says why.
  */
-export type Visibility =
+type Visibility =
   | { readonly kind: 'channel' }
   | { readonly kind: 'workspace-wide'; readonly query?: string }
   | { readonly kind: 'none'; readonly reason: string };

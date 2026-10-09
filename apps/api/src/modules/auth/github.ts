@@ -9,7 +9,7 @@
  * belongs to the workspace-level integration token, never to a member's sign-in
  * (D-23, D-38).
  */
-export const SCOPES = 'read:user user:email';
+const SCOPES = 'read:user user:email';
 
 export interface GitHubProfile {
   /** The stable identity. A login can be renamed and re-taken; this cannot. */
@@ -64,7 +64,7 @@ export interface GitHubEndpoints {
   readonly api: string;
 }
 
-export const GITHUB_ENDPOINTS: GitHubEndpoints = {
+const GITHUB_ENDPOINTS: GitHubEndpoints = {
   oauth: 'https://github.com',
   api: 'https://api.github.com',
 };

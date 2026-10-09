@@ -53,7 +53,9 @@ the first four drafts of this project ended up contradicting each other at the s
     `@ts-ignore` stays banned; in a test it is an assertion — *this must not compile* — and needs
     only to say what it asserts. A `TODO` without an issue number is unowned debt and fails lint;
     write it `TODO(#123)`. Each of these is a lint rule, demonstrated by `verify:enforcement`.
-    Dead code is debt: an export nothing imports is wired up or deleted. **The target is not zero
+    Dead code is debt: an export nothing imports is wired up or deleted, and `bun run knip` fails the
+    build when one is left. What it cannot see is named in `knip.jsonc`, each entry with its reason
+    and issue. **The target is not zero
     exceptions — it is zero exceptions nobody can count.** (D-48)
 
 ---

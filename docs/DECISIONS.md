@@ -1606,6 +1606,14 @@ invisible exceptions**.
 **Accepted cost:** filing an issue for a one-line exception is friction. That is the point. The
 friction is what makes the count stay near zero.
 
+**Amended 2026-10-09 (#136).** The `knip` bullet was written and not run; it now is. `knip` 6.39.0
+runs in `bun run verify` and in CI's `verify` job, and `verify:enforcement` plants an unused export
+to show the build go red (`docs/spikes/knip.md`). Its first run found 19 things: ten exports and one
+dev dependency were deleted or made private, and the exceptions are the whole of `knip.jsonc` —
+three scripts run by shell inside a container, and the browser's realtime client, which nothing
+imports until the client store lands (#26). Each carries a reason and an issue; none is a
+`knip` ignore setting. Delete the realtime entry when #26 merges.
+
 ---
 
 ### D-49. Deterministic budgets block; noisy ones block on regression

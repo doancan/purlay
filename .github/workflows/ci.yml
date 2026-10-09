@@ -67,6 +67,11 @@ jobs:
       - name: lint
         run: bun run lint
 
+      # An export nothing imports is wired up or deleted. The few things knip
+      # cannot see are named in knip.jsonc, each with a reason. (#136)
+      - name: unused files and exports
+        run: bun run knip
+
       - name: format
         run: bun run format:check
 
