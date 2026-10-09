@@ -8,8 +8,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import {
+  buildIntegrationTemplate,
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
+  dropDatabases,
   integrationDatabase,
   withRollback,
 } from './testing';
@@ -80,5 +82,56 @@ describe('integration harness', () => {
     await drop();
     const left = await sql`select 1 from pg_database where datname = ${name ?? ''}`.execute(shared);
     expect(left.rows).toEqual([]);
+  });
+});
+
+/**
+ * The cost of the clones, held to a budget: a hook has five seconds, and the
+ * runner's "a beforeEach/afterEach hook timed out" was a hook that needed more.
+ *
+ * Measured, so the numbers can be argued with. On a laptop a template is built from
+ * nothing in about 0.12 s, a clone made in 0.03 s and dropped in 0.01 s. On a disk
+ * throttled to 8 MB/s (a container run with `--device-write-bps`) they are 3.3 s,
+ * 0.5 s and up to 1.3 s — and that is the kind of disk where the hooks failed. The
+ * budgets are half a hook for the template (built once per process, in the preload,
+ * and here from nothing in a database of its own, so the test does not time a
+ * template that already exists) and a fifth of one for a clone and for a drop. A
+ * test that crosses them is saying that the next file's `beforeAll` is about to
+ * time out.
+ */
+describe('integration harness cost', () => {
+  const TEMPLATE_BUDGET_MS = 2_500;
+  const CLONE_BUDGET_MS = 1_000;
+  const DROP_BUDGET_MS = 1_000;
+
+  const timed = async <T>(work: () => Promise<T>): Promise<{ result: T; ms: number }> => {
+    const started = performance.now();
+    const result = await work();
+    return { result, ms: performance.now() - started };
+  };
+
+  test('a template is built from nothing, then cloned and dropped, inside the hook budget', async () => {
+    const scratch = `purlay_budget_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+    let building = Number.POSITIVE_INFINITY;
+    try {
+      building = (await timed(async () => await buildIntegrationTemplate(scratch))).ms;
+    } finally {
+      await dropDatabases([scratch]);
+    }
+
+    const cloning = await timed(async () => await cloneIntegrationDatabase());
+    const cloned = cloning.result;
+    // The control: what was timed has the whole schema in it, so it is not quick for being empty.
+    const applied = await sql<{ n: string }>`select count(*) as n from kysely_migration`.execute(
+      cloned.db,
+    );
+    expect(Number(applied.rows[0]?.n)).toBeGreaterThan(1);
+    const dropping = await timed(async () => {
+      await cloned.drop();
+    });
+
+    expect(building).toBeLessThan(TEMPLATE_BUDGET_MS);
+    expect(cloning.ms).toBeLessThan(CLONE_BUDGET_MS);
+    expect(dropping.ms).toBeLessThan(DROP_BUDGET_MS);
   });
 });

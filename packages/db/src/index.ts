@@ -33,8 +33,10 @@ export {
   type MigrationResultSet,
 } from './migrator';
 export {
+  buildIntegrationTemplate,
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
+  dropDatabases,
   integrationDatabase,
   withRollback,
   type ClonedDatabase,

@@ -14,6 +14,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   caller; a malformed DSN, or an `http://` one in production, refuses to start (#248, D-96, D-44).
 - Against a stand-in collector, one real 500 produced one envelope with the DSN set and none without.
 
+### Fix — 2026-10-09: the integration suite no longer times out its own hooks
+
+- CI failed about every other run with "a beforeEach/afterEach hook timed out": the migrator test made
+  thirteen databases and dropped them in `afterAll`, each drop a checkpoint. It now uses schemas;
+  readiness breaks the database in rolled-back transactions; the template is built once per process in a
+  preload; drops are issued together (`dropDatabases`) and a budget test guards the cost. Also made
+  deterministic: the migrator's lock-blocking test (held by an advisory lock, not by sleeping), the
+  shutdown drain tests (gates, not sleeps), the socket cleanup test (a server of its own), the
+  falls-behind test (sends until the server gives up) and the HOT-update test (a clone's empty pages)
+  (#246, D-46).
+
 ### Feature — 2026-10-09: a backup that has been restored
 
 - A populated stack — 20 400 messages, awkward unicode, 44 objects up to 12 MiB — was backed up and

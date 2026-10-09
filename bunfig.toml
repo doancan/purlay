@@ -1,5 +1,7 @@
 # Read by `bun test`. Only the coverage floor lives here.
 [test]
+# Builds the integration template before the first test, outside any hook's five seconds.
+preload = ["./packages/db/src/testing-preload.ts"]
 # The floor `bun run test:all` holds the suite to when a database is reachable
 # (#202). Bun applies it to **every file**, not to the total — measured — so one
 # untested file fails the run however well the rest is covered. When it was
