@@ -185,7 +185,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .onAfterResponse(({ request, path, set }) => {
       const started = currentRequest()?.startedAt;
-      log.info('request', {
+      // A balancer and the container's own health check poll these every few seconds; at
+      // info they were most of the log. A probe that FAILS is not lost: readiness writes the
+      // reason at warn.
+      const write = path === '/health' || path === '/health/ready' ? log.debug : log.info;
+      write('request', {
         method: request.method,
         path,
         status: set.status,

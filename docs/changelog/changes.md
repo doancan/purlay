@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-09: the image ships no tests, and health probes stop filling the log
+
+- The image contained every `*.test.ts` (75 files, 83 with the test-only directory). They are left out in
+  `.dockerignore`, and `scripts/image-smoke.sh` asks the image itself: 83 before, 0 after (#231, D-92
+  amended).
+- `/health` and `/health/ready` request lines are written at `debug` instead of `info` (about twelve lines every ten
+  seconds, with a balancer and the container health check polling); a failing probe is still visible, because readiness writes its reason at `warn`.
+
 ### Fix — 2026-10-09: the key checks cannot be walked around, and an integer is an integer
 
 - A second-round attack changed the development key's last base64 character (same bytes, different
