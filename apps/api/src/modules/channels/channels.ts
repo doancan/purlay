@@ -11,7 +11,7 @@
  * guard, so what is missing here is the endpoint that creates them, not the
  * protection.
  */
-import type { Executor } from '@purlay/db';
+import type { Executor, Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -53,7 +53,7 @@ export interface NewChannel {
  * for.
  */
 export const createChannel = async (
-  executor: Executor,
+  executor: Transaction,
   clock: Clock,
   context: WorkspaceContext,
   input: NewChannel,

@@ -5,7 +5,13 @@
  * committed; it is never edited by hand, and CI fails on any diff against a
  * fresh generation. The migrations are the single source. (D-45)
  */
-export { createDatabase, type DatabaseOptions, type Executor } from './client';
+export {
+  createDatabase,
+  isTransaction,
+  type DatabaseOptions,
+  type Executor,
+  type Transaction,
+} from './client';
 /**
  * The raw-SQL tag, for what the builder cannot say — `unnest`, a lateral pair.
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).

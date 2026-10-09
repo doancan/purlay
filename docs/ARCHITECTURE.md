@@ -294,6 +294,10 @@ after the commit, acknowledge after the publish — and both doors call it, so H
 with the same guarantees rather than a second implementation. Its boundary is `atomicallyOn`
 (`platform/transactions.ts`): a new transaction, or the caller's when there is one.
 
+**Every service that writes twice takes a `Transaction`**, not the pool: creating a workspace or a
+channel, and sign-in's account, membership and session, either write everything or nothing, and
+the type refuses the pool (D-77).
+
 - **Phase 0–2:** `InProcessEventBus` — a `Map<Topic, Set<socketId>>`. No network, no
   serialization, no broker to operate.
 - **Phase 3:** `RedisEventBus` — the same interface over Redis pub/sub, plus a

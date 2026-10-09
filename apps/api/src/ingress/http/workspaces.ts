@@ -19,6 +19,7 @@ import {
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { atomicallyOn } from '../../platform/transactions';
 import {
   createWorkspace,
   membersIn,
@@ -82,7 +83,9 @@ export const createMyWorkspace = async (
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const input = validated(CreateWorkspaceRequest, body);
-  return await createWorkspace(database, clock, userId, input);
+  return await atomicallyOn(database)(
+    async (transaction) => await createWorkspace(transaction, clock, userId, input),
+  );
 };
 
 export const readWorkspace = async (

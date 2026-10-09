@@ -1,4 +1,4 @@
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, Transaction as KyselyTransaction } from 'kysely';
 import pg from 'pg';
 import type { DB } from './schema';
 
@@ -35,3 +35,16 @@ export const createDatabase = (options: DatabaseOptions): Kysely<DB> =>
  * database handle of its own. (D-46)
  */
 export type Executor = Kysely<DB>;
+
+/**
+ * An executor that is *known* to be inside a transaction. A service that writes
+ * twice takes this rather than `Executor`, so passing it the pool — the mistake
+ * that leaves half a workspace behind — does not compile. `Executor` accepts a
+ * transaction; this does not accept the pool, because the two differ in the
+ * literal type of `isTransaction`.
+ */
+export type Transaction = KyselyTransaction<DB>;
+
+/** Narrows an executor to a transaction, by what it is rather than by a flag. */
+export const isTransaction = (executor: Executor): executor is Transaction =>
+  executor instanceof KyselyTransaction;

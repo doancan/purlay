@@ -6,12 +6,18 @@
  * reason, and so would every other test that relies on it (`CONTRIBUTING.md` §6.4).
  */
 import { describe, expect, test } from 'bun:test';
-import { aDatabaseThatMustNotBeTouched } from './testing';
+import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing';
 
 describe('a database that must not be touched', () => {
   test('refuses any use at all, naming what was reached for', () => {
     const database = aDatabaseThatMustNotBeTouched();
     expect(() => database.selectFrom('users')).toThrow(/selectFrom/);
     expect(() => database.transaction()).toThrow(/transaction/);
+  });
+});
+
+describe('a transaction that must not be touched', () => {
+  test('refuses any use at all, like the database it stands in for', () => {
+    expect(() => aTransactionThatMustNotBeTouched().selectFrom('users')).toThrow(/selectFrom/);
   });
 });

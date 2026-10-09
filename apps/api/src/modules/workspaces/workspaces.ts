@@ -19,7 +19,7 @@
  * member are both Phase 1 (`API.md` §3). The guard belongs with those endpoints,
  * where it can be tested against something that actually tries.
  */
-import type { Executor } from '@purlay/db';
+import type { Executor, Transaction } from '@purlay/db';
 import type { Membership, Workspace, WorkspaceMember } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -52,11 +52,11 @@ export interface NewWorkspace {
  * The two writes cannot be allowed to separate: a workspace with no owner
  * violates I-2 and cannot be recovered through any Phase 0 endpoint, because
  * every one of them requires a membership that does not exist. The caller passes
- * a transaction; this does not open one, so the boundary stays where the caller
- * can see it (D-46).
+ * a transaction — the type refuses the pool — and this does not open one, so the
+ * boundary stays where the caller can see it (D-46).
  */
 export const createWorkspace = async (
-  executor: Executor,
+  executor: Transaction,
   clock: Clock,
   creatorId: string,
   input: NewWorkspace,
