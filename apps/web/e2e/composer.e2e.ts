@@ -8,6 +8,7 @@
  */
 import type { Locator, Page, WebSocketRoute } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { navLink } from './support';
 
 const boxOf = (page: Page, name: string): Locator =>
   page.getByRole('textbox', { name: `Message ${name}` });
@@ -186,18 +187,12 @@ test.describe('a draft', () => {
     await page.goto(here.path);
     await boxOf(page, here.name).fill('half of a thought');
     // Another channel, by the sidebar (a client-side navigation), and a different draft there.
-    await page
-      .getByRole('complementary')
-      .getByRole('link', { name: new RegExp(`^(unread )?${there.name}`) })
-      .dispatchEvent('click');
+    await (await navLink(page, there.name)).dispatchEvent('click');
     await expect(boxOf(page, there.name)).toBeVisible();
     await expect(boxOf(page, there.name)).toHaveValue('');
     await boxOf(page, there.name).fill('the other thought');
 
-    await page
-      .getByRole('complementary')
-      .getByRole('link', { name: new RegExp(`^(unread )?${here.name}`) })
-      .dispatchEvent('click');
+    await (await navLink(page, here.name)).dispatchEvent('click');
     await expect(boxOf(page, here.name)).toHaveValue('half of a thought');
 
     await page.reload();

@@ -8,7 +8,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Persona } from './fixtures';
-import { history, writeInParallel, type ApiClient, type Tenant } from './support';
+import { history, navLink, writeInParallel, type ApiClient, type Tenant } from './support';
 
 const PEOPLE: readonly Persona[] = ['dogancan', 'alice', 'bob', 'carol'];
 
@@ -111,9 +111,7 @@ test.describe('a channel with unread messages', () => {
       .toBe(0);
     expect((await viewer.channelState(made.id))?.lastReadMessageId).toBe(ids.at(-1));
     // The sidebar badge and weight follow, from the server's own state.
-    await expect(
-      page.getByRole('complementary').getByRole('link', { name: new RegExp(`^${made.name}`) }),
-    ).not.toContainText('unread');
+    await expect(await navLink(page, made.name)).not.toContainText('unread');
 
     await page.reload();
     await expect(page.locator('[data-feed-marker]')).toHaveCount(0);

@@ -16,23 +16,39 @@ import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/te
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number];
 
-// Overridable so two checkouts (or a person's own `bun run demo`) can each have a harness: the
-// port and the database both come from it, and neither is shared.
-const PORT = Number(process.env['PURLAY_E2E_PORT'] ?? 4173);
-const DATABASE =
-  process.env['PURLAY_E2E_PORT'] === undefined ? 'purlay_e2e' : `purlay_e2e_${String(PORT)}`;
+// The first port of the run; each project takes the next. Overridable so two checkouts (or a
+// person's own `bun run demo`) each have their harness.
+const BASE_PORT = Number(process.env['PURLAY_E2E_PORT'] ?? 4173);
 const ci = process.env['CI'] !== undefined;
 
-const desktop = { width: 1440, height: 900 } as const;
-const narrow = { width: 820, height: 900 } as const;
+/**
+ * **One world per project: its own server, its own port, its own database, its own people.**
+ * The four projects used to share one: the write budget is per person (`RATE_LIMITED`, 10 a second
+ * from each), so one project's history writers starved another project's page of the budget it sends
+ * with, and one project's reading changed the unread counts another asserted on. Isolating by room
+ * and persona inside one world cannot remove the first (the people are the same four) and only
+ * hides the second; separate worlds remove both by construction, and cost one more process and one
+ * more scratch database each — seconds, once, against flakes forever. Within a project the specs
+ * still make a room of their own (`support.ts`), because they run in parallel.
+ */
+const projects = [
+  { name: 'chromium-dark', colorScheme: 'dark', viewport: { width: 1440, height: 900 } },
+  { name: 'chromium-light', colorScheme: 'light', viewport: { width: 1440, height: 900 } },
+  { name: 'chromium-dark-narrow', colorScheme: 'dark', viewport: { width: 820, height: 900 } },
+  { name: 'chromium-light-narrow', colorScheme: 'light', viewport: { width: 820, height: 900 } },
+] as const;
 
-const project = (
-  name: string,
-  colorScheme: 'dark' | 'light',
-  viewport: { width: number; height: number },
-): Project => ({
-  name,
-  use: { ...devices['Desktop Chrome'], colorScheme, viewport },
+// A harness uses its port for the web origin and the next one for the API: a hundred apart keeps clear of whatever else is listening nearby.
+const portOf = (index: number): number => BASE_PORT + index * 100;
+
+const project = (definition: (typeof projects)[number], index: number): Project => ({
+  name: definition.name,
+  use: {
+    ...devices['Desktop Chrome'],
+    colorScheme: definition.colorScheme,
+    viewport: definition.viewport,
+    baseURL: `http://localhost:${String(portOf(index))}`,
+  },
 });
 
 export default defineConfig({
@@ -51,7 +67,6 @@ export default defineConfig({
   reporter: ci ? [['github'], ['html', { open: 'never' }]] : 'list',
   timeout: 30_000,
   use: {
-    baseURL: `http://localhost:${String(PORT)}`,
     trace: 'on-first-retry',
     // The only motion in the product is a 120 ms collapse (`UX.md` §9); a screenshot
     // must never catch it half done.
@@ -66,20 +81,16 @@ export default defineConfig({
     timeout: 10_000,
     toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: 'disabled' },
   },
-  projects: [
-    project('chromium-dark', 'dark', desktop),
-    project('chromium-light', 'light', desktop),
-    project('chromium-dark-narrow', 'dark', narrow),
-    project('chromium-light-narrow', 'light', narrow),
-  ],
-  webServer: {
-    command: `bun run scripts/demo.ts --db ${DATABASE} --port ${String(PORT)} --manifest apps/web/e2e/.world.json`,
+  projects: projects.map(project),
+  // Servers start one after the other: the first builds the client, the rest serve that build.
+  webServer: projects.map((definition, index) => ({
+    command: `bun run scripts/demo.ts ${index === 0 ? '' : '--no-build '}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${definition.name}.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
-    url: `http://localhost:${String(PORT)}/health`,
+    url: `http://localhost:${String(portOf(index))}/health`,
     // Building, migrating and seeding two hundred messages through the real API.
     timeout: 240_000,
     reuseExistingServer: !ci,
-    stdout: 'pipe',
-  },
+    stdout: 'pipe' as const,
+  })),
 });

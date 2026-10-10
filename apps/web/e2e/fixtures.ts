@@ -64,10 +64,11 @@ interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
-  world: async ({ baseURL }, use) => {
-    // The manifest exists only while the demo harness that serves `baseURL` is up.
+  world: async ({ baseURL }, use, testInfo) => {
+    // The manifest exists only while the demo harness that serves `baseURL` is up; each project
+    // has its own world and so its own manifest.
     if (baseURL === undefined) throw new Error('no baseURL: the demo harness is not configured');
-    const path = join(import.meta.dirname, '.world.json');
+    const path = join(import.meta.dirname, `.world-${testInfo.project.name}.json`);
     await use(JSON.parse(readFileSync(path, 'utf8')) as World);
   },
 

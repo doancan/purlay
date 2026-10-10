@@ -13,6 +13,7 @@
  * write budget (`429` + `Retry-After`) instead of failing on it, because a room of seventy
  * messages is more than one person's burst and a test must not be flaky for being thorough.
  */
+import { expect, type Locator, type Page } from '@playwright/test';
 import { messageId, type Message } from '@purlay/types';
 
 export type Persona = 'dogancan' | 'alice' | 'bob' | 'carol';
@@ -203,3 +204,36 @@ export const writeInParallel = async (
     );
   }
 };
+
+/** Below this width the sidebar is an overlay behind the "Open navigation" toggle (`UX.md` §2). */
+const NARROW_BELOW_PX = 900;
+
+export const isNarrow = (page: Page): boolean =>
+  (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < NARROW_BELOW_PX;
+
+/**
+ * The app's frame is up — the sidebar at a desktop width, its toggle at a narrow one — and the
+ * screen has its title. Keys are listened for only after this.
+ */
+export const shellReady = async (page: Page): Promise<void> => {
+  const toggle = page.getByRole('button', { name: 'Open navigation' });
+  await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+};
+
+/** The workspace sidebar, wherever this width keeps it: in place, or inside the overlay's dialog. */
+const sidebarOf = (page: Page): Locator => page.getByRole('complementary');
+
+/** Opens the sidebar if it is behind its toggle, and returns it. Safe to call when it is open. */
+export const openNav = async (page: Page): Promise<Locator> => {
+  const toggle = page.getByRole('button', { name: 'Open navigation' });
+  await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
+  if (await toggle.isVisible()) await toggle.click();
+  const sidebar = sidebarOf(page);
+  await expect(sidebar).toBeVisible();
+  return sidebar;
+};
+
+/** The sidebar entry of a channel (its name may be preceded by "unread"), with the sidebar open. */
+export const navLink = async (page: Page, name: string): Promise<Locator> =>
+  (await openNav(page)).getByRole('link', { name: new RegExp(`^(unread )?${name}`) });

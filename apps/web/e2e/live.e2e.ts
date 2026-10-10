@@ -8,16 +8,13 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { navLink } from './support';
 
 const composer = (page: Page, name: string): Locator =>
   page.getByRole('textbox', { name: `Message ${name}` });
 
 const rowWith = (page: Page, text: string): Locator =>
   page.locator('[data-message-row]', { hasText: text });
-
-/** The sidebar entry of a channel, found by its name at the start of its accessible name. */
-const sidebarLink = (page: Page, name: string): Locator =>
-  page.getByRole('complementary').getByRole('link', { name: new RegExp(`^(unread )?${name}`) });
 
 test.describe('a message', () => {
   test('sent by one person appears for the other within a second, in the same place for both', async ({
@@ -157,12 +154,12 @@ test.describe('a message', () => {
     // Alice is somewhere else: another room's address, so this channel can raise a badge for her.
     const elsewhere = await room({ members: ['alice', 'dogancan'] });
     await alice.goto(elsewhere.path);
-    await expect(sidebarLink(alice, made.name)).toBeVisible();
+    await expect(await navLink(alice, made.name)).toBeVisible();
     expect(await api('alice').channelState(made.id)).toMatchObject({ unreadCount: 1 });
 
     await composer(page, made.name).fill('@alice could you look at this');
     await composer(page, made.name).press('Enter');
-    const link = sidebarLink(alice, made.name);
+    const link = await navLink(alice, made.name);
     // The server first (it is the truth the page is told), then the page.
     await expect
       .poll(async () => (await api('alice').channelState(made.id))?.unreadMentionCount)
@@ -200,9 +197,9 @@ test.describe('a message', () => {
     await composer(page, made.name).fill('no mention in this one');
     await composer(page, made.name).press('Enter');
     // Bold, because there is something unread — and no badge, because nothing needs her.
-    await expect(sidebarLink(alice, made.name)).toContainText('unread');
+    await expect(await navLink(alice, made.name)).toContainText('unread');
     await expect(
-      sidebarLink(alice, made.name).locator(
+      (await navLink(alice, made.name)).locator(
         '[aria-label$="unread mention"], [aria-label$="unread mentions"]',
       ),
     ).toHaveCount(0);
@@ -293,6 +290,8 @@ test.describe('a reaction', () => {
     const hers = aliceRow.getByRole('button', { name: '🚀, 1 reaction' });
     await expect(hers).toHaveAttribute('aria-pressed', 'true');
     await hers.click();
+    // Her own page first: if the take-back was refused, that is the failure, not a stale chip on his.
+    await expect(hers).toHaveCount(0);
     await expect(alice.getByText('The reaction was not saved. Try again.')).toHaveCount(0);
     await expect(chip).toHaveCount(0);
   });

@@ -5,6 +5,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, focused, test } from './fixtures';
+import { navLink, shellReady } from './support';
 
 const modifier = 'ControlOrMeta';
 
@@ -29,8 +30,7 @@ const fromTop = (page: Page): Promise<void> =>
 
 /** The app is up when its frame is: keys are listened for only after that. */
 const ready = async (page: Page): Promise<void> => {
-  await expect(page.getByRole('complementary')).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await shellReady(page);
 };
 
 test.describe('the command palette', () => {
@@ -238,10 +238,7 @@ test.describe('focus', () => {
     const there = await room({ members: ['dogancan', 'alice'] });
     await signIn();
     await page.goto('/w/acme-eng/questions');
-    await page
-      .getByRole('complementary')
-      .getByRole('link', { name: new RegExp(`^(unread )?${there.name}`) })
-      .dispatchEvent('click');
+    await (await navLink(page, there.name)).dispatchEvent('click');
     await expect(page.getByRole('heading', { level: 1, name: there.name })).toBeVisible();
     const where = await page.evaluate(() => {
       const active = document.activeElement;

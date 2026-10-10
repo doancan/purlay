@@ -10,6 +10,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { shellReady } from './support';
 
 const RICH = [
   'Plain words with a **bold** claim, then a link: https://example.com/a/path.',
@@ -24,12 +25,11 @@ const masks = (page: Page): Locator[] => [
   page.getByRole('textbox'),
   page.locator('[data-feed-marker]'),
   // The workspace-wide count of open questions moves with every other test.
-  page.getByRole('navigation', { name: 'Channel views' }),
+  page.getByRole('link', { name: /^Open questions/ }),
 ];
 
 const ready = async (page: Page): Promise<void> => {
-  await expect(page.getByRole('complementary')).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await shellReady(page);
   await expect(page.locator('[data-message-row]').first()).toBeVisible();
   // Fonts and layout settled: the pictures must not catch a reflow.
   await page.evaluate(() => document.fonts.ready);

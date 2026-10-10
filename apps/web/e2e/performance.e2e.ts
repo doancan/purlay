@@ -18,7 +18,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from './fixtures';
-import { history, writeInParallel } from './support';
+import { history, isNarrow, writeInParallel } from './support';
 
 /** The p-th percentile (nearest rank) of a list of numbers. */
 const percentile = (values: readonly number[], p: number): number => {
@@ -168,6 +168,10 @@ test.describe('interaction latency', () => {
     room,
     tenant,
   }, info) => {
+    test.skip(
+      isNarrow(page),
+      "switches by the sidebar's links, which at this width are in an overlay behind a toggle: the switch there is the overlay's, measured by narrow.e2e",
+    );
     test.setTimeout(120_000);
     const first = await room({ members: ['alice', 'bob', 'carol'] });
     const second = await room({ members: ['alice', 'bob', 'carol'] });
@@ -237,6 +241,10 @@ test.describe('long scrolls and memory (measured and reported)', () => {
     tenant,
     context,
   }, info) => {
+    test.skip(
+      isNarrow(page),
+      "switches by the sidebar's links, which at this width are in an overlay behind a toggle: the switch there is the overlay's, measured by narrow.e2e",
+    );
     test.setTimeout(180_000);
     const long = await room({ members: ['alice', 'bob', 'carol'] });
     const other = await room({ members: ['alice', 'bob', 'carol'] });

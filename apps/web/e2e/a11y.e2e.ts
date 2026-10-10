@@ -6,8 +6,8 @@
  * and menus are audited where they are specified (`states`, `frame`, `polish`). Each project is a
  * theme and a width, so every state here is audited in both themes.
  */
-import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { shellReady } from './support';
 
 const RICH = [
   'Plain words with a **bold** claim and a link to https://example.com/a/very/long/path?with=query.',
@@ -16,10 +16,7 @@ const RICH = [
   'A line\nand another line\n\nand a paragraph after a blank one',
 ];
 
-const ready = async (page: Page): Promise<void> => {
-  await expect(page.getByRole('complementary')).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-};
+const ready = shellReady;
 
 test.describe('a populated channel', () => {
   test('with every kind of content in its feed, reactions, and an unread marker', async ({
