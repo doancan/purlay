@@ -210,7 +210,8 @@ describe('integration: moving a read position', () => {
       const setup = await aReaderAndAWriter(db);
       const stranger = await aConversation(db, 'rs-nobody');
       // Same workspace, public channel, not a member of it.
-      const outsider = stranger.users[0] as TestUser;
+      const [outsider] = stranger.users;
+      if (outsider === undefined) throw new Error('no outsider was made');
       await db
         .insertInto('workspace_members')
         .values({ workspace_id: setup.workspaceId, user_id: outsider.userId })

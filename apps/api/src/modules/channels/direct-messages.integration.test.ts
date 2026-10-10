@@ -16,7 +16,7 @@ afterAll(async () => {
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
-describe('the pair key', () => {
+describe('integration: the pair key', () => {
   test('is the two ids in ascending order, whichever asks', () => {
     expect(directMessageKey('b', 'a')).toBe('a:b');
     expect(directMessageKey('a', 'b')).toBe('a:b');

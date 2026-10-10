@@ -6,10 +6,13 @@
  * channel. A caller cannot hold either without having been checked, so an
  * unscoped query does not compile (D-21, D-34).
  *
- * **Public channels only in this phase.** Private channels and DMs are Phase 1;
- * the *visibility rule* that governs them is already written and enforced by the
- * guard, so what is missing here is the endpoint that creates them, not the
- * protection.
+ * **Only public channels are created here.** Private channels have no endpoint yet, and
+ * a direct message is opened by `direct-messages.ts`; the *visibility rule* that
+ * governs all three is already written and enforced by the guard.
+ *
+ * Every channel is shown as one person sees it: their read position and counters
+ * (null when they can see it and have not joined) and, for a direct message, the
+ * other person (D-98, D-99).
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
