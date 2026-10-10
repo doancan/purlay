@@ -72,6 +72,7 @@ export const sizeTokens = [
   'size-dot',
   'size-dialog',
   'size-palette',
+  'size-palette-list',
   'size-toast',
   'size-avatar',
   'size-focus-offset',

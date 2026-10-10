@@ -11,6 +11,7 @@
 import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
+import { GlobalKeys } from './global-keys';
 import { NotFound } from './not-found';
 import { Sidebar } from './sidebar';
 import { WorkspaceScopeProvider } from './workspace';
@@ -25,6 +26,7 @@ export const Shell = ({
   <SessionGate>
     <WorkspaceScopeProvider slug={slug} notFound={<NotFound />}>
       <RealtimeProvider>
+        <GlobalKeys />
         <div className="flex h-screen bg-surface-100 text-ink">
           <Sidebar />
           <Main className="flex min-w-0 flex-1 flex-col">{children}</Main>

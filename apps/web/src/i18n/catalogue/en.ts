@@ -225,6 +225,17 @@ export const en = {
   'palette.hint.open': 'open',
   'palette.hint.close': 'close',
 
+  // ── Command palette, continued ──────────────────────────────────────────
+  'palette.description': 'Type to find a channel, person or view, then press Enter.',
+  'palette.listLabel': 'Results',
+  'palette.results': {
+    one: '{count} result',
+    other: '{count} results',
+  },
+  'palette.view.feed': 'Feed',
+  'palette.error': 'That did not open. Try again.',
+  'palette.announce.channel': 'Opened {name}',
+
   // ── Keyboard shortcuts (UX §7) ──────────────────────────────────────────
   'shortcuts.title': 'Keyboard shortcuts',
   'shortcuts.description': 'Everything you can do with a mouse you can do with these.',
@@ -241,4 +252,8 @@ export const en = {
   'shortcuts.group.navigation': 'Navigation',
   'shortcuts.group.messages': 'Messages',
   'shortcuts.group.composer': 'Composer',
+
+  // ── Keyboard shortcuts, continued ───────────────────────────────────────
+  'shortcuts.codeSend': 'Send from inside a code block',
+  'shortcuts.or': 'or',
 } as const satisfies Record<string, Message>;

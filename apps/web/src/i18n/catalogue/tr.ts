@@ -217,6 +217,16 @@ export const tr = {
   'palette.hint.open': 'aç',
   'palette.hint.close': 'kapat',
 
+  // ── Komut paleti, devamı ────────────────────────────────────────────────
+  'palette.description': 'Bir kanal, kişi ya da görünüm bulmak için yaz, sonra Enter’a bas.',
+  'palette.listLabel': 'Sonuçlar',
+  'palette.results': {
+    other: '{count} sonuç',
+  },
+  'palette.view.feed': 'Akış',
+  'palette.error': 'Açılamadı. Tekrar dene.',
+  'palette.announce.channel': '{name} açıldı',
+
   // ── Klavye kısayolları (UX §7) ──────────────────────────────────────────
   'shortcuts.title': 'Klavye kısayolları',
   'shortcuts.description': 'Fareyle yapabildiğin her şeyi bunlarla da yapabilirsin.',
@@ -233,4 +243,8 @@ export const tr = {
   'shortcuts.group.navigation': 'Gezinme',
   'shortcuts.group.messages': 'Mesajlar',
   'shortcuts.group.composer': 'Mesaj kutusu',
+
+  // ── Klavye kısayolları, devamı ──────────────────────────────────────────
+  'shortcuts.codeSend': 'Kod bloğunun içinden gönder',
+  'shortcuts.or': 'ya da',
 } as const satisfies Catalogue;
