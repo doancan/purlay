@@ -58,6 +58,16 @@ export interface ComposerProps {
 /** How long after the last keystroke the draft is written: often enough to lose nothing, rarely enough to cost nothing. */
 export const DRAFT_DEBOUNCE_MS = 300;
 
+/**
+ * What sits in the 56px gutter before the box: the channel's name when it fits ("api ›"), and
+ * the bare prompt when it does not or when this is a thread's reply box, whose name is a sentence.
+ * A name cut to "deplo…" says less than no name, so it is never cut; the full name is the
+ * element's title and the textarea's own label.
+ */
+const PROMPT_FITS = 5;
+export const promptOf = (channelName: string, isReply: boolean): string =>
+  isReply || channelName.length > PROMPT_FITS ? '›' : `${channelName} ›`;
+
 const Inner = ({
   channelId,
   channelName,
@@ -216,9 +226,10 @@ const Inner = ({
       <div className="flex max-w-feed items-start gap-3">
         <span
           aria-hidden="true"
-          className="w-gutter shrink-0 truncate text-right font-mono text-body text-ink-muted"
+          title={channelName}
+          className="w-gutter shrink-0 text-right font-mono text-body text-ink-muted"
         >
-          {channelName} ›
+          {promptOf(channelName, parentId !== undefined)}
         </span>
         <textarea
           data-composer=""

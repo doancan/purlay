@@ -3,6 +3,7 @@
  * the reactions, and that it does not re-render for nothing.
  */
 import { describe, expect, spyOn, test } from 'bun:test';
+import { act, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -73,10 +74,56 @@ describe('what a row shows', () => {
     expect(view.queryByText('alice')).toBeNull();
     const time = view.container.querySelector('time');
     expect(time?.className).toContain('opacity-0');
-    expect(time?.className).toContain('group-hover:opacity-100');
-    expect(time?.className).toContain('group-focus-within:opacity-100');
+    const row = view.getByRole('article');
+    act(() => {
+      fireEvent.pointerOver(row);
+    });
+    expect(time?.className ?? '').not.toContain('opacity-0');
+    act(() => {
+      fireEvent.pointerLeave(row);
+    });
+    expect(time?.className).toContain('opacity-0');
+    act(() => {
+      fireEvent.focus(row);
+    });
+    expect(time?.className ?? '').not.toContain('opacity-0');
+    act(() => {
+      fireEvent.blur(row);
+    });
+    expect(time?.className).toContain('opacity-0');
     const first = await mount(props());
     expect(first.container.querySelector('time')?.className ?? '').not.toContain('opacity-0');
+  });
+
+  /**
+   * A thread's replies are rows inside the root's row. Hovering the root must not show every
+   * reply's actions (a CSS `group-hover` would), and hovering a reply must not light the root's.
+   */
+  test('only the nearest row answers a pointer: a nested row is its own', async () => {
+    const view = await mount(
+      props({
+        message: aMessage(1),
+        children: (
+          <div data-testid="inner">
+            <article data-message-row="" data-testid="reply">
+              reply
+            </article>
+          </div>
+        ),
+      }),
+    );
+    const [root] = view.getAllByRole('article');
+    if (root === undefined) throw new Error('the row did not render');
+    const actions = (): HTMLElement | null => root.querySelector(':scope > div.absolute');
+    expect(actions()?.className).toContain('opacity-0');
+    act(() => {
+      fireEvent.pointerOver(view.getByTestId('reply'));
+    });
+    expect(actions()?.className).toContain('opacity-0');
+    act(() => {
+      fireEvent.pointerOver(root);
+    });
+    expect(actions()?.className ?? '').not.toContain('opacity-0');
   });
 
   test('is the one the keyboard reaches by Tab only when it is told it is', async () => {

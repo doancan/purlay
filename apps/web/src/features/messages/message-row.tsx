@@ -18,7 +18,7 @@
  * the cache's, and the cache keeps untouched messages as they were), so React's shallow
  * comparison is the whole check.
  */
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { failureKey, type FailureCode } from '../../data/failure';
@@ -83,15 +83,36 @@ const MessageRowView = ({
   );
   const absolute = format.absolute(message.createdAt);
   const failed = delivery === 'failed';
+  // Whether the pointer or focus is on THIS row and not on a row nested inside it. A thread's
+  // replies are rows inside the root's row, so CSS `group-hover` would show every reply's actions
+  // whenever the root is hovered; the nearest row is the one that answers.
+  const [pointed, setPointed] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const own = (event: React.SyntheticEvent): boolean =>
+    event.target instanceof Element &&
+    event.target.closest('[data-message-row]') === event.currentTarget;
+  const on = pointed || focused;
 
   return (
     <article
+      onPointerOver={(event) => {
+        setPointed(own(event));
+      }}
+      onPointerLeave={() => {
+        setPointed(false);
+      }}
+      onFocus={(event) => {
+        setFocused(own(event));
+      }}
+      onBlur={() => {
+        setFocused(false);
+      }}
       data-message-row=""
       data-message-id={message.id}
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: message.sender.username, when: absolute })}
       className={cn(
-        'group relative flex gap-3 px-4 py-1',
+        'relative flex gap-3 px-4 py-1',
         mentionsMe ? 'bg-accent-subtle' : 'hover:bg-surface-200',
         failed && 'border-l-marker border-danger',
       )}
@@ -101,9 +122,7 @@ const MessageRowView = ({
         <time
           dateTime={message.createdAt}
           title={absolute}
-          className={
-            grouped ? 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100' : undefined
-          }
+          className={grouped && !on ? 'opacity-0' : undefined}
         >
           {format.time(message.createdAt, new Date(nowMinute))}
         </time>
@@ -149,7 +168,12 @@ const MessageRowView = ({
       </div>
 
       {delivery === 'sent' && (
-        <div className="absolute right-4 top-1 flex gap-1 rounded-md border-hairline border-border-strong bg-surface-100 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
+        <div
+          className={cn(
+            'absolute right-4 top-1 flex gap-1 rounded-md border-hairline border-border-strong bg-surface-100',
+            !on && 'opacity-0',
+          )}
+        >
           <ReactMenu message={message} meId={meId} />
           {actions}
         </div>
