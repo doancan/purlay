@@ -26,6 +26,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/tokens/package.json packages/tokens/package.json
 COPY packages/types/package.json packages/types/package.json
 
 # Production dependencies of the API and the packages it uses; no dev tooling, no
