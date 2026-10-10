@@ -209,6 +209,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
   },
   {
+    id: 'sender-notified-of-their-own-reply',
+    why: 'answering your own thread puts a notification in your own inbox, for something you just wrote',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: '    if (userId === sender) return;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
+  },
+  {
     id: 'resolving-a-reply-is-allowed',
     why: 'a reply is marked resolved, which the database refuses with a constraint error the person sees as a failure',
     file: 'apps/api/src/modules/messages/threads.ts',
