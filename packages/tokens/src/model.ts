@@ -112,7 +112,7 @@ export interface Model {
   readonly text: readonly TextStyle[];
 }
 
-export interface FontFace {
+interface FontFace {
   readonly family: string;
   readonly weight: string;
   readonly file: string;
