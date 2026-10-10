@@ -21,7 +21,6 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import { CROSS_TENANT, pathFor, type OwnerIds } from '../../testing/cross-tenant';
-import { messageId } from '@purlay/types';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -231,7 +230,7 @@ describe('integration: channel visibility', () => {
       test(`${key} answers 404 to a workspace member who cannot see the message's channel`, async () => {
         await withRollback(async (db) => {
           const world = await aWorld(db);
-          const body = crossing.body?.(NOW);
+          const body = crossing.body?.(NOW, world.ids);
           const at = (id: string): string =>
             pathFor(path, {
               workspaceId: world.workspaceId,
