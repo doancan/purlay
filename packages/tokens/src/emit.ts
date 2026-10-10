@@ -20,16 +20,22 @@ import { WEIGHTS } from './model';
 /**
  * Where each size token goes in Tailwind's theme. Written out rather than guessed
  * from the name: the namespace decides which utilities exist (`--container-*` is
- * `w-`, `min-w-` and `max-w-`; `--size-*` is the square `size-`), and that is a
+ * `w-`, `min-w-` and `max-w-`; `--height-*` is `h-` and `min-h-`; `--size-*` is the square `size-`), and that is a
  * design decision. A token missing here, or an entry with no token, stops the
  * generator.
  */
-const SIZE_BINDING: Readonly<Record<string, string>> = {
+const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-rail': '--container-rail',
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',
+  'size-gutter': '--container-gutter',
+  'size-control': '--height-control',
+  'size-header': '--height-header',
+  // A badge is a height and a minimum width: one digit is a circle, two are not.
+  'size-badge': ['--height-badge', '--container-badge'],
   'size-avatar': '--size-avatar',
+  'size-dot': '--size-dot',
   'size-icon-sm': '--size-icon-sm',
   'size-icon-md': '--size-icon-md',
   'size-icon-lg': '--size-icon-lg',
@@ -54,7 +60,7 @@ const declaration = (name: string, value: string): string => `  ${name}: ${value
 
 const bound = (
   tokens: readonly PlainToken[],
-  binding: Readonly<Record<string, string>>,
+  binding: Readonly<Record<string, string | readonly string[]>>,
   skip: readonly string[],
   family: string,
 ): readonly (readonly [PlainToken, string])[] => {
@@ -65,7 +71,7 @@ const bound = (
     if (target === undefined) {
       throw new Error(`${family} "${token.name}" has no Tailwind binding in emit.ts`);
     }
-    pairs.push([token, target]);
+    for (const one of typeof target === 'string' ? [target] : target) pairs.push([token, one]);
   }
   for (const name of Object.keys(binding)) {
     if (!tokens.some((token) => token.name === name)) {

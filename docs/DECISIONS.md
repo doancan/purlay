@@ -3783,6 +3783,18 @@ Vite's dev server the pre-bundled barrel is 1.5 MB for Lucide and 4.4 MB for Tab
 `sideEffects: false`; Lucide is ISC, Tabler MIT. **Chosen: Lucide**, accepting about 1.2 KB of the
 250 KB budget for the smaller catalogue to audit and the lighter dev server.
 
+**7 · The measurements of the approved prototype are tokens, found by running the rule on the
+prototype.** The first screens were drawn as a prototype and approved before any component existed
+(`UX.md` is the behaviour, `tokens.json` the values). Running this decision's own rule over that
+prototype found five lengths with no token — the height of a control (28px), of the channel header
+(48px), the timestamp column of a message row (56px), a mention badge (18px) and a presence dot (8px)
+— and each became a `size-*` token rather than a literal, bound to the utility that reads it
+(`h-control`, `h-header`, `w-gutter`, `h-badge`/`min-w-badge`, `size-dot`) because `--height-*` is the
+namespace Tailwind reads for `h-` and `--container-*` the one for widths, measured and not assumed. A
+badge is bound twice, as a height and as a minimum width: one digit is a circle and two are not. The
+prototype also drops the 56px workspace rail for a switcher in the sidebar header, which `UX.md` §2
+still draws; `size-rail` stays until that section is rewritten with the screens.
+
 **Rejected — Tailwind's theme plus lint alone.** Measured above: it cannot see `z-50`, and a typo
 builds to nothing silently.
 

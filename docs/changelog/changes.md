@@ -11,6 +11,9 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - `packages/tokens/tokens.json` holds every colour in both themes, the scales and the type styles;
   `bun run tokens:generate` writes the CSS custom properties, the Tailwind binding and the token names.
   Tailwind's default theme is no longer imported, so `bg-red-500` and `p-7` do not exist (D-97).
+- Control height, header height, message-timestamp column, badge and presence dot are tokens
+  (`h-control`, `h-header`, `w-gutter`, `h-badge`, `size-dot`): the five lengths the approved prototype
+  needed that the file did not have (D-97 §7).
 - **Contrast is computed, not claimed.** `pairs.ts` states which colour is read on which, and every
   colour must be in a pair or have a reason not to be. The first run found `border-strong` at 2.85:1 on a
   mention row in the dark theme; it is fixed.

@@ -59,6 +59,12 @@
   --container-sidebar: var(--size-sidebar);
   --container-members: var(--size-members);
   --container-feed: var(--size-feed-max);
+  --height-control: var(--size-control);
+  --height-header: var(--size-header);
+  --container-gutter: var(--size-gutter);
+  --height-badge: var(--size-badge);
+  --container-badge: var(--size-badge);
+  --size-dot: var(--size-dot);
   --size-avatar: var(--size-avatar);
   --outline-offset-focus: var(--size-focus-offset);
   --size-icon-sm: var(--size-icon-sm);

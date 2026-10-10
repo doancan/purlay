@@ -84,6 +84,11 @@
   --size-members: 200px;
   --size-feed-max: 780px;
   --size-narrow: 900px;
+  --size-control: 28px;
+  --size-header: 48px;
+  --size-gutter: 56px;
+  --size-badge: 18px;
+  --size-dot: 8px;
   --size-avatar: 28px;
   --size-focus-offset: 2px;
   --size-icon-sm: 12px;
