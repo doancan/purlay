@@ -368,7 +368,15 @@ export const createEngine = (options: EngineOptions): Engine => {
         } else if ('channels' in frame.data) {
           for (const { channelId, nextCursor } of frame.data.channels) {
             if (nextCursor !== null) void continueReplay(channelId, nextCursor);
+            // Messages are replayed from a cursor; a reaction, a resolution or an edit on a message
+            // already held is not. A feed read before this answer may hold a state that changed
+            // between its read and the server beginning to send, and nothing would ever say so
+            // (found in a browser: a reaction taken back in that gap stayed on the other screen).
+            // Read again, what is cached for the channel is correct from this moment on.
+            void client.invalidateQueries({ queryKey: keys.messages(channelId) });
           }
+          // Threads are cached by their root, which names no channel: every one that is held.
+          void client.invalidateQueries({ queryKey: families.thread });
         }
         return;
       }

@@ -17,7 +17,15 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { FeedItem } from './feed-model';
 import type { FeedPorts } from './feed-ports';
-import { MARKER_MARGIN_PX, isNearBottom, restoreAfterPrepend, scrollToBottom } from './scroll';
+import {
+  MARKER_MARGIN_PX,
+  holdAnchor,
+  isNearBottom,
+  readAnchor,
+  restoreAfterPrepend,
+  scrollToBottom,
+  type Anchor,
+} from './scroll';
 
 export interface FeedScroll {
   /** Is the reader at the bottom right now? */
@@ -77,6 +85,7 @@ export const useFeedScroll = ({
     last: null as string | null,
     top: 0,
     height: 0,
+    anchor: null as Anchor | null,
   });
 
   const settle = useCallback((el: HTMLElement): void => {
@@ -91,7 +100,12 @@ export const useFeedScroll = ({
     if (el === null) return;
     settle(el);
     // Where the reader is *now* is what a later prepend must give back to them.
-    before.current = { ...before.current, top: el.scrollTop, height: el.scrollHeight };
+    before.current = {
+      ...before.current,
+      top: el.scrollTop,
+      height: el.scrollHeight,
+      anchor: readAnchor(el),
+    };
   }, [scroller, settle]);
 
   const jumpToBottom = useCallback((): void => {
@@ -118,6 +132,9 @@ export const useFeedScroll = ({
     } else if (previous.first !== null && first !== null && first < previous.first) {
       // Older messages arrived above the reader.
       restoreAfterPrepend(el, { scrollTop: previous.top, scrollHeight: previous.height });
+      // The height added above says where the reader is only if nothing below it changed: the row
+      // they were on can be shorter now (it follows a message by the same person).
+      holdAnchor(el, previous.anchor);
       settle(el);
     } else if (last !== previous.last) {
       const own =
@@ -136,7 +153,13 @@ export const useFeedScroll = ({
         setNewBelow((count) => count + arrived);
       }
     }
-    before.current = { first, last, top: el.scrollTop, height: el.scrollHeight };
+    before.current = {
+      first,
+      last,
+      top: el.scrollTop,
+      height: el.scrollHeight,
+      anchor: readAnchor(el),
+    };
   }, [items, ready, meId, scroller, settle]);
 
   // The box around the feed or the content inside it changed size: a reader at the bottom stays there.
@@ -146,7 +169,12 @@ export const useFeedScroll = ({
     if (el === null || inner === null) return undefined;
     return ports.whenResized([el, inner], () => {
       if (wasAtBottom.current) scrollToBottom(el);
-      before.current = { ...before.current, top: el.scrollTop, height: el.scrollHeight };
+      before.current = {
+        ...before.current,
+        top: el.scrollTop,
+        height: el.scrollHeight,
+        anchor: readAnchor(el),
+      };
     });
   }, [scroller, content, ports, showing]);
 

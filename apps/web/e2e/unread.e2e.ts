@@ -35,9 +35,10 @@ const roomWithHistory = async (
     members: readonly Persona[];
   }) => Promise<{ id: string; path: string; name: string }>,
   count: number,
+  by?: readonly Persona[],
 ): Promise<{ id: string; path: string; name: string; ids: string[] }> => {
   const made = await room({ members: PEOPLE });
-  await writeInParallel(tenant, made.id, history(count));
+  await writeInParallel(tenant, made.id, history(count, by));
   return { ...made, ids: [] };
 };
 
@@ -142,10 +143,6 @@ test.describe('a channel with unread messages', () => {
 
 test.describe('a reader who has scrolled up', () => {
   test.setTimeout(120_000);
-  // The history-above test shows a one-line (24 px) offset in some full-suite runs on a loaded
-  // machine and never alone or under a 8x CPU throttle (probed in a browser at both widths); it is
-  // retried, and reported as an open question rather than hidden.
-  test.describe.configure({ retries: 2 });
 
   test('is not moved by what arrives below, is told how much is waiting, and the pill takes them down', async ({
     page,
@@ -220,7 +217,9 @@ test.describe('a reader who has scrolled up', () => {
     tenant,
     api,
   }) => {
-    const made = await roomWithHistory(tenant, room, 130);
+    // One person wrote all of it, so every row but the first of the loaded page is a continuation
+    // with no name line — and the first loses its own when the page above arrives and it becomes one.
+    const made = await roomWithHistory(tenant, room, 130, ['carol']);
     const viewer = api('dogancan');
     const ids = await idsOf(viewer, made.id);
     await viewer.markRead(made.id, ids.at(-1) ?? '');
@@ -247,7 +246,9 @@ test.describe('a reader who has scrolled up', () => {
     await page.waitForTimeout(300);
     const after = (await page.locator(`[data-message-id="${anchor.id}"]`).boundingBox())?.y ?? 0;
     const before = anchor.top;
-    // The row that was at the top of the viewport is still where it was.
+    // The row that was at the top of the viewport is still where it was — even when it is no longer
+    // the first of its sender's run and has lost its name line (the history is written by two people
+    // at once, so where a run begins varies from room to room: that is what made this flaky).
     expect(Math.abs(after - before)).toBeLessThan(3);
     // The document itself never scrolled to do it.
     expect(await page.evaluate(() => document.documentElement.scrollTop)).toBe(0);

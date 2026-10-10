@@ -43,3 +43,37 @@ export const restoreAfterPrepend = (
 ): void => {
   el.scrollTop = before.scrollTop + (el.scrollHeight - before.scrollHeight);
 };
+
+/** The message row the reader is looking at, and how far below the top of the box it sits. */
+export interface Anchor {
+  readonly id: string;
+  readonly offset: number;
+}
+
+/** The first message row that is at least partly in sight, or null when there is none to name. */
+export const readAnchor = (box: Element): Anchor | null => {
+  const top = box.getBoundingClientRect().top;
+  for (const row of box.querySelectorAll<HTMLElement>('[data-message-row]')) {
+    const rect = row.getBoundingClientRect();
+    if (rect.bottom <= top) continue;
+    const id = row.dataset['messageId'];
+    return id === undefined ? null : { id, offset: rect.top - top };
+  }
+  return null;
+};
+
+/**
+ * Puts the anchor row back as far below the top of the box as it was. The total height that was
+ * added above is not enough to say where a row is: the row itself can change height when what is
+ * above it arrives — a message that now follows one by the same person loses its name line — and
+ * the reader would be moved by exactly that much (found in a browser: 24 px, one name line).
+ */
+export const holdAnchor = (box: HTMLElement, anchor: Anchor | null): void => {
+  if (anchor === null) return;
+  const row = box.querySelector<HTMLElement>(
+    `[data-message-row][data-message-id="${CSS.escape(anchor.id)}"]`,
+  );
+  if (row === null) return;
+  const moved = row.getBoundingClientRect().top - box.getBoundingClientRect().top - anchor.offset;
+  if (Math.abs(moved) >= 0.5) box.scrollTop += moved;
+};

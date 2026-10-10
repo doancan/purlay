@@ -1030,3 +1030,22 @@ describe('what was in flight when the page went', () => {
     expect(w.pending()[0]?.delivery).toBe('failed'); // and the deadline is armed again
   });
 });
+
+describe('what happened between a list being read and the channel being subscribed', () => {
+  test('a feed or thread read before the subscription was answered is read again: reactions and resolutions are not replayed, so what it holds may already be stale', () => {
+    const ROOT = '0199155c-6200-7b7f-8c11-000000000001';
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    // The feed and a thread were fetched; then the subscription's answer arrives.
+    w.client.setQueryData(keys.messages(CH), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.thread(ROOT), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.messages(OTHER_CH), { pages: [], pageParams: [] });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.messages(CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.thread(ROOT))?.isInvalidated).toBe(true);
+    // A channel that was not part of the answer is left as it was.
+    expect(w.client.getQueryState(keys.messages(OTHER_CH))?.isInvalidated).toBe(false);
+  });
+});
