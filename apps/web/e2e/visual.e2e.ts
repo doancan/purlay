@@ -23,6 +23,8 @@ const masks = (page: Page): Locator[] => [
   page.getByRole('heading', { level: 1 }),
   page.getByRole('textbox'),
   page.locator('[data-feed-marker]'),
+  // The workspace-wide count of open questions moves with every other test.
+  page.getByRole('navigation', { name: 'Channel views' }),
 ];
 
 const ready = async (page: Page): Promise<void> => {
@@ -96,7 +98,11 @@ test.describe('a conversation', () => {
     await expect(page.getByText(/is not available/).first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await expect(page.locator('main')).toHaveScreenshot('failed-and-refused.png', {
-      mask: [page.locator('time'), page.getByRole('heading', { level: 1 }), page.getByRole('textbox')],
+      mask: [
+        page.locator('time'),
+        page.getByRole('heading', { level: 1 }),
+        page.getByRole('textbox'),
+      ],
     });
   });
 });
