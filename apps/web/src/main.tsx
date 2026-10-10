@@ -7,13 +7,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import { Shell } from './shell';
+import { App } from './app/app';
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('index.html has no #root to mount into');
 
 createRoot(root).render(
   <StrictMode>
-    <Shell />
+    <App />
   </StrictMode>,
 );

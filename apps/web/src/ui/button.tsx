@@ -35,6 +35,10 @@ const variantClasses = {
 
 export type ButtonVariant = keyof typeof variantClasses;
 
+/** The look of a button on something that is not a `<button>` — a link that is the page's next step. */
+export const buttonStyle = (variant: ButtonVariant): string =>
+  cn(baseClasses, variantClasses[variant]);
+
 export interface ButtonProps extends Omit<React.ComponentPropsWithRef<'button'>, 'children'> {
   readonly variant?: ButtonVariant;
   /** A glyph before the label. Decorative: the label says what the button does. */

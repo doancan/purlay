@@ -26,6 +26,9 @@ export const tr = {
 
   // ── Uygulama ────────────────────────────────────────────────────────────
   'app.skip': 'Konuşmaya atla',
+  'app.placeholder.title': 'Bu ekran henüz yapılmadı',
+  'app.placeholder.body':
+    'Çevresindeki çerçeve son hâlinde; ekran kendi backend’iyle birlikte gelecek.',
   'app.notFound.title': 'Burada bir şey yok',
   'app.notFound.body': 'Bu adres Purlay içinde hiçbir yere çıkmıyor.',
   'app.notFound.home': 'Kanallarına git',

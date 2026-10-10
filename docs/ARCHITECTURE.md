@@ -146,13 +146,18 @@ purlay/
 │   │
 │   └── web/
 │       └── src/
+│           ├── app/             providers (one tree, every port optional), the frame, the outlet
 │           ├── features/        vertical slices: chat, threads, palette, notifications, auth
-│           ├── components/      shared primitives: CodeBlock, Markdown, Avatar
+│           ├── ui/              primitives on Radix where focus and ARIA fail silently; token classes only
+│           ├── components/      shared pieces: Icon (the one door to the icon set), CodeBlock, Markdown
+│           ├── theme/           light, dark and system — per device, set before first paint (D-98)
+│           ├── i18n/            typed catalogues over Intl, one chunk per language (D-41)
+│           ├── router/          a typed route table, Link, useRoute — no dependency (D-98)
 │           ├── realtime/        socket client, reconnect, replay, Zustand stores
 │           ├── api/             TanStack Query hooks, typed fetch client
-│           ├── testing/         the component-test DOM — registered here, never globally
-│           ├── main.tsx         the entry: mounts the shell
-│           └── shell.tsx        the application shell
+│           ├── gallery/         every primitive in both themes at once; development only
+│           ├── testing/         the component-test DOM, fakes, axe — registered here, never globally
+│           └── main.tsx         the entry: mounts the application
 │
 ├── packages/
 │   ├── types/                   models.ts · events.ts · api.ts — the contract

@@ -26,6 +26,8 @@ export const en = {
 
   // ── The application ─────────────────────────────────────────────────────
   'app.skip': 'Skip to the conversation',
+  'app.placeholder.title': 'This screen is not built yet',
+  'app.placeholder.body': 'The frame around it is final; the screen arrives with its backend.',
   'app.notFound.title': 'Nothing here',
   'app.notFound.body': 'This address does not lead anywhere in Purlay.',
   'app.notFound.home': 'Go to your channels',
