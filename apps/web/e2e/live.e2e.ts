@@ -60,7 +60,14 @@ test.describe('a message', () => {
     await expect(
       rowWith(alice, 'hello from alice, live').getByRole('img', { name: 'Sending' }),
     ).toHaveCount(0);
-    await expect(alice.getByText('Failed to send', { exact: true })).toHaveCount(0);
+    const failure = await rowWith(alice, 'hello from alice, live')
+      .getByText('Failed to send', { exact: true })
+      .count();
+    if (failure > 0) {
+      throw new Error(
+        `alice's send failed: ${await rowWith(alice, 'hello from alice, live').innerText()}`,
+      );
+    }
     await expect(rowWith(page, 'hello from alice, live')).toBeVisible();
     const stamped = await alice
       .locator('[data-message-row]', { hasText: 'hello from alice, live' })
