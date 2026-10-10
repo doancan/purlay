@@ -270,3 +270,27 @@ describe('accessibility', () => {
     await expectNoAxeViolations(view.container);
   });
 });
+
+describe('a link label cannot lie about where it goes', () => {
+  const RLO = '\u202E';
+  const PDF = '\u202C';
+
+  test('bidirectional controls are stripped from the label and the label is isolated', async () => {
+    const view = await mount(`[evil${RLO}moc.elpmaxe${PDF}](https://good.example/path)`);
+    const link = view.getByRole('link');
+    expect(link.textContent).not.toContain(RLO);
+    expect(link.textContent).not.toContain(PDF);
+    expect(link.querySelector('bdi')?.getAttribute('dir')).toBe('ltr');
+    expect(link.getAttribute('href')).toBe('https://good.example/path');
+  });
+
+  test('the host it really goes to is in the title, in the language of the page', async () => {
+    const view = await mount('[docs](https://good.example/path)');
+    expect(view.getByRole('link').getAttribute('title')).toBe('Opens good.example');
+  });
+
+  test('in Turkish too', async () => {
+    const view = await mount('[docs](https://good.example/path)', { locale: 'tr' });
+    expect(view.getByRole('link').getAttribute('title')).toBe('good.example adresini açar');
+  });
+});

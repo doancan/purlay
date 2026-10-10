@@ -17,6 +17,24 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { CodeBlock } from './code-block';
 import { parseContent, type Block, type Inline } from './parse-content';
 
+/**
+ * Bidirectional controls: the embeddings, overrides and isolates (U+202A–202E, U+2066–2069).
+ * In a link's *label* they can reorder what is drawn so that the text reads as one address
+ * and the link goes to another — the label is the only thing a person checks before
+ * clicking. Stripped from the label; the href is untouched, and is shown as the host in the
+ * link's `title`.
+ */
+const BIDI_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/g;
+
+/** The host a link goes to; null for an address that is not a URL (it is not rendered as a link then either). */
+const hostOf = (href: string): string | null => {
+  try {
+    return new URL(href).host;
+  } catch {
+    return null;
+  }
+};
+
 const ExternalLink = ({
   href,
   label,
@@ -25,14 +43,17 @@ const ExternalLink = ({
   readonly label: string;
 }): React.JSX.Element => {
   const { t } = useI18n();
+  const host = hostOf(href);
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      title={host === null ? undefined : t('message.link.opens', { host })}
       className="break-all text-accent underline"
     >
-      {label}
+      {/* Isolated and left-to-right: whatever the label says, it cannot reorder the text around it. */}
+      <bdi dir="ltr">{label.replace(BIDI_CONTROLS, '')}</bdi>
       <VisuallyHidden>{` (${t('message.link.external')})`}</VisuallyHidden>
     </a>
   );

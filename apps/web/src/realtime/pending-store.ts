@@ -20,7 +20,7 @@
  * send that does not work.
  */
 import { isMessageIdShape } from '@purlay/types';
-import type { ClientStorage } from '../data/browser-storage';
+import { noteStorageFailure, type ClientStorage } from '../data/browser-storage';
 
 export interface StoredMessage {
   readonly id: string;
@@ -60,6 +60,7 @@ export const loadStored = (storage: ClientStorage | null, userId: string): Store
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(isStored).slice(-MAX_STORED);
   } catch {
+    noteStorageFailure('pending-read');
     return [];
   }
 };
@@ -82,5 +83,6 @@ export const saveStored = (
     else storage?.setItem(pendingKey(userId), JSON.stringify(kept));
   } catch {
     // Not remembered (full, refused, missing); the send itself is unaffected.
+    noteStorageFailure('pending-write');
   }
 };

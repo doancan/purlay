@@ -29,10 +29,41 @@ export const PERSONAL_PREFIXES = [
   'purlay.pending.',
 ] as const;
 
+const noted = new Set<string>();
+
+/**
+ * Storage failing is deliberately silent to the person — a draft that is not remembered is
+ * not worth a toast — but silent to everyone is how "my drafts never survive a reload"
+ * becomes a mystery. So the first failure of each kind leaves one inspectable note on the
+ * page: `<html data-storage-failed="draft-write last-channel-read">`. (There is no
+ * `console` in the client; logging is not a thing this code base does from the browser.)
+ */
+export const noteStorageFailure = (where: string): void => {
+  if (noted.has(where)) return;
+  noted.add(where);
+  try {
+    const root = document.documentElement;
+    root.dataset['storageFailed'] = [...noted].join(' ');
+  } catch {
+    // No document (a prerender): there is no page to leave the note on.
+  }
+};
+
+/** Test seam: forget what was noted, so one test's failure is not the next one's silence. */
+export const resetStorageNotes = (): void => {
+  noted.clear();
+  try {
+    delete document.documentElement.dataset['storageFailed'];
+  } catch {
+    // No document.
+  }
+};
+
 export const browserStorage = (): ClientStorage | null => {
   try {
     return window.localStorage;
   } catch {
+    noteStorageFailure('unavailable');
     return null;
   }
 };
@@ -51,5 +82,6 @@ export const forgetPersonalData = (storage: ClientStorage | null): void => {
     for (const key of found) storage.removeItem(key);
   } catch {
     // Storage that cannot be read cannot be leaked from either.
+    noteStorageFailure('forget');
   }
 };
