@@ -1,0 +1,163 @@
+/*
+ * Generated from tokens.json by `bun run tokens:generate`. Do not edit: the build
+ * regenerates it and fails on a difference (D-97).
+ *
+ * Tailwind's default theme is never imported, so nothing exists here that is not
+ * a token. `inline` keeps utilities pointing at the custom properties, which
+ * is what lets `[data-theme]` change them at runtime.
+ */
+@theme inline {
+  /* Colour: bg-, text-, border-, outline-, fill- … with the token name */
+  --color-surface-000: var(--surface-000);
+  --color-surface-100: var(--surface-100);
+  --color-surface-200: var(--surface-200);
+  --color-code-bg: var(--code-bg);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-focus-ring: var(--focus-ring);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-on-status: var(--on-status);
+  --color-danger-text: var(--danger-text);
+  --color-warning-text: var(--warning-text);
+  --color-success-text: var(--success-text);
+  --color-scrim: var(--scrim);
+  --color-syntax-keyword: var(--syntax-keyword);
+  --color-syntax-string: var(--syntax-string);
+  --color-syntax-number: var(--syntax-number);
+  --color-syntax-comment: var(--syntax-comment);
+  --color-syntax-function: var(--syntax-function);
+  --color-syntax-type: var(--syntax-type);
+  --color-syntax-operator: var(--syntax-operator);
+
+  /* Spacing: p-, m-, gap-, inset- … (the 4px grid; there is no multiplier) */
+  --spacing-0: var(--space-0);
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-5: var(--space-5);
+  --spacing-6: var(--space-6);
+  --spacing-8: var(--space-8);
+
+  /* Radius */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-full: var(--radius-full);
+
+  /* Shadow */
+  --shadow-float: var(--shadow-float);
+
+  /* Sizes */
+  --container-rail: var(--size-rail);
+  --container-sidebar: var(--size-sidebar);
+  --container-members: var(--size-members);
+  --container-feed: var(--size-feed-max);
+  --height-control: var(--size-control);
+  --height-header: var(--size-header);
+  --container-gutter: var(--size-gutter);
+  --height-badge: var(--size-badge);
+  --container-badge: var(--size-badge);
+  --size-dot: var(--size-dot);
+  --size-avatar: var(--size-avatar);
+  --outline-offset-focus: var(--size-focus-offset);
+  --size-icon-sm: var(--size-icon-sm);
+  --size-icon-md: var(--size-icon-md);
+  --size-icon-lg: var(--size-icon-lg);
+  --breakpoint-narrow: 900px;
+
+  /* Stroke widths */
+  --border-width-hairline: var(--stroke-hairline);
+  --outline-width-focus: var(--stroke-focus);
+
+  /* Stacking: z- */
+  --z-index-sticky: var(--z-sticky);
+  --z-index-overlay: var(--z-overlay);
+  --z-index-popover: var(--z-popover);
+  --z-index-palette: var(--z-palette);
+  --z-index-toast: var(--z-toast);
+
+  /* Motion: duration-, ease- */
+  --transition-duration-collapse: var(--duration-collapse);
+  --transition-duration-bar: var(--duration-bar);
+  --ease-standard: var(--easing-standard);
+
+  /* Type: families, weights; the sizes are the text- utilities below */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-weight-normal: var(--weight-normal);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+
+  /* What the base layer reads */
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+}
+
+/* One class per text style sets all five properties: the style is the unit.
+ * icon-stroke is the one weight an icon has. */
+@utility text-display {
+  font-family: var(--text-display-family);
+  font-size: var(--text-display-size);
+  line-height: var(--text-display-leading);
+  font-weight: var(--text-display-weight);
+  letter-spacing: var(--text-display-tracking);
+}
+
+@utility text-title {
+  font-family: var(--text-title-family);
+  font-size: var(--text-title-size);
+  line-height: var(--text-title-leading);
+  font-weight: var(--text-title-weight);
+  letter-spacing: var(--text-title-tracking);
+}
+
+@utility text-heading {
+  font-family: var(--text-heading-family);
+  font-size: var(--text-heading-size);
+  line-height: var(--text-heading-leading);
+  font-weight: var(--text-heading-weight);
+  letter-spacing: var(--text-heading-tracking);
+}
+
+@utility text-body {
+  font-family: var(--text-body-family);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-leading);
+  font-weight: var(--text-body-weight);
+  letter-spacing: var(--text-body-tracking);
+}
+
+@utility text-label {
+  font-family: var(--text-label-family);
+  font-size: var(--text-label-size);
+  line-height: var(--text-label-leading);
+  font-weight: var(--text-label-weight);
+  letter-spacing: var(--text-label-tracking);
+}
+
+@utility text-caption {
+  font-family: var(--text-caption-family);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-leading);
+  font-weight: var(--text-caption-weight);
+  letter-spacing: var(--text-caption-tracking);
+}
+
+@utility text-code {
+  font-family: var(--text-code-family);
+  font-size: var(--text-code-size);
+  line-height: var(--text-code-leading);
+  font-weight: var(--text-code-weight);
+  letter-spacing: var(--text-code-tracking);
+}
+
+@utility icon-stroke {
+  stroke-width: var(--stroke-icon);
+}

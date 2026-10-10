@@ -6,10 +6,12 @@
  * accessible tree rather than through a class name. A test that asserted
  * `className` would pass with the styling layer uninstalled.
  */
-import './testing/dom';
+import { installDom } from './testing/dom';
 import { describe, expect, test } from 'bun:test';
 import { render } from '@testing-library/react';
 import { Shell } from './shell';
+
+installDom();
 
 describe('the shell', () => {
   test('renders, and is reachable through the accessible tree', () => {

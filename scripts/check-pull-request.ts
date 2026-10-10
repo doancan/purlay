@@ -34,6 +34,7 @@ const UNMETERED = [
   /\.md$/,
   /(^|\/)bun\.lock$/,
   /^packages\/db\/src\/schema\.ts$/,
+  /^packages\/tokens\/src\/generated\//,
   /^\.env\.example$/,
   /(^|\/)package\.json$/,
 ];

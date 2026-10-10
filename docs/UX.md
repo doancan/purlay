@@ -250,9 +250,11 @@ forget you are in is a mode that loses you messages.
 Decided here so Phase 0 does not invent one at random.
 
 > **These values are tokens, and the tokens are the only source.** Colour, spacing, type scale,
-> radius, shadow, motion duration and easing are declared once and consumed through the theme; a
-> literal in a component is a lint error. What makes an interface look designed rather than
-> assembled is the absence of a way to be inconsistent. (D-52)
+> radius, shadow, motion duration and easing are declared once, in `packages/tokens/tokens.json`,
+> and consumed through the theme; a literal in a component is a lint error. What makes an
+> interface look designed rather than assembled is the absence of a way to be inconsistent.
+> (D-52, D-97) The numbers quoted in this document are the file's, repeated where a diagram
+> needs them, and a test fails if they drift.
 
 - **Type:** system UI stack for prose; `ui-monospace`/`SF Mono`/`JetBrains Mono` for code.
   Base 14px, code 13px, line-height 1.5 prose / 1.45 code.

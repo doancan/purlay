@@ -46,6 +46,7 @@ second file is a number that will eventually disagree with itself.
 | Stack and accepted costs · required tests · protocol | `ARCHITECTURE.md` §2, §10, §5 |
 | Why each table, constraint and index exists; the invariants; the tables still to come | `SCHEMA.md` — its DDL for applied tables is bound to the migrations by `scripts/schema-document.test.ts` |
 | Layout, interaction, keyboard model, required states | `UX.md` |
+| Every visual value — colour in each theme, spacing, type styles, radius, shadow, stacking, motion, stroke, sizes — and which pairs of colours must be readable | `packages/tokens/tokens.json` and `packages/tokens/src/pairs.ts` (D-97). `UX.md` repeats a few widths and sizes, bound to the file by a test |
 | HTTP endpoints | `API.md` |
 | Environment variables | `CONFIG.md` |
 | Task breakdown and its ordering | GitHub Issues, milestoned by version (D-32) |
@@ -62,6 +63,8 @@ looking for the error codes to a file that does not have them.
 | The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
 | Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |
 | What a message id is, and how a client makes one | `packages/types/src/message-id.ts` — the rule and the generator together, bound by a test (D-8, D-33) |
+| The CSS custom properties, the Tailwind vocabulary and the token names | `packages/tokens/src/generated/` — generated from `tokens.json`, never written (D-97) |
+| Which icons exist, and what each means | `glyphs` in `apps/web/src/components/icon.tsx` (D-97) |
 | The variables the application reads | `apps/api/src/platform/config.ts` — `.env.example` is generated from it |
 | The tenant boundary: what mints a `WorkspaceContext`, and what a stranger gets instead | `apps/api/src/platform/tenancy.ts` (D-21, D-54) |
 | Which endpoints are tenant-scoped, where each sits on the channel-visibility axis, and how a test crosses each one | `apps/api/src/testing/cross-tenant.ts` (D-63, D-64) |

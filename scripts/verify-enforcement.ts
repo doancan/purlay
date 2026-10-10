@@ -241,6 +241,60 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "interface WorkspaceContext {\n  readonly workspaceId: string;\n}\nexport const forged = { workspaceId: 'w' } as WorkspaceContext;\n",
   },
+  // The design vocabulary is the tokens and nothing else: a literal colour, size
+  // or duration in a component fails the build, and a token passes. (D-97, #137)
+  ...(
+    [
+      ['a literal colour in a class: bg-[#ff0000]', '<div className="flex bg-[#ff0000]" />'],
+      ['a literal spacing in a class: p-[13px]', '<div className="p-[13px]" />'],
+      ['a literal duration in a class: duration-[120ms]', '<div className="duration-[120ms]" />'],
+      ['an arbitrary property: [mask-type:alpha]', '<div className="[mask-type:alpha]" />'],
+      ['a literal colour in a style object', "<div style={{ color: '#ffffff' }} />"],
+      ['a literal spacing in a style object', '<div style={{ padding: 13 }} />'],
+      ['a colour held in a string', "<div title={'#ff0000'} data-x={'rgb(1 2 3)'} />"],
+      ['a duration held in a string', "<div data-duration={'120ms'} />"],
+      ['an easing curve', "<div data-ease={'cubic-bezier(0.2, 0, 0, 1)'} />"],
+      ['an icon sized by a number', '<svg width={16} height={16} />'],
+      ['a class assembled at runtime', '<div className={`bg-${tone}-100`} />'],
+    ] as const
+  ).map(([what, jsx]) => ({
+    rule: `the token vocabulary: ${what} (D-97)`,
+    ruleId: 'purlay/no-raw-visual-value',
+    path: 'apps/web/src/__enforcement__.tsx',
+    source: `declare const tone: string;\nexport const view = (): React.JSX.Element => ${jsx};\n`,
+  })),
+  ...(
+    [
+      [
+        'a token class',
+        '<div className="flex gap-2 bg-surface-100 text-ink hover:bg-surface-200" />',
+      ],
+      [
+        'a state variant, which selects and carries no value',
+        '<div className="data-[state=open]:flex aria-[expanded=true]:flex" />',
+      ],
+      ['a token read in a style object', "<div style={{ color: 'var(--ink)', margin: 0 }} />"],
+      [
+        'a measured value, which is computed and not written',
+        '<div style={{ height: tone.length }} />',
+      ],
+      ['prose that mentions a number', "<p title={'PR #482 took 300ms of 5 retries'}>x</p>"],
+    ] as const
+  ).map(([what, jsx]) => ({
+    rule: `the token vocabulary allows ${what}`,
+    ruleId: 'purlay/no-raw-visual-value',
+    path: 'apps/web/src/__enforcement__.tsx',
+    source: `declare const tone: string;\nexport const view = (): React.JSX.Element => ${jsx};\n`,
+    allowed: true as const,
+  })),
+  // One set of icons, reached one way. (D-97)
+  {
+    rule: 'a screen may not import the icon library: it asks Icon for a glyph (D-97)',
+    ruleId: 'purlay/icons-through-icon',
+    path: 'apps/web/src/features/__enforcement__.tsx',
+    source:
+      "import { Hash } from 'lucide-react';\n\nexport const view = (): React.JSX.Element => <Hash size={16} />;\n",
+  },
 ];
 
 interface EslintMessage {

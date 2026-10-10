@@ -6,6 +6,25 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-10: the visual vocabulary is one file, and the build judges it (#137)
+
+- `packages/tokens/tokens.json` holds every colour in both themes, the scales and the type styles;
+  `bun run tokens:generate` writes the CSS custom properties, the Tailwind binding and the token names.
+  Tailwind's default theme is no longer imported, so `bg-red-500` and `p-7` do not exist (D-97).
+- Control height, header height, message-timestamp column, badge and presence dot are tokens
+  (`h-control`, `h-header`, `w-gutter`, `h-badge`, `size-dot`): the five lengths the approved prototype
+  needed that the file did not have (D-97 §7).
+- **Contrast is computed, not claimed.** `pairs.ts` states which colour is read on which, and every
+  colour must be in a pair or have a reason not to be. The first run found `border-strong` at 2.85:1 on a
+  mention row in the dark theme; it is fixed.
+- **Three refusals of a raw value:** the file's validator, a lint rule, and a test that compiles every class
+  the application writes and fails on one that builds to nothing or to a literal (`z-50` builds from a
+  bare number whatever the theme says).
+- One icon set behind one component: `Icon` takes a meaning and a size token, and has no stroke width to
+  ask for. The component test harness now registers its DOM per file; with a second component test
+  the first harness gave the second file none.
+- The numbers `UX.md` repeats (widths, base type size, the radius) are bound to the file by a test.
+
 ### Fix — 2026-10-09: the image smoke test brings its own database
 
 - It reached the development database through `host.docker.internal`; binding that database to the loopback

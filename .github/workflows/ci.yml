@@ -102,6 +102,14 @@ jobs:
       - name: .env.example is what the loader produces
         run: bun run config:example -- --check
 
+      # The CSS custom properties, the Tailwind binding and the token names are
+      # generated from `packages/tokens/tokens.json` (D-97). The same shape as the
+      # check above and the database types before it: generated so it can be read,
+      # checked so it cannot drift. The check also judges the source — soundness
+      # and readable contrast — so a colour that stops being legible stops here.
+      - name: the generated tokens are what the source produces
+        run: bun run tokens:check
+
   # Requires a database, which is why it is a job of its own rather than part of
   # `bun run verify` — that stays the subset a developer can run with nothing
   # installed. The database comes from docker-compose.yml so the image is
