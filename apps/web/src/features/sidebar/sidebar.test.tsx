@@ -6,6 +6,8 @@ import { describe, expect, test } from 'bun:test';
 import { act, waitFor, within } from '@testing-library/react';
 import type { Message } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
+import { OverlayProvider } from '../shell/overlay';
+import { JumpField } from './jump-field';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -228,8 +230,25 @@ describe('the people section', () => {
   test('lists everyone, once, and labels the person themselves', async () => {
     const view = await open();
     const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));
-    const items = [...section.querySelectorAll('li')].map((li) => li.textContent.trim());
-    expect(items).toEqual(['Alice', 'Bob', 'Dogancan you']);
+    // What is read aloud: the avatars are decorative, so what they say is not part of a name.
+    const spoken = (li: Element): string => {
+      const copy = li.cloneNode(true) as Element;
+      for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+      return copy.textContent.trim();
+    };
+    expect([...section.querySelectorAll('li')].map(spoken)).toEqual([
+      'Alice',
+      'Bob',
+      'Dogancan you',
+    ]);
+  });
+
+  test('each person has an avatar with their initials, hidden from a screen reader, and none has a presence dot', async () => {
+    const view = await open();
+    const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));
+    const avatars = [...section.querySelectorAll('li [aria-hidden="true"].size-avatar-sm')];
+    expect(avatars.map((avatar) => avatar.textContent)).toEqual(['AL', 'BO', 'DO']);
+    expect(section.querySelector('.size-dot')).toBeNull();
   });
 
   test('somebody with a conversation is a link to it, named for them, once', async () => {
@@ -415,12 +434,40 @@ describe('signing out, when it goes wrong or goes right', () => {
   });
 });
 
+describe('the jump field', () => {
+  test('is a button that says the key, and a click opens the command palette', async () => {
+    const view = await open();
+    const sidebar = within(view.getByRole('complementary'));
+    const jump = sidebar.getByRole('button', { name: /Jump to…/ });
+    expect(jump.querySelector('kbd')?.textContent).toMatch(/^(⌘|Ctrl)K$/);
+    expect(jump.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K');
+    expect(view.queryByRole('dialog', { name: 'Command palette' })).toBeNull();
+    await person().click(jump);
+    await settle();
+    expect(view.getByRole('dialog', { name: 'Command palette' })).toBeDefined();
+  });
+
+  test('is not drawn where nothing renders the palette, rather than drawn and dead', async () => {
+    const alone = await renderApp(<JumpField />);
+    expect(alone.queryByRole('button')).toBeNull();
+    alone.unmount();
+    const inside = await renderApp(
+      <OverlayProvider>
+        <JumpField />
+      </OverlayProvider>,
+    );
+    expect(inside.getByRole('button', { name: /Jump to…/ })).toBeDefined();
+  });
+});
+
 describe('the footer', () => {
   test('says who you are, and the key that jumps', async () => {
     const view = await open();
     const footer = view.getByRole('contentinfo');
     expect(footer.textContent).toContain('Dogancan');
-    expect(footer.querySelector('kbd')?.textContent).toBe('⌘K');
+    expect(footer.querySelector('[aria-hidden="true"].size-avatar-sm')?.textContent).toBe('DO');
+    // The hint moved to the jump field above; the footer no longer carries it.
+    expect(footer.querySelector('kbd')).toBeNull();
     expect(view.getByRole('button', { name: 'Theme' })).toBeDefined();
     expect(view.getByRole('button', { name: 'Language' })).toBeDefined();
   });
@@ -609,16 +656,16 @@ describe('browsing channels', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab reaches the workspace, the questions, the channels and their buttons, in that order', async () => {
+  test('Tab reaches the workspace, the jump field, the questions, the channels and their buttons, in that order', async () => {
     const view = await open();
-    const order = ['Switch workspace', 'Open questions'];
     act(() => {
       view.getByRole('button', { name: 'Switch workspace' }).focus();
     });
-    const seen: string[] = [document.activeElement?.getAttribute('aria-label') ?? ''];
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Switch workspace');
     await person().tab();
-    seen.push(document.activeElement?.textContent.trim().replace(/\d+$/, '') ?? '');
-    expect(seen.slice(0, order.length)).toEqual(order);
+    expect(document.activeElement?.textContent).toMatch(/^Jump to…(⌘|Ctrl)K$/);
+    await person().tab();
+    expect(document.activeElement?.textContent.trim().replace(/\d+$/, '')).toBe('Open questions');
     await person().tab();
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Browse channels');
     await person().tab();

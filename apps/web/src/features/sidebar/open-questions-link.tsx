@@ -36,8 +36,8 @@ export const OpenQuestionsLink = (): React.JSX.Element => {
         // `shrink-0`: the sidebar's column scrolls, and a flex item with a fixed height still shrinks
         // when the channels below it overflow — to one line of text, 21 px at the touch width (found
         // by the narrow spec once a workspace had a few hundred channels).
-        'flex h-control shrink-0 items-center gap-2 rounded-md px-3 text-body text-ink max-narrow:h-touch hover:bg-surface-200',
-        current && 'bg-surface-200 font-medium',
+        'flex h-control shrink-0 items-center gap-2 rounded-md px-2 text-body text-ink max-narrow:h-touch hover:bg-surface-200',
+        current && 'bg-accent-subtle font-medium hover:bg-accent-subtle',
       )}
     >
       <span className="text-warning-text">

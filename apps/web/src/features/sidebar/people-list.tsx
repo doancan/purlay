@@ -6,9 +6,8 @@
  * person without one is a button that opens it — `POST …/dms` is idempotent, so pressing
  * twice, or from two tabs, lands in the same channel (I-5). The person themselves is in
  * the list, labelled "you": a direct message with yourself is the scratchpad
- * (`PRD.md` §4.3). There is no presence dot because there is no presence — presence is
- * decoration, not information (`UX.md` §2), and drawing one that is always the same
- * colour would be a lie.
+ * (`PRD.md` §4.3). Each has an avatar and none has a presence dot, because there is no
+ * presence — drawing a dot that is always the same colour would be a lie (`UX.md` §2).
  */
 import { useDescribeFailure } from '../../data/failure';
 import { useState } from 'react';
@@ -17,6 +16,7 @@ import { useChannels, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
+import { Avatar } from '../../ui/avatar';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
@@ -57,7 +57,7 @@ export const PeopleList = (): React.JSX.Element => {
 
   return (
     <section aria-labelledby="sidebar-people" className="flex flex-col gap-1">
-      <h2 id="sidebar-people" className="pl-3 text-label text-ink-muted">
+      <h2 id="sidebar-people" className="pl-2 text-label text-ink-muted">
         {t('sidebar.people')}
       </h2>
       {waiting && !failed ? (
@@ -87,6 +87,7 @@ export const PeopleList = (): React.JSX.Element => {
               <li key={user.id}>
                 {direct === null ? (
                   <ActionRow
+                    avatar={<Avatar size="sm" name={user.displayName} username={user.username} />}
                     unread={false}
                     mentions={0}
                     disabled={opening === user.id}
@@ -101,6 +102,7 @@ export const PeopleList = (): React.JSX.Element => {
                     slug={workspace.slug}
                     channelId={direct.id}
                     current={direct.id === currentId}
+                    avatar={<Avatar size="sm" name={user.displayName} username={user.username} />}
                     unread={(direct.state?.unreadCount ?? 0) > 0}
                     mentions={direct.state?.unreadMentionCount ?? 0}
                   >

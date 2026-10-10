@@ -33,6 +33,7 @@ import { CommandPalette } from '../palette/command-palette';
 import { isMacPlatform, type PlatformSource } from '../shortcuts/platform';
 import { ShortcutsDialog } from '../shortcuts/shortcuts-dialog';
 import { useSession } from '../session/session';
+import { useOverlay } from './overlay';
 import { useWorkspace } from './workspace';
 
 interface GlobalKeysProps {
@@ -40,15 +41,13 @@ interface GlobalKeysProps {
   readonly platform?: PlatformSource;
 }
 
-type Overlay = 'palette' | 'shortcuts' | null;
-
 export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const { match, navigate } = useRoute();
   const channels = useChannels(workspace.id).data;
-  const [overlay, setOverlay] = useState<Overlay>(null);
+  const { overlay, setOverlay } = useOverlay();
   const [announcement, setAnnouncement] = useState('');
   const mac = useMemo(() => isMacPlatform(platform ?? navigator), [platform]);
 
@@ -95,7 +94,7 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
     return (): void => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [channels, currentId, navigate, overlay, slug, t, user.id]);
+  }, [channels, currentId, navigate, overlay, setOverlay, slug, t, user.id]);
 
   return (
     <>

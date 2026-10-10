@@ -16,6 +16,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Icon } from '../../components/icon';
+import { initialsOf } from '../../ui/avatar';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
@@ -36,9 +37,15 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         <button
           type="button"
           aria-label={t('sidebar.switch')}
-          className="flex h-control w-full items-center justify-between gap-2 rounded-md px-3 text-heading text-ink hover:bg-surface-200 max-narrow:h-touch"
+          className="flex w-full items-center gap-2 rounded-md p-1 text-heading text-ink hover:bg-surface-200 max-narrow:min-h-touch"
         >
-          <span className="truncate">{workspace.name}</span>
+          <span
+            aria-hidden="true"
+            className="inline-flex size-avatar shrink-0 items-center justify-center rounded-md bg-accent-subtle text-label text-accent"
+          >
+            {initialsOf(workspace.name)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-left">{workspace.name}</span>
           <Icon name="switch" size="sm" />
         </button>
       }
