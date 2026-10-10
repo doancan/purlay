@@ -1,0 +1,98 @@
+/**
+ * The routes, and the only place an address is spelled (D-98).
+ *
+ * A route is a name and a path pattern; everything else — which address a link
+ * points at, which screen an address means, what a screen's params are called —
+ * is derived from this table, so a path written twice cannot disagree with
+ * itself. The params' names are read out of the pattern by the type system:
+ * `href('channel', { slug, channelId })` compiles, and leaving `channelId` out or
+ * misspelling it does not.
+ *
+ * This is the part of a router that is a lookup. It is deliberately not a
+ * library: the client has a handful of routes, and 15–25 KB of the 250 KB budget
+ * is a poor price for matching a path and calling `history.pushState`.
+ */
+export const ROUTES = {
+  signIn: '/sign-in',
+  home: '/',
+  workspace: '/w/:slug',
+  channel: '/w/:slug/c/:channelId',
+  questions: '/w/:slug/questions',
+  gallery: '/__gallery',
+} as const;
+
+export type RouteName = keyof typeof ROUTES;
+
+type ParamNames<P extends string> = P extends `${string}:${infer Name}/${infer Rest}`
+  ? Name | ParamNames<Rest>
+  : P extends `${string}:${infer Name}`
+    ? Name
+    : never;
+
+export type RouteParams<N extends RouteName> = Readonly<
+  Record<ParamNames<(typeof ROUTES)[N]>, string>
+>;
+
+/** What an address means: a route and its params, or nothing this client serves. */
+export type Match =
+  | { readonly [N in RouteName]: { readonly name: N; readonly params: RouteParams<N> } }[RouteName]
+  | { readonly name: 'notFound'; readonly params: Readonly<Record<string, never>> };
+
+type Arguments<N extends RouteName> = keyof RouteParams<N> extends never
+  ? []
+  : [params: RouteParams<N>];
+
+/**
+ * The parts of a path. Only the ends are trimmed: an empty segment in the middle
+ * (`/w//questions`) must stay empty, or it would quietly become a different route
+ * (`/w/questions`, a workspace called "questions").
+ */
+const segments = (path: string): readonly string[] => {
+  const trimmed = path.replace(/^\/+|\/+$/g, '');
+  return trimmed === '' ? [] : trimmed.split('/');
+};
+
+const tryDecode = (part: string): string | null => {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    // `%E0%A4%A` is not text; an address that is not text is not a route.
+    return null;
+  }
+};
+
+/** Matches one pattern against one pathname, or null. Trailing slashes do not matter. */
+const matchPattern = (pattern: string, pathname: string): Record<string, string> | null => {
+  const want = segments(pattern);
+  const have = segments(pathname);
+  if (want.length !== have.length) return null;
+  const params: Record<string, string> = {};
+  for (const [index, part] of want.entries()) {
+    const actual = have[index] ?? '';
+    if (part.startsWith(':')) {
+      const decoded = tryDecode(actual);
+      if (decoded === null || decoded === '') return null;
+      params[part.slice(1)] = decoded;
+    } else if (part !== actual) {
+      return null;
+    }
+  }
+  return params;
+};
+
+export const matchRoute = (pathname: string): Match => {
+  for (const name of Object.keys(ROUTES) as RouteName[]) {
+    const params = matchPattern(ROUTES[name], pathname);
+    // The table is the type's source, so the cast is the one place a plain record
+    // becomes the precise params a pattern promises — `matchPattern` just checked it.
+    if (params !== null) return { name, params } as Match;
+  }
+  return { name: 'notFound', params: {} };
+};
+
+/** The address of a route, from untyped params; `href` is the typed way in. */
+export const spell = (name: RouteName, params: Readonly<Record<string, string>> = {}): string =>
+  ROUTES[name].replace(/:(\w+)/g, (_, key: string) => encodeURIComponent(params[key] ?? ''));
+
+export const href = <N extends RouteName>(name: N, ...args: Arguments<N>): string =>
+  spell(name, args[0]);
