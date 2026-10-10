@@ -123,10 +123,12 @@ test.describe('moving through the app', () => {
     room,
     api,
   }) => {
-    const here = await room({ members: ['dogancan', 'alice'] });
-    const unread = await room({ members: ['dogancan', 'alice'] });
+    // Carol reads: the jump opens whichever channel is next with something unread, and a channel
+    // that is opened is read — which must not be the viewer's seeded unread state.
+    const here = await room({ members: ['carol', 'alice'] });
+    const unread = await room({ members: ['carol', 'alice'] });
     await api('alice').say(unread.id, 'something you have not read');
-    await signIn();
+    await signIn('carol');
     await page.goto(here.path);
     await expect(page.getByRole('textbox', { name: /^Message/ })).toBeVisible();
     await page.keyboard.press('Alt+ArrowDown');

@@ -229,19 +229,20 @@ test.describe('a reader who has scrolled up', () => {
     const loaded = await rows.count();
     expect(loaded).toBeLessThanOrEqual(60);
 
-    // Scroll to the very top; the older page is asked for and prepended.
-    await scroller(page).evaluate((el) => {
+    // Scroll to the very top and note the first row and where it is, in the same breath: the older
+    // page is asked for and prepended, and nothing may have happened between the two.
+    const anchor = await scroller(page).evaluate((el) => {
       el.scrollTop = 0;
+      const first = el.querySelector('[data-message-row]');
+      return {
+        id: first?.getAttribute('data-message-id') ?? '',
+        top: first?.getBoundingClientRect().top ?? 0,
+      };
     });
-    const first = page.locator('[data-message-row]').first();
-    const anchorId = await first.getAttribute('data-message-id');
-    await expect(first).toBeVisible();
-    const before =
-      (await page.locator(`[data-message-id="${anchorId ?? ''}"]`).boundingBox())?.y ?? 0;
     await expect.poll(() => rows.count(), { timeout: 10_000 }).toBeGreaterThan(loaded);
     await page.waitForTimeout(300);
-    const after =
-      (await page.locator(`[data-message-id="${anchorId ?? ''}"]`).boundingBox())?.y ?? 0;
+    const after = (await page.locator(`[data-message-id="${anchor.id}"]`).boundingBox())?.y ?? 0;
+    const before = anchor.top;
     // The row that was at the top of the viewport is still where it was.
     expect(Math.abs(after - before)).toBeLessThan(3);
     // The document itself never scrolled to do it.

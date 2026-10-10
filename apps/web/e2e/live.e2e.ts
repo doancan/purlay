@@ -55,6 +55,12 @@ test.describe('a message', () => {
     });
     await composer(alice, made.name).fill('hello from alice, live');
     await composer(alice, made.name).press('Enter');
+    // Her own row first: if the server refused it, that is the failure, not a missing row on his page.
+    await expect(rowWith(alice, 'hello from alice, live')).toBeVisible();
+    await expect(
+      rowWith(alice, 'hello from alice, live').getByRole('img', { name: 'Sending' }),
+    ).toHaveCount(0);
+    await expect(alice.getByText('Failed to send', { exact: true })).toHaveCount(0);
     await expect(rowWith(page, 'hello from alice, live')).toBeVisible();
     const stamped = await alice
       .locator('[data-message-row]', { hasText: 'hello from alice, live' })
@@ -271,6 +277,7 @@ test.describe('a reaction', () => {
     await aliceRow.hover();
     await aliceRow.getByRole('button', { name: 'Add reaction' }).click();
     await alice.getByRole('menuitem', { name: /Ship it/ }).click();
+    await expect(alice.getByText('The reaction was not saved. Try again.')).toHaveCount(0);
 
     const chip = rowWith(page, 'ship it?').getByRole('button', { name: '🚀, 1 reaction' });
     await expect(chip).toBeVisible();
@@ -279,6 +286,7 @@ test.describe('a reaction', () => {
     const hers = aliceRow.getByRole('button', { name: '🚀, 1 reaction' });
     await expect(hers).toHaveAttribute('aria-pressed', 'true');
     await hers.click();
+    await expect(alice.getByText('The reaction was not saved. Try again.')).toHaveCount(0);
     await expect(chip).toHaveCount(0);
   });
 });

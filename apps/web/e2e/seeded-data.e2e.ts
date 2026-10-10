@@ -53,7 +53,12 @@ test.describe('the seeded workspace, as the viewer sees it', () => {
       page,
       `/api/workspaces/${world.workspace.id}/channels`,
     );
-    const byName = new Map(channels.map((c) => [c.name ?? c.peer?.username ?? '', c]));
+    // Rooms the flow specs made for themselves share this workspace; the seed is what is asked about.
+    // The palette spec opens a conversation with carol, which the seed does not have.
+    const seeded = channels.filter(
+      (c) => !(c.name ?? '').startsWith('room-') && c.peer?.username !== 'carol',
+    );
+    const byName = new Map(seeded.map((c) => [c.name ?? c.peer?.username ?? '', c]));
     expect([...byName.keys()].sort()).toEqual([
       'alice',
       'api',

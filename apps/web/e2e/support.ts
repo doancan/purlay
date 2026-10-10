@@ -168,10 +168,14 @@ export const makeRoom = async (tenant: Tenant, options: RoomOptions = {}): Promi
   return { id: made.id, name, path: `/w/${tenant.slug}/c/${made.id}` };
 };
 
-/** `count` plain messages from the people in turn, three at a time so no one person's budget is the pace. */
+/**
+ * `count` plain messages from carol and bob in turn. The write budget is per person, and alice and
+ * the viewer are the people tests drive through the page: a long history written in their names
+ * would leave the page without budget to send with.
+ */
 export const history = (
   count: number,
-  by: readonly Persona[] = ['alice', 'bob', 'carol'],
+  by: readonly Persona[] = ['carol', 'bob'],
 ): { readonly by: Persona; readonly text: string }[] =>
   Array.from({ length: count }, (_, index) => ({
     by: by[index % by.length] ?? 'alice',

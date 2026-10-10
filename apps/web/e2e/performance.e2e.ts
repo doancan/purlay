@@ -81,9 +81,9 @@ test.describe('interaction latency', () => {
     room,
   }, info) => {
     test.setTimeout(90_000);
-    // Bob sends: the write budget is per person, and twenty sends in a burst are the whole of it.
-    const made = await room({ members: ['bob', 'alice'] });
-    await signIn('bob');
+    // Alice sends: the write budget is per person, and twenty sends in a burst are the whole of it.
+    const made = await room({ members: ['alice', 'bob'] });
+    await signIn('alice');
     // The server's answers are held for two seconds: whatever paints sooner did not wait for them.
     await page.routeWebSocket(/\/ws$/, (ws) => {
       const server = ws.connectToServer();
@@ -164,11 +164,11 @@ test.describe('interaction latency', () => {
     tenant,
   }, info) => {
     test.setTimeout(120_000);
-    const first = await room({ members: ['bob', 'alice', 'carol'] });
-    const second = await room({ members: ['bob', 'alice', 'carol'] });
+    const first = await room({ members: ['alice', 'bob', 'carol'] });
+    const second = await room({ members: ['alice', 'bob', 'carol'] });
     await writeInParallel(tenant, first.id, history(60));
     await writeInParallel(tenant, second.id, history(60));
-    await signIn('bob');
+    await signIn('alice');
     await page.goto(first.path);
     await expect(page.locator('[data-message-row]').last()).toBeVisible();
     const switchTo = (target: { id: string; name: string }): Promise<number> =>
@@ -233,11 +233,11 @@ test.describe('long scrolls and memory (measured and reported)', () => {
     context,
   }, info) => {
     test.setTimeout(180_000);
-    const long = await room({ members: ['bob', 'alice', 'carol'] });
-    const other = await room({ members: ['bob', 'alice', 'carol'] });
+    const long = await room({ members: ['alice', 'bob', 'carol'] });
+    const other = await room({ members: ['alice', 'bob', 'carol'] });
     await writeInParallel(tenant, long.id, history(200));
     await writeInParallel(tenant, other.id, history(60));
-    await signIn('bob');
+    await signIn('alice');
     await page.goto(long.path);
     await expect(page.locator('[data-message-row]').last()).toBeVisible();
     await page.evaluate(() => {
