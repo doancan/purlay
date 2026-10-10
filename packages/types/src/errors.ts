@@ -51,6 +51,12 @@ export const ErrorCode = Type.Union([
   Type.Literal('ROUTE_NOT_FOUND'),
   Type.Literal('WORKSPACE_NOT_FOUND'),
   Type.Literal('CHANNEL_NOT_FOUND'),
+  /**
+   * A message that does not exist, or is in a channel the caller cannot see. One
+   * code for both, as the channel's is (D-34): which of the two it was is exactly
+   * what the caller must not be able to learn.
+   */
+  Type.Literal('MESSAGE_NOT_FOUND'),
   // Conflict
   /** A workspace slug is an identifier in a URL, so it is unique across the instance. */
   Type.Literal('WORKSPACE_SLUG_TAKEN'),
@@ -92,6 +98,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
+  MESSAGE_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,

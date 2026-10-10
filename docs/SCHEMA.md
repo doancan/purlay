@@ -547,12 +547,13 @@ CREATE TABLE reactions (
     UNIQUE (message_id, user_id, emoji)
 );
 
-CREATE INDEX idx_reactions_message ON reactions (message_id);
+CREATE INDEX idx_reactions_user ON reactions (user_id);
 ```
 
 > `ON DELETE CASCADE` is correct here and does not contradict D-9: a reaction is not content,
 > it carries no history, and it only ever disappears with the message it belongs to during a
-> hard purge.
+> hard purge. That a value is one emoji is the contract's `emoji` format and the service's rule
+> (at most twenty distinct per message, D-99); the column only bounds its length.
 
 ### 7.2. `attachments`
 
@@ -610,17 +611,28 @@ CREATE TABLE mentions (
     mentioned_user_id UUID NOT NULL REFERENCES users(id)      ON DELETE CASCADE,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    UNIQUE (message_id, mentioned_user_id)
+    UNIQUE (message_id, mentioned_user_id),
+
+    -- The message is in this channel, and the channel in this workspace. (I-1, I-4, D-90)
+    CONSTRAINT mentions_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT mentions_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
 );
 
 CREATE INDEX idx_mentions_user
     ON mentions (mentioned_user_id, workspace_id, created_at DESC);
+CREATE INDEX idx_mentions_workspace ON mentions (workspace_id);
+CREATE INDEX idx_mentions_channel   ON mentions (channel_id);
 ```
 
 ### 7.4. `notifications`
 
 Rows are written **even when Deep Work suppresses delivery**, so nothing is lost and a digest
-remains possible later. (D-15)
+remains possible later. (D-15) One row per person, message and kind (D-99): a resolution is a
+second thing to tell the author of the root, not a replacement for the mention that already did.
 
 ```sql
 CREATE TABLE notifications (
@@ -637,13 +649,31 @@ CREATE TABLE notifications (
     suppressed_by_deep_work BOOLEAN NOT NULL DEFAULT FALSE,
 
     read_at      TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (user_id, message_id, type),
+
+    CONSTRAINT notifications_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT notifications_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
 );
 
 -- The badge query: unread notifications for one user, newest first.
 CREATE INDEX idx_notifications_unread
     ON notifications (user_id, workspace_id, created_at DESC)
     WHERE read_at IS NULL;
+
+-- Reading a channel marks its notifications read and recounts what is left (D-99 §4).
+CREATE INDEX idx_notifications_channel_unread
+    ON notifications (user_id, channel_id, message_id)
+    WHERE read_at IS NULL;
+
+CREATE INDEX idx_notifications_workspace ON notifications (workspace_id);
+CREATE INDEX idx_notifications_channel   ON notifications (channel_id);
+CREATE INDEX idx_notifications_message   ON notifications (message_id);
 ```
 
 ---
@@ -909,7 +939,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0009_foreign_key_indexes.sql   every foreign key column indexed, built CONCURRENTLY; idx_workspaces_slug dropped  (D-89)
 0010_tenant_integrity.sql    composite tenant keys, messages_id_is_uuidv7, dm_key_form  (D-90)
 0011_message_content_units.sql   messages_content_length counts code units, as the contract does  (D-67)
-0012_engagement.sql          reactions, attachments, mentions, notifications
+0012_engagement.sql          reactions, mentions, notifications  (D-98; attachments follow with their endpoints)
 0013_integrations.sql        github_integrations, link_previews
 ```
 

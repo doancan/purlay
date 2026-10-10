@@ -29,6 +29,8 @@ export type MessageType = "system_event" | "text";
 
 export type NotificationLevel = "all" | "mentions" | "none";
 
+export type NotificationType = "direct_message" | "mention" | "thread_reply" | "thread_resolved";
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserRole = "admin" | "member" | "owner";
@@ -58,6 +60,15 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface Mentions {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  mentioned_user_id: string;
+  message_id: string;
+  workspace_id: string;
+}
+
 export interface Messages {
   channel_id: string;
   content: string;
@@ -75,6 +86,26 @@ export interface Messages {
   thread_reply_count: Generated<number>;
   updated_at: Generated<Timestamp>;
   workspace_id: string;
+}
+
+export interface Notifications {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  message_id: string;
+  read_at: Timestamp | null;
+  suppressed_by_deep_work: Generated<boolean>;
+  type: NotificationType;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface Reactions {
+  created_at: Generated<Timestamp>;
+  emoji: string;
+  id: Generated<string>;
+  message_id: string;
+  user_id: string;
 }
 
 export interface Sessions {
@@ -129,7 +160,10 @@ export interface Workspaces {
 export interface DB {
   channel_members: ChannelMembers;
   channels: Channels;
+  mentions: Mentions;
   messages: Messages;
+  notifications: Notifications;
+  reactions: Reactions;
   sessions: Sessions;
   users: Users;
   workspace_members: WorkspaceMembers;
