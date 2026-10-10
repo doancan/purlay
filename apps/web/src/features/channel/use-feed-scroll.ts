@@ -57,7 +57,11 @@ export const useFeedScroll = ({
   meId,
   ports,
 }: Options): FeedScroll => {
-  const [atBottom, setAtBottom] = useState(true);
+  // The scroller and its content exist only once there is something to show; the observers
+  // below must attach when they appear, not when the hook first runs.
+  const showing = ready && items.length > 0;
+  // False until the reader has been placed: a read position must not be sent on a guess made before layout.
+  const [atBottom, setAtBottom] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
   // The truth as of the last scroll or placement, read before an update lands: whether the
   // reader *was* at the bottom is what decides whether to follow what arrived.
@@ -139,7 +143,7 @@ export const useFeedScroll = ({
       if (wasAtBottom.current) scrollToBottom(el);
       before.current = { ...before.current, top: el.scrollTop, height: el.scrollHeight };
     });
-  }, [scroller, content, ports]);
+  }, [scroller, content, ports, showing]);
 
   return { atBottom, newBelow, onScroll, jumpToBottom };
 };

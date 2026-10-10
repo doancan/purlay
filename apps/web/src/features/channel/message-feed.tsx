@@ -97,6 +97,8 @@ export interface MessageFeedProps {
    * stays open; `undefined` when there was nothing unread to mark.
    */
   readonly markerAfter: string | null | undefined;
+  /** The read position when the channel was opened, whether or not anything was unread. */
+  readonly readAtOpen: string | null;
   /** Only members have a read position to move. */
   readonly member: boolean;
 }
@@ -105,6 +107,7 @@ export const MessageFeed = ({
   channelId,
   channelName,
   markerAfter,
+  readAtOpen,
   member,
 }: MessageFeedProps): React.JSX.Element => {
   const { t, format } = useI18n();
@@ -182,7 +185,7 @@ export const MessageFeed = ({
   useMarkRead({
     channelId,
     member,
-    readAtOpen: member ? (markerAfter ?? null) : null,
+    readAtOpen: member ? readAtOpen : null,
     newestId,
     atBottom,
     ports,
@@ -199,6 +202,20 @@ export const MessageFeed = ({
       if (!isFetchingNextPage) void fetchNextPage();
     });
   }, [ready, hasNextPage, isFetchingNextPage, fetchNextPage, ports]);
+
+  // One function for every row, so a row's props do not change when another row's do.
+  const retry = useCallback(
+    (id: string): void => {
+      engine.retry(id);
+    },
+    [engine],
+  );
+  const discard = useCallback(
+    (id: string): void => {
+      engine.discard(id);
+    },
+    [engine],
+  );
 
   const rows = (): HTMLElement[] =>
     Array.from(scroller.current?.querySelectorAll<HTMLElement>('[data-message-row]') ?? []);
@@ -340,12 +357,8 @@ export const MessageFeed = ({
                 nowMinute={nowMinute}
                 members={members}
                 tabIndex={item.key === tabbable ? 0 : -1}
-                onRetry={() => {
-                  engine.retry(item.key);
-                }}
-                onDiscard={() => {
-                  engine.discard(item.key);
-                }}
+                onRetry={retry}
+                onDiscard={discard}
               />
             );
           })}

@@ -43,8 +43,9 @@ export interface MessageRowProps {
   readonly members: ReadonlyMap<string, string>;
   /** Roving focus: 0 for the one row the keyboard reaches by Tab, -1 for the rest. */
   readonly tabIndex?: 0 | -1;
-  readonly onRetry?: () => void;
-  readonly onDiscard?: () => void;
+  /** Given the message's id, so one stable function serves every row and memoisation holds. */
+  readonly onRetry?: (id: string) => void;
+  readonly onDiscard?: (id: string) => void;
   /** More hover actions beside React — the thread slice's Reply. */
   readonly actions?: React.ReactNode;
   /** Below the content and the reactions: a thread's summary line and its replies. */
@@ -112,11 +113,23 @@ const MessageRowView = ({
             <span>{t('delivery.failed')}</span>
             {failure !== null && <span className="text-caption text-ink-muted">{failure}</span>}
             <span aria-hidden="true">·</span>
-            <button type="button" onClick={onRetry} className="underline">
+            <button
+              type="button"
+              onClick={() => {
+                onRetry?.(message.id);
+              }}
+              className="underline"
+            >
               {t('delivery.retry')}
             </button>
             <span aria-hidden="true">·</span>
-            <button type="button" onClick={onDiscard} className="underline">
+            <button
+              type="button"
+              onClick={() => {
+                onDiscard?.(message.id);
+              }}
+              className="underline"
+            >
               {t('delivery.delete')}
             </button>
           </div>

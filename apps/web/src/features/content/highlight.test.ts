@@ -3,7 +3,13 @@
  * token carries, and what happens when there is nothing to say.
  */
 import { describe, expect, test } from 'bun:test';
-import { browserHighlighter, grammarFor } from './highlight';
+import {
+  GRAMMARS,
+  browserHighlighter,
+  createHighlighter,
+  grammarFor,
+  type Grammar,
+} from './highlight';
 
 describe('which grammar a fence names', () => {
   test.each([
@@ -65,5 +71,22 @@ describe('highlighting', () => {
     expect(
       flags.every(([italic, bold]) => typeof italic === 'boolean' && typeof bold === 'boolean'),
     ).toBe(true);
+  });
+
+  test.each(Object.keys(GRAMMARS) as Grammar[])(
+    '%s loads and colours something',
+    async (grammar) => {
+      const lines = await browserHighlighter('x', grammar);
+      expect(lines?.[0]?.length).toBeGreaterThan(0);
+    },
+  );
+
+  test('a grammar that fails to load leaves the block plain, and the next one still works', async () => {
+    const broken = createHighlighter({
+      ...GRAMMARS,
+      yaml: () => Promise.reject(new Error('the chunk did not arrive')),
+    });
+    expect(await broken('a: 1', 'yaml')).toBeNull();
+    expect((await broken('SELECT 1', 'sql'))?.length).toBe(1);
   });
 });

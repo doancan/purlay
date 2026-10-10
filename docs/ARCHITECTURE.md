@@ -47,7 +47,7 @@
 | Object storage | S3-compatible; Garage locally | `garage` | An extra service locally, set up by a script because its image has no shell; no console. Any S3-compatible store works in production, and a filesystem driver exists for simple self-hosts (D-20; `docs/spikes/object-storage.md`) |
 | Server markdown | `unified` / `remark` + sanitising serialiser | not yet · `unified` | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
 | Client markdown | a small CommonMark/GFM renderer | undecided · O-6 | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
-| Highlighting | Shiki, grammars loaded lazily | not yet · `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
+| Highlighting | Shiki, grammars loaded lazily | `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
 | Thumbnails | `Bun.Image`, built into the runtime | built in | A young API, and its decoder differs by platform — `docs/spikes/image-pipeline.md`; thumbnails must use `fit: 'inside'`, because the two-dimension form stretches (D-75) |
 
 Full rationale and rejected alternatives: `DECISIONS.md` D-20.

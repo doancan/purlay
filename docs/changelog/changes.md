@@ -6,6 +6,28 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-10: the channel feed (D-98, D-99)
+
+- **A channel reads like a log**, as the approved prototype draws it: a 56px time gutter, no avatars, the
+  author's name once per run of messages within five minutes, the time of a grouped message there on hover
+  without moving anything. Day dividers, a real `<time>` with the full time on hover, a mention of the
+  person tinted and said in words.
+- **Message text is read as exactly three things** — fenced code, inline code and bare `http(s)` links —
+  plus the `@name` the server resolved, as React nodes and never as markup. The parser is a single forward
+  scan, tested at the longest message a person may send with inputs built to make a regular expression
+  back out of itself. Code blocks carry their language and line count, a copy that holds the raw text,
+  and a clamp above twelve lines. Shiki colours them with the `--syntax-*` tokens, loaded on first use:
+  the initial bundle holds no grammar.
+- **A send paints before the network answers** and never moves when the echo arrives; sending has a clock
+  in the gutter, failed has a coloured edge, a reason, Retry and Delete.
+- **The reader's place is kept** (`UX.md` §6): not moved by what arrives below or by older pages loaded
+  above, followed only from within 80px of the bottom (and always after their own send), a "N new
+  messages" pill otherwise; a channel opens at its unread marker, and counts as read when the bottom has
+  held for half a second, once more on leaving — never on render, never from a hidden tab.
+- Reactions are the server's set (chips with a pressed state, a seven-emoji menu); rows are memoised and the
+  data layer keeps message identity, so one new message draws one new row. New tokens: `size-code-clamp`
+  (the 280px clamp) and `stroke-marker` (the failed message's edge).
+
 ### Feature — 2026-10-10: the client's foundations, in both themes and two languages (D-98)
 
 - **Light and dark ship together.** The theme is the operating system's until a person chooses, kept per

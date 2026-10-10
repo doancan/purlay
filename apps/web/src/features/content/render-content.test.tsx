@@ -3,7 +3,7 @@
  * drawn (markup from the text), and the code block's clamp, copy and colour.
  */
 import { describe, expect, test } from 'bun:test';
-import { act } from '@testing-library/react';
+import { act, fireEvent } from '@testing-library/react';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
 import { renderApp } from '../../testing/render';
@@ -11,6 +11,7 @@ import { Toaster } from '../../ui/toast';
 import { person } from '../../testing/user';
 import { ContentPortsContext, type ContentPorts } from './content-ports';
 import type { HighlightToken } from './highlight';
+import { CLAMP_ABOVE_LINES } from './code-block';
 import { renderContent } from './render-content';
 
 installDom();
@@ -94,8 +95,13 @@ describe('mentions', () => {
 });
 
 describe('a code block', () => {
-  const twelve = Array.from({ length: 12 }, (_, i) => `line ${String(i + 1)}`).join('\n');
-  const fourteen = Array.from({ length: 14 }, (_, i) => `line ${String(i + 1)}`).join('\n');
+  const twelve = Array.from({ length: CLAMP_ABOVE_LINES }, (_, i) => `line ${String(i + 1)}`).join(
+    '\n',
+  );
+  const fourteen = Array.from(
+    { length: CLAMP_ABOVE_LINES + 2 },
+    (_, i) => `line ${String(i + 1)}`,
+  ).join('\n');
 
   test('has its language, its line count and its raw text', async () => {
     const view = await mount('```ts\nconst a = 1;\nconst b = 2;\n```');
@@ -229,6 +235,26 @@ describe('colour', () => {
       await pending;
     });
     expect(view.container.querySelector('code span')).toBeNull();
+  });
+});
+
+describe("the browser's own ports", () => {
+  test('copy goes to the real clipboard', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string): Promise<void> => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+    const view = await renderApp(renderContent('```\nraw text\n```'));
+    // `fireEvent`, not `person()`: user-event installs a clipboard of its own over this one.
+    fireEvent.click(view.getByRole('button', { name: 'Copy code' }));
+    await act(() => Promise.resolve());
+    expect(written).toEqual(['raw text']);
   });
 });
 

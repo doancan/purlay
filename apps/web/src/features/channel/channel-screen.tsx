@@ -75,6 +75,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
         channelId={channel.id}
         channelName={title}
         markerAfter={member && opened.unread ? opened.after : undefined}
+        readAtOpen={opened.after}
         member={member}
       />
       {member ? (

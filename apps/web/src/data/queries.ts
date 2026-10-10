@@ -42,6 +42,18 @@ export const useMembers = (workspaceId: string): UseQueryResult<WorkspaceMember[
   });
 };
 
+/**
+ * Pages of messages keep the identity of every message they hold.
+ *
+ * TanStack's structural sharing compares a new list to the old one *by position* and builds
+ * a fresh object for any element that differs there — so a message inserted at the head of
+ * a feed shifts every later message to a new index and every one of them is copied. A row is
+ * memoised on its message's identity (`features/messages/message-row.tsx`), so a copy is a
+ * re-render: one new message would redraw the whole page. The cache (`cache.ts`) already
+ * keeps untouched messages as they were; this stops the library undoing it.
+ */
+const KEEP_MESSAGES = { structuralSharing: false } as const;
+
 /** The feed: root messages, the newest page first and older ones as asked for. */
 export const useMessages = (channelId: string): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
@@ -50,6 +62,7 @@ export const useMessages = (channelId: string): UseInfiniteQueryResult<Pages> =>
     queryFn: ({ pageParam, signal }) => api.messages(channelId, { before: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    ...KEEP_MESSAGES,
   });
 };
 
@@ -62,6 +75,7 @@ export const useThread = (messageId: string, enabled = true): UseInfiniteQueryRe
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
+    ...KEEP_MESSAGES,
   });
 };
 
@@ -73,6 +87,7 @@ export const useUnresolved = (workspaceId: string): UseInfiniteQueryResult<Pages
     queryFn: ({ pageParam, signal }) => api.unresolved(workspaceId, { before: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    ...KEEP_MESSAGES,
   });
 };
 

@@ -37,7 +37,7 @@ export type Highlighter = (
 type Loader = () => Promise<{ readonly default: LanguageRegistration[] }>;
 
 /** Each grammar is a dynamic import, which is what makes it a chunk of its own. */
-const GRAMMARS = {
+export const GRAMMARS = {
   typescript: () => import('shiki/langs/typescript.mjs'),
   tsx: () => import('shiki/langs/tsx.mjs'),
   javascript: () => import('shiki/langs/javascript.mjs'),
@@ -54,7 +54,7 @@ const GRAMMARS = {
   markdown: () => import('shiki/langs/markdown.mjs'),
 } as const satisfies Record<string, Loader>;
 
-type Grammar = keyof typeof GRAMMARS;
+export type Grammar = keyof typeof GRAMMARS;
 
 /** The names people put after the fence, and the grammar each one means. */
 const ALIASES: Readonly<Record<string, Grammar>> = {
@@ -107,7 +107,6 @@ const asToken = (token: ThemedToken): HighlightToken => ({
 const THEME = 'css-variables';
 
 let core: Promise<HighlighterCore> | null = null;
-const loaded = new Set<Grammar>();
 
 /** One highlighter for the page, made on the first request; its theme is the CSS-variable one. */
 const highlighterCore = (): Promise<HighlighterCore> => {
@@ -125,21 +124,31 @@ const highlighterCore = (): Promise<HighlighterCore> => {
   return core;
 };
 
-/** The browser's highlighter: Shiki, loaded when first needed, and nothing at all when it cannot be. */
-export const browserHighlighter: Highlighter = async (code, language) => {
-  const grammar = grammarFor(language);
-  if (grammar === null) return null;
-  try {
-    const highlighter = await highlighterCore();
-    if (!loaded.has(grammar)) {
-      await highlighter.loadLanguage((await GRAMMARS[grammar]()).default);
-      loaded.add(grammar);
+/**
+ * A highlighter over a set of grammars: Shiki, loaded when first needed, and nothing at all
+ * when it cannot be. The grammars are an argument so a test can hand it one that fails to
+ * load — the case a real network produces and a real test run does not.
+ */
+export const createHighlighter = (grammars: Readonly<Record<Grammar, Loader>>): Highlighter => {
+  // Per highlighter: what *this* set of grammars has already put into the shared core.
+  const loaded = new Set<Grammar>();
+  return async (code, language) => {
+    const grammar = grammarFor(language);
+    if (grammar === null) return null;
+    try {
+      const highlighter = await highlighterCore();
+      if (!loaded.has(grammar)) {
+        await highlighter.loadLanguage((await grammars[grammar]()).default);
+        loaded.add(grammar);
+      }
+      return highlighter
+        .codeToTokensBase(code, { lang: grammar, theme: THEME })
+        .map((line) => line.map(asToken));
+    } catch {
+      // A chunk that did not arrive is a block that stays plain, not a message that fails.
+      return null;
     }
-    return highlighter
-      .codeToTokensBase(code, { lang: grammar, theme: THEME })
-      .map((line) => line.map(asToken));
-  } catch {
-    // A chunk that did not arrive is a block that stays plain, not a message that fails.
-    return null;
-  }
+  };
 };
+
+export const browserHighlighter: Highlighter = createHighlighter(GRAMMARS);
