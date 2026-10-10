@@ -3,6 +3,7 @@ import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { EmptyState } from '../../ui/states';
+import { Composer } from '../composer/composer';
 import { useWorkspace } from '../shell/workspace';
 
 export const ChannelScreen = ({ channelId }: { readonly channelId: string }): React.JSX.Element => {
@@ -26,5 +27,10 @@ export const ChannelScreen = ({ channelId }: { readonly channelId: string }): Re
       />
     );
   }
-  return <h1 className="p-4 text-title text-ink">{channel.name}</h1>;
+  return (
+    <>
+      <h1 className="flex-1 p-4 text-title text-ink">{channel.name}</h1>
+      <Composer channelId={channel.id} channelName={channel.name ?? ''} />
+    </>
+  );
 };
