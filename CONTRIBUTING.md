@@ -66,6 +66,11 @@ Start the local environment with `bun run db:up` (PostgreSQL and object storage,
 be healthy). `bun run db:up:postgres` starts the database alone — all the integration tests need,
 and what CI runs, because nothing the integration tests reach reads object storage yet.
 
+**The tests find that database through `DATABASE_URL`, and a fresh clone has none.** Bun reads `.env`
+for every command, so put the URL of the compose database there — its user, password, database and
+port are the ones in `docker-compose.yml`, the same URL the pipeline sets in `.github/workflows/ci.yml`.
+Without it `verify` still passes, on the unit tests alone, behind the banner below.
+
 **Two verification commands, and the difference matters:**
 
 | Command | Needs | Runs |
@@ -339,7 +344,7 @@ run, which is why the record carries both.
 4. **Update the documents in the same change.** Schema change → `SCHEMA.md`. Protocol change →
    `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in
    `DECISIONS.md`, with what you rejected and why.
-5. **Verify.** `bun run typecheck && bun run lint && bun test`. Paste real output.
+5. **Verify.** `bun run verify`, with the database (§2). Paste real output.
 6. **Log it.** Notable changes go to `docs/changelog/changes.md`.
 
 **Running it.** `bun run dev` starts both processes; `bun run dev:api` and `bun run dev:web` start
@@ -371,7 +376,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   ticket, issue or ADR references.
   - ❌ `feat(auth): task-123 sprint-5 için oturum ekle`
   - ✅ `feat(auth): add database-backed session validation`
-- Before a PR: `bun run lint && bun run typecheck && bun test`.
+- Before a PR: `bun run verify`, with the database (§2).
 
 ---
 
