@@ -145,6 +145,15 @@ const isSendAck = (
   data: { id: string };
 } => frame.event === 'ACK' && 'id' in frame.data;
 
+/**
+ * A list that is not being fetched right now. One that is is left to finish: cancelling a feed
+ * that is still reading back to the reader's place (or a first page that is on its way) to ask
+ * again fights the code that is driving it, and stalls it on its loading state (found by the
+ * unread specs under load).
+ */
+const settled = (query: { readonly state: { readonly fetchStatus: string } }): boolean =>
+  query.state.fetchStatus === 'idle';
+
 export const createEngine = (options: EngineOptions): Engine => {
   const { api, client, schedule } = options;
   const storage = options.storage ?? null;
@@ -373,10 +382,13 @@ export const createEngine = (options: EngineOptions): Engine => {
             // between its read and the server beginning to send, and nothing would ever say so
             // (found in a browser: a reaction taken back in that gap stayed on the other screen).
             // Read again, what is cached for the channel is correct from this moment on.
-            void client.invalidateQueries({ queryKey: keys.messages(channelId) });
+            void client.invalidateQueries({
+              queryKey: keys.messages(channelId),
+              predicate: settled,
+            });
           }
           // Threads are cached by their root, which names no channel: every one that is held.
-          void client.invalidateQueries({ queryKey: families.thread });
+          void client.invalidateQueries({ queryKey: families.thread, predicate: settled });
         }
         return;
       }

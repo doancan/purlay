@@ -174,6 +174,11 @@ describe('the open questions', () => {
     expect(first?.getAttribute('href')).toBe('/w/acme/questions');
   });
 
+  test('keep their height however long the list of channels below them is: a flex item that may shrink is squashed to a line', async () => {
+    const view = await open(aSignedInApi());
+    expect(view.getAllByRole('link')[0]?.className).toContain('shrink-0');
+  });
+
   test('say nothing while they load or when there are none — never a wrong zero', async () => {
     const quiet = await open(aSignedInApi());
     expect(quiet.getAllByRole('link')[0]?.textContent.trim()).toBe('Open questions');

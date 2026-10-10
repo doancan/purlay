@@ -33,7 +33,10 @@ export const OpenQuestionsLink = (): React.JSX.Element => {
       params={{ slug: workspace.slug }}
       {...(current ? { 'aria-current': 'page' as const } : {})}
       className={cn(
-        'flex h-control items-center gap-2 rounded-md px-3 text-body text-ink max-narrow:h-touch hover:bg-surface-200',
+        // `shrink-0`: the sidebar's column scrolls, and a flex item with a fixed height still shrinks
+        // when the channels below it overflow — to one line of text, 21 px at the touch width (found
+        // by the narrow spec once a workspace had a few hundred channels).
+        'flex h-control shrink-0 items-center gap-2 rounded-md px-3 text-body text-ink max-narrow:h-touch hover:bg-surface-200',
         current && 'bg-surface-200 font-medium',
       )}
     >

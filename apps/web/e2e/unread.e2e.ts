@@ -170,7 +170,9 @@ test.describe('a reader who has scrolled up', () => {
     await alice.say(made.id, 'arrived while you were reading up the page');
     await alice.say(made.id, 'and another');
     await alice.say(made.id, 'and a third');
-    await expect(page.getByRole('button', { name: '3 new messages' })).toBeVisible();
+    const pill = page.getByRole('button', { name: /new messages?$/ });
+    await expect(pill).toBeVisible();
+    await expect(pill).toHaveAccessibleName('3 new messages');
     // Nothing moved under the reader.
     expect(Math.abs(((await anchor.boundingBox())?.y ?? 0) - before)).toBeLessThan(1.5);
     // And nothing was marked read: they have not got there.
