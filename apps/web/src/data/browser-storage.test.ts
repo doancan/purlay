@@ -9,6 +9,7 @@ import { loadStored, pendingKey, saveStored } from '../realtime/pending-store';
 import { installDom } from '../testing/dom';
 import { memoryStorage } from '../testing/fakes';
 import {
+  browserStorage,
   forgetPersonalData,
   noteStorageFailure,
   resetStorageNotes,
@@ -57,6 +58,25 @@ describe('forgetting a person', () => {
     forgetPersonalData(refusing());
     forgetPersonalData(null);
     expect(note()).toBe('forget');
+  });
+});
+
+describe("the browser's storage", () => {
+  test("is the page's, or none and a note when reading the property itself throws", () => {
+    expect(browserStorage()).toBe(window.localStorage);
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get: (): never => {
+        throw new Error('blocked');
+      },
+    });
+    try {
+      expect(browserStorage()).toBeNull();
+      expect(note()).toBe('unavailable');
+    } finally {
+      if (original !== undefined) Object.defineProperty(window, 'localStorage', original);
+    }
   });
 });
 
