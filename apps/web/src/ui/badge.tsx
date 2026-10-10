@@ -2,7 +2,7 @@
  * The mention count — the only badge in the product (`UX.md` §2).
  *
  * "Nothing else gets a badge": an unread channel is bold, not badged, because a
- * count on everything is a count on nothing. This one is a pill (`rounded-full`
+ * count on everything is a count on nothing. This one is a pill (`rounded-pill`
  * is reserved for it and the presence dot), `h-badge` tall and at least as wide:
  * one digit is a circle, two are not.
  *
@@ -10,7 +10,7 @@
  * "2 unread mentions", built by the caller in the right language and plural.
  */
 const badgeClasses =
-  'inline-flex h-badge min-w-badge items-center justify-center rounded-full bg-accent px-1 text-label text-on-accent';
+  'inline-flex h-badge min-w-badge items-center justify-center rounded-pill bg-accent px-1 text-label text-on-accent';
 
 interface BadgeProps {
   readonly count: number;

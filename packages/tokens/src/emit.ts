@@ -159,7 +159,24 @@ const emitThemeCss = (model: Model): string => {
     if (lines.length > 0) lines.push('');
     lines.push(`  /* ${title} */`);
   };
+  /**
+   * `--theme-key: var(--token)`, so a utility follows the custom property at runtime.
+   *
+   * **A key that would share the token's name is not a theme key at all.** Tailwind writes
+   * every theme key to `:root` even under `inline`, so `--radius-md: var(--radius-md)` is
+   * written after the token's own `--radius-md: 6px` and wins; a custom property that refers
+   * to itself is invalid, and every radius, every icon (the SVG's own 24px) and the whole font
+   * stack silently fell back to the browser's. Found in a browser, by looking: nothing that
+   * does not run a cascade could have seen it. Such a name becomes a utility that reads the
+   * token directly (`collisions`, below) — the same class, the same `var()`, no second
+   * declaration to lose to.
+   */
+  const collisions: { readonly key: string; readonly token: string }[] = [];
   const map = (theme: string, source: string): void => {
+    if (theme === `--${source}`) {
+      collisions.push({ key: theme, token: source });
+      return;
+    }
     lines.push(declaration(theme, `var(--${source})`));
   };
 
@@ -169,7 +186,7 @@ const emitThemeCss = (model: Model): string => {
   for (const token of model.spacing) map(`--spacing-${suffix(token.name, 'space-')}`, token.name);
   section('Radius');
   for (const token of model.radius) map(`--radius-${suffix(token.name, 'radius-')}`, token.name);
-  section('Shadow');
+  section('Shadow (a utility: see `map`, and it differs by theme)');
   for (const shadow of model.shadows)
     map(`--shadow-${suffix(shadow.name, 'shadow-')}`, shadow.name);
   section('Sizes');
@@ -196,10 +213,8 @@ const emitThemeCss = (model: Model): string => {
   }
   for (const token of model.easing) map(`--ease-${suffix(token.name, 'easing-')}`, token.name);
   section('Type: families, weights; the sizes are the text- utilities below');
-  lines.push(
-    declaration('--font-sans', 'var(--font-sans)'),
-    declaration('--font-mono', 'var(--font-mono)'),
-  );
+  map('--font-sans', 'font-sans');
+  map('--font-mono', 'font-mono');
   for (const name of Object.values(WEIGHTS)) map(`--font-weight-${name}`, `weight-${name}`);
   section('What the base layer reads');
   lines.push(
@@ -223,6 +238,31 @@ const emitThemeCss = (model: Model): string => {
       '}',
     ].join('\n'),
   );
+  // The names `map` could not make theme keys of, as the utility each would have been.
+  for (const { key, token } of collisions) {
+    const value = `var(--${token})`;
+    const of = (prefix: string): string | null =>
+      key.startsWith(prefix) ? key.slice(prefix.length) : null;
+    const radius = of('--radius-');
+    const size = of('--size-');
+    const shadow = of('--shadow-');
+    const font = of('--font-');
+    const [name, body] =
+      radius !== null
+        ? [`rounded-${radius}`, declaration('border-radius', value)]
+        : size !== null
+          ? [`size-${size}`, `${declaration('width', value)}\n${declaration('height', value)}`]
+          : shadow !== null
+            ? [`shadow-${shadow}`, declaration('box-shadow', value)]
+            : font !== null
+              ? [`font-${font}`, declaration('font-family', value)]
+              : (() => {
+                  throw new Error(
+                    `${key} shares a name with its token and has no utility to become`,
+                  );
+                })();
+    utilities.push(`@utility ${name} {\n${body}\n}`);
+  }
   utilities.push(
     `@utility icon-stroke {\n${declaration('stroke-width', `var(--${ICON_STROKE})`)}\n}`,
   );

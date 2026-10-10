@@ -48,7 +48,7 @@ describe('classes in the vocabulary', () => {
     '-mt-2',
     'gap-2',
     'rounded-md',
-    'rounded-full',
+    'rounded-pill',
     'shadow-float',
     'z-popover',
     'duration-collapse',

@@ -3795,6 +3795,16 @@ badge is bound twice, as a height and as a minimum width: one digit is a circle 
 prototype also drops the 56px workspace rail for a switcher in the sidebar header, which `UX.md` §2
 still draws; `size-rail` stays until that section is rewritten with the screens.
 
+**8 · Amended 2026-10-10: a name shared by a theme key and a token is a utility, not a key.** The
+first screens in a real browser showed a serif font, 24px icons and square corners: Tailwind writes
+every theme key to `:root` even under `inline`, so `--radius-md: var(--radius-md)` was written after
+the token's own `--radius-md: 6px`, won, and — a custom property that refers to itself being invalid —
+the radius, the icon size and the whole font stack fell back to the browser's. Every test that
+compiled classes passed, because none ran a cascade. The generator now refuses such a key and writes
+the utility that reads the token (`rounded-*`, `size-*`, `shadow-*`, `font-*`); `radius-full` became
+`radius-pill`, because Tailwind's own `rounded-full` is a static utility the generated one would
+have sat beside; and `e2e/tokens.e2e.ts` reads the computed values in a browser, in both themes.
+
 **Rejected — Tailwind's theme plus lint alone.** Measured above: it cannot see `z-50`, and a typo
 builds to nothing silently.
 

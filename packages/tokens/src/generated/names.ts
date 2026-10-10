@@ -53,7 +53,7 @@ export const spacingTokens = [
 export const radiusTokens = [
   'radius-sm',
   'radius-md',
-  'radius-full',
+  'radius-pill',
 ] as const;
 
 export const shadowTokens = [

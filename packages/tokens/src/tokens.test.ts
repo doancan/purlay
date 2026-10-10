@@ -198,10 +198,10 @@ describe('the validator refuses', () => {
     expect(problemsOf(file).join('\n')).toContain('lowest to highest');
   });
 
-  test('a pill radius that is not radius-full', () => {
+  test('a pill radius that is not radius-pill', () => {
     const file = copy();
     damage(file, 'radius', 'radius-md', { value: '40px' });
-    expect(problemsOf(file).join('\n')).toContain('only radius-full may be one');
+    expect(problemsOf(file).join('\n')).toContain('only radius-pill may be one');
   });
 
   test('a shadow that is not "x y blur spread colour"', () => {
@@ -420,6 +420,34 @@ describe('the generated CSS', () => {
     expect(files['theme.css']).toContain('@theme inline {');
     expect(files['theme.css']).not.toContain('@theme default');
     expect(files['theme.css']).not.toContain('tailwindcss');
+  });
+
+  /**
+   * Found in a browser, by looking, and by no test that ran before it: Tailwind writes every
+   * theme key to `:root` even under `inline`, so `--radius-md: var(--radius-md)` was written
+   * after the token's own `--radius-md: 6px`, won, and — a custom property that refers to
+   * itself being invalid — every radius, every icon and the whole font stack fell back to the
+   * browser's. Class-compiling tests cannot see a cascade. A name shared by a theme key and a
+   * token is therefore a utility that reads the token, never a key.
+   */
+  test('has no theme key that refers to itself', () => {
+    const itself = [...files['theme.css'].matchAll(/^\s*(--[\w-]+):\s*var\(\1\)/gm)].map(
+      (match) => match[1],
+    );
+    expect(itself).toEqual([]);
+  });
+
+  test('writes what shares a name with its token as the utility that reads it', () => {
+    const css = files['theme.css'];
+    for (const utility of [
+      ['rounded-md', 'border-radius: var(--radius-md)'],
+      ['size-icon-sm', 'width: var(--size-icon-sm)'],
+      ['shadow-float', 'box-shadow: var(--shadow-float)'],
+      ['font-mono', 'font-family: var(--font-mono)'],
+    ] as const) {
+      expect(css).toContain(`@utility ${utility[0]} {\n  ${utility[1]};`);
+    }
+    expect(css).not.toMatch(/^\s*--(?:radius|shadow|font)-(?:md|float|mono|sans|sm):/m);
   });
 
   test('writes the viewport width as a literal, because a media query cannot read a variable', () => {

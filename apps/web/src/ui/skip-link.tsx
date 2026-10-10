@@ -7,7 +7,7 @@
  * view on focus, over everything (`z-toast`), with the same ring as any control.
  */
 const skipClasses =
-  'absolute left-4 top-2 z-toast -translate-y-full rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-1 text-label text-ink focus:translate-y-0';
+  'absolute left-4 top-0 z-toast -translate-y-full focus:top-2 rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-1 text-label text-ink focus:translate-y-0';
 
 interface SkipLinkProps {
   /** The `id` of the element that holds the page's main content. */

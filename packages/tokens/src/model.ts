@@ -279,8 +279,8 @@ export const parseTokens = (raw: unknown): Parsed => {
   const radius = plain('radius', file.radius.tokens, ({ name, value }) => {
     const n = px(value);
     if (n === undefined || n <= 0) return `"${value}" is not a positive px length`;
-    if (name === 'radius-full') return n === 9999 ? undefined : 'the full radius is 9999px';
-    return n <= 16 ? undefined : `${value} is a pill, and only radius-full may be one`;
+    if (name === 'radius-pill') return n === 9999 ? undefined : 'the full radius is 9999px';
+    return n <= 16 ? undefined : `${value} is a pill, and only radius-pill may be one`;
   });
   const size = plain('size', file.size.tokens, ({ value }) => {
     const n = px(value);
