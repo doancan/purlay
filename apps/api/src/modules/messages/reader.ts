@@ -62,13 +62,13 @@ export interface ThreadColumns {
   readonly resolved_by: string | null;
 }
 
-export const at = (value: Date | string): string => new Date(value).toISOString();
+const at = (value: Date | string): string => new Date(value).toISOString();
 
 const atOrNull = (value: Date | string | null): string | null =>
   value === null ? null : at(value);
 
 /** The people with these ids, as the contract's `User` — one query, none when there are no ids. */
-export const usersByIds = async (
+const usersByIds = async (
   executor: Executor,
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, User>> => {
@@ -98,10 +98,7 @@ export const usersByIds = async (
  * *resolved*, by nobody the client can name, rather than as open: a thread the team
  * closed does not reopen because a person left.
  */
-export const summaryOf = (
-  columns: ThreadColumns,
-  people: ReadonlyMap<string, User>,
-): ThreadSummary => ({
+const summaryOf = (columns: ThreadColumns, people: ReadonlyMap<string, User>): ThreadSummary => ({
   replyCount: columns.thread_reply_count,
   lastReplyAt: atOrNull(columns.thread_last_reply_at),
   resolvedAt: atOrNull(columns.resolved_at),

@@ -82,7 +82,7 @@ const requireRoot = async (
     .executeTakeFirst();
   // Another channel's message and none at all are one answer: which of the two it was
   // is what a caller who cannot see that channel must not learn (D-34).
-  if (parent === undefined || parent.channel_id !== context.channelId) {
+  if (parent?.channel_id !== context.channelId) {
     throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
   }
   if (parent.parent_id !== null) {
