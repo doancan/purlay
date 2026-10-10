@@ -3,48 +3,14 @@
  * test drives by hand, so Back and Forward are one function call.
  */
 import { installDom } from '../testing/dom';
-import { describe, expect, spyOn, test } from 'bun:test';
+import { fakeHistory } from '../testing/fakes';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, render } from '@testing-library/react';
-import { browserHistory, createRouter, type HistoryPort } from './router';
+import { browserHistory, createRouter } from './router';
 import { Link, RouterProvider, useRoute } from './router-provider';
 import { href, matchRoute } from './routes';
 
 installDom();
-
-/** A history that is an array, with Back. */
-const fakeHistory = (
-  start = '/',
-): HistoryPort & { stack: string[]; back: () => void; listeners: number } => {
-  const stack = [start];
-  const listeners = new Set<() => void>();
-  const split = (url: string): { pathname: string; search: string } => {
-    const [pathname = '/', search = ''] = url.split('?');
-    return { pathname, search: search === '' ? '' : `?${search}` };
-  };
-  return {
-    stack,
-    get listeners(): number {
-      return listeners.size;
-    },
-    read: () => split(stack[stack.length - 1] ?? '/'),
-    push: (url): void => {
-      stack.push(url);
-    },
-    replace: (url): void => {
-      stack[stack.length - 1] = url;
-    },
-    listen: (listener): (() => void) => {
-      listeners.add(listener);
-      return (): void => {
-        listeners.delete(listener);
-      };
-    },
-    back: (): void => {
-      stack.pop();
-      for (const listener of listeners) listener();
-    },
-  };
-};
 
 describe('matching an address', () => {
   test.each<readonly [string, string, Record<string, string>]>([
@@ -160,14 +126,14 @@ describe('the store', () => {
   test('listens to the browser only while somebody is reading', () => {
     const history = fakeHistory('/');
     const router = createRouter(history);
-    expect(history.listeners).toBe(0);
+    expect(history.listeners()).toBe(0);
     const stopA = router.subscribe(() => undefined);
     const stopB = router.subscribe(() => undefined);
-    expect(history.listeners).toBe(1);
+    expect(history.listeners()).toBe(1);
     stopA();
-    expect(history.listeners).toBe(1);
+    expect(history.listeners()).toBe(1);
     stopB();
-    expect(history.listeners).toBe(0);
+    expect(history.listeners()).toBe(0);
   });
 
   test('catches up on Back pressed while nobody was subscribed', () => {
@@ -275,6 +241,19 @@ describe('in React', () => {
 });
 
 describe('Link', () => {
+  // A click the router leaves alone would make happy-dom follow the link — a real
+  // network request to a server that is not there. The browser's default is not
+  // what is under test, so it is cancelled *after* the router has looked at it.
+  const cancelNavigation = (event: Event): void => {
+    event.preventDefault();
+  };
+  beforeAll(() => {
+    document.addEventListener('click', cancelNavigation);
+  });
+  afterAll(() => {
+    document.removeEventListener('click', cancelNavigation);
+  });
+
   const setup = (
     history = fakeHistory('/'),
   ): ReturnType<typeof render> & { history: ReturnType<typeof fakeHistory> } => ({
@@ -314,8 +293,7 @@ describe('Link', () => {
   test('a plain click navigates without a reload', () => {
     const { getByRole, history } = setup();
     const link = getByRole('link', { name: 'api' });
-    const proceeded = fireEvent.click(link);
-    expect(proceeded).toBe(false);
+    fireEvent.click(link);
     expect(history.stack).toEqual(['/', '/w/acme/c/c1']);
   });
 
