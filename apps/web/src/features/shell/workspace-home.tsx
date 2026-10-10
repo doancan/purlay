@@ -8,7 +8,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { EmptyState } from '../../ui/states';
+import { Notice } from './notice';
 import { ScreenBar } from './screen-bar';
 import { useWorkspace } from './workspace';
 
@@ -29,8 +29,9 @@ export const WorkspaceHome = (): React.JSX.Element => {
     return (
       <>
         <ScreenBar />
-        <EmptyState
+        <Notice
           as="h1"
+          glyph="channel"
           title={t('state.workspace.empty.title')}
           body={t('state.workspace.empty.body')}
         />

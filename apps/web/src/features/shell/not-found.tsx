@@ -3,22 +3,25 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { buttonStyle } from '../../ui/button';
 import { Main } from '../../ui/main';
-import { EmptyState } from '../../ui/states';
+import { Notice } from './notice';
 
 export const NotFound = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
-    <Main className="min-h-screen bg-surface-100 text-ink">
-      <EmptyState
-        as="h1"
-        title={t('app.notFound.title')}
-        body={t('app.notFound.body')}
-        action={
-          <Link to="home" className={buttonStyle('primary')}>
-            {t('app.notFound.home')}
-          </Link>
-        }
-      />
+    <Main className="flex min-h-screen flex-col bg-canvas p-2 text-ink">
+      <div className="flex flex-1 flex-col rounded-lg bg-surface-100 shadow-card">
+        <Notice
+          as="h1"
+          glyph="info"
+          title={t('app.notFound.title')}
+          body={t('app.notFound.body')}
+          action={
+            <Link to="home" className={buttonStyle('primary')}>
+              {t('app.notFound.home')}
+            </Link>
+          }
+        />
+      </div>
     </Main>
   );
 };

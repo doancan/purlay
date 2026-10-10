@@ -7,6 +7,9 @@
  * quietly and a person who has one is sent on. `?reason=ended` is how the client
  * explains that it got here because the session ended, and `?error` that the round trip
  * did not finish; both say what to do, neither blames.
+ *
+ * It is the first thing anyone sees of the product, so it is a card on the canvas with the
+ * product's mark, not a heading on a blank page (D-100).
  */
 import { useEffect } from 'react';
 import { useMe } from '../../data/queries';
@@ -14,8 +17,10 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { buttonStyle } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { Icon } from '../../components/icon';
+import { LogoMark } from '../shell/notice';
 
 export const SignInScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -33,24 +38,27 @@ export const SignInScreen = (): React.JSX.Element => {
   }, [me.isSuccess, navigate]);
 
   return (
-    <Main className="flex min-h-screen flex-col items-start justify-center gap-6 bg-surface-100 px-8 text-ink">
-      <section className="flex max-w-feed flex-col gap-3">
-        <h1 className="text-display">{t('signIn.title')}</h1>
-        <p className="text-body text-ink-muted">{t('signIn.lede')}</p>
-        {note !== null && (
-          <p role="status" className="text-label text-warning-text">
-            {note}
-          </p>
-        )}
+    <Main className="flex min-h-screen items-center justify-center bg-canvas p-4 text-ink">
+      <section className="flex w-full max-w-dialog flex-col gap-6 rounded-lg bg-surface-100 p-8 shadow-card">
+        <LogoMark />
+        <div className="flex flex-col gap-2">
+          <h1 className="text-display">{t('signIn.title')}</h1>
+          <p className="text-body text-ink-muted">{t('signIn.lede')}</p>
+          {note !== null && (
+            <p role="status" className="text-label text-warning-text">
+              {note}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col gap-3">
+          {/* A plain anchor on purpose: the browser must leave this page. */}
+          <a href="/auth/github" className={cn(buttonStyle('primary'), 'w-full')}>
+            <Icon name="confirm" />
+            {t('signIn.github')}
+          </a>
+          <p className="text-caption text-ink-muted">{t('signIn.scope')}</p>
+        </div>
       </section>
-      <div className="flex flex-col gap-2">
-        {/* A plain anchor on purpose: the browser must leave this page. */}
-        <a href="/auth/github" className={buttonStyle('primary')}>
-          <Icon name="confirm" />
-          {t('signIn.github')}
-        </a>
-        <p className="max-w-feed text-caption text-ink-muted">{t('signIn.scope')}</p>
-      </div>
     </Main>
   );
 };

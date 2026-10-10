@@ -19,9 +19,9 @@ export const SectionLoading = ({
   readonly label: string;
   readonly rows?: number;
 }): React.JSX.Element => (
-  <LoadingStatus label={label} className="flex flex-col gap-3 px-3 py-1">
+  <LoadingStatus label={label} className="flex flex-col gap-3 px-2 py-1">
     {Array.from({ length: rows }, (_, index) => (
-      <Skeleton key={index} className={index % 2 === 0 ? 'w-members' : 'w-gutter'} />
+      <Skeleton key={index} className={index % 2 === 0 ? 'w-members' : 'w-1/2'} />
     ))}
   </LoadingStatus>
 );
@@ -37,7 +37,7 @@ export const SectionError = ({
   readonly retryLabel: string;
   readonly onRetry: () => void;
 }): React.JSX.Element => (
-  <div role="alert" className="flex flex-col items-start gap-2 px-3 py-1">
+  <div role="alert" className="flex flex-col items-start gap-2 px-2 py-1">
     <p className="flex items-center gap-2 text-label text-danger-text">
       <Icon name="failed" size="sm" />
       {title}
@@ -56,7 +56,7 @@ export const SectionEmpty = ({
   readonly body: string;
   readonly action?: React.ReactNode;
 }): React.JSX.Element => (
-  <div className="flex flex-col items-start gap-2 px-3 py-1">
+  <div className="flex flex-col items-start gap-2 px-2 py-1">
     <p className="text-label text-ink">{title}</p>
     <p className="text-caption text-ink-muted">{body}</p>
     {action}
