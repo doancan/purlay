@@ -57,6 +57,8 @@ export const ErrorCode = Type.Union([
    * what the caller must not be able to learn.
    */
   Type.Literal('MESSAGE_NOT_FOUND'),
+  /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
+  Type.Literal('USER_NOT_FOUND'),
   // Conflict
   /** A workspace slug is an identifier in a URL, so it is unique across the instance. */
   Type.Literal('WORKSPACE_SLUG_TAKEN'),
@@ -99,6 +101,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
+  USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,

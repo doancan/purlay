@@ -8,9 +8,16 @@
  * its own derives the workspace from the resource and does both (D-34).
  */
 import type { Executor } from '@purlay/db';
-import { CreateChannelRequest, type Channel } from '@purlay/types';
+import {
+  CreateChannelRequest,
+  CreateDirectMessageRequest,
+  ReadChannelRequest,
+  type Channel,
+  type ReadChannelResponse,
+} from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById } from '../../platform/channels';
+import { publishChannelAdded, publishChannelState, type EventBus } from '../../platform/events';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import {
@@ -19,12 +26,19 @@ import {
   createChannel,
   joinChannel,
 } from '../../modules/channels/channels';
+import { openDirectMessage } from '../../modules/channels/direct-messages';
+import { markRead } from '../../modules/channels/read-state';
 import { requireSession } from './session';
 import { validated } from './validate';
 
 export interface ChannelDependencies {
   readonly database: Executor;
   readonly clock: Clock;
+}
+
+/** What a write that tells other sockets needs as well. */
+export interface ChannelWriteDependencies extends ChannelDependencies {
+  readonly bus: EventBus;
 }
 
 export const listChannels = async (
@@ -74,4 +88,51 @@ export const joinPublicChannel = async (
   const context = await requireChannelById(database, userId, channelId);
   await joinChannel(database, clock, context);
   return await channelIn(database, context);
+};
+
+/**
+ * `PUT /api/channels/:channelId/read` — the person has read up to this message.
+ *
+ * The position and both counters move in one transaction; the person's other
+ * devices are told after it commits, on their own topic, so a socket is never told
+ * of a position that was rolled back (D-99 §4). A position that did not move tells
+ * nobody.
+ */
+export const readUpTo = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<ReadChannelResponse> => {
+  const { database, clock, bus } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(ReadChannelRequest, body);
+  const outcome = await atomicallyOn(database)(
+    async (transaction) => await markRead(transaction, clock, context, input.lastReadMessageId),
+  );
+  if (outcome.moved) await publishChannelState(bus, clock, userId, channelId, outcome.state);
+  return outcome.state;
+};
+
+/**
+ * `POST /api/workspaces/:workspaceId/dms` — the direct message with this person,
+ * opened if it was not, and the same one if it was (I-5). The other person is told
+ * only when this call is what created it.
+ */
+export const openDirectMessageWith = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<{ readonly channel: Channel; readonly created: boolean }> => {
+  const { database, clock, bus } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const input = validated(CreateDirectMessageRequest, body);
+  const opened = await atomicallyOn(database)(
+    async (transaction) => await openDirectMessage(transaction, clock, context, input.userId),
+  );
+  if (opened.forPeer !== null) await publishChannelAdded(bus, clock, input.userId, opened.forPeer);
+  return { channel: opened.channel, created: opened.created };
 };
