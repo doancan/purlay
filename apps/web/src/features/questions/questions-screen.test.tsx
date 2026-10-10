@@ -212,6 +212,12 @@ describe('its states (UX §8)', () => {
       screen.getByRole('heading', { level: 2, name: 'Every thread is resolved' }),
     ).toBeDefined();
     expect(screen.getByText(/the moment it has a reply and no resolution/)).toBeDefined();
+    // Designed, not a blank: a tile with the resolved glyph above the title, centred.
+    const heading = screen.getByRole('heading', { level: 2, name: 'Every thread is resolved' });
+    const tile = heading.previousElementSibling;
+    expect(tile?.getAttribute('aria-hidden')).toBe('true');
+    expect(tile?.className).toContain('rounded-md');
+    expect(heading.parentElement?.className).toContain('text-center');
     await expectNoAxeViolations(screen.container);
   });
 
