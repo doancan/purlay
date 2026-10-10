@@ -212,10 +212,11 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
   const recover = (channelId: string): void => {
     if (!(channelId in store.getState().degraded)) return;
-    store.setState((state) => {
-      const { [channelId]: _gone, ...rest } = state.degraded;
-      return { degraded: rest };
-    });
+    store.setState((state) => ({
+      degraded: Object.fromEntries(
+        Object.entries(state.degraded).filter(([id]) => id !== channelId),
+      ),
+    }));
   };
   const update = (id: string, patch: Partial<PendingMessage>): void => {
     change((all) => all.map((p) => (p.id === id ? { ...p, ...patch } : p)));

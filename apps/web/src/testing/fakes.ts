@@ -29,7 +29,7 @@ export const memoryStorage = (initial: Readonly<Record<string, string>> = {}): M
       data[key] = value;
     },
     removeItem: (key): void => {
-      delete data[key];
+      Reflect.deleteProperty(data, key);
     },
     key: (index): string | null => Object.keys(data)[index] ?? null,
     get length(): number {

@@ -75,7 +75,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
  * identity is asked for again, so the session gate takes over and the person is taken to
  * sign in.
  */
-export const refreshSession = (client: QueryClient): void => {
+const refreshSession = (client: QueryClient): void => {
   void client.invalidateQueries({ queryKey: keys.me });
 };
 

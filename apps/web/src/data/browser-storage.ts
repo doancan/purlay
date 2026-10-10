@@ -23,11 +23,7 @@ export interface ClientStorage {
 }
 
 /** The keys that hold what a person wrote or where they were. Anything else on the page is the device's. */
-export const PERSONAL_PREFIXES = [
-  'purlay.draft.',
-  'purlay.lastChannel.',
-  'purlay.pending.',
-] as const;
+const PERSONAL_PREFIXES = ['purlay.draft.', 'purlay.lastChannel.', 'purlay.pending.'] as const;
 
 const noted = new Set<string>();
 

@@ -19,16 +19,16 @@ installDom();
 afterEach(resetStorageNotes);
 
 const refusing = (): ClientStorage => ({
-  getItem: () => {
+  getItem: (): string | null => {
     throw new Error('blocked');
   },
-  setItem: () => {
+  setItem: (): void => {
     throw new Error('quota');
   },
-  removeItem: () => {
+  removeItem: (): void => {
     throw new Error('blocked');
   },
-  key: () => {
+  key: (): string | null => {
     throw new Error('blocked');
   },
   get length(): number {

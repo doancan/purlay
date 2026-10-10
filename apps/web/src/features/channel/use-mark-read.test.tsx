@@ -71,13 +71,13 @@ const mount = async (
   };
   return {
     calls,
-    advance: async (ms) => {
+    advance: async (ms): Promise<void> => {
       await act(async () => {
         timers.advance(ms);
         await flush();
       });
     },
-    show: async (on) => {
+    show: async (on): Promise<void> => {
       await act(async () => {
         set(on);
         await flush();

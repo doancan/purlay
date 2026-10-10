@@ -735,7 +735,7 @@ describe('a subscription the server refuses', () => {
       data: { code, message: 'no' },
       refId: subscribeId(w),
       ts: T0,
-    } as ServerFrame);
+    });
   };
 
   test('for a reason waiting will not change leaves the channels degraded, with the code, for the bar to show', () => {
@@ -814,7 +814,7 @@ describe('a replay that cannot be finished', () => {
     return {
       asked: () => asks,
       api: {
-        messages: () => {
+        messages: (): Promise<MessagePage> => {
           asks += 1;
           return asks <= failures
             ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
@@ -870,7 +870,9 @@ describe('a replay that cannot be finished', () => {
       messages: () => {
         asks += 1;
         return new Promise((resolve) => {
-          release = (): void => resolve({ data: [], nextCursor: null });
+          release = (): void => {
+            resolve({ data: [], nextCursor: null });
+          };
         });
       },
     });
@@ -894,7 +896,9 @@ describe('a replay that cannot be finished', () => {
     const w = await startReplay({
       messages: () =>
         new Promise((resolve) => {
-          release = (): void => resolve({ data: [], nextCursor: null });
+          release = (): void => {
+            resolve({ data: [], nextCursor: null });
+          };
         }),
     });
     w.engine.stop();
