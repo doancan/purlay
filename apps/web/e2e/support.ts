@@ -131,7 +131,7 @@ export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
 
 let counter = 0;
 /** A name no other test, project or run will pick: lowercase, hyphens, within the 64. */
-export const uniqueName = (prefix: string): string => {
+const uniqueName = (prefix: string): string => {
   counter += 1;
   const stamp = Math.floor(performance.timeOrigin + performance.now()).toString(36);
   const salt = Math.random().toString(36).slice(2, 6);
