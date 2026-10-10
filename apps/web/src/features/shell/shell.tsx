@@ -11,6 +11,7 @@
 import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
+import { ConnectionBar } from './connection-bar';
 import { NotFound } from './not-found';
 import { Sidebar } from './sidebar';
 import { WorkspaceScopeProvider } from './workspace';
@@ -27,7 +28,10 @@ export const Shell = ({
       <RealtimeProvider>
         <div className="flex h-screen bg-surface-100 text-ink">
           <Sidebar />
-          <Main className="flex min-w-0 flex-1 flex-col">{children}</Main>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <ConnectionBar />
+            <Main className="flex min-h-0 flex-1 flex-col">{children}</Main>
+          </div>
         </div>
       </RealtimeProvider>
     </WorkspaceScopeProvider>

@@ -8,7 +8,7 @@
  * refuses everything else — so a screen that reaches for an endpoint the test did not
  * expect fails by name (`fake-api.ts`).
  */
-import type { Channel, MeResponse, Message, User, Workspace } from '@purlay/types';
+import type { Channel, MeResponse, Message, User, Workspace, WorkspaceMember } from '@purlay/types';
 import type { Api } from '../data/api';
 import { anApi } from './fake-api';
 
@@ -92,9 +92,16 @@ export const aMessage = (n: number, over: Partial<Message> = {}): Message => ({
   ...over,
 });
 
+/** Everyone in the workspace: the person, and two others. */
+export const someMembers = (): WorkspaceMember[] =>
+  [ME, ALICE, BOB].map((user) => ({ user, role: 'member' as const, joinedAt: WHEN }));
+
 export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
   anApi({
     me: () => Promise.resolve(aSession()),
     channels: () => Promise.resolve(someChannels()),
+    // What the sidebar asks for on every signed-in screen.
+    members: () => Promise.resolve(someMembers()),
+    unresolved: () => Promise.resolve({ data: [], nextCursor: null }),
     ...overrides,
   });

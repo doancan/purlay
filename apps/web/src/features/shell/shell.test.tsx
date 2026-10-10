@@ -58,7 +58,7 @@ describe('the session gate', () => {
     );
     const view = await visit(
       '/w/acme',
-      anApi({ me: () => answer, channels: () => Promise.resolve([]) }),
+      aSignedInApi({ me: () => answer, channels: () => Promise.resolve([]) }),
     );
     expect(view.getByRole('alert').textContent).toContain("Couldn't reach Purlay");
     expect(here(view)).toBe('/w/acme');

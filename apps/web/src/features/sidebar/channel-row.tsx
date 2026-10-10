@@ -1,0 +1,106 @@
+/**
+ * One line of the sidebar that goes somewhere: a channel, or a conversation with a person.
+ *
+ * The treatment is the same for both because the signal is the same (`UX.md` §2): a row
+ * with something unread is **bold**, the row you are in is on `surface-200`, and a count
+ * — the only one in the product — appears only for what *needs you*, a mention or a
+ * message in a direct message. Bold is the unread signal, never a dot or a colour, so it
+ * survives colour-blindness and a screen reader hears it as the word "unread" before the
+ * name rather than as a typographic accident.
+ */
+import { Icon, type GlyphName } from '../../components/icon';
+import { useI18n } from '../../i18n/i18n-provider';
+import { Link } from '../../router/router-provider';
+import { Badge } from '../../ui/badge';
+import { cn } from '../../ui/cn';
+import { VisuallyHidden } from '../../ui/visually-hidden';
+
+const rowClasses =
+  'flex h-control w-full items-center gap-2 rounded-md px-3 text-body hover:bg-surface-200';
+
+const toneClasses = {
+  quiet: 'text-ink-muted',
+  unread: 'text-ink font-semibold',
+  current: 'bg-surface-200 text-ink font-medium',
+} as const;
+
+/** What a row looks like, from what is true of it: where you are beats what is unread. */
+const rowTone = (current: boolean, unread: boolean): keyof typeof toneClasses =>
+  current ? 'current' : unread ? 'unread' : 'quiet';
+
+interface RowContentProps {
+  readonly glyph?: GlyphName;
+  readonly mono?: boolean;
+  readonly unread: boolean;
+  readonly mentions: number;
+  readonly current: boolean;
+  readonly children: React.ReactNode;
+}
+
+/** What is inside a row, so a row that is a button and one that is a link look the same. */
+const RowContent = ({
+  glyph,
+  mono = false,
+  unread,
+  mentions,
+  children,
+}: Omit<RowContentProps, 'current'>): React.JSX.Element => {
+  const { t } = useI18n();
+  return (
+    <>
+      {glyph === undefined ? null : <Icon name={glyph} />}
+      <span className={cn('min-w-0 flex-1 truncate', mono && 'font-mono')}>
+        {unread ? <VisuallyHidden>{t('sidebar.unread')} </VisuallyHidden> : null}
+        {children}
+      </span>
+      {mentions > 0 ? (
+        <Badge count={mentions} label={t('sidebar.mentions', { count: mentions })} />
+      ) : null}
+    </>
+  );
+};
+
+interface ChannelLinkProps extends RowContentProps {
+  readonly slug: string;
+  readonly channelId: string;
+}
+
+/** A row that opens a conversation the person is already in. */
+export const ChannelRow = ({
+  slug,
+  channelId,
+  current,
+  children,
+  ...content
+}: ChannelLinkProps): React.JSX.Element => (
+  <Link
+    to="channel"
+    params={{ slug, channelId }}
+    {...(current ? { 'aria-current': 'page' as const } : {})}
+    className={cn(rowClasses, toneClasses[rowTone(current, content.unread)])}
+  >
+    <RowContent {...content}>{children}</RowContent>
+  </Link>
+);
+
+interface ActionRowProps extends Omit<RowContentProps, 'current'> {
+  readonly onClick: () => void;
+  readonly disabled?: boolean;
+}
+
+/** A row that *does* something — opens a conversation that does not exist yet. */
+export const ActionRow = ({
+  onClick,
+  disabled = false,
+  children,
+  ...content
+}: ActionRowProps): React.JSX.Element => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className={cn(rowClasses, toneClasses[rowTone(false, content.unread)], 'text-left')}
+  >
+    <RowContent {...content}>{children}</RowContent>
+  </button>
+);

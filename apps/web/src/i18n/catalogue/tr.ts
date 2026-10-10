@@ -54,6 +54,25 @@ export const tr = {
   'sidebar.mentions': {
     other: '{count} okunmamış bahsetme',
   },
+  // ── Sidebar chrome ──────────────────────────────────────────────────────
+  'sidebar.workspaces': 'Çalışma alanları',
+  'sidebar.signedInAs': '{name} olarak giriş yapıldı',
+  'sidebar.browse': 'Kanallara göz at',
+  'sidebar.questions.many': '99+',
+  'sidebar.unread': 'okunmamış',
+  'sidebar.dm.failed': 'Konuşma açılamadı. Yeniden dene.',
+  'sidebar.people.empty': 'Burada henüz başka kimse yok.',
+  'browse.title': 'Kanallara göz at',
+  'browse.description': 'Henüz katılmadığın herkese açık kanallar.',
+  'browse.join': 'Katıl',
+  'browse.joinLabel': '{name} kanalına katıl',
+  'browse.joinFailed': 'Kanala katılamadın. Yeniden dene.',
+  'browse.loading': 'Kanallar yükleniyor',
+  'browse.empty.title': 'Katılacak kanal yok',
+  'browse.empty.body': 'Var olan tüm herkese açık kanallardasın.',
+  'browse.error.title': 'Kanallar yüklenemedi',
+  'browse.error.body': 'Sunucu yanıt vermedi. Yeniden dene.',
+
   'workspace.none.title': 'Henüz bir çalışma alanında değilsin',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
