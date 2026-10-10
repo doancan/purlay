@@ -18,7 +18,7 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type ChannelType } from '@purlay/types';
-import type { Executor } from '@purlay/db';
+import type { Database, Executor, SelectQueryBuilder } from '@purlay/db';
 import { AppError } from './errors';
 import type { WorkspaceContext } from './tenancy';
 
@@ -64,12 +64,15 @@ interface Scope {
  * channel in somebody else's workspace cost the same and cannot be told apart by
  * how long the refusal takes (#200).
  */
-const visible = async (
-  executor: Executor,
-  userId: string,
-  scope: Scope,
-): Promise<readonly VisibleChannel[]> => {
-  let query = executor
+/** The channels and the joins that decide who may see them; each caller adds what it selects. */
+type VisibilityQuery = SelectQueryBuilder<
+  Database,
+  'channels' | 'workspaces' | 'workspace_members' | 'channel_members',
+  object
+>;
+
+const visibleChannels = (executor: Executor, userId: string): VisibilityQuery =>
+  executor
     .selectFrom('channels')
     .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
     .innerJoin('workspace_members', (join) =>
@@ -82,12 +85,22 @@ const visible = async (
         .onRef('channel_members.channel_id', '=', 'channels.id')
         .on('channel_members.user_id', '=', userId),
     )
-    .select(['channels.id as id', 'channels.workspace_id as workspaceId', 'channels.type as type'])
     .where('channels.deleted_at', 'is', null)
     .where('workspaces.deleted_at', 'is', null)
     .where((eb) =>
       eb.or([eb('channels.type', '=', 'public'), eb('channel_members.user_id', 'is not', null)]),
     );
+
+const visible = async (
+  executor: Executor,
+  userId: string,
+  scope: Scope,
+): Promise<readonly VisibleChannel[]> => {
+  let query = visibleChannels(executor, userId).select([
+    'channels.id as id',
+    'channels.workspace_id as workspaceId',
+    'channels.type as type',
+  ]);
   if (scope.channelIds !== undefined) query = query.where('channels.id', 'in', scope.channelIds);
   if (scope.workspaceId !== undefined) {
     query = query.where('channels.workspace_id', '=', scope.workspaceId);
@@ -178,3 +191,52 @@ export const visibleChannelIds = async (
   (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map(
     (channel) => channel.id,
   );
+
+const messageNotFound = (): AppError =>
+  new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+
+/** A message the caller may act on, and the channel it is in. */
+export interface VisibleMessage {
+  readonly context: ChannelContext;
+  readonly messageId: string;
+  /** Null for a root. Threads are two levels deep, so a reply's is always a root (I-1). */
+  readonly parentId: string | null;
+}
+
+/**
+ * For a route that names a message and nothing else (`/api/messages/:messageId/…`).
+ *
+ * The message's channel and the caller's right to see it are **one query**, built on
+ * the same rule as every other entry point (`visibleChannels`), so a message that
+ * does not exist, one in somebody else's workspace, one in a private channel the
+ * caller is not in and one that was deleted are the same refusal and cost the same
+ * round trip — two queries, one to find the channel and one to check it, would let
+ * how long the refusal took say which of them it was (D-34, #200).
+ *
+ * A tombstoned message (D-9) is not one to act on: it has nothing to resolve, react
+ * to or reply under, and its thread, if any, is read through the channel.
+ */
+export const requireMessageById = async (
+  executor: Executor,
+  userId: string,
+  messageId: string,
+): Promise<VisibleMessage> => {
+  if (!Value.Check(Uuid, messageId)) throw messageNotFound();
+  const row = await visibleChannels(executor, userId)
+    .innerJoin('messages', 'messages.channel_id', 'channels.id')
+    .select([
+      'channels.id as id',
+      'channels.workspace_id as workspaceId',
+      'channels.type as type',
+      'messages.parent_id as parentId',
+    ])
+    .where('messages.id', '=', messageId)
+    .where('messages.deleted_at', 'is', null)
+    .executeTakeFirst();
+  if (row === undefined) throw messageNotFound();
+  return {
+    context: mint(userId, row),
+    messageId,
+    parentId: row.parentId,
+  };
+};

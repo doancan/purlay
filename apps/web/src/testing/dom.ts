@@ -15,9 +15,14 @@
  * the first component test file got a DOM and the second got
  * `document is not defined`. It stayed hidden while one component test existed.
  * The second one (the icons, #137) found it. Hooks belong to the file that asks.
+ *
+ * One consequence worth knowing: Radix is imported *before* this DOM exists, and
+ * decides at import time that there is none. `radix-preload.ts` is what makes it
+ * work anyway.
  */
-import { afterAll, beforeAll } from 'bun:test';
+import { afterAll, afterEach, beforeAll } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { cleanup } from '@testing-library/react';
 
 /**
  * Registered **in a lifecycle hook**, not when called.
@@ -31,6 +36,16 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 export const installDom = (): void => {
   beforeAll(() => {
     GlobalRegistrator.register();
+  });
+
+  /**
+   * What a test rendered is removed when the test ends. Testing Library does this
+   * itself when the runner has a global `afterEach`; this runner's is not seen
+   * from there, so without it every test's render piles up in the one `document`
+   * and a query finds the previous test's button too.
+   */
+  afterEach(() => {
+    cleanup();
   });
 
   /**

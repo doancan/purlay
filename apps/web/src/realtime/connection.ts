@@ -26,6 +26,7 @@ import {
   SUBSCRIBE_MAX_CHANNELS,
   parseServerMessage,
   type ClientFrame,
+  type ErrorCode,
   type ServerFrame,
 } from '@purlay/types';
 import { reconnectDelay } from './backoff';
@@ -137,6 +138,17 @@ export interface ConnectionOptions {
   readonly newId: () => string;
   readonly onFrame: (frame: ServerFrame) => void;
   readonly onStatus?: (status: ConnectionStatus) => void;
+  /**
+   * A chunk of channels the server refused for a reason waiting will not change, with its
+   * code and the id of the `SUBSCRIBE` it answers. Told **before** `onFrame` gets the same
+   * `ERROR`, so whoever owns the store can say so and then recognise the frame. Without it a
+   * refusal is skipped silently here and those channels never receive another message.
+   */
+  readonly onSubscribeRefused?: (
+    channelIds: readonly string[],
+    code: ErrorCode,
+    refId: string,
+  ) => void;
 }
 
 export interface Connection {
@@ -277,8 +289,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         );
         limitedTimes += 1;
       } else {
-        // Refused for a reason waiting will not change; the store sees the ERROR.
+        // Refused for a reason waiting will not change: say so, and go on with the next chunk.
+        const { channelIds, id } = inFlight;
         inFlight = null;
+        options.onSubscribeRefused?.(channelIds, frame.data.code, id);
         pump();
       }
     }

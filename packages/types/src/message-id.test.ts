@@ -134,3 +134,13 @@ describe('the replay floor', () => {
     expect(oldestAcceptable > messageIdFloor(messageIdTime(cursor) - REPLAY_OVERLAP_MS)).toBe(true);
   });
 });
+
+import { isMessageIdShape as shapeOf } from './message-id';
+
+describe('the id shape is lower-case', () => {
+  test('an upper-case spelling of a valid v7 id is refused', () => {
+    const id = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
+    expect(shapeOf(id)).toBe(true);
+    expect(shapeOf(id.toUpperCase())).toBe(false);
+  });
+});

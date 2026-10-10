@@ -51,11 +51,24 @@ export const ErrorCode = Type.Union([
   Type.Literal('ROUTE_NOT_FOUND'),
   Type.Literal('WORKSPACE_NOT_FOUND'),
   Type.Literal('CHANNEL_NOT_FOUND'),
+  /**
+   * A message that does not exist, or is in a channel the caller cannot see. One
+   * code for both, as the channel's is (D-34): which of the two it was is exactly
+   * what the caller must not be able to learn.
+   */
+  Type.Literal('MESSAGE_NOT_FOUND'),
+  /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
+  Type.Literal('USER_NOT_FOUND'),
   // Conflict
   /** A workspace slug is an identifier in a URL, so it is unique across the instance. */
   Type.Literal('WORKSPACE_SLUG_TAKEN'),
   Type.Literal('CHANNEL_NAME_TAKEN'),
   Type.Literal('MESSAGE_ID_CONFLICT'),
+  /**
+   * Resolving a message that cannot be resolved: a reply (only roots resolve), or a
+   * root nobody has replied to (a resolved thread has at least one reply, I-8).
+   */
+  Type.Literal('THREAD_NOT_RESOLVABLE'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
   // Volume
   /**
@@ -92,10 +105,13 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
+  MESSAGE_NOT_FOUND: 404,
+  USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,
   MESSAGE_ID_CONFLICT: 409,
+  THREAD_NOT_RESOLVABLE: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
 
   UNSUPPORTED_MEDIA_TYPE: 415,

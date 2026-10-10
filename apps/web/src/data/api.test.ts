@@ -1,0 +1,165 @@
+/**
+ * Every endpoint against the path `API.md` gives it, and the method and body the
+ * contract says. The responses are real shapes, so the schema check in `http.ts`
+ * is exercised too: an endpoint wired to the wrong schema fails here.
+ */
+import { describe, expect, test } from 'bun:test';
+import { createApi, type Api } from './api';
+import { createHttp } from './http';
+
+const ID = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
+const WHEN = '2026-09-09T08:00:00.000Z';
+const user = { id: ID, username: 'alice', displayName: 'Alice', avatarUrl: null };
+const state = { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 };
+const channel = {
+  id: ID,
+  workspaceId: ID,
+  name: 'api',
+  topic: null,
+  type: 'public',
+  lastMessageAt: null,
+  state,
+  peer: null,
+};
+const message = {
+  id: ID,
+  channelId: ID,
+  sender: user,
+  content: 'hi',
+  editedAt: null,
+  deletedAt: null,
+  createdAt: WHEN,
+  parentId: null,
+  thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
+  reactions: [],
+  mentions: [],
+};
+const workspace = { id: ID, name: 'acme', slug: 'acme', avatarUrl: null };
+
+interface Call {
+  method: string;
+  url: string;
+  body: unknown;
+}
+
+const harness = (body: unknown): { api: Api; calls: Call[] } => {
+  const calls: Call[] = [];
+  const fetchFn = ((url: string, init: RequestInit) => {
+    calls.push({
+      method: String(init.method),
+      url,
+      body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
+    });
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  }) as unknown as typeof fetch;
+  return { api: createApi(createHttp(fetchFn)), calls };
+};
+
+describe('the endpoints', () => {
+  test('identity and workspaces', async () => {
+    const me = harness({
+      user: { ...user, email: 'a@example.test' },
+      memberships: [{ workspace, role: 'owner', joinedAt: WHEN }],
+    });
+    expect((await me.api.me()).user.username).toBe('alice');
+    expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
+
+    const list = harness([{ workspace, role: 'member', joinedAt: WHEN }]);
+    expect(await list.api.workspaces()).toHaveLength(1);
+    expect(list.calls[0]?.url).toBe('/api/workspaces');
+
+    const created = harness(workspace);
+    await created.api.createWorkspace({ name: 'acme', slug: 'acme' });
+    expect(created.calls[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/workspaces',
+      body: { name: 'acme', slug: 'acme' },
+    });
+
+    const members = harness([{ user, role: 'member', joinedAt: WHEN }]);
+    await members.api.members(ID);
+    expect(members.calls[0]?.url).toBe(`/api/workspaces/${ID}/members`);
+  });
+
+  test('channels, joining, direct messages and the read position', async () => {
+    const list = harness([channel]);
+    await list.api.channels(ID);
+    expect(list.calls[0]?.url).toBe(`/api/workspaces/${ID}/channels`);
+
+    const create = harness(channel);
+    await create.api.createChannel(ID, { name: 'api', topic: 'x' });
+    expect(create.calls[0]).toMatchObject({ method: 'POST', body: { name: 'api', topic: 'x' } });
+    await create.api.joinChannel(ID);
+    expect(create.calls[1]).toMatchObject({ method: 'POST', url: `/api/channels/${ID}/join` });
+    await create.api.openDirectMessage(ID, 'u1');
+    expect(create.calls[2]).toMatchObject({
+      url: `/api/workspaces/${ID}/dms`,
+      body: { userId: 'u1' },
+    });
+
+    const read = harness(state);
+    await read.api.markRead(ID, 'm1');
+    expect(read.calls[0]).toMatchObject({
+      method: 'PUT',
+      url: `/api/channels/${ID}/read`,
+      body: { lastReadMessageId: 'm1' },
+    });
+  });
+
+  test('messages, threads and the open questions page by cursor', async () => {
+    const page = harness({ data: [message], nextCursor: null });
+    await page.api.messages(ID, { before: 'b', limit: 25 });
+    expect(page.calls[0]?.url).toBe(`/api/channels/${ID}/messages?before=b&limit=25`);
+    await page.api.messages(ID);
+    expect(page.calls[1]?.url).toBe(`/api/channels/${ID}/messages`);
+    await page.api.thread(ID, { after: 'a' });
+    expect(page.calls[2]?.url).toBe(`/api/messages/${ID}/thread?after=a`);
+    await page.api.unresolved(ID, { before: 'b' });
+    expect(page.calls[3]?.url).toBe(`/api/workspaces/${ID}/unresolved?before=b`);
+    await page.api.unresolved(ID);
+    await page.api.thread(ID);
+    expect(page.calls[4]?.url).toBe(`/api/workspaces/${ID}/unresolved`);
+    expect(page.calls[5]?.url).toBe(`/api/messages/${ID}/thread`);
+
+    const sent = harness(message);
+    await sent.api.send(ID, { id: ID, content: 'hi', parentId: ID });
+    expect(sent.calls[0]).toMatchObject({
+      method: 'POST',
+      url: `/api/channels/${ID}/messages`,
+      body: { id: ID, content: 'hi', parentId: ID },
+    });
+  });
+
+  test('resolution and reactions, the emoji percent-encoded into the path', async () => {
+    const msg = harness(message);
+    await msg.api.resolve(ID);
+    await msg.api.reopen(ID);
+    expect(msg.calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `POST /api/messages/${ID}/resolve`,
+      `DELETE /api/messages/${ID}/resolve`,
+    ]);
+
+    const reactions = harness({ reactions: [{ emoji: '👍', userIds: [ID] }] });
+    await reactions.api.react(ID, '👍');
+    await reactions.api.unreact(ID, '👍');
+    expect(reactions.calls[0]?.url).toBe(`/api/messages/${ID}/reactions/%F0%9F%91%8D`);
+    expect(reactions.calls[1]).toMatchObject({ method: 'DELETE' });
+  });
+
+  test('signing out asks and does not read an answer', async () => {
+    const out = harness(null);
+    await out.api.signOut();
+    expect(out.calls[0]).toMatchObject({ method: 'POST', url: '/auth/logout' });
+  });
+
+  test('an abandoned read carries the signal', async () => {
+    let signal: AbortSignal | undefined;
+    const fetchFn = ((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return Promise.resolve(new Response(JSON.stringify([channel]), { status: 200 }));
+    }) as unknown as typeof fetch;
+    const controller = new AbortController();
+    await createApi(createHttp(fetchFn)).channels(ID, controller.signal);
+    expect(signal).toBe(controller.signal);
+  });
+});

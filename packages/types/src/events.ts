@@ -10,7 +10,16 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody } from './errors';
-import { FromClient, Message, MessageContent, Uuid } from './models';
+import {
+  Channel,
+  ChannelState,
+  FromClient,
+  Message,
+  MessageContent,
+  Reaction,
+  ThreadSummary,
+  Uuid,
+} from './models';
 
 /**
  * The largest frame either side may send, in bytes (`ARCHITECTURE.md` §5.5).
@@ -38,7 +47,12 @@ export const MAX_FRAME_BYTES = 64 * 1024;
 export const MessageSendFrame = FromClient({
   id: Uuid,
   op: Type.Literal('MESSAGE_SEND'),
-  payload: FromClient({ channelId: Uuid, content: MessageContent }),
+  payload: FromClient({
+    channelId: Uuid,
+    content: MessageContent,
+    /** Makes it a reply to this root, as in the HTTP request (I-1). */
+    parentId: Type.Optional(Uuid),
+  }),
 });
 
 /**
@@ -113,6 +127,19 @@ export const ACCESS_REVOKED_MAX_CHANNELS = 500;
  */
 const envelope = { ts: Type.Number(), refId: Type.Optional(Uuid) };
 
+/**
+ * The order a whole-state frame's state was written in (`0015_state_versions`).
+ *
+ * A frame that says "this is the state, replace what you hold" is repaired by the next one —
+ * and ruined by a late one: two writes commit in one order and are published in another, and
+ * the older state would overwrite the newer. The version is the row's own count of its
+ * changes, taken in the statement that made them, so a client keeps the newest it has applied
+ * for each thing and drops a frame that is not newer. Not for ordering across *kinds*:
+ * `THREAD_UPDATED` and `REACTIONS_UPDATED` share a message's counter, and are compared only
+ * with frames of their own kind.
+ */
+const stateVersion = { version: Type.Integer({ minimum: 1 }) };
+
 /** The message is durable. Carries no row, because the client already has it. */
 export const AckFrame = Type.Object({
   event: Type.Literal('ACK'),
@@ -158,6 +185,51 @@ export const ErrorFrame = Type.Object({
 export const MessageCreatedFrame = Type.Object({
   event: Type.Literal('MESSAGE_CREATED'),
   data: Message,
+  ...envelope,
+});
+
+/**
+ * A root's replies changed: one arrived, or the thread was resolved or reopened.
+ * The root is not re-sent — the summary is the only thing about it that moved —
+ * and the frame is on the channel's topic, so everyone watching the channel hears
+ * it (`API.md` §5: HTTP and the socket are two doors into one service).
+ */
+export const ThreadUpdatedFrame = Type.Object({
+  event: Type.Literal('THREAD_UPDATED'),
+  data: Type.Object({ channelId: Uuid, messageId: Uuid, thread: ThreadSummary }),
+  ...stateVersion,
+  ...envelope,
+});
+
+/** Somebody reacted or took it back; the message's whole set, so a client replaces rather than patches. */
+export const ReactionsUpdatedFrame = Type.Object({
+  event: Type.Literal('REACTIONS_UPDATED'),
+  data: Type.Object({ channelId: Uuid, messageId: Uuid, reactions: Type.Array(Reaction) }),
+  ...stateVersion,
+  ...envelope,
+});
+
+/**
+ * *Your* read position and counters in one channel changed — a message arrived for
+ * you, or you read on another device. On the `user:` topic, so it reaches only that
+ * person's sockets, and carries the server's numbers: a client that incremented its
+ * own would drift from the column the first time two devices disagreed (D-13).
+ */
+export const ChannelStateFrame = Type.Object({
+  event: Type.Literal('CHANNEL_STATE'),
+  data: Type.Object({ channelId: Uuid, state: ChannelState }),
+  ...stateVersion,
+  ...envelope,
+});
+
+/**
+ * A channel appeared for you — somebody opened a direct message with you. On the
+ * `user:` topic. The client adds it and subscribes; without this a DM would not
+ * exist for the other person until they reloaded.
+ */
+export const ChannelAddedFrame = Type.Object({
+  event: Type.Literal('CHANNEL_ADDED'),
+  data: Channel,
   ...envelope,
 });
 
@@ -209,6 +281,10 @@ export const ServerFrame = Type.Union([
   UnsubscribedFrame,
   ErrorFrame,
   MessageCreatedFrame,
+  ThreadUpdatedFrame,
+  ReactionsUpdatedFrame,
+  ChannelStateFrame,
+  ChannelAddedFrame,
   SessionEndedFrame,
   AccessRevokedFrame,
   PongFrame,
@@ -274,6 +350,8 @@ export const parseServerMessage = (text: string): ServerMessage => {
  * - `user:` is where every socket a user holds listens, whichever session it
  *   belongs to: the end of the account (`SESSION_ENDED`, `account-deleted`) and the
  *   removal of one member's access (`ACCESS_REVOKED`) are published here (D-85).
+ * - `user:` also carries what is true for one person only: their read state
+ *   (`CHANNEL_STATE`) and a channel that appeared for them (`CHANNEL_ADDED`).
  * - `workspace:` has no publisher yet; it is named for Phase 1.
  */
 export type Topic =

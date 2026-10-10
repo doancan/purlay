@@ -49,8 +49,22 @@ import {
   readMe,
   readWorkspace,
 } from './workspaces';
-import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
-import { postMessage, readHistory } from './messages';
+import {
+  createWorkspaceChannel,
+  joinPublicChannel,
+  listChannels,
+  openDirectMessageWith,
+  readChannel,
+  readUpTo,
+} from './channels';
+import {
+  postMessage,
+  readHistory,
+  readThread,
+  readUnresolved,
+  setThreadResolution,
+} from './messages';
+import { changeReaction } from './reactions';
 import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { MAX_FRAME_BYTES } from '@purlay/types';
@@ -268,9 +282,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return await createWorkspaceChannel(dependencies, request, params.workspaceId, body);
     })
+    .post('/api/workspaces/:workspaceId/dms', async ({ request, params, body, set }) => {
+      const { channel, created } = await openDirectMessageWith(
+        { ...dependencies, bus: sockets.bus },
+        request,
+        params.workspaceId,
+        body,
+      );
+      // 201 when this call made it, 200 when it was already there: the same pair
+      // is the same channel, and a retry is not a second one (I-5).
+      set.status = created ? 201 : 200;
+      return channel;
+    })
     .get(
       '/api/channels/:channelId',
       async ({ request, params }) => await readChannel(dependencies, request, params.channelId),
+    )
+    .put(
+      '/api/channels/:channelId/read',
+      async ({ request, params, body }) =>
+        await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
     .post(
       '/api/channels/:channelId/join',
@@ -286,6 +317,36 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return await postMessage(sending, request, params.channelId, body);
     })
+    .get(
+      '/api/messages/:messageId/thread',
+      async ({ request, params }) => await readThread(dependencies, request, params.messageId),
+    )
+    .post(
+      '/api/messages/:messageId/resolve',
+      async ({ request, params }) =>
+        await setThreadResolution(sending, request, params.messageId, true),
+    )
+    .delete(
+      '/api/messages/:messageId/resolve',
+      async ({ request, params }) =>
+        await setThreadResolution(sending, request, params.messageId, false),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/unresolved',
+      async ({ request, params }) =>
+        await readUnresolved(dependencies, request, params.workspaceId),
+    )
+
+    .put(
+      '/api/messages/:messageId/reactions/:emoji',
+      async ({ request, params }) =>
+        await changeReaction(sending, request, params.messageId, params.emoji, true),
+    )
+    .delete(
+      '/api/messages/:messageId/reactions/:emoji',
+      async ({ request, params }) =>
+        await changeReaction(sending, request, params.messageId, params.emoji, false),
+    )
 
     /**
      * The socket.

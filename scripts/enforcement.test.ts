@@ -193,11 +193,16 @@ describe('build output stays outside the source tree', () => {
    * than the thing that causes it.
    */
   test('no compiled output of any kind sits beside a source file', () => {
+    // One file is allowed, by name: the page-load theme script is *written* as a
+    // plain script because it must run before any module does and be served as-is
+    // (`apps/web/public/theme-init.js`, D-98). It is a source, not output. Naming it
+    // keeps the rule whole — a second `.js` there is a decision, made here.
     const found = Bun.spawnSync([
       'bash',
       '-lc',
       "find apps packages scripts \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' " +
-        "-o -name '*.d.ts.map' \\) -not -path '*/node_modules/*' -not -path '*/dist/*'",
+        "-o -name '*.d.ts.map' \\) -not -path '*/node_modules/*' -not -path '*/dist/*' " +
+        "-not -path 'apps/web/public/theme-init.js'",
     ]);
     expect(found.stdout.toString().trim()).toBe('');
   });

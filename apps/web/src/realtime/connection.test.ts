@@ -187,6 +187,10 @@ const created = (channelId: string, id: string): string => {
       editedAt: null,
       deletedAt: null,
       createdAt: new Date(T0).toISOString(),
+      parentId: null,
+      thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
+      reactions: [],
+      mentions: [],
     },
   };
   return JSON.stringify(frame);

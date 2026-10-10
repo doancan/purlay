@@ -58,7 +58,11 @@ export const documentedEndpoints = (): readonly DocumentedEndpoint[] =>
 export interface Ids {
   readonly workspaceId: string;
   readonly channelId: string;
+  readonly messageId: string;
 }
+
+/** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
+const CROSSING_EMOJI = encodeURIComponent('👍');
 
 /**
  * The documented path with its parameters filled in.
@@ -71,6 +75,8 @@ export const pathFor = (path: string, ids: Ids): string =>
   path.replace(/:(\w+)/g, (_whole, name: string) => {
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
+    if (name === 'messageId') return ids.messageId;
+    if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
 
@@ -79,6 +85,9 @@ export const pathFor = (path: string, ids: Ids): string =>
  *
  * - `channel`: it names one channel, and a workspace member who cannot see that
  *   channel is told it does not exist.
+ * - `message`: it names one message, and a workspace member who cannot see the
+ *   channel the message is in is told it does not exist — the same refusal as for a
+ *   message that was never written.
  * - `workspace-wide`: it reads across the workspace's channels, and nothing from
  *   a channel the caller cannot see may appear anywhere in what it returns.
  *   `query` is what the read needs to return anything at all — search needs `q`.
@@ -86,21 +95,38 @@ export const pathFor = (path: string, ids: Ids): string =>
  */
 type Visibility =
   | { readonly kind: 'channel' }
+  | { readonly kind: 'message' }
   | { readonly kind: 'workspace-wide'; readonly query?: string }
   | { readonly kind: 'none'; readonly reason: string };
 
+/**
+ * What a body may need from the owner's side of a crossing and cannot derive: the
+ * owner themself (a direct message with a person who is certainly in the
+ * workspace) and a message of the owner's channel (a read position names one). The
+ * stranger's request carries the same body, which is how a refusal that came before
+ * the body was read is told from one that came after.
+ */
+export interface OwnerIds {
+  readonly userId: string;
+  readonly messageId: string;
+}
+
 export interface CrossTenantCase {
   /** What a stranger is told — and, identically, somebody naming an id that never existed. */
-  readonly refusal: Extract<ErrorCode, 'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND'>;
+  readonly refusal: Extract<
+    ErrorCode,
+    'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND' | 'MESSAGE_NOT_FOUND'
+  >;
   /**
    * A body the owner's identical request succeeds with. Without it a `POST` would
    * be refused for its body, and the `404` would never have been reached.
    */
-  readonly body?: (now: Date) => unknown;
+  readonly body?: (now: Date, owner: OwnerIds) => unknown;
   readonly visibility: Visibility;
 }
 
 const CHANNEL: Visibility = { kind: 'channel' };
+const MESSAGE: Visibility = { kind: 'message' };
 
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId': {
@@ -123,10 +149,38 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/channels/:channelId': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'POST /api/workspaces/:workspaceId/dms': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: (_now, owner) => ({ userId: owner.userId }),
+    visibility: {
+      kind: 'none',
+      reason: 'opens a direct message; it returns only the one it opened',
+    },
+  },
+  'PUT /api/channels/:channelId/read': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (_now, owner) => ({ lastReadMessageId: owner.messageId }),
+    visibility: CHANNEL,
+  },
   'POST /api/channels/:channelId/messages': {
     refusal: 'CHANNEL_NOT_FOUND',
     body: (now) => ({ id: messageId(now), content: 'crossing' }),
     visibility: CHANNEL,
+  },
+  'PUT /api/messages/:messageId/reactions/:emoji': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+  },
+  'DELETE /api/messages/:messageId/reactions/:emoji': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+  },
+  'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'GET /api/workspaces/:workspaceId/unresolved': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide' },
   },
 };
 

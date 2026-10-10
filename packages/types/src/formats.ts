@@ -12,11 +12,19 @@
 import { FormatRegistry } from '@sinclair/typebox';
 
 /**
- * Shape only. That a `messages.id` is specifically a UUIDv7 carrying a plausible
+ * Shape only — and **lower-case only**. Every id this system makes is lower-case hex
+ * (PostgreSQL's text form, `crypto.randomUUID`, our UUIDv7), and every place that compares
+ * one does it as text: the read position (`id <= position`), `dm_key` (a CHECK on the form,
+ * I-5), topic names, a client's cache keys. A format that also accepted `ABC…` let a request
+ * through the boundary that each of those then handled differently — a direct message
+ * refused as malformed, a read position silently not moved, a frame published to a topic
+ * nobody listens on. One spelling is refused at the one place that can say so (H-API 2).
+ *
+ * That a `messages.id` is specifically a UUIDv7 carrying a plausible
  * timestamp is checked by the server before it trusts a client-supplied id
  * (D-33) — a rule about time, not a string format.
  */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Deliberately narrow: an address the application produced, in UTC. */
 const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -70,6 +78,17 @@ const NOT_STORABLE =
   /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const isPlainText = (value: string): boolean => !NOT_STORABLE.test(value);
 
+/**
+ * One emoji and nothing else: a pictograph with its optional variation selector and
+ * skin-tone modifier, joined by zero-width joiners (family, profession), or a flag
+ * (two regional indicators), or a keycap. Unicode emoji only — custom emoji are a
+ * permanent non-goal (D-4) — and a reaction is one of them, so a string of text
+ * cannot be stored in the column that holds it. Whether the glyph exists on a
+ * given platform is the platform's business.
+ */
+const EMOJI =
+  /^(?:\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?)*)$/u;
+
 FormatRegistry.Set('uuid', (value) => UUID.test(value));
 FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
@@ -77,6 +96,7 @@ FormatRegistry.Set('uri', (value) => URI.test(value));
 FormatRegistry.Set('message-content', isMessageContent);
 FormatRegistry.Set('name', (value) => !FORBIDDEN_IN_NAME.test(value));
 FormatRegistry.Set('plain-text', isPlainText);
+FormatRegistry.Set('emoji', (value) => EMOJI.test(value));
 
 export const REGISTERED_FORMATS = [
   'uuid',
@@ -86,4 +106,5 @@ export const REGISTERED_FORMATS = [
   'message-content',
   'name',
   'plain-text',
+  'emoji',
 ] as const;

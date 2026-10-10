@@ -66,6 +66,8 @@ describe('.dockerignore', () => {
     '.claude',
     '**/*.test.ts',
     'apps/api/src/testing',
+    'apps/api/src/cli/demo-*.ts',
+    'apps/api/src/cli/seed-demo.ts',
   ])('keeps %s out of the context', (entry) => {
     expect(dockerignore.split('\n')).toContain(entry);
   });

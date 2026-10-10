@@ -20,11 +20,13 @@ import {
 } from '@sinclair/typebox';
 import {
   Channel,
+  ChannelState,
   CurrentUser,
   FromClient,
   Membership,
   Message,
   MessageContent,
+  Reaction,
   User,
   UserRole,
   Uuid,
@@ -110,6 +112,12 @@ export type CreateChannelRequest = Static<typeof CreateChannelRequest>;
 export const SendMessageRequest = FromClient({
   id: Uuid,
   content: MessageContent,
+  /**
+   * Makes this a reply. Must be a root message of the same channel (I-1); a reply
+   * to a reply is refused, because depth is a rule of the service and not of any
+   * one screen.
+   */
+  parentId: Type.Optional(Uuid),
 });
 export type SendMessageRequest = Static<typeof SendMessageRequest>;
 
@@ -118,3 +126,37 @@ export type MessagePage = Static<typeof MessagePage>;
 
 export const ChannelList = Type.Array(Channel);
 export type ChannelList = Static<typeof ChannelList>;
+
+/** `GET /api/messages/:messageId/thread` — replies, keyset, **oldest first**. */
+export const ThreadPage = Page(Message);
+export type ThreadPage = Static<typeof ThreadPage>;
+
+/**
+ * `GET /api/workspaces/:workspaceId/unresolved` — the open-questions view: roots
+ * with at least one reply and no resolution, newest first, from channels the
+ * caller can see and no others (D-34).
+ */
+export const UnresolvedPage = Page(Message);
+export type UnresolvedPage = Static<typeof UnresolvedPage>;
+
+/**
+ * `PUT /api/channels/:channelId/read` — the newest message the person has seen.
+ * Never moves the position backwards, and a message that is not in this channel is
+ * refused (I-3). The answer is the new state, so the client does not recompute it.
+ */
+export const ReadChannelRequest = FromClient({ lastReadMessageId: Uuid });
+export type ReadChannelRequest = Static<typeof ReadChannelRequest>;
+export const ReadChannelResponse = ChannelState;
+export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
+
+/** `PUT`/`DELETE /api/messages/:messageId/reactions/:emoji` — idempotent; answers the message's reactions. */
+export const ReactionsResponse = Type.Object({ reactions: Type.Array(Reaction) });
+export type ReactionsResponse = Static<typeof ReactionsResponse>;
+
+/** `POST /api/workspaces/:workspaceId/dms` — the same pair gets the same channel (I-5). */
+export const CreateDirectMessageRequest = FromClient({ userId: Uuid });
+export type CreateDirectMessageRequest = Static<typeof CreateDirectMessageRequest>;
+
+/** `GET /api/workspaces/:workspaceId/members` — who can be messaged, mentioned and counted. */
+export const WorkspaceMemberList = Type.Array(WorkspaceMember);
+export type WorkspaceMemberList = Static<typeof WorkspaceMemberList>;

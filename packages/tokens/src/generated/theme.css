@@ -47,34 +47,32 @@
   --spacing-8: var(--space-8);
 
   /* Radius */
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius-md);
-  --radius-full: var(--radius-full);
 
-  /* Shadow */
-  --shadow-float: var(--shadow-float);
+  /* Shadow (a utility: see `map`, and it differs by theme) */
 
   /* Sizes */
-  --container-rail: var(--size-rail);
   --container-sidebar: var(--size-sidebar);
   --container-members: var(--size-members);
   --container-feed: var(--size-feed-max);
   --height-control: var(--size-control);
+  --height-touch: var(--size-touch);
+  --container-touch: var(--size-touch);
   --height-header: var(--size-header);
   --container-gutter: var(--size-gutter);
   --height-badge: var(--size-badge);
   --container-badge: var(--size-badge);
-  --size-dot: var(--size-dot);
-  --size-avatar: var(--size-avatar);
+  --height-code: var(--size-code-clamp);
+  --container-dialog: var(--size-dialog);
+  --container-palette: var(--size-palette);
+  --height-palette-list: var(--size-palette-list);
+  --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
-  --size-icon-sm: var(--size-icon-sm);
-  --size-icon-md: var(--size-icon-md);
-  --size-icon-lg: var(--size-icon-lg);
   --breakpoint-narrow: 900px;
 
   /* Stroke widths */
   --border-width-hairline: var(--stroke-hairline);
   --outline-width-focus: var(--stroke-focus);
+  --border-width-marker: var(--stroke-marker);
 
   /* Stacking: z- */
   --z-index-sticky: var(--z-sticky);
@@ -89,8 +87,6 @@
   --ease-standard: var(--easing-standard);
 
   /* Type: families, weights; the sizes are the text- utilities below */
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
   --font-weight-normal: var(--weight-normal);
   --font-weight-medium: var(--weight-medium);
   --font-weight-semibold: var(--weight-semibold);
@@ -156,6 +152,55 @@
   line-height: var(--text-code-leading);
   font-weight: var(--text-code-weight);
   letter-spacing: var(--text-code-tracking);
+}
+
+@utility rounded-sm {
+  border-radius: var(--radius-sm);
+}
+
+@utility rounded-md {
+  border-radius: var(--radius-md);
+}
+
+@utility rounded-pill {
+  border-radius: var(--radius-pill);
+}
+
+@utility shadow-float {
+  box-shadow: var(--shadow-float);
+}
+
+@utility size-dot {
+  width: var(--size-dot);
+  height: var(--size-dot);
+}
+
+@utility size-avatar {
+  width: var(--size-avatar);
+  height: var(--size-avatar);
+}
+
+@utility size-icon-sm {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+
+@utility size-icon-md {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+}
+
+@utility size-icon-lg {
+  width: var(--size-icon-lg);
+  height: var(--size-icon-lg);
+}
+
+@utility font-sans {
+  font-family: var(--font-sans);
+}
+
+@utility font-mono {
+  font-family: var(--font-mono);
 }
 
 @utility icon-stroke {

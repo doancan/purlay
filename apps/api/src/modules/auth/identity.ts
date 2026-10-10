@@ -185,11 +185,14 @@ export const resolveIdentity = async (
   }
 
   const username = await availableUsername(executor, profile.login, undefined);
-  // The lookup above and this insert race: the same GitHub account completing
-  // sign-in twice at once (a double-clicked callback) passes the lookup twice. The
-  // conflict is resolved by the statement, so whichever is second refreshes the row
-  // the first made rather than violating `users_github_id_key` (D-78). The
-  // username is left as the first stored it.
+  // The lookups above and this insert race: the same GitHub account completing sign-in
+  // twice at once (a double-clicked callback, two tabs) passes them twice. **Any** unique
+  // key can be the one that loses — `github_id` when the first row is already visible,
+  // `email` when it commits after this statement's check of the first and before its
+  // check of the second (D-78 handled the first and answered the second as a stranger
+  // holding the address: a 409 for a person who had done nothing wrong). So the insert
+  // names no key and does nothing on any conflict; what a conflict meant is decided by
+  // reading, below, with the first row now committed and visible.
   const created = await executor
     .insertInto('users')
     .values({
@@ -199,23 +202,37 @@ export const resolveIdentity = async (
       display_name: displayName,
       avatar_url: profile.avatarUrl,
     })
-    .onConflict((conflict) =>
-      conflict
-        .column('github_id')
-        .doUpdateSet({
-          display_name: displayName,
-          avatar_url: profile.avatarUrl,
-          updated_at: now,
-        })
-        .where('users.deleted_at', 'is', null),
-    )
+    .onConflict((conflict) => conflict.doNothing())
     .returning('id')
     .executeTakeFirst();
+
   if (created === undefined) {
-    // The account was deleted and its GitHub id is deliberately never reused
-    // (D-38), so there is no row to refresh and none to create. No Phase 0 path
-    // deletes a user; the contract has no code for this yet, and inventing one is
-    // not this change's to do.
+    // Somebody got there first. If it was this account, refresh the row it made and carry
+    // on — the username stays as the first stored it. If it was not, the address is a
+    // stranger's, and that is the conflict the lookups above exist to name.
+    const winner = await executor
+      .updateTable('users')
+      .set({ display_name: displayName, avatar_url: profile.avatarUrl, updated_at: now })
+      .where('github_id', '=', String(profile.id))
+      .where('deleted_at', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+    if (winner !== undefined) return { userId: winner.id };
+    const stranger = await executor
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', email)
+      .executeTakeFirst();
+    if (stranger !== undefined) {
+      throw new AppError({
+        code: 'ACCOUNT_EMAIL_CONFLICT',
+        message: 'That email address already belongs to another Purlay account.',
+      });
+    }
+    // The account was deleted and its GitHub id is deliberately never reused (D-38), or
+    // the username was taken in the same instant: no row to refresh, none to create. No
+    // Phase 0 path deletes a user; the contract has no code for this yet, and inventing
+    // one is not this change's to do.
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
 

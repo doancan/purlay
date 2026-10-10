@@ -6,8 +6,9 @@ Single source of truth for the HTTP surface. WebSocket frames are specified sepa
 The endpoint list previously existed only as scattered mentions across `ARCHITECTURE.md`. It is
 consolidated here so that adding an endpoint has one obvious place to be recorded.
 
-**Phase markers:** ○ Phase 0 · ① Phase 1 · ② Phase 2. An endpoint not marked for the current
-phase is not built.
+**Phase markers:** ○ built · ① Phase 1 · ② Phase 2. An endpoint not marked ○ is not built. The
+thread, resolution and open-questions endpoints were pulled forward by the owner (D-98, D-99) and are
+marked ○ with the rest; the other Phase 1 rows are unchanged.
 
 ---
 
@@ -53,7 +54,7 @@ account for it. `message` is for humans and may change. (D-47)
 | `401` | No session, or the session is expired or revoked |
 | `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
-| `409` | Conflict — duplicate workspace slug, duplicate channel name, duplicate DM, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
+| `409` | Conflict — duplicate workspace slug, duplicate channel name, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
 | `413` | A JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame — refused by the server before it is read), or an upload over `attachment_size_limit` |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` — a `POST`/`PUT`/`PATCH`/`DELETE` whose body is not `application/json` (a form, `text/plain`, or a body with no type). A request with no body at all, such as logout, is unaffected (D-80) |
 | `429` | Rate limited |
@@ -120,16 +121,26 @@ Demoting or removing the last `owner` returns `409` (invariant I-2).
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see |
 | ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member |
-| ① | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
+| ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
 | ① | `PATCH` | `/api/channels/:channelId` | member — name, topic |
 | ① | `DELETE` | `/api/channels/:channelId` | admin — soft delete |
 | ○ | `POST` | `/api/channels/:channelId/join` | member — public only |
 | ① | `POST` | `/api/channels/:channelId/leave` | member |
-| ① | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
+| ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
 | ① | `PUT` | `/api/channels/:channelId/notification-level` | member — `all` \| `mentions` \| `none` |
 
-Creating a DM is idempotent: the same pair returns the same channel, never a second one.
+Creating a DM is idempotent: the same pair returns the same channel, never a second one — and so it is
+never a `409`. The call that made the channel answers `201` and tells the other person (`CHANNEL_ADDED`);
+every later call for the pair, from either side, answers `200` with the same channel and tells nobody.
+A conversation with a person whose account has been erased keeps its channel and its `peer.id`; the
+rest of `peer` is a placeholder (`username: "deleted"`, `displayName: "Deleted user"`, no avatar),
+because nothing the account held is handed out (I-11).
+
+`PUT …/read` answers the caller's `ChannelState` and, **whether or not the position moved**, publishes it
+to the caller's own `user:` topic: a repeat is usually a retry of a read whose answer or frame was
+lost, and the frame is the same state, so a client that has it applies it again and one that missed it is
+repaired. Nobody else hears it.
 
 ---
 
@@ -138,18 +149,44 @@ Creating a DM is idempotent: the same pair returns the same channel, never a sec
 | | Method | Path | Notes |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/channels/:channelId/messages` | Root messages, keyset, newest first (`SCHEMA.md` §6.3) |
-| ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND`. Content is `MessageContent` in `@purlay/types` — its length limit and the characters it refuses are defined there (D-67) |
-| ① | `GET` | `/api/messages/:messageId/thread` | Replies, keyset, oldest first |
+| ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND`. A body with `parentId` is a reply to that root (I-1); the same id in another channel is `404 MESSAGE_NOT_FOUND`, a reply's id is `400` on `parentId`. `@here`, `@channel` and `@everyone` are `400` on `content` (D-12). Content is `MessageContent` in `@purlay/types` — its length limit and the characters it refuses are defined there (D-67) |
+| ○ | `GET` | `/api/messages/:messageId/thread` | Replies of a root, keyset, **oldest first** with no cursor or with `after`; `before` reads older ones newest first, as every page does. A reply has no thread: `404` |
 | ① | `PATCH` | `/api/messages/:messageId` | Author only — **window pending O-1** |
 | ① | `DELETE` | `/api/messages/:messageId` | Author or admin — tombstone, never erase (D-9) |
-| ① | `POST` | `/api/messages/:messageId/resolve` | Root messages only |
-| ① | `DELETE` | `/api/messages/:messageId/resolve` | Reopen |
-| ① | `PUT` | `/api/messages/:messageId/reactions/:emoji` | Idempotent |
-| ① | `DELETE` | `/api/messages/:messageId/reactions/:emoji` | |
-| ① | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`). **Restricted to channels the caller can see** (D-34) |
+| ○ | `POST` | `/api/messages/:messageId/resolve` | Roots with at least one reply only, else `409 THREAD_NOT_RESOLVABLE` (I-8). Idempotent: closing a closed thread answers the message and publishes nothing. Answers the root |
+| ○ | `DELETE` | `/api/messages/:messageId/resolve` | Reopen; the same message answered, a reply is `409 THREAD_NOT_RESOLVABLE` |
+| ○ | `PUT` | `/api/messages/:messageId/reactions/:emoji` | Idempotent. Answers the message's whole set (`ReactionsResponse`) |
+| ○ | `DELETE` | `/api/messages/:messageId/reactions/:emoji` | Takes back the caller's own reaction and nobody else's. Idempotent |
+| ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34) |
 
+A reply, a resolution and a reopening publish `THREAD_UPDATED` after the commit; a reply also moves the
+caller-independent counters and tells each recipient their own numbers (`CHANNEL_STATE`, D-99).
+
+**A publish is never the request's error.** The write is committed before anything is published
+(D-35), so a frame that cannot be sent is logged with what it was, the rest are still sent, and the
+request answers what it did. Re-sending the same message id re-tells everything from the rows as
+they are now — the room hears `MESSAGE_CREATED` again, the thread its summary, each recipient their
+numbers — and counts nothing twice, so a retry repairs a lost announcement (D-88, D-99 amended).
+
+**Whole-state frames carry a `version`.** `THREAD_UPDATED`, `REACTIONS_UPDATED` and `CHANNEL_STATE` say
+"this is the state, replace what you hold", and two of them published from different requests can
+arrive in the opposite order to the one their writes committed in. `version` is a positive integer, the
+row's own count of its changes taken in the statement that made them (`state_version`, migration
+`0015`): a client keeps the newest it has applied for each *thing* (a message's summary, a message's
+reactions, a channel's state) and drops a frame with a smaller one. Equal is applied again — it is
+the same state told twice. `THREAD_UPDATED` and `REACTIONS_UPDATED` share a message's counter and are
+compared only with frames of their own kind.
 Every mutation here publishes to the `EventBus`, so an action taken over HTTP reaches other
 clients over their sockets identically. HTTP and WebSocket are two doors into one service.
+
+**Reactions** (D-99 §6). `:emoji` is one Unicode emoji, percent-encoded in the path and checked
+against the contract's `emoji` format; anything else is `400` naming `emoji`. A message carries at
+most **twenty different** emoji: a `PUT` that would add a twenty-first kind is a `400` on `emoji`,
+and adding your voice to a kind already there is never refused. A `PUT` of a reaction the caller
+already gave, or a `DELETE` of one they never gave, is `200` with the set and **publishes nothing** —
+`REACTIONS_UPDATED` is sent, on the channel's topic, only when the set actually changed. A message
+that does not exist, is deleted, or is in a channel the caller cannot see is `404 MESSAGE_NOT_FOUND`,
+the same answer for all of them.
 
 ---
 

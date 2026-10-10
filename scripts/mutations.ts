@@ -92,23 +92,15 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'send-announces-before-the-commit',
     why: 'subscribers receive a message that then rolls back, and nothing can retract the frame',
     file: MESSAGES,
-    find: `  const message = await atomically(
-    async (transaction) => await sendMessage(transaction, clock, context, input),
-  );
-  await bus.publish(channelTopic(context.channelId), {
-    event: 'MESSAGE_CREATED',
-    data: message,
-    ts: clock.now().getTime(),
-  });
-  return message;`,
-    replace: `  return await atomically(async (transaction) => {
-    const sent = await sendMessage(transaction, clock, context, input);
+    find: `    return await sendMessage(transaction, clock, context, input);
+  });`,
+    replace: `    const early = await sendMessage(transaction, clock, context, input);
     await bus.publish(channelTopic(context.channelId), {
       event: 'MESSAGE_CREATED',
-      data: sent,
+      data: early.message,
       ts: clock.now().getTime(),
     });
-    return sent;
+    return early;
   });`,
     tests: ['apps/api/src/modules/messages/send-order.integration.test.ts'],
   },
@@ -199,5 +191,101 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'if (!equal(signature, await sign(encryptionKey, payload))) return false;',
     replace: '',
     tests: ['apps/api/src/modules/auth/state.test.ts'],
+  },
+  {
+    id: 'broadcast-mention-accepted',
+    why: '@here wakes a channel that was promised it never would be, and the parser D-12 describes does nothing',
+    file: MESSAGES,
+    find: 'if (mentions.broadcast.length > 0) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
+  },
+  {
+    id: 'sender-counts-their-own-message-unread',
+    why: 'the person who wrote a message sees it as unread, and the badge never clears for the most active member',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "    .where('user_id', '<>', sender)\n    .returning(",
+    replace: '    .returning(',
+    tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
+  },
+  {
+    id: 'resolving-a-reply-is-allowed',
+    why: 'a reply is marked resolved, which the database refuses with a constraint error the person sees as a failure',
+    file: 'apps/api/src/modules/messages/threads.ts',
+    find: "    if (target.parentId !== null) {\n      throw notResolvable('Only the message that started a thread can be resolved.');\n    }\n",
+    replace: '',
+    tests: ['apps/api/src/modules/messages/threads.integration.test.ts'],
+  },
+  {
+    id: 'read-position-not-locked',
+    why: 'two devices reading at once each act on a position neither has committed, and the one that commits last can move it back',
+    file: 'apps/api/src/modules/channels/read-state.ts',
+    find: '    // Held to the end of the transaction: two reads of one channel by one person\n    // (two devices, two tabs) run one after the other.\n    .forUpdate()\n',
+    replace: '',
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
+    id: 'resolve-root-not-locked',
+    why: 'two people resolving at once both find the thread open: the later overwrites who resolved it and is told twice',
+    file: 'apps/api/src/modules/messages/threads.ts',
+    find: "      .where('id', '=', messageId)\n      .forUpdate()\n",
+    replace: "      .where('id', '=', messageId)\n",
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
+    id: 'reaction-kinds-not-serialised',
+    why: 'two people adding different new reactions at the cap both count nineteen and both insert, so a message carries twenty-one kinds',
+    file: 'apps/api/src/modules/reactions/reactions.ts',
+    find: '    await serialiseReactionsTo(transaction, messageId);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
+    id: 'channel-state-version-not-counted',
+    why: 'a late CHANNEL_STATE cannot be told from a newer one, so an old badge overwrites the current number until something else moves it',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: '      state_version: sql<number>`state_version + 1`,\n',
+    replace: '',
+    tests: ['apps/api/src/modules/messages/state-versions.integration.test.ts'],
+  },
+  {
+    id: 'backdated-message-counted-as-unread',
+    why: 'a message that sorts behind the reader’s position is counted unread, leaving a badge a read cannot clear',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: '(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)',
+    replace: '(true)',
+    tests: ['apps/api/src/modules/messages/delivery-backdated.integration.test.ts'],
+  },
+  {
+    id: 'thread-participants-unbounded',
+    why: 'one reply to a thread everybody joined writes a notification row for every participant',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: '      .limit(THREAD_PARTICIPANTS_MAX)\n',
+    replace: '',
+    tests: ['apps/api/src/modules/messages/notify-recipients.integration.test.ts'],
+  },
+  {
+    id: 'thread-reply-told-to-people-who-cannot-see-the-channel',
+    why: 'somebody removed from a private channel is still sent notifications that name it',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: 'if (seeing.has(userId)) consider(userId, ',
+    replace: 'consider(userId, ',
+    tests: ['apps/api/src/modules/messages/notify-recipients.integration.test.ts'],
+  },
+  {
+    id: 'publish-failure-after-commit-is-an-error',
+    why: 'a write that committed answers 500 because a frame could not be sent, and the retry repeats what is already done',
+    file: 'apps/api/src/platform/events.ts',
+    find: 'await Promise.allSettled(chunk.map(',
+    replace: 'await Promise.all(chunk.map(',
+    tests: ['apps/api/src/ingress/http/publish-failure.integration.test.ts'],
+  },
+  {
+    id: 'demo-seeder-writes-to-any-database',
+    why: 'a mistyped DATABASE_URL gets thirty-day sessions for invented people and a file of their cookies',
+    file: 'apps/api/src/cli/demo-seed.ts',
+    find: '  assertDemoDatabase(config.DATABASE_URL);\n',
+    replace: '',
+    tests: ['apps/api/src/cli/demo-seed.integration.test.ts'],
   },
 ];

@@ -102,6 +102,14 @@ describe('every served endpoint has a cross-tenant case', () => {
     }
   });
 
+  test('nothing that names a message opts out of the visibility axis', () => {
+    for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
+      if (key.includes(':messageId')) {
+        expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'message' });
+      }
+    }
+  });
+
   test('search and open questions are read as workspace-wide, once they exist', () => {
     // Both must stay documented, or this check would be skipping them by name.
     for (const key of WORKSPACE_WIDE_READS) {

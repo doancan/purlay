@@ -9,8 +9,16 @@
 import type { Executor } from '@purlay/db';
 import { PageQuery, SendMessageRequest, type Message, type MessagePage } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById, requireMessageById } from '../../platform/channels';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { visibleChannelIds } from '../../platform/channels';
 import { messageHistory, send, type SendDependencies } from '../../modules/messages/messages';
+import {
+  setResolved,
+  threadReplies,
+  unresolvedIn,
+  type ResolveDependencies,
+} from '../../modules/messages/threads';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -62,4 +70,53 @@ export const postMessage = async (
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SendMessageRequest, body);
   return await send(dependencies, context, input, sessionId);
+};
+
+/**
+ * `GET /api/messages/:messageId/thread` — the replies of a root, oldest first.
+ *
+ * The message is resolved to its channel and to the caller's right to see it in one
+ * query, so a message that does not exist and one in a conversation the caller is not
+ * in are the same `404` (D-34).
+ */
+export const readThread = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  messageId: string,
+): Promise<MessagePage> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const root = await requireMessageById(database, userId, messageId);
+  const query = validated(PageQuery, asPageQuery(new URL(request.url)));
+  return await threadReplies(database, root, query);
+};
+
+/** `POST` and `DELETE /api/messages/:messageId/resolve` — close the thread, or reopen it. */
+export const setThreadResolution = async (
+  dependencies: HistoryDependencies & ResolveDependencies,
+  request: Request,
+  messageId: string,
+  resolved: boolean,
+): Promise<Message> => {
+  const { database, clock } = dependencies;
+  const { userId, sessionId } = await requireSession(database, clock, request);
+  return await setResolved(dependencies, userId, messageId, resolved, sessionId);
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/unresolved` — the open-questions view.
+ *
+ * One of the two reads D-34 was written about: it spans channels, so it asks the
+ * guard which ones the caller can see and reads inside that set and nowhere else.
+ */
+export const readUnresolved = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<MessagePage> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const query = validated(PageQuery, asPageQuery(new URL(request.url)));
+  return await unresolvedIn(database, context, await visibleChannelIds(database, context), query);
 };

@@ -129,4 +129,20 @@ describe('integration: the migrated schema', () => {
       expect(names).toContain(kept);
     }
   });
+
+  /**
+   * 0014: the open-questions index holds only roots that have a reply. Without that predicate
+   * it held every unresolved root, and a view that wants the rare ones read them all
+   * (a sequential scan of 400,000 messages, 6,975 buffers, against 41).
+   */
+  test('the open-questions index holds only what the view can show', async () => {
+    const { rows } = await sql<{ definition: string }>`
+      select indexdef as definition from pg_indexes
+      where schemaname = 'public' and indexname = 'idx_messages_unresolved'`.execute(
+      integrationDatabase(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.definition).toContain('thread_reply_count > 0');
+    expect(rows[0]?.definition).toContain('resolved_at IS NULL');
+  });
 });

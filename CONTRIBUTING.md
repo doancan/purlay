@@ -182,6 +182,17 @@ What belongs here is the discipline around them:
   `DATABASE_URL` for the integration tests (D-47, amended).
 - **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
   budget regression is a defect, not a threshold to adjust.
+- **See it, and test it, the way it is deployed.** `bun run demo` builds the client, recreates a
+  scratch database named `purlay_demo`, seeds a believable workspace *through the real API*
+  (`apps/api/src/cli/demo-seed.ts`: four people, six channels, two days of conversation, threads,
+  reactions, a read position) and serves it all on one origin at `http://localhost:4173`; the
+  startup banner prints `/__demo/login?as=dogancan`, which hands the browser the genuine session
+  cookie GitHub would have (use Chromium or Firefox: the cookie is `Secure`, which they accept on
+  `localhost`). That login is a route of the demo's front server only — the API has none and never
+  will. `bun run test:e2e:install` fetches Chromium once (CI runs it too); `bun run test:e2e` runs Playwright against the same harness in a database named
+  `purlay_e2e`, in both themes and at two widths; `bun run test:e2e:update` rewrites the
+  screenshots, which you then look at before committing (they depend on the machine's fonts).
+  `bun run budget:web` fails above 250 KB of initial gzipped JavaScript and names what grew.
 
 ---
 

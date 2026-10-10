@@ -18,6 +18,7 @@ import { requireChannelById, type ChannelContext } from '../../platform/channels
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { aChannel } from '../../testing/channels';
+import { aRecordingLogger } from '../../testing/doubles';
 import { messageHistory, missedIn, send, sendMessage } from './messages';
 
 afterAll(async () => {
@@ -174,19 +175,28 @@ describe('integration: a retried send', () => {
     });
   });
 
-  test('a message committed but not announced is announced by the retry', async () => {
+  /**
+   * H-API 4, which amends the D-88 decision above: a publish that fails *after the commit* is
+   * not an error for the request that committed. The sender used to see a 500 for a write that
+   * had succeeded and retry it; now it gets its answer, the failure is logged with what it was
+   * publishing, and a retry still announces again from the stored row (the test above), so a
+   * client that never saw its ACK repairs the room the same way. What the room missed is also
+   * what a reconnect's replay by cursor delivers (D-65).
+   */
+  test('a publish that fails after the commit is logged, not turned into an error, and the retry announces', async () => {
     await withRollback(async (db) => {
       const channel = await aChannel(db);
       const { bus, frames } = recordingBus(1);
-      const dependencies = { atomically: atomicallyOn(db), clock: fixedClock(later(1)), bus };
+      const { log, lines } = aRecordingLogger();
+      const dependencies = { atomically: atomicallyOn(db), clock: fixedClock(later(1)), bus, log };
       const id = messageId(later(1));
 
-      const failed = await send(dependencies, channel, { id, content: 'hello' }).then(
-        () => 'sent',
-        (error: unknown) => String(error),
-      );
-      expect(failed).toContain('the bus is down');
+      const sent = await send(dependencies, channel, { id, content: 'hello' });
+      expect(sent.id).toBe(id);
       expect(frames).toHaveLength(0);
+      expect(lines.map((line) => [line['msg'], line['what']])).toEqual([
+        ['publish failed after commit', 'MESSAGE_CREATED'],
+      ]);
 
       await send(dependencies, channel, { id, content: 'hello' });
       expect(frames).toHaveLength(1);

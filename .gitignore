@@ -66,6 +66,9 @@ coverage/
 test-results/
 playwright-report/
 .playwright/
+# What the demo harness wrote for the browser tests: ids and session tokens of a scratch database.
+apps/web/e2e/.world*.json
+.world*.json.ready
 *.cpuprofile
 *.heapsnapshot
 

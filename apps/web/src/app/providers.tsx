@@ -1,0 +1,89 @@
+/**
+ * Everything a screen can ask for from above it, mounted once, in one order.
+ *
+ * The order is the dependency order: the theme and the words come first because
+ * nothing renders without them (and the words are the one that makes the rest
+ * wait, so it takes the `fallback`); the router and the cache next; the tooltip
+ * timing and the toast list last, because they are leaves.
+ *
+ * Every provider takes its outside world as an optional port, so the browser's
+ * are the defaults and a test passes fakes for the ones it cares about — one
+ * component, two worlds. The component tests and the application mount the same
+ * tree; a provider missing from a test is a provider missing from the app.
+ */
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import type { I18nPorts } from '../i18n/i18n-provider';
+import { I18nProvider } from '../i18n/i18n-provider';
+import type { Schedule } from '../realtime/connection';
+import type { HistoryPort } from '../router/router';
+import { RouterProvider } from '../router/router-provider';
+import type { ThemePorts } from '../theme/theme';
+import { ThemeProvider } from '../theme/theme-provider';
+import { TooltipProvider } from '../ui/tooltip';
+import { ToastProvider } from '../ui/toast';
+import { ActionsProvider } from '../data/actions-provider';
+import type { Api } from '../data/api';
+import { ApiProvider } from '../data/api-provider';
+import type { ClientStorage } from '../data/browser-storage';
+import { StorageProvider } from '../data/storage-provider';
+import { RealtimePortsContext, type RealtimePorts } from '../realtime/realtime-provider';
+import { createQueryClient } from './query-client';
+
+export interface AppPorts {
+  readonly theme?: ThemePorts;
+  readonly i18n?: I18nPorts;
+  readonly history?: HistoryPort;
+  readonly schedule?: Schedule;
+  readonly queryClient?: QueryClient;
+  /** The API; the browser's `fetch` on the same origin when absent. */
+  readonly api?: Api;
+  /** The socket, timers and clock the realtime engine uses; the browser's when absent. */
+  readonly realtime?: RealtimePorts;
+  /** Where drafts, the last channel and unsent messages live; the browser's when absent, none when `null`. */
+  readonly storage?: ClientStorage | null;
+}
+
+interface AppProvidersProps {
+  readonly ports?: AppPorts;
+  /** Shown until the first catalogue has loaded: the prerendered shell's skeleton. */
+  readonly fallback?: React.ReactNode;
+  readonly children: React.ReactNode;
+}
+
+export const AppProviders = ({
+  ports = {},
+  fallback,
+  children,
+}: AppProvidersProps): React.JSX.Element => {
+  // One cache for the life of the page; a re-render must never replace it.
+  const [client] = useState(() => ports.queryClient ?? createQueryClient());
+  return (
+    <ThemeProvider {...(ports.theme === undefined ? {} : { ports: ports.theme })}>
+      <I18nProvider
+        {...(ports.i18n === undefined ? {} : { ports: ports.i18n })}
+        {...(fallback === undefined ? {} : { fallback })}
+      >
+        <RouterProvider {...(ports.history === undefined ? {} : { history: ports.history })}>
+          <QueryClientProvider client={client}>
+            <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
+              <StorageProvider {...(ports.storage === undefined ? {} : { storage: ports.storage })}>
+                <ActionsProvider>
+                  <RealtimePortsContext.Provider value={ports.realtime ?? {}}>
+                    <TooltipProvider>
+                      <ToastProvider
+                        {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
+                      >
+                        {children}
+                      </ToastProvider>
+                    </TooltipProvider>
+                  </RealtimePortsContext.Provider>
+                </ActionsProvider>
+              </StorageProvider>
+            </ApiProvider>
+          </QueryClientProvider>
+        </RouterProvider>
+      </I18nProvider>
+    </ThemeProvider>
+  );
+};

@@ -3795,6 +3795,16 @@ badge is bound twice, as a height and as a minimum width: one digit is a circle 
 prototype also drops the 56px workspace rail for a switcher in the sidebar header, which `UX.md` §2
 still draws; `size-rail` stays until that section is rewritten with the screens.
 
+**8 · Amended 2026-10-10: a name shared by a theme key and a token is a utility, not a key.** The
+first screens in a real browser showed a serif font, 24px icons and square corners: Tailwind writes
+every theme key to `:root` even under `inline`, so `--radius-md: var(--radius-md)` was written after
+the token's own `--radius-md: 6px`, won, and — a custom property that refers to itself being invalid —
+the radius, the icon size and the whole font stack fell back to the browser's. Every test that
+compiled classes passed, because none ran a cascade. The generator now refuses such a key and writes
+the utility that reads the token (`rounded-*`, `size-*`, `shadow-*`, `font-*`); `radius-full` became
+`radius-pill`, because Tailwind's own `rounded-full` is a static utility the generated one would
+have sat beside; and `e2e/tokens.e2e.ts` reads the computed values in a browser, in both themes.
+
 **Rejected — Tailwind's theme plus lint alone.** Measured above: it cannot see `z-50`, and a typo
 builds to nothing silently.
 
@@ -3818,6 +3828,226 @@ line), a transition longer than 200ms is wanted, Tailwind changes what `@theme i
 
 **Reversibility:** the values are free to change. The *shape* — one file, generated outputs, the
 refusals — is cheap to keep and costly to add later, which is why it is built before the first screen.
+
+### D-98. The client is built end to end: no screen without its backend, and the owner pulls the wedge forward
+
+The tokens (D-97) and the approved prototype exist; the client does not. This records the analysis
+that decides the order and the edges before any screen is written, because the expensive mistakes in
+a client are architectural and cheap to make in the first week.
+
+**What the analysis found.**
+
+1. *The backend serves less than the prototype shows.* Phase 0 has sign-in, workspaces, channels,
+   messages (keyset) and the socket. Threads, resolution, the open-questions view, read state,
+   reactions and DMs are Phase 1 (`API.md`) with no contract in `@purlay/types` — but the schema
+   already has the columns (`parent_id`, `resolved_at`, `resolved_by`, the thread counters,
+   `last_read_message_id`, the unread counters, `reactions`, `mentions`).
+2. *The transport is done and the rest is not.* `apps/web/src/realtime` holds the connection,
+   reconnect, cursors and clock, tested. There is no router, data layer, store, i18n, theme switch,
+   accessibility harness or browser test.
+3. *The budget decides the tools.* 250 KB gzipped initial, with the empty shell already about 60 KB
+   (`PRD.md` §5). Every dependency below is justified against that number, and the build fails when
+   it is exceeded (#140).
+
+**Decided by the owner (2026-10-10): every control on a screen works against a real backend, end to
+end.** D-53 already said no screen ships with a state unhandled; this adds that no screen ships with an
+action unbacked — a button wired to a fixture is the prototype feeling D-53 exists to prevent, and a
+fixture backend is a second implementation of an API that would have to be rewritten against the real
+one. **`PRD.md` §4 and D-4 bind the phases, so this is the exception stated, not assumed:** the owner
+pulls forward the slices of Phase 1 the approved prototype *is* — the wedge and what it needs to be
+usable — and nothing else:
+
+| Slice | Backend | Client |
+|---|---|---|
+| Phase 0 as specified | exists | sign-in, workspace and channel list, create channel, message list, composer, optimistic send, scroll anchoring |
+| Threads and resolution | replies (`parentId`, I-1), thread counters, `GET …/thread`, `POST`/`DELETE …/resolve`, `GET …/unresolved` | inline thread, Resolve/Reopen, the open-questions view |
+| Read state and mentions | `@username` parsing (D-12, D-29), unread counters, `PUT …/read` (I-3, I-6) | bold channels, mention badge, the *New* marker |
+| Reactions | `PUT`/`DELETE …/reactions/:emoji` | React, counts |
+| DMs | `POST …/dms` (I-5) | People section |
+| Navigation | none — the palette reads what the client already holds | `Cmd+K` palette, shortcut reference |
+
+**Not pulled forward, and not built:** editing and deletion (O-1), attachments, search, the
+notification inbox, Deep Work, invitations and roles, presence and typing (ephemeral, D-7), GitHub
+cards and every Phase 2 item. The prototype's deploy, CI and diff cards were illustrations of what a
+developer's channel contains; they need the GitHub integration, are Phase 2, and are not in the
+client. An empty slot in the interface for any of them would be a control that does nothing.
+
+**Every slice ships in one order:** the shape in `@purlay/types` first (`CONTRIBUTING.md`), then the
+module and its integration tests, then the HTTP door and the socket frame (two doors into one
+service, `API.md` §5), then `API.md`, then the client against it, then the browser test against both.
+
+**What this decision adds to the client.** It builds on D-18, D-41, D-50 and D-52: React + Vite SPA
+with a prerendered shell, TanStack Query for server state, Zustand for the realtime buffer, Radix
+for dialog, menu, tooltip and popover, typed catalogues over `Intl`. Covers #138, #23–#27, #101,
+#109, #139, #140 and #141.
+
+**1 · Two themes, now.** `UX.md` §9 said light arrives in Phase 2, and D-53 said snapshots are taken
+"in every theme that exists". Both are amended: dark and light ship together, because the tokens were
+written with both (contrast is computed in each) and a theme added after the screens is a theme
+retrofitted onto them. The theme is the OS preference until the person chooses; the choice is per
+device (`localStorage`), applied before first paint by a same-origin script so there is no flash and
+no inline script for the content security policy (#112) to refuse. A development-only **gallery**
+renders every component and state in both themes side by side; it is also what the visual snapshots
+photograph, so a theme can not be added to the product and missed by the tests.
+
+**2 · A router of our own, about a hundred lines.** The client has a handful of routes. A router
+library costs 15–25 KB of the budget to match a path and call `history.pushState`; the alternative is
+a typed route table, a `Link` and a hook. Rejected: `react-router` and `@tanstack/react-router`
+(size, and loaders and search-param machinery for routes this small); `wouter` (small, but untyped
+paths). Reversible: call sites use `Link` and `useRoute`, so replacing the module changes one
+directory.
+
+**3 · The ports are interfaces, the adapters are the browser's.** The data layer takes `fetch`, the
+socket opener, the clock, the id generator and `localStorage` as arguments (D-46 does the same for
+the realtime code). A test drives a failed send, a dropped connection or a slow page by hand; a
+Playwright test drives the same code in a real browser against the real API.
+
+**4 · The message body is text, with exactly three exceptions.** The markdown pipeline is Phase 1
+and its renderer and the server's sanitiser are chosen together (O-6), so this decision does not
+choose a markdown package. The renderer recognises fenced code, inline code and bare `http(s)` links,
+emits React nodes (never `dangerouslySetInnerHTML`, so there is no HTML to sanitise), and shows
+everything else literally with its line breaks. It is one function, `renderContent`, which O-6's
+renderer replaces without touching a caller. Fenced code is highlighted by Shiki with grammars
+loaded on first use (D-36), coloured by the `--syntax-*` tokens, so the initial chunk holds none.
+
+**5 · Read position is the server's.** The unread marker is placed at `last_read_message_id`,
+written by `PUT /api/channels/:id/read` when the bottom is reached or the channel is left, never on
+mere render (`UX.md` §6). It follows the person across devices, which a client-side value would not.
+
+**6 · Performance is a feature with numbers.** Typing paints the person's own message in the same
+frame (state, not network); history is rendered as a bounded window of 50 (`UX.md` §6, O-5) with
+`content-visibility: auto` on rows outside the viewport; code, the highlighter, the dialogs and the
+gallery are separate chunks; a row is memoised on `(id, editedAt, delivery state)`. The browser test
+measures keystroke-to-paint and channel switch against the budgets, and `bun run budget:web` fails
+the build, naming what grew, when the initial chunk passes 250 KB gzipped.
+
+**7 · What the palette is built on (closes O-7 for this decision).** Radix publishes no combobox. The
+palette is a Radix `Dialog` holding a hand-written listbox that follows the WAI-ARIA combobox
+pattern, with `axe` and a keyboard-path test in CI — the argument for primitives (focus and ARIA fail
+silently when hand-written) is met by testing exactly that, and `cmdk` is not adopted: it is a
+dependency on top of Radix for the part of the pattern that is thirty lines.
+
+**Rejected — wiring the prototype's thread screens to a fixture backend.** It would demo well and
+cost more than it shows: a second implementation of an API, a contract guessed in the client, and a
+rewrite when the real one differs. The owner's instruction is the opposite, and this records why it is
+right.
+
+**Rejected — one large pull request.** The work lands as one commit series per slice so it can be
+reviewed and, if needed, split along the issues; `large-change` applies where a single slice exceeds
+the budget.
+
+**Reversibility:** the router, the content renderer and the highlighter each sit behind a single
+module on purpose. The theme mechanism and the ports are expensive to retrofit and cheap to write
+first, which is why they are first. Pulling a Phase 1 slice forward is not reversible once data
+exists, which is why each ships with its integration tests and its documentation in the same change.
+
+### D-99. The wedge's backend: what a write touches, and what "needs you" means
+
+D-98 pulls threads, resolution, read state, mentions, reactions and DMs forward and orders the work
+contract-first. The schema has the columns; four rules were not written down anywhere, and each is a
+correctness question rather than a style one, so they are decided here before two people implement them
+in parallel.
+
+**1 · "Needs you" is one number.** `unread_mention_count` is what is waiting for *this person*: an
+`@username` naming them, any message in a direct message, and a reply in a thread they started or have
+already answered (D-29, which has its own words for why the third counts). `unread_count` is every
+message by someone else past their read position, replies included. The first never exceeds the second
+(I-6), and it becomes a `CHECK` now that the service that defines it exists (`SCHEMA.md` §11 said it
+would). A resolution *notifies* the root author (a `thread_resolved` row) and moves no counter: it is not
+a message, so counting it would put the two numbers in disagreement the first time they are recomputed.
+
+**2 · The send is one transaction (D-35, completed).** In order: insert the message (a reply first
+checks that its parent exists, is in the same channel, is a root and is not deleted — I-1); bump the
+parent's `thread_reply_count` and `thread_last_reply_at`; set `channels.last_message_at`; parse
+`@username` and write `mentions`; write `notifications` (one row per person per message, the strongest
+class wins: mention, then direct message, then thread reply; never the sender; none for a membership at
+`notification_level = 'none'`); and increment the counters in **one** `UPDATE … RETURNING` over the
+channel's other members. Commit. *Then* publish `MESSAGE_CREATED` on the channel, `THREAD_UPDATED` for a
+reply, and `CHANNEL_STATE` on each recipient's `user:` topic from the rows the `UPDATE` returned. The
+server's numbers travel; no client increments its own (D-13), so two devices cannot drift.
+
+**3 · Mentions are parsed, and `@here` is refused.** `@name` is a mention when it is not inside inline
+or fenced code, is not preceded by a word character, `@` or a backtick, and names a person who can see
+the channel (every workspace member for a public channel, the members for a private one or a DM);
+matching is case-insensitive on `username`. An unknown name stays text. `@here`, `@channel` and
+`@everyone` fail the send with `VALIDATION_FAILED` on `content` — the parser's rejection D-12 promised —
+and the composer says so before the request, the server being the authority. Mentioning yourself is
+text, not a notification.
+
+**4 · The read position moves forward only, and the counters are recomputed, not patched.** `PUT
+…/read` is refused for a message not in the channel (I-3, as `MESSAGE_NOT_FOUND`), is a no-op for a
+position at or behind the current one, and otherwise sets `last_read_message_id`, sets `unread_count` to
+the count of messages by others past it and `unread_mention_count` to the lesser of that and the unread
+notifications of the mention classes past it, marks the notifications at or behind it read, and
+publishes `CHANNEL_STATE` to the person's other devices. A decrement could underflow under a race; a
+recompute from rows cannot. The recount is bounded by what is unread and uses an index that leads with
+`(channel_id, id)` — the migration adds it if the measurement says the existing one is not enough.
+
+**5 · Resolution.** Any member who can see the channel may resolve or reopen (`ARCHITECTURE.md` §7.4),
+on a root with at least one reply; anything else is `THREAD_NOT_RESOLVABLE` (I-8, and "only roots
+resolve"). Resolving a resolved thread, or reopening an open one, answers the message and publishes
+nothing: it changed nothing. `GET …/unresolved` lists roots with replies and no resolution from the
+channels the caller can see (D-34), newest first.
+
+**6 · Reactions.** `PUT` and `DELETE` are idempotent, answer the message's whole set, and publish
+`REACTIONS_UPDATED` only when the set changed. The emoji is one Unicode emoji (the contract's `emoji`
+format); a message holds at most twenty distinct ones, which bounds a frame an attacker could otherwise
+inflate.
+
+**7 · Direct messages.** `POST …/dms` takes a person who is a member of the workspace (`USER_NOT_FOUND`
+otherwise), gets or creates the channel for the sorted pair (I-5), makes both members, and publishes
+`CHANNEL_ADDED` to the other person only when it created one. A note to self is a DM with one member.
+
+**8 · One reader of messages.** History, thread, open questions, replay and the send's answer all build a
+`Message` through one function that fetches reactions and mentions for the whole page in two queries —
+never one per row (the rule D-13 states for counters applies to every page). Replay still carries roots
+only; a client reconnecting refetches the threads it has open, because a reply missed during the gap is
+not a root and has no cursor in the feed.
+
+**9 · Doors.** Replies are sent over the socket (`MESSAGE_SEND` gains `parentId`) or HTTP; resolution,
+reactions and read state are HTTP only and are heard on the socket. They are infrequent, they have no
+optimistic row that must paint inside a frame, and a second implementation of each over the socket is a
+second place for them to differ.
+
+**Amended 2026-10-10 (review of the first implementation).** None of this reverses a rule above; each
+closes a case the first implementation answered wrongly or left to chance.
+
+- *Rule 1 and 4 — a message behind the reader is not unread.* A client may send an id up to a minute in
+  the past (D-33), so a message can sort *below* a position someone has already read past. It is
+  counted for a member only when their position is before it; otherwise it is stored, its notification
+  is already read, and the recount (`id > position`) agrees with what was stored. Before, the stored
+  number sat above the recount and the badge could not be cleared by reading. The recount also skips
+  deleted messages and the notifications of deleted messages.
+- *Rule 2 — who is told of a reply.* The root's author and the most recent **50** earlier repliers
+  (`THREAD_PARTICIPANTS_MAX`), and only those who can still see the channel now — a member of the
+  workspace, not deleted, and for a private channel or DM still in it (D-34). A resolution notifies
+  the root's author on the same condition. The bound is on what one reply can write; older
+  participants still have the thread.
+- *Rule 2 — publishing after the commit.* Published in stages (the room, then the thread, then each
+  person's numbers), the publishes of a stage concurrently in chunks of 32; a publish that fails is
+  logged and does not fail a write that committed, nor stop the ones behind it. A repeated send
+  re-tells from the rows; a repeated `PUT /read` re-tells the caller's devices (rule 4 is otherwise
+  unchanged: the position never moves back). D-88's "a retry announces again" is kept and extended.
+- *Rule 2 — whole-state frames are ordered.* `THREAD_UPDATED`, `REACTIONS_UPDATED` and
+  `CHANNEL_STATE` carry `version` from `state_version` on the row they are made from (migration
+  `0015`); the client drops an older one (`API.md` §5). Reactions therefore now update the message row
+  once, as the last write of their transaction, and contend with a reply to the same message for that
+  instant; the advisory lock still serialises reactions with each other.
+- *Rule 5 — the open-questions index.* `idx_messages_unresolved` holds only roots with a reply (migration
+  `0014`): 6,975 buffers and 37 ms became 41 buffers and 0.07 ms where the caller sees every channel and
+  the questions are rare, and no worse where they are common.
+- *Rule 7 — a direct message with an erased account* keeps its channel and `peer.id` and shows a
+  placeholder. *Idempotence is `200`, creation `201`* (`API.md` §4); it is not a conflict.
+- *Ids have one spelling.* The wire form of every UUID is lower-case; an upper-case id is a validation
+  error rather than a second spelling of the same id that string comparison, ordering and the read
+  position would each treat differently.
+
+**Rejected — counting unread on read.** D-35 rejected it; the recount in rule 4 is a different thing (it
+runs when a person reads, bounded by what they had not).
+
+**Rejected — a `thread_resolved` increment.** Rule 1.
+
+**Rejected — letting the client keep its own counters and reconcile.** Two sources of one number.
 
 ---
 

@@ -29,6 +29,8 @@ export type MessageType = "system_event" | "text";
 
 export type NotificationLevel = "all" | "mentions" | "none";
 
+export type NotificationType = "direct_message" | "mention" | "thread_reply" | "thread_resolved";
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserRole = "admin" | "member" | "owner";
@@ -39,6 +41,7 @@ export interface ChannelMembers {
   joined_at: Generated<Timestamp>;
   last_read_message_id: string | null;
   notification_level: Generated<NotificationLevel>;
+  state_version: Generated<number>;
   unread_count: Generated<number>;
   unread_mention_count: Generated<number>;
   user_id: string;
@@ -58,6 +61,15 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface Mentions {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  mentioned_user_id: string;
+  message_id: string;
+  workspace_id: string;
+}
+
 export interface Messages {
   channel_id: string;
   content: string;
@@ -71,10 +83,31 @@ export interface Messages {
   resolved_at: Timestamp | null;
   resolved_by: string | null;
   sender_id: string;
+  state_version: Generated<number>;
   thread_last_reply_at: Timestamp | null;
   thread_reply_count: Generated<number>;
   updated_at: Generated<Timestamp>;
   workspace_id: string;
+}
+
+export interface Notifications {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  message_id: string;
+  read_at: Timestamp | null;
+  suppressed_by_deep_work: Generated<boolean>;
+  type: NotificationType;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface Reactions {
+  created_at: Generated<Timestamp>;
+  emoji: string;
+  id: Generated<string>;
+  message_id: string;
+  user_id: string;
 }
 
 export interface Sessions {
@@ -129,7 +162,10 @@ export interface Workspaces {
 export interface DB {
   channel_members: ChannelMembers;
   channels: Channels;
+  mentions: Mentions;
   messages: Messages;
+  notifications: Notifications;
+  reactions: Reactions;
   sessions: Sessions;
   users: Users;
   workspace_members: WorkspaceMembers;

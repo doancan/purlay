@@ -319,7 +319,11 @@ export const routeFrame = async (
         const message = await send(
           dependencies,
           context,
-          { id: parsed.id, content: parsed.payload.content },
+          {
+            id: parsed.id,
+            content: parsed.payload.content,
+            parentId: parsed.payload.parentId,
+          },
           // The identity was cached at the upgrade; the write re-proves it (D-85).
           identity.sessionId,
         );

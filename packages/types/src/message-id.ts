@@ -27,7 +27,8 @@
  */
 export const MESSAGE_ID_SKEW = { behindMs: 60_000, aheadMs: 5_000 } as const;
 
-const HEX = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Lower-case only, as the `uuid` format is (`formats.ts`): ids are compared as text.
+const HEX = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /**
  * Shape only: version nibble `7`, RFC-conformant variant bits.

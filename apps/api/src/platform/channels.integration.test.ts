@@ -11,7 +11,12 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { AppError } from './errors';
-import { requireChannelById, requireChannelVisibility, visibleChannelIds } from './channels';
+import {
+  requireChannelById,
+  requireChannelVisibility,
+  requireMessageById,
+  visibleChannelIds,
+} from './channels';
 import { requireWorkspaceMembership } from './tenancy';
 
 afterAll(async () => {
@@ -186,6 +191,88 @@ describe('integration: channel visibility', () => {
 
       expect([...(await visibleChannelIds(db, forAlice))].sort()).toEqual([open, hers].sort());
       expect(await visibleChannelIds(db, forBob)).toEqual([open]);
+    });
+  });
+});
+
+const addMessage = async (
+  db: Executor,
+  workspaceId: string,
+  channelId: string,
+  senderId: string,
+  parentId: string | null = null,
+  deleted = false,
+): Promise<string> => {
+  const id = Bun.randomUUIDv7();
+  await db
+    .insertInto('messages')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      sender_id: senderId,
+      parent_id: parentId,
+      content: 'hello',
+      deleted_at: deleted ? new Date('2026-01-01T00:00:00.000Z') : null,
+    })
+    .execute();
+  return id;
+};
+
+describe('integration: message visibility', () => {
+  test('a message is reachable by the people who can see its channel, and names its parent', async () => {
+    await withRollback(async (db) => {
+      const author = await addUser(db, 'mv-author');
+      const workspaceId = await addWorkspace(db, 'mv-open', author);
+      const channelId = await addChannel(db, workspaceId, 'general');
+      const root = await addMessage(db, workspaceId, channelId, author);
+      const reply = await addMessage(db, workspaceId, channelId, author, root);
+
+      const found = await requireMessageById(db, author, root);
+      expect(found.context.channelId).toBe(channelId);
+      expect(found.parentId).toBeNull();
+      expect((await requireMessageById(db, author, reply)).parentId).toBe(root);
+    });
+  });
+
+  /** D-34's second axis, for the endpoints that name a message instead of a channel. */
+  test('a message in a private channel is invisible to a workspace member outside it', async () => {
+    await withRollback(async (db) => {
+      const insider = await addUser(db, 'mv-in');
+      const outsider = await addUser(db, 'mv-out');
+      const workspaceId = await addWorkspace(db, 'mv-private', insider, outsider);
+      const channelId = await addChannel(db, workspaceId, 'secret', 'private', insider);
+      const message = await addMessage(db, workspaceId, channelId, insider);
+
+      expect((await requireMessageById(db, insider, message)).context.channelType).toBe('private');
+      const refusal = await refusalFrom(() => requireMessageById(db, outsider, message));
+      expect(refusal.status).toBe(404);
+      expect(refusal.body.code).toBe('MESSAGE_NOT_FOUND');
+    });
+  });
+
+  test('every refusal is the same refusal: other tenant, deleted, never existed, not a uuid', async () => {
+    await withRollback(async (db) => {
+      const insider = await addUser(db, 'mv-oracle-in');
+      const outsider = await addUser(db, 'mv-oracle-out');
+      const theirs = await addWorkspace(db, 'mv-theirs', insider);
+      await addWorkspace(db, 'mv-mine', outsider);
+      const channelId = await addChannel(db, theirs, 'theirs');
+      const hidden = await addMessage(db, theirs, channelId, insider);
+      const deleted = await addMessage(db, theirs, channelId, insider, null, true);
+
+      const answers = [
+        await refusalFrom(() => requireMessageById(db, outsider, hidden)),
+        await refusalFrom(() => requireMessageById(db, insider, deleted)),
+        await refusalFrom(() => requireMessageById(db, insider, Bun.randomUUIDv7())),
+        await refusalFrom(() => requireMessageById(db, insider, "'; DROP TABLE messages; --")),
+      ];
+      const [first] = answers;
+      if (first === undefined) throw new Error('no refusals were collected');
+      for (const answer of answers) {
+        expect(answer.status).toBe(404);
+        expect(answer.body).toEqual(first.body);
+      }
     });
   });
 });

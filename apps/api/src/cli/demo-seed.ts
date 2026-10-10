@@ -1,0 +1,365 @@
+/**
+ * Builds the demo workspace **through the real application**.
+ *
+ * The seed does not insert messages into tables. It signs in four people (a session
+ * issued by the real `issueSession`, so the cookie is genuine), then drives an
+ * in-process `createApp` with real `Request`s: create the workspace, create and join
+ * channels, send every message to `POST /api/channels/:id/messages`, react, resolve,
+ * read. So what the screens show is what the send transaction produced — thread
+ * counters, mentions, notifications, unread counters (D-99) — and the seed doubles as a
+ * smoke test of the API against a plausible, not a minimal, history.
+ *
+ * **Why in-process and not against a server.** Two reasons. A message id is a UUIDv7
+ * the server accepts only within a minute of its own clock (D-33), and a believable
+ * history spans two days: the seed has to *be* the server's clock, which a running
+ * process would not let it be. And it needs no port, no ordering of startup, nothing to
+ * leave running — the same code runs from the demo harness, from a test inside a
+ * rolled-back transaction, and from a developer's shell.
+ *
+ * What it writes directly, and why: the four users and their workspace memberships
+ * (invitations are not built, and sign-in is GitHub's), and the one private channel
+ * (no endpoint creates one yet). Everything else is the API's.
+ */
+import type { Executor } from '@purlay/db';
+import { messageId } from '@purlay/types';
+import type { Config } from '../platform/config';
+import type { Clock } from '../platform/clock';
+import { SESSION_COOKIE } from '../platform/cookies';
+import { createLogger } from '../platform/logging';
+import { createApp } from '../ingress/http/app';
+import type { GitHubClient } from '../modules/auth/github';
+import { issueSession } from '../modules/auth/sessions';
+import {
+  PERSONAS,
+  apiChannel,
+  deploysChannel,
+  directMessages,
+  incidentsChannel,
+  messageCount,
+  securityChannel,
+  selfNotes,
+  type PersonaKey,
+  type Step,
+} from './demo-script';
+
+interface Persona {
+  readonly userId: string;
+  readonly username: string;
+  readonly displayName: string;
+  /** The `Cookie` header value a signed-in browser sends, and the bare token under it. */
+  readonly cookie: string;
+  readonly token: string;
+}
+
+export interface Manifest {
+  readonly workspace: { readonly id: string; readonly slug: string; readonly name: string };
+  readonly personas: Readonly<Record<PersonaKey, Persona>>;
+  readonly channels: {
+    readonly api: string;
+    readonly deploys: string;
+    readonly incidents: string;
+    readonly design: string;
+    readonly security: string;
+    /** The viewer's direct message with Alice, and with themselves. */
+    readonly dmAlice: string;
+    readonly dmSelf: string;
+  };
+  /** Ids of the messages a step named with a `key`, for tests that need to find one. */
+  readonly messages: Readonly<Record<string, string>>;
+  readonly counts: { readonly messages: number };
+}
+
+export interface SeedOptions {
+  readonly database: Executor;
+  readonly config: Config;
+  /** The instant the seeded history ends; it begins about two days before. */
+  readonly now: Date;
+}
+
+const MINUTE = 60_000;
+const SESSION_DAYS = 30;
+const SLUG = 'acme-eng';
+const WORKSPACE_NAME = 'acme-eng';
+
+/** How long a step list runs, from its first message to its last. */
+const durationMinutes = (steps: readonly Step[]): number =>
+  steps.reduce(
+    (total, step) =>
+      total +
+      step.gapMinutes +
+      (step.replies ?? []).reduce((sum, reply) => sum + reply.gapMinutes, 0),
+    0,
+  );
+
+/** GitHub is how a real person signs in; the seed issues its sessions itself and must never ask. */
+export const neverSignsIn: GitHubClient = {
+  exchangeCode: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
+  profile: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
+  emails: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
+};
+
+const ROOMY = { perSecond: 100_000, burst: 1_000_000 } as const;
+
+/**
+ * The only databases the seed will write to: the ones `scripts/demo.ts` and the browser tests
+ * create and drop themselves. The seed makes people with 30-day sessions and writes their
+ * cookies to a file — pointed at a real database by a mistyped `DATABASE_URL` it would be a
+ * backdoor with a receipt, so the name is checked, not the intention (H-API 9).
+ */
+const DEMO_DATABASE = /^purlay_(?:demo|e2e)(?:[\w-]*)$/;
+
+export const assertDemoDatabase = (connectionString: string): void => {
+  const name = new URL(connectionString).pathname.slice(1);
+  if (!DEMO_DATABASE.test(name)) {
+    throw new Error(
+      `refusing to seed "${name}": the demo only writes to a database named purlay_demo… or purlay_e2e…`,
+    );
+  }
+};
+
+export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
+  const { database, config } = options;
+  assertDemoDatabase(config.DATABASE_URL);
+  let current = new Date(options.now.getTime() - 3 * 24 * 60 * MINUTE);
+  const clock: Clock = { now: (): Date => new Date(current) };
+  const at = (instant: Date): void => {
+    current = instant;
+  };
+  const advance = (minutes: number): void => {
+    current = new Date(current.getTime() + minutes * MINUTE);
+  };
+
+  // The history is sent in bulk by four people, which the production write budget
+  // would (rightly) refuse; the seed is not a client to rate-limit.
+  const app = createApp({
+    config,
+    database,
+    clock,
+    log: createLogger({ level: 'silent' }),
+    github: neverSignsIn,
+    rateBudgets: { auth: ROOMY, writes: ROOMY },
+  });
+
+  // ── People ────────────────────────────────────────────────────────────────
+  const existing = await database
+    .selectFrom('users')
+    .select('id')
+    .where('username', 'in', Object.keys(PERSONAS))
+    .execute();
+  if (existing.length > 0) {
+    throw new Error(
+      'the demo people already exist in this database; the seed is for a fresh one (scripts/demo.ts creates it)',
+    );
+  }
+
+  const keys = Object.keys(PERSONAS) as PersonaKey[];
+  const people = {} as Record<PersonaKey, Persona>;
+  for (const key of keys) {
+    const profile = PERSONAS[key];
+    const user = await database
+      .insertInto('users')
+      .values({
+        email: `${key}@acme.example`,
+        username: key,
+        display_name: profile.displayName,
+        github_id: profile.githubId,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const { token } = await issueSession(database, clock, user.id, SESSION_DAYS);
+    people[key] = {
+      userId: user.id,
+      username: key,
+      displayName: profile.displayName,
+      cookie: `${SESSION_COOKIE}=${token}`,
+      token,
+    };
+  }
+
+  // ── The request every step goes through ───────────────────────────────────
+  const call = async (
+    who: PersonaKey,
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<unknown> => {
+    const response = await app.handle(
+      new Request(`${config.APP_URL}${path}`, {
+        method,
+        headers: {
+          cookie: people[who].cookie,
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    );
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`${method} ${path} as ${who} answered ${String(response.status)}: ${text}`);
+    }
+    return text === '' ? null : (JSON.parse(text) as unknown);
+  };
+  const idOf = (value: unknown): string => (value as { id: string }).id;
+
+  // ── Workspace and channels ────────────────────────────────────────────────
+  at(new Date(options.now.getTime() - 3 * 24 * 60 * MINUTE));
+  const workspace = (await call('dogancan', 'POST', '/api/workspaces', {
+    name: WORKSPACE_NAME,
+    slug: SLUG,
+  })) as { id: string };
+  for (const key of keys) {
+    if (key === 'dogancan') continue;
+    await database
+      .insertInto('workspace_members')
+      .values({
+        workspace_id: workspace.id,
+        user_id: people[key].userId,
+        role: 'member',
+        joined_at: current,
+      })
+      .execute();
+  }
+
+  const makeChannel = async (creator: PersonaKey, name: string, topic: string): Promise<string> =>
+    idOf(await call(creator, 'POST', `/api/workspaces/${workspace.id}/channels`, { name, topic }));
+  const join = async (who: PersonaKey, channelId: string): Promise<void> => {
+    await call(who, 'POST', `/api/channels/${channelId}/join`);
+  };
+
+  const api = await makeChannel('alice', 'api', 'Backend deploys and incident follow-ups');
+  const deploys = await makeChannel('bob', 'deploys', 'Staging and production releases');
+  const incidents = await makeChannel('carol', 'incidents', 'Active incidents and postmortems');
+  const design = await makeChannel('dogancan', 'design', 'Product and interface decisions');
+  for (const channelId of [api, deploys, incidents]) {
+    for (const key of keys) {
+      // The creator is already in; joining twice is not an error but is not needed.
+      const creator = channelId === api ? 'alice' : channelId === deploys ? 'bob' : 'carol';
+      if (key !== creator) await join(key, channelId);
+    }
+  }
+
+  // The private channel: nobody can create one through the API yet (`API.md` §4).
+  const security = (
+    await database
+      .insertInto('channels')
+      .values({
+        workspace_id: workspace.id,
+        name: 'security',
+        topic: 'Private · vulnerability reports',
+        type: 'private',
+        created_by: people.alice.userId,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow()
+  ).id;
+  await database
+    .insertInto('channel_members')
+    .values([
+      { channel_id: security, user_id: people.alice.userId },
+      { channel_id: security, user_id: people.bob.userId },
+    ])
+    .execute();
+
+  const dmAlice = idOf(
+    await call('dogancan', 'POST', `/api/workspaces/${workspace.id}/dms`, {
+      userId: people.alice.userId,
+    }),
+  );
+  const dmSelf = idOf(
+    await call('dogancan', 'POST', `/api/workspaces/${workspace.id}/dms`, {
+      userId: people.dogancan.userId,
+    }),
+  );
+
+  // ── The conversation ──────────────────────────────────────────────────────
+  const named: Record<string, string> = {};
+  const readTo: Partial<Record<string, string>> = {};
+  let total = 0;
+
+  const say = async (
+    who: PersonaKey,
+    channelId: string,
+    text: string,
+    parentId?: string,
+  ): Promise<string> => {
+    const id = messageId(clock.now());
+    await call(who, 'POST', `/api/channels/${channelId}/messages`, {
+      id,
+      content: text,
+      ...(parentId === undefined ? {} : { parentId }),
+    });
+    total += 1;
+    return id;
+  };
+
+  const play = async (
+    channelId: string,
+    channelName: string,
+    steps: readonly Step[],
+    endsAt: Date,
+  ): Promise<void> => {
+    at(new Date(endsAt.getTime() - durationMinutes(steps) * MINUTE));
+    for (const step of steps) {
+      advance(step.gapMinutes);
+      const id = await say(step.who, channelId, step.text);
+      if (step.key !== undefined) named[step.key] = id;
+      if (step.readUpTo === true) readTo[channelName] = id;
+      for (const reaction of step.reactions ?? []) {
+        for (const by of reaction.by) {
+          await call(
+            by,
+            'PUT',
+            `/api/messages/${id}/reactions/${encodeURIComponent(reaction.emoji)}`,
+          );
+        }
+      }
+      for (const reply of step.replies ?? []) {
+        advance(reply.gapMinutes);
+        await say(reply.who, channelId, reply.text, id);
+      }
+      if (step.resolvedBy !== undefined) {
+        advance(2);
+        await call(step.resolvedBy, 'POST', `/api/messages/${id}/resolve`);
+      }
+    }
+  };
+
+  const end = options.now;
+  const ago = (minutes: number): Date => new Date(end.getTime() - minutes * MINUTE);
+  await play(api, 'api', apiChannel(), ago(25));
+  await play(deploys, 'deploys', deploysChannel(), ago(95));
+  await play(incidents, 'incidents', incidentsChannel(), ago(300));
+  await play(security, 'security', securityChannel(), ago(700));
+  await play(dmAlice, 'dmAlice', directMessages(), ago(60));
+  await play(dmSelf, 'dmSelf', selfNotes(), ago(180));
+
+  // What the viewer has read, set last so the counters are recomputed over the whole
+  // history (D-99 §4) — the way a person who read to here and then went to lunch is.
+  at(ago(10));
+  const channelIds: Record<string, string> = { api, deploys, dmAlice, dmSelf };
+  for (const [name, upTo] of Object.entries(readTo)) {
+    const channelId = channelIds[name];
+    if (channelId !== undefined && upTo !== undefined) {
+      await call('dogancan', 'PUT', `/api/channels/${channelId}/read`, { lastReadMessageId: upTo });
+    }
+  }
+
+  return {
+    workspace: { id: workspace.id, slug: SLUG, name: WORKSPACE_NAME },
+    personas: people,
+    channels: { api, deploys, incidents, design, security, dmAlice, dmSelf },
+    messages: named,
+    counts: { messages: total },
+  };
+};
+
+/** What the seed will send, without sending it: for the harness's banner and a test. */
+export const plannedMessages = (): number =>
+  [
+    apiChannel(),
+    deploysChannel(),
+    incidentsChannel(),
+    securityChannel(),
+    directMessages(),
+    selfNotes(),
+  ].reduce((sum, steps) => sum + messageCount(steps), 0);

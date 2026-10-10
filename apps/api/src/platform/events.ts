@@ -7,8 +7,17 @@
  * The implementation — a map in this process today, a shared adapter in Phase 3 —
  * is not here, and nothing that publishes can tell which one it has (D-7).
  */
-import { ACCESS_REVOKED_MAX_CHANNELS, type ServerFrame, type Topic } from '@purlay/types';
+import {
+  ACCESS_REVOKED_MAX_CHANNELS,
+  type Channel,
+  type ChannelState,
+  type Reaction,
+  type ServerFrame,
+  type ThreadSummary,
+  type Topic,
+} from '@purlay/types';
 import type { Clock } from './clock';
+import { createLogger, type Logger } from './logging';
 
 /** The contract's, not a second definition: the topic names cross nodes in Phase 3. */
 export type { Topic };
@@ -96,6 +105,135 @@ export const publishUserDeleted = async (
     data: { reason: 'account-deleted' },
     ts: clock.now().getTime(),
   });
+};
+
+/**
+ * What the wedge's writes tell the room and the person (D-99). Each is called
+ * **after** the change commits, like the revocations above, so nobody is told of
+ * something that was then rolled back; each takes the bus it was given.
+ */
+
+/** A root's replies changed — a reply arrived, or the thread was resolved or reopened. */
+export const publishThreadUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  data: { readonly channelId: string; readonly messageId: string; readonly thread: ThreadSummary },
+  version: number,
+): Promise<void> => {
+  await bus.publish(channelTopic(data.channelId), {
+    event: 'THREAD_UPDATED',
+    data,
+    version,
+    ts: clock.now().getTime(),
+  });
+};
+
+/** A message's reactions changed. The whole set, so a client replaces rather than patches. */
+export const publishReactionsUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  data: {
+    readonly channelId: string;
+    readonly messageId: string;
+    readonly reactions: readonly Reaction[];
+  },
+  version: number,
+): Promise<void> => {
+  await bus.publish(channelTopic(data.channelId), {
+    event: 'REACTIONS_UPDATED',
+    data: { ...data, reactions: [...data.reactions] },
+    version,
+    ts: clock.now().getTime(),
+  });
+};
+
+/** One person's read position and counters in one channel, for every socket they hold. */
+export const publishChannelState = async (
+  bus: EventBus,
+  clock: Clock,
+  userId: string,
+  channelId: string,
+  state: ChannelState,
+  version: number,
+): Promise<void> => {
+  await bus.publish(userTopic(userId), {
+    event: 'CHANNEL_STATE',
+    data: { channelId, state },
+    version,
+    ts: clock.now().getTime(),
+  });
+};
+
+/** A channel appeared for one person — somebody opened a direct message with them. */
+export const publishChannelAdded = async (
+  bus: EventBus,
+  clock: Clock,
+  userId: string,
+  channel: Channel,
+): Promise<void> => {
+  await bus.publish(userTopic(userId), {
+    event: 'CHANNEL_ADDED',
+    data: channel,
+    ts: clock.now().getTime(),
+  });
+};
+
+/**
+ * The logger a caller that did not pass one gets: nothing is written. The application's own
+ * wiring always passes the real one (a test through `createApp` proves it), so this is for the
+ * module-level tests that drive a function without an application around it.
+ */
+export const NO_LOG: Logger = createLogger({ level: 'silent' });
+
+/** One thing to tell the room or a person after a commit, named for the log. */
+export interface Publish {
+  readonly label: string;
+  readonly run: () => Promise<void>;
+}
+
+/** A named publish, for `publishAfterCommit`. */
+export const publication = (label: string, run: () => Promise<void>): Publish => ({ label, run });
+
+/** How many publishes of one stage are in flight at once. */
+export const PUBLISH_CHUNK = 32;
+
+/**
+ * Tells everyone what a committed write did — and never turns that into an error.
+ *
+ * The write is already committed when this runs: a publish that throws must not become a 500
+ * (or an `ERROR` frame) for a request that *succeeded*, and one failure must not stop the
+ * frames behind it from going. Each failure is logged with what it was publishing, and the
+ * rest are still attempted. The in-process bus cannot throw today; `publish` is the seam the
+ * shared adapter replaces in Phase 3 (D-7), and the day it is a network call this is what
+ * keeps a flaky one from making sends look like they failed.
+ *
+ * **Stages run in order, the publishes inside a stage concurrently** in chunks of
+ * `PUBLISH_CHUNK`: the room hears a message before the reply count that moved under it
+ * (D-99 §2), but a hundred people hearing their own counters need not queue behind one
+ * another.
+ */
+export const publishAfterCommit = async (
+  log: Logger,
+  stages: readonly (readonly Publish[])[],
+): Promise<void> => {
+  for (const stage of stages) {
+    for (let at = 0; at < stage.length; at += PUBLISH_CHUNK) {
+      const chunk = stage.slice(at, at + PUBLISH_CHUNK);
+      const settled = await Promise.allSettled(
+        chunk.map(async (publish) => {
+          await publish.run();
+        }),
+      );
+      settled.forEach((outcome, index) => {
+        if (outcome.status === 'rejected') {
+          log.error('publish failed after commit', {
+            what: chunk[index]?.label,
+            err: outcome.reason,
+          });
+        }
+      });
+    }
+  }
 };
 
 /** What the bus hands a frame to. The hub implements it; nothing else needs to. */

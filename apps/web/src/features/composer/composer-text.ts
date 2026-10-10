@@ -1,0 +1,97 @@
+/**
+ * What the composer knows about the text it holds — pure functions, no DOM.
+ *
+ * Four questions, each answered once and tested alone: is the caret inside an open
+ * code fence (so Enter is a newline, not a send), does the text address everybody
+ * (`@here`, which the server refuses and the composer refuses first), what does a
+ * long paste become, and how far over the limit is the text.
+ *
+ * **Every scan is linear.** The input is up to 16,000 characters typed or pasted by
+ * anybody; nothing here backtracks, so no input makes the composer hang (D-33's
+ * reasoning about untrusted input holds on the client too).
+ */
+import { MESSAGE_CONTENT_MAX } from '@purlay/types';
+
+/** A line that opens or closes a fenced block: three or more backticks first on the line. */
+const FENCE_LINE = /^`{3,}/;
+
+/** How many lines a paste may have before it is made a code block (`UX.md` §5). */
+const PASTE_FENCE_AFTER_LINES = 12;
+
+/** The counter appears this close to the limit and not before: it is noise until it matters. */
+const COUNTER_FROM_REMAINING = 500;
+
+/**
+ * Whether the caret is inside a fence that is open or being opened.
+ *
+ * Fence lines in the text *up to the caret*, counting the line the caret is on: an odd
+ * number means a block is open. That is what makes "type ``` then Enter" open one —
+ * the line being finished is itself a fence — and "type the closing ``` then Enter"
+ * send it: the count is even again.
+ */
+export const insideFence = (textBeforeCaret: string): boolean => {
+  let fences = 0;
+  for (const line of textBeforeCaret.split('\n')) {
+    if (FENCE_LINE.test(line)) fences += 1;
+  }
+  return fences % 2 === 1;
+};
+
+/** The text with code made blank, so what is left is what a person *said* and not what they quoted. */
+const withoutCode = (text: string): string => {
+  const lines: string[] = [];
+  let fenced = false;
+  for (const line of text.split('\n')) {
+    if (FENCE_LINE.test(line)) {
+      fenced = !fenced;
+      lines.push('');
+    } else if (fenced) {
+      lines.push('');
+    } else {
+      lines.push(line.replace(/`[^`\n]*`/g, ''));
+    }
+  }
+  return lines.join('\n');
+};
+
+/** `@here` as the server's parser reads it: not in code, not after a word character, `@` or a backtick. */
+const BROADCAST = /(?<![\w@`])@(here|channel|everyone)(?![A-Za-z0-9_-])/i;
+
+/** The broadcast mention the text contains, as typed, or null. */
+export const broadcastMention = (text: string): string | null =>
+  BROADCAST.exec(withoutCode(text))?.[0] ?? null;
+
+/** How many UTF-16 code units the text is over the limit; zero or less means it fits. */
+export const unitsOver = (text: string): number => text.length - MESSAGE_CONTENT_MAX;
+
+/** How many are left before the limit, or null while the counter would only be noise. */
+export const unitsLeft = (text: string): number | null => {
+  const left = MESSAGE_CONTENT_MAX - text.length;
+  return left <= COUNTER_FROM_REMAINING ? left : null;
+};
+
+/** Trailing whitespace only: what a person typed inside the message is never altered. */
+export const trimEnd = (text: string): string => text.replace(/\s+$/, '');
+
+/** Whether a paste is long enough to become a block. */
+export const isLongPaste = (pasted: string): boolean =>
+  pasted.split('\n').length > PASTE_FENCE_AFTER_LINES;
+
+/**
+ * The paste as a fenced block. The fence is one backtick longer than the longest run
+ * the paste itself contains at the start of a line, so pasting a Markdown file with its
+ * own fences cannot close the block early.
+ */
+export const asCodeBlock = (pasted: string): string => {
+  let longest = 2;
+  for (const line of pasted.split('\n')) {
+    const run = /^`+/.exec(line)?.[0].length ?? 0;
+    if (run > longest) longest = run;
+  }
+  const fence = '`'.repeat(longest + 1);
+  return `${fence}\n${pasted.replace(/\n+$/, '')}\n${fence}`;
+};
+
+/** Rows to show: as many as the lines, within the bounds that keep the composer a line and not a page. */
+export const rowsFor = (text: string, min = 2, max = 12): number =>
+  Math.min(max, Math.max(min, text.split('\n').length));

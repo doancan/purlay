@@ -53,7 +53,7 @@ export const spacingTokens = [
 export const radiusTokens = [
   'radius-sm',
   'radius-md',
-  'radius-full',
+  'radius-pill',
 ] as const;
 
 export const shadowTokens = [
@@ -61,16 +61,21 @@ export const shadowTokens = [
 ] as const;
 
 export const sizeTokens = [
-  'size-rail',
   'size-sidebar',
   'size-members',
   'size-feed-max',
   'size-narrow',
   'size-control',
+  'size-touch',
   'size-header',
   'size-gutter',
   'size-badge',
   'size-dot',
+  'size-code-clamp',
+  'size-dialog',
+  'size-palette',
+  'size-palette-list',
+  'size-toast',
   'size-avatar',
   'size-focus-offset',
   'size-icon-sm',
@@ -89,6 +94,7 @@ export const zIndexTokens = [
 export const borderWidthTokens = [
   'stroke-hairline',
   'stroke-focus',
+  'stroke-marker',
   'stroke-icon',
 ] as const;
 

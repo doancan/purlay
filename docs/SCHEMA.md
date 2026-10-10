@@ -312,6 +312,11 @@ CREATE TABLE channel_members (
     unread_count         INTEGER NOT NULL DEFAULT 0,
     unread_mention_count INTEGER NOT NULL DEFAULT 0,
 
+    -- Counts this row's changes to the state above, in the statement that makes them, so the
+    -- order of versions is the order of commits. `CHANNEL_STATE` carries it and a client drops
+    -- a frame that is not newer than the one it holds. Added by 0015. (D-99, amended)
+    state_version        INTEGER NOT NULL DEFAULT 0,
+
     -- Defaults to 'mentions': quiet by default is the product, not a preference. (D-12)
     notification_level notification_level NOT NULL DEFAULT 'mentions',
 
@@ -320,6 +325,11 @@ CREATE TABLE channel_members (
     UNIQUE (channel_id, user_id),
     CONSTRAINT unread_counts_non_negative
         CHECK (unread_count >= 0 AND unread_mention_count >= 0),
+
+    -- I-6. What needs you is, first, something you have not read. Added by 0013, NOT VALID
+    -- then validated, once the service that defines a counted mention existed. (D-99)
+    CONSTRAINT unread_mention_within_unread
+        CHECK (unread_mention_count <= unread_count),
 
     -- I-3. SET NULL names its column: the plain form would also null `channel_id`, which a
     -- membership cannot exist without. Added by 0010, NOT VALID then validated. (D-90)
@@ -370,6 +380,11 @@ CREATE TABLE messages (
     -- does not become 50 extra queries.
     thread_reply_count   INTEGER NOT NULL DEFAULT 0,
     thread_last_reply_at TIMESTAMPTZ,
+
+    -- Counts changes to the thread summary and the reaction set, in the statement that makes
+    -- them, so versions are in commit order; `THREAD_UPDATED` and `REACTIONS_UPDATED` carry it.
+    -- Added by 0015. (D-99, amended)
+    state_version        INTEGER NOT NULL DEFAULT 0,
 
     -- The wedge: a thread can be closed, and stays searchable. (D-2)
     resolved_at  TIMESTAMPTZ,
@@ -451,9 +466,13 @@ CREATE INDEX idx_messages_search
 CREATE INDEX idx_messages_sender ON messages (sender_id);
 
 -- Open questions across a workspace: the resolvable-thread feature's own view.
+-- Only roots that have a reply: nearly every root has none, and an index of all of them made
+-- a view that wants the rare ones read them all (6,975 buffers against 41 on 400,000 messages).
+-- Redefined by 0014.
 CREATE INDEX idx_messages_unresolved
     ON messages (workspace_id, id DESC)
-    WHERE parent_id IS NULL AND resolved_at IS NULL AND deleted_at IS NULL;
+    WHERE parent_id IS NULL AND resolved_at IS NULL AND deleted_at IS NULL
+      AND thread_reply_count > 0;
 
 -- The foreign keys. The indexes above are partial, and the query that enforces a foreign key
 -- filters on the column alone, so none of them can answer it. Without these, deleting 100 of
@@ -547,12 +566,13 @@ CREATE TABLE reactions (
     UNIQUE (message_id, user_id, emoji)
 );
 
-CREATE INDEX idx_reactions_message ON reactions (message_id);
+CREATE INDEX idx_reactions_user ON reactions (user_id);
 ```
 
 > `ON DELETE CASCADE` is correct here and does not contradict D-9: a reaction is not content,
 > it carries no history, and it only ever disappears with the message it belongs to during a
-> hard purge.
+> hard purge. That a value is one emoji is the contract's `emoji` format and the service's rule
+> (at most twenty distinct per message, D-99); the column only bounds its length.
 
 ### 7.2. `attachments`
 
@@ -610,17 +630,28 @@ CREATE TABLE mentions (
     mentioned_user_id UUID NOT NULL REFERENCES users(id)      ON DELETE CASCADE,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    UNIQUE (message_id, mentioned_user_id)
+    UNIQUE (message_id, mentioned_user_id),
+
+    -- The message is in this channel, and the channel in this workspace. (I-1, I-4, D-90)
+    CONSTRAINT mentions_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT mentions_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
 );
 
 CREATE INDEX idx_mentions_user
     ON mentions (mentioned_user_id, workspace_id, created_at DESC);
+CREATE INDEX idx_mentions_workspace ON mentions (workspace_id);
+CREATE INDEX idx_mentions_channel   ON mentions (channel_id);
 ```
 
 ### 7.4. `notifications`
 
 Rows are written **even when Deep Work suppresses delivery**, so nothing is lost and a digest
-remains possible later. (D-15)
+remains possible later. (D-15) One row per person, message and kind (D-99): a resolution is a
+second thing to tell the author of the root, not a replacement for the mention that already did.
 
 ```sql
 CREATE TABLE notifications (
@@ -637,13 +668,31 @@ CREATE TABLE notifications (
     suppressed_by_deep_work BOOLEAN NOT NULL DEFAULT FALSE,
 
     read_at      TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (user_id, message_id, type),
+
+    CONSTRAINT notifications_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT notifications_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
 );
 
 -- The badge query: unread notifications for one user, newest first.
 CREATE INDEX idx_notifications_unread
     ON notifications (user_id, workspace_id, created_at DESC)
     WHERE read_at IS NULL;
+
+-- Reading a channel marks its notifications read and recounts what is left (D-99 §4).
+CREATE INDEX idx_notifications_channel_unread
+    ON notifications (user_id, channel_id, message_id)
+    WHERE read_at IS NULL;
+
+CREATE INDEX idx_notifications_workspace ON notifications (workspace_id);
+CREATE INDEX idx_notifications_channel   ON notifications (channel_id);
+CREATE INDEX idx_notifications_message   ON notifications (message_id);
 ```
 
 ---
@@ -857,15 +906,15 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-3 | `channel_members.last_read_message_id` must belong to that channel. | the database: `channel_members_last_read_channel_fkey` |
 | I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | the database: `messages_channel_workspace_fkey` |
 | I-5 | `dm_key` is the workspace's two member UUIDs, sorted ascending and joined with `:`. The database enforces the form and the order; that the two are members of the workspace is the service's. | `channels.service`, in part `dm_key_form` |
-| I-6 | `unread_count` ≥ `unread_mention_count` for every membership row. | `read-state.service` |
+| I-6 | `unread_count` ≥ `unread_mention_count` for every membership row. | the database: `unread_mention_within_unread` (D-99) |
 | I-7 | `workspaces.storage_used_bytes` equals the sum of live attachment sizes. Reconciled nightly. | `storage.service` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit.service` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry. | `retention.service` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
 
-**What the database enforces, and what stays with the service.** I-3 and I-4 are constraints now, and I-1
-and I-5 are constraints in part (D-90). Four things stay service-level on purpose:
+**What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
+last with the read-state service, D-99), and I-1 and I-5 are constraints in part (D-90). Four things stay service-level on purpose:
 
 - **Thread depth (I-1, the rest).** A reply's parent must itself be a root. A foreign key cannot say
   "the row I point at has a null column"; it takes a trigger, or a stored generated column on a table of
@@ -876,9 +925,6 @@ and I-5 are constraints in part (D-90). Four things stay service-level on purpos
   need. The service maintains them in the send's transaction; a nightly reconcile is the check. A
   `thread_reply_count` of 999 on a message with no replies is accepted by the database, and the audit was
   right to say so.
-- **I-6** compares two columns of one row and could be a `CHECK`. It is not one yet because the read-state
-  service that defines when a mention is counted does not exist, and a constraint written before the rule is
-  settled would decide it. It becomes one with that service.
 - **The timestamp inside a message id.** A `CHECK` must be immutable, and "not from the future" is not. The
   service refuses it (D-33); the database refuses a wrong version and variant.
 - **That a DM's two ids are members of its workspace**, and that a channel member is a workspace member.
@@ -909,15 +955,18 @@ file that leaves its transaction runs statement by statement and must be safe to
 0009_foreign_key_indexes.sql   every foreign key column indexed, built CONCURRENTLY; idx_workspaces_slug dropped  (D-89)
 0010_tenant_integrity.sql    composite tenant keys, messages_id_is_uuidv7, dm_key_form  (D-90)
 0011_message_content_units.sql   messages_content_length counts code units, as the contract does  (D-67)
-0012_engagement.sql          reactions, attachments, mentions, notifications
-0013_integrations.sql        github_integrations, link_previews
+0012_engagement.sql          reactions, mentions, notifications  (D-98; attachments follow with their endpoints)
+0013_read_state.sql          unread_mention_within_unread: I-6 as a CHECK  (D-99)
+0014_open_questions_index.sql   idx_messages_unresolved holds only roots that have a reply  (D-99, amended)
+0015_state_versions.sql      channel_members.state_version, messages.state_version  (D-99, amended)
+0016_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0014_administration.sql      audit_log, job_runs  (Phase 1)
+0017_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0015_github_feeds.sql`; Phase 2's magic links add `0016_email_auth.sql`.
+Phase 2 adds `0018_github_feeds.sql`; Phase 2's magic links add `0019_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, and again with each hardening migration
