@@ -336,7 +336,10 @@ export default defineConfig([
   includeIgnoreFile(fileURLToPath(new URL('.gitignore', import.meta.url))),
 
   // Ignored for lint but tracked in git, so they cannot come from `.gitignore`.
-  globalIgnores(['**/*.d.ts', 'packages/db/src/schema.ts']),
+  // `apps/web/public` is served as written, never bundled or type-checked: today
+  // that is the page-load theme script, which `theme.test.ts` runs against a fake
+  // page, and the project service rightly has no project for a plain script.
+  globalIgnores(['**/*.d.ts', 'packages/db/src/schema.ts', 'apps/web/public/**']),
 
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,

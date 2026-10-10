@@ -64,6 +64,9 @@
   --height-badge: var(--size-badge);
   --container-badge: var(--size-badge);
   --size-dot: var(--size-dot);
+  --container-dialog: var(--size-dialog);
+  --container-palette: var(--size-palette);
+  --container-toast: var(--size-toast);
   --size-avatar: var(--size-avatar);
   --outline-offset-focus: var(--size-focus-offset);
   --size-icon-sm: var(--size-icon-sm);
