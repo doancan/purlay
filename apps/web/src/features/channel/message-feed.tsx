@@ -12,7 +12,8 @@
  * and a message arriving while the reader is scrolled up raises a pill instead of moving them.
  *
  * **Keyboard**: one row is in the tab order (roving focus) and ↑ ↓ Home End move between
- * rows; Escape returns to the composer. Visible focus is the global ring, which a row never
+ * rows; Escape returns to the composer — or, from inside an open thread, folds the thread
+ * first (`features/threads`, which also owns T, R and ⌘⇧R on the focused row). Visible focus is the global ring, which a row never
  * hides.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,9 +27,10 @@ import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { EmptyState, ErrorState } from '../../ui/states';
 import { VisuallyHidden } from '../../ui/visually-hidden';
-import { MessageRow } from '../messages/message-row';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { ThreadsProvider, useThreads } from '../threads/thread-context';
+import { ThreadedMessageRow } from '../threads/threaded-row';
 import { buildFeed, newestConfirmedId, type FeedItem } from './feed-model';
 import { useFeedPorts, type FeedPorts } from './feed-ports';
 import { useFeedScroll } from './use-feed-scroll';
@@ -89,6 +91,138 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.matches('input, textarea, select') || target.isContentEditable);
 
+interface FeedListProps {
+  readonly content: React.RefObject<HTMLDivElement | null>;
+  readonly scroller: React.RefObject<HTMLDivElement | null>;
+  readonly items: readonly FeedItem[];
+  readonly channelName: string;
+  readonly ariaLabel: string;
+  readonly busy: boolean;
+  readonly meId: string;
+  readonly nowMinute: number;
+  readonly members: ReadonlyMap<string, string>;
+  /** The one row in the tab order. */
+  readonly tabbable: string | null;
+  readonly onRetry: (id: string) => void;
+  readonly onDiscard: (id: string) => void;
+  readonly onFocusRow: (id: string) => void;
+}
+
+/**
+ * The stream itself, and the keyboard that moves through it. It is its own component so it
+ * can sit *inside* the threads' provider and ask it first what a key means (T, R, ⌘⇧R, and
+ * Escape from within an open thread) before the feed's own keys get it.
+ */
+const FeedList = ({
+  content,
+  scroller,
+  items,
+  channelName,
+  ariaLabel,
+  busy,
+  meId,
+  nowMinute,
+  members,
+  tabbable,
+  onRetry,
+  onDiscard,
+  onFocusRow,
+}: FeedListProps): React.JSX.Element => {
+  const { t } = useI18n();
+  const threads = useThreads();
+
+  const rows = (): HTMLElement[] =>
+    Array.from(scroller.current?.querySelectorAll<HTMLElement>('[data-message-row]') ?? []);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    // Menus and their items render in a portal but bubble here through React; they are not ours.
+    if (event.defaultPrevented || !scroller.current?.contains(event.target as Node)) return;
+    if (threads.handleKey(event)) return;
+    if (event.key === 'Escape') {
+      composerIn(scroller.current.closest('main'))?.focus();
+      return;
+    }
+    if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+    const all = rows();
+    const current = all.findIndex(
+      (row) => row === (event.target as HTMLElement).closest('[data-message-row]'),
+    );
+    let next = -1;
+    if (event.key === 'ArrowUp') next = current === -1 ? all.length - 1 : Math.max(0, current - 1);
+    else if (event.key === 'ArrowDown')
+      next = current === -1 ? 0 : Math.min(all.length - 1, current + 1);
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = all.length - 1;
+    const row = all[next];
+    if (row === undefined) return;
+    event.preventDefault();
+    row.focus();
+  };
+
+  const onFocus = (event: React.FocusEvent<HTMLDivElement>): void => {
+    const id = (event.target as HTMLElement).closest<HTMLElement>('[data-message-id]')?.dataset[
+      'messageId'
+    ];
+    if (id !== undefined) onFocusRow(id);
+  };
+
+  return (
+    /* A feed is an ordered stream of articles, and a screen reader needs to know it is one. */
+    <div
+      ref={content}
+      role="feed"
+      aria-label={ariaLabel}
+      aria-busy={busy}
+      onKeyDown={onKeyDown}
+      onFocusCapture={onFocus}
+    >
+      {items.map((item) => {
+        if (item.kind === 'day') {
+          return (
+            <div
+              key={item.key}
+              aria-hidden="true"
+              className="flex items-center gap-3 px-4 pb-2 pt-4"
+            >
+              <span className="w-gutter shrink-0" />
+              <span className="text-label text-ink-muted">{item.label}</span>
+              <span className="flex-1 border-t-hairline border-border-subtle" />
+            </div>
+          );
+        }
+        if (item.kind === 'marker') {
+          return (
+            <div
+              key={item.key}
+              data-feed-marker=""
+              className="flex items-center gap-3 px-4 pb-1 pt-3 text-label text-accent"
+            >
+              <span className="w-gutter shrink-0 text-right">{t('message.newMarker')}</span>
+              <span className="flex-1 border-t-hairline border-accent" />
+            </div>
+          );
+        }
+        return (
+          <ThreadedMessageRow
+            key={item.key}
+            message={item.message}
+            delivery={item.delivery}
+            failure={item.failure}
+            grouped={item.grouped}
+            channelName={channelName}
+            meId={meId}
+            nowMinute={nowMinute}
+            members={members}
+            tabIndex={item.key === tabbable ? 0 : -1}
+            onRetry={onRetry}
+            onDiscard={onDiscard}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 export interface MessageFeedProps {
   readonly channelId: string;
   readonly channelName: string;
@@ -101,6 +235,8 @@ export interface MessageFeedProps {
   readonly readAtOpen: string | null;
   /** Only members have a read position to move. */
   readonly member: boolean;
+  /** A thread to open with the channel, from the address (`?thread=`); brought into view once loaded. */
+  readonly openThread?: string | null;
 }
 
 export const MessageFeed = ({
@@ -109,6 +245,7 @@ export const MessageFeed = ({
   markerAfter,
   readAtOpen,
   member,
+  openThread = null,
 }: MessageFeedProps): React.JSX.Element => {
   const { t, format } = useI18n();
   const ports = useFeedPorts();
@@ -174,7 +311,7 @@ export const MessageFeed = ({
   );
 
   const ready = feed.isSuccess;
-  const { atBottom, newBelow, onScroll, jumpToBottom } = useFeedScroll({
+  const { atBottom, newBelow, onScroll, jumpToBottom, holdPlace } = useFeedScroll({
     scroller,
     content,
     items,
@@ -203,6 +340,13 @@ export const MessageFeed = ({
     });
   }, [ready, hasNextPage, isFetchingNextPage, fetchNextPage, ports]);
 
+  // A thread the address asks for may be older than the first page: read back until its root
+  // is here or there is nothing older, one page at a time.
+  const wanted = openThread !== null && !messages.some((m) => m.id === openThread);
+  useEffect(() => {
+    if (wanted && ready && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [wanted, ready, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   // One function for every row, so a row's props do not change when another row's do.
   const retry = useCallback(
     (id: string): void => {
@@ -216,40 +360,6 @@ export const MessageFeed = ({
     },
     [engine],
   );
-
-  const rows = (): HTMLElement[] =>
-    Array.from(scroller.current?.querySelectorAll<HTMLElement>('[data-message-row]') ?? []);
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Menus and their items render in a portal but bubble here through React; they are not ours.
-    if (event.defaultPrevented || !scroller.current?.contains(event.target as Node)) return;
-    if (event.key === 'Escape') {
-      composerIn(scroller.current.closest('main'))?.focus();
-      return;
-    }
-    if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
-    const all = rows();
-    const current = all.findIndex(
-      (row) => row === (event.target as HTMLElement).closest('[data-message-row]'),
-    );
-    let next = -1;
-    if (event.key === 'ArrowUp') next = current === -1 ? all.length - 1 : Math.max(0, current - 1);
-    else if (event.key === 'ArrowDown')
-      next = current === -1 ? 0 : Math.min(all.length - 1, current + 1);
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = all.length - 1;
-    const row = all[next];
-    if (row === undefined) return;
-    event.preventDefault();
-    row.focus();
-  };
-
-  const onFocus = (event: React.FocusEvent<HTMLDivElement>): void => {
-    const id = (event.target as HTMLElement).closest<HTMLElement>('[data-message-id]')?.dataset[
-      'messageId'
-    ];
-    if (id !== undefined) setFocusedId(id);
-  };
 
   if (feed.isPending) {
     return (
@@ -311,58 +421,23 @@ export const MessageFeed = ({
             <span>{t('feed.start')}</span>
           )}
         </div>
-        {/* A feed is an ordered stream of articles, and a screen reader needs to know it is one. */}
-        <div
-          ref={content}
-          role="feed"
-          aria-label={t('feed.label', { channel: channelName })}
-          aria-busy={isFetchingNextPage}
-          onKeyDown={onKeyDown}
-          onFocusCapture={onFocus}
-        >
-          {items.map((item) => {
-            if (item.kind === 'day') {
-              return (
-                <div
-                  key={item.key}
-                  aria-hidden="true"
-                  className="flex items-center gap-3 px-4 pb-2 pt-4"
-                >
-                  <span className="w-gutter shrink-0" />
-                  <span className="text-label text-ink-muted">{item.label}</span>
-                  <span className="flex-1 border-t-hairline border-border-subtle" />
-                </div>
-              );
-            }
-            if (item.kind === 'marker') {
-              return (
-                <div
-                  key={item.key}
-                  data-feed-marker=""
-                  className="flex items-center gap-3 px-4 pb-1 pt-3 text-label text-accent"
-                >
-                  <span className="w-gutter shrink-0 text-right">{t('message.newMarker')}</span>
-                  <span className="flex-1 border-t-hairline border-accent" />
-                </div>
-              );
-            }
-            return (
-              <MessageRow
-                key={item.key}
-                message={item.message}
-                delivery={item.delivery}
-                failure={item.failure}
-                grouped={item.grouped}
-                meId={user.id}
-                nowMinute={nowMinute}
-                members={members}
-                tabIndex={item.key === tabbable ? 0 : -1}
-                onRetry={retry}
-                onDiscard={discard}
-              />
-            );
-          })}
-        </div>
+        <ThreadsProvider scroller={scroller} holdPlace={holdPlace} openThread={openThread}>
+          <FeedList
+            content={content}
+            scroller={scroller}
+            items={items}
+            channelName={channelName}
+            ariaLabel={t('feed.label', { channel: channelName })}
+            busy={isFetchingNextPage}
+            meId={user.id}
+            nowMinute={nowMinute}
+            members={members}
+            tabbable={tabbable}
+            onRetry={retry}
+            onDiscard={discard}
+            onFocusRow={setFocusedId}
+          />
+        </ThreadsProvider>
       </div>
 
       {newBelow > 0 && !atBottom && (
