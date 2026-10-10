@@ -14,11 +14,12 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { cn } from '../../ui/cn';
 import { useOpenCount } from '../questions/use-open-count';
+import { NavToggle } from '../shell/nav';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 
 const tabClasses =
-  'inline-flex h-control items-center gap-2 rounded-md px-3 text-label hover:bg-surface-200 hover:text-ink';
+  'inline-flex h-control items-center gap-2 whitespace-nowrap rounded-md px-3 text-label hover:bg-surface-200 hover:text-ink max-narrow:h-touch';
 
 /** What a person calls this channel: its name, or who they are talking to. */
 export const useChannelTitle = (channel: Channel): string => {
@@ -39,21 +40,24 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
 
   return (
     <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
-      <div className="flex min-w-0 items-baseline gap-3">
-        <h1 className="flex items-center gap-1 text-title text-ink">
-          <Icon name={direct ? 'person' : 'channel'} size="lg" />
-          <span className="font-mono">{title}</span>
-        </h1>
-        <span className="truncate text-caption text-ink-muted">
-          {direct ? '' : (channel.topic ?? t('header.noTopic'))}
-        </span>
+      <div className="flex min-w-0 items-center gap-2">
+        <NavToggle />
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="flex items-center gap-1 text-title text-ink">
+            <Icon name={direct ? 'person' : 'channel'} size="lg" />
+            <span className="font-mono">{title}</span>
+          </h1>
+          <span className="truncate text-caption text-ink-muted max-narrow:hidden">
+            {direct ? '' : (channel.topic ?? t('header.noTopic'))}
+          </span>
+        </div>
       </div>
       <nav aria-label={t('header.views')} className="flex gap-1">
         <Link
           to="channel"
           params={{ slug: workspace.slug, channelId: channel.id }}
           aria-current="page"
-          className={cn(tabClasses, 'bg-surface-200 text-ink')}
+          className={cn(tabClasses, 'bg-surface-200 text-ink max-narrow:hidden')}
         >
           {t('header.feed')}
         </Link>

@@ -28,12 +28,13 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useChannelTitle } from '../channel/channel-header';
+import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
 import { lastChannel } from './last-channel';
 import { useOpenCount } from './use-open-count';
 
 const tabClasses =
-  'inline-flex h-control items-center gap-2 rounded-md px-3 text-label hover:bg-surface-200 hover:text-ink';
+  'inline-flex h-control items-center gap-2 whitespace-nowrap rounded-md px-3 text-label hover:bg-surface-200 hover:text-ink max-narrow:h-touch';
 
 interface Group {
   readonly channelId: string;
@@ -71,9 +72,14 @@ const Header = (): React.JSX.Element => {
 
   return (
     <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
-      <div className="flex min-w-0 items-baseline gap-3">
-        <h1 className="text-title text-ink">{t('questions.title')}</h1>
-        <span className="truncate text-caption text-ink-muted">{t('questions.lede')}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <NavToggle />
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="whitespace-nowrap text-title text-ink">{t('questions.title')}</h1>
+          <span className="truncate text-caption text-ink-muted max-narrow:hidden">
+            {t('questions.lede')}
+          </span>
+        </div>
       </div>
       <nav aria-label={t('header.views')} className="flex gap-1">
         {back === undefined ? (
@@ -97,7 +103,7 @@ const Header = (): React.JSX.Element => {
           to="questions"
           params={{ slug: workspace.slug }}
           aria-current="page"
-          className={cn(tabClasses, 'bg-surface-200 text-ink')}
+          className={cn(tabClasses, 'bg-surface-200 text-ink max-narrow:hidden')}
         >
           {t('header.questions')}
           {open !== null && open.count > 0 && (

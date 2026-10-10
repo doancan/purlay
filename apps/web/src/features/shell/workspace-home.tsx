@@ -9,6 +9,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { EmptyState } from '../../ui/states';
+import { ScreenBar } from './screen-bar';
 import { useWorkspace } from './workspace';
 
 export const WorkspaceHome = (): React.JSX.Element => {
@@ -26,17 +27,23 @@ export const WorkspaceHome = (): React.JSX.Element => {
 
   if (target === undefined && channels.isSuccess) {
     return (
-      <EmptyState
-        as="h1"
-        title={t('state.workspace.empty.title')}
-        body={t('state.workspace.empty.body')}
-      />
+      <>
+        <ScreenBar />
+        <EmptyState
+          as="h1"
+          title={t('state.workspace.empty.title')}
+          body={t('state.workspace.empty.body')}
+        />
+      </>
     );
   }
   return (
-    <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 p-4">
-      <Skeleton className="w-sidebar" />
-      <Skeleton />
-    </LoadingStatus>
+    <>
+      <ScreenBar />
+      <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 p-4">
+        <Skeleton className="w-sidebar" />
+        <Skeleton />
+      </LoadingStatus>
+    </>
   );
 };

@@ -16,7 +16,7 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
 const rowClasses =
-  'flex h-control w-full items-center gap-2 rounded-md px-3 text-body hover:bg-surface-200';
+  'flex h-control w-full items-center gap-2 rounded-md px-3 text-body hover:bg-surface-200 max-narrow:h-touch';
 
 const toneClasses = {
   quiet: 'text-ink-muted',

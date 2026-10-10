@@ -55,6 +55,8 @@
   --container-members: var(--size-members);
   --container-feed: var(--size-feed-max);
   --height-control: var(--size-control);
+  --height-touch: var(--size-touch);
+  --container-touch: var(--size-touch);
   --height-header: var(--size-header);
   --container-gutter: var(--size-gutter);
   --height-badge: var(--size-badge);

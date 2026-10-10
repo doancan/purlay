@@ -15,7 +15,7 @@ import { Icon } from '../components/icon';
 import { cn } from './cn';
 
 const inputClasses =
-  'h-control w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted';
+  'h-control max-narrow:h-touch w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted';
 
 export interface TextFieldProps extends Omit<
   React.ComponentPropsWithRef<'input'>,

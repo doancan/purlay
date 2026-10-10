@@ -122,6 +122,15 @@ interface SocketData {
   readonly queue: (string | Buffer)[];
 }
 
+/**
+ * A close code that may be put on the wire again. 1005 (none given), 1006 (the connection was
+ * lost: never sent, only reported) and anything else outside 1000–1014 / 3000–4999 are what a
+ * socket *reports*, and `close()` refuses them — so a browser tab that vanishes would crash the
+ * proxy that tried to pass its report on.
+ */
+export const forwardableCode = (code: number): number =>
+  code === 1004 || code === 1005 || code === 1006 || code === 1015 ? 1000 : code;
+
 /** Starts the front server. The returned handle's `stop` closes it. */
 export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<SocketData>> => {
   const wsApi = options.api.replace(/^http/, 'ws');
@@ -168,7 +177,7 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
           client.send(event.data as string);
         });
         upstream.addEventListener('close', (event) => {
-          client.close(event.code === 1005 ? 1000 : event.code);
+          client.close(forwardableCode(event.code));
         });
       },
       message: (client, message) => {
@@ -177,7 +186,7 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
         else client.data.queue.push(message);
       },
       close: (client, code) => {
-        client.data.upstream?.close(code === 1005 ? 1000 : code);
+        client.data.upstream?.close(forwardableCode(code));
       },
     },
   });

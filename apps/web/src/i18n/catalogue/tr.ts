@@ -62,6 +62,11 @@ export const tr = {
   'sidebar.unread': 'okunmamış',
   'sidebar.dm.failed': 'Konuşma açılamadı. Yeniden dene.',
   'sidebar.people.empty': 'Burada henüz başka kimse yok.',
+
+  // ── Dar pencere (UX §2): kenar çubuğu üst katman olur ────────────────────
+  'nav.open': 'Gezinmeyi aç',
+  'nav.description': 'Kanallar, kişiler ve açık sorular',
+
   'browse.title': 'Kanallara göz at',
   'browse.description': 'Henüz katılmadığın herkese açık kanallar.',
   'browse.join': 'Katıl',

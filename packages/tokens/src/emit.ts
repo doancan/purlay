@@ -31,6 +31,8 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-gutter': '--container-gutter',
   'size-control': '--height-control',
   'size-header': '--height-header',
+  // A touch target is a height and a minimum width: a row is as wide as its container, an icon button is a square.
+  'size-touch': ['--height-touch', '--container-touch'],
   // A badge is a height and a minimum width: one digit is a circle, two are not.
   'size-badge': ['--height-badge', '--container-badge'],
   'size-code-clamp': '--height-code',

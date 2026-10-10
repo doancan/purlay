@@ -11,6 +11,7 @@
 import { LanguageMenu } from '../../i18n/language-menu';
 import { useI18n } from '../../i18n/i18n-provider';
 import { ThemeMenu } from '../../theme/theme-menu';
+import { cn } from '../../ui/cn';
 import { Kbd } from '../../ui/kbd';
 import { useSession } from '../session/session';
 import { ChannelList } from '../sidebar/channel-list';
@@ -18,13 +19,21 @@ import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { PeopleList } from '../sidebar/people-list';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
 
-export const Sidebar = (): React.JSX.Element => {
+interface SidebarProps {
+  /** Inside the narrow window's overlay: as tall as the panel rather than as tall as the page's row. */
+  readonly overlay?: boolean;
+}
+
+export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element => {
   const { t } = useI18n();
   const { user } = useSession();
   return (
     <aside
       aria-label={t('sidebar.label')}
-      className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline border-border-subtle bg-surface-000 px-2 py-3"
+      className={cn(
+        'flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline border-border-subtle bg-surface-000 px-2 py-3',
+        overlay && 'h-full',
+      )}
     >
       <WorkspaceMenu />
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">

@@ -7,7 +7,8 @@
  * layout, and the JavaScript fills it rather than creating it. So it must hold no
  * hooks and no words — it cannot call `useI18n`, because the words are what it is
  * waiting for — and its widths are the same tokens the real frame uses, so nothing
- * moves when the real one replaces it.
+ * moves when the real one replaces it. Below the breakpoint the real sidebar is an overlay,
+ * not a column, so the skeleton's is not drawn there either (`max-narrow:hidden`).
  *
  * It is hidden from assistive technology on purpose: a screen reader meets the
  * real page when it arrives, and a page of "block, block, block" in between is
@@ -17,7 +18,7 @@ import { Skeleton } from '../ui/skeleton';
 
 export const AppSkeleton = (): React.JSX.Element => (
   <div aria-hidden="true" className="flex h-screen bg-surface-100">
-    <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline border-border-subtle bg-surface-000 px-2 py-3">
+    <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-border-subtle bg-surface-000 px-2 py-3">
       <Skeleton className="mx-3 w-members" />
       <div className="flex flex-col gap-2 px-3">
         <Skeleton className="w-gutter" />

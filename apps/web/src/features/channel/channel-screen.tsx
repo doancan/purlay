@@ -24,6 +24,7 @@ import { Composer } from '../composer/composer';
 import { threadInSearch } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { rememberChannel } from '../questions/last-channel';
+import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
 import { ChannelHeader, useChannelTitle } from './channel-header';
 import { MessageFeed } from './message-feed';
@@ -105,18 +106,24 @@ export const ChannelScreen = ({ channelId }: { readonly channelId: string }): Re
   const channel = channels.data?.find((c) => c.id === channelId);
   if (channels.isPending) {
     return (
-      <LoadingStatus label={t('common.loading')} className="p-4">
-        <Skeleton className="w-sidebar" />
-      </LoadingStatus>
+      <>
+        <ScreenBar />
+        <LoadingStatus label={t('common.loading')} className="p-4">
+          <Skeleton className="w-sidebar" />
+        </LoadingStatus>
+      </>
     );
   }
   if (channel === undefined) {
     return (
-      <EmptyState
-        as="h1"
-        title={t('state.channel.missing.title')}
-        body={t('state.channel.missing.body')}
-      />
+      <>
+        <ScreenBar />
+        <EmptyState
+          as="h1"
+          title={t('state.channel.missing.title')}
+          body={t('state.channel.missing.body')}
+        />
+      </>
     );
   }
   return <ChannelView key={channel.id} channel={channel} />;

@@ -63,6 +63,11 @@ export const en = {
   'sidebar.unread': 'unread',
   'sidebar.dm.failed': 'The conversation could not be opened. Try again.',
   'sidebar.people.empty': 'Nobody else is here yet.',
+
+  // ── Narrow window (UX §2): the sidebar is an overlay ─────────────────────
+  'nav.open': 'Open navigation',
+  'nav.description': 'Channels, people and open questions',
+
   'browse.title': 'Browse channels',
   'browse.description': 'Public channels you have not joined yet.',
   'browse.join': 'Join',
