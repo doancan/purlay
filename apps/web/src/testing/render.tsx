@@ -14,11 +14,15 @@
  * The global `screen` is unusable under this DOM and lint refuses it
  * (`testing/dom.ts`); use the queries this returns.
  */
+import type { QueryClient } from '@tanstack/react-query';
 import { act, render, type RenderResult } from '@testing-library/react';
+import type { Api } from '../data/api';
 import { AppProviders } from '../app/providers';
+import { createQueryClient } from '../app/query-client';
 import { en } from '../i18n/catalogue/en';
 import { tr } from '../i18n/catalogue/tr';
 import type { Locale } from '../i18n/types';
+import { anApi } from './fake-api';
 import { fakeColourScheme, fakeHistory, fakeSchedule, memoryStorage } from './fakes';
 
 export interface WorldOptions {
@@ -29,11 +33,13 @@ export interface WorldOptions {
   readonly dark?: boolean;
   /** The theme the person already chose, if they did. */
   readonly theme?: 'light' | 'dark';
+  /** The API the screens talk to. Absent, any call to it is a failure of the test. */
+  readonly api?: Api;
 }
 
 export const renderApp = async (
   ui: React.ReactElement,
-  { locale = 'en', path = '/', dark = false, theme }: WorldOptions = {},
+  { locale = 'en', path = '/', dark = false, theme, api = anApi() }: WorldOptions = {},
 ): Promise<RenderResult & { readonly world: ReturnType<typeof makeWorld> }> => {
   const world = makeWorld({ locale, path, dark, ...(theme === undefined ? {} : { theme }) });
   const result = render(
@@ -49,6 +55,8 @@ export const renderApp = async (
         },
         history: world.history,
         schedule: world.timers.schedule,
+        queryClient: world.client,
+        api,
       }}
     >
       {ui}
@@ -77,12 +85,16 @@ const makeWorld = ({
     readonly setAttribute: (name: string, value: string) => void;
   };
   readonly locale: Locale;
+  /** The page's cache, to seed before a render or to read after one. */
+  readonly client: QueryClient;
 } => {
   const attributes: Record<string, string> = {};
   return {
     themeStorage: memoryStorage(theme === undefined ? {} : { 'purlay.theme': theme }),
     localeStorage: memoryStorage(),
     colourScheme: fakeColourScheme(dark),
+    // No retries: a failing query must fail the test now, not after a back-off.
+    client: createQueryClient({ retries: 0 }),
     history: fakeHistory(path),
     timers: fakeSchedule(),
     page: {

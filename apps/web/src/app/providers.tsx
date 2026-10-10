@@ -22,6 +22,9 @@ import type { ThemePorts } from '../theme/theme';
 import { ThemeProvider } from '../theme/theme-provider';
 import { TooltipProvider } from '../ui/tooltip';
 import { ToastProvider } from '../ui/toast';
+import { ActionsProvider } from '../data/actions-provider';
+import type { Api } from '../data/api';
+import { ApiProvider } from '../data/api-provider';
 import { createQueryClient } from './query-client';
 
 export interface AppPorts {
@@ -30,6 +33,8 @@ export interface AppPorts {
   readonly history?: HistoryPort;
   readonly schedule?: Schedule;
   readonly queryClient?: QueryClient;
+  /** The API; the browser's `fetch` on the same origin when absent. */
+  readonly api?: Api;
 }
 
 interface AppProvidersProps {
@@ -54,13 +59,17 @@ export const AppProviders = ({
       >
         <RouterProvider {...(ports.history === undefined ? {} : { history: ports.history })}>
           <QueryClientProvider client={client}>
-            <TooltipProvider>
-              <ToastProvider
-                {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
-              >
-                {children}
-              </ToastProvider>
-            </TooltipProvider>
+            <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
+              <ActionsProvider>
+                <TooltipProvider>
+                  <ToastProvider
+                    {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
+                  >
+                    {children}
+                  </ToastProvider>
+                </TooltipProvider>
+              </ActionsProvider>
+            </ApiProvider>
           </QueryClientProvider>
         </RouterProvider>
       </I18nProvider>
