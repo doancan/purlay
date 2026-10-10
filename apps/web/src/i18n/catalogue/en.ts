@@ -202,6 +202,14 @@ export const en = {
   'thread.announce.resolved': 'Thread resolved',
   'thread.announce.reopened': 'Thread reopened',
 
+  // ── Threads, in place (D-98) ────────────────────────────────────────────
+  'thread.reply': 'Reply',
+  'thread.loadMore': 'Load more replies',
+  'thread.none': 'No replies yet',
+  'thread.composerName': 'a thread in {channel}',
+  'thread.resolveFailed': 'Only a thread with at least one reply can be resolved.',
+  'thread.actionFailed': 'The thread was not changed. Try again.',
+
   // ── Composer (UX §5) ────────────────────────────────────────────────────
   'composer.label': 'Message {channel}',
   'composer.placeholder': 'Write to {channel}. Enter sends, Shift+Enter adds a line.',
@@ -257,6 +265,11 @@ export const en = {
   'questions.footer':
     'These are the questions your team has not finished answering. Resolve a thread and it leaves this list.',
   'questions.back': 'Back to {channel}',
+
+  // ── Open questions, the list (D-98) ─────────────────────────────────────
+  'questions.replies': '{replies} · {when}',
+  'questions.more': 'Load more questions',
+  'questions.unnamed': 'A channel you can no longer see',
 
   // ── Theme and language ──────────────────────────────────────────────────
   'theme.label': 'Theme',

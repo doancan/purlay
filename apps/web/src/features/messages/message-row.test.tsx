@@ -44,6 +44,16 @@ const mount = async (
     options,
   );
 
+describe("a resolved thread's root", () => {
+  test('is quiet — its text in the muted ink — and is the same row otherwise', async () => {
+    const view = await mount(props({ dimmed: true }));
+    expect(view.getByText('message 1').closest('.text-ink-muted')).not.toBeNull();
+    await expectNoAxeViolations(view.container);
+    const normal = await mount(props());
+    expect(normal.getAllByText('message 1').at(-1)?.closest('.text-ink-muted')).toBeNull();
+  });
+});
+
 describe('what a row shows', () => {
   test('the name, the time as a real element with the full time on hover, and the body', async () => {
     const view = await mount(props());

@@ -96,3 +96,19 @@ export const spell = (name: RouteName, params: Readonly<Record<string, string>> 
 
 export const href = <N extends RouteName>(name: N, ...args: Arguments<N>): string =>
   spell(name, args[0]);
+
+/**
+ * `?thread=<message id>` on a channel's address: open this root's thread when the channel
+ * opens (the open-questions view links to a question this way). It is the one query
+ * parameter the client defines, so its name and its reading live beside the routes.
+ */
+const THREAD_PARAM = 'thread';
+
+export const threadHref = (slug: string, channelId: string, messageId: string): string =>
+  `${href('channel', { slug, channelId })}?${THREAD_PARAM}=${encodeURIComponent(messageId)}`;
+
+/** The thread an address asks to open, or null; anything that is not an id-shaped value is not asked for. */
+export const threadInSearch = (search: string): string | null => {
+  const value = new URLSearchParams(search).get(THREAD_PARAM);
+  return value !== null && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+};

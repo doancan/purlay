@@ -10,6 +10,7 @@ import { act } from '@testing-library/react';
 import type { Channel, Message, MessagePage, User } from '@purlay/types';
 import type { Api } from '../data/api';
 import { ChannelScreen } from '../features/channel/channel-screen';
+import { Toaster } from '../ui/toast';
 import { FeedPortsContext } from '../features/channel/feed-ports';
 import { ContentPortsContext } from '../features/content/content-ports';
 import { SessionGate } from '../features/session/session';
@@ -42,6 +43,8 @@ export interface ChannelOptions {
   readonly members?: readonly { readonly user: User; readonly role?: 'member' | 'owner' }[];
   readonly messages?: MessagePage | (() => Promise<MessagePage>);
   readonly locale?: 'en' | 'tr';
+  /** The address the page starts at, for a channel opened by a link (`?thread=`). */
+  readonly path?: string;
   readonly dark?: boolean;
   /** Layout numbers the feed reads at the moment it mounts. */
   readonly layout?: Partial<Pick<ScrollMetrics, 'scrollHeight' | 'clientHeight' | 'markerTop'>>;
@@ -71,6 +74,7 @@ const Region = ({
     <main>
       <EngineProbe capture={capture} />
       <ChannelScreen channelId={channelId} />
+      <Toaster dismissLabel="Close" />
     </main>
   );
 };
@@ -121,6 +125,7 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
     </FeedPortsContext.Provider>,
     {
       api,
+      ...(options.path === undefined ? {} : { path: options.path }),
       ...(options.locale === undefined ? {} : { locale: options.locale }),
       ...(options.dark === undefined ? {} : { dark: options.dark }),
     },

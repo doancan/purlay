@@ -12,7 +12,7 @@
  * written to; it shows its messages and a way to join, in place of the composer, so a link
  * to a public channel is useful before they are in it.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { useActions } from '../../data/actions-provider';
 import { useChannels } from '../../data/queries';
@@ -21,6 +21,9 @@ import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { EmptyState } from '../../ui/states';
 import { Composer } from '../composer/composer';
+import { threadInSearch } from '../../router/routes';
+import { useRoute } from '../../router/router-provider';
+import { rememberChannel } from '../questions/last-channel';
 import { useWorkspace } from '../shell/workspace';
 import { ChannelHeader, useChannelTitle } from './channel-header';
 import { MessageFeed } from './message-feed';
@@ -60,7 +63,14 @@ const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
 
 const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const title = useChannelTitle(channel);
+  const { workspace } = useWorkspace();
+  const { search } = useRoute();
   const member = channel.state !== null;
+  // The thread the address asks for, read when the channel opens and not again.
+  const [openThread] = useState(() => threadInSearch(search));
+  useEffect(() => {
+    rememberChannel(workspace.id, channel.id);
+  }, [workspace.id, channel.id]);
   // Frozen when the channel is opened: the marker is the reader's place-holder, so it stays
   // while they read past it instead of vanishing the moment it is seen (`UX.md` §6).
   const [opened] = useState(() => ({
@@ -77,6 +87,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
         markerAfter={member && opened.unread ? opened.after : undefined}
         readAtOpen={opened.after}
         member={member}
+        openThread={openThread}
       />
       {member ? (
         <Composer channelId={channel.id} channelName={title} autoFocus />

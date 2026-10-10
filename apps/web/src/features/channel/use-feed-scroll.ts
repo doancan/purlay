@@ -26,6 +26,11 @@ export interface FeedScroll {
   readonly newBelow: number;
   readonly onScroll: () => void;
   readonly jumpToBottom: () => void;
+  /**
+   * The reader is about to change the height of what is below them on purpose (a thread
+   * opening), and does not want to be carried to the bottom by it.
+   */
+  readonly holdPlace: () => void;
 }
 
 interface Options {
@@ -145,5 +150,9 @@ export const useFeedScroll = ({
     });
   }, [scroller, content, ports, showing]);
 
-  return { atBottom, newBelow, onScroll, jumpToBottom };
+  const holdPlace = useCallback((): void => {
+    wasAtBottom.current = false;
+  }, []);
+
+  return { atBottom, newBelow, onScroll, jumpToBottom, holdPlace };
 };

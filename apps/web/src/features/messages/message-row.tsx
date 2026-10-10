@@ -46,6 +46,11 @@ export interface MessageRowProps {
   /** Given the message's id, so one stable function serves every row and memoisation holds. */
   readonly onRetry?: (id: string) => void;
   readonly onDiscard?: (id: string) => void;
+  /**
+   * A resolved thread's root is quiet: its text in the muted ink, so the feed gets calmer as
+   * questions close (`UX.md` §4.3). Colour is not the only signal — the status line says so.
+   */
+  readonly dimmed?: boolean;
   /** More hover actions beside React — the thread slice's Reply. */
   readonly actions?: React.ReactNode;
   /** Below the content and the reactions: a thread's summary line and its replies. */
@@ -63,6 +68,7 @@ const MessageRowView = ({
   tabIndex = -1,
   onRetry,
   onDiscard,
+  dimmed = false,
   actions,
   children,
 }: MessageRowProps): React.JSX.Element => {
@@ -105,7 +111,9 @@ const MessageRowView = ({
       <div className="min-w-0 flex-1">
         {!grouped && <span className="text-heading text-ink">{message.sender.username}</span>}
         {mentionsMe && <VisuallyHidden>{`${t('message.mention')}. `}</VisuallyHidden>}
-        {renderContent(message.content, { mentioned })}
+        <div className={dimmed ? 'text-ink-muted' : undefined}>
+          {renderContent(message.content, { mentioned })}
+        </div>
         <ReactionBar message={message} meId={meId} />
         {failed && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-label text-danger-text">

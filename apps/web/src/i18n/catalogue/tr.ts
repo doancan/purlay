@@ -196,6 +196,14 @@ export const tr = {
   'thread.announce.resolved': 'Thread çözüldü',
   'thread.announce.reopened': 'Thread yeniden açıldı',
 
+  // ── Threads, in place (D-98) ────────────────────────────────────────────
+  'thread.reply': 'Yanıtla',
+  'thread.loadMore': 'Daha fazla yanıt yükle',
+  'thread.none': 'Henüz yanıt yok',
+  'thread.composerName': '{channel} kanalındaki bir thread',
+  'thread.resolveFailed': 'Yalnızca en az bir yanıtı olan thread çözülebilir.',
+  'thread.actionFailed': 'Thread değişmedi. Tekrar dene.',
+
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
   'composer.label': '{channel} kanalına mesaj',
   'composer.placeholder': '{channel} kanalına yaz. Enter gönderir, Shift+Enter yeni satır ekler.',
@@ -247,6 +255,11 @@ export const tr = {
   'questions.footer':
     'Bunlar ekibinin henüz cevaplamayı bitirmediği sorular. Bir thread’i çözdüğünde bu listeden çıkar.',
   'questions.back': '{channel} kanalına dön',
+
+  // ── Open questions, the list (D-98) ─────────────────────────────────────
+  'questions.replies': '{replies} · {when}',
+  'questions.more': 'Daha fazla soru yükle',
+  'questions.unnamed': 'Artık göremediğin bir kanal',
 
   // ── Tema ve dil ─────────────────────────────────────────────────────────
   'theme.label': 'Tema',
