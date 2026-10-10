@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-10: answering your own thread is held to telling you nothing (D-29)
+
+- The rule held, but nothing would have noticed it going: the test for a self-reply checked the
+  sender's counters, which a different filter keeps, and never the sender's notification rows. It now
+  does, and `scripts/mutations.ts` removes the guard to prove the test goes red.
+
 ### Feature — 2026-10-10: the browser tests, the demo and the budgets (D-49, D-50, D-98)
 
 - **`bun run demo`** builds the client, recreates a scratch database, seeds a believable workspace
