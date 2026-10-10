@@ -36,14 +36,14 @@
 | Query builder | Kysely | `kysely`, `pg` | No migration tooling and no relation loading; we write SQL and joins by hand |
 | Validation | TypeBox | `@sinclair/typebox` | Shared with Elysia's schema layer, so one definition validates and types |
 | Web | React + Vite, single-page with a **prerendered shell** | `react`, `react-dom`, `vite` | Cold load is met by shipping less, not by rendering elsewhere; server rendering would fight the optimistic model (D-50) |
-| UI primitives | Radix, for dialog · menu · tooltip · popover only — the command palette is **undecided**, because Radix publishes no combobox | not yet · `@radix-ui/*`, and O-7 for the palette | One package per primitive so only what is used ships; everything else is written here (D-52) |
-| Component tests | `bun test` + `happy-dom` + Testing Library | `@happy-dom/global-registrator`, `@testing-library/react` | `happy-dom` arrives as the registrator's own dependency, not a separate pin (nothing imports it; knip). Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
+| UI primitives | Radix, for dialog · menu · tooltip · popover only — the command palette is **undecided**, because Radix publishes no combobox | `@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-tooltip`, and D-98 for the palette | One package per primitive so only what is used ships; everything else is written here (D-52) |
+| Component tests | `bun test` + `happy-dom` + Testing Library | `@happy-dom/global-registrator`, `@testing-library/react`, `axe-core` | `happy-dom` arrives as the registrator's own dependency, not a separate pin (nothing imports it; knip). Two tools with two jobs — logic and accessibility here, browser behaviour in Playwright |
 | Browser tests | Playwright + `@axe-core/playwright` | not yet · `playwright`, `@axe-core/playwright` | Keyboard paths, visual snapshots and the cold-load measurement. Snapshot maintenance is a real cost, accepted (D-52) |
 | Styling | Tailwind CSS, its default theme **not imported** | `tailwindcss`, `@tailwindcss/vite` | Verbose markup. Only the tokens exist as classes; a bare number (`z-50`) still builds, so lint and a vocabulary test catch what the theme cannot (D-97, `docs/spikes/design-tokens.md`) |
 | Design tokens | one JSON file → generated CSS custom properties, Tailwind binding and names | none, on purpose | Ours (`packages/tokens`): about 1,300 lines with its comments and 650 of tests, and no build-tool dependency; Style Dictionary was not evaluated (D-97). Contrast is a build gate, not a claim |
 | Icons | `lucide-react`, behind one component | `lucide-react` | +2.4 KB gzipped for twelve icons, 1.2 KB more than the lighter candidate; reached only through `components/icon.tsx` (D-97, `docs/spikes/design-tokens.md`) |
-| Server state | TanStack Query | not yet · `@tanstack/react-query` | (D-18) |
-| Realtime state | Zustand | not yet · `zustand` | (D-18) |
+| Server state | TanStack Query | `@tanstack/react-query` | (D-18) |
+| Realtime state | Zustand | `zustand` | (D-18) |
 | Object storage | S3-compatible; Garage locally | `garage` | An extra service locally, set up by a script because its image has no shell; no console. Any S3-compatible store works in production, and a filesystem driver exists for simple self-hosts (D-20; `docs/spikes/object-storage.md`) |
 | Server markdown | `unified` / `remark` + sanitising serialiser | not yet · `unified` | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
 | Client markdown | a small CommonMark/GFM renderer | undecided · O-6 | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
