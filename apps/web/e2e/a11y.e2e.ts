@@ -27,9 +27,9 @@ test.describe('a populated channel', () => {
     expectNoAxe,
   }) => {
     const made = await room({ members: ['dogancan', 'alice', 'bob'] });
-    const first = await api('alice').say(made.id, RICH[0] ?? '');
+    const first = await api('carol').say(made.id, RICH[0] ?? '');
     for (const text of RICH.slice(1)) await api('bob').say(made.id, text);
-    await api('alice').react(first.id, '🚀');
+    await api('carol').react(first.id, '🚀');
     await api('bob').react(first.id, '🚀');
     await api('bob').react(first.id, '👀');
     await signIn();
@@ -48,16 +48,16 @@ test.describe('a populated channel', () => {
     expectNoAxe,
   }) => {
     const made = await room({ members: ['dogancan', 'alice', 'bob'] });
-    const open = await api('alice').say(made.id, 'a question that stays open?');
+    const open = await api('carol').say(made.id, 'a question that stays open?');
     await api('bob').say(made.id, 'an answer', { parentId: open.id });
-    const closed = await api('alice').say(made.id, 'a question that was settled?');
+    const closed = await api('carol').say(made.id, 'a question that was settled?');
     await api('bob').say(made.id, 'yes', { parentId: closed.id });
-    await api('alice').resolve(closed.id);
+    await api('carol').resolve(closed.id);
     await signIn();
     await page.goto(made.path);
     await ready(page);
     await expect(page.getByRole('button', { name: /Open · 1 reply/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Resolved by alice/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Resolved by carol/ })).toBeVisible();
     await expectNoAxe();
 
     await page.getByRole('button', { name: /Open · 1 reply/ }).click();
@@ -101,7 +101,7 @@ test.describe('a populated channel', () => {
     test.setTimeout(90_000);
     const made = await room({ members: ['dogancan', 'alice'] });
     for (let index = 0; index < 40; index++)
-      await api('alice').say(made.id, `line ${String(index)}`);
+      await api('carol').say(made.id, `line ${String(index)}`);
     await signIn();
     await page.goto(made.path);
     await ready(page);
@@ -111,7 +111,7 @@ test.describe('a populated channel', () => {
       .evaluate((el) => {
         el.scrollTop = 0;
       });
-    await api('alice').say(made.id, 'arrives while reading up');
+    await api('carol').say(made.id, 'arrives while reading up');
     await expect(page.getByRole('button', { name: /new message/ })).toBeVisible();
     await expectNoAxe();
   });
@@ -126,7 +126,7 @@ test.describe('the other screens', () => {
     expectNoAxe,
   }) => {
     const made = await room({ members: ['dogancan', 'alice', 'bob'] });
-    const root = await api('alice').say(made.id, 'is this audited?');
+    const root = await api('carol').say(made.id, 'is this audited?');
     await api('bob').say(made.id, 'yes', { parentId: root.id });
     await signIn();
     await page.goto('/w/acme-eng/questions');
@@ -143,8 +143,8 @@ test.describe('the other screens', () => {
     expectNoAxe,
   }) => {
     const made = await room({ members: ['dogancan', 'alice'] });
-    const root = await api('alice').say(made.id, 'can I reply here?');
-    await api('alice').say(made.id, 'you can', { parentId: root.id });
+    const root = await api('carol').say(made.id, 'can I reply here?');
+    await api('carol').say(made.id, 'you can', { parentId: root.id });
     await signIn();
     await page.goto(`${made.path}?thread=${root.id}`);
     await ready(page);

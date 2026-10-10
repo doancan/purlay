@@ -45,6 +45,12 @@ interface World {
 const SESSION_COOKIE = '__Host-purlay_session';
 
 interface Fixtures {
+  /**
+   * Every answer `429` the server gave to a page of this test, named. The write budget is per
+   * person, and a test that is refused its budget fails in some unrelated assertion a few seconds
+   * later; this fails it first, saying what happened. (Automatic: every test has it.)
+   */
+  readonly throttling: { readonly watch: (context: BrowserContext) => void };
   readonly world: World;
   /** Carries the genuine session cookie of one of the seeded people; returns where it signed in. */
   readonly signIn: (persona?: Persona) => Promise<void>;
@@ -64,6 +70,23 @@ interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
+  throttling: [
+    async ({ context }, use): Promise<void> => {
+      const refused: string[] = [];
+      const watch = (watched: BrowserContext): void => {
+        watched.on('response', (response) => {
+          if (response.status() === 429) {
+            refused.push(`${response.request().method()} ${new URL(response.url()).pathname}`);
+          }
+        });
+      };
+      watch(context);
+      await use({ watch });
+      expect(refused, 'the server refused these for want of write budget (429)').toEqual([]);
+    },
+    { auto: true },
+  ],
+
   world: async ({ baseURL }, use, testInfo) => {
     // The manifest exists only while the demo harness that serves `baseURL` is up; each project
     // has its own world and so its own manifest.
@@ -102,7 +125,7 @@ export const test = base.extend<Fixtures>({
     await use((options) => makeRoom(tenant, options));
   },
 
-  asPerson: async ({ browser, baseURL, world }, use, testInfo) => {
+  asPerson: async ({ browser, baseURL, world, throttling }, use, testInfo) => {
     const contexts: BrowserContext[] = [];
     await use(async (persona) => {
       const { colorScheme, viewport, reducedMotion, locale, timezoneId } = testInfo.project.use;
@@ -115,6 +138,7 @@ export const test = base.extend<Fixtures>({
         ...(timezoneId === undefined ? {} : { timezoneId }),
       });
       contexts.push(context);
+      throttling.watch(context);
       await signInAs(context, baseURL ?? '', world.personas[persona].token);
       return await context.newPage();
     });

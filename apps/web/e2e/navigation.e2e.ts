@@ -123,12 +123,12 @@ test.describe('moving through the app', () => {
     room,
     api,
   }) => {
-    // Carol reads: the jump opens whichever channel is next with something unread, and a channel
-    // that is opened is read — which must not be the viewer's seeded unread state.
-    const here = await room({ members: ['carol', 'alice'] });
-    const unread = await room({ members: ['carol', 'alice'] });
-    await api('alice').say(unread.id, 'something you have not read');
-    await signIn('carol');
+    // Alice reads: the jump opens whichever channel is next with something unread, and a channel
+    // that is opened is read — which must not be the viewer's seeded unread state (dogancan's).
+    const here = await room({ members: ['alice', 'bob'] });
+    const unread = await room({ members: ['alice', 'bob'] });
+    await api('bob').say(unread.id, 'something you have not read');
+    await signIn('alice');
     await page.goto(here.path);
     await expect(page.getByRole('textbox', { name: /^Message/ })).toBeVisible();
     await page.keyboard.press('Alt+ArrowDown');
@@ -147,9 +147,9 @@ test.describe('moving through the app', () => {
     const made = await room({
       members: ['dogancan', 'alice'],
       messages: [
-        { by: 'alice', text: 'first of three' },
-        { by: 'alice', text: 'second of three' },
-        { by: 'alice', text: 'third of three' },
+        { by: 'carol', text: 'first of three' },
+        { by: 'carol', text: 'second of three' },
+        { by: 'carol', text: 'third of three' },
       ],
     });
     await signIn();
@@ -200,7 +200,7 @@ test.describe('focus', () => {
   }) => {
     const made = await room({
       members: ['dogancan', 'alice'],
-      messages: [{ by: 'alice', text: 'something to land on' }],
+      messages: [{ by: 'carol', text: 'something to land on' }],
     });
     await signIn();
     await page.goto(made.path);

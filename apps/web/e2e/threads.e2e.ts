@@ -22,9 +22,9 @@ const aQuestion = async (
 ): Promise<Question> => {
   const made = await room({ members: ['dogancan', 'alice', 'bob'] });
   const question = `why is the backoff four seconds in ${made.name}?`;
-  const root = await api('alice').say(made.id, question);
+  const root = await api('carol').say(made.id, question);
   await api('bob').say(made.id, 'the upstream rate limit', { parentId: root.id });
-  await api('alice').say(made.id, 'documented in the postmortem', { parentId: root.id });
+  await api('carol').say(made.id, 'documented in the postmortem', { parentId: root.id });
   return { ...made, rootId: root.id, question };
 };
 
@@ -252,7 +252,7 @@ test.describe('the open questions', () => {
     // Back in the list, a thread resolved by somebody else is gone without a reload.
     await page.goto('/w/acme-eng/questions');
     await expect(group).toBeVisible();
-    await api('alice').resolve(made.rootId);
+    await api('carol').resolve(made.rootId);
     await expect(group).toHaveCount(0, { timeout: 5_000 });
   });
 
@@ -265,7 +265,7 @@ test.describe('the open questions', () => {
   }) => {
     test.setTimeout(120_000);
     const made = await room({ members: ['dogancan', 'alice', 'bob', 'carol'] });
-    const root = await api('alice').say(made.id, `an old question in ${made.name}`);
+    const root = await api('carol').say(made.id, `an old question in ${made.name}`);
     await api('bob').say(made.id, 'an old answer', { parentId: root.id });
     await writeInParallel(tenant, made.id, history(90));
     await api('dogancan').markRead(

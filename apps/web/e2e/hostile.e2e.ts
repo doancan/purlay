@@ -50,7 +50,7 @@ test.describe('hostile content', () => {
   }) => {
     test.setTimeout(120_000);
     const made = await room({ members: ['dogancan', 'alice'] });
-    for (const payload of PAYLOADS) await api('alice').say(made.id, payload.text);
+    for (const payload of PAYLOADS) await api('carol').say(made.id, payload.text);
     await signIn();
     await page.goto(made.path);
     await expect(page.locator('[data-message-row]').first()).toBeVisible();
@@ -125,9 +125,9 @@ test.describe('hostile content', () => {
   test('inside a thread, the same', async ({ page, signIn, room, api }) => {
     test.setTimeout(90_000);
     const made = await room({ members: ['dogancan', 'alice'] });
-    const root = await api('alice').say(made.id, 'a root for hostile replies');
+    const root = await api('carol').say(made.id, 'a root for hostile replies');
     for (const payload of PAYLOADS.slice(0, 9)) {
-      await api('alice').say(made.id, payload.text, { parentId: root.id });
+      await api('carol').say(made.id, payload.text, { parentId: root.id });
     }
     await signIn();
     await page.goto(`${made.path}?thread=${root.id}`);

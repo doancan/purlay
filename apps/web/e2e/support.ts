@@ -18,6 +18,17 @@ import { messageId, type Message } from '@purlay/types';
 
 export type Persona = 'dogancan' | 'alice' | 'bob' | 'carol';
 
+/*
+ * Who does what, because the write budget is per person (10 a second, a burst of 20; a send over
+ * the socket that exceeds it fails with "You are going too fast") and a project's tests run in
+ * parallel against one world:
+ *   dogancan, alice  the people a test drives through the page. Their budget is the page's.
+ *   carol, bob       the people who write what is already there — histories, questions, replies —
+ *                    through the API, and who make the rooms. Their budget is for that.
+ * A test that makes alice speak through the API as well as through her page (live.e2e.ts) does so in
+ * a handful of calls.
+ */
+
 export interface Room {
   readonly id: string;
   readonly name: string;

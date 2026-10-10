@@ -166,10 +166,10 @@ test.describe('a reader who has scrolled up', () => {
     await expect(anchor).toBeVisible();
     const before = (await anchor.boundingBox())?.y ?? 0;
 
-    const alice = api('alice');
-    await alice.say(made.id, 'arrived while you were reading up the page');
-    await alice.say(made.id, 'and another');
-    await alice.say(made.id, 'and a third');
+    const speaker = api('carol');
+    await speaker.say(made.id, 'arrived while you were reading up the page');
+    await speaker.say(made.id, 'and another');
+    await speaker.say(made.id, 'and a third');
     const pill = page.getByRole('button', { name: /new messages?$/ });
     await expect(pill).toBeVisible();
     await expect(pill).toHaveAccessibleName('3 new messages');
@@ -204,7 +204,7 @@ test.describe('a reader who has scrolled up', () => {
     await scroller(page).evaluate((el) => {
       el.scrollTop = el.scrollHeight - el.clientHeight - 60;
     });
-    await api('alice').say(made.id, 'arrives within the sticky zone');
+    await api('carol').say(made.id, 'arrives within the sticky zone');
     await expect(page.getByText('arrives within the sticky zone')).toBeVisible();
     await expect
       .poll(() => scroller(page).evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
