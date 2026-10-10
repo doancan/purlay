@@ -102,7 +102,7 @@ describe('every served endpoint has a cross-tenant case', () => {
     }
   });
 
-  test('nothing that names a message opts out of the visibility axis either', () => {
+  test('nothing that names a message opts out of the visibility axis', () => {
     for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
       if (key.includes(':messageId')) {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'message' });

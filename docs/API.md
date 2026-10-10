@@ -6,8 +6,9 @@ Single source of truth for the HTTP surface. WebSocket frames are specified sepa
 The endpoint list previously existed only as scattered mentions across `ARCHITECTURE.md`. It is
 consolidated here so that adding an endpoint has one obvious place to be recorded.
 
-**Phase markers:** ○ Phase 0 · ① Phase 1 · ② Phase 2. An endpoint not marked for the current
-phase is not built.
+**Phase markers:** ○ built · ① Phase 1 · ② Phase 2. An endpoint not marked ○ is not built. The
+thread, resolution and open-questions endpoints were pulled forward by the owner (D-98, D-99) and are
+marked ○ with the rest; the other Phase 1 rows are unchanged.
 
 ---
 
@@ -138,16 +139,18 @@ Creating a DM is idempotent: the same pair returns the same channel, never a sec
 | | Method | Path | Notes |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/channels/:channelId/messages` | Root messages, keyset, newest first (`SCHEMA.md` §6.3) |
-| ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND`. Content is `MessageContent` in `@purlay/types` — its length limit and the characters it refuses are defined there (D-67) |
-| ① | `GET` | `/api/messages/:messageId/thread` | Replies, keyset, oldest first |
+| ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND`. A body with `parentId` is a reply to that root (I-1); the same id in another channel is `404 MESSAGE_NOT_FOUND`, a reply's id is `400` on `parentId`. `@here`, `@channel` and `@everyone` are `400` on `content` (D-12). Content is `MessageContent` in `@purlay/types` — its length limit and the characters it refuses are defined there (D-67) |
+| ○ | `GET` | `/api/messages/:messageId/thread` | Replies of a root, keyset, **oldest first** with no cursor or with `after`; `before` reads older ones newest first, as every page does. A reply has no thread: `404` |
 | ① | `PATCH` | `/api/messages/:messageId` | Author only — **window pending O-1** |
 | ① | `DELETE` | `/api/messages/:messageId` | Author or admin — tombstone, never erase (D-9) |
-| ① | `POST` | `/api/messages/:messageId/resolve` | Root messages only |
-| ① | `DELETE` | `/api/messages/:messageId/resolve` | Reopen |
+| ○ | `POST` | `/api/messages/:messageId/resolve` | Roots with at least one reply only, else `409 THREAD_NOT_RESOLVABLE` (I-8). Idempotent: closing a closed thread answers the message and publishes nothing. Answers the root |
+| ○ | `DELETE` | `/api/messages/:messageId/resolve` | Reopen; the same message answered, a reply is `409 THREAD_NOT_RESOLVABLE` |
 | ○ | `PUT` | `/api/messages/:messageId/reactions/:emoji` | Idempotent. Answers the message's whole set (`ReactionsResponse`) |
 | ○ | `DELETE` | `/api/messages/:messageId/reactions/:emoji` | Takes back the caller's own reaction and nobody else's. Idempotent |
-| ① | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`). **Restricted to channels the caller can see** (D-34) |
+| ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34) |
 
+A reply, a resolution and a reopening publish `THREAD_UPDATED` after the commit; a reply also moves the
+caller-independent counters and tells each recipient their own numbers (`CHANNEL_STATE`, D-99).
 Every mutation here publishes to the `EventBus`, so an action taken over HTTP reaches other
 clients over their sockets identically. HTTP and WebSocket are two doors into one service.
 

@@ -64,6 +64,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('WORKSPACE_SLUG_TAKEN'),
   Type.Literal('CHANNEL_NAME_TAKEN'),
   Type.Literal('MESSAGE_ID_CONFLICT'),
+  /**
+   * Resolving a message that cannot be resolved: a reply (only roots resolve), or a
+   * root nobody has replied to (a resolved thread has at least one reply, I-8).
+   */
+  Type.Literal('THREAD_NOT_RESOLVABLE'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
   // Volume
   /**
@@ -106,6 +111,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WORKSPACE_SLUG_TAKEN: 409,
   CHANNEL_NAME_TAKEN: 409,
   MESSAGE_ID_CONFLICT: 409,
+  THREAD_NOT_RESOLVABLE: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
 
   UNSUPPORTED_MEDIA_TYPE: 415,

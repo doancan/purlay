@@ -104,6 +104,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
   },
+  // A new message raises the unread counters of the channel's existing memberships. It
+  // adds, removes and changes no membership, so nobody's access moves (D-99, #58).
+  'apps/api/src/modules/messages/delivery.ts#recordDelivery': {
+    none: 'raises the unread counters of existing memberships and changes no access (#58)',
+  },
   // Nothing calls it yet. It deletes rows that are already revoked (announced when
   // they were revoked) or past their expiry (the hub's own timer ends the socket).
   'packages/db/src/sessions.ts#purgeDeadSessions': {

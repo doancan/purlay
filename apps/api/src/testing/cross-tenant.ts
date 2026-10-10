@@ -86,7 +86,8 @@ export const pathFor = (path: string, ids: Ids): string =>
  * - `channel`: it names one channel, and a workspace member who cannot see that
  *   channel is told it does not exist.
  * - `message`: it names one message, and a workspace member who cannot see the
- *   channel the message is in is told the message does not exist.
+ *   channel the message is in is told it does not exist — the same refusal as for a
+ *   message that was never written.
  * - `workspace-wide`: it reads across the workspace's channels, and nothing from
  *   a channel the caller cannot see may appear anywhere in what it returns.
  *   `query` is what the read needs to return anything at all — search needs `q`.
@@ -173,6 +174,13 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/messages/:messageId/reactions/:emoji': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
+  },
+  'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'GET /api/workspaces/:workspaceId/unresolved': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide' },
   },
 };
 

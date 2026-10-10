@@ -21,7 +21,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor, type Ids, type OwnerIds } from '../../testing/cross-tenant';
+import { CROSS_TENANT, pathFor, type Ids } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -51,38 +51,39 @@ const call = async (
     }),
   );
 
-const signedIn = async (
-  db: Executor,
-  name: string,
-): Promise<{ cookie: string; userId: string }> => {
-  const user = await aSignedInUser(db, clock, name);
-  return { cookie: user.cookie, userId: user.userId };
-};
+const signedIn = async (db: Executor, name: string): Promise<string> =>
+  (await aSignedInUser(db, clock, name)).cookie;
 
 const created = async (response: Response): Promise<string> => {
   expect(response.status).toBe(201);
   return ((await response.json()) as { id: string }).id;
 };
 
-/** A workspace with one channel in it, owned by whoever `cookie` belongs to. */
-const aTenant = async (
-  db: Executor,
-  cookie: string,
-  slug: string,
-): Promise<Ids & { readonly messageId: string }> => {
+/** A workspace with a channel, and a thread in it, owned by whoever `cookie` belongs to. */
+const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids> => {
   const workspaceId = await created(
     await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug: aUniqueSlug(slug) }),
   );
   const channelId = await created(
     await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'general' }),
   );
-  const sent = messageId(NOW);
-  const posted = await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
-    id: sent,
-    content: 'first',
-  });
-  expect(posted.status).toBe(201);
-  return { workspaceId, channelId, messageId: sent };
+  // A root with one reply, so every message endpoint the owner crosses has something to
+  // succeed on: a thread to read, one that can be resolved, one that can be reopened.
+  const root = messageId(NOW);
+  await created(
+    await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
+      id: root,
+      content: 'a question',
+    }),
+  );
+  await created(
+    await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
+      id: messageId(NOW),
+      content: 'an answer',
+      parentId: root,
+    }),
+  );
+  return { workspaceId, channelId, messageId: root };
 };
 
 const NEVER_EXISTED: Ids = {
@@ -103,27 +104,30 @@ describe('integration: cross-tenant isolation', () => {
 
     test(`${key} answers 404 across a tenant boundary, as if it did not exist`, async () => {
       await withRollback(async (db) => {
-        const owner = await signedIn(db, 'xt-owner');
+        const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
+        const owner = ownerUser.cookie;
         const stranger = await signedIn(db, 'xt-stranger');
-        const theirs = await aTenant(db, owner.cookie, 'xt-theirs');
-        await aTenant(db, stranger.cookie, 'xt-own');
-        const known: OwnerIds = { userId: owner.userId, messageId: theirs.messageId };
-        const body = crossing.body?.(NOW, known);
+        const theirs = await aTenant(db, owner, 'xt-theirs');
+        await aTenant(db, stranger, 'xt-own');
+        const body = crossing.body?.(NOW, {
+          userId: ownerUser.userId,
+          messageId: theirs.messageId,
+        });
 
-        const across = await call(db, method, pathFor(path, theirs), stranger.cookie, body);
+        const across = await call(db, method, pathFor(path, theirs), stranger, body);
         expect(across.status).toBe(404);
         const refusal: unknown = await across.json();
         expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
         for (const ids of [NEVER_EXISTED, NOT_A_UUID]) {
-          const elsewhere = await call(db, method, pathFor(path, ids), stranger.cookie, body);
+          const elsewhere = await call(db, method, pathFor(path, ids), stranger, body);
           expect({ status: elsewhere.status, body: await elsewhere.json() }).toEqual({
             status: 404,
             body: refusal,
           });
         }
 
-        const own = await call(db, method, pathFor(path, theirs), owner.cookie, body);
+        const own = await call(db, method, pathFor(path, theirs), owner, body);
         expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
       });
     });

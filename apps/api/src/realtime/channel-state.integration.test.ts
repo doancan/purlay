@@ -191,6 +191,10 @@ const post = async (cookie: string, channelId: string, at: number): Promise<stri
 const created = (frames: readonly ServerFrame[]): string[] =>
   frames.flatMap((f) => (f.event === 'MESSAGE_CREATED' ? [f.data.id] : []));
 
+/** The states that say the person has read up to `id` — not the ones a send produced on the way. */
+const readStates = (client: Client, id: string): ServerFrame[] =>
+  frames(client, 'CHANNEL_STATE').filter((f) => f.data.state.lastReadMessageId === id);
+
 const frames = <E extends ServerFrame['event']>(
   client: Client,
   event: E,
@@ -211,8 +215,13 @@ describe('integration: read state follows the person across their devices', () =
     expect(read.status).toBe(200);
 
     for (const device of [laptop, phone]) {
-      await device.until((all) => all.some((f) => f.event === 'CHANNEL_STATE'), 'the new state');
-      expect(frames(device, 'CHANNEL_STATE')[0]?.data).toEqual({
+      await device.until(
+        (all) =>
+          all.some((f) => f.event === 'CHANNEL_STATE' && f.data.state.lastReadMessageId === sent),
+        'the new state',
+      );
+      // Bob's send already told Alice's devices her unread count rose (D-99 §2); the read is the next.
+      expect(readStates(device, sent)[0]?.data).toEqual({
         channelId: room.channelId,
         state: { lastReadMessageId: sent, unreadCount: 0, unreadMentionCount: 0 },
       });
@@ -228,12 +237,16 @@ describe('integration: read state follows the person across their devices', () =
     const sent = await post(room.bob.cookie, room.channelId, 2);
     const path = `/api/channels/${room.channelId}/read`;
     await http('PUT', path, room.alice.cookie, { lastReadMessageId: sent });
-    await laptop.until((all) => all.some((f) => f.event === 'CHANNEL_STATE'), 'the first state');
+    await laptop.until(
+      (all) =>
+        all.some((f) => f.event === 'CHANNEL_STATE' && f.data.state.lastReadMessageId === sent),
+      'the first state',
+    );
 
     const again = await http('PUT', path, room.alice.cookie, { lastReadMessageId: sent });
     expect(again.status).toBe(200);
     await settle(laptop);
-    expect(frames(laptop, 'CHANNEL_STATE')).toHaveLength(1);
+    expect(readStates(laptop, sent)).toHaveLength(1);
     await laptop.close();
   });
 });

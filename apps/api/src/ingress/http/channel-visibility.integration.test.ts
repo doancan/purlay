@@ -18,7 +18,6 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import { CROSS_TENANT, pathFor, type OwnerIds } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -63,15 +62,15 @@ const created = async (response: Response): Promise<string> => {
 interface World {
   readonly owner: string;
   readonly outsider: string;
-  /** What a body may need: the outsider (a person certainly in the workspace) and a message of the visible channel. */
+  /** What a body may need: the outsider (certainly in the workspace) and a message of the visible channel. */
   readonly ids: OwnerIds;
   readonly workspaceId: string;
   /** Public, and the outsider has joined it. The control. */
   readonly visible: string;
   /** Each one hidden from the outsider for a different reason. */
   readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
-  /** One message in each channel above, by the same names: what a `message` endpoint is aimed at. */
-  readonly messages: {
+  /** A root with an answer in each channel above: the thing a message endpoint names. */
+  readonly threads: {
     readonly visible: string;
     readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
   };
@@ -108,12 +107,6 @@ const aWorld = async (db: Executor): Promise<World> => {
     }),
   );
   expect((await call(db, 'POST', `/api/channels/${visible}/join`, outsider.cookie)).ok).toBe(true);
-  const first = messageId(NOW);
-  const posted = await call(db, 'POST', `/api/channels/${visible}/messages`, owner.cookie, {
-    id: first,
-    content: 'first',
-  });
-  expect(posted.status).toBe(201);
 
   const seed = async (
     values: { type: 'public' | 'private' | 'direct_message' } & Record<string, unknown>,
@@ -134,46 +127,56 @@ const aWorld = async (db: Executor): Promise<World> => {
   };
 
   const pair = [owner.id, third.id].sort().join(':');
-  const world = {
-    owner: owner.cookie,
-    outsider: outsider.cookie,
-    ids: { userId: outsider.id, messageId: first },
-    workspaceId,
-    visible,
-    hidden: {
-      private: await seed({ type: 'private', name: 'leadership' }, [owner.id]),
-      'direct message': await seed({ type: 'direct_message', name: null, dm_key: pair }, [
-        owner.id,
-        third.id,
-      ]),
-      deleted: await seed({ type: 'public', name: 'gone', deleted_at: NOW }, [owner.id]),
-    },
-  };
+  const hidden = {
+    private: await seed({ type: 'private', name: 'leadership' }, [owner.id]),
+    'direct message': await seed({ type: 'direct_message', name: null, dm_key: pair }, [
+      owner.id,
+      third.id,
+    ]),
+    deleted: await seed({ type: 'public', name: 'gone', deleted_at: NOW }, [owner.id]),
+  } as const;
 
-  const messageIn = async (channelId: string): Promise<string> => {
-    const id = messageId(NOW);
+  // A question with one answer in every channel, written by the owner: what the
+  // message endpoints name, and what the open-questions view lists.
+  const thread = async (channelId: string): Promise<string> => {
+    const root = Bun.randomUUIDv7();
+    const base = { workspace_id: workspaceId, channel_id: channelId, sender_id: owner.id };
     await db
       .insertInto('messages')
       .values({
-        id,
-        workspace_id: workspaceId,
-        channel_id: channelId,
-        sender_id: owner.id,
-        content: 'a message in a channel',
+        ...base,
+        id: root,
+        content: 'a question',
+        thread_reply_count: 1,
+        thread_last_reply_at: NOW,
       })
       .execute();
-    return id;
+    await db
+      .insertInto('messages')
+      .values({ ...base, id: Bun.randomUUIDv7(), content: 'an answer', parent_id: root })
+      .execute();
+    return root;
   };
-  const withMessages: World = {
-    ...world,
-    messages: {
-      visible: await messageIn(world.visible),
-      hidden: {
-        private: await messageIn(world.hidden.private),
-        'direct message': await messageIn(world.hidden['direct message']),
-        deleted: await messageIn(world.hidden.deleted),
-      },
+
+  const threads = {
+    visible: await thread(visible),
+    hidden: {
+      private: await thread(hidden.private),
+      'direct message': await thread(hidden['direct message']),
+      deleted: await thread(hidden.deleted),
     },
+  };
+
+  const world: World = {
+    owner: owner.cookie,
+    outsider: outsider.cookie,
+    // What a body may need: the outsider, who is certainly in the workspace, and a message
+    // of the visible channel (a read position names one).
+    ids: { userId: outsider.id, messageId: threads.visible },
+    workspaceId,
+    visible,
+    hidden,
+    threads,
   };
 
   // The seeding is real: the owner, who is in the private channel and the DM,
@@ -181,7 +184,7 @@ const aWorld = async (db: Executor): Promise<World> => {
   for (const channelId of [world.hidden.private, world.hidden['direct message']]) {
     expect((await call(db, 'GET', `/api/channels/${channelId}`, owner.cookie)).status).toBe(200);
   }
-  return withMessages;
+  return world;
 };
 
 const NEVER_EXISTED = '00000000-0000-4000-8000-000000000000';
@@ -231,11 +234,11 @@ describe('integration: channel visibility', () => {
         await withRollback(async (db) => {
           const world = await aWorld(db);
           const body = crossing.body?.(NOW, world.ids);
-          const at = (id: string): string =>
+          const at = (messageId: string): string =>
             pathFor(path, {
               workspaceId: world.workspaceId,
               channelId: NEVER_EXISTED,
-              messageId: id,
+              messageId,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -243,8 +246,8 @@ describe('integration: channel visibility', () => {
           const refusal: unknown = await absent.json();
           expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
-          for (const [why, id] of Object.entries(world.messages.hidden)) {
-            const response = await call(db, method, at(id), world.outsider, body);
+          for (const [why, messageId] of Object.entries(world.threads.hidden)) {
+            const response = await call(db, method, at(messageId), world.outsider, body);
             expect({ why, status: response.status, body: await response.json() }).toEqual({
               why,
               status: 404,
@@ -252,8 +255,9 @@ describe('integration: channel visibility', () => {
             });
           }
 
-          // The same caller, one message they can see: the only difference is which one.
-          const control = await call(db, method, at(world.messages.visible), world.outsider, body);
+          // The same caller, a message in a channel they can see: the only thing that
+          // changed is which message the request names.
+          const control = await call(db, method, at(world.threads.visible), world.outsider, body);
           expect({ status: control.status, ok: control.ok }).toEqual({
             status: control.status,
             ok: true,
