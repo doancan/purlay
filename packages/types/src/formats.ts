@@ -70,6 +70,17 @@ const NOT_STORABLE =
   /\u0000|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const isPlainText = (value: string): boolean => !NOT_STORABLE.test(value);
 
+/**
+ * One emoji and nothing else: a pictograph with its optional variation selector and
+ * skin-tone modifier, joined by zero-width joiners (family, profession), or a flag
+ * (two regional indicators), or a keycap. Unicode emoji only — custom emoji are a
+ * permanent non-goal (D-4) — and a reaction is one of them, so a string of text
+ * cannot be stored in the column that holds it. Whether the glyph exists on a
+ * given platform is the platform's business.
+ */
+const EMOJI =
+  /^(?:\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?)*)$/u;
+
 FormatRegistry.Set('uuid', (value) => UUID.test(value));
 FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
@@ -77,6 +88,7 @@ FormatRegistry.Set('uri', (value) => URI.test(value));
 FormatRegistry.Set('message-content', isMessageContent);
 FormatRegistry.Set('name', (value) => !FORBIDDEN_IN_NAME.test(value));
 FormatRegistry.Set('plain-text', isPlainText);
+FormatRegistry.Set('emoji', (value) => EMOJI.test(value));
 
 export const REGISTERED_FORMATS = [
   'uuid',
@@ -86,4 +98,5 @@ export const REGISTERED_FORMATS = [
   'message-content',
   'name',
   'plain-text',
+  'emoji',
 ] as const;

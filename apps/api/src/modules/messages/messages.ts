@@ -59,6 +59,11 @@ const asMessage = (row: MessageRow): Message => ({
   editedAt: row.edited_at === null ? null : at(row.edited_at),
   deletedAt: row.deleted_at === null ? null : at(row.deleted_at),
   createdAt: at(row.created_at),
+  // Filled in by the thread, reaction and mention slices (D-98).
+  parentId: null,
+  thread: null,
+  reactions: [],
+  mentions: [],
 });
 
 const COLUMNS = [

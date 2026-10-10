@@ -35,6 +35,9 @@ const asChannel = (row: ChannelRow): Channel => ({
   topic: row.topic,
   type: row.type,
   lastMessageAt: row.last_message_at === null ? null : new Date(row.last_message_at).toISOString(),
+  // Filled in by the read-state and direct-message slices (D-98); until then no one has either.
+  state: null,
+  peer: null,
 });
 
 const COLUMNS = ['id', 'workspace_id', 'name', 'topic', 'type', 'last_message_at'] as const;

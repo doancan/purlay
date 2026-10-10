@@ -202,10 +202,12 @@ What the shape is for, which the types do not say:
 - **A server frame is `{ event, data, ts, refId? }`.** `refId` echoes the client frame it answers,
   which is how an optimistic send is reconciled. `ts` is the server clock, for drift correction and
   never for ordering — ordering is the id (D-8).
-- **A frame exists when the feature that sends it is built.** Phase 0 sends messages, subscribes,
-  unsubscribes and pings. Editing, deleting, thread replies and resolution, reactions, typing and
-  read state arrive with their Phase 1 features — added to the union then, so an exhaustive switch
-  over it breaks where a case is unhandled rather than carrying stubs for features that do not exist.
+- **A frame exists when the feature that sends it is built.** The client sends messages (a reply
+  carries `parentId`), subscribes, unsubscribes and pings. Resolution, reactions and read state are
+  HTTP and are heard here as `THREAD_UPDATED`, `REACTIONS_UPDATED` and, on the person's own `user:`
+  topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). Editing, deleting and typing arrive with
+  their features — added to the union then, so an exhaustive switch over it breaks where a case is
+  unhandled rather than carrying stubs for features that do not exist.
 
 ### 5.3. Send and reconcile
 

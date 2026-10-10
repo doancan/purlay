@@ -96,6 +96,22 @@ export const Membership = Type.Object({
 });
 export type Membership = Static<typeof Membership>;
 
+/**
+ * A person's read position in one channel, and what is waiting beyond it
+ * (`SCHEMA.md` §5.2). Maintained on write (D-13, D-35), never counted on read.
+ *
+ * `unreadMentionCount` is what needs *you*: an `@username` mention, any message in a
+ * direct message, and a reply in a thread you started or answered (D-29). It never
+ * exceeds `unreadCount` (I-6) — a message that needs you is, first, one you have not
+ * read.
+ */
+export const ChannelState = Type.Object({
+  lastReadMessageId: Type.Union([Uuid, Type.Null()]),
+  unreadCount: Type.Integer({ minimum: 0 }),
+  unreadMentionCount: Type.Integer({ minimum: 0 }),
+});
+export type ChannelState = Static<typeof ChannelState>;
+
 export const Channel = Type.Object({
   id: Uuid,
   workspaceId: Uuid,
@@ -105,6 +121,17 @@ export const Channel = Type.Object({
   type: ChannelType,
   /** Denormalised so the sidebar can order channels without touching `messages`. */
   lastMessageAt: Type.Union([Timestamp, Type.Null()]),
+  /**
+   * What *this caller* has read here — it differs per person, which is why it is
+   * a field of the response and not of the channel. Null when the caller can see
+   * the channel but has not joined it (a public channel they could join).
+   */
+  state: Type.Union([ChannelState, Type.Null()]),
+  /**
+   * The other person in a direct message (the caller themselves, for a note to
+   * self). Null for every other kind, which has a name instead (D-6).
+   */
+  peer: Type.Union([User, Type.Null()]),
 });
 export type Channel = Static<typeof Channel>;
 
@@ -126,6 +153,31 @@ export const MessageContent = Type.String({
   format: 'message-content',
 });
 
+/**
+ * One emoji and the people who used it. The people, not a count: every client
+ * needs to know whether *it* is among them, and a frame broadcast to a channel
+ * cannot say that per recipient. The count is the length.
+ */
+export const Reaction = Type.Object({
+  emoji: Type.String({ minLength: 1, maxLength: 32, format: 'emoji' }),
+  userIds: Type.Array(Uuid, { minItems: 1 }),
+});
+export type Reaction = Static<typeof Reaction>;
+
+/**
+ * What a root message knows about its replies, so a feed of fifty roots is not
+ * fifty more queries (`SCHEMA.md` §6.1). `resolvedAt` and `resolvedBy` are both set
+ * or both null — the database's `resolution_is_complete` — and only a root with at
+ * least one reply can be resolved (I-8).
+ */
+export const ThreadSummary = Type.Object({
+  replyCount: Type.Integer({ minimum: 0 }),
+  lastReplyAt: Type.Union([Timestamp, Type.Null()]),
+  resolvedAt: Type.Union([Timestamp, Type.Null()]),
+  resolvedBy: Type.Union([User, Type.Null()]),
+});
+export type ThreadSummary = Static<typeof ThreadSummary>;
+
 export const Message = Type.Object({
   /** A UUIDv7 the client generated. It is also the pagination cursor. (D-8) */
   id: Uuid,
@@ -140,5 +192,15 @@ export const Message = Type.Object({
    */
   deletedAt: Type.Union([Timestamp, Type.Null()]),
   createdAt: Timestamp,
+  /** The root this replies to; null for a root. Threads are two levels deep (I-1). */
+  parentId: Type.Union([Uuid, Type.Null()]),
+  /** A root's replies, in summary; null for a reply, which has none of its own. */
+  thread: Type.Union([ThreadSummary, Type.Null()]),
+  reactions: Type.Array(Reaction),
+  /**
+   * The people this message names with `@username`, resolved once at write time
+   * (D-12) so no client re-parses a body to find out who was addressed.
+   */
+  mentions: Type.Array(Uuid),
 });
 export type Message = Static<typeof Message>;

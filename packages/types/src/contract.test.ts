@@ -10,7 +10,17 @@ import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody, ErrorCode } from './errors';
 import { Channel, CurrentUser, Message, User } from './models';
 import { ClientFrame, MessageSendFrame, ServerFrame } from './events';
-import { MeResponse, MessagePage, Page, SendMessageRequest } from './api';
+import {
+  CreateDirectMessageRequest,
+  MeResponse,
+  MessagePage,
+  Page,
+  ReactionsResponse,
+  ReadChannelRequest,
+  SendMessageRequest,
+  ThreadPage,
+  UnresolvedPage,
+} from './api';
 import * as api from './api';
 import { Type } from '@sinclair/typebox';
 
@@ -41,6 +51,8 @@ describe('models', () => {
       topic: null,
       type: 'direct_message',
       lastMessageAt: null,
+      state: null,
+      peer: user,
     };
     expect(Value.Check(Channel, dm)).toBe(true);
     expect(Value.Check(Channel, { ...dm, type: 'nonsense' })).toBe(false);
@@ -55,6 +67,10 @@ describe('models', () => {
       editedAt: null,
       deletedAt: null,
       createdAt: when,
+      parentId: null,
+      thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
+      reactions: [],
+      mentions: [],
     };
     expect(Value.Check(Message, message)).toBe(true);
     expect(Value.Check(Message, { ...message, sender: id })).toBe(false);
@@ -208,5 +224,108 @@ describe('what the client sends refuses what it did not declare', () => {
   /** A response may gain a field without breaking a client that has not rebuilt. */
   test('a response is not closed, deliberately', () => {
     expect(MeResponse.additionalProperties).toBeUndefined();
+  });
+});
+
+describe('the wedge: threads, reactions, read state (D-98)', () => {
+  const root = {
+    id,
+    channelId: id,
+    sender: user,
+    content: 'why is the backoff 4s?',
+    editedAt: null,
+    deletedAt: null,
+    createdAt: when,
+    parentId: null,
+    thread: { replyCount: 2, lastReplyAt: when, resolvedAt: when, resolvedBy: user },
+    reactions: [{ emoji: '👍', userIds: [id] }],
+    mentions: [id],
+  };
+
+  test('a root carries its thread summary, a reply carries none', () => {
+    expect(Value.Check(Message, root)).toBe(true);
+    expect(Value.Check(Message, { ...root, parentId: id, thread: null })).toBe(true);
+    expect(Value.Check(Message, { ...root, thread: undefined })).toBe(false);
+  });
+
+  test('a reaction is one emoji, and somebody; an empty set of people is not a reaction', () => {
+    expect(Value.Check(Message, { ...root, reactions: [{ emoji: '👍', userIds: [] }] })).toBe(
+      false,
+    );
+    expect(
+      Value.Check(Message, { ...root, reactions: [{ emoji: 'thumbs up', userIds: [id] }] }),
+    ).toBe(false);
+  });
+
+  test.each(['👍', '🎉', '👍🏽', '👨‍👩‍👧', '🇹🇷', '1️⃣', '❤️'])('%s is an emoji', (emoji) => {
+    expect(Value.Check(ReactionsResponse, { reactions: [{ emoji, userIds: [id] }] })).toBe(true);
+  });
+
+  test.each(['', 'a', 'ab', '👍👍', '👍 ', '<script>', '1', '🏽'])(
+    '%j is not one emoji',
+    (emoji) => {
+      expect(Value.Check(ReactionsResponse, { reactions: [{ emoji, userIds: [id] }] })).toBe(false);
+    },
+  );
+
+  test('a reply is sent with the root it answers; the field is optional and closed', () => {
+    expect(Value.Check(SendMessageRequest, { id, content: 'a', parentId: id })).toBe(true);
+    expect(Value.Check(SendMessageRequest, { id, content: 'a', parentId: 'x' })).toBe(false);
+    expect(Value.Check(SendMessageRequest, { id, content: 'a', resolved: true })).toBe(false);
+    const frame = {
+      id,
+      op: 'MESSAGE_SEND',
+      payload: { channelId: id, content: 'a', parentId: id },
+    };
+    expect(Value.Check(ClientFrame, frame)).toBe(true);
+  });
+
+  test('threads and open questions are keyset pages of messages', () => {
+    expect(Value.Check(ThreadPage, { data: [root], nextCursor: null })).toBe(true);
+    expect(Value.Check(UnresolvedPage, { data: [root], nextCursor: id })).toBe(true);
+  });
+
+  test('reading names a message and nothing else', () => {
+    expect(Value.Check(ReadChannelRequest, { lastReadMessageId: id })).toBe(true);
+    expect(Value.Check(ReadChannelRequest, { lastReadMessageId: id, unreadCount: 0 })).toBe(false);
+    expect(Value.Check(CreateDirectMessageRequest, { userId: id })).toBe(true);
+  });
+
+  test('the new frames validate, and each carries what it must', () => {
+    const state = { lastReadMessageId: null, unreadCount: 3, unreadMentionCount: 1 };
+    const frames = [
+      {
+        event: 'THREAD_UPDATED',
+        data: { channelId: id, messageId: id, thread: root.thread },
+        ts: 1,
+      },
+      {
+        event: 'REACTIONS_UPDATED',
+        data: { channelId: id, messageId: id, reactions: root.reactions },
+        ts: 1,
+      },
+      { event: 'CHANNEL_STATE', data: { channelId: id, state }, ts: 1 },
+      {
+        event: 'CHANNEL_ADDED',
+        data: {
+          id,
+          workspaceId: id,
+          name: null,
+          topic: null,
+          type: 'direct_message',
+          lastMessageAt: null,
+          state,
+          peer: user,
+        },
+        ts: 1,
+      },
+    ];
+    for (const frame of frames) expect(Value.Check(ServerFrame, frame)).toBe(true);
+    expect(
+      Value.Check(ServerFrame, {
+        ...frames[2],
+        data: { channelId: id, state: { ...state, unreadCount: -1 } },
+      }),
+    ).toBe(false);
   });
 });

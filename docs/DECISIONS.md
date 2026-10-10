@@ -3931,6 +3931,81 @@ module on purpose. The theme mechanism and the ports are expensive to retrofit a
 first, which is why they are first. Pulling a Phase 1 slice forward is not reversible once data
 exists, which is why each ships with its integration tests and its documentation in the same change.
 
+### D-99. The wedge's backend: what a write touches, and what "needs you" means
+
+D-98 pulls threads, resolution, read state, mentions, reactions and DMs forward and orders the work
+contract-first. The schema has the columns; four rules were not written down anywhere, and each is a
+correctness question rather than a style one, so they are decided here before two people implement them
+in parallel.
+
+**1 · "Needs you" is one number.** `unread_mention_count` is what is waiting for *this person*: an
+`@username` naming them, any message in a direct message, and a reply in a thread they started or have
+already answered (D-29, which has its own words for why the third counts). `unread_count` is every
+message by someone else past their read position, replies included. The first never exceeds the second
+(I-6), and it becomes a `CHECK` now that the service that defines it exists (`SCHEMA.md` §11 said it
+would). A resolution *notifies* the root author (a `thread_resolved` row) and moves no counter: it is not
+a message, so counting it would put the two numbers in disagreement the first time they are recomputed.
+
+**2 · The send is one transaction (D-35, completed).** In order: insert the message (a reply first
+checks that its parent exists, is in the same channel, is a root and is not deleted — I-1); bump the
+parent's `thread_reply_count` and `thread_last_reply_at`; set `channels.last_message_at`; parse
+`@username` and write `mentions`; write `notifications` (one row per person per message, the strongest
+class wins: mention, then direct message, then thread reply; never the sender; none for a membership at
+`notification_level = 'none'`); and increment the counters in **one** `UPDATE … RETURNING` over the
+channel's other members. Commit. *Then* publish `MESSAGE_CREATED` on the channel, `THREAD_UPDATED` for a
+reply, and `CHANNEL_STATE` on each recipient's `user:` topic from the rows the `UPDATE` returned. The
+server's numbers travel; no client increments its own (D-13), so two devices cannot drift.
+
+**3 · Mentions are parsed, and `@here` is refused.** `@name` is a mention when it is not inside inline
+or fenced code, is not preceded by a word character, `@` or a backtick, and names a person who can see
+the channel (every workspace member for a public channel, the members for a private one or a DM);
+matching is case-insensitive on `username`. An unknown name stays text. `@here`, `@channel` and
+`@everyone` fail the send with `VALIDATION_FAILED` on `content` — the parser's rejection D-12 promised —
+and the composer says so before the request, the server being the authority. Mentioning yourself is
+text, not a notification.
+
+**4 · The read position moves forward only, and the counters are recomputed, not patched.** `PUT
+…/read` is refused for a message not in the channel (I-3, as `MESSAGE_NOT_FOUND`), is a no-op for a
+position at or behind the current one, and otherwise sets `last_read_message_id`, sets `unread_count` to
+the count of messages by others past it and `unread_mention_count` to the lesser of that and the unread
+notifications of the mention classes past it, marks the notifications at or behind it read, and
+publishes `CHANNEL_STATE` to the person's other devices. A decrement could underflow under a race; a
+recompute from rows cannot. The recount is bounded by what is unread and uses an index that leads with
+`(channel_id, id)` — the migration adds it if the measurement says the existing one is not enough.
+
+**5 · Resolution.** Any member who can see the channel may resolve or reopen (`ARCHITECTURE.md` §7.4),
+on a root with at least one reply; anything else is `THREAD_NOT_RESOLVABLE` (I-8, and "only roots
+resolve"). Resolving a resolved thread, or reopening an open one, answers the message and publishes
+nothing: it changed nothing. `GET …/unresolved` lists roots with replies and no resolution from the
+channels the caller can see (D-34), newest first.
+
+**6 · Reactions.** `PUT` and `DELETE` are idempotent, answer the message's whole set, and publish
+`REACTIONS_UPDATED` only when the set changed. The emoji is one Unicode emoji (the contract's `emoji`
+format); a message holds at most twenty distinct ones, which bounds a frame an attacker could otherwise
+inflate.
+
+**7 · Direct messages.** `POST …/dms` takes a person who is a member of the workspace (`USER_NOT_FOUND`
+otherwise), gets or creates the channel for the sorted pair (I-5), makes both members, and publishes
+`CHANNEL_ADDED` to the other person only when it created one. A note to self is a DM with one member.
+
+**8 · One reader of messages.** History, thread, open questions, replay and the send's answer all build a
+`Message` through one function that fetches reactions and mentions for the whole page in two queries —
+never one per row (the rule D-13 states for counters applies to every page). Replay still carries roots
+only; a client reconnecting refetches the threads it has open, because a reply missed during the gap is
+not a root and has no cursor in the feed.
+
+**9 · Doors.** Replies are sent over the socket (`MESSAGE_SEND` gains `parentId`) or HTTP; resolution,
+reactions and read state are HTTP only and are heard on the socket. They are infrequent, they have no
+optimistic row that must paint inside a frame, and a second implementation of each over the socket is a
+second place for them to differ.
+
+**Rejected — counting unread on read.** D-35 rejected it; the recount in rule 4 is a different thing (it
+runs when a person reads, bounded by what they had not).
+
+**Rejected — a `thread_resolved` increment.** Rule 1.
+
+**Rejected — letting the client keep its own counters and reconcile.** Two sources of one number.
+
 ---
 
 ## Part D — Open, deliberately
