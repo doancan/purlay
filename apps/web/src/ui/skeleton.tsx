@@ -15,6 +15,17 @@ import { VisuallyHidden } from './visually-hidden';
 
 const skeletonClasses = 'block h-3 rounded-sm bg-surface-200 max-w-full';
 
+/** What a message row will be: an avatar's circle and two lines, so nothing moves when it lands. */
+export const SkeletonRow = ({ className }: SkeletonProps): React.JSX.Element => (
+  <span aria-hidden="true" className={cn('flex gap-3 px-2 py-2', className)}>
+    <span className="block size-avatar shrink-0 rounded-pill bg-surface-200" />
+    <span className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
+      <Skeleton className="w-1/4" />
+      <Skeleton className="w-3/4" />
+    </span>
+  </span>
+);
+
 interface SkeletonProps {
   /** A width from the vocabulary (`w-sidebar`, `w-1/2`…); full width when absent. */
   readonly className?: string;

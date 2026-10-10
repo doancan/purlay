@@ -15,7 +15,7 @@ import { cn } from './cn';
 import { Tooltip } from './tooltip';
 
 const iconButtonClasses =
-  'inline-flex h-control max-narrow:h-touch aspect-square shrink-0 items-center justify-center rounded-sm text-ink-muted hover:bg-surface-200 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-muted';
+  'inline-flex h-control max-narrow:h-touch aspect-square shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-muted';
 
 export interface IconButtonProps extends Omit<
   React.ComponentPropsWithRef<'button'>,

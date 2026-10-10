@@ -142,17 +142,76 @@ const press = async (user: ReturnType<typeof person>, keys: string): Promise<voi
 };
 
 describe('what it shows', () => {
-  test('is a labelled textarea for the channel, a prompt prefix, and the three hints', async () => {
+  test('is a labelled textarea for the channel, in one card with a send button, and no prompt prefix', async () => {
     const { view, box } = await mount();
     expect(view.getByRole('textbox', { name: 'Message api' })).toBe(box());
     expect(box().getAttribute('placeholder')).toBe(
       'Write to api. Enter sends, Shift+Enter adds a line.',
     );
-    expect(view.getByText('api ›')).toBeDefined();
-    expect(view.getByText('sends')).toBeDefined();
-    expect(view.getByText('new line')).toBeDefined();
-    expect(view.getByText('code block')).toBeDefined();
-    expect(view.getByRole('button', { name: /Send/ })).toBeDefined();
+    expect(view.queryByText('api ›')).toBeNull();
+    const card = view.container.querySelector('[data-composer-card]');
+    expect(card?.className).toContain('rounded-lg');
+    expect(card?.contains(box())).toBe(true);
+    const send = view.getByRole('button', { name: 'Send' });
+    expect(card?.contains(send)).toBe(true);
+    expect(send.className).toContain('rounded-pill');
+  });
+
+  test('the hints are drawn only while focus is in the card, and are described to a screen reader always', async () => {
+    const { view, box, user } = await mount();
+    const described = (): string =>
+      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.textContent ?? '';
+    // Not focused: in the DOM, for the textarea's description, but visually hidden.
+    for (const hint of ['sends', 'new line', 'code block']) expect(described()).toContain(hint);
+    expect(
+      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className ?? '',
+    ).not.toContain('text-caption');
+    await user.click(box());
+    for (const hint of ['sends', 'new line', 'code block']) {
+      expect(view.getByText(hint)).toBeDefined();
+      expect(described()).toContain(hint);
+    }
+    expect(
+      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className,
+    ).toContain('text-caption');
+    // Tab goes to the Send button, which is still inside the card: the hints stay.
+    await user.tab();
+    expect(
+      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className,
+    ).toContain('text-caption');
+    act(() => {
+      (document.activeElement as HTMLElement).blur();
+    });
+    expect(
+      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className ?? '',
+    ).not.toContain('text-caption');
+  });
+
+  test('the card wears the focus ring while focus is inside it, since the textarea draws none of its own', async () => {
+    const { view, box, user } = await mount();
+    const card = view.container.querySelector('[data-composer-card]');
+    expect(card?.className).not.toContain('outline-focus');
+    expect(box().className).toContain('outline-none');
+    await user.click(box());
+    expect(card?.className).toContain('outline-focus');
+    act(() => {
+      box().blur();
+    });
+    expect(card?.className).not.toContain('outline-focus');
+  });
+
+  test('the send button says it is off while there is nothing to send, and on once there is', async () => {
+    const { view, box, sent, user } = await mount();
+    const send = view.getByRole('button', { name: 'Send' });
+    // aria-disabled, not disabled: nothing about the connection or an empty box removes a control
+    // from the page, and a screen reader still finds it and is told why it does nothing.
+    expect(send.getAttribute('aria-disabled')).toBe('true');
+    await user.type(box(), '   ');
+    expect(send.getAttribute('aria-disabled')).toBe('true');
+    await user.click(send);
+    expect(sent()).toEqual([]);
+    await user.type(box(), 'hello');
+    expect(send.getAttribute('aria-disabled')).toBe('false');
   });
 
   test('grows with its lines inside a floor of two and a ceiling of twelve', async () => {
@@ -244,8 +303,8 @@ describe('sending', () => {
     });
     const { view, box, user } = await mount({ api, open: false });
     expect(box().disabled).toBe(false);
-    expect((view.getByRole('button', { name: /Send/ }) as HTMLButtonElement).disabled).toBe(false);
     await user.type(box(), 'offline');
+    expect(view.getByRole('button', { name: /Send/ }).getAttribute('aria-disabled')).toBe('false');
     await press(user, '{Enter}');
     await settle();
     expect(asked).toHaveLength(1);
