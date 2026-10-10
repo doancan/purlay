@@ -36,7 +36,11 @@ export default defineConfig({
   // Not `.spec.ts`: `bun test` discovers that name and would try to run Playwright's tests.
   testMatch: '**/*.e2e.ts',
   // One folder per project, so a light screenshot is never compared with a dark one.
-  snapshotPathTemplate: '{testDir}/__snapshots__/{projectName}/{testFileName}-snapshots/{arg}{ext}',
+  // The platform is in the path: `system-ui` is a different face on every operating system, so a
+  // baseline photographed on one is not a baseline for another. Each platform keeps its own, and
+  // the first run on a new one writes them (`bun run test:e2e:update`).
+  snapshotPathTemplate:
+    '{testDir}/__snapshots__/{platform}/{projectName}/{testFileName}-snapshots/{arg}{ext}',
   fullyParallel: true,
   forbidOnly: ci,
   retries: ci ? 1 : 0,

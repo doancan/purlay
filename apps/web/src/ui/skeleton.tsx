@@ -13,7 +13,7 @@
 import { cn } from './cn';
 import { VisuallyHidden } from './visually-hidden';
 
-const skeletonClasses = 'block h-3 rounded-sm bg-surface-200';
+const skeletonClasses = 'block h-3 rounded-sm bg-surface-200 max-w-full';
 
 interface SkeletonProps {
   /** A width from the vocabulary (`w-sidebar`, `w-1/2`…); full width when absent. */
