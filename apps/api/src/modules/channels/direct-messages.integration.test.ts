@@ -8,6 +8,7 @@ import { fixedClock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aConversation } from '../../testing/conversations';
 import type { TestUser } from '../../testing/users';
+import { channelsVisibleIn } from './channels';
 import { directMessageKey, openDirectMessage } from './direct-messages';
 
 afterAll(async () => {
@@ -142,6 +143,45 @@ describe('integration: opening a direct message', () => {
       }
       expect(refusals[1]).toEqual(refusals[0]);
       expect(refusals[2]).toEqual(refusals[0]);
+    });
+  });
+});
+
+/**
+ * An erased account (I-11) keeps its conversations — authorship survives, D-22 — but the
+ * person is gone: the channel list must not hand out what the user row no longer holds
+ * personal data for. The peer stays *present*, so a client can key on it and render the
+ * conversation, and is a placeholder: no username to link, no avatar, a name that says so.
+ */
+describe('integration: a direct message with somebody who is gone', () => {
+  test('shows a placeholder in place of the person, in the list and when opened', async () => {
+    await withRollback(async (db) => {
+      const { workspaceId, users } = await aConversation(db, 'dm-eve', 'dm-fay');
+      const [eve, fay] = users as [TestUser, TestUser];
+      const context = await requireWorkspaceMembership(db, eve.userId, workspaceId);
+      const opened = await openDirectMessage(db, clock, context, fay.userId);
+      expect(opened.channel.peer?.username).toBe(fay.username);
+
+      await db
+        .updateTable('users')
+        .set({
+          deleted_at: new Date('2026-09-09T11:00:00.000Z'),
+          avatar_url: 'https://x.test/a.png',
+        })
+        .where('id', '=', fay.userId)
+        .execute();
+
+      const listed = await channelsVisibleIn(db, context);
+      const dm = listed.find((channel) => channel.id === opened.channel.id);
+      expect(dm?.peer).toEqual({
+        id: fay.userId,
+        username: 'deleted',
+        displayName: 'Deleted user',
+        avatarUrl: null,
+      });
+      // Opening it again does not bring the person back, nor fail.
+      const again = await openDirectMessage(db, clock, context, eve.userId);
+      expect(again.channel.peer?.id).toBe(eve.userId);
     });
   });
 });

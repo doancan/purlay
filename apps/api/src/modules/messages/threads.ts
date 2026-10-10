@@ -20,8 +20,15 @@ import { requireMessageById, type VisibleMessage } from '../../platform/channels
 import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
-import { publishThreadUpdated, type EventBus } from '../../platform/events';
+import {
+  NO_LOG,
+  publishAfterCommit,
+  publishThreadUpdated,
+  type EventBus,
+} from '../../platform/events';
+import type { Logger } from '../../platform/logging';
 import { requireLiveSession } from '../auth/sessions';
+import { stillSeeing } from './delivery';
 import { buildMessages, MESSAGE_COLUMNS, readBuilt, readSummary, type MessageRow } from './reader';
 
 export interface PageQuery {
@@ -133,6 +140,8 @@ export interface ResolveDependencies {
   readonly atomically: Atomically;
   readonly clock: Clock;
   readonly bus: EventBus;
+  /** Where a failed publish is written; the write it follows is already committed. */
+  readonly log?: Logger;
 }
 
 const notResolvable = (message: string): AppError =>
@@ -154,7 +163,7 @@ export const setResolved = async (
   resolved: boolean,
   sessionId?: string,
 ): Promise<Message> => {
-  const { atomically, clock, bus } = dependencies;
+  const { atomically, clock, bus, log = NO_LOG } = dependencies;
   const outcome = await atomically(async (transaction) => {
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
     const target = await requireMessageById(transaction, userId, messageId);
@@ -215,21 +224,34 @@ export const setResolved = async (
   });
 
   if (outcome.changed) {
-    await publishThreadUpdated(bus, clock, {
-      channelId: outcome.channelId,
-      messageId,
-      thread: outcome.summary,
-    });
+    await publishAfterCommit(log, [
+      [
+        {
+          label: 'THREAD_UPDATED',
+          run: async () =>
+            await publishThreadUpdated(bus, clock, {
+              channelId: outcome.channelId,
+              messageId,
+              thread: outcome.summary,
+            }),
+        },
+      ],
+    ]);
   }
   return outcome.message;
 };
 
-/** The root's author is told their thread was closed — unless they muted the channel. */
+/**
+ * The root's author is told their thread was closed — unless they muted the channel, or can
+ * no longer see it: a notification row names a conversation, and somebody removed from a
+ * private channel since asking must not learn it was resolved (D-34).
+ */
 const notifyResolved = async (
   executor: Executor,
   target: VisibleMessage,
   authorId: string,
 ): Promise<void> => {
+  if (!(await stillSeeing(executor, target.context, [authorId])).has(authorId)) return;
   const membership = await executor
     .selectFrom('channel_members')
     .select('notification_level')

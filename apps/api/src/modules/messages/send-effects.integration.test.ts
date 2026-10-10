@@ -467,7 +467,8 @@ describe('integration: a retry', () => {
 
       expect(again.message).toEqual(first.message);
       expect(first.recipients).toHaveLength(1);
-      expect(again.recipients).toEqual([]);
+      // Told again from the rows as they are (so a lost publish is repaired), never counted again.
+      expect(again.recipients).toEqual(first.recipients);
       expect(await counters(db, room, idOf(room, 'bob'))).toMatchObject({ unread: 1, mentions: 1 });
       expect(await notificationsOf(db, idOf(room, 'bob'))).toHaveLength(1);
     });
@@ -486,7 +487,7 @@ describe('integration: a retry', () => {
 
       expect(first.thread?.summary.replyCount).toBe(1);
       expect(again.thread).toEqual(first.thread);
-      expect(again.recipients).toEqual([]);
+      expect(again.recipients).toEqual(first.recipients);
       expect(await counters(db, room, idOf(room, 'alice'))).toMatchObject({
         unread: 1,
         mentions: 1,

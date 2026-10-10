@@ -231,7 +231,12 @@ describe('integration: read state follows the person across their devices', () =
     for (const client of [laptop, phone, bob]) await client.close();
   });
 
-  test('a position that did not move tells nobody', async () => {
+  /**
+   * A repeated read is usually a retry of one whose answer — or whose frame — was lost, so it
+   * tells the caller's devices where they stand, from the row. The same position, the same
+   * numbers, on the caller's own topic: nobody else hears it (H-API 4).
+   */
+  test('a position that did not move tells the caller again, and nobody else', async () => {
     const room = await aRoom();
     const laptop = await connect(room.alice.cookie);
     const sent = await post(room.bob.cookie, room.channelId, 2);
@@ -246,7 +251,9 @@ describe('integration: read state follows the person across their devices', () =
     const again = await http('PUT', path, room.alice.cookie, { lastReadMessageId: sent });
     expect(again.status).toBe(200);
     await settle(laptop);
-    expect(readStates(laptop, sent)).toHaveLength(1);
+    const states = readStates(laptop, sent);
+    expect(states).toHaveLength(2);
+    expect(states[1]?.data).toEqual(states[0]?.data);
     await laptop.close();
   });
 });

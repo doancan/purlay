@@ -17,6 +17,7 @@ import {
   type Topic,
 } from '@purlay/types';
 import type { Clock } from './clock';
+import { createLogger, type Logger } from './logging';
 
 /** The contract's, not a second definition: the topic names cross nodes in Phase 3. */
 export type { Topic };
@@ -169,6 +170,57 @@ export const publishChannelAdded = async (
     data: channel,
     ts: clock.now().getTime(),
   });
+};
+
+/**
+ * The logger a caller that did not pass one gets: nothing is written. The application's own
+ * wiring always passes the real one (a test through `createApp` proves it), so this is for the
+ * module-level tests that drive a function without an application around it.
+ */
+export const NO_LOG: Logger = createLogger({ level: 'silent' });
+
+/** One thing to tell the room or a person after a commit, named for the log. */
+export interface Publish {
+  readonly label: string;
+  readonly run: () => Promise<void>;
+}
+
+/** How many publishes of one stage are in flight at once. */
+export const PUBLISH_CHUNK = 32;
+
+/**
+ * Tells everyone what a committed write did — and never turns that into an error.
+ *
+ * The write is already committed when this runs: a publish that throws must not become a 500
+ * (or an `ERROR` frame) for a request that *succeeded*, and one failure must not stop the
+ * frames behind it from going. Each failure is logged with what it was publishing, and the
+ * rest are still attempted. The in-process bus cannot throw today; `publish` is the seam the
+ * shared adapter replaces in Phase 3 (D-7), and the day it is a network call this is what
+ * keeps a flaky one from making sends look like they failed.
+ *
+ * **Stages run in order, the publishes inside a stage concurrently** in chunks of
+ * `PUBLISH_CHUNK`: the room hears a message before the reply count that moved under it
+ * (D-99 §2), but a hundred people hearing their own counters need not queue behind one
+ * another.
+ */
+export const publishAfterCommit = async (
+  log: Logger,
+  stages: readonly (readonly Publish[])[],
+): Promise<void> => {
+  for (const stage of stages) {
+    for (let at = 0; at < stage.length; at += PUBLISH_CHUNK) {
+      const chunk = stage.slice(at, at + PUBLISH_CHUNK);
+      const settled = await Promise.allSettled(chunk.map(async (publish) => await publish.run()));
+      settled.forEach((outcome, index) => {
+        if (outcome.status === 'rejected') {
+          log.error('publish failed after commit', {
+            what: chunk[index]?.label,
+            err: outcome.reason,
+          });
+        }
+      });
+    }
+  }
 };
 
 /** What the bus hands a frame to. The hub implements it; nothing else needs to. */

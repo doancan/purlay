@@ -17,7 +17,13 @@ import type { ReactionsResponse } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireMessageById } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
-import { publishReactionsUpdated, type EventBus } from '../../platform/events';
+import {
+  NO_LOG,
+  publishAfterCommit,
+  publishReactionsUpdated,
+  type EventBus,
+} from '../../platform/events';
+import type { Logger } from '../../platform/logging';
 import type { Atomically } from '../../platform/transactions';
 import { requireLiveSession } from '../auth/sessions';
 import { reactionSets } from '../messages/sets';
@@ -35,6 +41,8 @@ export interface ReactionDependencies {
   readonly atomically: Atomically;
   readonly clock: Clock;
   readonly bus: EventBus;
+  /** Where a failed publish is written; the write it follows is already committed. */
+  readonly log?: Logger;
 }
 
 /**
@@ -81,7 +89,7 @@ export const setReaction = async (
   emoji: string,
   present: boolean,
 ): Promise<ReactionsResponse> => {
-  const { atomically, clock, bus } = dependencies;
+  const { atomically, clock, bus, log = NO_LOG } = dependencies;
   const outcome = await atomically(async (transaction) => {
     await requireLiveSession(transaction, clock, caller.sessionId);
     const { context } = await requireMessageById(transaction, caller.userId, messageId);
@@ -126,11 +134,19 @@ export const setReaction = async (
   });
 
   if (outcome.changed) {
-    await publishReactionsUpdated(bus, clock, {
-      channelId: outcome.channelId,
-      messageId,
-      reactions: outcome.reactions,
-    });
+    await publishAfterCommit(log, [
+      [
+        {
+          label: 'REACTIONS_UPDATED',
+          run: async () =>
+            await publishReactionsUpdated(bus, clock, {
+              channelId: outcome.channelId,
+              messageId,
+              reactions: outcome.reactions,
+            }),
+        },
+      ],
+    ]);
   }
   return { reactions: outcome.reactions };
 };

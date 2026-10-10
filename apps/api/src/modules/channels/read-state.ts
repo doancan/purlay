@@ -111,9 +111,10 @@ export const markRead = async (
             and sender_id <> ${context.userId} and deleted_at is null
         ),
         (
-          select count(*)::int from notifications
-          where user_id = ${context.userId} and channel_id = ${context.channelId}
-            and read_at is null and type in (${sql.join(NEEDS_YOU)})
+          select count(*)::int from notifications n
+          join messages m on m.id = n.message_id and m.deleted_at is null
+          where n.user_id = ${context.userId} and n.channel_id = ${context.channelId}
+            and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
         )
       )`,
     })

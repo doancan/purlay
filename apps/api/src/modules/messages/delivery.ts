@@ -32,6 +32,10 @@ const STRENGTH: Readonly<Record<Reason, number>> = {
   thread_reply: 1,
 };
 
+/** True when the position is at or past the message: the person has read beyond it. */
+const isBehind = (position: string | null, messageId: string): boolean =>
+  position !== null && position.toLowerCase() >= messageId.toLowerCase();
+
 /** One person's numbers in the channel after the message, ready to be told to them. */
 export interface ChannelStateUpdate {
   readonly userId: string;
@@ -45,6 +49,45 @@ export interface ChannelStateUpdate {
  * only among its members: naming somebody who cannot see the conversation would
  * tell them it exists. The sender is never a recipient of their own message.
  */
+/**
+ * How many earlier repliers a reply tells, besides the root's author (D-99 §2, amended
+ * 2026-10-10). A thread nobody has to read to the end has no use for telling all of ten
+ * thousand people at once: the most recent repliers are the ones in the conversation, and the
+ * set — not the thread — is what one reply writes a row for.
+ */
+export const THREAD_PARTICIPANTS_MAX = 50;
+
+/**
+ * Of these people, the ones who can see the channel *now*: still a workspace member, not
+ * deleted, and — for a private channel or a DM — still in it (D-34). Somebody who replied
+ * yesterday and was removed today is told nothing: a notification row names a conversation.
+ */
+export const stillSeeing = async (
+  executor: Executor,
+  context: ChannelContext,
+  userIds: readonly string[],
+): Promise<ReadonlySet<string>> => {
+  if (userIds.length === 0) return new Set();
+  let query = executor
+    .selectFrom('users')
+    .innerJoin('workspace_members', (join) =>
+      join
+        .onRef('workspace_members.user_id', '=', 'users.id')
+        .on('workspace_members.workspace_id', '=', context.workspaceId),
+    )
+    .select('users.id')
+    .where('users.id', 'in', userIds)
+    .where('users.deleted_at', 'is', null);
+  if (context.channelType !== 'public') {
+    query = query.innerJoin('channel_members', (join) =>
+      join
+        .onRef('channel_members.user_id', '=', 'users.id')
+        .on('channel_members.channel_id', '=', context.channelId),
+    );
+  }
+  return new Set((await query.execute()).map((row) => row.id));
+};
+
 export const resolveMentions = async (
   executor: Executor,
   context: ChannelContext,
@@ -131,30 +174,40 @@ export const recordDelivery = async (
   }
 
   if (thread !== null) {
-    consider(thread.rootAuthorId, 'thread_reply');
-    // A bounded `DISTINCT` over `idx_messages_thread`: one indexed lookup per reply (D-29).
+    // The most recent repliers over `idx_messages_thread`, one row per person, newest first and
+    // bounded: one indexed scan per reply (D-29), and a bound on what one reply can write.
     const answered = await executor
       .selectFrom('messages')
       .select('sender_id')
-      .distinct()
       .where('parent_id', '=', thread.rootId)
       .where('deleted_at', 'is', null)
       .where('id', '<>', messageId)
+      .groupBy('sender_id')
+      .orderBy(sql`max(id::text)`, 'desc')
+      .limit(THREAD_PARTICIPANTS_MAX)
       .execute();
-    for (const row of answered) consider(row.sender_id, 'thread_reply');
+    const participants = [thread.rootAuthorId, ...answered.map((row) => row.sender_id)];
+    const seeing = await stillSeeing(executor, context, participants);
+    for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }
 
-  // A membership that has muted the channel is told nothing.
+  // A membership that has muted the channel is told nothing. The same read says who has
+  // already read *past* this message: an id may be up to a minute in the past, so a message
+  // can arrive behind somebody's position, and what is behind it is read (see the counters).
   const candidates = [...reasons.keys()];
   const muted = new Set<string>();
+  const alreadyRead = new Set<string>();
   if (candidates.length > 0) {
     const levels = await executor
       .selectFrom('channel_members')
-      .select(['user_id', 'notification_level'])
+      .select(['user_id', 'notification_level', 'last_read_message_id'])
       .where('channel_id', '=', context.channelId)
       .where('user_id', 'in', candidates)
       .execute();
-    for (const row of levels) if (row.notification_level === 'none') muted.add(row.user_id);
+    for (const row of levels) {
+      if (row.notification_level === 'none') muted.add(row.user_id);
+      if (isBehind(row.last_read_message_id, messageId)) alreadyRead.add(row.user_id);
+    }
   }
   const notified = candidates.filter((userId) => !muted.has(userId));
 
@@ -173,6 +226,8 @@ export const recordDelivery = async (
                   channel_id: context.channelId,
                   message_id: messageId,
                   type,
+                  // Behind the person's position: it exists for the inbox and needs nothing.
+                  ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),
                 },
               ];
         }),
@@ -181,11 +236,16 @@ export const recordDelivery = async (
       .execute();
   }
 
+  // Counted only for a member whose position is before this message. One whose position is
+  // at or past it has read beyond it, and the read recount (`id > position`) would not find it:
+  // counting it here left the stored number above the recount, and a badge `PUT /read` could
+  // not clear because it is a no-op for a position that does not move (H-API 1).
+  const ahead = sql<boolean>`(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)`;
   const changed = await executor
     .updateTable('channel_members')
     .set({
-      unread_count: sql<number>`unread_count + 1`,
-      unread_mention_count: sql<number>`unread_mention_count + case when user_id = any(${notified}::uuid[]) then 1 else 0 end`,
+      unread_count: sql<number>`unread_count + case when ${ahead} then 1 else 0 end`,
+      unread_mention_count: sql<number>`unread_mention_count + case when ${ahead} and user_id = any(${notified}::uuid[]) then 1 else 0 end`,
     })
     .where('channel_id', '=', context.channelId)
     .where('user_id', '<>', sender)
@@ -201,3 +261,27 @@ export const recordDelivery = async (
     },
   }));
 };
+
+/**
+ * The channel's other members' numbers as the rows hold them now — what a retried send tells
+ * again. Counts nothing, writes nothing.
+ */
+export const currentStates = async (
+  executor: Executor,
+  context: ChannelContext,
+): Promise<readonly ChannelStateUpdate[]> =>
+  (
+    await executor
+      .selectFrom('channel_members')
+      .select(['user_id', 'last_read_message_id', 'unread_count', 'unread_mention_count'])
+      .where('channel_id', '=', context.channelId)
+      .where('user_id', '<>', context.userId)
+      .execute()
+  ).map((row) => ({
+    userId: row.user_id,
+    state: {
+      lastReadMessageId: row.last_read_message_id,
+      unreadCount: row.unread_count,
+      unreadMentionCount: row.unread_mention_count,
+    },
+  }));

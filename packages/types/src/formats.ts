@@ -12,11 +12,19 @@
 import { FormatRegistry } from '@sinclair/typebox';
 
 /**
- * Shape only. That a `messages.id` is specifically a UUIDv7 carrying a plausible
+ * Shape only — and **lower-case only**. Every id this system makes is lower-case hex
+ * (PostgreSQL's text form, `crypto.randomUUID`, our UUIDv7), and every place that compares
+ * one does it as text: the read position (`id <= position`), `dm_key` (a CHECK on the form,
+ * I-5), topic names, a client's cache keys. A format that also accepted `ABC…` let a request
+ * through the boundary that each of those then handled differently — a direct message
+ * refused as malformed, a read position silently not moved, a frame published to a topic
+ * nobody listens on. One spelling is refused at the one place that can say so (H-API 2).
+ *
+ * That a `messages.id` is specifically a UUIDv7 carrying a plausible
  * timestamp is checked by the server before it trusts a client-supplied id
  * (D-33) — a rule about time, not a string format.
  */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Deliberately narrow: an address the application produced, in UTC. */
 const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;

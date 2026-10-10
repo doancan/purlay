@@ -17,7 +17,14 @@ import {
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById } from '../../platform/channels';
-import { publishChannelAdded, publishChannelState, type EventBus } from '../../platform/events';
+import {
+  NO_LOG,
+  publishAfterCommit,
+  publishChannelAdded,
+  publishChannelState,
+  type EventBus,
+} from '../../platform/events';
+import type { Logger } from '../../platform/logging';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import {
@@ -39,6 +46,8 @@ export interface ChannelDependencies {
 /** What a write that tells other sockets needs as well. */
 export interface ChannelWriteDependencies extends ChannelDependencies {
   readonly bus: EventBus;
+  /** Where a failed publish is written; the write it follows is already committed. */
+  readonly log?: Logger;
 }
 
 export const listChannels = async (
@@ -95,8 +104,10 @@ export const joinPublicChannel = async (
  *
  * The position and both counters move in one transaction; the person's other
  * devices are told after it commits, on their own topic, so a socket is never told
- * of a position that was rolled back (D-99 §4). A position that did not move tells
- * nobody.
+ * of a position that was rolled back (D-99 §4). A position that did not move **still
+ * tells the caller's devices where they stand**, from the row as it is: a repeated read
+ * usually means the answer, or the frame behind it, was lost, and this is what repairs it.
+ * It is the caller's own topic, so nobody else hears anything (H-API 4).
  */
 export const readUpTo = async (
   dependencies: ChannelWriteDependencies,
@@ -104,14 +115,21 @@ export const readUpTo = async (
   channelId: string,
   body: unknown,
 ): Promise<ReadChannelResponse> => {
-  const { database, clock, bus } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(ReadChannelRequest, body);
   const outcome = await atomicallyOn(database)(
     async (transaction) => await markRead(transaction, clock, context, input.lastReadMessageId),
   );
-  if (outcome.moved) await publishChannelState(bus, clock, userId, channelId, outcome.state);
+  await publishAfterCommit(log, [
+    [
+      {
+        label: 'CHANNEL_STATE',
+        run: async () => await publishChannelState(bus, clock, userId, channelId, outcome.state),
+      },
+    ],
+  ]);
   return outcome.state;
 };
 
@@ -126,13 +144,23 @@ export const openDirectMessageWith = async (
   workspaceId: string,
   body: unknown,
 ): Promise<{ readonly channel: Channel; readonly created: boolean }> => {
-  const { database, clock, bus } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(CreateDirectMessageRequest, body);
   const opened = await atomicallyOn(database)(
     async (transaction) => await openDirectMessage(transaction, clock, context, input.userId),
   );
-  if (opened.forPeer !== null) await publishChannelAdded(bus, clock, input.userId, opened.forPeer);
+  const forPeer = opened.forPeer;
+  if (forPeer !== null) {
+    await publishAfterCommit(log, [
+      [
+        {
+          label: 'CHANNEL_ADDED',
+          run: async () => await publishChannelAdded(bus, clock, input.userId, forPeer),
+        },
+      ],
+    ]);
+  }
   return { channel: opened.channel, created: opened.created };
 };

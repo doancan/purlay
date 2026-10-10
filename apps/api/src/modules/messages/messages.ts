@@ -31,12 +31,21 @@ import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
 import {
   channelTopic,
+  NO_LOG,
+  publishAfterCommit,
   publishChannelState,
   publishThreadUpdated,
   type EventBus,
+  type Publish,
 } from '../../platform/events';
+import type { Logger } from '../../platform/logging';
 import type { Atomically } from '../../platform/transactions';
-import { recordDelivery, resolveMentions, type ChannelStateUpdate } from './delivery';
+import {
+  currentStates,
+  recordDelivery,
+  resolveMentions,
+  type ChannelStateUpdate,
+} from './delivery';
 import { parseMentions } from './mentions';
 import {
   buildMessages,
@@ -137,7 +146,10 @@ export const sendMessage = async (
       message,
       thread:
         row.parent_id === null || summary === undefined ? null : { rootId: row.parent_id, summary },
-      recipients: [],
+      // Nothing is counted twice, but everything is *told* again, from the rows as they are
+      // now: a retry usually means the first answer did not arrive, and if the frames behind
+      // it were lost too, this is what repairs the other people's badges (H-API 4).
+      recipients: await currentStates(executor, context),
     };
   };
 
@@ -407,6 +419,8 @@ export interface SendDependencies {
   readonly atomically: Atomically;
   readonly clock: Clock;
   readonly bus: EventBus;
+  /** Where a failed publish is written; the write it follows is already committed. */
+  readonly log?: Logger;
 }
 
 /**
@@ -428,7 +442,7 @@ export const send = async (
   input: OutgoingMessage,
   sessionId?: string,
 ): Promise<Message> => {
-  const { atomically, clock, bus } = dependencies;
+  const { atomically, clock, bus, log = NO_LOG } = dependencies;
   const sent = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
@@ -436,21 +450,42 @@ export const send = async (
   });
   // The room first, then what moved under it, then each person's own numbers: a
   // client that hears a reply has already heard the message, and one that hears a
-  // count change has heard what changed it (D-99 §2).
-  await bus.publish(channelTopic(context.channelId), {
-    event: 'MESSAGE_CREATED',
-    data: sent.message,
-    ts: clock.now().getTime(),
-  });
+  // count change has heard what changed it (D-99 §2). Committed already, so a publish that
+  // fails is logged and the rest still go; the write is not an error.
+  const stages: Publish[][] = [
+    [
+      {
+        label: 'MESSAGE_CREATED',
+        run: async () =>
+          await bus.publish(channelTopic(context.channelId), {
+            event: 'MESSAGE_CREATED',
+            data: sent.message,
+            ts: clock.now().getTime(),
+          }),
+      },
+    ],
+  ];
   if (sent.thread !== null) {
-    await publishThreadUpdated(bus, clock, {
-      channelId: context.channelId,
-      messageId: sent.thread.rootId,
-      thread: sent.thread.summary,
-    });
+    const { rootId, summary } = sent.thread;
+    stages.push([
+      {
+        label: 'THREAD_UPDATED',
+        run: async () =>
+          await publishThreadUpdated(bus, clock, {
+            channelId: context.channelId,
+            messageId: rootId,
+            thread: summary,
+          }),
+      },
+    ]);
   }
-  for (const recipient of sent.recipients) {
-    await publishChannelState(bus, clock, recipient.userId, context.channelId, recipient.state);
-  }
+  stages.push(
+    sent.recipients.map((recipient) => ({
+      label: 'CHANNEL_STATE',
+      run: async () =>
+        await publishChannelState(bus, clock, recipient.userId, context.channelId, recipient.state),
+    })),
+  );
+  await publishAfterCommit(log, stages);
   return sent.message;
 };

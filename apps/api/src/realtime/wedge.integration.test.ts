@@ -261,7 +261,11 @@ describe('integration: a reply on real sockets', () => {
       .where('user_id', '=', room.alice.id)
       .executeTakeFirstOrThrow();
     expect(counted).toEqual({ unread_count: 1, unread_mention_count: 1 });
-    expect(alice.frames.filter((f) => f.event === 'CHANNEL_STATE')).toHaveLength(1);
+    // The retry tells Alice her numbers again, from the row (H-API 4) — the same numbers.
+    const states = alice.frames.flatMap((f) => (f.event === 'CHANNEL_STATE' ? [f.data.state] : []));
+    expect(states).toHaveLength(2);
+    for (const state of states)
+      expect(state).toMatchObject({ unreadCount: 1, unreadMentionCount: 1 });
 
     await alice.close();
     await bob.close();

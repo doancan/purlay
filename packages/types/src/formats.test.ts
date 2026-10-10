@@ -22,6 +22,13 @@ describe('string formats', () => {
     expect(check?.('')).toBe(false);
   });
 
+  /** Ids are compared as text everywhere (read position, dm_key, topics): one spelling (H-API 2). */
+  test('uuid is lower-case only, because every comparison of one is a text comparison', () => {
+    const check = FormatRegistry.Get('uuid');
+    expect(check?.('0199155C-6200-7B7F-8C11-2A4D3F9E1B70')).toBe(false);
+    expect(check?.('0199155c-6200-7b7f-8c11-2A4D3F9E1B70')).toBe(false);
+  });
+
   test('date-time insists on a zone', () => {
     const check = FormatRegistry.Get('date-time');
     expect(check?.('2026-09-09T08:00:00.000Z')).toBe(true);

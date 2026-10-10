@@ -379,3 +379,49 @@ describe('integration: two reads of one channel at once keep the counters consis
     });
   });
 });
+
+/**
+ * Ids are lower-case (`formats.ts`): the one spelling the read position's text comparison,
+ * `dm_key`'s CHECK and the topic names all agree on. An upper-case one is refused at the
+ * boundary, in the same words as any malformed id — it used to pass the contract and then be
+ * a 400 from a database constraint, a read position that silently did not move, or a frame
+ * published to a topic nobody listens on (H-API 2).
+ */
+describe('integration: an id spelled in upper case', () => {
+  test('a direct message to it, a read up to it and a path naming it are refused, not half-done', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const id = await say(db, room, room.bob, 1);
+
+      const dm = await call(db, 'POST', `/api/workspaces/${room.workspaceId}/dms`, {
+        cookie: room.alice.cookie,
+        body: { userId: room.bob.userId.toUpperCase() },
+      });
+      expect(dm.status).toBe(400);
+      expect(((await json(dm))['error'] as { code: string }).code).toBe('VALIDATION_FAILED');
+
+      const read = await call(db, 'PUT', `/api/channels/${room.channelId}/read`, {
+        cookie: room.alice.cookie,
+        body: { lastReadMessageId: id.toUpperCase() },
+      });
+      expect(read.status).toBe(400);
+
+      const path = await call(db, 'GET', `/api/channels/${room.channelId.toUpperCase()}`, {
+        cookie: room.alice.cookie,
+      });
+      expect(path.status).toBe(404);
+      const thread = await call(db, 'GET', `/api/messages/${id.toUpperCase()}/thread`, {
+        cookie: room.alice.cookie,
+      });
+      expect(thread.status).toBe(404);
+
+      // The same requests in the one spelling work, and the position really moved.
+      const ok = await call(db, 'PUT', `/api/channels/${room.channelId}/read`, {
+        cookie: room.alice.cookie,
+        body: { lastReadMessageId: id },
+      });
+      expect(ok.status).toBe(200);
+      expect((await json(ok))['lastReadMessageId']).toBe(id);
+    });
+  });
+});

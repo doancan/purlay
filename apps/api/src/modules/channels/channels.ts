@@ -38,6 +38,7 @@ interface ChannelRow {
   readonly peer_username: string | null;
   readonly peer_display_name: string | null;
   readonly peer_avatar_url: string | null;
+  readonly peer_deleted_at: Date | string | null;
 }
 
 const asChannel = (row: ChannelRow): Channel => ({
@@ -58,12 +59,16 @@ const asChannel = (row: ChannelRow): Channel => ({
   peer:
     row.peer_id === null
       ? null
-      : {
-          id: row.peer_id,
-          username: row.peer_username ?? '',
-          displayName: row.peer_display_name ?? '',
-          avatarUrl: row.peer_avatar_url,
-        },
+      : row.peer_deleted_at !== null
+        ? // Erased (I-11): the conversation stays and so does the id a client keys on, and
+          // nothing the account held is handed out.
+          { id: row.peer_id, username: 'deleted', displayName: 'Deleted user', avatarUrl: null }
+        : {
+            id: row.peer_id,
+            username: row.peer_username ?? '',
+            displayName: row.peer_display_name ?? '',
+            avatarUrl: row.peer_avatar_url,
+          },
 });
 
 /**
@@ -110,6 +115,7 @@ const readChannels = async (
       'users.username as peer_username',
       'users.display_name as peer_display_name',
       'users.avatar_url as peer_avatar_url',
+      'users.deleted_at as peer_deleted_at',
     ]);
   if (only.ids !== undefined) query = query.where('channels.id', 'in', only.ids);
   if (only.id !== undefined) query = query.where('channels.id', '=', only.id);
