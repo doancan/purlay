@@ -62,7 +62,7 @@ const mark = (into: string[], what: string): Promise<void> => {
 
 const idAt = (offset: number): string => messageId(new Date(NOW.getTime() + offset));
 
-describe('publishAfterCommit', () => {
+describe('integration: publishAfterCommit', () => {
   test('stages go in order, a failure is logged and the rest still go, and it never throws', async () => {
     const { log, lines } = aRecordingLogger();
     const order: string[] = [];

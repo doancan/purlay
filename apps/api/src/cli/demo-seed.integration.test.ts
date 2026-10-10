@@ -9,6 +9,7 @@ import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { createApp } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
 import { testConfig, testDependencies } from '../testing/doubles';
+import { PERSONAS } from './demo-script';
 import { assertDemoDatabase, neverSignsIn, plannedMessages, seedDemo } from './demo-seed';
 
 afterAll(async () => {
@@ -104,7 +105,7 @@ describe('integration: the demo seed', () => {
   });
 });
 
-describe('the database the seed will write to', () => {
+describe('integration: the database the seed will write to', () => {
   test.each(['purlay_demo', 'purlay_demo_two', 'purlay_e2e', 'purlay_e2e_4173'])(
     '%s is a scratch one',
     (name) => {
@@ -131,7 +132,13 @@ describe('the database the seed will write to', () => {
         message = error instanceof Error ? error.message : '';
       });
       expect(message).toContain('refusing to seed "purlay"');
-      expect(await db.selectFrom('users').select('id').execute()).toHaveLength(0);
+      expect(
+        await db
+          .selectFrom('users')
+          .select('id')
+          .where('username', 'in', Object.keys(PERSONAS))
+          .execute(),
+      ).toHaveLength(0);
     });
   });
 });

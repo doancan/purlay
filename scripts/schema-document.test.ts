@@ -122,6 +122,14 @@ for (const change of constraintChanges(migrationsSql)) {
   else if (constraints.delete(change.rename)) constraints.add(change.to);
   else throw new Error(`a migration renames ${change.rename}, which does not exist`);
 }
+// A column a later migration adds (0015) is part of the table from then on; the re-runnable
+// `IF NOT EXISTS` form adds it once.
+for (const match of withoutComments(migrationsSql).matchAll(
+  /ALTER TABLE (\w+)\s+ADD COLUMN (?:IF NOT EXISTS )?(\w+)/g,
+)) {
+  const [, table = '', column = ''] = match;
+  (applied.get(table)?.columns as Set<string> | undefined)?.add(column);
+}
 const documented = tablesIn(documentSql);
 const appliedIndexes = indexesIn(migrationsSql);
 const documentedIndexes = indexesIn(documentSql);

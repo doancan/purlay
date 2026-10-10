@@ -106,7 +106,7 @@ const ROOMY = { perSecond: 100_000, burst: 1_000_000 } as const;
  * cookies to a file — pointed at a real database by a mistyped `DATABASE_URL` it would be a
  * backdoor with a receipt, so the name is checked, not the intention (H-API 9).
  */
-export const DEMO_DATABASE = /^purlay_(?:demo|e2e)(?:[\w-]*)$/;
+const DEMO_DATABASE = /^purlay_(?:demo|e2e)(?:[\w-]*)$/;
 
 export const assertDemoDatabase = (connectionString: string): void => {
   const name = new URL(connectionString).pathname.slice(1);
