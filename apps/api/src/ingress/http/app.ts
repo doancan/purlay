@@ -49,7 +49,14 @@ import {
   readMe,
   readWorkspace,
 } from './workspaces';
-import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
+import {
+  createWorkspaceChannel,
+  joinPublicChannel,
+  listChannels,
+  openDirectMessageWith,
+  readChannel,
+  readUpTo,
+} from './channels';
 import { postMessage, readHistory } from './messages';
 import { changeReaction } from './reactions';
 import { readiness } from '../../platform/readiness';
@@ -269,9 +276,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return await createWorkspaceChannel(dependencies, request, params.workspaceId, body);
     })
+    .post('/api/workspaces/:workspaceId/dms', async ({ request, params, body, set }) => {
+      const { channel, created } = await openDirectMessageWith(
+        { ...dependencies, bus: sockets.bus },
+        request,
+        params.workspaceId,
+        body,
+      );
+      // 201 when this call made it, 200 when it was already there: the same pair
+      // is the same channel, and a retry is not a second one (I-5).
+      set.status = created ? 201 : 200;
+      return channel;
+    })
     .get(
       '/api/channels/:channelId',
       async ({ request, params }) => await readChannel(dependencies, request, params.channelId),
+    )
+    .put(
+      '/api/channels/:channelId/read',
+      async ({ request, params, body }) =>
+        await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
     .post(
       '/api/channels/:channelId/join',

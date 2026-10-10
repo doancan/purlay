@@ -99,6 +99,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishSessionsEnded',
     calledFrom: 'apps/api/src/modules/auth/sign-in.ts',
   },
+  // Moves a read position and recounts what is unread. It changes what a person has
+  // read, not what they may see, so no socket's access is affected (D-99 §4, #25).
+  'apps/api/src/modules/channels/read-state.ts#markRead': {
+    none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
+  },
   // Nothing calls it yet. It deletes rows that are already revoked (announced when
   // they were revoked) or past their expiry (the hub's own timer ends the socket).
   'packages/db/src/sessions.ts#purgeDeadSessions': {

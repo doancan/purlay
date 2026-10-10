@@ -120,13 +120,13 @@ Demoting or removing the last `owner` returns `409` (invariant I-2).
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see |
 | ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member |
-| ① | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
+| ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
 | ① | `PATCH` | `/api/channels/:channelId` | member — name, topic |
 | ① | `DELETE` | `/api/channels/:channelId` | admin — soft delete |
 | ○ | `POST` | `/api/channels/:channelId/join` | member — public only |
 | ① | `POST` | `/api/channels/:channelId/leave` | member |
-| ① | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
+| ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
 | ① | `PUT` | `/api/channels/:channelId/notification-level` | member — `all` \| `mentions` \| `none` |
 
 Creating a DM is idempotent: the same pair returns the same channel, never a second one.

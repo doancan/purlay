@@ -20,7 +20,8 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor } from '../../testing/cross-tenant';
+import { CROSS_TENANT, pathFor, type OwnerIds } from '../../testing/cross-tenant';
+import { messageId } from '@purlay/types';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -63,6 +64,8 @@ const created = async (response: Response): Promise<string> => {
 interface World {
   readonly owner: string;
   readonly outsider: string;
+  /** What a body may need: the outsider (a person certainly in the workspace) and a message of the visible channel. */
+  readonly ids: OwnerIds;
   readonly workspaceId: string;
   /** Public, and the outsider has joined it. The control. */
   readonly visible: string;
@@ -106,6 +109,12 @@ const aWorld = async (db: Executor): Promise<World> => {
     }),
   );
   expect((await call(db, 'POST', `/api/channels/${visible}/join`, outsider.cookie)).ok).toBe(true);
+  const first = messageId(NOW);
+  const posted = await call(db, 'POST', `/api/channels/${visible}/messages`, owner.cookie, {
+    id: first,
+    content: 'first',
+  });
+  expect(posted.status).toBe(201);
 
   const seed = async (
     values: { type: 'public' | 'private' | 'direct_message' } & Record<string, unknown>,
@@ -129,6 +138,7 @@ const aWorld = async (db: Executor): Promise<World> => {
   const world = {
     owner: owner.cookie,
     outsider: outsider.cookie,
+    ids: { userId: outsider.id, messageId: first },
     workspaceId,
     visible,
     hidden: {
@@ -186,7 +196,7 @@ describe('integration: channel visibility', () => {
       test(`${key} answers 404 to a workspace member who cannot see the channel`, async () => {
         await withRollback(async (db) => {
           const world = await aWorld(db);
-          const body = crossing.body?.(NOW);
+          const body = crossing.body?.(NOW, world.ids);
           const at = (channelId: string): string =>
             pathFor(path, {
               workspaceId: world.workspaceId,

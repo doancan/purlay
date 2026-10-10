@@ -6,12 +6,15 @@
  * channel. A caller cannot hold either without having been checked, so an
  * unscoped query does not compile (D-21, D-34).
  *
- * **Public channels only in this phase.** Private channels and DMs are Phase 1;
- * the *visibility rule* that governs them is already written and enforced by the
- * guard, so what is missing here is the endpoint that creates them, not the
- * protection.
+ * **Only public channels are created here.** Private channels have no endpoint yet, and
+ * a direct message is opened by `direct-messages.ts`; the *visibility rule* that
+ * governs all three is already written and enforced by the guard.
+ *
+ * Every channel is shown as one person sees it: their read position and counters
+ * (null when they can see it and have not joined) and, for a direct message, the
+ * other person (D-98, D-99).
  */
-import type { Executor, Transaction } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -26,6 +29,15 @@ interface ChannelRow {
   readonly topic: string | null;
   readonly type: Channel['type'];
   readonly last_message_at: Date | string | null;
+  /** Null when the caller is not a member: they can see the channel, not read it. */
+  readonly member_user_id: string | null;
+  readonly last_read_message_id: string | null;
+  readonly unread_count: number | null;
+  readonly unread_mention_count: number | null;
+  readonly peer_id: string | null;
+  readonly peer_username: string | null;
+  readonly peer_display_name: string | null;
+  readonly peer_avatar_url: string | null;
 }
 
 const asChannel = (row: ChannelRow): Channel => ({
@@ -35,12 +47,92 @@ const asChannel = (row: ChannelRow): Channel => ({
   topic: row.topic,
   type: row.type,
   lastMessageAt: row.last_message_at === null ? null : new Date(row.last_message_at).toISOString(),
-  // Filled in by the read-state and direct-message slices (D-98); until then no one has either.
-  state: null,
-  peer: null,
+  state:
+    row.member_user_id === null
+      ? null
+      : {
+          lastReadMessageId: row.last_read_message_id,
+          unreadCount: row.unread_count ?? 0,
+          unreadMentionCount: row.unread_mention_count ?? 0,
+        },
+  peer:
+    row.peer_id === null
+      ? null
+      : {
+          id: row.peer_id,
+          username: row.peer_username ?? '',
+          displayName: row.peer_display_name ?? '',
+          avatarUrl: row.peer_avatar_url,
+        },
 });
 
-const COLUMNS = ['id', 'workspace_id', 'name', 'topic', 'type', 'last_message_at'] as const;
+/**
+ * The channels a person is shown, with everything that is true *for them*.
+ *
+ * One query however many channels there are: the membership (their read position
+ * and counters) and, for a direct message, the other person are joins, not a lookup
+ * per row — the sidebar renders on every load, and a query per channel is the N+1 the
+ * project rules forbid (D-13). The other person is found from `dm_key`, the sorted
+ * pair, rather than from `channel_members`: it is already on the row, and for a note
+ * to self the pair is the same id twice, so the caller is their own peer (D-6, I-5).
+ */
+const readChannels = async (
+  executor: Executor,
+  userId: string,
+  only: { readonly ids?: readonly string[]; readonly id?: string },
+): Promise<readonly ChannelRow[]> => {
+  let query = executor
+    .selectFrom('channels')
+    .leftJoin('channel_members', (join) =>
+      join
+        .onRef('channel_members.channel_id', '=', 'channels.id')
+        .on('channel_members.user_id', '=', userId),
+    )
+    .leftJoin('users', (join) =>
+      join.on(
+        sql<boolean>`channels.type = 'direct_message' and users.id = (case
+          when split_part(channels.dm_key, ':', 1) = ${userId} then split_part(channels.dm_key, ':', 2)
+          else split_part(channels.dm_key, ':', 1) end)::uuid`,
+      ),
+    )
+    .select([
+      'channels.id as id',
+      'channels.workspace_id as workspace_id',
+      'channels.name as name',
+      'channels.topic as topic',
+      'channels.type as type',
+      'channels.last_message_at as last_message_at',
+      'channel_members.user_id as member_user_id',
+      'channel_members.last_read_message_id as last_read_message_id',
+      'channel_members.unread_count as unread_count',
+      'channel_members.unread_mention_count as unread_mention_count',
+      'users.id as peer_id',
+      'users.username as peer_username',
+      'users.display_name as peer_display_name',
+      'users.avatar_url as peer_avatar_url',
+    ]);
+  if (only.ids !== undefined) query = query.where('channels.id', 'in', only.ids);
+  if (only.id !== undefined) query = query.where('channels.id', '=', only.id);
+  return await query
+    // `NULLS LAST` because PostgreSQL sorts nulls *first* under `DESC`: without
+    // it a channel nobody has written in yet ranks above every active one, which
+    // is the opposite of what `UX.md` §4 asks the sidebar to show.
+    .orderBy('channels.last_message_at', (order) => order.desc().nullsLast())
+    .orderBy('channels.name', 'asc')
+    .execute();
+};
+
+/** One channel as one person sees it — what a create, a join and a direct message answer with. */
+export const channelFor = async (
+  executor: Executor,
+  userId: string,
+  channelId: string,
+): Promise<Channel> => {
+  const [row] = await readChannels(executor, userId, { id: channelId });
+  if (row === undefined)
+    throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
+  return asChannel(row);
+};
 
 export interface NewChannel {
   readonly name: string;
@@ -85,7 +177,7 @@ export const createChannel = async (
       type: 'public',
       created_by: context.userId,
     })
-    .returning(COLUMNS)
+    .returning('id')
     .executeTakeFirstOrThrow();
 
   await executor
@@ -93,7 +185,7 @@ export const createChannel = async (
     .values({ channel_id: row.id, user_id: context.userId, joined_at: clock.now() })
     .execute();
 
-  return asChannel(row);
+  return await channelFor(executor, context.userId, row.id);
 };
 
 /**
@@ -109,28 +201,12 @@ export const channelsVisibleIn = async (
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return [];
 
-  const rows = await executor
-    .selectFrom('channels')
-    .select(COLUMNS)
-    .where('id', 'in', visible)
-    // `NULLS LAST` because PostgreSQL sorts nulls *first* under `DESC`: without
-    // it a channel nobody has written in yet ranks above every active one, which
-    // is the opposite of what `UX.md` §4 asks the sidebar to show.
-    .orderBy('last_message_at', (order) => order.desc().nullsLast())
-    .orderBy('name', 'asc')
-    .execute();
-  return rows.map(asChannel);
+  return (await readChannels(executor, context.userId, { ids: visible })).map(asChannel);
 };
 
 /** The channel the context was minted for. There is no other one it could return. */
-export const channelIn = async (executor: Executor, context: ChannelContext): Promise<Channel> => {
-  const row = await executor
-    .selectFrom('channels')
-    .select(COLUMNS)
-    .where('id', '=', context.channelId)
-    .executeTakeFirstOrThrow();
-  return asChannel(row);
-};
+export const channelIn = async (executor: Executor, context: ChannelContext): Promise<Channel> =>
+  await channelFor(executor, context.userId, context.channelId);
 
 /**
  * Joins a channel you can already see.
