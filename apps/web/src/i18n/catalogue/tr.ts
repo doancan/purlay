@@ -159,6 +159,15 @@ export const tr = {
   'composer.hint.send': 'gönderir',
   'composer.hint.newline': 'yeni satır',
 
+  // ── Mesaj kutusu: göndermeden önce denetlenenler (D-99 §3) ──────────────
+  'composer.hint.code': 'kod bloğu',
+  'composer.remaining': {
+    other: '{count} karakter kaldı',
+  },
+  'composer.invalid': 'Bu mesajda Purlay’in gönderemediği bir karakter var. Kaldırıp tekrar dene.',
+  'composer.broadcast':
+    '{mention} kullanılamaz: Purlay herkese bildirim göndermez. Kimi kastettiysen adıyla an.',
+
   // ── Bağlantı (UX §8) ────────────────────────────────────────────────────
   'connection.reconnecting': 'Yeniden bağlanılıyor… geri döndüğünde mesajlar gönderilecek',
   'connection.ended': 'Oturumun sona erdi',
