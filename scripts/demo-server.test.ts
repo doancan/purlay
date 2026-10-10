@@ -68,6 +68,12 @@ beforeAll(() => {
   seen = [];
 });
 
+describe('the demo front', () => {
+  test('listens on loopback only: its login door mints sessions for whoever reaches it', () => {
+    expect(front.hostname).toBe('127.0.0.1');
+  });
+});
+
 describe('which paths are whose', () => {
   test.each<[string, Route]>([
     ['/ws', 'socket'],

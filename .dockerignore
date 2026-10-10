@@ -41,3 +41,9 @@ docker-compose*.yml
 **/*.test.ts
 **/*.test.tsx
 apps/api/src/testing
+
+# The demo seeder makes people with live sessions and writes their cookies to a file. It is a
+# development tool (`bun run demo`), guarded by the name of the database it will write to, and
+# kept out of the image so that no container can run it at all (H-API 9).
+apps/api/src/cli/demo-*.ts
+apps/api/src/cli/seed-demo.ts

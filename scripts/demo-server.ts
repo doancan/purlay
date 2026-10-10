@@ -126,6 +126,9 @@ interface SocketData {
 export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<SocketData>> => {
   const wsApi = options.api.replace(/^http/, 'ws');
   return Bun.serve<SocketData>({
+    // `/__demo/login` hands a signed-in session to whoever asks. Bun's default is every
+    // interface, which on a café network is everybody; loopback is the whole audience (H-API 9).
+    hostname: '127.0.0.1',
     port: options.port,
     fetch: async (request, server) => {
       const url = new URL(request.url);

@@ -9,7 +9,7 @@ import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { createApp } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
 import { testConfig, testDependencies } from '../testing/doubles';
-import { neverSignsIn, plannedMessages, seedDemo } from './demo-seed';
+import { assertDemoDatabase, neverSignsIn, plannedMessages, seedDemo } from './demo-seed';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -20,7 +20,7 @@ const NOW = new Date('2026-09-09T12:00:00.000Z');
 describe('integration: the demo seed', () => {
   test('sends every message through the API, and leaves the counters the send path keeps', async () => {
     await withRollback(async (db) => {
-      const config = testConfig();
+      const config = testConfig({ DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test' });
       const manifest = await seedDemo({ database: db, config, now: NOW });
       expect(manifest.counts.messages).toBe(plannedMessages());
 
@@ -81,7 +81,7 @@ describe('integration: the demo seed', () => {
 
   test('refuses a database that already has the people, rather than duplicating them', async () => {
     await withRollback(async (db) => {
-      const config = testConfig();
+      const config = testConfig({ DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test' });
       await seedDemo({ database: db, config, now: NOW });
       let message = '';
       await seedDemo({ database: db, config, now: NOW }).catch((error: unknown) => {
@@ -101,5 +101,37 @@ describe('integration: the demo seed', () => {
         await call.catch((error: unknown) => (error instanceof Error ? error.message : '')),
       ).toContain('never signs in');
     }
+  });
+});
+
+describe('the database the seed will write to', () => {
+  test.each(['purlay_demo', 'purlay_demo_two', 'purlay_e2e', 'purlay_e2e_4173'])(
+    '%s is a scratch one',
+    (name) => {
+      expect(() => {
+        assertDemoDatabase(`postgres://u:p@localhost:5432/${name}`);
+      }).not.toThrow();
+    },
+  );
+
+  test.each(['purlay', 'purlay_tok', 'production', 'purlay_demo/../x', 'demo', 'my_purlay_demo'])(
+    '%s is refused, with its name in the message',
+    (name) => {
+      expect(() => {
+        assertDemoDatabase(`postgres://u:p@localhost:5432/${name}`);
+      }).toThrow(/refusing to seed/);
+    },
+  );
+
+  test('seedDemo itself refuses before touching the database', async () => {
+    await withRollback(async (db) => {
+      const config = testConfig({ DATABASE_URL: 'postgres://u:p@localhost:5432/purlay' });
+      let message = '';
+      await seedDemo({ database: db, config, now: NOW }).catch((error: unknown) => {
+        message = error instanceof Error ? error.message : '';
+      });
+      expect(message).toContain('refusing to seed "purlay"');
+      expect(await db.selectFrom('users').select('id').execute()).toHaveLength(0);
+    });
   });
 });

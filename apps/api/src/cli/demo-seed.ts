@@ -100,8 +100,26 @@ export const neverSignsIn: GitHubClient = {
 
 const ROOMY = { perSecond: 100_000, burst: 1_000_000 } as const;
 
+/**
+ * The only databases the seed will write to: the ones `scripts/demo.ts` and the browser tests
+ * create and drop themselves. The seed makes people with 30-day sessions and writes their
+ * cookies to a file — pointed at a real database by a mistyped `DATABASE_URL` it would be a
+ * backdoor with a receipt, so the name is checked, not the intention (H-API 9).
+ */
+export const DEMO_DATABASE = /^purlay_(?:demo|e2e)(?:[\w-]*)$/;
+
+export const assertDemoDatabase = (connectionString: string): void => {
+  const name = new URL(connectionString).pathname.slice(1);
+  if (!DEMO_DATABASE.test(name)) {
+    throw new Error(
+      `refusing to seed "${name}": the demo only writes to a database named purlay_demo… or purlay_e2e…`,
+    );
+  }
+};
+
 export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   const { database, config } = options;
+  assertDemoDatabase(config.DATABASE_URL);
   let current = new Date(options.now.getTime() - 3 * 24 * 60 * MINUTE);
   const clock: Clock = { now: (): Date => new Date(current) };
   const at = (instant: Date): void => {
