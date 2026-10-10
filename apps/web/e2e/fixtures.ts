@@ -191,24 +191,3 @@ export const focused = (page: Page): Promise<string> =>
       element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 40)
     }`;
   });
-
-/**
- * Milliseconds from a user's action to the next frame that painted its effect: the clock
- * starts as `action` begins and stops on the second animation frame after it settles —
- * the first is when the browser is asked to render, the second is when it had.
- */
-export const timeToPaint = async (page: Page, action: () => Promise<void>): Promise<number> => {
-  const start = await page.evaluate(() => performance.now());
-  await action();
-  const end = await page.evaluate(
-    () =>
-      new Promise<number>((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            resolve(performance.now());
-          });
-        });
-      }),
-  );
-  return end - start;
-};
