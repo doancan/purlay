@@ -61,7 +61,6 @@ export const shadowTokens = [
 ] as const;
 
 export const sizeTokens = [
-  'size-rail',
   'size-sidebar',
   'size-members',
   'size-feed-max',

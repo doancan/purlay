@@ -25,7 +25,6 @@ import { WEIGHTS } from './model';
  * generator.
  */
 const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
-  'size-rail': '--container-rail',
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',

@@ -29,27 +29,28 @@
 
 ## 2. Layout
 
-One fixed shell, three regions. No resizable panes in Phase 1 — a saved layout is one more
-state to sync for no benefit at this size.
+One fixed shell, two regions and an optional third. No resizable panes in Phase 1 — a saved
+layout is one more state to sync for no benefit at this size.
 
 ```
-┌────────────┬──────────────────────────────────────────────┬──────────┐
-│ workspace  │  #api                          [search] [◐]  │          │
-│  switcher  ├──────────────────────────────────────────────┤ members  │
-│  (56px)    │                                              │ (opt.)   │
-│            │              MESSAGE FEED                    │          │
-│ ┌────────┐ │           (single column)                    │ 200px    │
-│ │channels│ │                                              │          │
-│ │  DMs   │ │                                              │          │
-│ │  240px │ ├──────────────────────────────────────────────┤          │
-│ └────────┘ │  composer                                    │          │
-└────────────┴──────────────────────────────────────────────┴──────────┘
+┌──────────────┬────────────────────────────────────────────────┬──────────┐
+│ acme-eng  ⇅  │  # api  Backend deploys…    [Feed] [Questions] │          │
+│              ├────────────────────────────────────────────────┤ members  │
+│ Channels     │ 14:30  alice                                   │ (opt.)   │
+│  # api       │        Merged the rate-limit fix.              │          │
+│  # deploys   │ 14:31  alice                                   │ 200px    │
+│  # incidents │        Staging is green.                       │          │
+│ People       ├────────────────────────────────────────────────┤          │
+│  240px       │ api ›  composer                                │          │
+└──────────────┴────────────────────────────────────────────────┴──────────┘
 ```
 
-- **Workspace switcher (56px)** — avatars only, unread dot per workspace. Hidden when the user
-  belongs to one workspace.
-- **Sidebar (240px)** — channels, then DMs, ordered by `channels.last_message_at`. Unread
-  channels are bold; unread **mentions** carry a count badge. Nothing else gets a badge.
+- **Workspace switcher** — a menu in the sidebar header, not a rail: the product is used inside
+  one workspace at a time, and a column of avatars beside the sidebar is the part of a chat layout
+  that reads as somebody else's product. (Approved prototype, D-98.)
+- **Sidebar (240px)** — channels, then people, ordered by `channels.last_message_at`. Channel names
+  are set in the mono face with a `#`. Unread channels are bold; unread **mentions** carry a count
+  badge. Nothing else gets a badge.
 - **Feed** — the single column. Max width 780px, left-aligned, not centred: eye travel matters
   more than symmetry when reading code.
 - **Member list** — collapsed by default. Presence is decoration, not information.
@@ -62,19 +63,20 @@ state to sync for no benefit at this size.
 ## 3. The message row
 
 ```
-  ┌ avatar  alice  14:32                                    [⋯] [☺] [↩]
-  │ The retry backoff is 4s because the upstream rate-limits at 15/min.
-  │
-  │ ┌─────────────────────────────────────────────────── ts ─┐
-  │ │ const backoff = 4_000;                          [copy] │
-  │ └────────────────────────────────────────────────────────┘
-  │
-  │ 👍 3   🎉 1
-  └ ▸ 4 replies · last 12m ago                      ● unresolved
+  14:32  alice                                                    React
+         The retry backoff is 4s because the upstream rate-limits at 15/min.
+         ┌─────────────────────────────────────────────────── ts ─┐
+         │ const backoff = 4_000;                          Copy   │
+         └────────────────────────────────────────────────────────┘
+         👍 3   🎉 1
+         ○ Open · 4 replies · last 12m ago                  Show thread T
 ```
 
-- **Consecutive messages** from the same author within 5 minutes hide the avatar and header.
-- **Hover controls** appear top-right and never reflow the row — they overlay it.
+- **No avatars.** The left column is a fixed 56px gutter holding the time in the mono face, so
+  a channel scans like a log: who, then what, down a single edge. (Approved prototype, D-98.)
+- **Consecutive messages** from the same author within 5 minutes hide the name; their time shows
+  in the gutter on hover.
+- **Hover controls** are text on the header line and never reflow the row.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
 
@@ -258,8 +260,9 @@ Decided here so Phase 0 does not invent one at random.
 
 - **Type:** system UI stack for prose; `ui-monospace`/`SF Mono`/`JetBrains Mono` for code.
   Base 14px, code 13px, line-height 1.5 prose / 1.45 code.
-- **Colour:** dark theme first — this is a tool that sits open beside an editor. Light theme in
-  Phase 2. Never colour alone to carry meaning: resolved, failed and unread each pair colour
+- **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
+  choice kept per device. Dark is designed first — this is a tool that sits open beside an editor —
+  and every colour pair is computed in both. Never colour alone to carry meaning: resolved, failed and unread each pair colour
   with a glyph or weight, for contrast and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
 - **Motion:** effectively none. The only transitions are the thread collapse on resolve (§4.3)

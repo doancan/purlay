@@ -55,7 +55,6 @@
   --shadow-float: var(--shadow-float);
 
   /* Sizes */
-  --container-rail: var(--size-rail);
   --container-sidebar: var(--size-sidebar);
   --container-members: var(--size-members);
   --container-feed: var(--size-feed-max);
