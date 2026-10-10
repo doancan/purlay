@@ -66,6 +66,7 @@ export const sizeTokens = [
   'size-feed-max',
   'size-narrow',
   'size-control',
+  'size-touch',
   'size-header',
   'size-gutter',
   'size-badge',

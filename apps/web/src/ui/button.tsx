@@ -24,7 +24,7 @@ import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
 
 const baseClasses =
-  'inline-flex h-control shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border-hairline px-3 text-label disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted';
+  'inline-flex h-control max-narrow:h-touch shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border-hairline px-3 text-label disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted';
 
 const variantClasses = {
   primary: 'border-accent bg-accent text-on-accent',

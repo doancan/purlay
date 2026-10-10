@@ -31,7 +31,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         <button
           type="button"
           aria-label={t('sidebar.switch')}
-          className="flex h-control w-full items-center justify-between gap-2 rounded-md px-3 text-heading text-ink hover:bg-surface-200"
+          className="flex h-control w-full items-center justify-between gap-2 rounded-md px-3 text-heading text-ink hover:bg-surface-200 max-narrow:h-touch"
         >
           <span className="truncate">{workspace.name}</span>
           <Icon name="switch" size="sm" />

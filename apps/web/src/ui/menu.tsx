@@ -22,7 +22,7 @@ const contentClasses =
   'z-popover min-w-members rounded-md border-hairline border-border-strong bg-surface-100 p-1 shadow-float';
 
 const itemClasses =
-  'flex h-control cursor-pointer items-center gap-2 rounded-sm px-2 text-body text-ink data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
+  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-sm px-2 text-body text-ink data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
 
 const toneClasses = {
   default: '',

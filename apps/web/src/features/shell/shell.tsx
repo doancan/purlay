@@ -14,7 +14,8 @@ import { SessionGate } from '../session/session';
 import { ConnectionBar } from './connection-bar';
 import { GlobalKeys } from './global-keys';
 import { NotFound } from './not-found';
-import { Sidebar } from './sidebar';
+import { NavProvider } from './nav';
+import { SidebarSlot } from './sidebar-slot';
 import { WorkspaceScopeProvider } from './workspace';
 
 export const Shell = ({
@@ -28,13 +29,15 @@ export const Shell = ({
     <WorkspaceScopeProvider slug={slug} notFound={<NotFound />}>
       <RealtimeProvider>
         <GlobalKeys />
-        <div className="flex h-screen bg-surface-100 text-ink">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <ConnectionBar />
-            <Main className="flex min-h-0 flex-1 flex-col">{children}</Main>
+        <NavProvider>
+          <div className="flex h-screen bg-surface-100 text-ink">
+            <SidebarSlot />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <ConnectionBar />
+              <Main className="flex min-h-0 flex-1 flex-col">{children}</Main>
+            </div>
           </div>
-        </div>
+        </NavProvider>
       </RealtimeProvider>
     </WorkspaceScopeProvider>
   </SessionGate>

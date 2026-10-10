@@ -33,7 +33,7 @@ export const OpenQuestionsLink = (): React.JSX.Element => {
       params={{ slug: workspace.slug }}
       {...(current ? { 'aria-current': 'page' as const } : {})}
       className={cn(
-        'flex h-control items-center gap-2 rounded-md px-3 text-body text-ink hover:bg-surface-200',
+        'flex h-control items-center gap-2 rounded-md px-3 text-body text-ink max-narrow:h-touch hover:bg-surface-200',
         current && 'bg-surface-200 font-medium',
       )}
     >

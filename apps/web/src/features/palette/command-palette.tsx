@@ -283,7 +283,7 @@ export const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps): Rea
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-palette bg-scrim" />
         <RadixDialog.Content
-          className="fixed inset-x-4 top-0 z-palette mx-auto mt-8 flex max-w-palette flex-col overflow-hidden rounded-md border-hairline border-border-strong bg-surface-100 text-ink shadow-float"
+          className="fixed inset-x-4 top-1/6 z-palette mx-auto flex max-w-palette flex-col overflow-hidden rounded-md border-hairline border-border-strong bg-surface-100 text-ink shadow-float"
           onOpenAutoFocus={() => {
             // Before Radix moves focus in, the active element is still the opener.
             returnTo.current =
