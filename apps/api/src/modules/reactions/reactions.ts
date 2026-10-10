@@ -102,7 +102,9 @@ export const setReaction = async (
       }
       const inserted = await transaction
         .insertInto('reactions')
-        .values({ message_id: messageId, user_id: caller.userId, emoji })
+        // The module's clock, not the database's: inside one transaction every row would carry
+        // the same instant, and a set is ordered by when its reactions arrived.
+        .values({ message_id: messageId, user_id: caller.userId, emoji, created_at: clock.now() })
         .onConflict((conflict) => conflict.columns(['message_id', 'user_id', 'emoji']).doNothing())
         .returning('id')
         .executeTakeFirst();
