@@ -4,6 +4,9 @@
 # Generated from the migrations; never edited by hand. (D-45)
 packages/db/src/schema.ts
 
+# Generated from packages/tokens/tokens.json; `bun run tokens:check` is what keeps it exact. (D-97)
+packages/tokens/src/generated/
+
 # The documents are hand-wrapped at a deliberate width and their line breaks carry
 # intent. Reflowing them would produce an enormous diff and destroy that discipline.
 # Prettier's job is code.

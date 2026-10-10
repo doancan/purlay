@@ -120,6 +120,169 @@ const purlay = {
         };
       },
     },
+    /**
+     * A raw visual value in a component is a lint error (D-52, D-97).
+     *
+     * The vocabulary — colour, spacing, type, radius, shadow, stacking, motion — is
+     * `packages/tokens/tokens.json` and nothing else. This refuses what can be seen
+     * in the syntax; `apps/web/src/styles.test.ts` asks Tailwind about the rest (a
+     * typo, or `z-50`, which builds from a bare number whatever the theme says).
+     *
+     * What it refuses, and what it deliberately lets through:
+     * - an arbitrary Tailwind value or property (`w-[13px]`, `bg-[#fff]`,
+     *   `[mask-type:alpha]`). `data-[…]` and `aria-[…]` stay: they select on state,
+     *   they do not carry a value;
+     * - a string that *is* a colour or a length (`'#fff'`, `'13px'`, `'120ms'`), or
+     *   holds a colour function or a `cubic-bezier`. A sentence that merely mentions
+     *   "PR #482" or "300ms" is prose, not a style;
+     * - in a `style` object, a literal that is not `var(--token)` or `0`. A value
+     *   computed at runtime (a measured height) is not a literal, so it stays;
+     * - a numeric `width`, `height`, `size`, `strokeWidth`… attribute: an icon is
+     *   sized from the type scale (`size-icon-md`), not by eye;
+     * - a `className` assembled with `${}`, which Tailwind cannot build either.
+     */
+    'no-raw-visual-value': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        const WHY = ' Use a token from packages/tokens/tokens.json, or add one there (D-97).';
+        const STATE_VARIANTS = new Set([
+          'data',
+          'aria',
+          'group-data',
+          'group-aria',
+          'peer-data',
+          'peer-aria',
+        ]);
+        const ARBITRARY_VALUE = /(?:^|\s)(?:[\w-]+:)*([a-z][\w-]*?)-\[[^\]\s]+\]/g;
+        const ARBITRARY_PROPERTY = /(?:^|\s)(?:[\w-]+:)*\[[a-z-]+:[^\]]+\]/;
+        const COLOUR_WHOLE = /^\s*#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})\s*$/i;
+        const COLOUR_FUNCTION = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch|color-mix)\(/i;
+        const LENGTH_WHOLE = /^\s*-?\d*\.?\d+(?:px|rem|em|ms|s)\s*$/;
+        const EASING = /\b(?:cubic-bezier|steps)\(/;
+        const SIZED = new Set([
+          'width',
+          'height',
+          'size',
+          'strokeWidth',
+          'fontSize',
+          'rx',
+          'ry',
+          'r',
+          'cx',
+          'cy',
+          'x',
+          'y',
+          'gap',
+        ]);
+
+        const refuse = (node, what) => {
+          context.report({ node, message: `${what}.${WHY}` });
+        };
+
+        const judgeText = (node, text) => {
+          for (const match of text.matchAll(ARBITRARY_VALUE)) {
+            if (!STATE_VARIANTS.has(match[1])) {
+              refuse(
+                node,
+                `"${match[0].trim()}" is an arbitrary value, so the design would be set by eye`,
+              );
+              return;
+            }
+          }
+          if (ARBITRARY_PROPERTY.test(text)) {
+            refuse(
+              node,
+              `an arbitrary property ("${text.trim().slice(0, 40)}") bypasses the vocabulary`,
+            );
+          } else if (COLOUR_WHOLE.test(text) || COLOUR_FUNCTION.test(text)) {
+            refuse(node, `"${text.trim().slice(0, 40)}" is a literal colour`);
+          } else if (LENGTH_WHOLE.test(text)) {
+            refuse(node, `"${text.trim()}" is a literal size or duration`);
+          } else if (EASING.test(text)) {
+            refuse(node, 'a literal easing curve');
+          }
+        };
+
+        const isZero = (node) =>
+          node.type === 'Literal' && (node.value === 0 || node.value === '0');
+        const isToken = (node) =>
+          node.type === 'Literal' &&
+          typeof node.value === 'string' &&
+          node.value.startsWith('var(--');
+
+        return {
+          Literal(node) {
+            if (typeof node.value === 'string') judgeText(node, node.value);
+          },
+          TemplateElement(node) {
+            judgeText(node, node.value.cooked ?? node.value.raw);
+          },
+          JSXAttribute(node) {
+            if (node.name.type !== 'JSXIdentifier') return;
+            const name = node.name.name;
+            const value = node.value;
+            if (value === null || value === undefined) return;
+            if (name === 'className' && value.type === 'JSXExpressionContainer') {
+              const expression = value.expression;
+              if (expression.type === 'TemplateLiteral' && expression.expressions.length > 0) {
+                refuse(
+                  expression,
+                  'a className assembled with ${} cannot be checked, and Tailwind cannot build it; write each whole class',
+                );
+              }
+            }
+            if (name === 'style' && value.type === 'JSXExpressionContainer') {
+              const expression = value.expression;
+              if (expression.type === 'ObjectExpression') {
+                for (const property of expression.properties) {
+                  if (property.type !== 'Property') continue;
+                  const given = property.value;
+                  if (given.type === 'Literal' && !isZero(given) && !isToken(given)) {
+                    refuse(given, 'a literal in a style object');
+                  }
+                }
+              }
+            }
+            if (SIZED.has(name)) {
+              const expression = value.type === 'JSXExpressionContainer' ? value.expression : value;
+              if (
+                expression.type === 'Literal' &&
+                !isZero(expression) &&
+                /^-?\d*\.?\d+$/.test(String(expression.value))
+              ) {
+                refuse(expression, `a numeric ${name} sets a size by eye`);
+              }
+            }
+          },
+        };
+      },
+    },
+    /**
+     * One icon set, reached one way (D-97). `lucide-react` is imported by
+     * `components/icon.tsx` and nowhere else, so a screen asks for a glyph by its
+     * meaning and cannot give it a size or a weight of its own.
+     */
+    'icons-through-icon': {
+      meta: { type: 'problem', schema: [] },
+      create(context) {
+        const check = (node) => {
+          const source = node.source;
+          if (source !== null && source !== undefined && source.value === 'lucide-react') {
+            context.report({
+              node: source,
+              message:
+                'Icons come through components/icon.tsx: ask for a glyph by name (<Icon name="channel" />). Add the glyph to `glyphs` there if it is missing. (D-97)',
+            });
+          }
+        };
+        return {
+          ImportDeclaration: check,
+          ExportNamedDeclaration: check,
+          ExportAllDeclaration: check,
+          ImportExpression: check,
+        };
+      },
+    },
     'no-test-code-import': {
       meta: { type: 'problem', schema: [] },
       create(context) {
@@ -357,6 +520,19 @@ export default defineConfig([
     files: ['apps/api/src/**/*.ts'],
     ignores: ['**/*.test.ts', 'apps/api/src/testing/**', '**/*.testing.ts'],
     rules: { 'purlay/no-test-code-import': 'error' },
+  },
+
+  // A raw visual value in a component is a lint error (D-52, D-97). Tests assert on
+  // values and the harness builds a DOM, so neither is a component.
+  {
+    files: ['apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx', 'apps/web/src/testing/**'],
+    rules: { 'purlay/no-raw-visual-value': 'error' },
+  },
+  {
+    files: ['apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx'],
+    ignores: ['apps/web/src/components/icon.tsx'],
+    rules: { 'purlay/icons-through-icon': 'error' },
   },
 
   // Command-line entry points. Their output *is* their interface, so the ban on

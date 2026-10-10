@@ -168,7 +168,14 @@ describe('the local verify runs everything CI runs', () => {
  * is stated once here rather than remembered per tool.
  */
 describe('build output stays outside the source tree', () => {
-  const projects = ['packages/types', 'packages/db', 'apps/api', 'apps/web', 'scripts'] as const;
+  const projects = [
+    'packages/types',
+    'packages/db',
+    'packages/tokens',
+    'apps/api',
+    'apps/web',
+    'scripts',
+  ] as const;
 
   for (const project of projects) {
     test(`${project} emits into .tsbuild`, () => {

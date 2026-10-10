@@ -1,2 +1,32 @@
-/* Tailwind, in one line — version 4 needs no config file and no content array. */
-@import 'tailwindcss';
+/*
+ * The application's stylesheet, and the whole of it.
+ *
+ * Tailwind arrives in two pieces rather than as `@import 'tailwindcss'`, and the
+ * piece that is missing is the point: its default theme — the palette, the
+ * spacing multiplier, the shadow and type scales — is never imported, so a class
+ * that is not a token does not exist. `bg-red-500` and `p-7` build to nothing
+ * instead of building to something nobody chose (D-97, `docs/spikes/design-tokens.md`).
+ *
+ * The vocabulary is generated from `packages/tokens/tokens.json`. Nothing below
+ * may hold a literal colour, length or duration: `src/styles.test.ts` refuses it.
+ */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/preflight.css' layer(base);
+@import '@purlay/tokens/tokens.css' layer(theme);
+@import '@purlay/tokens/theme.css';
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@layer base {
+  html {
+    background-color: var(--surface-100);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+
+  /* Keyboard focus is always visible and always the same (UX §8); a component never draws its own. */
+  :focus-visible {
+    outline: var(--stroke-focus) solid var(--focus-ring);
+    outline-offset: var(--size-focus-offset);
+  }
+}

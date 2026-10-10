@@ -5,7 +5,9 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "dependencies": {
+    "@purlay/tokens": "workspace:*",
     "@purlay/types": "workspace:*",
+    "lucide-react": "1.48.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

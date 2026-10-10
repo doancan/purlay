@@ -132,7 +132,16 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 - **No raw visual values anywhere** — colour, spacing, type size, radius, shadow, motion duration
   and easing come from the tokens, and a literal is a lint error. `mt-[13px]` is the obvious case;
   the rule covers the whole vocabulary. Consistency comes from having no way to be inconsistent,
-  not from remembering. (D-52)
+  not from remembering. (D-52, D-97)
+  - **The vocabulary is `packages/tokens/tokens.json`.** To add or change a value, edit that file
+    and run `bun run tokens:generate`; never edit `src/generated/`. The generator refuses an
+    unsound file, and refuses a colour pair that is not readable in both themes, so a change that
+    would ship an illegible interface fails before it is committed.
+  - **A class that is not a token does not exist.** Tailwind's default theme is not imported, so
+    `bg-red-500` and `p-7` build to nothing; `apps/web/src/styles.test.ts` fails on them, on a
+    typo, and on the classes Tailwind builds from a bare number (`z-50`, `duration-300`).
+  - **Icons through `Icon`.** `<Icon name="channel" />`; never `lucide-react` directly, never a
+    pixel size or a stroke width. A missing glyph is a line in `glyphs` in `components/icon.tsx`.
 - **Headless primitives for dialog, menu, combobox, tooltip and popover** (Radix). Focus
   management and ARIA are where hand-written components fail silently. Everything else is written
   here. (D-52)
