@@ -137,7 +137,7 @@ describe('delivery', () => {
     const view = await mount(
       props({
         delivery: 'failed',
-        failure: 'Too long.',
+        failure: 'VALIDATION_FAILED',
         onRetry: (id) => {
           retried += id === aMessage(1).id ? 1 : 0;
         },
@@ -149,7 +149,7 @@ describe('delivery', () => {
     expect(view.getByRole('article').className).toContain('border-danger');
     expect(view.getByRole('article').className).toContain('border-l-marker');
     expect(view.getByText('Failed to send')).toBeDefined();
-    expect(view.getByText('Too long.')).toBeDefined();
+    expect(view.getByText('That was refused. Check what you entered and try again.')).toBeDefined();
     const user = person();
     await user.click(view.getByRole('button', { name: 'Retry' }));
     await user.click(view.getByRole('button', { name: 'Delete' }));
@@ -160,7 +160,7 @@ describe('delivery', () => {
   test('failed with no reason says only what it knows', async () => {
     const view = await mount(props({ delivery: 'failed' }));
     expect(view.getByText('Failed to send')).toBeDefined();
-    expect(view.container.textContent).not.toContain('Too long');
+    expect(view.container.textContent).not.toContain('was refused');
   });
 });
 

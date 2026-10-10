@@ -16,7 +16,9 @@ import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useStore } from 'zustand';
 import { useApi } from '../data/api-provider';
 import { keys } from '../data/keys';
+import { useClientStorage } from '../data/storage-provider';
 import { useChannels } from '../data/queries';
+import { useSession } from '../features/session/session';
 import { useWorkspace } from '../features/shell/workspace';
 import { systemClock } from '../system-clock';
 import type { Clock } from './clock';
@@ -52,6 +54,8 @@ export const RealtimeProvider = ({
   const api = useApi();
   const client = useQueryClient();
   const { workspace } = useWorkspace();
+  const { user } = useSession();
+  const storage = useClientStorage();
   const channels = useChannels(workspace.id);
 
   const engine = useMemo(
@@ -64,12 +68,24 @@ export const RealtimeProvider = ({
         schedule: ports.schedule ?? browserSchedule,
         random: ports.random ?? Math.random,
         clock: ports.clock ?? systemClock,
+        userId: user.id,
+        storage,
         // The identity answer is what says whether the session is still there.
         onSessionEnded: () => {
           void client.invalidateQueries({ queryKey: keys.me });
         },
       }),
-    [api, client, ports.url, ports.openSocket, ports.schedule, ports.random, ports.clock],
+    [
+      api,
+      client,
+      user.id,
+      storage,
+      ports.url,
+      ports.openSocket,
+      ports.schedule,
+      ports.random,
+      ports.clock,
+    ],
   );
 
   useEffect(() => {

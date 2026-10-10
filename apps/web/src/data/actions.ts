@@ -28,6 +28,7 @@ import {
   reactionsUpdated,
   threadUpdated,
 } from './cache';
+import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
 
 export interface Actions {
@@ -43,7 +44,11 @@ export interface Actions {
   readonly signOut: () => Promise<void>;
 }
 
-export const createActions = (api: Api, client: QueryClient): Actions => {
+export const createActions = (
+  api: Api,
+  client: QueryClient,
+  storage: ClientStorage | null = null,
+): Actions => {
   const settled = (updated: Message): void => {
     // The root as the server now has it, in every list that shows it; and the
     // summary is what the open-questions view filters on.
@@ -92,8 +97,11 @@ export const createActions = (api: Api, client: QueryClient): Actions => {
     },
     signOut: async (): Promise<void> => {
       await api.signOut();
-      // Nothing cached belongs to the next person to sign in on this page.
+      // Nothing cached belongs to the next person to sign in on this page — nor does anything
+      // they wrote that the browser kept: a draft is keyed by channel and thread ids alone, so
+      // the next person opening the same conversation would otherwise find it.
       client.clear();
+      forgetPersonalData(storage);
     },
   };
 };

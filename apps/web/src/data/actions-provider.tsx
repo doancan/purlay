@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useMemo } from 'react';
 import { createActions, type Actions } from './actions';
 import { useApi } from './api-provider';
+import { useClientStorage } from './storage-provider';
 
 const ActionsContext = createContext<Actions | null>(null);
 
@@ -13,7 +14,8 @@ export const ActionsProvider = ({
 }): React.JSX.Element => {
   const api = useApi();
   const client = useQueryClient();
-  const actions = useMemo(() => createActions(api, client), [api, client]);
+  const storage = useClientStorage();
+  const actions = useMemo(() => createActions(api, client, storage), [api, client, storage]);
   return <ActionsContext.Provider value={actions}>{children}</ActionsContext.Provider>;
 };
 

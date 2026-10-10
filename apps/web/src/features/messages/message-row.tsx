@@ -21,6 +21,7 @@
 import { memo } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
+import { failureKey, type FailureCode } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Delivery } from '../../realtime/engine';
 import { cn } from '../../ui/cn';
@@ -33,7 +34,7 @@ export interface MessageRowProps {
   /** Where the message is on its way to the server; `sent` for everything the server has. */
   readonly delivery?: Delivery;
   /** Why a failed send failed, in the server's words when it said any. */
-  readonly failure?: string | null;
+  readonly failure?: FailureCode | null;
   /** The same author as the row above, within five minutes: no name, the time on hover. */
   readonly grouped?: boolean;
   readonly meId: string;
@@ -119,7 +120,9 @@ const MessageRowView = ({
           <div className="mt-1 flex flex-wrap items-center gap-2 text-label text-danger-text">
             <Icon name="failed" size="sm" />
             <span>{t('delivery.failed')}</span>
-            {failure !== null && <span className="text-caption text-ink-muted">{failure}</span>}
+            {failure !== null && (
+              <span className="text-caption text-ink-muted">{t(failureKey(failure))}</span>
+            )}
             <span aria-hidden="true">·</span>
             <button
               type="button"

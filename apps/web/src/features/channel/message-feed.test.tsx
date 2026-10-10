@@ -309,6 +309,50 @@ describe('older messages', () => {
     view.unmountAll();
   });
 
+  test('a page that keeps failing is asked for once and not in a loop; only Try again asks again', async () => {
+    let asks = 0;
+    const view = await mountChannel({
+      ...twoPages(() => {
+        asks += 1;
+        return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+      }),
+      topStaysInView: true,
+    });
+    await settle();
+    await settle();
+    expect(view.getByText("Couldn't load older messages")).toBeDefined();
+    // The first fetch, and the one retry the query client allows a transient failure: no more.
+    const afterSettling = asks;
+    await settle();
+    await settle();
+    expect(asks).toBe(afterSettling);
+    expect(afterSettling).toBeLessThanOrEqual(2);
+
+    await person().click(view.getByRole('button', { name: 'Try again' }));
+    await settle();
+    expect(asks).toBeGreaterThan(afterSettling);
+    view.unmountAll();
+  });
+
+  test('a thread link into history that fails to load is not chased in a loop either', async () => {
+    let asks = 0;
+    const view = await mountChannel({
+      ...twoPages(() => {
+        asks += 1;
+        return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+      }),
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(1)}`,
+    });
+    await settle();
+    await settle();
+    const afterSettling = asks;
+    await settle();
+    await settle();
+    expect(asks).toBe(afterSettling);
+    expect(afterSettling).toBeLessThanOrEqual(2);
+    view.unmountAll();
+  });
+
   test('a channel that fits on one page is not asked for more, and its observer is not left running', async () => {
     const view = await mountChannel({ messages: page(newer) });
     expect(view.feed.live.visible).toBe(0);

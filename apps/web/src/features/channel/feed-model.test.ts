@@ -68,7 +68,7 @@ describe('the order', () => {
       input({
         pending: [
           pendingOf(1, { delivery: 'sending' }),
-          pendingOf(2, { delivery: 'failed', reason: 'Too long.' }),
+          pendingOf(2, { delivery: 'failed', reason: 'VALIDATION_FAILED' }),
           pendingOf(3, { delivery: 'sent' }),
         ],
       }),
@@ -76,7 +76,7 @@ describe('the order', () => {
     const rows = items.filter((i) => i.kind === 'message');
     expect(rows.map((r) => [r.delivery, r.failure])).toEqual([
       ['sending', null],
-      ['failed', 'Too long.'],
+      ['failed', 'VALIDATION_FAILED'],
       ['sent', null],
     ]);
     expect(rows[0]).toMatchObject({ message: { sender: ME, parentId: null } });

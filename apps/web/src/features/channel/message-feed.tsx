@@ -330,22 +330,32 @@ export const MessageFeed = ({
   const announcement = useDeliveryAnnouncer(items);
 
   // Older pages load when the top comes into view, one at a time.
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
+  //
+  // **A page that failed is not asked for again by itself.** The observer reports "visible"
+  // whenever it is set up and the top row is on screen, and a failed fetch ends the fetching
+  // state, which sets it up anew: without the error check one outage was a loop of requests
+  // with no back-off, hammering the server while the row said "Try again". Only that button
+  // asks after a failure.
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = feed;
   useEffect(() => {
     const root = scroller.current;
     const target = top.current;
-    if (!ready || root === null || target === null || !hasNextPage) return undefined;
+    if (!ready || root === null || target === null || !hasNextPage || isFetchNextPageError) {
+      return undefined;
+    }
     return ports.whenVisible(target, root, () => {
       if (!isFetchingNextPage) void fetchNextPage();
     });
-  }, [ready, hasNextPage, isFetchingNextPage, fetchNextPage, ports]);
+  }, [ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, ports]);
 
   // A thread the address asks for may be older than the first page: read back until its root
   // is here or there is nothing older, one page at a time.
   const wanted = openThread !== null && !messages.some((m) => m.id === openThread);
   useEffect(() => {
-    if (wanted && ready && hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [wanted, ready, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (wanted && ready && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+      void fetchNextPage();
+    }
+  }, [wanted, ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   // One function for every row, so a row's props do not change when another row's do.
   const retry = useCallback(

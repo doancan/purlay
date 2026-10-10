@@ -57,6 +57,7 @@ export const renderApp = async (
         schedule: world.timers.schedule,
         queryClient: world.client,
         api,
+        storage: world.storage,
         realtime: {
           openSocket: world.sockets.openSocket,
           schedule: world.timers.schedule,
@@ -96,6 +97,8 @@ const makeWorld = ({
   readonly sockets: ReturnType<typeof fakeSockets>;
   /** The clock the realtime engine reads; fixed, so ids and times in a test are what it says. */
   readonly clock: { readonly now: () => Date };
+  /** What the page keeps in the browser: drafts, the last channel, unsent messages. */
+  readonly storage: ReturnType<typeof memoryStorage>;
   /** The page's cache, to seed before a render or to read after one. */
   readonly client: QueryClient;
 } => {
@@ -116,6 +119,7 @@ const makeWorld = ({
     },
     locale,
     sockets: fakeSockets(),
+    storage: memoryStorage(),
     clock: { now: () => new Date(Date.UTC(2026, 8, 9, 12, 0, 0)) },
   };
 };

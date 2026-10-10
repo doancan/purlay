@@ -10,6 +10,7 @@
  * when its echo arrives**: the id was final from the start (D-8), and a pending row whose
  * id the server's list already holds is dropped here rather than shown twice.
  */
+import type { FailureCode } from '../../data/failure';
 import type { Message, User } from '@purlay/types';
 import type { PendingMessage } from '../../realtime/engine';
 
@@ -22,7 +23,7 @@ export type FeedItem =
       readonly key: string;
       readonly message: Message;
       readonly delivery: 'sent' | 'sending' | 'failed';
-      readonly failure: string | null;
+      readonly failure: FailureCode | null;
       readonly grouped: boolean;
     }
   | { readonly kind: 'day'; readonly key: string; readonly label: string }
@@ -62,7 +63,7 @@ const asMessage = (pending: PendingMessage, me: User): Message => ({
 interface Entry {
   readonly message: Message;
   readonly delivery: 'sent' | 'sending' | 'failed';
-  readonly failure: string | null;
+  readonly failure: FailureCode | null;
 }
 
 export const buildFeed = ({

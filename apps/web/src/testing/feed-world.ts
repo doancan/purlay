@@ -84,6 +84,13 @@ export interface FeedWorld {
   readonly timers: FakeSchedule;
   /** The top sentinel came into view. */
   readonly sentinelVisible: () => void;
+  /**
+   * The top row is on screen and stays there, as it is for a short channel or a reader parked
+   * at the top. A real `IntersectionObserver` reports "visible" the moment it is set up and
+   * again every time it is set up anew, which is how a failing page turns into a loop; this
+   * makes the fake do the same (in a microtask, as the real one does).
+   */
+  stayInView: boolean;
   /** The scroller or its content changed size. */
   readonly resize: () => void;
   /** The page was hidden or shown. */
@@ -102,7 +109,8 @@ export const feedWorld = (start = new Date(Date.UTC(2026, 8, 9, 12, 0, 0))): Fee
   const visibility = new Set<() => void>();
   let shown = true;
   const live = { visible: 0, resized: 0, visibility: 0 };
-  return {
+  const world: FeedWorld = {
+    stayInView: false,
     timers,
     clock,
     live,
@@ -110,6 +118,11 @@ export const feedWorld = (start = new Date(Date.UTC(2026, 8, 9, 12, 0, 0))): Fee
       whenVisible: (_target, _root, onVisible) => {
         visible.add(onVisible);
         live.visible += 1;
+        if (world.stayInView) {
+          queueMicrotask(() => {
+            if (visible.has(onVisible)) onVisible();
+          });
+        }
         return (): void => {
           visible.delete(onVisible);
           live.visible -= 1;
@@ -146,4 +159,5 @@ export const feedWorld = (start = new Date(Date.UTC(2026, 8, 9, 12, 0, 0))): Fee
       for (const listener of visibility) listener();
     },
   };
+  return world;
 };

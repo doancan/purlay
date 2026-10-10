@@ -16,13 +16,27 @@
  *    never dropped without telling anybody.
  * 5. The server's `MESSAGE_CREATED` echo teaches the cache the real row and retires
  *    the pending one. A reconnect re-sends what was still `sending`.
+ * 6. What is in flight is kept in the browser, per person, and comes back after a reload
+ *    as `failed` with its Retry (`pending-store.ts`): a send is never dropped, including
+ *    by a tab that closed while it waited.
+ * 7. **What the server refuses is said, not swallowed.** A `SUBSCRIBE` it will not take, a
+ *    replay that cannot be finished, an error that answers nothing the client sent: each
+ *    leaves the channels it touches in `degraded`, which the connection bar shows with a
+ *    Retry. A channel that is gone for good (`CHANNEL_NOT_FOUND`, `FORBIDDEN`) is let go and
+ *    the list asked again, because live updates it will never have are not a state to show.
  *
  * Everything outside the process is an argument (the socket, the timers, the clock,
  * the dice), so a test drives a dropped connection by hand (D-46).
  */
 import type { QueryClient } from '@tanstack/react-query';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { messageId, type Channel, type ClientFrame, type ServerFrame } from '@purlay/types';
+import {
+  messageId,
+  type Channel,
+  type ClientFrame,
+  type ErrorCode,
+  type ServerFrame,
+} from '@purlay/types';
 import type { Api } from '../data/api';
 import {
   channelAdded,
@@ -32,8 +46,10 @@ import {
   reactionsUpdated,
   threadUpdated,
 } from '../data/cache';
-import { families } from '../data/keys';
+import type { ClientStorage } from '../data/browser-storage';
+import { codeOf, type FailureCode } from '../data/failure';
 import { isApiError } from '../data/errors';
+import { families, keys } from '../data/keys';
 import type { Clock } from './clock';
 import {
   createConnection,
@@ -42,10 +58,27 @@ import {
   type OpenSocket,
   type Schedule,
 } from './connection';
+import { loadStored, saveStored, type StoredMessage } from './pending-store';
 import { createServerClock } from './server-clock';
 
 /** How long a send may wait for its ACK before it is shown as failed (`UX.md` §3.1). */
 export const ACK_DEADLINE_MS = 3_000;
+
+/**
+ * How long a replay continuation waits before it asks again, and so how many times it tries:
+ * one more attempt after each wait. Capped — a feed with a hole in it is better refetched
+ * whole than chased forever — and short, because the person is looking at the channel.
+ */
+export const REPLAY_RETRY_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000];
+
+/** Refused for a reason waiting will not change: the channel is gone, or the person lost it. */
+const PERMANENT: ReadonlySet<string> = new Set(['CHANNEL_NOT_FOUND', 'FORBIDDEN']);
+
+/** The `degraded` key for an error that answers nothing the client can name. */
+export const UNNAMED = '*';
+
+/** What a channel in `degraded` was refused for: the server's code, or `REPLAY` for a gap that could not be filled. */
+export type DegradedReason = ErrorCode | 'REPLAY';
 
 export type Delivery = 'sending' | 'sent' | 'failed';
 
@@ -58,13 +91,15 @@ export interface PendingMessage {
   /** When the person sent it, by the corrected clock — the row's time until the echo says. */
   readonly createdAt: string;
   readonly delivery: Delivery;
-  /** Why it failed, in the server's words when it said any; null otherwise. */
-  readonly reason: string | null;
+  /** Why it failed, as a code a screen turns into words (`data/failure.ts`); null while it has not. */
+  readonly reason: FailureCode | null;
 }
 
 export interface RealtimeState {
   readonly status: ConnectionStatus;
   readonly pending: readonly PendingMessage[];
+  /** Channels whose live updates are not trustworthy right now, by what went wrong. */
+  readonly degraded: Readonly<Record<string, DegradedReason>>;
 }
 
 export interface Outgoing {
@@ -83,6 +118,10 @@ export interface EngineOptions {
   readonly clock: Clock;
   /** The session ended — signed out elsewhere, or expired. */
   readonly onSessionEnded: () => void;
+  /** Whose messages these are: what is kept for a reload is kept for this person alone. */
+  readonly userId: string;
+  /** Where unsent messages are kept; absent, nothing is. */
+  readonly storage?: ClientStorage | null;
 }
 
 export interface Engine {
@@ -96,6 +135,8 @@ export interface Engine {
   readonly retry: (id: string) => void;
   /** Removes a failed message the person does not want to resend. */
   readonly discard: (id: string) => void;
+  /** Asks again for every channel whose live updates were refused or interrupted. */
+  readonly retryDegraded: () => void;
 }
 
 const isSendAck = (
@@ -106,7 +147,19 @@ const isSendAck = (
 
 export const createEngine = (options: EngineOptions): Engine => {
   const { api, client, schedule } = options;
-  const store = createStore<RealtimeState>(() => ({ status: 'idle', pending: [] }));
+  const storage = options.storage ?? null;
+  // What a reload interrupted comes back as failed: it may have reached the server or not,
+  // and Retry — the same id — is right either way (D-8).
+  const restored: PendingMessage[] = loadStored(storage, options.userId).map((m) => ({
+    ...m,
+    delivery: 'failed',
+    reason: null,
+  }));
+  const store = createStore<RealtimeState>(() => ({
+    status: 'idle',
+    pending: restored,
+    degraded: {},
+  }));
   const serverClock = createServerClock(options.clock);
   const timers = new Map<string, () => void>();
   const watched = new Set<string>();
@@ -123,11 +176,46 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
   let connection: Connection | null = null;
   let opened = false;
+  // A stop that left sends waiting: the next open owes them what a reconnect owes.
+  let resumeOnOpen = false;
+  // Moves on every stop, so a continuation that was asleep when the page stopped does not wake into a dead engine.
+  let epoch = 0;
+  const wakers = new Set<() => void>();
+  const continuing = new Set<string>();
+  // Subscribe frames the connection has already reported as refused, so the ERROR that follows is not reported twice.
+  const reported = new Set<string>();
+
+  const persist = (pending: readonly PendingMessage[]): void => {
+    const keep: StoredMessage[] = pending
+      .filter((p) => p.delivery !== 'sent')
+      .map(({ id, channelId, parentId, content, createdAt }) => ({
+        id,
+        channelId,
+        parentId,
+        content,
+        createdAt,
+      }));
+    saveStored(storage, options.userId, keep);
+  };
 
   const change = (
     edit: (pending: readonly PendingMessage[]) => readonly PendingMessage[],
   ): void => {
     store.setState((state) => ({ pending: edit(state.pending) }));
+    persist(store.getState().pending);
+  };
+
+  const degrade = (channelIds: readonly string[], reason: DegradedReason): void => {
+    store.setState((state) => ({
+      degraded: { ...state.degraded, ...Object.fromEntries(channelIds.map((id) => [id, reason])) },
+    }));
+  };
+  const recover = (channelId: string): void => {
+    if (!(channelId in store.getState().degraded)) return;
+    store.setState((state) => {
+      const { [channelId]: _gone, ...rest } = state.degraded;
+      return { degraded: rest };
+    });
   };
   const update = (id: string, patch: Partial<PendingMessage>): void => {
     change((all) => all.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -139,7 +227,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     timers.delete(id);
     change((all) => all.filter((p) => p.id !== id));
   };
-  const fail = (id: string, reason: string): void => {
+  const fail = (id: string, reason: FailureCode): void => {
     timers.get(id)?.();
     timers.delete(id);
     if (find(id) !== undefined) update(id, { delivery: 'failed', reason });
@@ -156,7 +244,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       messageCreated(client, message);
       forget(pending.id);
     } catch (error) {
-      fail(pending.id, isApiError(error) ? error.message : 'The message could not be sent.');
+      fail(pending.id, codeOf(error));
     }
   };
 
@@ -179,7 +267,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       pending.id,
       schedule(() => {
         timers.delete(pending.id);
-        fail(pending.id, 'The server did not answer in time.');
+        fail(pending.id, 'TIMEOUT');
       }, ACK_DEADLINE_MS),
     );
   };
@@ -196,19 +284,76 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.channels });
   };
 
-  /** A replay that was one page: read on from the cursor until the present, then release the channel. */
-  const continueReplay = async (channelId: string, from: string): Promise<void> => {
+  /** Waits on the injected schedule; false when the page stopped meanwhile. */
+  const sleep = (ms: number): Promise<boolean> =>
+    new Promise((resolve) => {
+      const cancel = schedule(() => {
+        wakers.delete(wake);
+        resolve(true);
+      }, ms);
+      const wake = (): void => {
+        cancel();
+        resolve(false);
+      };
+      wakers.add(wake);
+    });
+
+  /** One pass over the pages from a cursor to the present. */
+  const readThrough = async (channelId: string, from: string): Promise<void> => {
     let cursor: string | null = from;
-    try {
-      while (cursor !== null) {
-        const page = await api.messages(channelId, { after: cursor });
-        for (const message of page.data) messageCreated(client, message);
-        cursor = page.nextCursor;
-      }
-      connection?.continuationDone(channelId, from);
-    } catch {
-      // The connection still holds the cursor: the next reconnect asks again.
+    while (cursor !== null) {
+      const page = await api.messages(channelId, { after: cursor });
+      for (const message of page.data) messageCreated(client, message);
+      cursor = page.nextCursor;
     }
+  };
+
+  /**
+   * A replay that was one page: read on from the cursor until the present, then release the
+   * channel. A failure is tried again after a wait, a few times; if it still fails the feed
+   * has a hole the cursor cannot be trusted to fill, so the channel's messages are asked for
+   * whole, from the server, and the channel is shown as degraded until that is done. One
+   * continuation per channel at a time: a second `ACK` for the same one does not start a
+   * parallel read.
+   */
+  const continueReplay = async (channelId: string, from: string): Promise<void> => {
+    if (continuing.has(channelId)) return;
+    continuing.add(channelId);
+    const mine = epoch;
+    try {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await readThrough(channelId, from);
+          if (mine !== epoch) return;
+          connection?.continuationDone(channelId, from);
+          recover(channelId);
+          return;
+        } catch {
+          if (mine !== epoch) return;
+          const wait = REPLAY_RETRY_DELAYS_MS[attempt];
+          if (wait === undefined) break;
+          if (!(await sleep(wait)) || mine !== epoch) return;
+        }
+      }
+      degrade([channelId], 'REPLAY');
+      void client.invalidateQueries({ queryKey: keys.messages(channelId) });
+    } finally {
+      continuing.delete(channelId);
+    }
+  };
+
+  /** A `SUBSCRIBE` the server will not take: said, and for a channel that is gone, let go. */
+  const refused = (channelIds: readonly string[], code: ErrorCode): void => {
+    if (PERMANENT.has(code)) {
+      for (const id of channelIds) {
+        watched.delete(id);
+        connection?.unwatch(id);
+        recover(id);
+      }
+      void client.invalidateQueries({ queryKey: families.channels });
+      return;
+    }
+    degrade(channelIds, code);
   };
 
   const onFrame = (frame: ServerFrame): void => {
@@ -227,7 +372,20 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       }
       case 'ERROR': {
-        if (frame.refId !== undefined) fail(frame.refId, frame.data.message);
+        const { refId } = frame;
+        if (refId !== undefined && find(refId) !== undefined) {
+          fail(refId, frame.data.code);
+        } else if (refId !== undefined && reported.delete(refId)) {
+          // A refused subscription the connection already told us about.
+        } else if (
+          frame.data.code === 'RATE_LIMITED' ||
+          frame.data.code === 'DATABASE_UNAVAILABLE'
+        ) {
+          // The connection sends the chunk again after a wait; nothing is lost yet.
+        } else {
+          // An error that answers nothing the client can name must still not be silent.
+          degrade([UNNAMED], frame.data.code);
+        }
         return;
       }
       case 'MESSAGE_CREATED': {
@@ -277,7 +435,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     store.setState({ status });
     if (status !== 'open') return;
     // The first open is the page loading; every later one is a return from a gap.
-    if (opened) resync();
+    if (opened || resumeOnOpen) resync();
+    resumeOnOpen = false;
     opened = true;
   };
 
@@ -300,6 +459,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       newId: () => messageId(serverClock.now()),
       onFrame,
       onStatus,
+      onSubscribeRefused: (channelIds, code, refId) => {
+        reported.add(refId);
+        refused(channelIds, code);
+      },
     });
 
   return {
@@ -316,6 +479,13 @@ export const createEngine = (options: EngineOptions): Engine => {
       connection?.stop();
       for (const cancel of timers.values()) cancel();
       timers.clear();
+      // Continuations asleep between attempts wake and end; the epoch tells a running one it is stale.
+      epoch += 1;
+      for (const wake of [...wakers]) wake();
+      wakers.clear();
+      continuing.clear();
+      // A send still waiting has lost its deadline timer with the rest: the next open owes it a re-send.
+      resumeOnOpen = store.getState().pending.some((p) => p.delivery === 'sending');
     },
     watch: (channelIds): void => {
       const wanted = new Set(channelIds);
@@ -357,6 +527,17 @@ export const createEngine = (options: EngineOptions): Engine => {
     },
     discard: (id): void => {
       if (find(id)?.delivery === 'failed') forget(id);
+    },
+    retryDegraded: (): void => {
+      const stale = Object.keys(store.getState().degraded).filter((id) => id !== UNNAMED);
+      store.setState({ degraded: {} });
+      // Unwatched and watched again, the channel is subscribed from its cursor as if new.
+      for (const id of stale) {
+        if (!watched.has(id)) continue;
+        connection?.unwatch(id);
+        connection?.watch(id);
+      }
+      void client.invalidateQueries({ queryKey: families.channels });
     },
   };
 };

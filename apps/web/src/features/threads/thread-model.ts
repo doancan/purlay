@@ -11,6 +11,7 @@
  * **A pending reply does not move when its echo arrives** — same id, same order — and one
  * whose id the server's list already holds is dropped here rather than shown twice.
  */
+import type { FailureCode } from '../../data/failure';
 import type { Message, User } from '@purlay/types';
 import type { PendingMessage } from '../../realtime/engine';
 import { GROUP_WINDOW_MS } from '../channel/feed-model';
@@ -19,7 +20,7 @@ export interface ReplyItem {
   readonly key: string;
   readonly message: Message;
   readonly delivery: 'sent' | 'sending' | 'failed';
-  readonly failure: string | null;
+  readonly failure: FailureCode | null;
   readonly grouped: boolean;
 }
 
@@ -49,7 +50,7 @@ const asReply = (pending: PendingMessage, me: User): Message => ({
 interface Entry {
   readonly message: Message;
   readonly delivery: ReplyItem['delivery'];
-  readonly failure: string | null;
+  readonly failure: FailureCode | null;
 }
 
 const byId = (a: Entry, b: Entry): number =>

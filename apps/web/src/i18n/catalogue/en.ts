@@ -276,6 +276,23 @@ export const en = {
   'questions.more': 'Load more questions',
   'questions.unnamed': 'A channel you can no longer see',
 
+  // ── Failures: one sentence per cause, shared by every screen ────────────
+  'failure.network': 'Check your connection and try again.',
+  'failure.session': 'Your session ended. Sign in again to carry on.',
+  'failure.gone':
+    'This is no longer available. It may have been removed, or you may have lost access.',
+  'failure.slow': 'You are going too fast. Wait a moment and try again.',
+  'failure.refused': 'That was refused. Check what you entered and try again.',
+  'failure.generic': 'Something went wrong on our side. Try again in a moment.',
+  'failure.signOut': "Couldn't sign you out. Try again.",
+  'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
+  'connection.degraded': {
+    one: 'Live updates are paused for {count} channel',
+    other: 'Live updates are paused for {count} channels',
+  },
+  'connection.stale': 'What you see may be out of date',
+  'message.link.opens': 'Opens {host}',
+
   // ── Theme and language ──────────────────────────────────────────────────
   'theme.label': 'Theme',
   'theme.system': 'System',

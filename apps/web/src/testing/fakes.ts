@@ -15,6 +15,9 @@ export interface MemoryStorage {
   readonly data: Record<string, string>;
   readonly getItem: (key: string) => string | null;
   readonly setItem: (key: string, value: string) => void;
+  readonly removeItem: (key: string) => void;
+  readonly key: (index: number) => string | null;
+  readonly length: number;
 }
 
 export const memoryStorage = (initial: Readonly<Record<string, string>> = {}): MemoryStorage => {
@@ -24,6 +27,13 @@ export const memoryStorage = (initial: Readonly<Record<string, string>> = {}): M
     getItem: (key): string | null => data[key] ?? null,
     setItem: (key, value): void => {
       data[key] = value;
+    },
+    removeItem: (key): void => {
+      delete data[key];
+    },
+    key: (index): string | null => Object.keys(data)[index] ?? null,
+    get length(): number {
+      return Object.keys(data).length;
     },
   };
 };

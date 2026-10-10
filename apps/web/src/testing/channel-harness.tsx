@@ -46,6 +46,8 @@ export interface ChannelOptions {
   /** The address the page starts at, for a channel opened by a link (`?thread=`). */
   readonly path?: string;
   readonly dark?: boolean;
+  /** The top row is on screen and stays there (see `FeedWorld.stayInView`). */
+  readonly topStaysInView?: boolean;
   /** Layout numbers the feed reads at the moment it mounts. */
   readonly layout?: Partial<Pick<ScrollMetrics, 'scrollHeight' | 'clientHeight' | 'markerTop'>>;
 }
@@ -86,6 +88,7 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
   metrics.clientHeight = options.layout?.clientHeight ?? 400;
   metrics.markerTop = options.layout?.markerTop ?? 0;
   const feed = feedWorld();
+  feed.stayInView = options.topStaysInView ?? false;
   let engine: Engine | null = null;
   const messages = options.messages ?? page([]);
   const api = aSignedInApi({

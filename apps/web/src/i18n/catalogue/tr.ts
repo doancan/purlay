@@ -266,6 +266,22 @@ export const tr = {
   'questions.more': 'Daha fazla soru yükle',
   'questions.unnamed': 'Artık göremediğin bir kanal',
 
+  // ── Hatalar: her neden için bir cümle, bütün ekranlarda ortak ──────────
+  'failure.network': 'Bağlantını kontrol edip tekrar dene.',
+  'failure.session': 'Oturumun sona erdi. Devam etmek için tekrar giriş yap.',
+  'failure.gone':
+    'Bu artık kullanılamıyor. Kaldırılmış olabilir ya da erişimini kaybetmiş olabilirsin.',
+  'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',
+  'failure.refused': 'Bu reddedildi. Girdiğini kontrol edip tekrar dene.',
+  'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
+  'failure.signOut': 'Çıkış yapılamadı. Tekrar dene.',
+  'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',
+  'connection.degraded': {
+    other: '{count} kanal için canlı güncellemeler durdu',
+  },
+  'connection.stale': 'Gördüklerin güncel olmayabilir',
+  'message.link.opens': '{host} adresini açar',
+
   // ── Tema ve dil ─────────────────────────────────────────────────────────
   'theme.label': 'Tema',
   'theme.system': 'Sistem',
