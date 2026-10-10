@@ -225,7 +225,7 @@ export const shellReady = async (page: Page): Promise<void> => {
 const sidebarOf = (page: Page): Locator => page.getByRole('complementary');
 
 /** Opens the sidebar if it is behind its toggle, and returns it. Safe to call when it is open. */
-export const openNav = async (page: Page): Promise<Locator> => {
+const openNav = async (page: Page): Promise<Locator> => {
   const toggle = page.getByRole('button', { name: 'Open navigation' });
   await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
   if (await toggle.isVisible()) await toggle.click();
