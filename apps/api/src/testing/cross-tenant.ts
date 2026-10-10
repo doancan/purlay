@@ -89,6 +89,18 @@ type Visibility =
   | { readonly kind: 'workspace-wide'; readonly query?: string }
   | { readonly kind: 'none'; readonly reason: string };
 
+/**
+ * What a body may need from the owner's side of a crossing and cannot derive: the
+ * owner themself (a direct message with a person who is certainly in the
+ * workspace) and a message of the owner's channel (a read position names one). The
+ * stranger's request carries the same body, which is how a refusal that came before
+ * the body was read is told from one that came after.
+ */
+export interface OwnerIds {
+  readonly userId: string;
+  readonly messageId: string;
+}
+
 export interface CrossTenantCase {
   /** What a stranger is told — and, identically, somebody naming an id that never existed. */
   readonly refusal: Extract<ErrorCode, 'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND'>;
@@ -96,7 +108,7 @@ export interface CrossTenantCase {
    * A body the owner's identical request succeeds with. Without it a `POST` would
    * be refused for its body, and the `404` would never have been reached.
    */
-  readonly body?: (now: Date) => unknown;
+  readonly body?: (now: Date, owner: OwnerIds) => unknown;
   readonly visibility: Visibility;
 }
 
@@ -123,6 +135,19 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/channels/:channelId': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'POST /api/workspaces/:workspaceId/dms': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: (_now, owner) => ({ userId: owner.userId }),
+    visibility: {
+      kind: 'none',
+      reason: 'opens a direct message; it returns only the one it opened',
+    },
+  },
+  'PUT /api/channels/:channelId/read': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (_now, owner) => ({ lastReadMessageId: owner.messageId }),
+    visibility: CHANNEL,
+  },
   'POST /api/channels/:channelId/messages': {
     refusal: 'CHANNEL_NOT_FOUND',
     body: (now) => ({ id: messageId(now), content: 'crossing' }),
