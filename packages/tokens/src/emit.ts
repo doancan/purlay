@@ -33,6 +33,7 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-header': '--height-header',
   // A badge is a height and a minimum width: one digit is a circle, two are not.
   'size-badge': ['--height-badge', '--container-badge'],
+  'size-code-clamp': '--height-code',
   'size-dialog': '--container-dialog',
   'size-palette': '--container-palette',
   'size-toast': '--container-toast',
@@ -53,6 +54,7 @@ const ICON_STROKE = 'stroke-icon';
 const STROKE_BINDING: Readonly<Record<string, string>> = {
   'stroke-hairline': '--border-width-hairline',
   'stroke-focus': '--outline-width-focus',
+  'stroke-marker': '--border-width-marker',
 };
 
 const HEADER = `Generated from tokens.json by \`bun run tokens:generate\`. Do not edit: the build

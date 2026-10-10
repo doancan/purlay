@@ -64,6 +64,7 @@
   --height-badge: var(--size-badge);
   --container-badge: var(--size-badge);
   --size-dot: var(--size-dot);
+  --height-code: var(--size-code-clamp);
   --container-dialog: var(--size-dialog);
   --container-palette: var(--size-palette);
   --container-toast: var(--size-toast);
@@ -77,6 +78,7 @@
   /* Stroke widths */
   --border-width-hairline: var(--stroke-hairline);
   --outline-width-focus: var(--stroke-focus);
+  --border-width-marker: var(--stroke-marker);
 
   /* Stacking: z- */
   --z-index-sticky: var(--z-sticky);

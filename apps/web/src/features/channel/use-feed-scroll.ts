@@ -1,0 +1,145 @@
+/**
+ * The feed's scroll behaviour (`UX.md` §6): the rules, as one hook.
+ *
+ * - **Anchor on read position, not on the bottom.** A reader scrolled up is not moved by
+ *   anything arriving below, and older pages loaded above do not move them either
+ *   (`restoreAfterPrepend`). A "N new messages ↓" pill says what is waiting.
+ * - **Stick to the bottom only when already at the bottom** (within 80px) — and always
+ *   after the person's own send, which they expect to see.
+ * - **A channel opens where the reader's place is**: at the unread marker when there is
+ *   one, at the bottom when there is not.
+ * - **It keeps its place when the box around it changes size** — the composer growing a
+ *   line, a late-arriving highlight — while at the bottom.
+ *
+ * What is measured and what is observed come through `FeedPorts`, so a test sets the
+ * numbers an element would have and fires the observers by hand.
+ */
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import type { FeedItem } from './feed-model';
+import type { FeedPorts } from './feed-ports';
+import { MARKER_MARGIN_PX, isNearBottom, restoreAfterPrepend, scrollToBottom } from './scroll';
+
+export interface FeedScroll {
+  /** Is the reader at the bottom right now? */
+  readonly atBottom: boolean;
+  /** How many messages from other people arrived below while the reader was scrolled up. */
+  readonly newBelow: number;
+  readonly onScroll: () => void;
+  readonly jumpToBottom: () => void;
+}
+
+interface Options {
+  readonly scroller: React.RefObject<HTMLElement | null>;
+  readonly content: React.RefObject<HTMLElement | null>;
+  readonly items: readonly FeedItem[];
+  /** The first page is in: until then there is nothing to place the reader in. */
+  readonly ready: boolean;
+  readonly meId: string;
+  readonly ports: FeedPorts;
+}
+
+const messageIds = (items: readonly FeedItem[]): { first: string | null; last: string | null } => {
+  let first: string | null = null;
+  let last: string | null = null;
+  for (const item of items) {
+    if (item.kind !== 'message') continue;
+    first ??= item.message.id;
+    last = item.message.id;
+  }
+  return { first, last };
+};
+
+export const useFeedScroll = ({
+  scroller,
+  content,
+  items,
+  ready,
+  meId,
+  ports,
+}: Options): FeedScroll => {
+  const [atBottom, setAtBottom] = useState(true);
+  const [newBelow, setNewBelow] = useState(0);
+  // The truth as of the last scroll or placement, read before an update lands: whether the
+  // reader *was* at the bottom is what decides whether to follow what arrived.
+  const wasAtBottom = useRef(true);
+  const placed = useRef(false);
+  const before = useRef({
+    first: null as string | null,
+    last: null as string | null,
+    top: 0,
+    height: 0,
+  });
+
+  const settle = useCallback((el: HTMLElement): void => {
+    const near = isNearBottom(el);
+    wasAtBottom.current = near;
+    setAtBottom(near);
+    if (near) setNewBelow(0);
+  }, []);
+
+  const onScroll = useCallback((): void => {
+    const el = scroller.current;
+    if (el === null) return;
+    settle(el);
+    // Where the reader is *now* is what a later prepend must give back to them.
+    before.current = { ...before.current, top: el.scrollTop, height: el.scrollHeight };
+  }, [scroller, settle]);
+
+  const jumpToBottom = useCallback((): void => {
+    const el = scroller.current;
+    if (el === null) return;
+    scrollToBottom(el);
+    settle(el);
+  }, [scroller, settle]);
+
+  // Runs after every change to the list, before the browser paints it.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el === null || !ready) return;
+    const { first, last } = messageIds(items);
+    const previous = before.current;
+
+    if (!placed.current) {
+      // Opening: the marker if there is one, else the bottom.
+      const marker = el.querySelector<HTMLElement>('[data-feed-marker]');
+      if (marker === null) scrollToBottom(el);
+      else el.scrollTop = Math.max(0, marker.offsetTop - MARKER_MARGIN_PX);
+      placed.current = true;
+      settle(el);
+    } else if (previous.first !== null && first !== null && first < previous.first) {
+      // Older messages arrived above the reader.
+      restoreAfterPrepend(el, { scrollTop: previous.top, scrollHeight: previous.height });
+      settle(el);
+    } else if (last !== previous.last) {
+      const own =
+        [...items].reverse().find((item) => item.kind === 'message')?.message.sender.id === meId;
+      if (wasAtBottom.current || own) {
+        scrollToBottom(el);
+        settle(el);
+      } else {
+        const arrived = items.filter(
+          (item) =>
+            item.kind === 'message' &&
+            previous.last !== null &&
+            item.message.id > previous.last &&
+            item.message.sender.id !== meId,
+        ).length;
+        setNewBelow((count) => count + arrived);
+      }
+    }
+    before.current = { first, last, top: el.scrollTop, height: el.scrollHeight };
+  }, [items, ready, meId, scroller, settle]);
+
+  // The box around the feed or the content inside it changed size: a reader at the bottom stays there.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const inner = content.current;
+    if (el === null || inner === null) return undefined;
+    return ports.whenResized([el, inner], () => {
+      if (wasAtBottom.current) scrollToBottom(el);
+      before.current = { ...before.current, top: el.scrollTop, height: el.scrollHeight };
+    });
+  }, [scroller, content, ports]);
+
+  return { atBottom, newBelow, onScroll, jumpToBottom };
+};

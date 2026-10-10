@@ -88,6 +88,7 @@
   --size-gutter: 56px;
   --size-badge: 18px;
   --size-dot: 8px;
+  --size-code-clamp: 280px;
   --size-dialog: 480px;
   --size-palette: 560px;
   --size-toast: 360px;
@@ -103,6 +104,7 @@
   --z-toast: 50;
   --stroke-hairline: 1px;
   --stroke-focus: 2px;
+  --stroke-marker: 2px;
   --stroke-icon: 2.25px;
   --duration-collapse: 120ms;
   --duration-bar: 120ms;
