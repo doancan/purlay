@@ -66,6 +66,7 @@
   --size-dot: var(--size-dot);
   --container-dialog: var(--size-dialog);
   --container-palette: var(--size-palette);
+  --height-palette-list: var(--size-palette-list);
   --container-toast: var(--size-toast);
   --size-avatar: var(--size-avatar);
   --outline-offset-focus: var(--size-focus-offset);

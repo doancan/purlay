@@ -35,6 +35,7 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-badge': ['--height-badge', '--container-badge'],
   'size-dialog': '--container-dialog',
   'size-palette': '--container-palette',
+  'size-palette-list': '--height-palette-list',
   'size-toast': '--container-toast',
   'size-avatar': '--size-avatar',
   'size-dot': '--size-dot',
