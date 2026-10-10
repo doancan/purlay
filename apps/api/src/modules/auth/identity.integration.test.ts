@@ -7,7 +7,7 @@
  * claims.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback } from '@purlay/db';
+import { closeIntegrationDatabase, sql, withRollback } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { GitHubEmail, GitHubProfile } from './github';
@@ -425,6 +425,103 @@ describe('integration: GitHub identity', () => {
         .where('github_id', '=', '21')
         .execute();
       expect(rows).toHaveLength(1);
+    });
+  });
+});
+
+/**
+ * The window between the lookups and the insert, held open by a trigger that does what the
+ * other half of a double-clicked callback does there: it writes a row first. The old
+ * statement named `github_id` as the only key it would resolve, so a row that collided on
+ * `email` instead — committed after that key was checked and before this one — surfaced as a
+ * stranger holding the address, and a person who had done nothing wrong was refused (D-78).
+ */
+describe('integration: a row that appears between the lookups and the insert', () => {
+  const rivalBeforeInsert = async (
+    db: Parameters<Parameters<typeof withRollback>[0]>[0],
+    row: { github_id: string; email: string; username: string; deleted: boolean },
+  ): Promise<void> => {
+    await sql`
+      create function rival_first() returns trigger language plpgsql as $$
+      begin
+        if new.username <> ${sql.lit(row.username)}
+           and not exists (select 1 from users where username = ${sql.lit(row.username)}) then
+          insert into users (github_id, email, username, display_name, deleted_at)
+          values (${sql.lit(row.github_id)}, ${sql.lit(row.email)}, ${sql.lit(row.username)}, 'first', ${sql.raw(row.deleted ? 'now()' : 'null')});
+        end if;
+        return new;
+      end $$
+    `.execute(db);
+    await sql`create trigger rival before insert on users for each row execute function rival_first()`.execute(
+      db,
+    );
+  };
+
+  test('the same account arriving first is refreshed, not refused', async () => {
+    await withRollback(async (db) => {
+      await rivalBeforeInsert(db, {
+        github_id: '4101',
+        email: 'rival@example.test',
+        username: 'rival-first',
+        deleted: false,
+      });
+      const { userId } = await resolveIdentity(
+        db,
+        clock,
+        account({ id: 4101, login: 'octocat-race', name: 'Second Callback' }),
+        verified('rival@example.test'),
+      );
+      const rows = await db
+        .selectFrom('users')
+        .select(['id', 'username', 'display_name'])
+        .where('github_id', '=', '4101')
+        .execute();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        id: userId,
+        username: 'rival-first',
+        display_name: 'Second Callback',
+      });
+    });
+  });
+
+  test('a stranger arriving first with the address is the conflict it always was', async () => {
+    await withRollback(async (db) => {
+      await rivalBeforeInsert(db, {
+        github_id: '4102',
+        email: 'taken@example.test',
+        username: 'rival-stranger',
+        deleted: false,
+      });
+      const refusal = await refusalFrom(() =>
+        resolveIdentity(
+          db,
+          clock,
+          account({ id: 4103, login: 'octocat-late' }),
+          verified('taken@example.test'),
+        ),
+      );
+      expect(refusal.body.code).toBe('ACCOUNT_EMAIL_CONFLICT');
+    });
+  });
+
+  test('an account that was deleted in that instant has nothing to refresh and nothing to create', async () => {
+    await withRollback(async (db) => {
+      await rivalBeforeInsert(db, {
+        github_id: '4104',
+        email: 'gone@example.test',
+        username: 'rival-gone',
+        deleted: true,
+      });
+      const refusal = await refusalFrom(() =>
+        resolveIdentity(
+          db,
+          clock,
+          account({ id: 4104, login: 'octocat-gone' }),
+          verified('other@example.test'),
+        ),
+      );
+      expect(refusal.body.code).toBe('INTERNAL');
     });
   });
 });
