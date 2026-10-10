@@ -27,7 +27,7 @@ export interface Formatters {
   readonly number: (value: number) => string;
 }
 
-export interface DayWords {
+interface DayWords {
   readonly today: string;
   readonly yesterday: string;
 }

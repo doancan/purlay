@@ -6,6 +6,24 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-10: the client's foundations, in both themes and two languages (D-98)
+
+- **Light and dark ship together.** The theme is the operating system's until a person chooses, kept per
+  device, and set before first paint by a same-origin script (no inline script for a content security
+  policy to refuse). A development gallery shows every primitive and state in both themes at once.
+- **English and Turkish from the first screen**, on `Intl` and typed catalogues: a missing or misspelt
+  key is a compile error, plurals are the platform's decision, and each language is its own chunk.
+- **A typed router of our own** (a route table, `Link`, `useRoute`), no dependency; `Link` is a real
+  anchor that takes over only a plain left click.
+- **Primitives on Radix** (dialog, menu, tooltip) and written here (button, text field, toast, states),
+  every class a token. Two accessibility defects only a test could find are fixed: a controlled dialog
+  returned focus to the page's top, and its auto-focused close button opened a tooltip that swallowed the
+  first Escape.
+- **The application frame:** a skip link, one `<main>`, and focus that moves to it when the address
+  changes — a client-side navigation otherwise leaves a keyboard user on the link they pressed.
+- Component tests run `axe` on every primitive in each state; the helper is itself tested to fail on an
+  inaccessible page. Dialog, palette and toast widths are tokens.
+
 ### Feature — 2026-10-10: the visual vocabulary is one file, and the build judges it (#137)
 
 - `packages/tokens/tokens.json` holds every colour in both themes, the scales and the type styles;

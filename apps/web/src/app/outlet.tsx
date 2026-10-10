@@ -21,10 +21,28 @@ import { buttonStyle } from '../ui/button';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { EmptyState } from '../ui/states';
 
+declare global {
+  /**
+   * The build flag this file reads, typed where it is read. It is read with **dot
+   * access** and never by index: Vite replaces `import.meta.env.VITE_GALLERY` with a
+   * literal, which lets the bundler see `false || false` and drop the gallery's
+   * chunk, where `import.meta.env['VITE_GALLERY']` is replaced by a whole object
+   * that cannot be folded (measured: the chunk stayed in a production build). Not a
+   * `.d.ts` file because a declaration file beside a source file is what the build
+   * check refuses, as compiled output.
+   */
+  interface ImportMetaEnv {
+    /** `1` builds the development gallery into this build. */
+    readonly VITE_GALLERY?: string;
+  }
+}
+
+/** The gallery's chunk. A function of its own so a test can ask for it without the build flag. */
+export const loadGallery = (): Promise<{ default: ComponentType }> =>
+  import('../gallery/gallery').then((module) => ({ default: module.Gallery }));
+
 const defaultGallery: ComponentType | null =
-  import.meta.env.DEV || import.meta.env['VITE_GALLERY'] === '1'
-    ? lazy(() => import('../gallery/gallery').then((module) => ({ default: module.Gallery })))
-    : null;
+  import.meta.env.DEV || import.meta.env.VITE_GALLERY === '1' ? lazy(loadGallery) : null;
 
 const Placeholder = (): React.JSX.Element => {
   const { t } = useI18n();

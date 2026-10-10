@@ -12,7 +12,8 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { expectNoAxeViolations } from '../testing/axe';
 import { renderApp } from '../testing/render';
 import { App } from './app';
-import { Outlet } from './outlet';
+import { Outlet, loadGallery } from './outlet';
+import { Gallery } from '../gallery/gallery';
 import { AppSkeleton } from './skeleton';
 import { AppProviders } from './providers';
 import { fakeColourScheme, fakeHistory, fakeSchedule, memoryStorage } from '../testing/fakes';
@@ -149,6 +150,12 @@ describe('the gallery route', () => {
       await Promise.resolve();
     });
     expect(await findByRole('heading', { name: 'arrived' })).toBeDefined();
+  });
+});
+
+describe('the gallery chunk', () => {
+  test('loads as the gallery, so the build flag only decides whether anything asks for it', async () => {
+    expect((await loadGallery()).default).toBe(Gallery);
   });
 });
 

@@ -45,7 +45,7 @@ export interface DarkQuery {
 }
 
 /** The part of `<html>` this writes. */
-export interface ThemeTarget {
+interface ThemeTarget {
   setAttribute(name: string, value: string): void;
 }
 
@@ -62,7 +62,7 @@ export const parseChoice = (raw: string | null): ThemeChoice =>
 export const resolveTheme = (choice: ThemeChoice, prefersDark: boolean): ResolvedTheme =>
   choice === 'system' ? (prefersDark ? 'dark' : 'light') : choice;
 
-export interface ThemeState {
+interface ThemeState {
   readonly choice: ThemeChoice;
   readonly resolved: ResolvedTheme;
   readonly setChoice: (choice: ThemeChoice) => void;

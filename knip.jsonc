@@ -20,12 +20,20 @@
       ],
     },
     "apps/web": {
-      // THE ONE EXEMPTION. The realtime client library and the browser clock
+      // The first exemption. The realtime client library and the browser clock
       // that feeds it are finished and tested, and nothing imports them until the
       // client store lands (#26). Listing them as entries keeps their exports
       // out of the report until then; delete this array when #26 merges and
       // knip will say which exports, if any, the store left unused.
       "entry": ["src/realtime/*.ts", "src/system-clock.ts"],
+
+      // A second, different kind: a dependency named only by a *string*.
+      // `testing/radix-preload.ts` calls `mock.module('@radix-ui/react-use-layout-effect')`,
+      // which is how Radix portals mount in a test DOM that registers after Radix is
+      // imported. Knip reads imports, not strings, so it sees a devDependency nothing
+      // uses; it is the one thing the preload needs and the package is a direct
+      // devDependency for no other reason (#138).
+      "ignoreDependencies": ["@radix-ui/react-use-layout-effect"],
     },
   },
 }

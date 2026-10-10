@@ -59,6 +59,23 @@ describe('the gallery', () => {
     expect(queryByRole('dialog')).toBeNull();
   });
 
+  test('its controls do nothing, and can be pressed without harm', async () => {
+    const { getAllByRole, getByRole } = await renderApp(
+      <>
+        <Gallery />
+        <Toaster dismissLabel="Close" />
+      </>,
+    );
+    const [retry] = getAllByRole('button', { name: 'Retry' });
+    if (retry === undefined) throw new Error('the gallery shows a failed state with a Retry');
+    await person().click(retry);
+    await person().click(getByRole('button', { name: 'Menu' }));
+    await person().click(getByRole('menuitem', { name: 'Settings' }));
+    await person().click(getByRole('button', { name: 'Show toast' }));
+    await person().click(getByRole('button', { name: 'Undo' }));
+    expect(getByRole('button', { name: 'Show toast' })).toBeDefined();
+  });
+
   test('its toast is live', async () => {
     // The frame mounts the toast region; the gallery alone does not.
     const { getByRole, getAllByRole } = await renderApp(

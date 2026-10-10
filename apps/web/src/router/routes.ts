@@ -12,7 +12,7 @@
  * library: the client has a handful of routes, and 15–25 KB of the 250 KB budget
  * is a poor price for matching a path and calling `history.pushState`.
  */
-export const ROUTES = {
+const ROUTES = {
   signIn: '/sign-in',
   home: '/',
   workspace: '/w/:slug',

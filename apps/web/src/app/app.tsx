@@ -22,7 +22,7 @@ import { AppProviders, type AppPorts } from './providers';
 import { AppSkeleton } from './skeleton';
 
 /** The element every screen renders into; the skip link points here. */
-export const MAIN_ID = 'main';
+const MAIN_ID = 'main';
 
 const Frame = (): React.JSX.Element => {
   const { t } = useI18n();

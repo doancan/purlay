@@ -29,14 +29,14 @@ import { IconButton } from './icon-button';
 /** Long enough to read a sentence and reach for Undo; short enough not to pile up. */
 export const TOAST_DURATION_MS = 6_000;
 
-export interface ToastInput {
+interface ToastInput {
   readonly message: string;
   readonly actionLabel?: string;
   readonly onAction?: () => void;
   readonly durationMs?: number;
 }
 
-export interface Toast {
+interface Toast {
   readonly id: number;
   readonly message: string;
   readonly action: { readonly label: string; readonly run: () => void } | null;

@@ -36,6 +36,9 @@ import { useToast } from '../ui/toast';
 
 type SpecimenTheme = 'dark' | 'light';
 
+/** What a gallery control does: nothing, on purpose — it is here to be looked at. */
+const noop = (): void => undefined;
+
 const Section = ({
   title,
   children,
@@ -169,7 +172,7 @@ const Specimen = (): React.JSX.Element => (
         title="Couldn't load messages"
         body="The server did not answer. Your draft is safe."
         retryLabel="Retry"
-        onRetry={() => undefined}
+        onRetry={noop}
       />
     </Section>
   </div>
@@ -191,14 +194,14 @@ const Overlays = (): React.JSX.Element => {
         </Button>
         <Menu trigger={<Button glyph="person">Menu</Button>}>
           <MenuLabel>alice</MenuLabel>
-          <MenuItem onSelect={() => undefined} glyph="settings">
+          <MenuItem onSelect={noop} glyph="settings">
             Settings
           </MenuItem>
-          <MenuItem onSelect={() => undefined} glyph="shortcuts" shortcut="⌘/">
+          <MenuItem onSelect={noop} glyph="shortcuts" shortcut="⌘/">
             Shortcuts
           </MenuItem>
           <MenuSeparator />
-          <MenuItem onSelect={() => undefined} glyph="sign-out" tone="danger">
+          <MenuItem onSelect={noop} glyph="sign-out" tone="danger">
             Sign out
           </MenuItem>
         </Menu>
@@ -207,7 +210,7 @@ const Overlays = (): React.JSX.Element => {
             show({
               message: 'Pasted text became a code block',
               actionLabel: 'Undo',
-              onAction: () => undefined,
+              onAction: noop,
             });
           }}
         >

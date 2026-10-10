@@ -14,9 +14,9 @@
  */
 import type { en } from './catalogue/en';
 
-export type PluralCategory = 'zero' | 'one' | 'two' | 'few' | 'many';
+type PluralCategory = 'zero' | 'one' | 'two' | 'few' | 'many';
 
-export type PluralMessage = Readonly<Partial<Record<PluralCategory, string>> & { other: string }>;
+type PluralMessage = Readonly<Partial<Record<PluralCategory, string>> & { other: string }>;
 
 export type Message = string | PluralMessage;
 
@@ -50,14 +50,13 @@ type IsPlural<K extends MessageKey> = (typeof en)[K] extends string ? false : tr
  * `count` as a number where the message is a plural (the count both picks the
  * form and is usually shown).
  */
-export type ParamsOf<K extends MessageKey> = {
+type ParamsOf<K extends MessageKey> = {
   readonly [N in NamesIn<TemplateOf<(typeof en)[K]>>]: N extends 'count' ? number : string | number;
 } & (IsPlural<K> extends true ? { readonly count: number } : unknown);
 
 type NeedsParams<K extends MessageKey> = keyof ParamsOf<K> extends never ? false : true;
 
 /** The arguments after the key: none for a plain string, the params object otherwise. */
-export type TranslateArgs<K extends MessageKey> =
-  NeedsParams<K> extends true ? [params: ParamsOf<K>] : [];
+type TranslateArgs<K extends MessageKey> = NeedsParams<K> extends true ? [params: ParamsOf<K>] : [];
 
 export type Translate = <K extends MessageKey>(key: K, ...args: TranslateArgs<K>) => string;
