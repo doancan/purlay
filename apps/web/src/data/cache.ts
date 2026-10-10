@@ -77,6 +77,22 @@ export const patchMessage = (
 };
 
 /**
+ * A list with nothing cached yet that is being fetched *now* was asked for before this message
+ * existed, and its answer may have been written before it too: left alone, the message would be
+ * counted and announced and then missing from the screen until something else reloaded it
+ * (found in a browser: a reply sent while its thread was still opening). Asking again, the
+ * in-flight request is cancelled in favour of one that starts after the message.
+ */
+const askAgainIfOnItsWay = (client: QueryClient, key: readonly unknown[]): void => {
+  if (client.isFetching({ queryKey: key, exact: true }) === 0) return;
+  // Invalidating alone would join the request already in flight when there is no data yet to
+  // set aside; it has to be let go of first.
+  void client
+    .cancelQueries({ queryKey: key, exact: true })
+    .then(() => client.invalidateQueries({ queryKey: key, exact: true, refetchType: 'all' }));
+};
+
+/**
  * A message arrived — live, replayed, or the echo of one's own send.
  *
  * A root goes into its channel's feed, a reply into its thread's list, each only if
@@ -87,6 +103,7 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
   if (message.parentId === null) {
     const key = keys.messages(message.channelId);
     const cached = client.getQueryData<Pages>(key);
+    if (cached === undefined) askAgainIfOnItsWay(client, key);
     if (cached !== undefined) {
       const [first, ...rest] = cached.pages;
       if (first !== undefined) {
@@ -99,6 +116,7 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
   } else {
     const key = keys.thread(message.parentId);
     const cached = client.getQueryData<Pages>(key);
+    if (cached === undefined) askAgainIfOnItsWay(client, key);
     const last = cached?.pages.at(-1);
     if (cached !== undefined && last !== undefined) {
       client.setQueryData<Pages>(key, {

@@ -148,13 +148,20 @@ export interface RoomOptions {
 /** A channel of its own, with its people in it and its history written. */
 export const makeRoom = async (tenant: Tenant, options: RoomOptions = {}): Promise<Room> => {
   const members = options.members ?? ['dogancan', 'alice'];
-  const creator = members[0] ?? 'dogancan';
+  // The write budget is per person, and a test drives its people through the page as well as
+  // the API: four projects at once making rooms as them would spend the budget the page needs
+  // to send with (the server answers `RATE_LIMITED`, and the row rightly fails). So a person
+  // who is not in the test makes the room, and joins it with whoever else is not the test's.
+  const outsider = (['carol', 'bob', 'alice'] as const).find((person) => !members.includes(person));
+  const creator = outsider ?? members.find((person) => person !== 'dogancan') ?? 'dogancan';
   const name = uniqueName('room');
   const made = await apiAs(tenant, creator).post<{ id: string }>(
     `/api/workspaces/${tenant.workspaceId}/channels`,
     { name, topic: 'a channel a test made for itself' },
   );
-  for (const person of members.slice(1)) await apiAs(tenant, person).join(made.id);
+  for (const person of members.filter((member) => member !== creator)) {
+    await apiAs(tenant, person).join(made.id);
+  }
   for (const message of options.messages ?? []) {
     await apiAs(tenant, message.by).say(made.id, message.text);
   }

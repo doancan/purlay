@@ -695,6 +695,30 @@ describe('the keyboard (UX §7)', () => {
     view.unmountAll();
   });
 
+  test("Esc on the question itself folds the thread under it, and a thread left open never takes the feed's Esc", async () => {
+    const view = await mount();
+    await showThread(view);
+    const root = rowOf(view, messageIdAt(ROOT));
+    act(() => {
+      root.focus();
+    });
+    key(root, 'Escape');
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    expect(document.activeElement).toBe(root);
+
+    // With a thread open and the person on some *other* message, Esc goes to the channel's
+    // composer — not to the reply box of the thread that is open, which comes first in the page.
+    await showThread(view);
+    const other = rowOf(view, messageIdAt(1));
+    act(() => {
+      other.focus();
+    });
+    key(other, 'Escape');
+    expect(document.activeElement).toBe(view.getByLabelText('Message api'));
+    view.unmountAll();
+  });
+
   test('the hover Reply does what R does', async () => {
     const view = await mount();
     await person().click(
@@ -788,6 +812,42 @@ describe('the root stays where it is', () => {
     end = 470;
     await arrive(view, { event: 'MESSAGE_CREATED', data: reply(7), ts: 1 });
     expect(view.metrics.assigned.length).toBeGreaterThan(count);
+    spy.mockRestore();
+    view.unmountAll();
+  });
+});
+
+describe('the end of a thread, when the reader is moved by something else', () => {
+  test('a scroll is not mistaken for growth: the reader who is taken elsewhere is not dragged back', async () => {
+    const view = await mount({ layout: { scrollHeight: 2000, clientHeight: 400 } });
+    connect(view);
+    // The end of the thread is fixed in the *content* (at 380); where it is on screen is the
+    // content position less wherever the reader has scrolled to.
+    const spy = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ): DOMRect {
+      const isScroller = this.className.includes('overflow-y-auto');
+      const bottom = isScroller ? 400 : 380 - view.metrics.top;
+      return {
+        top: isScroller ? 0 : bottom,
+        bottom,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: bottom,
+        toJSON: (): object => ({}),
+      };
+    });
+    view.metrics.top = 1600;
+    await showThread(view);
+    // The reader is taken to the thread (a link to it scrolls it into view) and a reply lands: the
+    // thread's box grew by a few pixels, not by the sixteen hundred the reader was just carried.
+    view.metrics.top = 0;
+    const count = view.metrics.assigned.length;
+    await arrive(view, { event: 'MESSAGE_CREATED', data: reply(7), ts: 1 });
+    expect(view.metrics.assigned.slice(count).filter((top) => top > 400)).toEqual([]);
     spy.mockRestore();
     view.unmountAll();
   });

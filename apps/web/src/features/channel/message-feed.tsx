@@ -81,11 +81,21 @@ const useDeliveryAnnouncer = (items: readonly FeedItem[]): string => {
   return said;
 };
 
-/** The composer, wherever the screen put it: the one text box in this region that is for writing. */
-const composerIn = (region: Element | null): HTMLElement | null =>
-  region?.querySelector<HTMLElement>('[data-composer]') ??
-  region?.querySelector<HTMLElement>('textarea') ??
-  null;
+/**
+ * The channel's composer, wherever the screen put it: the text box in this region that is for
+ * writing *to the channel*. A thread has a reply box of its own, earlier in the document than the
+ * channel's, and Esc "to the composer" must not land in it (found in a browser: with a thread open,
+ * Esc moved focus into its reply box).
+ */
+const composerIn = (region: Element | null): HTMLElement | null => {
+  const outsideThreads = (candidates: Iterable<HTMLElement>): HTMLElement | undefined =>
+    Array.from(candidates).find((box) => box.closest('[data-thread-root]') === null);
+  return (
+    outsideThreads(region?.querySelectorAll<HTMLElement>('[data-composer]') ?? []) ??
+    outsideThreads(region?.querySelectorAll<HTMLElement>('textarea') ?? []) ??
+    null
+  );
+};
 
 const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&

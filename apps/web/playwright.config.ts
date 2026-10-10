@@ -16,7 +16,10 @@ import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/te
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number];
 
-const PORT = 4173;
+// Overridable so two checkouts (or a person's own demo) on one machine do not share a server
+// and a database: the run would sign in with tokens another run's seed made, and get 401.
+const PORT = Number(process.env['E2E_PORT'] ?? '4173');
+const DATABASE = process.env['E2E_DB'] ?? 'purlay_e2e';
 const ci = process.env['CI'] !== undefined;
 
 const desktop = { width: 1440, height: 900 } as const;
@@ -57,6 +60,9 @@ export default defineConfig({
     timezoneId: 'UTC',
   },
   expect: {
+    // A flow crosses a socket, a server transaction and a cache; on a busy machine five seconds is
+    // a guess, ten is a verdict. (Latency *claims* are measured in the page, not by this timeout.)
+    timeout: 10_000,
     toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: 'disabled' },
   },
   projects: [
@@ -66,7 +72,7 @@ export default defineConfig({
     project('chromium-light-narrow', 'light', narrow),
   ],
   webServer: {
-    command: `bun run scripts/demo.ts --db purlay_e2e --port ${String(PORT)} --manifest apps/web/e2e/.world.json`,
+    command: `bun run scripts/demo.ts --db ${DATABASE} --port ${String(PORT)} --manifest apps/web/e2e/.world.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
     url: `http://localhost:${String(PORT)}/health`,
