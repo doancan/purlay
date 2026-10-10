@@ -29,6 +29,8 @@ export interface ReadOutcome {
   readonly state: ChannelState;
   /** False when the position was at or behind where it already was. */
   readonly moved: boolean;
+  /** The row's `state_version` the state was read at (0015). */
+  readonly version: number;
 }
 
 /**
@@ -48,7 +50,7 @@ export const markRead = async (
 ): Promise<ReadOutcome> => {
   const member = await executor
     .selectFrom('channel_members')
-    .select(['last_read_message_id', 'unread_count', 'unread_mention_count'])
+    .select(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
     .where('channel_id', '=', context.channelId)
     .where('user_id', '=', context.userId)
     // Held to the end of the transaction: two reads of one channel by one person
@@ -75,6 +77,7 @@ export const markRead = async (
   if (current !== null && messageId <= current) {
     return {
       moved: false,
+      version: member.state_version,
       state: {
         lastReadMessageId: current,
         unreadCount: member.unread_count,
@@ -96,6 +99,7 @@ export const markRead = async (
     .updateTable('channel_members')
     .set({
       last_read_message_id: messageId,
+      state_version: sql<number>`state_version + 1`,
       unread_count: sql<number>`(
         select count(*)::int from messages
         where channel_id = ${context.channelId} and id > ${messageId}
@@ -120,11 +124,12 @@ export const markRead = async (
     })
     .where('channel_id', '=', context.channelId)
     .where('user_id', '=', context.userId)
-    .returning(['last_read_message_id', 'unread_count', 'unread_mention_count'])
+    .returning(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
     .executeTakeFirstOrThrow();
 
   return {
     moved: true,
+    version: updated.state_version,
     state: {
       lastReadMessageId: updated.last_read_message_id,
       unreadCount: updated.unread_count,

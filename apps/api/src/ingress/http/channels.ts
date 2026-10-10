@@ -126,7 +126,8 @@ export const readUpTo = async (
     [
       {
         label: 'CHANNEL_STATE',
-        run: async () => await publishChannelState(bus, clock, userId, channelId, outcome.state),
+        run: async () =>
+          await publishChannelState(bus, clock, userId, channelId, outcome.state, outcome.version),
       },
     ],
   ]);

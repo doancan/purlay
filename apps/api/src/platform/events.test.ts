@@ -42,20 +42,22 @@ describe('publishing the wedge', () => {
       resolvedAt: null,
       resolvedBy: null,
     };
-    await publishThreadUpdated(bus, clock, { channelId: ID, messageId: OTHER, thread });
+    await publishThreadUpdated(bus, clock, { channelId: ID, messageId: OTHER, thread }, 7);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.topic).toBe(`channel:${ID}`);
     expect(Value.Check(ServerFrame, sent[0]?.frame)).toBe(true);
     expect(sent[0]?.frame.ts).toBe(clock.now().getTime());
+    expect(sent[0]?.frame).toMatchObject({ version: 7 });
   });
 
   test('a reaction update goes to the channel and carries the whole set', async () => {
     const { bus, sent } = recording();
-    await publishReactionsUpdated(bus, clock, {
-      channelId: ID,
-      messageId: OTHER,
-      reactions: [{ emoji: '👍', userIds: [ID] }],
-    });
+    await publishReactionsUpdated(
+      bus,
+      clock,
+      { channelId: ID, messageId: OTHER, reactions: [{ emoji: '👍', userIds: [ID] }] },
+      3,
+    );
     expect(sent[0]?.topic).toBe(`channel:${ID}`);
     expect(Value.Check(ServerFrame, sent[0]?.frame)).toBe(true);
   });
@@ -74,7 +76,7 @@ describe('publishing the wedge', () => {
       state,
       peer: user,
     };
-    await publishChannelState(bus, clock, OTHER, ID, state);
+    await publishChannelState(bus, clock, OTHER, ID, state, 5);
     await publishChannelAdded(bus, clock, OTHER, channel);
     expect(sent.map((entry) => entry.topic)).toEqual([`user:${OTHER}`, `user:${OTHER}`]);
     for (const entry of sent) expect(Value.Check(ServerFrame, entry.frame)).toBe(true);

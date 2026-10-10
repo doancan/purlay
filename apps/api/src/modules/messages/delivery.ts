@@ -40,6 +40,8 @@ const isBehind = (position: string | null, messageId: string): boolean =>
 export interface ChannelStateUpdate {
   readonly userId: string;
   readonly state: ChannelState;
+  /** The row's `state_version` the numbers were read at: the order the client applies them in. */
+  readonly version: number;
 }
 
 /**
@@ -246,10 +248,19 @@ export const recordDelivery = async (
     .set({
       unread_count: sql<number>`unread_count + case when ${ahead} then 1 else 0 end`,
       unread_mention_count: sql<number>`unread_mention_count + case when ${ahead} and user_id = any(${notified}::uuid[]) then 1 else 0 end`,
+      // Counted with the numbers it describes, in the one statement, under the row lock it
+      // takes: the order of versions is the order of commits (0015).
+      state_version: sql<number>`state_version + 1`,
     })
     .where('channel_id', '=', context.channelId)
     .where('user_id', '<>', sender)
-    .returning(['user_id', 'last_read_message_id', 'unread_count', 'unread_mention_count'])
+    .returning([
+      'user_id',
+      'last_read_message_id',
+      'unread_count',
+      'unread_mention_count',
+      'state_version',
+    ])
     .execute();
 
   return changed.map((row) => ({
@@ -259,6 +270,7 @@ export const recordDelivery = async (
       unreadCount: row.unread_count,
       unreadMentionCount: row.unread_mention_count,
     },
+    version: row.state_version,
   }));
 };
 
@@ -273,7 +285,13 @@ export const currentStates = async (
   (
     await executor
       .selectFrom('channel_members')
-      .select(['user_id', 'last_read_message_id', 'unread_count', 'unread_mention_count'])
+      .select([
+        'user_id',
+        'last_read_message_id',
+        'unread_count',
+        'unread_mention_count',
+        'state_version',
+      ])
       .where('channel_id', '=', context.channelId)
       .where('user_id', '<>', context.userId)
       .execute()
@@ -284,4 +302,5 @@ export const currentStates = async (
       unreadCount: row.unread_count,
       unreadMentionCount: row.unread_mention_count,
     },
+    version: row.state_version,
   }));

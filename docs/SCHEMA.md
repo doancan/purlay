@@ -312,6 +312,11 @@ CREATE TABLE channel_members (
     unread_count         INTEGER NOT NULL DEFAULT 0,
     unread_mention_count INTEGER NOT NULL DEFAULT 0,
 
+    -- Counts this row's changes to the state above, in the statement that makes them, so the
+    -- order of versions is the order of commits. `CHANNEL_STATE` carries it and a client drops
+    -- a frame that is not newer than the one it holds. Added by 0015. (D-99, amended)
+    state_version        INTEGER NOT NULL DEFAULT 0,
+
     -- Defaults to 'mentions': quiet by default is the product, not a preference. (D-12)
     notification_level notification_level NOT NULL DEFAULT 'mentions',
 
@@ -375,6 +380,11 @@ CREATE TABLE messages (
     -- does not become 50 extra queries.
     thread_reply_count   INTEGER NOT NULL DEFAULT 0,
     thread_last_reply_at TIMESTAMPTZ,
+
+    -- Counts changes to the thread summary and the reaction set, in the statement that makes
+    -- them, so versions are in commit order; `THREAD_UPDATED` and `REACTIONS_UPDATED` carry it.
+    -- Added by 0015. (D-99, amended)
+    state_version        INTEGER NOT NULL DEFAULT 0,
 
     -- The wedge: a thread can be closed, and stays searchable. (D-2)
     resolved_at  TIMESTAMPTZ,
@@ -456,9 +466,13 @@ CREATE INDEX idx_messages_search
 CREATE INDEX idx_messages_sender ON messages (sender_id);
 
 -- Open questions across a workspace: the resolvable-thread feature's own view.
+-- Only roots that have a reply: nearly every root has none, and an index of all of them made
+-- a view that wants the rare ones read them all (6,975 buffers against 41 on 400,000 messages).
+-- Redefined by 0014.
 CREATE INDEX idx_messages_unresolved
     ON messages (workspace_id, id DESC)
-    WHERE parent_id IS NULL AND resolved_at IS NULL AND deleted_at IS NULL;
+    WHERE parent_id IS NULL AND resolved_at IS NULL AND deleted_at IS NULL
+      AND thread_reply_count > 0;
 
 -- The foreign keys. The indexes above are partial, and the query that enforces a foreign key
 -- filters on the column alone, so none of them can answer it. Without these, deleting 100 of
@@ -943,14 +957,16 @@ file that leaves its transaction runs statement by statement and must be safe to
 0011_message_content_units.sql   messages_content_length counts code units, as the contract does  (D-67)
 0012_engagement.sql          reactions, mentions, notifications  (D-98; attachments follow with their endpoints)
 0013_read_state.sql          unread_mention_within_unread: I-6 as a CHECK  (D-99)
-0014_integrations.sql        github_integrations, link_previews
+0014_open_questions_index.sql   idx_messages_unresolved holds only roots that have a reply  (D-99, amended)
+0015_state_versions.sql      channel_members.state_version, messages.state_version  (D-99, amended)
+0016_integrations.sql        github_integrations, link_previews
 ```
 
 ```
-0015_administration.sql      audit_log, job_runs  (Phase 1)
+0017_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0016_github_feeds.sql`; Phase 2's magic links add `0017_email_auth.sql`.
+Phase 2 adds `0018_github_feeds.sql`; Phase 2's magic links add `0019_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, and again with each hardening migration

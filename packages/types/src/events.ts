@@ -127,6 +127,19 @@ export const ACCESS_REVOKED_MAX_CHANNELS = 500;
  */
 const envelope = { ts: Type.Number(), refId: Type.Optional(Uuid) };
 
+/**
+ * The order a whole-state frame's state was written in (`0015_state_versions`).
+ *
+ * A frame that says "this is the state, replace what you hold" is repaired by the next one —
+ * and ruined by a late one: two writes commit in one order and are published in another, and
+ * the older state would overwrite the newer. The version is the row's own count of its
+ * changes, taken in the statement that made them, so a client keeps the newest it has applied
+ * for each thing and drops a frame that is not newer. Not for ordering across *kinds*:
+ * `THREAD_UPDATED` and `REACTIONS_UPDATED` share a message's counter, and are compared only
+ * with frames of their own kind.
+ */
+const stateVersion = { version: Type.Integer({ minimum: 1 }) };
+
 /** The message is durable. Carries no row, because the client already has it. */
 export const AckFrame = Type.Object({
   event: Type.Literal('ACK'),
@@ -184,6 +197,7 @@ export const MessageCreatedFrame = Type.Object({
 export const ThreadUpdatedFrame = Type.Object({
   event: Type.Literal('THREAD_UPDATED'),
   data: Type.Object({ channelId: Uuid, messageId: Uuid, thread: ThreadSummary }),
+  ...stateVersion,
   ...envelope,
 });
 
@@ -191,6 +205,7 @@ export const ThreadUpdatedFrame = Type.Object({
 export const ReactionsUpdatedFrame = Type.Object({
   event: Type.Literal('REACTIONS_UPDATED'),
   data: Type.Object({ channelId: Uuid, messageId: Uuid, reactions: Type.Array(Reaction) }),
+  ...stateVersion,
   ...envelope,
 });
 
@@ -203,6 +218,7 @@ export const ReactionsUpdatedFrame = Type.Object({
 export const ChannelStateFrame = Type.Object({
   event: Type.Literal('CHANNEL_STATE'),
   data: Type.Object({ channelId: Uuid, state: ChannelState }),
+  ...stateVersion,
   ...envelope,
 });
 

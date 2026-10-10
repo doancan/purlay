@@ -4009,6 +4009,39 @@ reactions and read state are HTTP only and are heard on the socket. They are inf
 optimistic row that must paint inside a frame, and a second implementation of each over the socket is a
 second place for them to differ.
 
+**Amended 2026-10-10 (review of the first implementation).** None of this reverses a rule above; each
+closes a case the first implementation answered wrongly or left to chance.
+
+- *Rule 1 and 4 — a message behind the reader is not unread.* A client may send an id up to a minute in
+  the past (D-33), so a message can sort *below* a position someone has already read past. It is
+  counted for a member only when their position is before it; otherwise it is stored, its notification
+  is already read, and the recount (`id > position`) agrees with what was stored. Before, the stored
+  number sat above the recount and the badge could not be cleared by reading. The recount also skips
+  deleted messages and the notifications of deleted messages.
+- *Rule 2 — who is told of a reply.* The root's author and the most recent **50** earlier repliers
+  (`THREAD_PARTICIPANTS_MAX`), and only those who can still see the channel now — a member of the
+  workspace, not deleted, and for a private channel or DM still in it (D-34). A resolution notifies
+  the root's author on the same condition. The bound is on what one reply can write; older
+  participants still have the thread.
+- *Rule 2 — publishing after the commit.* Published in stages (the room, then the thread, then each
+  person's numbers), the publishes of a stage concurrently in chunks of 32; a publish that fails is
+  logged and does not fail a write that committed, nor stop the ones behind it. A repeated send
+  re-tells from the rows; a repeated `PUT /read` re-tells the caller's devices (rule 4 is otherwise
+  unchanged: the position never moves back). D-88's "a retry announces again" is kept and extended.
+- *Rule 2 — whole-state frames are ordered.* `THREAD_UPDATED`, `REACTIONS_UPDATED` and
+  `CHANNEL_STATE` carry `version` from `state_version` on the row they are made from (migration
+  `0015`); the client drops an older one (`API.md` §5). Reactions therefore now update the message row
+  once, as the last write of their transaction, and contend with a reply to the same message for that
+  instant; the advisory lock still serialises reactions with each other.
+- *Rule 5 — the open-questions index.* `idx_messages_unresolved` holds only roots with a reply (migration
+  `0014`): 6,975 buffers and 37 ms became 41 buffers and 0.07 ms where the caller sees every channel and
+  the questions are rare, and no worse where they are common.
+- *Rule 7 — a direct message with an erased account* keeps its channel and `peer.id` and shows a
+  placeholder. *Idempotence is `200`, creation `201`* (`API.md` §4); it is not a conflict.
+- *Ids have one spelling.* The wire form of every UUID is lower-case; an upper-case id is a validation
+  error rather than a second spelling of the same id that string comparison, ordering and the read
+  position would each treat differently.
+
 **Rejected — counting unread on read.** D-35 rejected it; the recount in rule 4 is a different thing (it
 runs when a person reads, bounded by what they had not).
 

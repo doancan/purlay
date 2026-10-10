@@ -118,10 +118,12 @@ export const publishThreadUpdated = async (
   bus: EventBus,
   clock: Clock,
   data: { readonly channelId: string; readonly messageId: string; readonly thread: ThreadSummary },
+  version: number,
 ): Promise<void> => {
   await bus.publish(channelTopic(data.channelId), {
     event: 'THREAD_UPDATED',
     data,
+    version,
     ts: clock.now().getTime(),
   });
 };
@@ -135,10 +137,12 @@ export const publishReactionsUpdated = async (
     readonly messageId: string;
     readonly reactions: readonly Reaction[];
   },
+  version: number,
 ): Promise<void> => {
   await bus.publish(channelTopic(data.channelId), {
     event: 'REACTIONS_UPDATED',
     data: { ...data, reactions: [...data.reactions] },
+    version,
     ts: clock.now().getTime(),
   });
 };
@@ -150,10 +154,12 @@ export const publishChannelState = async (
   userId: string,
   channelId: string,
   state: ChannelState,
+  version: number,
 ): Promise<void> => {
   await bus.publish(userTopic(userId), {
     event: 'CHANNEL_STATE',
     data: { channelId, state },
+    version,
     ts: clock.now().getTime(),
   });
 };

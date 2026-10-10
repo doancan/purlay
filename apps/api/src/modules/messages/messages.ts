@@ -73,7 +73,12 @@ export interface OutgoingMessage {
  */
 export interface Sent {
   readonly message: Message;
-  readonly thread: { readonly rootId: string; readonly summary: ThreadSummary } | null;
+  readonly thread: {
+    readonly rootId: string;
+    readonly summary: ThreadSummary;
+    /** The root's `state_version` the summary was read at (0015). */
+    readonly version: number;
+  } | null;
   readonly recipients: readonly ChannelStateUpdate[];
 }
 
@@ -106,17 +111,25 @@ const requireRoot = async (
   return { authorId: parent.sender_id };
 };
 
-/** The summary of a root's thread as it is now. */
+/** The summary of a root's thread as it is now, and the version it was read at. */
 const currentSummary = async (
   executor: Executor,
   rootId: string,
-): Promise<ThreadSummary | undefined> => {
+): Promise<{ readonly summary: ThreadSummary; readonly version: number } | undefined> => {
   const root = await executor
     .selectFrom('messages')
-    .select(['thread_reply_count', 'thread_last_reply_at', 'resolved_at', 'resolved_by'])
+    .select([
+      'thread_reply_count',
+      'thread_last_reply_at',
+      'resolved_at',
+      'resolved_by',
+      'state_version',
+    ])
     .where('id', '=', rootId)
     .executeTakeFirst();
-  return root === undefined ? undefined : await readSummary(executor, root);
+  return root === undefined
+    ? undefined
+    : { summary: await readSummary(executor, root), version: root.state_version };
 };
 
 /**
@@ -140,12 +153,14 @@ export const sendMessage = async (
     if (message === undefined) {
       throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
     }
-    const summary =
+    const current =
       row.parent_id === null ? undefined : await currentSummary(executor, row.parent_id);
     return {
       message,
       thread:
-        row.parent_id === null || summary === undefined ? null : { rootId: row.parent_id, summary },
+        row.parent_id === null || current === undefined
+          ? null
+          : { rootId: row.parent_id, ...current },
       // Nothing is counted twice, but everything is *told* again, from the rows as they are
       // now: a retry usually means the first answer did not arrive, and if the frames behind
       // it were lost too, this is what repairs the other people's badges (H-API 4).
@@ -226,11 +241,23 @@ export const sendMessage = async (
       .set({
         thread_reply_count: sql<number>`thread_reply_count + 1`,
         thread_last_reply_at: sql<Date>`greatest(coalesce(thread_last_reply_at, ${sentAt}), ${sentAt})`,
+        // In the statement that moves the summary, so versions are in commit order (0015).
+        state_version: sql<number>`state_version + 1`,
       })
       .where('id', '=', input.parentId)
-      .returning(['thread_reply_count', 'thread_last_reply_at', 'resolved_at', 'resolved_by'])
+      .returning([
+        'thread_reply_count',
+        'thread_last_reply_at',
+        'resolved_at',
+        'resolved_by',
+        'state_version',
+      ])
       .executeTakeFirstOrThrow();
-    thread = { rootId: input.parentId, summary: await readSummary(executor, summaryColumns) };
+    thread = {
+      rootId: input.parentId,
+      summary: await readSummary(executor, summaryColumns),
+      version: summaryColumns.state_version,
+    };
   }
 
   // The mentions, the notifications and the counters: one place decides who is told (D-99 §1).
@@ -466,16 +493,17 @@ export const send = async (
     ],
   ];
   if (sent.thread !== null) {
-    const { rootId, summary } = sent.thread;
+    const { rootId, summary, version } = sent.thread;
     stages.push([
       {
         label: 'THREAD_UPDATED',
         run: async () =>
-          await publishThreadUpdated(bus, clock, {
-            channelId: context.channelId,
-            messageId: rootId,
-            thread: summary,
-          }),
+          await publishThreadUpdated(
+            bus,
+            clock,
+            { channelId: context.channelId, messageId: rootId, thread: summary },
+            version,
+          ),
       },
     ]);
   }
@@ -483,7 +511,14 @@ export const send = async (
     sent.recipients.map((recipient) => ({
       label: 'CHANNEL_STATE',
       run: async () =>
-        await publishChannelState(bus, clock, recipient.userId, context.channelId, recipient.state),
+        await publishChannelState(
+          bus,
+          clock,
+          recipient.userId,
+          context.channelId,
+          recipient.state,
+          recipient.version,
+        ),
     })),
   );
   await publishAfterCommit(log, stages);

@@ -110,6 +110,17 @@ export const createEngine = (options: EngineOptions): Engine => {
   const serverClock = createServerClock(options.clock);
   const timers = new Map<string, () => void>();
   const watched = new Set<string>();
+  // The newest version of each whole state a frame has taught the cache, by kind and thing.
+  // Frames are published after their commits and from different requests, so a late one can
+  // arrive behind a newer one; replacing the newer state with it would stick until something
+  // else moved. Older is dropped, equal is applied again (a re-told state repairs a lost one).
+  const applied = new Map<string, number>();
+  const isNewest = (kind: string, id: string, version: number): boolean => {
+    const key = `${kind}:${id}`;
+    if (version < (applied.get(key) ?? 0)) return false;
+    applied.set(key, version);
+    return true;
+  };
   let connection: Connection | null = null;
   let opened = false;
 
@@ -225,13 +236,19 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       }
       case 'THREAD_UPDATED':
-        threadUpdated(client, frame.data.messageId, frame.data.thread);
+        if (isNewest('thread', frame.data.messageId, frame.version)) {
+          threadUpdated(client, frame.data.messageId, frame.data.thread);
+        }
         return;
       case 'REACTIONS_UPDATED':
-        reactionsUpdated(client, frame.data.messageId, frame.data.reactions);
+        if (isNewest('reactions', frame.data.messageId, frame.version)) {
+          reactionsUpdated(client, frame.data.messageId, frame.data.reactions);
+        }
         return;
       case 'CHANNEL_STATE':
-        channelStateChanged(client, frame.data.channelId, frame.data.state);
+        if (isNewest('state', frame.data.channelId, frame.version)) {
+          channelStateChanged(client, frame.data.channelId, frame.data.state);
+        }
         return;
       case 'CHANNEL_ADDED': {
         const channel: Channel = frame.data;

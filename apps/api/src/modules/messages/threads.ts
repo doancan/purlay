@@ -13,7 +13,7 @@
  * decisions and the second finds the thread already closed: a no-op that says so
  * with the message and publishes nothing, because nothing changed.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { PAGE_LIMIT, type Message, type MessagePage } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import { requireMessageById, type VisibleMessage } from '../../platform/channels';
@@ -194,11 +194,13 @@ export const setResolved = async (
       const now = clock.now();
       await transaction
         .updateTable('messages')
-        .set(
-          resolved
+        .set({
+          ...(resolved
             ? { resolved_at: now, resolved_by: userId, updated_at: now }
-            : { resolved_at: null, resolved_by: null, updated_at: now },
-        )
+            : { resolved_at: null, resolved_by: null, updated_at: now }),
+          // Counted with the change, under the root lock above (0015).
+          state_version: sql<number>`state_version + 1`,
+        })
         .where('id', '=', messageId)
         .execute();
       if (resolved && root.sender_id !== userId) {
@@ -209,7 +211,13 @@ export const setResolved = async (
     const message = await readBuilt(transaction, messageId);
     const columns = await transaction
       .selectFrom('messages')
-      .select(['thread_reply_count', 'thread_last_reply_at', 'resolved_at', 'resolved_by'])
+      .select([
+        'thread_reply_count',
+        'thread_last_reply_at',
+        'resolved_at',
+        'resolved_by',
+        'state_version',
+      ])
       .where('id', '=', messageId)
       .executeTakeFirstOrThrow();
     if (message === undefined) {
@@ -220,6 +228,7 @@ export const setResolved = async (
       changed: changes,
       channelId: target.context.channelId,
       summary: await readSummary(transaction, columns),
+      version: columns.state_version,
     };
   });
 
@@ -229,11 +238,12 @@ export const setResolved = async (
         {
           label: 'THREAD_UPDATED',
           run: async () =>
-            await publishThreadUpdated(bus, clock, {
-              channelId: outcome.channelId,
-              messageId,
-              thread: outcome.summary,
-            }),
+            await publishThreadUpdated(
+              bus,
+              clock,
+              { channelId: outcome.channelId, messageId, thread: outcome.summary },
+              outcome.version,
+            ),
         },
       ],
     ]);

@@ -22,6 +22,7 @@ import { ACK_DEADLINE_MS, createEngine, type Engine, type PendingMessage } from 
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
+const OTHER_CH = '0199155c-6200-7b7f-8c11-0000000000c2';
 const T0 = Date.parse('2026-10-09T12:00:00.000Z');
 const C1 = '0199155c-6200-7b7f-8c11-0000000000d1';
 const C2 = '0199155c-6200-7b7f-8c11-0000000000d2';
@@ -417,6 +418,7 @@ describe('the frames', () => {
       frame({
         event: 'THREAD_UPDATED',
         data: { channelId: CH, messageId: root.id, thread: summary },
+        version: 1,
         ts: T0,
       }),
     );
@@ -424,6 +426,7 @@ describe('the frames', () => {
       frame({
         event: 'REACTIONS_UPDATED',
         data: { channelId: CH, messageId: root.id, reactions: [{ emoji: '👍', userIds: [ME.id] }] },
+        version: 1,
         ts: T0,
       }),
     );
@@ -434,6 +437,7 @@ describe('the frames', () => {
           channelId: CH,
           state: { lastReadMessageId: null, unreadCount: 2, unreadMentionCount: 1 },
         },
+        version: 1,
         ts: T0,
       }),
     );
@@ -442,6 +446,92 @@ describe('the frames', () => {
     expect(cached?.thread).toEqual(summary);
     expect(cached?.reactions).toEqual([{ emoji: '👍', userIds: [ME.id] }]);
     expect(w.client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state?.unreadCount).toBe(2);
+  });
+
+  /**
+   * Whole-state frames are published after their commits and from different requests, so a
+   * late one can arrive behind a newer one (0015). Replacing the newer state with it would
+   * stick until something else moved the row, so each carries the order it was written in.
+   */
+  describe('a whole state that arrives late', () => {
+    const counters = (unreadCount: number, version: number): ServerFrame =>
+      frame({
+        event: 'CHANNEL_STATE',
+        data: {
+          channelId: CH,
+          state: { lastReadMessageId: null, unreadCount, unreadMentionCount: 0 },
+        },
+        version,
+        ts: T0,
+      });
+    const unread = (w: ReturnType<typeof world>): number | undefined =>
+      w.client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state?.unreadCount;
+
+    test('does not replace a newer one, is applied again when told twice, and is per channel', () => {
+      const w = world();
+      w.client.setQueryData(keys.channels(WS), [channel(CH), channel(OTHER_CH)]);
+      w.engine.start();
+      w.open();
+
+      w.deliver(counters(5, 7));
+      w.deliver(counters(4, 6)); // committed before the one above, published after it
+      expect(unread(w)).toBe(5);
+
+      w.deliver(counters(0, 7)); // the same version again: a re-told state, applied
+      expect(unread(w)).toBe(0);
+      w.deliver(counters(9, 8));
+      expect(unread(w)).toBe(9);
+
+      // Another channel's counter is another thing: its first frame is its own newest.
+      w.deliver(
+        frame({
+          event: 'CHANNEL_STATE',
+          data: {
+            channelId: OTHER_CH,
+            state: { lastReadMessageId: null, unreadCount: 3, unreadMentionCount: 0 },
+          },
+          version: 1,
+          ts: T0,
+        }),
+      );
+      const other = w.client.getQueryData<Channel[]>(keys.channels(WS))?.[1];
+      expect(other?.state?.unreadCount).toBe(3);
+    });
+
+    test('a thread summary and a reaction set are ordered separately, though they share a counter', () => {
+      const w = world();
+      const root = echo('0199155c-6200-7b7f-8c11-000000000001');
+      w.client.setQueryData<Pages>(keys.messages(CH), {
+        pageParams: [undefined],
+        pages: [{ data: [root], nextCursor: null }],
+      });
+      w.engine.start();
+      w.open();
+      const reactions = (emoji: string, version: number): ServerFrame =>
+        frame({
+          event: 'REACTIONS_UPDATED',
+          data: { channelId: CH, messageId: root.id, reactions: [{ emoji, userIds: [ME.id] }] },
+          version,
+          ts: T0,
+        });
+      const thread = (replyCount: number, version: number): ServerFrame =>
+        frame({
+          event: 'THREAD_UPDATED',
+          data: { channelId: CH, messageId: root.id, thread: { ...summary, replyCount } },
+          version,
+          ts: T0,
+        });
+      const row = (): Message | undefined =>
+        w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0];
+
+      w.deliver(reactions('🎉', 3));
+      w.deliver(thread(2, 2)); // older than the reaction's version, but a different kind: applied
+      expect(row()?.thread?.replyCount).toBe(2);
+      w.deliver(thread(1, 1)); // older than the summary held: dropped
+      expect(row()?.thread?.replyCount).toBe(2);
+      w.deliver(reactions('👍', 2)); // older than the set held: dropped
+      expect(row()?.reactions).toEqual([{ emoji: '🎉', userIds: [ME.id] }]);
+    });
   });
 
   test('a channel that appears is added and watched; a revoked one leaves and is let go', () => {

@@ -41,6 +41,7 @@ export interface ChannelMembers {
   joined_at: Generated<Timestamp>;
   last_read_message_id: string | null;
   notification_level: Generated<NotificationLevel>;
+  state_version: Generated<number>;
   unread_count: Generated<number>;
   unread_mention_count: Generated<number>;
   user_id: string;
@@ -82,6 +83,7 @@ export interface Messages {
   resolved_at: Timestamp | null;
   resolved_by: string | null;
   sender_id: string;
+  state_version: Generated<number>;
   thread_last_reply_at: Timestamp | null;
   thread_reply_count: Generated<number>;
   updated_at: Generated<Timestamp>;

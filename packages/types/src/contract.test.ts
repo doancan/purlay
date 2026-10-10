@@ -297,14 +297,16 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
       {
         event: 'THREAD_UPDATED',
         data: { channelId: id, messageId: id, thread: root.thread },
+        version: 1,
         ts: 1,
       },
       {
         event: 'REACTIONS_UPDATED',
         data: { channelId: id, messageId: id, reactions: root.reactions },
+        version: 1,
         ts: 1,
       },
-      { event: 'CHANNEL_STATE', data: { channelId: id, state }, ts: 1 },
+      { event: 'CHANNEL_STATE', data: { channelId: id, state }, version: 1, ts: 1 },
       {
         event: 'CHANNEL_ADDED',
         data: {
@@ -327,5 +329,16 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
         data: { channelId: id, state: { ...state, unreadCount: -1 } },
       }),
     ).toBe(false);
+  });
+
+  // The order a whole state was written in is not optional: a frame without it could not be
+  // compared with the one before, which is the whole reason it is there (0015).
+  test('a whole-state frame names its version, and a version is a positive whole number', () => {
+    const state = { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 };
+    const frame = { event: 'CHANNEL_STATE', data: { channelId: id, state }, ts: 1 };
+    expect(Value.Check(ServerFrame, frame)).toBe(false);
+    expect(Value.Check(ServerFrame, { ...frame, version: 0 })).toBe(false);
+    expect(Value.Check(ServerFrame, { ...frame, version: 1.5 })).toBe(false);
+    expect(Value.Check(ServerFrame, { ...frame, version: 2 })).toBe(true);
   });
 });

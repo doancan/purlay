@@ -50,10 +50,12 @@ export interface ReactionDependencies {
  *
  * The cap is a count followed by an insert, and two people adding different new
  * emoji at nineteen would each count nineteen and both insert — twenty-one. A lock
- * on the message row would close that, and would also stall every reply and
- * resolution of a busy thread behind a reaction, since they update the same row. An
- * advisory lock keyed on the message is held only by other reactions to it and is
- * released with the transaction, so it costs exactly the contention it prevents.
+ * on the message row would close that, and would hold the row for the whole
+ * transaction against every reply and resolution of a busy thread. An advisory lock
+ * keyed on the message is held only by other reactions to it and is released with the
+ * transaction, so it costs exactly the contention it prevents. (The version bump
+ * (0015) does write the row, but as the transaction's last write, so a reply waits
+ * for the instant between that statement and the commit, not for the whole of it.)
  */
 const serialiseReactionsTo = async (executor: Executor, messageId: string): Promise<void> => {
   await sql`select pg_advisory_xact_lock(hashtextextended(${messageId}, 0))`.execute(executor);
@@ -129,8 +131,20 @@ export const setReaction = async (
       changed = removed !== undefined;
     }
 
+    // Counted with the change, in this transaction, so the versions are in commit order and a
+    // late frame cannot replace a newer set (0015). A repeat that changed nothing counts nothing.
+    const version = changed
+      ? (
+          await transaction
+            .updateTable('messages')
+            .set({ state_version: sql<number>`state_version + 1` })
+            .where('id', '=', messageId)
+            .returning('state_version')
+            .executeTakeFirstOrThrow()
+        ).state_version
+      : 0;
     const reactions = (await reactionSets(transaction, [messageId])).get(messageId) ?? [];
-    return { channelId: context.channelId, reactions: [...reactions], changed };
+    return { channelId: context.channelId, reactions: [...reactions], changed, version };
   });
 
   if (outcome.changed) {
@@ -139,11 +153,12 @@ export const setReaction = async (
         {
           label: 'REACTIONS_UPDATED',
           run: async () =>
-            await publishReactionsUpdated(bus, clock, {
-              channelId: outcome.channelId,
-              messageId,
-              reactions: outcome.reactions,
-            }),
+            await publishReactionsUpdated(
+              bus,
+              clock,
+              { channelId: outcome.channelId, messageId, reactions: outcome.reactions },
+              outcome.version,
+            ),
         },
       ],
     ]);

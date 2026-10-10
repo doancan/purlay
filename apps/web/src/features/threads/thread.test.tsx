@@ -361,6 +361,7 @@ describe('live', () => {
         messageId: messageIdAt(ROOT),
         thread: { ...open, replyCount: 3 },
       },
+      version: 1,
       ts: 1,
     });
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain('3 replies');
@@ -371,6 +372,7 @@ describe('live', () => {
         messageId: messageIdAt(ROOT),
         thread: { ...closed, replyCount: 3 },
       },
+      version: 2,
       ts: 1,
     });
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
@@ -399,6 +401,7 @@ describe('live', () => {
         messageId: messageIdAt(6),
         reactions: [{ emoji: '👍', userIds: [ALICE.id] }],
       },
+      version: 1,
       ts: 1,
     });
     expect(within(rowOf(view, messageIdAt(6))).getByRole('button', { name: /👍/u })).toBeDefined();
@@ -414,6 +417,7 @@ describe('live', () => {
     await arrive(view, {
       event: 'THREAD_UPDATED',
       data: { channelId: IDS.api, messageId: messageIdAt(ROOT), thread: closed },
+      version: 1,
       ts: 1,
     });
     await settle();
@@ -429,6 +433,7 @@ describe('live', () => {
     await arrive(view, {
       event: 'THREAD_UPDATED',
       data: { channelId: IDS.api, messageId: messageIdAt(ROOT), thread: closed },
+      version: 1,
       ts: 1,
     });
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();

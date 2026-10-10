@@ -249,6 +249,7 @@ describe('live', () => {
           messageId: messageIdAt(3),
           thread: { ...open, resolvedAt: '2026-09-09T11:50:00.000Z', resolvedBy: ALICE },
         },
+        version: 1,
         ts: 1,
       });
       await Promise.resolve();
