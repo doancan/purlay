@@ -61,7 +61,7 @@ export const en = {
   'sidebar.browse': 'Browse channels',
   'sidebar.questions.many': '99+',
   'sidebar.unread': 'unread',
-  'sidebar.dm.failed': 'The conversation could not be opened. Try again.',
+  'sidebar.dm.failed': 'The conversation could not be opened.',
   'sidebar.people.empty': 'Nobody else is here yet.',
 
   // ── Narrow window (UX §2): the sidebar is an overlay ─────────────────────
@@ -72,7 +72,7 @@ export const en = {
   'browse.description': 'Public channels you have not joined yet.',
   'browse.join': 'Join',
   'browse.joinLabel': 'Join {name}',
-  'browse.joinFailed': 'You could not join the channel. Try again.',
+  'browse.joinFailed': 'You could not join the channel.',
   'browse.loading': 'Loading channels',
   'browse.empty.title': 'Nothing to join',
   'browse.empty.body': 'You are in every public channel there is.',
@@ -91,7 +91,7 @@ export const en = {
   'workspace.create.taken': 'That address is taken. Choose another.',
   'workspace.create.invalid':
     'Use lowercase letters, numbers and hyphens, starting with a letter or number.',
-  'workspace.create.failed': 'The workspace was not created. Try again.',
+  'workspace.create.failed': 'The workspace was not created.',
   'state.session.error.title': "Couldn't reach Purlay",
   'state.session.error.body': 'The server did not answer. You are still signed in; try again.',
   'state.channel.missing.title': 'That channel is not here',
@@ -110,7 +110,7 @@ export const en = {
   'newChannel.taken': 'A channel with that name already exists. Choose another.',
   'newChannel.invalid':
     'Use lowercase letters, numbers and hyphens, starting with a letter or number.',
-  'newChannel.failed': 'The channel was not created. Try again.',
+  'newChannel.failed': 'The channel was not created.',
 
   // ── Channel header ──────────────────────────────────────────────────────
   'header.views': 'Channel views',
@@ -158,7 +158,7 @@ export const en = {
   'feed.start': 'This is the beginning of the channel',
   'channel.join.notice': 'You are reading #{name} without being a member.',
   'channel.join.action': 'Join channel',
-  'channel.join.failed': 'Could not join the channel. Try again.',
+  'channel.join.failed': 'Could not join the channel.',
   'message.reactWith': 'React with {emoji}',
   'message.quickReactions': 'Quick reactions',
   'message.reactionOf': {
@@ -168,7 +168,7 @@ export const en = {
   'message.code.language': 'Language: {language}',
   'message.code.plain': 'text',
   'message.link.external': 'Opens in a new tab',
-  'message.reactionFailed': 'The reaction was not saved. Try again.',
+  'message.reactionFailed': 'The reaction was not saved.',
   'reaction.thumbsUp': 'Thumbs up',
   'reaction.heart': 'Heart',
   'reaction.celebrate': 'Celebrate',
@@ -213,7 +213,7 @@ export const en = {
   'thread.none': 'No replies yet',
   'thread.composerName': 'a thread in {channel}',
   'thread.resolveFailed': 'Only a thread with at least one reply can be resolved.',
-  'thread.actionFailed': 'The thread was not changed. Try again.',
+  'thread.actionFailed': 'The thread was not changed.',
 
   // ── Composer (UX §5) ────────────────────────────────────────────────────
   'composer.label': 'Message {channel}',
@@ -276,6 +276,23 @@ export const en = {
   'questions.more': 'Load more questions',
   'questions.unnamed': 'A channel you can no longer see',
 
+  // ── Failures: one sentence per cause, shared by every screen ────────────
+  'failure.network': 'Check your connection and try again.',
+  'failure.session': 'Your session ended. Sign in again to carry on.',
+  'failure.gone':
+    'This is no longer available. It may have been removed, or you may have lost access.',
+  'failure.slow': 'You are going too fast. Wait a moment and try again.',
+  'failure.refused': 'That was refused. Check what you entered and try again.',
+  'failure.generic': 'Something went wrong on our side. Try again in a moment.',
+  'failure.signOut': "Couldn't sign you out.",
+  'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
+  'connection.degraded': {
+    one: 'Live updates are paused for {count} channel',
+    other: 'Live updates are paused for {count} channels',
+  },
+  'connection.stale': 'What you see may be out of date',
+  'message.link.opens': 'Opens {host}',
+
   // ── Theme and language ──────────────────────────────────────────────────
   'theme.label': 'Theme',
   'theme.system': 'System',
@@ -310,7 +327,7 @@ export const en = {
     other: '{count} results',
   },
   'palette.view.feed': 'Feed',
-  'palette.error': 'That did not open. Try again.',
+  'palette.error': 'That did not open.',
   'palette.announce.channel': 'Opened {name}',
 
   // ── Keyboard shortcuts (UX §7) ──────────────────────────────────────────

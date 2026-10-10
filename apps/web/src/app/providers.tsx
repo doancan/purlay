@@ -25,6 +25,8 @@ import { ToastProvider } from '../ui/toast';
 import { ActionsProvider } from '../data/actions-provider';
 import type { Api } from '../data/api';
 import { ApiProvider } from '../data/api-provider';
+import type { ClientStorage } from '../data/browser-storage';
+import { StorageProvider } from '../data/storage-provider';
 import { RealtimePortsContext, type RealtimePorts } from '../realtime/realtime-provider';
 import { createQueryClient } from './query-client';
 
@@ -38,6 +40,8 @@ export interface AppPorts {
   readonly api?: Api;
   /** The socket, timers and clock the realtime engine uses; the browser's when absent. */
   readonly realtime?: RealtimePorts;
+  /** Where drafts, the last channel and unsent messages live; the browser's when absent, none when `null`. */
+  readonly storage?: ClientStorage | null;
 }
 
 interface AppProvidersProps {
@@ -63,17 +67,19 @@ export const AppProviders = ({
         <RouterProvider {...(ports.history === undefined ? {} : { history: ports.history })}>
           <QueryClientProvider client={client}>
             <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
-              <ActionsProvider>
-                <RealtimePortsContext.Provider value={ports.realtime ?? {}}>
-                  <TooltipProvider>
-                    <ToastProvider
-                      {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
-                    >
-                      {children}
-                    </ToastProvider>
-                  </TooltipProvider>
-                </RealtimePortsContext.Provider>
-              </ActionsProvider>
+              <StorageProvider {...(ports.storage === undefined ? {} : { storage: ports.storage })}>
+                <ActionsProvider>
+                  <RealtimePortsContext.Provider value={ports.realtime ?? {}}>
+                    <TooltipProvider>
+                      <ToastProvider
+                        {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
+                      >
+                        {children}
+                      </ToastProvider>
+                    </TooltipProvider>
+                  </RealtimePortsContext.Provider>
+                </ActionsProvider>
+              </StorageProvider>
             </ApiProvider>
           </QueryClientProvider>
         </RouterProvider>

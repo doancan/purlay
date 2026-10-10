@@ -6,6 +6,7 @@
  * so in a toast and leaves the row where it was; the person is never navigated into a
  * channel they are not in.
  */
+import { useDescribeFailure } from '../../data/failure';
 import { useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useActions } from '../../data/actions-provider';
@@ -33,6 +34,7 @@ export const BrowseChannelsDialog = ({
   const { joinChannel } = useActions();
   const { navigate } = useRoute();
   const { show } = useToast();
+  const describe = useDescribeFailure();
   const [joining, setJoining] = useState<string | null>(null);
 
   const join = async (channelId: string): Promise<void> => {
@@ -41,8 +43,8 @@ export const BrowseChannelsDialog = ({
       await joinChannel(channelId);
       onOpenChange(false);
       navigate(href('channel', { slug: workspace.slug, channelId }));
-    } catch {
-      show({ message: t('browse.joinFailed') });
+    } catch (failure) {
+      show({ message: `${t('browse.joinFailed')} ${describe(failure)}` });
     } finally {
       setJoining(null);
     }

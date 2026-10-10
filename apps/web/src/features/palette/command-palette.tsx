@@ -19,6 +19,7 @@
  * **Matches are shown with weight, not colour**: the letters that matched are
  * semibold, so the emphasis survives every theme and every kind of colour vision.
  */
+import { useDescribeFailure } from '../../data/failure';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
@@ -77,12 +78,13 @@ const GROUP_LABEL = {
 
 const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element => {
   const { t } = useI18n();
+  const describe = useDescribeFailure();
   const items = usePaletteItems();
   const base = useId();
   const listId = `${base}-list`;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pointer = useRef<{ x: number; y: number } | null>(null);
 
@@ -104,7 +106,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
 
   const activate = async (entry: Shown | undefined): Promise<void> => {
     if (entry === undefined || busy) return;
-    setFailed(false);
+    setFailed(null);
     try {
       const result = entry.item.run();
       if (result instanceof Promise) {
@@ -112,9 +114,11 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
         await result;
       }
       onClose();
-    } catch {
+    } catch (failure) {
+      setFailed(describe(failure));
+    } finally {
+      // A command that succeeded closes the palette; one that did not must not leave it stuck busy.
       setBusy(false);
-      setFailed(true);
     }
   };
 
@@ -172,7 +176,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
           onChange={(event) => {
             setQuery(event.target.value);
             setSelected(0);
-            setFailed(false);
+            setFailed(null);
           }}
           onKeyDown={onKeyDown}
           className="min-w-0 flex-1 bg-transparent text-body text-ink placeholder:text-ink-muted"
@@ -251,9 +255,9 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
         </div>
       )}
 
-      {failed && (
+      {failed !== null && (
         <p role="alert" className="px-4 pb-2 text-label text-danger-text">
-          {t('palette.error')}
+          {`${t('palette.error')} ${failed}`}
         </p>
       )}
       <VisuallyHidden role="status" aria-live="polite">

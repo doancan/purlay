@@ -10,14 +10,33 @@
  *
  * The position only moves forward: an id at or behind what was already sent is never sent
  * again, and the server agrees (a position behind the current one is a no-op there too).
- * A failed request is not retried in a loop — the next arrival at the bottom tries again.
+ * A failed request is tried once more after a longer pause — a blip on the way is the usual
+ * cause, and a position that never reaches the server is a channel that shows unread again
+ * on the next load. Not in a loop: if that fails too, or the person has already left, the
+ * newest id is **owed** and sent the next time the channel is opened, so what they read is
+ * not forgotten for want of a second request.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
+import type { Actions } from '../../data/actions';
 import type { FeedPorts } from './feed-ports';
 
 /** How long the bottom must hold before the position is sent. */
 export const READ_DEBOUNCE_MS = 500;
+
+/** How long a failed request waits before its one retry. */
+export const READ_RETRY_MS = 2_000;
+
+/** Positions the server did not take, per page (per `Actions`), by channel. */
+const owedBy = new WeakMap<Actions, Map<string, string>>();
+const owedOf = (actions: Actions): Map<string, string> => {
+  let owed = owedBy.get(actions);
+  if (owed === undefined) {
+    owed = new Map();
+    owedBy.set(actions, owed);
+  }
+  return owed;
+};
 
 interface Options {
   readonly channelId: string;
@@ -39,7 +58,10 @@ export const useMarkRead = ({
   atBottom,
   ports,
 }: Options): void => {
-  const { markRead } = useActions();
+  const actions = useActions();
+  const { markRead } = actions;
+  const alive = useRef(true);
+  const retry = useRef<(() => void) | null>(null);
   const sent = useRef(readAtOpen);
   const reached = useRef<string | null>(null);
   const [visible, setVisible] = useState(() => ports.pageVisible());
@@ -53,17 +75,40 @@ export const useMarkRead = ({
   );
 
   const send = useCallback(
-    (id: string): void => {
+    (id: string, again = true): void => {
       if (sent.current !== null && id <= sent.current) return;
       const previous = sent.current;
       sent.current = id;
-      markRead(channelId, id).catch(() => {
-        // Let the next arrival at the bottom try again, unless something newer went out since.
-        if (sent.current === id) sent.current = previous;
-      });
+      markRead(channelId, id).then(
+        () => {
+          const owed = owedOf(actions);
+          const waiting = owed.get(channelId);
+          if (waiting !== undefined && waiting <= id) owed.delete(channelId);
+        },
+        () => {
+          // Unless something newer went out since, the position is still the old one.
+          if (sent.current === id) sent.current = previous;
+          const owed = owedOf(actions);
+          const waiting = owed.get(channelId);
+          if (waiting === undefined || waiting < id) owed.set(channelId, id);
+          if (again && alive.current) {
+            retry.current?.();
+            retry.current = ports.schedule(() => {
+              retry.current = null;
+              send(id, false);
+            }, READ_RETRY_MS);
+          }
+        },
+      );
     },
-    [channelId, markRead],
+    [channelId, markRead, actions, ports],
   );
+
+  // What the last visit read and could not report is reported now.
+  useEffect(() => {
+    const waiting = owedOf(actions).get(channelId);
+    if (member && waiting !== undefined) send(waiting, false);
+  }, [member, channelId, actions, send]);
 
   useEffect(() => {
     if (!member || !atBottom || !visible || newestId === null) return undefined;
@@ -74,12 +119,21 @@ export const useMarkRead = ({
     }, READ_DEBOUNCE_MS);
   }, [member, atBottom, visible, newestId, ports, send]);
 
+  useEffect(() => {
+    alive.current = true;
+    return (): void => {
+      alive.current = false;
+      retry.current?.();
+      retry.current = null;
+    };
+  }, [channelId]);
+
   // Leaving the channel — or the page — reads what the person had reached.
   const leave = useRef(send);
   leave.current = send;
   useEffect(
     () => (): void => {
-      if (member && reached.current !== null) leave.current(reached.current);
+      if (member && reached.current !== null) leave.current(reached.current, false);
     },
     [member, channelId],
   );

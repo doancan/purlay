@@ -11,6 +11,7 @@
  * row out of Phase 1; seven are offered, named in words, in a menu — which gives them the
  * keyboard model of one (arrows, type-ahead, Escape back to the trigger).
  */
+import { useDescribeFailure } from '../../data/failure';
 import type { Message, Reaction } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useActions } from '../../data/actions-provider';
@@ -35,10 +36,11 @@ const useToggle = (message: Message, meId: string): ((emoji: string) => void) =>
   const { react, unreact } = useActions();
   const { show } = useToast();
   const { t } = useI18n();
+  const describe = useDescribeFailure();
   return (emoji): void => {
     const mine = message.reactions.some((r) => r.emoji === emoji && r.userIds.includes(meId));
-    (mine ? unreact(message, emoji) : react(message, emoji)).catch(() => {
-      show({ message: t('message.reactionFailed') });
+    (mine ? unreact(message, emoji) : react(message, emoji)).catch((failure: unknown) => {
+      show({ message: `${t('message.reactionFailed')} ${describe(failure)}` });
     });
   };
 };

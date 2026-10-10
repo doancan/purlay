@@ -8,6 +8,7 @@
  * of that is allowed to reach the composer, so every access is guarded and a failure
  * is a draft that is not remembered, not a composer that does not work.
  */
+import { noteStorageFailure } from '../../data/browser-storage';
 import type { KeyValueStorage } from '../../theme/theme';
 
 export interface DraftStorage extends KeyValueStorage {
@@ -22,6 +23,7 @@ export const readDraft = (storage: DraftStorage | null, key: string): string => 
   try {
     return storage?.getItem(key) ?? '';
   } catch {
+    noteStorageFailure('draft-read');
     return '';
   }
 };
@@ -33,5 +35,6 @@ export const writeDraft = (storage: DraftStorage | null, key: string, text: stri
     else storage?.setItem(key, text);
   } catch {
     // Not remembered; the composer carries on.
+    noteStorageFailure('draft-write');
   }
 };

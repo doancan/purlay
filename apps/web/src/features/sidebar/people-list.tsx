@@ -10,6 +10,7 @@
  * decoration, not information (`UX.md` §2), and drawing one that is always the same
  * colour would be a lie.
  */
+import { useDescribeFailure } from '../../data/failure';
 import { useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { useChannels, useMembers } from '../../data/queries';
@@ -32,6 +33,7 @@ export const PeopleList = (): React.JSX.Element => {
   const { openDirectMessage } = useActions();
   const { match, navigate } = useRoute();
   const { show } = useToast();
+  const describe = useDescribeFailure();
   const [opening, setOpening] = useState<string | null>(null);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
 
@@ -40,8 +42,8 @@ export const PeopleList = (): React.JSX.Element => {
     try {
       const channel = await openDirectMessage(workspace.id, userId);
       navigate(href('channel', { slug: workspace.slug, channelId: channel.id }));
-    } catch {
-      show({ message: t('sidebar.dm.failed') });
+    } catch (failure) {
+      show({ message: `${t('sidebar.dm.failed')} ${describe(failure)}` });
     } finally {
       setOpening(null);
     }

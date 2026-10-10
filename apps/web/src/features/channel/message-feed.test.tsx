@@ -10,6 +10,7 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
 import type { Channel, Message, ReadChannelResponse } from '@purlay/types';
 import { ApiError } from '../../data/errors';
+import { keys } from '../../data/keys';
 import { installDom } from '../../testing/dom';
 import {
   mountChannel,
@@ -354,6 +355,29 @@ describe('older messages', () => {
     view.unmountAll();
   });
 
+  test('a refresh that fails behind rows already on screen says they may be out of date, and Retry asks again', async () => {
+    let fail = false;
+    const view = await mountChannel({
+      messages: () =>
+        fail
+          ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+          : Promise.resolve(page([aMessage(1, { sender: BOB })])),
+    });
+    expect(view.queryByText('What you see may be out of date')).toBeNull();
+    fail = true;
+    await act(async () => {
+      await view.world.client.invalidateQueries({ queryKey: keys.messages(IDS.api) });
+    });
+    await settle();
+    expect(view.getByText('What you see may be out of date')).toBeDefined();
+    expect(view.container.querySelectorAll('[data-message-row]')).toHaveLength(1);
+    fail = false;
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(view.queryByText('What you see may be out of date')).toBeNull();
+    view.unmountAll();
+  });
+
   test('a page that fails says so in the same row, and Try again asks again', async () => {
     let fail = true;
     const view = await mountChannel(
@@ -370,6 +394,50 @@ describe('older messages', () => {
     await person().click(view.getByRole('button', { name: 'Try again' }));
     await settle();
     expect(view.container.querySelectorAll('[data-message-row]')).toHaveLength(4);
+    view.unmountAll();
+  });
+
+  test('a page that keeps failing is asked for once and not in a loop; only Try again asks again', async () => {
+    let asks = 0;
+    const view = await mountChannel({
+      ...twoPages(() => {
+        asks += 1;
+        return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+      }),
+      topStaysInView: true,
+    });
+    await settle();
+    await settle();
+    expect(view.getByText("Couldn't load older messages")).toBeDefined();
+    // The first fetch, and the one retry the query client allows a transient failure: no more.
+    const afterSettling = asks;
+    await settle();
+    await settle();
+    expect(asks).toBe(afterSettling);
+    expect(afterSettling).toBeLessThanOrEqual(2);
+
+    await person().click(view.getByRole('button', { name: 'Try again' }));
+    await settle();
+    expect(asks).toBeGreaterThan(afterSettling);
+    view.unmountAll();
+  });
+
+  test('a thread link into history that fails to load is not chased in a loop either', async () => {
+    let asks = 0;
+    const view = await mountChannel({
+      ...twoPages(() => {
+        asks += 1;
+        return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+      }),
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(1)}`,
+    });
+    await settle();
+    await settle();
+    const afterSettling = asks;
+    await settle();
+    await settle();
+    expect(asks).toBe(afterSettling);
+    expect(afterSettling).toBeLessThanOrEqual(2);
     view.unmountAll();
   });
 
@@ -584,7 +652,7 @@ describe('a send on its way', () => {
     view.unmountAll();
   });
 
-  test("Delete takes a failed send away, and the server's reason is shown", async () => {
+  test("Delete takes a failed send away, and the reason is shown in words, not the server's", async () => {
     const view = await mountChannel({ messages: page([aMessage(1, { sender: BOB })]) });
     open(view);
     let id = '';
@@ -599,7 +667,8 @@ describe('a send on its way', () => {
         ts: 1,
       });
     });
-    expect(view.getByText('Slow down.')).toBeDefined();
+    expect(view.getByText('You are going too fast. Wait a moment and try again.')).toBeDefined();
+    expect(view.queryByText('Slow down.')).toBeNull();
     await person().click(view.getByRole('button', { name: 'Delete' }));
     expect(view.queryByText('too long')).toBeNull();
     view.unmountAll();

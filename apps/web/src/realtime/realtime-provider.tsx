@@ -16,12 +16,14 @@ import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useStore } from 'zustand';
 import { useApi } from '../data/api-provider';
 import { keys } from '../data/keys';
+import { useClientStorage } from '../data/storage-provider';
 import { useChannels } from '../data/queries';
+import { useSession } from '../features/session/session';
 import { useWorkspace } from '../features/shell/workspace';
 import { systemClock } from '../system-clock';
 import type { Clock } from './clock';
 import type { ConnectionStatus, OpenSocket, Schedule } from './connection';
-import { createEngine, type Engine, type PendingMessage } from './engine';
+import { createEngine, type DegradedReason, type Engine, type PendingMessage } from './engine';
 import { browserSchedule, browserSocket } from './socket';
 
 export interface RealtimePorts {
@@ -52,6 +54,8 @@ export const RealtimeProvider = ({
   const api = useApi();
   const client = useQueryClient();
   const { workspace } = useWorkspace();
+  const { user } = useSession();
+  const storage = useClientStorage();
   const channels = useChannels(workspace.id);
 
   const engine = useMemo(
@@ -64,12 +68,24 @@ export const RealtimeProvider = ({
         schedule: ports.schedule ?? browserSchedule,
         random: ports.random ?? Math.random,
         clock: ports.clock ?? systemClock,
+        userId: user.id,
+        storage,
         // The identity answer is what says whether the session is still there.
         onSessionEnded: () => {
           void client.invalidateQueries({ queryKey: keys.me });
         },
       }),
-    [api, client, ports.url, ports.openSocket, ports.schedule, ports.random, ports.clock],
+    [
+      api,
+      client,
+      user.id,
+      storage,
+      ports.url,
+      ports.openSocket,
+      ports.schedule,
+      ports.random,
+      ports.clock,
+    ],
   );
 
   useEffect(() => {
@@ -100,6 +116,10 @@ export const useEngine = (): Engine => {
 
 export const useConnectionStatus = (): ConnectionStatus =>
   useStore(useEngine().store, (state) => state.status);
+
+/** Channels whose live updates are not trustworthy right now, and why. */
+export const useDegraded = (): Readonly<Record<string, DegradedReason>> =>
+  useStore(useEngine().store, (state) => state.degraded);
 
 /** Every message in flight, across channels; filter with `useMemo` where a screen wants one channel's. */
 export const usePending = (): readonly PendingMessage[] =>

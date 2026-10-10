@@ -5,6 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   GRAMMARS,
+  memoisedCore,
   browserHighlighter,
   createHighlighter,
   grammarFor,
@@ -88,5 +89,34 @@ describe('highlighting', () => {
     });
     expect(await broken('a: 1', 'yaml')).toBeNull();
     expect((await broken('SELECT 1', 'sql'))?.length).toBe(1);
+  });
+});
+
+describe('the highlighter core', () => {
+  test('a load that failed is asked for again, not remembered as failed for the life of the page', async () => {
+    let asks = 0;
+    const real = browserHighlighter;
+    const core = memoisedCore(() => {
+      asks += 1;
+      return asks === 1
+        ? Promise.reject(new Error('the chunk did not arrive'))
+        : Promise.reject(new Error('still down'));
+    });
+    const flaky = createHighlighter(GRAMMARS, core);
+    expect(await flaky('SELECT 1', 'sql')).toBeNull();
+    expect(await flaky('SELECT 1', 'sql')).toBeNull();
+    expect(asks).toBe(2);
+    expect(await real('SELECT 1', 'sql')).not.toBeNull();
+  });
+
+  test('a load that worked is kept: one core for every block', async () => {
+    let asks = 0;
+    const loaded = memoisedCore(() => {
+      asks += 1;
+      return Promise.resolve({} as never);
+    });
+    await loaded();
+    await loaded();
+    expect(asks).toBe(1);
   });
 });

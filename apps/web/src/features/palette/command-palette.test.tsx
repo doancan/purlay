@@ -359,7 +359,9 @@ describe('what each kind of item does', () => {
     await person().type(input(), 'alice');
     await person().keyboard('{Enter}');
     await settle();
-    expect(view.getByRole('alert').textContent).toBe('That did not open. Try again.');
+    expect(view.getByRole('alert').textContent).toBe(
+      'That did not open. Something went wrong on our side. Try again in a moment.',
+    );
     expect(closed()).toEqual([]);
     expect(here()).toBe(`/w/acme/c/${IDS.api}`);
     await person().type(input(), 'x');

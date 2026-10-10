@@ -66,7 +66,7 @@ describe('the replies of a thread', () => {
       replies: [reply(2, { sender: BOB }), reply(5, { sender: ME })],
       pending: [
         pending(3),
-        pending(4, { delivery: 'failed', reason: 'Too long.' }),
+        pending(4, { delivery: 'failed', reason: 'VALIDATION_FAILED' }),
         // The server already has this one: its echo arrived, so it is not shown twice.
         pending(5),
         pending(6, { delivery: 'sent' }),
@@ -76,7 +76,7 @@ describe('the replies of a thread', () => {
     expect(items.map((i) => [i.key, i.delivery, i.failure])).toEqual([
       [messageIdAt(2), 'sent', null],
       [messageIdAt(3), 'sending', null],
-      [messageIdAt(4), 'failed', 'Too long.'],
+      [messageIdAt(4), 'failed', 'VALIDATION_FAILED'],
       [messageIdAt(5), 'sent', null],
       [messageIdAt(6), 'sending', null],
     ]);

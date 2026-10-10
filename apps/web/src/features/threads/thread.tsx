@@ -21,6 +21,7 @@
  * becomes "Resolved by …" with the root's text dimmed — the feed gets quieter as questions
  * close (`ThreadedMessageRow`). Nothing is posted: the resolution is metadata on the root.
  */
+import { useDescribeFailure } from '../../data/failure';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
@@ -60,6 +61,7 @@ const ThreadView = ({
   members,
 }: ThreadProps): React.JSX.Element | null => {
   const { t, format } = useI18n();
+  const describe = useDescribeFailure();
   const threads = useThreads();
   const actions = useActions();
   const engine = useEngine();
@@ -126,7 +128,7 @@ const ThreadView = ({
           message:
             isApiError(error) && error.code === 'THREAD_NOT_RESOLVABLE'
               ? t('thread.resolveFailed')
-              : t('thread.actionFailed'),
+              : `${t('thread.actionFailed')} ${describe(error)}`,
         });
       } finally {
         working.current = false;

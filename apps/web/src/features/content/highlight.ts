@@ -106,37 +106,55 @@ const asToken = (token: ThemedToken): HighlightToken => ({
 
 const THEME = 'css-variables';
 
-let core: Promise<HighlighterCore> | null = null;
+type CoreLoader = () => Promise<HighlighterCore>;
 
-/** One highlighter for the page, made on the first request; its theme is the CSS-variable one. */
-const highlighterCore = (): Promise<HighlighterCore> => {
-  core ??= (async (): Promise<HighlighterCore> => {
-    const [shiki, engine] = await Promise.all([
-      import('shiki/core'),
-      import('shiki/engine/javascript'),
-    ]);
-    return await shiki.createHighlighterCore({
-      themes: [shiki.createCssVariablesTheme({ name: THEME, variablePrefix: '--shiki-' })],
-      langs: [],
-      engine: engine.createJavaScriptRegexEngine(),
-    });
-  })();
-  return core;
+const loadCore: CoreLoader = async () => {
+  const [shiki, engine] = await Promise.all([
+    import('shiki/core'),
+    import('shiki/engine/javascript'),
+  ]);
+  return await shiki.createHighlighterCore({
+    themes: [shiki.createCssVariablesTheme({ name: THEME, variablePrefix: '--shiki-' })],
+    langs: [],
+    engine: engine.createJavaScriptRegexEngine(),
+  });
 };
+
+/**
+ * One core for the page, made on the first request and kept — **unless making it failed**.
+ * A chunk that did not arrive on a bad connection is a moment, not a verdict: if the
+ * rejected promise were kept, every code block on the page would stay plain until a reload,
+ * long after the network came back.
+ */
+export const memoisedCore = (load: CoreLoader): CoreLoader => {
+  let held: Promise<HighlighterCore> | null = null;
+  return () => {
+    held ??= load().catch((error: unknown) => {
+      held = null;
+      throw error;
+    });
+    return held;
+  };
+};
+
+const sharedCore = memoisedCore(loadCore);
 
 /**
  * A highlighter over a set of grammars: Shiki, loaded when first needed, and nothing at all
  * when it cannot be. The grammars are an argument so a test can hand it one that fails to
  * load — the case a real network produces and a real test run does not.
  */
-export const createHighlighter = (grammars: Readonly<Record<Grammar, Loader>>): Highlighter => {
+export const createHighlighter = (
+  grammars: Readonly<Record<Grammar, Loader>>,
+  core: CoreLoader = sharedCore,
+): Highlighter => {
   // Per highlighter: what *this* set of grammars has already put into the shared core.
   const loaded = new Set<Grammar>();
   return async (code, language) => {
     const grammar = grammarFor(language);
     if (grammar === null) return null;
     try {
-      const highlighter = await highlighterCore();
+      const highlighter = await core();
       if (!loaded.has(grammar)) {
         await highlighter.loadLanguage((await grammars[grammar]()).default);
         loaded.add(grammar);

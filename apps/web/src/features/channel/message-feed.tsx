@@ -367,15 +367,23 @@ export const MessageFeed = ({
   const announcement = useDeliveryAnnouncer(items);
 
   // Older pages load when the top comes into view, one at a time.
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = feed;
+  //
+  // **A page that failed is not asked for again by itself.** The observer reports "visible"
+  // whenever it is set up and the top row is on screen, and a failed fetch ends the fetching
+  // state, which sets it up anew: without the error check one outage was a loop of requests
+  // with no back-off, hammering the server while the row said "Try again". Only that button
+  // asks after a failure.
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = feed;
   useEffect(() => {
     const root = scroller.current;
     const target = top.current;
-    if (!ready || root === null || target === null || !hasNextPage) return undefined;
+    if (!ready || root === null || target === null || !hasNextPage || isFetchNextPageError) {
+      return undefined;
+    }
     return ports.whenVisible(target, root, () => {
       if (!isFetchingNextPage) void fetchNextPage();
     });
-  }, [ready, hasNextPage, isFetchingNextPage, fetchNextPage, ports]);
+  }, [ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, ports]);
 
   // Reading back to the reader's place (see `seeking`), one page at a time.
   // The count of pages is a dependency because a page that arrives before the render that would
@@ -389,8 +397,10 @@ export const MessageFeed = ({
   // is here or there is nothing older, one page at a time.
   const wanted = openThread !== null && !messages.some((m) => m.id === openThread);
   useEffect(() => {
-    if (wanted && ready && hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [wanted, ready, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (wanted && ready && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+      void fetchNextPage();
+    }
+  }, [wanted, ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   // One function for every row, so a row's props do not change when another row's do.
   const retry = useCallback(
@@ -448,6 +458,25 @@ export const MessageFeed = ({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* A refetch that failed behind data already on screen: the rows are the last good ones, and say so. */}
+      {feed.isRefetchError && !feed.isFetchNextPageError && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b-hairline border-border-subtle px-4 py-1 text-caption text-ink-muted"
+        >
+          <Icon name="warning" size="sm" />
+          {t('connection.stale')}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              void feed.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
       <div ref={scroller} onScroll={onScroll} className="relative flex-1 overflow-y-auto py-2">
         {/* The top row is one height whatever it says, so loading above never pushes what is below. */}
         <div ref={top} className="flex h-control items-center px-4 text-caption text-ink-muted">

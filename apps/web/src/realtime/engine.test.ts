@@ -14,11 +14,19 @@ import {
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
 import { anApi } from '../testing/fake-api';
-import { fakeSchedule } from '../testing/fakes';
+import { fakeSchedule, memoryStorage, type MemoryStorage } from '../testing/fakes';
 import type { Api } from '../data/api';
 import type { Clock } from './clock';
 import type { SocketHandlers } from './connection';
-import { ACK_DEADLINE_MS, createEngine, type Engine, type PendingMessage } from './engine';
+import {
+  ACK_DEADLINE_MS,
+  REPLAY_RETRY_DELAYS_MS,
+  UNNAMED,
+  createEngine,
+  type Engine,
+  type PendingMessage,
+} from './engine';
+import { MAX_STORED, pendingKey } from './pending-store';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -87,7 +95,12 @@ interface World {
   readonly pending: () => readonly PendingMessage[];
 }
 
-const world = (api: Partial<Api> = {}): World => {
+interface Extras {
+  readonly storage?: MemoryStorage | null;
+  readonly userId?: string;
+}
+
+const world = (api: Partial<Api> = {}, extras: Extras = {}): World => {
   const timers = fakeSchedule();
   const sockets: Socket[] = [];
   const client = new QueryClient();
@@ -96,6 +109,8 @@ const world = (api: Partial<Api> = {}): World => {
   const engine = createEngine({
     api: anApi(api),
     client,
+    userId: extras.userId ?? ME.id,
+    ...(extras.storage === undefined ? {} : { storage: extras.storage }),
     url: 'ws://purlay.test/ws',
     openSocket: (_url, handlers) => {
       const socket: Socket = { handlers, sent: [], closed: false };
@@ -260,7 +275,7 @@ describe('a send over an open socket', () => {
     w.timers.advance(1);
     expect(w.pending()[0]).toMatchObject({
       delivery: 'failed',
-      reason: 'The server did not answer in time.',
+      reason: 'TIMEOUT',
     });
 
     w.engine.retry(id);
@@ -272,7 +287,7 @@ describe('a send over an open socket', () => {
     expect(w.pending()[0]?.delivery).toBe('sent');
   });
 
-  test("an ERROR that names the send fails it with the server's words; one that names nothing is ignored", () => {
+  test("an ERROR that names the send fails it with the server's code; one the connection retries by itself is ignored", () => {
     const w = world();
     w.engine.start();
     w.open();
@@ -289,7 +304,7 @@ describe('a send over an open socket', () => {
         ts: T0,
       }),
     );
-    expect(w.pending()[0]).toMatchObject({ delivery: 'failed', reason: 'Slow down.' });
+    expect(w.pending()[0]).toMatchObject({ delivery: 'failed', reason: 'RATE_LIMITED' });
   });
 
   test('only a failed message can be retried or discarded', () => {
@@ -338,7 +353,7 @@ describe('a send while the socket is down goes over HTTP, the same service', () 
     await Promise.resolve();
     expect(w.pending().find((p) => p.id === first)).toMatchObject({
       delivery: 'failed',
-      reason: 'Too long.',
+      reason: 'VALIDATION_FAILED',
     });
     refuse = new Error('boom');
     const second = w.engine.send({ channelId: CH, content: 'y' });
@@ -346,7 +361,7 @@ describe('a send while the socket is down goes over HTTP, the same service', () 
     await Promise.resolve();
     expect(w.pending().find((p) => p.id === second)).toMatchObject({
       delivery: 'failed',
-      reason: 'The message could not be sent.',
+      reason: 'UNKNOWN',
     });
   });
 
@@ -686,5 +701,332 @@ describe('is the session still there', () => {
     failures(w);
     for (let i = 0; i < 6; i++) await Promise.resolve();
     expect(w.engine.store.getState().status === 'ended').toBe(ends);
+  });
+});
+
+/**
+ * What the server refuses, and what cannot be finished, is said — never swallowed (review:
+ * a refused SUBSCRIBE left those channels without live updates and nothing on screen said so).
+ */
+describe('a subscription the server refuses', () => {
+  const subscribeId = (w: World): string => {
+    const sent = w.sentOps('SUBSCRIBE').at(-1);
+    if (sent === undefined) throw new Error('nothing subscribed');
+    return sent.id;
+  };
+  const opened = (channels: string[]): World => {
+    const w = world();
+    w.client.setQueryData(
+      keys.channels(WS),
+      channels.map((id) => channel(id)),
+    );
+    w.engine.watch(channels);
+    w.engine.start();
+    w.open();
+    w.timers.advance(2_000);
+    return w;
+  };
+  const refuse = (
+    w: World,
+    code: 'CHANNEL_NOT_FOUND' | 'FORBIDDEN' | 'UNSUPPORTED_MEDIA_TYPE' | 'INTERNAL',
+  ): void => {
+    w.deliver({
+      event: 'ERROR',
+      data: { code, message: 'no' },
+      refId: subscribeId(w),
+      ts: T0,
+    });
+  };
+
+  test('for a reason waiting will not change leaves the channels degraded, with the code, for the bar to show', () => {
+    const w = opened([CH, CH2]);
+    refuse(w, 'UNSUPPORTED_MEDIA_TYPE');
+    expect(w.engine.store.getState().degraded).toEqual({
+      [CH]: 'UNSUPPORTED_MEDIA_TYPE',
+      [CH2]: 'UNSUPPORTED_MEDIA_TYPE',
+    });
+  });
+
+  test.each(['CHANNEL_NOT_FOUND', 'FORBIDDEN'] as const)(
+    'with %s lets the channels go and asks for the list again: live updates it will never have are not a state to show',
+    (code) => {
+      const w = opened([CH, CH2]);
+      refuse(w, code);
+      expect(w.engine.store.getState().degraded).toEqual({});
+      expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+      // Let go: a reconnect does not ask for them again.
+      w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+      for (let waited = 0; w.sockets.length < 2 && waited < 3_000; waited += 100)
+        w.timers.advance(100);
+      w.open();
+      w.timers.advance(2_000);
+      const asked = w
+        .sentOps('SUBSCRIBE')
+        .slice(1)
+        .flatMap((s) => s.payload['channels'] as { channelId: string }[]);
+      expect(asked).toEqual([]);
+    },
+  );
+
+  test("is reported once: the ERROR that follows the connection's report is not a second, unnamed failure", () => {
+    const w = opened([CH]);
+    refuse(w, 'INTERNAL');
+    expect(Object.keys(w.engine.store.getState().degraded)).toEqual([CH]);
+  });
+
+  test('Retry asks again for exactly those channels, and clears what was said', () => {
+    const w = opened([CH, CH2]);
+    refuse(w, 'INTERNAL');
+    const before = w.sentOps('SUBSCRIBE').length;
+    w.engine.retryDegraded();
+    expect(w.engine.store.getState().degraded).toEqual({});
+    w.timers.advance(2_000);
+    answerAll(w);
+    w.timers.advance(2_000);
+    expect(w.sentOps('SUBSCRIBE').length).toBeGreaterThan(before);
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+  });
+});
+
+describe('an error that answers nothing the client can name', () => {
+  test('is shown as degraded under the unnamed key, and not for what the connection retries by itself', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.deliver({ event: 'ERROR', data: { code: 'RATE_LIMITED', message: 'x' }, ts: T0 });
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'DATABASE_UNAVAILABLE', message: 'x' },
+      refId: '0199155c-6200-7b7f-8c11-0000000000aa',
+      ts: T0,
+    });
+    expect(w.engine.store.getState().degraded).toEqual({});
+    w.deliver({ event: 'ERROR', data: { code: 'INTERNAL', message: 'x' }, ts: T0 });
+    expect(w.engine.store.getState().degraded).toEqual({ [UNNAMED]: 'INTERNAL' });
+    w.engine.retryDegraded();
+    expect(w.engine.store.getState().degraded).toEqual({});
+  });
+});
+
+describe('a replay that cannot be finished', () => {
+  const failingThenOk = (failures: number): { api: Partial<Api>; asked: () => number } => {
+    let asks = 0;
+    return {
+      asked: () => asks,
+      api: {
+        messages: (): Promise<MessagePage> => {
+          asks += 1;
+          return asks <= failures
+            ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+            : Promise.resolve({ data: [], nextCursor: null });
+        },
+      },
+    };
+  };
+  const startReplay = async (api: Partial<Api>): Promise<World> => {
+    const w = world(api);
+    w.client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [], nextCursor: null }],
+    });
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.timers.advance(2_000);
+    answerAll(w, { [CH]: C1 });
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    return w;
+  };
+
+  test('is tried again after waits that grow, and succeeds without ever saying anything', async () => {
+    const { api, asked } = failingThenOk(2);
+    const w = await startReplay(api);
+    expect(asked()).toBe(1);
+    w.timers.advance(REPLAY_RETRY_DELAYS_MS[0] ?? 0);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(asked()).toBe(2);
+    w.timers.advance(REPLAY_RETRY_DELAYS_MS[1] ?? 0);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(asked()).toBe(3);
+    expect(w.engine.store.getState().degraded).toEqual({});
+  });
+
+  test('that never works hands the channel back to the server whole, and says the channel is degraded', async () => {
+    const { api, asked } = failingThenOk(99);
+    const w = await startReplay(api);
+    for (const wait of REPLAY_RETRY_DELAYS_MS) {
+      w.timers.advance(wait);
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    }
+    expect(asked()).toBe(REPLAY_RETRY_DELAYS_MS.length + 1);
+    expect(w.engine.store.getState().degraded).toEqual({ [CH]: 'REPLAY' });
+    expect(w.client.getQueryState(keys.messages(CH))?.isInvalidated).toBe(true);
+  });
+
+  test('a second acknowledgement for the same channel does not start a parallel read', async () => {
+    let release: () => void = () => undefined;
+    let asks = 0;
+    const w = await startReplay({
+      messages: () => {
+        asks += 1;
+        return new Promise((resolve) => {
+          release = (): void => {
+            resolve({ data: [], nextCursor: null });
+          };
+        });
+      },
+    });
+    w.deliver({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 });
+    expect(asks).toBe(1);
+    release();
+  });
+
+  test('stopping ends one that is waiting between attempts: it does not wake into a dead engine', async () => {
+    const { api, asked } = failingThenOk(99);
+    const w = await startReplay(api);
+    w.engine.stop();
+    w.timers.advance(60_000);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(asked()).toBe(1);
+    expect(w.engine.store.getState().degraded).toEqual({});
+  });
+
+  test('stopping while a page is in flight ends the continuation without releasing the channel', async () => {
+    let release: () => void = () => undefined;
+    const w = await startReplay({
+      messages: () =>
+        new Promise((resolve) => {
+          release = (): void => {
+            resolve({ data: [], nextCursor: null });
+          };
+        }),
+    });
+    w.engine.stop();
+    release();
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(w.engine.store.getState().degraded).toEqual({});
+  });
+
+  test('a failure after the page stopped says nothing', async () => {
+    let fail: (reason: Error) => void = () => undefined;
+    const w = await startReplay({
+      messages: () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    });
+    w.engine.stop();
+    fail(new ApiError(0, 'NETWORK', 'offline'));
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(w.engine.store.getState().degraded).toEqual({});
+  });
+});
+
+describe('what was in flight when the page went', () => {
+  const key = pendingKey(ME.id);
+
+  test('is kept as it is sent, and not once the server has it', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'hello', parentId: 'root-9' });
+    expect(JSON.parse(storage.data[key] ?? '[]')).toEqual([
+      {
+        id,
+        channelId: CH,
+        parentId: 'root-9',
+        content: 'hello',
+        createdAt: '2026-10-09T12:00:00.000Z',
+      },
+    ]);
+    w.deliver(ack(id));
+    expect(storage.data[key]).toBeUndefined();
+  });
+
+  test('comes back after a reload as failed, with the same id, and Retry sends exactly that', () => {
+    const storage = memoryStorage();
+    const first = world({}, { storage });
+    first.engine.start();
+    first.open();
+    const id = first.engine.send({ channelId: CH, content: 'typed just before the tab died' });
+
+    const second = world({}, { storage });
+    expect(second.pending()).toEqual([
+      {
+        id,
+        channelId: CH,
+        parentId: null,
+        content: 'typed just before the tab died',
+        createdAt: '2026-10-09T12:00:00.000Z',
+        delivery: 'failed',
+        reason: null,
+      },
+    ]);
+    second.engine.start();
+    second.open();
+    second.engine.retry(id);
+    expect(second.sentOps('MESSAGE_SEND').map((f) => f.id)).toEqual([id]);
+    second.deliver({ event: 'MESSAGE_CREATED', data: echo(id), version: 1, ts: T0 } as ServerFrame);
+    expect(second.pending()).toEqual([]);
+    expect(storage.data[key]).toBeUndefined();
+  });
+
+  test('is never shown to, or re-sent by, a different person on the same browser', () => {
+    const storage = memoryStorage();
+    const mine = world({}, { storage });
+    mine.engine.start();
+    mine.open();
+    mine.engine.send({ channelId: CH, content: 'mine' });
+    const theirs = world({}, { storage, userId: '00000000-0000-4000-8000-0000000000f9' });
+    expect(theirs.pending()).toEqual([]);
+  });
+
+  test('is kept within bounds: the newest fifty, and no more characters than the quota can spare', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.engine.start();
+    w.open();
+    for (let i = 0; i < MAX_STORED + 5; i++)
+      w.engine.send({ channelId: CH, content: `m${String(i)}` });
+    expect((JSON.parse(storage.data[key] ?? '[]') as unknown[]).length).toBe(MAX_STORED);
+    expect(w.pending()).toHaveLength(MAX_STORED + 5);
+  });
+
+  test('survives storage that is missing, full or refuses: the send works, only the memory does not', () => {
+    const throwing = {
+      ...memoryStorage(),
+      setItem: (): void => {
+        throw new Error('quota');
+      },
+      getItem: (): string => {
+        throw new Error('blocked');
+      },
+    } as unknown as MemoryStorage;
+    const w = world({}, { storage: throwing });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'still sends' });
+    expect(w.sentOps('MESSAGE_SEND').map((f) => f.id)).toEqual([id]);
+    const none = world({}, { storage: null });
+    none.engine.start();
+    none.open();
+    none.engine.send({ channelId: CH, content: 'no storage at all' });
+    expect(none.pending()).toHaveLength(1);
+  });
+
+  test('a page that stopped and started again (StrictMode) owes its waiting sends a re-send on the next open', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'in flight' });
+    w.engine.stop();
+    w.timers.advance(ACK_DEADLINE_MS * 2);
+    expect(w.pending()[0]?.delivery).toBe('sending'); // the deadline timer went with the stop
+    w.engine.start();
+    w.open();
+    expect(w.sentOps('MESSAGE_SEND').filter((f) => f.id === id)).toHaveLength(2);
+    w.timers.advance(ACK_DEADLINE_MS);
+    expect(w.pending()[0]?.delivery).toBe('failed'); // and the deadline is armed again
   });
 });

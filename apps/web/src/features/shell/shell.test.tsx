@@ -4,7 +4,7 @@
  * socket is one it drives.
  */
 import { describe, expect, test } from 'bun:test';
-import { act } from '@testing-library/react';
+import { act, within } from '@testing-library/react';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
 import { installDom } from '../../testing/dom';
@@ -211,6 +211,31 @@ describe('the connection', () => {
       .sent('SUBSCRIBE')
       .flatMap((f) => (f.payload['channels'] as { channelId: string }[]).map((c) => c.channelId));
     expect(watched.sort()).toEqual([IDS.api, IDS.deploys, IDS.incidents].sort());
+  });
+
+  test('a subscription the server refuses is said in the bar, and Retry asks for those channels again', async () => {
+    const view = await visit(`/w/acme/c/${IDS.api}`, aSignedInApi());
+    view.world.sockets.open();
+    await settle();
+    act(() => {
+      view.world.timers.advance(2_000);
+    });
+    const asked = view.world.sockets.sent('SUBSCRIBE');
+    const first = asked[0];
+    if (first === undefined) throw new Error('nothing was subscribed');
+    expect(view.queryByText(/Live updates are paused/)).toBeNull();
+    act(() => {
+      view.world.sockets.deliver({
+        event: 'ERROR',
+        data: { code: 'INTERNAL', message: 'x' },
+        refId: first.id,
+        ts: 1,
+      });
+    });
+    const bar = view.getByText('Live updates are paused for 3 channels').closest('[role="status"]');
+    if (bar === null) throw new Error('the bar was not there');
+    await person().click(within(bar as HTMLElement).getByRole('button', { name: 'Retry' }));
+    expect(view.queryByText(/Live updates are paused/)).toBeNull();
   });
 
   test('the end of the session sends the person back to sign in', async () => {

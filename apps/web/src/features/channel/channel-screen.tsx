@@ -12,6 +12,7 @@
  * written to; it shows its messages and a way to join, in place of the composer, so a link
  * to a public channel is useful before they are in it.
  */
+import { useDescribeFailure } from '../../data/failure';
 import { useEffect, useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { useActions } from '../../data/actions-provider';
@@ -32,8 +33,9 @@ import { MessageFeed } from './message-feed';
 const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t } = useI18n();
   const { joinChannel } = useActions();
+  const describe = useDescribeFailure();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   return (
     <div className="flex flex-wrap items-center gap-3 border-t-hairline border-border-subtle px-4 py-3">
       <p className="text-body text-ink-muted">
@@ -44,18 +46,18 @@ const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
         busy={busy}
         onClick={() => {
           setBusy(true);
-          setFailed(false);
-          joinChannel(channel.id).catch(() => {
+          setFailed(null);
+          joinChannel(channel.id).catch((failure: unknown) => {
             setBusy(false);
-            setFailed(true);
+            setFailed(describe(failure));
           });
         }}
       >
         {t('channel.join.action')}
       </Button>
-      {failed && (
+      {failed !== null && (
         <p role="alert" className="text-label text-danger-text">
-          {t('channel.join.failed')}
+          {`${t('channel.join.failed')} ${failed}`}
         </p>
       )}
     </div>
