@@ -33,6 +33,9 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-header': '--height-header',
   // A badge is a height and a minimum width: one digit is a circle, two are not.
   'size-badge': ['--height-badge', '--container-badge'],
+  'size-dialog': '--container-dialog',
+  'size-palette': '--container-palette',
+  'size-toast': '--container-toast',
   'size-avatar': '--size-avatar',
   'size-dot': '--size-dot',
   'size-icon-sm': '--size-icon-sm',

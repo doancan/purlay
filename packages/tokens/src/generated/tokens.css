@@ -88,6 +88,9 @@
   --size-gutter: 56px;
   --size-badge: 18px;
   --size-dot: 8px;
+  --size-dialog: 480px;
+  --size-palette: 560px;
+  --size-toast: 360px;
   --size-avatar: 28px;
   --size-focus-offset: 2px;
   --size-icon-sm: 12px;
