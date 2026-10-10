@@ -164,7 +164,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   return (
     <>
       <div className="p-3 pb-2">
-        <div className="flex h-control max-narrow:h-touch items-center gap-2 rounded-pill bg-surface-200 px-3">
+        <div className="flex h-control max-narrow:h-touch items-center gap-2 rounded-pill bg-surface-200 px-3 focus-within:outline-focus focus-within:outline-focus-ring focus-within:outline-offset-focus">
           <Icon name="search" />
           <input
             type="text"
@@ -184,7 +184,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
               setFailed(null);
             }}
             onKeyDown={onKeyDown}
-            className="min-w-0 flex-1 bg-transparent text-body text-ink placeholder:text-ink-muted"
+            className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
           />
           <Kbd>Esc</Kbd>
         </div>

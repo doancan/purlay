@@ -213,7 +213,7 @@ const Inner = ({
   };
 
   const left = unitsLeft(text);
-  const rows = rowsFor(text);
+  const rows = rowsFor(text, 1);
 
   const compact = parentId !== undefined;
   const empty = trimEnd(text) === '';
@@ -261,8 +261,8 @@ const Inner = ({
   );
 
   return (
-    <div className="shrink-0 px-4 pb-4 pt-2">
-      <div className="mx-auto flex w-full max-w-feed flex-col gap-2">
+    <div className="shrink-0 pb-4 pt-2">
+      <div className="mx-auto flex w-full max-w-feed flex-col gap-2 px-4">
         <div
           data-composer-card=""
           onFocus={() => {
@@ -280,7 +280,7 @@ const Inner = ({
             <textarea
               data-composer=""
               ref={field}
-              rows={compact ? Math.max(1, rows - 1) : rows}
+              rows={rows}
               value={text}
               aria-label={t('composer.label', { channel: channelName })}
               aria-invalid={error === null ? undefined : true}

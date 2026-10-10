@@ -26,7 +26,8 @@ export const segmentClasses =
 export const activeSegmentClasses =
   'border-hairline border-border-subtle bg-surface-100 text-ink max-narrow:hidden';
 /** The track the two segments sit in. */
-export const segmentTrackClasses = 'flex gap-1 rounded-pill bg-surface-200 p-1';
+export const segmentTrackClasses =
+  'flex shrink-0 gap-1 rounded-pill bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
 
 /** The square at the head of a header: what this screen is, in a glyph. */
 export const HeaderTile = ({
@@ -36,7 +37,7 @@ export const HeaderTile = ({
 }): React.JSX.Element => (
   <span
     aria-hidden="true"
-    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted"
+    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted max-narrow:hidden"
   >
     {children}
   </span>

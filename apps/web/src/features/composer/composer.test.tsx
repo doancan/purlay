@@ -214,9 +214,9 @@ describe('what it shows', () => {
     expect(send.getAttribute('aria-disabled')).toBe('false');
   });
 
-  test('grows with its lines inside a floor of two and a ceiling of twelve', async () => {
+  test('grows with its lines from one line to a ceiling of twelve', async () => {
     const { box, user } = await mount();
-    expect(Number(box().getAttribute('rows'))).toBe(2);
+    expect(Number(box().getAttribute('rows'))).toBe(1);
     await user.click(box());
     await user.type(
       box(),

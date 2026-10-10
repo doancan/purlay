@@ -196,7 +196,9 @@ const QuestionRow = ({
               {format.time(question.createdAt, now)}
             </time>
           </span>
-          <span className="block truncate text-body text-ink">{question.content}</span>
+          <span className="block truncate text-body text-ink max-narrow:line-clamp-2 max-narrow:whitespace-normal">
+            {question.content}
+          </span>
         </span>
         <span className="inline-flex h-badge shrink-0 items-center gap-1 whitespace-nowrap rounded-pill border-hairline border-border-subtle px-2 text-label text-warning-text">
           <Icon name="reply" size="sm" />
