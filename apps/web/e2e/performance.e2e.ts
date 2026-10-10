@@ -21,16 +21,21 @@ test.describe('cold load', () => {
     signIn,
     world,
   }, info) => {
-    await signIn();
+    // Bob, not the viewer whose unread state the seeded-data spec asserts: a visit can mark a channel read.
+    await signIn('bob');
     const route = `/w/${world.workspace.slug}/c/${world.channels.api}`;
+    // The frame is the sidebar, or — below the breakpoint, where it is an overlay — the toggle that opens it.
+    const frame = page
+      .getByRole('complementary')
+      .or(page.getByRole('button', { name: 'Open navigation' }));
     // Warm: the first visit puts the bundle in the browser's cache.
     await page.goto(route);
-    await expect(page.getByRole('complementary')).toBeVisible();
+    await expect(frame).toBeVisible();
 
     const started = performance.now();
     await page.goto(route, { waitUntil: 'commit' });
-    // Interactive: the sidebar is the frame, and the page answers a key press.
-    await expect(page.getByRole('complementary')).toBeVisible();
+    // Interactive: the frame is there, and the page answers a key press.
+    await expect(frame).toBeVisible();
     await page.keyboard.press('Tab');
     const elapsed = performance.now() - started;
     const navigation = await page.evaluate(() => {

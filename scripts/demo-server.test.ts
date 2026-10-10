@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileFor, routeOf, startFront, type Route } from './demo-server';
+import { fileFor, forwardableCode, routeOf, startFront, type Route } from './demo-server';
 
 const dist = mkdtempSync(join(tmpdir(), 'demo-dist-'));
 mkdirSync(join(dist, 'assets'));
@@ -193,5 +193,19 @@ describe('the socket', () => {
 
   test('a plain request to /ws is told it needs an upgrade', async () => {
     expect((await fetch(`${base}/ws`)).status).toBe(426);
+  });
+});
+
+describe('a close code that is passed on', () => {
+  /** What a socket reports is not always what it may send: 1006 is "the connection was lost". */
+  test.each([1004, 1005, 1006, 1015])(
+    '%i is a report, not a code, and becomes a normal close',
+    (code) => {
+      expect(forwardableCode(code)).toBe(1000);
+    },
+  );
+
+  test.each([1000, 1001, 1011, 1012, 3000, 4401])('%i is passed on as it is', (code) => {
+    expect(forwardableCode(code)).toBe(code);
   });
 });

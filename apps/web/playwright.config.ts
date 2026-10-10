@@ -16,7 +16,11 @@ import { defineConfig, devices, type PlaywrightTestConfig } from '@playwright/te
 
 type Project = NonNullable<PlaywrightTestConfig['projects']>[number];
 
-const PORT = 4173;
+// Overridable so two checkouts (or a person's own `bun run demo`) can each have a harness: the
+// port and the database both come from it, and neither is shared.
+const PORT = Number(process.env['PURLAY_E2E_PORT'] ?? 4173);
+const DATABASE =
+  process.env['PURLAY_E2E_PORT'] === undefined ? 'purlay_e2e' : `purlay_e2e_${String(PORT)}`;
 const ci = process.env['CI'] !== undefined;
 
 const desktop = { width: 1440, height: 900 } as const;
@@ -66,7 +70,7 @@ export default defineConfig({
     project('chromium-light-narrow', 'light', narrow),
   ],
   webServer: {
-    command: `bun run scripts/demo.ts --db purlay_e2e --port ${String(PORT)} --manifest apps/web/e2e/.world.json`,
+    command: `bun run scripts/demo.ts --db ${DATABASE} --port ${String(PORT)} --manifest apps/web/e2e/.world.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
     url: `http://localhost:${String(PORT)}/health`,

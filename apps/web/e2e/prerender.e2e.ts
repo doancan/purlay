@@ -17,7 +17,10 @@ test.describe('before JavaScript', () => {
     await page.goto('/');
     const root = page.locator('#root');
     // A sidebar, a header and feed rows drawn as layout.
-    await expect(root.locator('div.w-sidebar')).toBeVisible();
+    // Below the breakpoint the sidebar is an overlay, so the skeleton draws no column for it.
+    const narrow = (page.viewportSize()?.width ?? 0) < 900;
+    if (narrow) await expect(root.locator('div.w-sidebar')).toBeHidden();
+    else await expect(root.locator('div.w-sidebar')).toBeVisible();
     await expect(root.locator('div.h-header').first()).toBeVisible();
     expect(await root.locator('span.bg-surface-200').count()).toBeGreaterThanOrEqual(8);
     // Hidden from assistive technology: nothing to read yet, and "block, block, block" is noise.
@@ -44,7 +47,7 @@ test.describe('the swap', () => {
     baseURL,
     world,
   }) => {
-    await signIn();
+    await signIn('bob');
     const route = `/w/${world.workspace.slug}`;
 
     // The skeleton, as a browser without JavaScript paints it (with the same cookie: it is
@@ -65,7 +68,11 @@ test.describe('the swap', () => {
 
     const page = await context.newPage();
     await page.goto(route);
-    const real = page.getByRole('complementary');
+    // Below the breakpoint the sidebar is an overlay, so the frame that arrives is the toggle.
+    const narrow = (page.viewportSize()?.width ?? 0) < 900;
+    const real = narrow
+      ? page.getByRole('button', { name: 'Open navigation' })
+      : page.getByRole('complementary');
     await expect(real).toBeVisible();
     const after = await page.evaluate(() => {
       const sidebar = document.querySelector('aside');
@@ -75,8 +82,14 @@ test.describe('the swap', () => {
         headerHeight: header?.getBoundingClientRect().height ?? -1,
       };
     });
-    expect(skeleton.sidebarWidth).toBeGreaterThan(0);
-    expect(after.sidebarWidth).toBe(skeleton.sidebarWidth);
+    if (narrow) {
+      // Neither the skeleton nor the page has a sidebar in the layout: nothing to move.
+      expect(skeleton.sidebarWidth).toBe(0);
+      expect(after.sidebarWidth).toBe(-1);
+    } else {
+      expect(skeleton.sidebarWidth).toBeGreaterThan(0);
+      expect(after.sidebarWidth).toBe(skeleton.sidebarWidth);
+    }
     // The header only exists once a channel screen does; when it does it must match.
     if (after.headerHeight > 0) expect(after.headerHeight).toBe(skeleton.headerHeight);
   });

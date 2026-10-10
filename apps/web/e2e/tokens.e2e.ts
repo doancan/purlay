@@ -11,8 +11,13 @@ import { expect, test } from './fixtures';
 
 test.describe('the tokens, as computed', () => {
   test.beforeEach(async ({ page, signIn }) => {
-    await signIn('dogancan');
+    // Bob: a visit marks channels read, and the viewer's unread state is what the seeded-data spec asserts.
+    await signIn('bob');
     await page.goto('/');
+    // Below the breakpoint the sidebar is an overlay, so it is opened to be measured.
+    const toggle = page.getByRole('button', { name: 'Open navigation' });
+    await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
+    if (await toggle.isVisible()) await toggle.click();
     await page.waitForSelector('aside svg');
   });
 

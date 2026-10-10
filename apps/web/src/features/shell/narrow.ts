@@ -13,7 +13,7 @@
 import { createContext, useMemo, useSyncExternalStore } from 'react';
 
 /** The part of `MediaQueryList` this uses. */
-export interface NarrowQuery {
+interface NarrowQuery {
   readonly matches: boolean;
   readonly addEventListener: (type: 'change', listener: () => void) => void;
   readonly removeEventListener: (type: 'change', listener: () => void) => void;
