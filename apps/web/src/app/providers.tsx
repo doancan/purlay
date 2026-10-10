@@ -25,6 +25,7 @@ import { ToastProvider } from '../ui/toast';
 import { ActionsProvider } from '../data/actions-provider';
 import type { Api } from '../data/api';
 import { ApiProvider } from '../data/api-provider';
+import { RealtimePortsContext, type RealtimePorts } from '../realtime/realtime-provider';
 import { createQueryClient } from './query-client';
 
 export interface AppPorts {
@@ -35,6 +36,8 @@ export interface AppPorts {
   readonly queryClient?: QueryClient;
   /** The API; the browser's `fetch` on the same origin when absent. */
   readonly api?: Api;
+  /** The socket, timers and clock the realtime engine uses; the browser's when absent. */
+  readonly realtime?: RealtimePorts;
 }
 
 interface AppProvidersProps {
@@ -61,13 +64,15 @@ export const AppProviders = ({
           <QueryClientProvider client={client}>
             <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
               <ActionsProvider>
-                <TooltipProvider>
-                  <ToastProvider
-                    {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
-                  >
-                    {children}
-                  </ToastProvider>
-                </TooltipProvider>
+                <RealtimePortsContext.Provider value={ports.realtime ?? {}}>
+                  <TooltipProvider>
+                    <ToastProvider
+                      {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
+                    >
+                      {children}
+                    </ToastProvider>
+                  </TooltipProvider>
+                </RealtimePortsContext.Provider>
               </ActionsProvider>
             </ApiProvider>
           </QueryClientProvider>

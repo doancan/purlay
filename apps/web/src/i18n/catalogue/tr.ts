@@ -56,7 +56,24 @@ export const tr = {
   },
   'workspace.none.title': 'Henüz bir çalışma alanında değilsin',
   'workspace.none.body':
-    'Bir sahipten seni eklemesini iste ya da zaten bir çalışma alanına bağlı hesabınla giriş yap.',
+    'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
+  'workspace.create.title': 'Çalışma alanı oluştur',
+  'workspace.create.body':
+    'Çalışma alanı, bir ekibin konuştuğu yerdir. Diğerlerini sonra davet edebilirsin.',
+  'workspace.create.name': 'Ad',
+  'workspace.create.slug': 'Adres',
+  'workspace.create.slugHint':
+    'Küçük harf, rakam ve tire. Web adresinin parçasıdır ve sonradan değişmez.',
+  'workspace.create.submit': 'Çalışma alanı oluştur',
+  'workspace.create.taken': 'Bu adres alınmış. Başka bir tane seç.',
+  'workspace.create.invalid': 'Küçük harf, rakam ve tire kullan; harf ya da rakamla başla.',
+  'workspace.create.failed': 'Çalışma alanı oluşturulamadı. Tekrar dene.',
+  'state.session.error.title': "Purlay'e ulaşılamadı",
+  'state.session.error.body': 'Sunucu yanıt vermedi. Oturumun açık; tekrar dene.',
+  'state.channel.missing.title': 'Bu kanal burada değil',
+  'state.channel.missing.body': 'Ya yok ya da göremiyorsun.',
+  'state.workspace.empty.title': 'Bir kanal seç',
+  'state.workspace.empty.body': 'Listeden birini seç ya da ilkini oluştur.',
 
   // ── Yeni kanal ──────────────────────────────────────────────────────────
   'newChannel.title': 'Yeni kanal',

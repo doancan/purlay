@@ -27,7 +27,7 @@ import {
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
-export interface PageQuery {
+interface PageQuery {
   /** Older than this id (newest first). */
   readonly before?: string | undefined;
   /** Newer than this id (oldest first) — what a continuation after a reconnect asks for. */

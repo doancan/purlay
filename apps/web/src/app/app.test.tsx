@@ -18,12 +18,23 @@ import { AppSkeleton } from './skeleton';
 import { AppProviders } from './providers';
 import { fakeColourScheme, fakeHistory, fakeSchedule, memoryStorage } from '../testing/fakes';
 import { en } from '../i18n/catalogue/en';
+import { ApiError } from '../data/errors';
+import type { Api } from '../data/api';
+import { anApi } from '../testing/fake-api';
+import { IDS, aSignedInApi } from '../testing/fixtures';
 
 installDom();
+
+const signedIn = (): Api => aSignedInApi();
+
+/** Nobody is signed in: the identity answers 401, as the API does. */
+const signedOut = (): Api =>
+  anApi({ me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'Sign in.')) });
 
 const worldPorts = (
   path: string,
   load: () => Promise<typeof en> = () => Promise.resolve(en),
+  api: Api = signedOut(),
 ): Parameters<typeof App>[0] => ({
   ports: {
     theme: {
@@ -40,20 +51,28 @@ const worldPorts = (
     },
     history: fakeHistory(path),
     schedule: fakeSchedule().schedule,
+    api,
   },
 });
 
-const mounted = async (path: string): Promise<ReturnType<typeof render>> => {
-  const result = render(<App {...worldPorts(path)} />);
-  await act(async () => {
-    await Promise.resolve();
-  });
+/** Lets queries answer and the redirects they cause land: a few turns of the event loop. */
+const settle = async (): Promise<void> => {
+  for (let turn = 0; turn < 4; turn++) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+};
+
+const mounted = async (path: string, api?: Api): Promise<ReturnType<typeof render>> => {
+  const result = render(<App {...worldPorts(path, undefined, api)} />);
+  await settle();
   return result;
 };
 
 describe('the frame', () => {
   test('has a skip link first, and one main that it points at', async () => {
-    const { getByRole, container } = await mounted('/');
+    const { getByRole, container } = await mounted('/sign-in');
     const skip = getByRole('link', { name: 'Skip to the conversation' });
     expect(container.querySelector('a') === skip).toBe(true);
     const main = getByRole('main');
@@ -62,20 +81,18 @@ describe('the frame', () => {
   });
 
   test('has its toast region ready before any toast', async () => {
-    const { getByRole } = await mounted('/');
+    const { getByRole } = await mounted('/sign-in');
     expect(getByRole('status')).toBeDefined();
   });
 
-  test('passes the accessibility audit on every known route', async () => {
-    for (const path of [
-      '/',
-      '/sign-in',
-      '/w/acme',
-      '/w/acme/c/c1',
-      '/w/acme/questions',
-      '/nowhere',
-    ]) {
+  test('passes the accessibility audit on every known route, signed out and signed in', async () => {
+    for (const path of ['/sign-in', '/nowhere']) {
       const { container, unmount } = await mounted(path);
+      await expectNoAxeViolations(container);
+      unmount();
+    }
+    for (const path of ['/w/acme', `/w/acme/c/${IDS.api}`, '/w/acme/questions']) {
+      const { container, unmount } = await mounted(path, aSignedInApi());
       await expectNoAxeViolations(container);
       unmount();
     }
@@ -83,13 +100,16 @@ describe('the frame', () => {
 });
 
 describe('what an address shows', () => {
-  test.each(['/', '/sign-in', '/w/acme', '/w/acme/c/c1', '/w/acme/questions'])(
-    '%s is a screen that is not built yet, and says so',
+  test('/sign-in is the sign-in screen', async () => {
+    const { getByRole } = await mounted('/sign-in');
+    expect(getByRole('heading', { level: 1, name: 'Sign in to Purlay' })).toBeDefined();
+  });
+
+  test.each(['/', '/w/acme', `/w/acme/c/${IDS.api}`, '/w/acme/questions'])(
+    '%s asks a signed-out visitor to sign in',
     async (path) => {
       const { getByRole } = await mounted(path);
-      expect(
-        getByRole('heading', { level: 1, name: 'This screen is not built yet' }),
-      ).toBeDefined();
+      expect(getByRole('heading', { level: 1, name: 'Sign in to Purlay' })).toBeDefined();
     },
   );
 
@@ -107,7 +127,7 @@ describe('what an address shows', () => {
 
 describe('focus follows navigation', () => {
   test('is not moved on first render, where the browser has already done it', async () => {
-    await mounted('/');
+    await mounted('/sign-in');
     expect(document.activeElement === document.body).toBe(true);
   });
 
@@ -118,9 +138,15 @@ describe('focus follows navigation', () => {
       link.focus();
     });
     fireEvent.click(link);
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await settle();
+    expect(document.activeElement === getByRole('main')).toBe(true);
+  });
+
+  test('reaches a main that was not there yet when the address changed', async () => {
+    // `/` asks who is signed in before it has a page, so the first thing it shows has no <main>.
+    const { getByRole } = await mounted('/nowhere', signedIn());
+    fireEvent.click(getByRole('link', { name: 'Go to your channels' }));
+    await settle();
     expect(document.activeElement === getByRole('main')).toBe(true);
   });
 });
@@ -167,13 +193,14 @@ describe('the skeleton', () => {
         resolve(en);
       };
     });
-    const { container, queryByRole } = render(<App {...worldPorts('/', () => slow)} />);
+    const { container, queryByRole } = render(<App {...worldPorts('/sign-in', () => slow)} />);
     expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
     expect(queryByRole('main')).toBeNull();
     await act(async () => {
       release();
       await slow;
     });
+    await settle();
     expect(queryByRole('main')).not.toBeNull();
   });
 

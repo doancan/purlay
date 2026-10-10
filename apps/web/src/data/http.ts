@@ -16,7 +16,7 @@ import { AppErrorBody } from '@purlay/types';
 import type { Static, TSchema } from '@sinclair/typebox';
 import { ApiError } from './errors';
 
-export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface RequestOptions {
   /** Appended as a query string; `undefined` values are left out. */

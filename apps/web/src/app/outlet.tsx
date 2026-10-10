@@ -3,8 +3,9 @@
  *
  * One switch over the route table, so adding a route is a compile error until it
  * has a screen: `Match['name']` is exhaustive here, and `default` is not written.
- * The screens for the known routes are placeholders today — the frame around them
- * is final, the screens arrive with the backend they need (D-98).
+ * Every signed-in route renders inside `Shell`, which is what makes a person, a
+ * workspace and a connection true below it; the sign-in screen and the front door
+ * need only the person.
  *
  * **The gallery is a development tool and is not in the production build.** It is
  * a lazy chunk behind a condition Vite resolves *statically* (`import.meta.env.DEV`
@@ -15,11 +16,17 @@
  * It is a prop so a test can mount it without a build flag.
  */
 import { lazy, Suspense, type ComponentType } from 'react';
+import { ChannelScreen } from '../features/channel/channel-screen';
+import { QuestionsScreen } from '../features/questions/questions-screen';
+import { SessionGate } from '../features/session/session';
+import { Home } from '../features/shell/home';
+import { NotFound } from '../features/shell/not-found';
+import { Shell } from '../features/shell/shell';
+import { WorkspaceHome } from '../features/shell/workspace-home';
+import { SignInScreen } from '../features/sign-in/sign-in-screen';
 import { useI18n } from '../i18n/i18n-provider';
-import { Link, useRoute } from '../router/router-provider';
-import { buttonStyle } from '../ui/button';
+import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
-import { EmptyState } from '../ui/states';
 
 declare global {
   /**
@@ -44,27 +51,6 @@ export const loadGallery = (): Promise<{ default: ComponentType }> =>
 const defaultGallery: ComponentType | null =
   import.meta.env.DEV || import.meta.env.VITE_GALLERY === '1' ? lazy(loadGallery) : null;
 
-const Placeholder = (): React.JSX.Element => {
-  const { t } = useI18n();
-  return <EmptyState as="h1" title={t('app.placeholder.title')} body={t('app.placeholder.body')} />;
-};
-
-const NotFound = (): React.JSX.Element => {
-  const { t } = useI18n();
-  return (
-    <EmptyState
-      as="h1"
-      title={t('app.notFound.title')}
-      body={t('app.notFound.body')}
-      action={
-        <Link to="home" className={buttonStyle('primary')}>
-          {t('app.notFound.home')}
-        </Link>
-      }
-    />
-  );
-};
-
 const Loading = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
@@ -85,11 +71,31 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
   const { match } = useRoute();
   switch (match.name) {
     case 'signIn':
+      return <SignInScreen />;
     case 'home':
+      return (
+        <SessionGate>
+          <Home />
+        </SessionGate>
+      );
     case 'workspace':
+      return (
+        <Shell slug={match.params.slug}>
+          <WorkspaceHome />
+        </Shell>
+      );
     case 'channel':
+      return (
+        <Shell slug={match.params.slug}>
+          <ChannelScreen channelId={match.params.channelId} />
+        </Shell>
+      );
     case 'questions':
-      return <Placeholder />;
+      return (
+        <Shell slug={match.params.slug}>
+          <QuestionsScreen />
+        </Shell>
+      );
     case 'gallery': {
       const Gallery = gallery;
       return Gallery === null ? (

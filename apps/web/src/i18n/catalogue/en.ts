@@ -57,6 +57,23 @@ export const en = {
   'workspace.none.title': 'You are not in a workspace yet',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
+  'workspace.create.title': 'Create a workspace',
+  'workspace.create.body': 'A workspace is where one team talks. You can invite the others after.',
+  'workspace.create.name': 'Name',
+  'workspace.create.slug': 'Address',
+  'workspace.create.slugHint':
+    'Lowercase letters, numbers and hyphens. It is part of the web address and cannot be changed.',
+  'workspace.create.submit': 'Create workspace',
+  'workspace.create.taken': 'That address is taken. Choose another.',
+  'workspace.create.invalid':
+    'Use lowercase letters, numbers and hyphens, starting with a letter or number.',
+  'workspace.create.failed': 'The workspace was not created. Try again.',
+  'state.session.error.title': "Couldn't reach Purlay",
+  'state.session.error.body': 'The server did not answer. You are still signed in; try again.',
+  'state.channel.missing.title': 'That channel is not here',
+  'state.channel.missing.body': 'It does not exist, or you cannot see it.',
+  'state.workspace.empty.title': 'Pick a channel',
+  'state.workspace.empty.body': 'Choose one from the list, or create the first.',
 
   // ── New channel ─────────────────────────────────────────────────────────
   'newChannel.title': 'New channel',

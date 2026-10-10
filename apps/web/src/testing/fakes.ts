@@ -8,7 +8,8 @@
  */
 import type { HistoryPort } from '../router/router';
 import type { DarkQuery } from '../theme/theme';
-import type { Schedule } from '../realtime/connection';
+import type { OpenSocket, Schedule, SocketHandlers } from '../realtime/connection';
+import type { ServerFrame } from '@purlay/types';
 
 export interface MemoryStorage {
   readonly data: Record<string, string>;
@@ -118,4 +119,52 @@ export const fakeColourScheme = (dark = false): FakeColourScheme => {
     },
   };
   return query;
+};
+
+/** A socket the test drives: what the client sent, and frames the server "sends" back. */
+export interface FakeSocketWorld {
+  readonly openSocket: OpenSocket;
+  readonly sockets: { readonly sent: string[]; readonly handlers: SocketHandlers }[];
+  /** The newest socket has finished connecting. */
+  readonly open: () => void;
+  /** The server sends this frame down the newest socket. */
+  readonly deliver: (frame: ServerFrame) => void;
+  /** Every frame of one operation the client sent, parsed. */
+  readonly sent: (op: string) => { id: string; op: string; payload: Record<string, unknown> }[];
+}
+
+export const fakeSockets = (): FakeSocketWorld => {
+  const sockets: FakeSocketWorld['sockets'] = [];
+  const newest = (): FakeSocketWorld['sockets'][number] => {
+    const socket = sockets.at(-1);
+    if (socket === undefined) throw new Error('no socket was opened');
+    return socket;
+  };
+  return {
+    sockets,
+    openSocket: (_url, handlers): ReturnType<OpenSocket> => {
+      const sent: string[] = [];
+      sockets.push({ sent, handlers });
+      return {
+        send: (text): void => {
+          sent.push(text);
+        },
+        close: (): void => undefined,
+      };
+    },
+    open: (): void => {
+      newest().handlers.opened();
+    },
+    deliver: (frame): void => {
+      newest().handlers.message(JSON.stringify(frame));
+    },
+    sent: (op): { id: string; op: string; payload: Record<string, unknown> }[] =>
+      sockets
+        .flatMap((socket) => socket.sent)
+        .map(
+          (text) =>
+            JSON.parse(text) as { id: string; op: string; payload: Record<string, unknown> },
+        )
+        .filter((frame) => frame.op === op),
+  };
 };

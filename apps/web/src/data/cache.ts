@@ -175,9 +175,6 @@ export const channelAdded = (client: QueryClient, channel: Channel): void => {
   client.setQueryData<Channel[]>(key, [...list.filter((c) => c.id !== channel.id), channel]);
 };
 
-/** The caller joined a public channel, or created one: the same list, the same one row. */
-export const channelJoined = channelAdded;
-
 /** Delivery for these channels stopped. They leave the list and their messages leave the cache. */
 export const channelsRevoked = (client: QueryClient, channelIds: readonly string[]): void => {
   for (const [key, list] of client.getQueriesData<Channel[]>({ queryKey: families.channels })) {

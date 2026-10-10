@@ -23,7 +23,7 @@ import { en } from '../i18n/catalogue/en';
 import { tr } from '../i18n/catalogue/tr';
 import type { Locale } from '../i18n/types';
 import { anApi } from './fake-api';
-import { fakeColourScheme, fakeHistory, fakeSchedule, memoryStorage } from './fakes';
+import { fakeColourScheme, fakeHistory, fakeSchedule, fakeSockets, memoryStorage } from './fakes';
 
 export interface WorldOptions {
   readonly locale?: Locale;
@@ -57,6 +57,13 @@ export const renderApp = async (
         schedule: world.timers.schedule,
         queryClient: world.client,
         api,
+        realtime: {
+          openSocket: world.sockets.openSocket,
+          schedule: world.timers.schedule,
+          random: () => 0.5,
+          clock: world.clock,
+          url: 'ws://purlay.test/ws',
+        },
       }}
     >
       {ui}
@@ -85,6 +92,10 @@ const makeWorld = ({
     readonly setAttribute: (name: string, value: string) => void;
   };
   readonly locale: Locale;
+  /** The realtime socket: what the client sent, and what the "server" sends back. */
+  readonly sockets: ReturnType<typeof fakeSockets>;
+  /** The clock the realtime engine reads; fixed, so ids and times in a test are what it says. */
+  readonly clock: { readonly now: () => Date };
   /** The page's cache, to seed before a render or to read after one. */
   readonly client: QueryClient;
 } => {
@@ -104,5 +115,7 @@ const makeWorld = ({
       },
     },
     locale,
+    sockets: fakeSockets(),
+    clock: { now: () => new Date(Date.UTC(2026, 8, 9, 12, 0, 0)) },
   };
 };
