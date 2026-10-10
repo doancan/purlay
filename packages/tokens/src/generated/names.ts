@@ -11,6 +11,7 @@ export const themes = [
 
 export const colorTokens = [
   'surface-000',
+  'canvas',
   'surface-100',
   'surface-200',
   'code-bg',
@@ -21,6 +22,12 @@ export const colorTokens = [
   'accent',
   'on-accent',
   'accent-subtle',
+  'avatar-1',
+  'avatar-2',
+  'avatar-3',
+  'avatar-4',
+  'avatar-5',
+  'avatar-6',
   'focus-ring',
   'danger',
   'warning',
@@ -53,10 +60,12 @@ export const spacingTokens = [
 export const radiusTokens = [
   'radius-sm',
   'radius-md',
+  'radius-lg',
   'radius-pill',
 ] as const;
 
 export const shadowTokens = [
+  'shadow-card',
   'shadow-float',
 ] as const;
 
@@ -68,7 +77,6 @@ export const sizeTokens = [
   'size-control',
   'size-touch',
   'size-header',
-  'size-gutter',
   'size-badge',
   'size-dot',
   'size-code-clamp',
@@ -76,11 +84,13 @@ export const sizeTokens = [
   'size-palette',
   'size-palette-list',
   'size-toast',
-  'size-avatar',
   'size-focus-offset',
   'size-icon-sm',
   'size-icon-md',
   'size-icon-lg',
+  'size-avatar',
+  'size-avatar-sm',
+  'size-avatar-lg',
 ] as const;
 
 export const zIndexTokens = [

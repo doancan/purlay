@@ -28,7 +28,6 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',
-  'size-gutter': '--container-gutter',
   'size-control': '--height-control',
   'size-header': '--height-header',
   // A touch target is a height and a minimum width: a row is as wide as its container, an icon button is a square.
@@ -41,6 +40,8 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-palette-list': '--height-palette-list',
   'size-toast': '--container-toast',
   'size-avatar': '--size-avatar',
+  'size-avatar-sm': '--size-avatar-sm',
+  'size-avatar-lg': '--size-avatar-lg',
   'size-dot': '--size-dot',
   'size-icon-sm': '--size-icon-sm',
   'size-icon-md': '--size-icon-md',
@@ -115,6 +116,14 @@ const themeBlock = (model: Model, theme: string): string => {
   return lines.join('\n');
 };
 
+/** The two subsets a face ships in; the Turkish letters (ğ ş ı İ) are the second one. */
+const RANGES = {
+  latin:
+    'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+  'latin-ext':
+    'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF',
+} as const;
+
 const emitTokensCss = (model: Model): string => {
   const blocks = model.themes.map((theme) => themeBlock(model, theme.id));
   const fixed = [':root {'];
@@ -152,7 +161,19 @@ const emitTokensCss = (model: Model): string => {
     '  }',
     '}',
   ];
-  return `/*\n * ${HEADER.split('\n').join('\n * ')}\n */\n${[...blocks, fixed.join('\n'), reduced.join('\n')].join('\n\n')}\n`;
+  const faces = model.faces.map((face) =>
+    [
+      '@font-face {',
+      `  font-family: '${face.family}';`,
+      `  font-weight: ${face.weight};`,
+      '  font-style: normal;',
+      '  font-display: swap;',
+      `  src: url('/${face.file}') format('woff2');`,
+      `  unicode-range: ${RANGES[face.range]};`,
+      '}',
+    ].join('\n'),
+  );
+  return `/*\n * ${HEADER.split('\n').join('\n * ')}\n */\n${[...faces, ...blocks, fixed.join('\n'), reduced.join('\n')].join('\n\n')}\n`;
 };
 
 const emitThemeCss = (model: Model): string => {

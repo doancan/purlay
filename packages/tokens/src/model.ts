@@ -108,7 +108,15 @@ export interface Model {
   readonly duration: readonly PlainToken[];
   readonly easing: readonly PlainToken[];
   readonly fonts: { readonly sans: string; readonly mono: string };
+  readonly faces: readonly FontFace[];
   readonly text: readonly TextStyle[];
+}
+
+export interface FontFace {
+  readonly family: string;
+  readonly weight: string;
+  readonly file: string;
+  readonly range: 'latin' | 'latin-ext';
 }
 
 export type Parsed =
@@ -410,6 +418,7 @@ export const parseTokens = (raw: unknown): Parsed => {
       duration,
       easing,
       fonts: file.type.families,
+      faces: file.type.fonts,
       text,
     },
   };

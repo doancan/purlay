@@ -42,6 +42,7 @@ const cross = (
   );
 
 const SURFACES = ['surface-000', 'surface-100', 'surface-200'] as const;
+const AVATARS = ['avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6'] as const;
 const READING = [...SURFACES, 'accent-subtle', 'code-bg'] as const;
 const SYNTAX = [
   'syntax-keyword',
@@ -55,6 +56,8 @@ const SYNTAX = [
 
 export const PAIRS: readonly Pair[] = [
   ...cross(['ink', 'ink-muted'], READING, TEXT, 'message text and secondary text'),
+  ...cross(['ink', 'ink-muted'], ['canvas'], TEXT, 'the sign-in card sits on it, and its words with it'),
+  ...cross(['ink'], AVATARS, TEXT, 'the initials in an avatar'),
   // A link is `accent` on whatever the message sits on, including a mention's tint.
   ...cross(['accent'], [...SURFACES, 'accent-subtle'], TEXT, 'link text'),
   ...cross(['on-accent'], ['accent'], TEXT, 'text on a primary button'),
@@ -79,6 +82,13 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   'surface-000': 'a background; it is the `background` of the pairs above',
   'surface-100': 'a background; it is the `background` of the pairs above',
   'surface-200': 'a background; it is the `background` of the pairs above',
+  canvas: 'a background; it is the `background` of the pairs above',
+  'avatar-1': 'a background; it is the `background` of the pairs above',
+  'avatar-2': 'a background; it is the `background` of the pairs above',
+  'avatar-3': 'a background; it is the `background` of the pairs above',
+  'avatar-4': 'a background; it is the `background` of the pairs above',
+  'avatar-5': 'a background; it is the `background` of the pairs above',
+  'avatar-6': 'a background; it is the `background` of the pairs above',
   'code-bg': 'a background; it is the `background` of the pairs above',
   'accent-subtle': 'a background; it is the `background` of the pairs above',
   'border-subtle': 'decorative: a divider that carries no meaning, so it is allowed to be faint',

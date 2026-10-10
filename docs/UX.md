@@ -29,62 +29,78 @@
 
 ## 2. Layout
 
-One fixed shell, two regions and an optional third. No resizable panes in Phase 1 — a saved
-layout is one more state to sync for no benefit at this size.
+One fixed shell: two floating cards on a tinted canvas, and an optional third. No resizable panes
+in Phase 1 — a saved layout is one more state to sync for no benefit at this size. The cards are
+the shape of the interface (D-100): the sidebar is one, the channel is the other, and the canvas
+between and around them is what makes each read as an object rather than a region of one big
+surface.
 
 ```
-┌──────────────┬────────────────────────────────────────────────┬──────────┐
-│ acme-eng  ⇅  │  # api  Backend deploys…    [Feed] [Questions] │          │
-│              ├────────────────────────────────────────────────┤ members  │
-│ Channels     │ 14:30  alice                                   │ (opt.)   │
-│  # api       │        Merged the rate-limit fix.              │          │
-│  # deploys   │ 14:31  alice                                   │ 200px    │
-│  # incidents │        Staging is green.                       │          │
-│ People       ├────────────────────────────────────────────────┤          │
-│  240px       │ api ›  composer                                │          │
-└──────────────┴────────────────────────────────────────────────┴──────────┘
+ canvas
+ ┌──────────────┐ ┌────────────────────────────────────────────────┐ ┌─────────┐
+ │ ◆ acme-eng ⇅ │ │ ▣ api  Backend deploys…   (Feed)(Questions 3)  │ │         │
+ │ ⌕ Jump ⌘K    │ ├────────────────────────────────────────────────┤ │ members │
+ │ ? Questions 3│ │  (a) alice  14:30                              │ │ (opt.)  │
+ │ Channels     │ │      Merged the rate-limit fix.                │ │         │
+ │  # api       │ │  (a) bob  14:32                                │ │  200px  │
+ │  # deploys 3 │ │      ┌ ts ────────────────────────┐            │ │         │
+ │ People       │ │      └────────────────────────────┘            │ │         │
+ │  (a) Alice   │ │ ┌────────────────────────────────────────┐ (➤) │ │         │
+ │  272px       │ │ └────────────────────────────────────────┘     │ └─────────┘
+ └──────────────┘ └────────────────────────────────────────────────┘
 ```
 
-- **Workspace switcher** — a menu in the sidebar header, not a rail: the product is used inside
-  one workspace at a time, and a column of avatars beside the sidebar is the part of a chat layout
-  that reads as somebody else's product. (Approved prototype, D-98.)
-- **Sidebar (240px)** — channels, then people, ordered by `channels.last_message_at`. Channel names
-  are set in the mono face with a `#`. Unread channels are bold; unread **mentions** carry a count
-  badge. Nothing else gets a badge.
-- **Feed** — the single column. Max width 780px, left-aligned, not centred: eye travel matters
-  more than symmetry when reading code.
+- **Workspace switcher** — a menu in the sidebar card's header, not a rail: the product is used
+  inside one workspace at a time, and a column of workspace icons beside the sidebar is the part of
+  a chat layout that reads as somebody else's product.
+- **Sidebar (272px)** — a card. The jump field (the palette's door, `⌘K`), the open-questions
+  view, the channels, then the people. Channel names are set in the mono face with a `#`. Unread
+  channels are bold; unread **mentions** carry a count badge. Nothing else gets a badge. A person
+  has an avatar and no presence dot: there is no presence to show (Phase 2), and a dot that is
+  always one colour would be a lie.
+- **Channel card** — header, feed, composer, in that order, one column. The header names the
+  channel in a tile and carries the two views as a segmented control: the feed, and **open
+  questions** with its live count, which is the product's argument and so is always one click away.
+- **Feed** — the single column. Max width 780px, centred in its card: a card has two edges, and a
+  column hung from one of them leaves the other as dead space.
 - **Member list** — collapsed by default. Presence is decoration, not information.
 
-**Below 900px** the sidebar becomes an overlay. Purlay is not a mobile product in Phase 1
-(`PRD.md` §4), but it must not be broken on a narrow window.
+**Below 900px** the sidebar becomes an overlay and the channel card fills the window. Purlay is
+not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow window.
 
 ---
 
 ## 3. The message row
 
 ```
-  14:32  alice                                                    React
-         The retry backoff is 4s because the upstream rate-limits at 15/min.
-         ┌─────────────────────────────────────────────────── ts ─┐
-         │ const backoff = 4_000;                          Copy   │
-         └────────────────────────────────────────────────────────┘
-         👍 3   🎉 1
-         ○ Open · 4 replies · last 12m ago                  Show thread T
+  (a) alice  14:32                                                [☺][↩]
+      The retry backoff is 4s because the upstream rate-limits at 15/min.
+      ┌─────────────────────────────────────────────────── ts ─┐
+      │ const backoff = 4_000;                          Copy   │
+      └────────────────────────────────────────────────────────┘
+      👍 3   🎉 1
+      ○ Open · 4 replies · last 12m ago                  Show thread T
 ```
 
-- **No avatars.** The left column is a fixed 56px gutter holding the time in the mono face, so
-  a channel scans like a log: who, then what, down a single edge. (Approved prototype, D-98.)
-- **Consecutive messages** from the same author within 5 minutes hide the name; their time shows
-  in the gutter on hover.
-- **Hover controls** are text on the header line and never reflow the row.
+- **Avatars, and no bubbles.** An avatar in a fixed column names who is speaking before a word is
+  read; the text is not put in a bubble, because a bubble makes a code block a box inside a box and
+  narrows every line it holds. Your own messages are on the same edge as everyone else's: a chat
+  with two edges is read by following the speaker, and this one is read by following the thread.
+- **The header line** is the name and the time, side by side, in the mono face for the time.
+- **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
+  their time shows in the avatar's column on hover.
+- **Hover controls** are a small raised group at the row's corner and never reflow the row. Only
+  the row under the pointer shows its own: a reply inside a thread is a row of its own.
+- **A message that mentions you** sits in a rounded tint, and says so to a screen reader.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
+- **The day** is a centred chip between messages, not a rule.
 
 ### 3.1. Delivery state
 
 | State | Appearance | Behaviour |
 |---|---|---|
-| `sending` | Full opacity, subtle clock glyph in the gutter | Paints in < 16ms, before any network call (`PRD.md` §5) |
+| `sending` | Full opacity, subtle clock glyph beside the time | Paints in < 16ms, before any network call (`PRD.md` §5) |
 | `sent` | Glyph removed | On `ACK`. **The row does not move** — the id was final from the start (D-8) |
 | `failed` | Left border in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
 
@@ -258,8 +274,10 @@ Decided here so Phase 0 does not invent one at random.
 > (D-52, D-97) The numbers quoted in this document are the file's, repeated where a diagram
 > needs them, and a test fails if they drift.
 
-- **Type:** system UI stack for prose; `ui-monospace`/`SF Mono`/`JetBrains Mono` for code.
-  Base 14px, code 13px, line-height 1.5 prose / 1.45 code.
+- **Type:** IBM Plex Sans for prose and IBM Plex Mono for code, the time and a channel's name,
+  served from this origin in Latin and Latin Extended (the Turkish letters are in the second) with a
+  system stack behind them while they load (D-100). Base 14px, code 13px, line-height 1.5 prose /
+  1.45 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
   choice kept per device. Dark is designed first — this is a tool that sits open beside an editor —
   and every colour pair is computed in both. Never colour alone to carry meaning: resolved, failed and unread each pair colour
@@ -267,8 +285,9 @@ Decided here so Phase 0 does not invent one at random.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
 - **Motion:** effectively none. The only transitions are the thread collapse on resolve (§4.3)
   and the reconnect bar. No message entry animation — at conversational speed it reads as lag.
-- **Radius / elevation:** 6px, one shadow level. Cards and code blocks are separated by border
-  and background, not by depth.
+- **Radius / elevation:** 8px for a control, 14px for a card. The two floating cards have one soft
+  shadow on the canvas; a message, a code block and a control are separated by border and
+  background, never by depth.
 
 ---
 
