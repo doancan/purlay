@@ -29,4 +29,24 @@
     outline: var(--stroke-focus) solid var(--focus-ring);
     outline-offset: var(--size-focus-offset);
   }
+
+  /*
+   * Shiki paints code with its css-variables theme, which names a variable per kind of token.
+   * Each is mapped to a syntax token here, and on every element that sets a theme (not only the
+   * root), so highlighting follows whichever theme the code sits in — including the gallery's two
+   * side by side. There is no second palette: change a syntax colour in tokens.json and code follows.
+   */
+  :root,
+  [data-theme] {
+    --shiki-foreground: var(--ink);
+    --shiki-token-constant: var(--syntax-number);
+    --shiki-token-string: var(--syntax-string);
+    --shiki-token-comment: var(--syntax-comment);
+    --shiki-token-keyword: var(--syntax-keyword);
+    --shiki-token-parameter: var(--ink);
+    --shiki-token-function: var(--syntax-function);
+    --shiki-token-string-expression: var(--syntax-string);
+    --shiki-token-punctuation: var(--syntax-operator);
+    --shiki-token-link: var(--accent);
+  }
 }

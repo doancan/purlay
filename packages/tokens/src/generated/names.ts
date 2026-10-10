@@ -70,6 +70,7 @@ export const sizeTokens = [
   'size-gutter',
   'size-badge',
   'size-dot',
+  'size-code-clamp',
   'size-dialog',
   'size-palette',
   'size-palette-list',
@@ -92,6 +93,7 @@ export const zIndexTokens = [
 export const borderWidthTokens = [
   'stroke-hairline',
   'stroke-focus',
+  'stroke-marker',
   'stroke-icon',
 ] as const;
 
