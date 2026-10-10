@@ -413,6 +413,25 @@ export const MessageFeed = ({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* A refetch that failed behind data already on screen: the rows are the last good ones, and say so. */}
+      {feed.isRefetchError && !feed.isFetchNextPageError && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b-hairline border-border-subtle px-4 py-1 text-caption text-ink-muted"
+        >
+          <Icon name="warning" size="sm" />
+          {t('connection.stale')}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              void feed.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
       <div ref={scroller} onScroll={onScroll} className="relative flex-1 overflow-y-auto py-2">
         {/* The top row is one height whatever it says, so loading above never pushes what is below. */}
         <div ref={top} className="flex h-control items-center px-4 text-caption text-ink-muted">

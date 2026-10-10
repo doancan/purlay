@@ -10,6 +10,7 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
 import type { Channel, Message, ReadChannelResponse } from '@purlay/types';
 import { ApiError } from '../../data/errors';
+import { keys } from '../../data/keys';
 import { installDom } from '../../testing/dom';
 import {
   mountChannel,
@@ -287,6 +288,29 @@ describe('older messages', () => {
     expect(view.metrics.assigned.at(-1)).toBe(700); // 100 + 600
     expect(view.getByText('This is the beginning of the channel')).toBeDefined();
     expect(view.feed.live.visible).toBe(0);
+    view.unmountAll();
+  });
+
+  test('a refresh that fails behind rows already on screen says they may be out of date, and Retry asks again', async () => {
+    let fail = false;
+    const view = await mountChannel({
+      messages: () =>
+        fail
+          ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+          : Promise.resolve(page([aMessage(1, { sender: BOB })])),
+    });
+    expect(view.queryByText('What you see may be out of date')).toBeNull();
+    fail = true;
+    await act(async () => {
+      await view.world.client.invalidateQueries({ queryKey: keys.messages(IDS.api) });
+    });
+    await settle();
+    expect(view.getByText('What you see may be out of date')).toBeDefined();
+    expect(view.container.querySelectorAll('[data-message-row]')).toHaveLength(1);
+    fail = false;
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(view.queryByText('What you see may be out of date')).toBeNull();
     view.unmountAll();
   });
 

@@ -83,7 +83,11 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
       () => {
         show({ message: t('common.copied') });
       },
-      () => undefined,
+      () => {
+        // The clipboard refuses outside a secure context or without permission: say so, and
+        // leave the code on the screen to be selected by hand.
+        show({ message: t('failure.copy') });
+      },
     );
   };
 

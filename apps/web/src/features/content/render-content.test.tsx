@@ -157,12 +157,15 @@ describe('a code block', () => {
     expect(view.getAllByText('Copied').length).toBeGreaterThan(0);
   });
 
-  test('a clipboard the browser refuses is not an error the person has to read', async () => {
+  test('a clipboard the browser refuses is said, and the code is left to select by hand', async () => {
     const view = await mount('```\nx\n```', {
       ports: plainPorts({ copy: () => Promise.reject(new Error('denied')) }),
     });
     await person().click(view.getByRole('button', { name: 'Copy code' }));
     expect(view.queryByText('Copied')).toBeNull();
+    expect(
+      await view.findByText("Couldn't copy. Select the text and copy it yourself."),
+    ).toBeDefined();
   });
 
   test('in Turkish, the same block speaks Turkish', async () => {
