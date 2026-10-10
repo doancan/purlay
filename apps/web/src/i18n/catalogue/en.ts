@@ -184,6 +184,16 @@ export const en = {
   'composer.hint.send': 'sends',
   'composer.hint.newline': 'new line',
 
+  // ── Composer: what is checked before a send (D-99 §3) ───────────────────
+  'composer.hint.code': 'code block',
+  'composer.remaining': {
+    one: '{count} character left',
+    other: '{count} characters left',
+  },
+  'composer.invalid': 'This message has a character Purlay cannot send. Remove it and try again.',
+  'composer.broadcast':
+    '{mention} is not available: Purlay does not notify everybody. Name the person you mean.',
+
   // ── Connection (UX §8) ──────────────────────────────────────────────────
   'connection.reconnecting': 'Reconnecting… messages will send when you are back',
   'connection.ended': 'Your session ended',
