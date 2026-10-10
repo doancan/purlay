@@ -209,19 +209,28 @@ test.describe('the connection', () => {
       const Native = window.WebSocket;
       const sockets: WebSocket[] = [];
       (window as unknown as { __sockets: WebSocket[] }).__sockets = sockets;
+      (window as unknown as { __heard: number }).__heard = 0;
       window.WebSocket = class extends Native {
         constructor(url: string | URL, protocols?: string | string[]) {
           super(url, protocols);
           sockets.push(this);
+          this.addEventListener('message', () => {
+            (window as unknown as { __heard: number }).__heard += 1;
+          });
         }
       };
     });
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     await expect(page.locator('article').first()).toBeVisible();
-    // Wait until the socket has really opened, so the bar has something to be the loss of.
-    await page.waitForFunction(() =>
-      (window as unknown as { __sockets: WebSocket[] }).__sockets.some((s) => s.readyState === 1),
+    // Wait until the app has been connected, so the bar has something to be the loss of. An open
+    // socket is the browser's fact; the server's first frame is the app's, and arrives only after
+    // the app has rendered as connected — closing on the first would race that render.
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __sockets: WebSocket[] }).__sockets.some(
+          (s) => s.readyState === 1,
+        ) && (window as unknown as { __heard: number }).__heard > 0,
     );
 
     await context.setOffline(true);
@@ -233,6 +242,8 @@ test.describe('the connection', () => {
     await expect(bar).toBeVisible();
     // Writing is never refused (UX §8): the composer and Send stay enabled.
     await expect(page.locator('textarea[data-composer]')).toBeEnabled();
+    // An empty box has nothing to send, and says so with aria-disabled; with a draft in it Send is live.
+    await page.locator('textarea[data-composer]').fill('still writing');
     await expect(page.getByRole('button', { name: /^Send/ })).toBeEnabled();
     // The bar alone: what is under it is the feed, which depends on the day the seed ran.
     await expect(bar).toHaveScreenshot('connection-lost.png');
