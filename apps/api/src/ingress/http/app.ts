@@ -50,7 +50,13 @@ import {
   readWorkspace,
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
-import { postMessage, readHistory } from './messages';
+import {
+  postMessage,
+  readHistory,
+  readThread,
+  readUnresolved,
+  setThreadResolution,
+} from './messages';
 import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { MAX_FRAME_BYTES } from '@purlay/types';
@@ -286,6 +292,25 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return await postMessage(sending, request, params.channelId, body);
     })
+    .get(
+      '/api/messages/:messageId/thread',
+      async ({ request, params }) => await readThread(dependencies, request, params.messageId),
+    )
+    .post(
+      '/api/messages/:messageId/resolve',
+      async ({ request, params }) =>
+        await setThreadResolution(sending, request, params.messageId, true),
+    )
+    .delete(
+      '/api/messages/:messageId/resolve',
+      async ({ request, params }) =>
+        await setThreadResolution(sending, request, params.messageId, false),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/unresolved',
+      async ({ request, params }) =>
+        await readUnresolved(dependencies, request, params.workspaceId),
+    )
 
     /**
      * The socket.

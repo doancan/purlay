@@ -67,6 +67,11 @@ interface World {
   readonly visible: string;
   /** Each one hidden from the outsider for a different reason. */
   readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
+  /** A root with an answer in each channel above: the thing a message endpoint names. */
+  readonly threads: {
+    readonly visible: string;
+    readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
+  };
 }
 
 /**
@@ -120,18 +125,50 @@ const aWorld = async (db: Executor): Promise<World> => {
   };
 
   const pair = [owner.id, third.id].sort().join(':');
+  const hidden = {
+    private: await seed({ type: 'private', name: 'leadership' }, [owner.id]),
+    'direct message': await seed({ type: 'direct_message', name: null, dm_key: pair }, [
+      owner.id,
+      third.id,
+    ]),
+    deleted: await seed({ type: 'public', name: 'gone', deleted_at: NOW }, [owner.id]),
+  } as const;
+
+  // A question with one answer in every channel, written by the owner: what the
+  // message endpoints name, and what the open-questions view lists.
+  const thread = async (channelId: string): Promise<string> => {
+    const root = Bun.randomUUIDv7();
+    const base = { workspace_id: workspaceId, channel_id: channelId, sender_id: owner.id };
+    await db
+      .insertInto('messages')
+      .values({
+        ...base,
+        id: root,
+        content: 'a question',
+        thread_reply_count: 1,
+        thread_last_reply_at: NOW,
+      })
+      .execute();
+    await db
+      .insertInto('messages')
+      .values({ ...base, id: Bun.randomUUIDv7(), content: 'an answer', parent_id: root })
+      .execute();
+    return root;
+  };
+
   const world: World = {
     owner: owner.cookie,
     outsider: outsider.cookie,
     workspaceId,
     visible,
-    hidden: {
-      private: await seed({ type: 'private', name: 'leadership' }, [owner.id]),
-      'direct message': await seed({ type: 'direct_message', name: null, dm_key: pair }, [
-        owner.id,
-        third.id,
-      ]),
-      deleted: await seed({ type: 'public', name: 'gone', deleted_at: NOW }, [owner.id]),
+    hidden,
+    threads: {
+      visible: await thread(visible),
+      hidden: {
+        private: await thread(hidden.private),
+        'direct message': await thread(hidden['direct message']),
+        deleted: await thread(hidden.deleted),
+      },
     },
   };
 
@@ -156,7 +193,11 @@ describe('integration: channel visibility', () => {
           const world = await aWorld(db);
           const body = crossing.body?.(NOW);
           const at = (channelId: string): string =>
-            pathFor(path, { workspaceId: world.workspaceId, channelId });
+            pathFor(path, {
+              workspaceId: world.workspaceId,
+              channelId,
+              messageId: NEVER_EXISTED,
+            });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
           expect(absent.status).toBe(404);
@@ -181,6 +222,43 @@ describe('integration: channel visibility', () => {
       });
     }
 
+    if (visibility.kind === 'message') {
+      test(`${key} answers 404 to a workspace member who cannot see the message's channel`, async () => {
+        await withRollback(async (db) => {
+          const world = await aWorld(db);
+          const body = crossing.body?.(NOW);
+          const at = (messageId: string): string =>
+            pathFor(path, {
+              workspaceId: world.workspaceId,
+              channelId: NEVER_EXISTED,
+              messageId,
+            });
+
+          const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
+          expect(absent.status).toBe(404);
+          const refusal: unknown = await absent.json();
+          expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
+
+          for (const [why, messageId] of Object.entries(world.threads.hidden)) {
+            const response = await call(db, method, at(messageId), world.outsider, body);
+            expect({ why, status: response.status, body: await response.json() }).toEqual({
+              why,
+              status: 404,
+              body: refusal,
+            });
+          }
+
+          // The same caller, a message in a channel they can see: the only thing that
+          // changed is which message the request names.
+          const control = await call(db, method, at(world.threads.visible), world.outsider, body);
+          expect({ status: control.status, ok: control.ok }).toEqual({
+            status: control.status,
+            ok: true,
+          });
+        });
+      });
+    }
+
     if (visibility.kind === 'workspace-wide') {
       test(`${key} returns nothing from a channel the caller cannot see`, async () => {
         await withRollback(async (db) => {
@@ -190,7 +268,7 @@ describe('integration: channel visibility', () => {
             const response = await call(
               db,
               method,
-              `${pathFor(path, { workspaceId: world.workspaceId, channelId: NEVER_EXISTED })}${query}`,
+              `${pathFor(path, { workspaceId: world.workspaceId, channelId: NEVER_EXISTED, messageId: NEVER_EXISTED })}${query}`,
               cookie,
             );
             expect(response.status).toBe(200);

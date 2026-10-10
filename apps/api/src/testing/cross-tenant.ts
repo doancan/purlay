@@ -58,6 +58,7 @@ export const documentedEndpoints = (): readonly DocumentedEndpoint[] =>
 export interface Ids {
   readonly workspaceId: string;
   readonly channelId: string;
+  readonly messageId: string;
 }
 
 /**
@@ -71,6 +72,7 @@ export const pathFor = (path: string, ids: Ids): string =>
   path.replace(/:(\w+)/g, (_whole, name: string) => {
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
+    if (name === 'messageId') return ids.messageId;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
 
@@ -79,6 +81,9 @@ export const pathFor = (path: string, ids: Ids): string =>
  *
  * - `channel`: it names one channel, and a workspace member who cannot see that
  *   channel is told it does not exist.
+ * - `message`: it names one message, and a workspace member who cannot see the
+ *   channel the message is in is told it does not exist — the same refusal as for a
+ *   message that was never written.
  * - `workspace-wide`: it reads across the workspace's channels, and nothing from
  *   a channel the caller cannot see may appear anywhere in what it returns.
  *   `query` is what the read needs to return anything at all — search needs `q`.
@@ -86,12 +91,16 @@ export const pathFor = (path: string, ids: Ids): string =>
  */
 type Visibility =
   | { readonly kind: 'channel' }
+  | { readonly kind: 'message' }
   | { readonly kind: 'workspace-wide'; readonly query?: string }
   | { readonly kind: 'none'; readonly reason: string };
 
 export interface CrossTenantCase {
   /** What a stranger is told — and, identically, somebody naming an id that never existed. */
-  readonly refusal: Extract<ErrorCode, 'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND'>;
+  readonly refusal: Extract<
+    ErrorCode,
+    'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND' | 'MESSAGE_NOT_FOUND'
+  >;
   /**
    * A body the owner's identical request succeeds with. Without it a `POST` would
    * be refused for its body, and the `404` would never have been reached.
@@ -101,6 +110,7 @@ export interface CrossTenantCase {
 }
 
 const CHANNEL: Visibility = { kind: 'channel' };
+const MESSAGE: Visibility = { kind: 'message' };
 
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId': {
@@ -127,6 +137,13 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'CHANNEL_NOT_FOUND',
     body: (now) => ({ id: messageId(now), content: 'crossing' }),
     visibility: CHANNEL,
+  },
+  'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'GET /api/workspaces/:workspaceId/unresolved': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide' },
   },
 };
 
