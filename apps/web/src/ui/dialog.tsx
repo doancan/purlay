@@ -30,7 +30,7 @@ import { IconButton } from './icon-button';
 const overlayClasses = 'fixed inset-0 z-palette bg-scrim';
 
 const contentClasses =
-  'fixed inset-x-4 top-0 z-palette mx-auto mt-8 flex max-w-dialog flex-col gap-4 rounded-md border-hairline border-border-strong bg-surface-100 p-6 text-ink shadow-float';
+  'fixed inset-x-4 top-0 z-palette mx-auto mt-8 flex max-w-dialog flex-col gap-4 rounded-lg border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float';
 
 interface DialogProps {
   readonly open: boolean;

@@ -1,7 +1,7 @@
 /**
  * The button — one height, four meanings.
  *
- * A control is `h-control` tall (28px, `UX.md` §1: density), a 6px radius with a
+ * A control is `h-control` tall (`UX.md` §1: density), a `radius-md` corner with a
  * hairline edge, and says what it does in the `label` text style. The variant is
  * the *meaning*, not a colour:
  *
@@ -28,7 +28,7 @@ const baseClasses =
 
 const variantClasses = {
   primary: 'border-accent bg-accent text-on-accent',
-  secondary: 'border-border-strong text-ink hover:bg-surface-200',
+  secondary: 'border-border-subtle bg-surface-200 text-ink hover:border-border-strong',
   ghost: 'border-transparent text-ink-muted hover:bg-surface-200 hover:text-ink',
   danger: 'border-danger bg-danger text-on-status',
 } as const;

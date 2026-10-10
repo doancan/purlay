@@ -19,7 +19,7 @@ const OPEN_DELAY_MS = 400;
 const SKIP_DELAY_MS = 300;
 
 const contentClasses =
-  'z-popover flex items-center gap-2 rounded-md border-hairline border-border-strong bg-surface-100 px-2 py-1 text-label text-ink shadow-float';
+  'z-popover flex items-center gap-2 rounded-md border-hairline border-border-subtle bg-surface-100 px-2 py-1 text-label text-ink shadow-float';
 
 export const TooltipProvider = ({
   children,

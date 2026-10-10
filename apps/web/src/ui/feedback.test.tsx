@@ -10,7 +10,7 @@ import { expectNoAxeViolations } from '../testing/axe';
 import { person } from '../testing/user';
 import { renderApp } from '../testing/render';
 import { Button } from './button';
-import { Skeleton, LoadingStatus } from './skeleton';
+import { Skeleton, SkeletonRow, LoadingStatus } from './skeleton';
 import { SkipLink } from './skip-link';
 import { EmptyState, ErrorState } from './states';
 import { TextField } from './text-field';
@@ -160,5 +160,15 @@ describe('TextField', () => {
       </form>,
     );
     await expectNoAxeViolations(container);
+  });
+});
+
+describe('a skeleton row', () => {
+  test('is the outline of a message row: an avatar circle and two lines, hidden from assistive technology', async () => {
+    const { container } = await renderApp(<SkeletonRow />);
+    const row = container.firstElementChild as HTMLElement;
+    expect(row.getAttribute('aria-hidden')).toBe('true');
+    expect(row.querySelector('.size-avatar.rounded-pill')).not.toBeNull();
+    expect(row.querySelectorAll('.h-3')).toHaveLength(2);
   });
 });

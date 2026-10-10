@@ -16,6 +16,9 @@
  * current option only by actually moving (a list that scrolls under a still pointer
  * must not change what Enter will do).
  *
+ * **A row has a tile**: a person's avatar, or the glyph of what the row is on a quiet square, so
+ * the eye can sort the list by shape before it reads a word.
+ *
  * **Matches are shown with weight, not colour**: the letters that matched are
  * semibold, so the emphasis survives every theme and every kind of colour vision.
  */
@@ -23,6 +26,7 @@ import { useDescribeFailure } from '../../data/failure';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
+import { Avatar } from '../../ui/avatar';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { Kbd } from '../../ui/kbd';
@@ -159,29 +163,31 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   let index = -1;
   return (
     <>
-      <div className="flex items-center gap-3 border-b-hairline border-border-subtle px-4 py-3">
-        <Icon name="search" />
-        <input
-          type="text"
-          role="combobox"
-          aria-label={t('palette.title')}
-          aria-expanded={shown.length > 0}
-          aria-controls={shown.length > 0 ? listId : undefined}
-          aria-autocomplete="list"
-          aria-activedescendant={current === undefined ? undefined : optionId(selected)}
-          autoComplete="off"
-          spellCheck={false}
-          placeholder={t('palette.placeholder')}
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setSelected(0);
-            setFailed(null);
-          }}
-          onKeyDown={onKeyDown}
-          className="min-w-0 flex-1 bg-transparent text-body text-ink placeholder:text-ink-muted"
-        />
-        <Kbd>Esc</Kbd>
+      <div className="p-3 pb-2">
+        <div className="flex h-control max-narrow:h-touch items-center gap-2 rounded-pill bg-surface-200 px-3">
+          <Icon name="search" />
+          <input
+            type="text"
+            role="combobox"
+            aria-label={t('palette.title')}
+            aria-expanded={shown.length > 0}
+            aria-controls={shown.length > 0 ? listId : undefined}
+            aria-autocomplete="list"
+            aria-activedescendant={current === undefined ? undefined : optionId(selected)}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={t('palette.placeholder')}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setSelected(0);
+              setFailed(null);
+            }}
+            onKeyDown={onKeyDown}
+            className="min-w-0 flex-1 bg-transparent text-body text-ink placeholder:text-ink-muted"
+          />
+          <Kbd>Esc</Kbd>
+        </div>
       </div>
 
       {shown.length === 0 ? (
@@ -239,7 +245,20 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
                         active && 'bg-accent-subtle',
                       )}
                     >
-                      <Icon name={entry.item.glyph} />
+                      {entry.item.avatar === undefined ? (
+                        <span
+                          aria-hidden="true"
+                          className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted"
+                        >
+                          <Icon name={entry.item.glyph} />
+                        </span>
+                      ) : (
+                        <Avatar
+                          size="sm"
+                          name={entry.item.avatar.name}
+                          username={entry.item.avatar.username}
+                        />
+                      )}
                       <span className="min-w-0 flex-1 truncate">
                         <Emphasised text={entry.item.label} positions={entry.positions} />
                       </span>
@@ -287,7 +306,7 @@ export const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps): Rea
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-palette bg-scrim" />
         <RadixDialog.Content
-          className="fixed inset-x-4 top-1/6 z-palette mx-auto flex max-w-palette flex-col overflow-hidden rounded-md border-hairline border-border-strong bg-surface-100 text-ink shadow-float"
+          className="fixed inset-x-4 top-1/6 z-palette mx-auto flex max-w-palette flex-col overflow-hidden rounded-lg border-hairline border-border-subtle bg-surface-100 text-ink shadow-float"
           onOpenAutoFocus={() => {
             // Before Radix moves focus in, the active element is still the opener.
             returnTo.current =
