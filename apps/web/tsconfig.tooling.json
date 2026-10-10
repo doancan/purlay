@@ -4,7 +4,9 @@
     "outDir": "../../.tsbuild/web-tooling",
     "rootDir": ".",
     "tsBuildInfoFile": "../../.tsbuild/web-tooling.tsbuildinfo",
-    "types": ["bun", "vite/client"]
+    "types": ["bun", "vite/client"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
-  "files": ["vite.config.ts"]
+  "files": ["vite.config.ts", "playwright.config.ts"],
+  "include": ["e2e/**/*.ts"]
 }
