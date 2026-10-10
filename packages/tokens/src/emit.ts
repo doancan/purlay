@@ -238,6 +238,9 @@ const emitThemeCss = (model: Model): string => {
       '}',
     ].join('\n'),
   );
+  const refuse = (key: string): never => {
+    throw new Error(`${key} shares a name with its token and has no utility to become`);
+  };
   // The names `map` could not make theme keys of, as the utility each would have been.
   for (const { key, token } of collisions) {
     const value = `var(--${token})`;
@@ -256,11 +259,7 @@ const emitThemeCss = (model: Model): string => {
             ? [`shadow-${shadow}`, declaration('box-shadow', value)]
             : font !== null
               ? [`font-${font}`, declaration('font-family', value)]
-              : (() => {
-                  throw new Error(
-                    `${key} shares a name with its token and has no utility to become`,
-                  );
-                })();
+              : refuse(key);
     utilities.push(`@utility ${name} {\n${body}\n}`);
   }
   utilities.push(
