@@ -284,7 +284,7 @@ export const en = {
   'failure.slow': 'You are going too fast. Wait a moment and try again.',
   'failure.refused': 'That was refused. Check what you entered and try again.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
-  'failure.signOut': "Couldn't sign you out. Try again.",
+  'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
   'connection.degraded': {
     one: 'Live updates are paused for {count} channel',

@@ -23,7 +23,7 @@ import { useWorkspace } from '../features/shell/workspace';
 import { systemClock } from '../system-clock';
 import type { Clock } from './clock';
 import type { ConnectionStatus, OpenSocket, Schedule } from './connection';
-import { createEngine, type Engine, type PendingMessage } from './engine';
+import { createEngine, type DegradedReason, type Engine, type PendingMessage } from './engine';
 import { browserSchedule, browserSocket } from './socket';
 
 export interface RealtimePorts {
@@ -116,6 +116,10 @@ export const useEngine = (): Engine => {
 
 export const useConnectionStatus = (): ConnectionStatus =>
   useStore(useEngine().store, (state) => state.status);
+
+/** Channels whose live updates are not trustworthy right now, and why. */
+export const useDegraded = (): Readonly<Record<string, DegradedReason>> =>
+  useStore(useEngine().store, (state) => state.degraded);
 
 /** Every message in flight, across channels; filter with `useMemo` where a screen wants one channel's. */
 export const usePending = (): readonly PendingMessage[] =>

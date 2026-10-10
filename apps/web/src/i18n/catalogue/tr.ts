@@ -274,7 +274,7 @@ export const tr = {
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',
   'failure.refused': 'Bu reddedildi. Girdiğini kontrol edip tekrar dene.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
-  'failure.signOut': 'Çıkış yapılamadı. Tekrar dene.',
+  'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',
   'connection.degraded': {
     other: '{count} kanal için canlı güncellemeler durdu',

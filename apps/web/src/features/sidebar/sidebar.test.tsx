@@ -368,6 +368,46 @@ describe('the workspace menu', () => {
   });
 });
 
+describe('signing out, when it goes wrong or goes right', () => {
+  test('a refused sign-out says so, in words that fit the cause, and leaves the person where they were', async () => {
+    const api = aSignedInApi({
+      signOut: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+    });
+    const view = await open(api);
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
+    await settle();
+    expect(
+      view.getByText("Couldn't sign you out. Check your connection and try again."),
+    ).toBeDefined();
+    expect(here(view)).not.toBe('/sign-in');
+  });
+
+  test('forgets what the browser kept for this person — drafts, the last channel, unsent messages — and keeps the theme', async () => {
+    const view = await open(aSignedInApi({ signOut: () => Promise.resolve() }));
+    const { storage } = view.world;
+    storage.setItem('purlay.draft.c1', 'half a thought');
+    storage.setItem('purlay.draft.c1.t9', 'half a reply');
+    storage.setItem('purlay.lastChannel.w1', 'c1');
+    storage.setItem('purlay.pending.u1', '[]');
+    storage.setItem('purlay.theme', 'dark');
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
+    await settle();
+    expect(Object.keys(storage.data)).toEqual(['purlay.theme']);
+  });
+
+  test('a refused sign-out forgets nothing: the person is still signed in with their drafts', async () => {
+    const api = aSignedInApi({ signOut: () => Promise.reject(new ApiError(500, 'INTERNAL', 'x')) });
+    const view = await open(api);
+    view.world.storage.setItem('purlay.draft.c1', 'keep me');
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
+    await settle();
+    expect(view.world.storage.data['purlay.draft.c1']).toBe('keep me');
+  });
+});
+
 describe('the footer', () => {
   test('says who you are, and the key that jumps', async () => {
     const view = await open();

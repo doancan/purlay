@@ -7,14 +7,17 @@
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
  * Signing out asks the server and then forgets the page's cache (`actions.signOut`) before
  * leaving, so the next person on this screen inherits nothing; `replace` keeps Back from
- * returning to a page that would only bounce to sign-in.
+ * returning to a page that would only bounce to sign-in. A sign-out the server refuses is a
+ * toast and the person stays where they are: signed in, and told.
  */
 import { useActions } from '../../data/actions-provider';
+import { useDescribeFailure } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Icon } from '../../components/icon';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
+import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 
@@ -24,6 +27,8 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   const { user, memberships } = useSession();
   const { signOut } = useActions();
   const { navigate } = useRoute();
+  const { show } = useToast();
+  const describe = useDescribeFailure();
 
   return (
     <Menu
@@ -55,9 +60,16 @@ export const WorkspaceMenu = (): React.JSX.Element => {
       <MenuItem
         glyph="sign-out"
         onSelect={() => {
-          void signOut().then(() => {
-            navigate(href('signIn'), { replace: true });
-          });
+          // A refused sign-out leaves the person signed in and says so; going to the sign-in
+          // screen anyway would bounce straight back and look like nothing happened.
+          void signOut().then(
+            () => {
+              navigate(href('signIn'), { replace: true });
+            },
+            (error: unknown) => {
+              show({ message: `${t('failure.signOut')} ${describe(error)}` });
+            },
+          );
         }}
       >
         {t('user.signOut')}
