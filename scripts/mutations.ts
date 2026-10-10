@@ -92,23 +92,15 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'send-announces-before-the-commit',
     why: 'subscribers receive a message that then rolls back, and nothing can retract the frame',
     file: MESSAGES,
-    find: `  const message = await atomically(
-    async (transaction) => await sendMessage(transaction, clock, context, input),
-  );
-  await bus.publish(channelTopic(context.channelId), {
-    event: 'MESSAGE_CREATED',
-    data: message,
-    ts: clock.now().getTime(),
-  });
-  return message;`,
-    replace: `  return await atomically(async (transaction) => {
-    const sent = await sendMessage(transaction, clock, context, input);
+    find: `    return await sendMessage(transaction, clock, context, input);
+  });`,
+    replace: `    const early = await sendMessage(transaction, clock, context, input);
     await bus.publish(channelTopic(context.channelId), {
       event: 'MESSAGE_CREATED',
-      data: sent,
+      data: early.message,
       ts: clock.now().getTime(),
     });
-    return sent;
+    return early;
   });`,
     tests: ['apps/api/src/modules/messages/send-order.integration.test.ts'],
   },
@@ -199,5 +191,29 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'if (!equal(signature, await sign(encryptionKey, payload))) return false;',
     replace: '',
     tests: ['apps/api/src/modules/auth/state.test.ts'],
+  },
+  {
+    id: 'broadcast-mention-accepted',
+    why: '@here wakes a channel that was promised it never would be, and the parser D-12 describes does nothing',
+    file: MESSAGES,
+    find: 'if (mentions.broadcast.length > 0) {',
+    replace: 'if (false) {',
+    tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
+  },
+  {
+    id: 'sender-counts-their-own-message-unread',
+    why: 'the person who wrote a message sees it as unread, and the badge never clears for the most active member',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "    .where('user_id', '<>', sender)\n    .returning(",
+    replace: '    .returning(',
+    tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
+  },
+  {
+    id: 'resolving-a-reply-is-allowed',
+    why: 'a reply is marked resolved, which the database refuses with a constraint error the person sees as a failure',
+    file: 'apps/api/src/modules/messages/threads.ts',
+    find: "    if (target.parentId !== null) {\n      throw notResolvable('Only the message that started a thread can be resolved.');\n    }\n",
+    replace: '',
+    tests: ['apps/api/src/modules/messages/threads.integration.test.ts'],
   },
 ];
