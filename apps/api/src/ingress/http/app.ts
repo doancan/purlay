@@ -51,6 +51,7 @@ import {
 } from './workspaces';
 import { createWorkspaceChannel, joinPublicChannel, listChannels, readChannel } from './channels';
 import { postMessage, readHistory } from './messages';
+import { changeReaction } from './reactions';
 import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { MAX_FRAME_BYTES } from '@purlay/types';
@@ -286,6 +287,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 201;
       return await postMessage(sending, request, params.channelId, body);
     })
+
+    .put(
+      '/api/messages/:messageId/reactions/:emoji',
+      async ({ request, params }) =>
+        await changeReaction(sending, request, params.messageId, params.emoji, true),
+    )
+    .delete(
+      '/api/messages/:messageId/reactions/:emoji',
+      async ({ request, params }) =>
+        await changeReaction(sending, request, params.messageId, params.emoji, false),
+    )
 
     /**
      * The socket.

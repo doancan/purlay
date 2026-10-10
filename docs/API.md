@@ -144,12 +144,21 @@ Creating a DM is idempotent: the same pair returns the same channel, never a sec
 | ① | `DELETE` | `/api/messages/:messageId` | Author or admin — tombstone, never erase (D-9) |
 | ① | `POST` | `/api/messages/:messageId/resolve` | Root messages only |
 | ① | `DELETE` | `/api/messages/:messageId/resolve` | Reopen |
-| ① | `PUT` | `/api/messages/:messageId/reactions/:emoji` | Idempotent |
-| ① | `DELETE` | `/api/messages/:messageId/reactions/:emoji` | |
+| ○ | `PUT` | `/api/messages/:messageId/reactions/:emoji` | Idempotent. Answers the message's whole set (`ReactionsResponse`) |
+| ○ | `DELETE` | `/api/messages/:messageId/reactions/:emoji` | Takes back the caller's own reaction and nobody else's. Idempotent |
 | ① | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`). **Restricted to channels the caller can see** (D-34) |
 
 Every mutation here publishes to the `EventBus`, so an action taken over HTTP reaches other
 clients over their sockets identically. HTTP and WebSocket are two doors into one service.
+
+**Reactions** (D-99 §6). `:emoji` is one Unicode emoji, percent-encoded in the path and checked
+against the contract's `emoji` format; anything else is `400` naming `emoji`. A message carries at
+most **twenty different** emoji: a `PUT` that would add a twenty-first kind is a `400` on `emoji`,
+and adding your voice to a kind already there is never refused. A `PUT` of a reaction the caller
+already gave, or a `DELETE` of one they never gave, is `200` with the set and **publishes nothing** —
+`REACTIONS_UPDATED` is sent, on the channel's topic, only when the set actually changed. A message
+that does not exist, is deleted, or is in a channel the caller cannot see is `404 MESSAGE_NOT_FOUND`,
+the same answer for all of them.
 
 ---
 

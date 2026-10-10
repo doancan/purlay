@@ -18,6 +18,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import { CROSS_TENANT, pathFor } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -67,6 +68,11 @@ interface World {
   readonly visible: string;
   /** Each one hidden from the outsider for a different reason. */
   readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
+  /** One message in each channel above, by the same names: what a `message` endpoint is aimed at. */
+  readonly messages: {
+    readonly visible: string;
+    readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
+  };
 }
 
 /**
@@ -120,7 +126,7 @@ const aWorld = async (db: Executor): Promise<World> => {
   };
 
   const pair = [owner.id, third.id].sort().join(':');
-  const world: World = {
+  const world = {
     owner: owner.cookie,
     outsider: outsider.cookie,
     workspaceId,
@@ -135,12 +141,38 @@ const aWorld = async (db: Executor): Promise<World> => {
     },
   };
 
+  const messageIn = async (channelId: string): Promise<string> => {
+    const id = messageId(NOW);
+    await db
+      .insertInto('messages')
+      .values({
+        id,
+        workspace_id: workspaceId,
+        channel_id: channelId,
+        sender_id: owner.id,
+        content: 'a message in a channel',
+      })
+      .execute();
+    return id;
+  };
+  const withMessages: World = {
+    ...world,
+    messages: {
+      visible: await messageIn(world.visible),
+      hidden: {
+        private: await messageIn(world.hidden.private),
+        'direct message': await messageIn(world.hidden['direct message']),
+        deleted: await messageIn(world.hidden.deleted),
+      },
+    },
+  };
+
   // The seeding is real: the owner, who is in the private channel and the DM,
   // can see both. Otherwise the outsider's 404 could be a broken fixture's.
   for (const channelId of [world.hidden.private, world.hidden['direct message']]) {
     expect((await call(db, 'GET', `/api/channels/${channelId}`, owner.cookie)).status).toBe(200);
   }
-  return world;
+  return withMessages;
 };
 
 const NEVER_EXISTED = '00000000-0000-4000-8000-000000000000';
@@ -156,7 +188,11 @@ describe('integration: channel visibility', () => {
           const world = await aWorld(db);
           const body = crossing.body?.(NOW);
           const at = (channelId: string): string =>
-            pathFor(path, { workspaceId: world.workspaceId, channelId });
+            pathFor(path, {
+              workspaceId: world.workspaceId,
+              channelId,
+              messageId: NEVER_EXISTED,
+            });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
           expect(absent.status).toBe(404);
@@ -181,6 +217,42 @@ describe('integration: channel visibility', () => {
       });
     }
 
+    if (visibility.kind === 'message') {
+      test(`${key} answers 404 to a workspace member who cannot see the message's channel`, async () => {
+        await withRollback(async (db) => {
+          const world = await aWorld(db);
+          const body = crossing.body?.(NOW);
+          const at = (id: string): string =>
+            pathFor(path, {
+              workspaceId: world.workspaceId,
+              channelId: NEVER_EXISTED,
+              messageId: id,
+            });
+
+          const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
+          expect(absent.status).toBe(404);
+          const refusal: unknown = await absent.json();
+          expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
+
+          for (const [why, id] of Object.entries(world.messages.hidden)) {
+            const response = await call(db, method, at(id), world.outsider, body);
+            expect({ why, status: response.status, body: await response.json() }).toEqual({
+              why,
+              status: 404,
+              body: refusal,
+            });
+          }
+
+          // The same caller, one message they can see: the only difference is which one.
+          const control = await call(db, method, at(world.messages.visible), world.outsider, body);
+          expect({ status: control.status, ok: control.ok }).toEqual({
+            status: control.status,
+            ok: true,
+          });
+        });
+      });
+    }
+
     if (visibility.kind === 'workspace-wide') {
       test(`${key} returns nothing from a channel the caller cannot see`, async () => {
         await withRollback(async (db) => {
@@ -190,7 +262,7 @@ describe('integration: channel visibility', () => {
             const response = await call(
               db,
               method,
-              `${pathFor(path, { workspaceId: world.workspaceId, channelId: NEVER_EXISTED })}${query}`,
+              `${pathFor(path, { workspaceId: world.workspaceId, channelId: NEVER_EXISTED, messageId: NEVER_EXISTED })}${query}`,
               cookie,
             );
             expect(response.status).toBe(200);

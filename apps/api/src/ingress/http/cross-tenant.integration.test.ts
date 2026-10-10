@@ -19,6 +19,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import { CROSS_TENANT, pathFor, type Ids } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -66,15 +67,25 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   const channelId = await created(
     await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'general' }),
   );
-  return { workspaceId, channelId };
+  const message = await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
+    id: messageId(NOW),
+    content: 'a message to cross',
+  });
+  const sent = await created(message);
+  return { workspaceId, channelId, messageId: sent };
 };
 
 const NEVER_EXISTED: Ids = {
   workspaceId: '00000000-0000-4000-8000-000000000000',
   channelId: '00000000-0000-4000-8000-000000000000',
+  messageId: '00000000-0000-4000-8000-000000000000',
 };
 
-const NOT_A_UUID: Ids = { workspaceId: 'not-a-uuid', channelId: 'not-a-uuid' };
+const NOT_A_UUID: Ids = {
+  workspaceId: 'not-a-uuid',
+  channelId: 'not-a-uuid',
+  messageId: 'not-a-uuid',
+};
 
 describe('integration: cross-tenant isolation', () => {
   for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
