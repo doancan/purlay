@@ -272,17 +272,14 @@ test.describe('long scrolls and memory (measured and reported)', () => {
           requestAnimationFrame(step);
         }),
     );
-    const longTasks = await page.evaluate(
-      () => (window as unknown as { __long: number[] }).__long,
-    );
+    const longTasks = await page.evaluate(() => (window as unknown as { __long: number[] }).__long);
 
     const cdp = await context.newCDPSession(page);
     const heap = async (): Promise<number> => {
       await cdp.send('HeapProfiler.collectGarbage');
       return await page.evaluate(
         () =>
-          (performance as unknown as { memory: { usedJSHeapSize: number } }).memory
-            .usedJSHeapSize,
+          (performance as unknown as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize,
       );
     };
     await page.goto(other.path);
