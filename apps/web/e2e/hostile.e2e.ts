@@ -13,8 +13,8 @@ const PAYLOADS: readonly { readonly name: string; readonly text: string }[] = [
   { name: 'img-onerror', text: '<img src=x onerror="window.__pwned=\'img\'"> after the image' },
   { name: 'svg-onload', text: '<svg onload="window.__pwned=\'svg\'"></svg> after the svg' },
   { name: 'iframe', text: '<iframe src="javascript:window.__pwned=\'frame\'"></iframe> after' },
-  { name: 'md-javascript', text: '[click me](javascript:window.__pwned=\'md\') after the link' },
-  { name: 'bare-javascript', text: 'javascript:window.__pwned=\'bare\' after the scheme' },
+  { name: 'md-javascript', text: "[click me](javascript:window.__pwned='md') after the link" },
+  { name: 'bare-javascript', text: "javascript:window.__pwned='bare' after the scheme" },
   { name: 'html-anchor', text: '<a href="javascript:window.__pwned=\'a\'">anchor</a> after' },
   { name: 'data-url', text: '[data](data:text/html,<script>window.__pwned=1</script>) after' },
   { name: 'md-image', text: '![x](javascript:window.__pwned=1) after the image' },
@@ -30,7 +30,9 @@ const PAYLOADS: readonly { readonly name: string; readonly text: string }[] = [
   { name: 'combining', text: 'e' + '́'.repeat(3_000) },
 ];
 
-const sidewaysScroll = (page: Page): Promise<{ readonly feed: number; readonly document: number }> =>
+const sidewaysScroll = (
+  page: Page,
+): Promise<{ readonly feed: number; readonly document: number }> =>
   page.evaluate(() => {
     const feed = document.querySelector('[role=feed]')?.parentElement;
     return {
@@ -70,12 +72,16 @@ test.describe('hostile content', () => {
       undefined,
     );
     // Markup is displayed as the characters it is made of.
-    await expect(page.getByText('<script>window.__pwned = "script"</script>', { exact: false })).toBeVisible();
+    await expect(
+      page.getByText('<script>window.__pwned = "script"</script>', { exact: false }),
+    ).toBeVisible();
     // No element made from the payloads: no script, frame or svg inside the feed, no inline handler.
     const injected = await page.evaluate(() => {
       const feed = document.querySelector('[role=feed]');
       return {
-        elements: feed?.querySelectorAll('script, iframe, svg[onload], img[onerror], object, embed').length ?? -1,
+        elements:
+          feed?.querySelectorAll('script, iframe, svg[onload], img[onerror], object, embed')
+            .length ?? -1,
         handlers: feed?.querySelectorAll('[onerror], [onload], [onclick]').length ?? -1,
         scripts: [...(feed?.querySelectorAll('a[href]') ?? [])]
           .map((a) => a.getAttribute('href') ?? '')
@@ -91,6 +97,16 @@ test.describe('hostile content', () => {
       undefined,
     );
 
+    const wide = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-message-row]')]
+        .map((row, index) => ({
+          index,
+          over: row.scrollWidth - row.clientWidth,
+          text: row.textContent.slice(0, 30),
+        }))
+        .filter((row) => row.over > 1),
+    );
+    expect(wide, 'rows wider than their box').toEqual([]);
     const sideways = await sidewaysScroll(page);
     expect(sideways.feed).toBeLessThanOrEqual(1);
     expect(sideways.document).toBeLessThanOrEqual(1);
@@ -134,7 +150,17 @@ test.describe('hostile content', () => {
     await signIn();
     await page.goto(made.path);
     const box = page.getByRole('textbox', { name: /^Message/ });
-    await box.fill('a lone surrogate \uD800 in the middle');
+    // `fill` would normalise the lone surrogate on its way in; the field is set as a script would.
+    await box.evaluate((field: HTMLTextAreaElement) => {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      ) as {
+        set: (this: HTMLTextAreaElement, value: string) => void;
+      };
+      descriptor.set.call(field, 'a lone surrogate \uD800 in the middle');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     await box.press('Enter');
     await expect(page.getByText(/character Purlay cannot send/).first()).toBeVisible();
     const held = await api('dogancan').get<{ data: unknown[] }>(

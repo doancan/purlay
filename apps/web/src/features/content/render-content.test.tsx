@@ -266,4 +266,11 @@ describe('accessibility', () => {
     });
     await expectNoAxeViolations(view.container);
   });
+
+  test('clips what cannot wrap: a chain of joined emoji is one cluster and must not widen its row', async () => {
+    const view = await mount(Array.from({ length: 300 }, () => '👩').join('\u200D'));
+    expect(view.container.querySelector('p')?.parentElement?.className).toContain(
+      'overflow-x-clip',
+    );
+  });
 });

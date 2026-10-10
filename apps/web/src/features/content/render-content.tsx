@@ -94,7 +94,10 @@ export const renderContent = (
   content: string,
   { mentioned = NOBODY }: RenderOptions = {},
 ): React.JSX.Element => (
-  <div className="flex min-w-0 flex-col gap-1 text-body text-ink">
+  // `overflow-x-clip`: wrapping can break between grapheme clusters but not inside one, and a
+  // joiner chain of three hundred emoji is one cluster (found in a browser: the row was 4,000 px
+  // wide and the feed scrolled sideways). What cannot wrap is cut off at the box, not let out of it.
+  <div className="flex min-w-0 flex-col gap-1 overflow-x-clip text-body text-ink">
     {parseContent(content).map((block, index) => (
       <BlockNode key={index} block={block} mentioned={mentioned} />
     ))}
