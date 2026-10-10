@@ -5,6 +5,7 @@
  * land on a page that only redirects). A person with none sees why, and — because a
  * workspace is the one thing the API lets anybody create — a form to make the first.
  */
+import { useDescribeFailure } from '../../data/failure';
 import { useEffect, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
@@ -28,6 +29,7 @@ const slugOf = (name: string): string =>
 
 const CreateWorkspace = (): React.JSX.Element => {
   const { t } = useI18n();
+  const describe = useDescribeFailure();
   const { createWorkspace } = useActions();
   const { navigate } = useRoute();
   const [name, setName] = useState('');
@@ -58,7 +60,10 @@ const CreateWorkspace = (): React.JSX.Element => {
       } else if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
         setError({ field: 'slug', message: t('workspace.create.invalid') });
       } else {
-        setError({ field: 'form', message: t('workspace.create.failed') });
+        setError({
+          field: 'form',
+          message: `${t('workspace.create.failed')} ${describe(failure)}`,
+        });
       }
     }
   };

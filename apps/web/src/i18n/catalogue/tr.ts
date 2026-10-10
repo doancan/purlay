@@ -60,7 +60,7 @@ export const tr = {
   'sidebar.browse': 'Kanallara göz at',
   'sidebar.questions.many': '99+',
   'sidebar.unread': 'okunmamış',
-  'sidebar.dm.failed': 'Konuşma açılamadı. Yeniden dene.',
+  'sidebar.dm.failed': 'Konuşma açılamadı.',
   'sidebar.people.empty': 'Burada henüz başka kimse yok.',
 
   // ── Dar pencere (UX §2): kenar çubuğu üst katman olur ────────────────────
@@ -71,7 +71,7 @@ export const tr = {
   'browse.description': 'Henüz katılmadığın herkese açık kanallar.',
   'browse.join': 'Katıl',
   'browse.joinLabel': '{name} kanalına katıl',
-  'browse.joinFailed': 'Kanala katılamadın. Yeniden dene.',
+  'browse.joinFailed': 'Kanala katılamadın.',
   'browse.loading': 'Kanallar yükleniyor',
   'browse.empty.title': 'Katılacak kanal yok',
   'browse.empty.body': 'Var olan tüm herkese açık kanallardasın.',
@@ -91,7 +91,7 @@ export const tr = {
   'workspace.create.submit': 'Çalışma alanı oluştur',
   'workspace.create.taken': 'Bu adres alınmış. Başka bir tane seç.',
   'workspace.create.invalid': 'Küçük harf, rakam ve tire kullan; harf ya da rakamla başla.',
-  'workspace.create.failed': 'Çalışma alanı oluşturulamadı. Tekrar dene.',
+  'workspace.create.failed': 'Çalışma alanı oluşturulamadı.',
   'state.session.error.title': "Purlay'e ulaşılamadı",
   'state.session.error.body': 'Sunucu yanıt vermedi. Oturumun açık; tekrar dene.',
   'state.channel.missing.title': 'Bu kanal burada değil',
@@ -109,7 +109,7 @@ export const tr = {
   'newChannel.create': 'Kanalı oluştur',
   'newChannel.taken': 'Bu adda bir kanal zaten var. Başka bir ad seç.',
   'newChannel.invalid': 'Küçük harf, rakam ve tire kullan; harf ya da rakamla başla.',
-  'newChannel.failed': 'Kanal oluşturulamadı. Yeniden dene.',
+  'newChannel.failed': 'Kanal oluşturulamadı.',
 
   // ── Kanal başlığı ───────────────────────────────────────────────────────
   'header.views': 'Kanal görünümleri',
@@ -154,7 +154,7 @@ export const tr = {
   'feed.start': 'Kanalın başı burası',
   'channel.join.notice': '#{name} kanalını üye olmadan okuyorsun.',
   'channel.join.action': 'Kanala katıl',
-  'channel.join.failed': 'Kanala katılınamadı. Tekrar dene.',
+  'channel.join.failed': 'Kanala katılınamadı.',
   'message.reactWith': '{emoji} ile tepki ver',
   'message.quickReactions': 'Hızlı tepkiler',
   'message.reactionOf': {
@@ -163,7 +163,7 @@ export const tr = {
   'message.code.language': 'Dil: {language}',
   'message.code.plain': 'metin',
   'message.link.external': 'Yeni sekmede açılır',
-  'message.reactionFailed': 'Tepki kaydedilemedi. Tekrar dene.',
+  'message.reactionFailed': 'Tepki kaydedilemedi.',
   'reaction.thumbsUp': 'Beğen',
   'reaction.heart': 'Kalp',
   'reaction.celebrate': 'Kutla',
@@ -207,7 +207,7 @@ export const tr = {
   'thread.none': 'Henüz yanıt yok',
   'thread.composerName': '{channel} kanalındaki bir thread',
   'thread.resolveFailed': 'Yalnızca en az bir yanıtı olan thread çözülebilir.',
-  'thread.actionFailed': 'Thread değişmedi. Tekrar dene.',
+  'thread.actionFailed': 'Thread değişmedi.',
 
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
   'composer.label': '{channel} kanalına mesaj',
@@ -315,7 +315,7 @@ export const tr = {
     other: '{count} sonuç',
   },
   'palette.view.feed': 'Akış',
-  'palette.error': 'Açılamadı. Tekrar dene.',
+  'palette.error': 'Açılamadı.',
   'palette.announce.channel': '{name} açıldı',
 
   // ── Klavye kısayolları (UX §7) ──────────────────────────────────────────

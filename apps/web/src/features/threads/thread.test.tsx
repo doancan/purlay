@@ -542,7 +542,7 @@ describe('resolving and reopening', () => {
     [
       'anything else goes wrong',
       new ApiError(0, 'NETWORK', 'offline'),
-      'The thread was not changed. Try again.',
+      'The thread was not changed. Check your connection and try again.',
     ],
   ])('when %s: a toast says so in words, and nothing changes', async (_why, failure, words) => {
     const view = await mount({ api: { resolve: () => Promise.reject(failure) } });

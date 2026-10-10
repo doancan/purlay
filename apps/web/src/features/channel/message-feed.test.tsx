@@ -564,7 +564,7 @@ describe('a send on its way', () => {
     view.unmountAll();
   });
 
-  test("Delete takes a failed send away, and the server's reason is shown", async () => {
+  test("Delete takes a failed send away, and the reason is shown in words, not the server's", async () => {
     const view = await mountChannel({ messages: page([aMessage(1, { sender: BOB })]) });
     open(view);
     let id = '';
@@ -579,7 +579,8 @@ describe('a send on its way', () => {
         ts: 1,
       });
     });
-    expect(view.getByText('Slow down.')).toBeDefined();
+    expect(view.getByText('You are going too fast. Wait a moment and try again.')).toBeDefined();
+    expect(view.queryByText('Slow down.')).toBeNull();
     await person().click(view.getByRole('button', { name: 'Delete' }));
     expect(view.queryByText('too long')).toBeNull();
     view.unmountAll();

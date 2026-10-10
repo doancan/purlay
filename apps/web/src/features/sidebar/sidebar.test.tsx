@@ -44,6 +44,8 @@ const some = <T extends HTMLElement>(node: T | null | undefined): T => {
   return node;
 };
 
+const GENERIC = 'Something went wrong on our side. Try again in a moment.';
+
 type View = Awaited<ReturnType<typeof renderApp>>;
 
 const open = async (api: Api = aSignedInApi(), path = `/w/acme/c/${IDS.api}`): Promise<View> => {
@@ -563,7 +565,7 @@ describe('browsing channels', () => {
     );
     await person().click(view.getByRole('button', { name: 'Join browse' }));
     await settle();
-    expect(view.getByText('You could not join the channel. Try again.')).toBeDefined();
+    expect(view.getByText(`You could not join the channel. ${GENERIC}`)).toBeDefined();
     expect(here(view)).toBe(`/w/acme/c/${IDS.api}`);
     expect(view.getByRole('dialog')).toBeDefined();
   });

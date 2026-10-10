@@ -8,6 +8,7 @@
  * "invalid", anything else as one line under the form. The form is left as it was on a
  * failure, so nothing typed is lost to a retry.
  */
+import { useDescribeFailure } from '../../data/failure';
 import { useId, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
@@ -34,6 +35,7 @@ export const NewChannelDialog = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
+  const describe = useDescribeFailure();
   const { workspace } = useWorkspace();
   const { createChannel } = useActions();
   const { navigate } = useRoute();
@@ -76,7 +78,7 @@ export const NewChannelDialog = ({
       } else if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
         setProblem({ field: 'name', message: t('newChannel.invalid') });
       } else {
-        setProblem({ field: 'form', message: t('newChannel.failed') });
+        setProblem({ field: 'form', message: `${t('newChannel.failed')} ${describe(failure)}` });
       }
     }
   };

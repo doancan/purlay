@@ -246,7 +246,11 @@ describe('reactions', () => {
       api: anApi({ react: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')) }),
     });
     await person().click(view.getByRole('button', { name: '🎉, 1 reaction' }));
-    expect(await view.findByText('The reaction was not saved. Try again.')).toBeDefined();
+    expect(
+      await view.findByText(
+        'The reaction was not saved. Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeDefined();
   });
 
   test('the quick set is seven distinct emoji, each with words', () => {
