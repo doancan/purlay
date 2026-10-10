@@ -82,10 +82,26 @@ export const TokensFile = Type.Object(
     ),
     type: Type.Object(
       {
-        // Empty on purpose: the stack is the system's own, so no font file ships
-        // and no third party is asked for one (`UX.md` §9, D-39, D-49). Adding a
-        // face is a decision, and this is the line that makes it one.
-        fonts: Type.Array(Type.Never(), { maxItems: 0 }),
+        // Self-hosted faces, one entry per file (D-100). No third party is ever asked for a font
+        // (D-39): `file` is a path under the web app's own `public/`, never a URL, so the origin
+        // that serves the page serves the face and the CSP needs no new source.
+        fonts: Type.Array(
+          Type.Object(
+            {
+              family: Type.String({ minLength: 1, maxLength: 64 }),
+              weight: Type.Union([
+                Type.Literal('400'),
+                Type.Literal('500'),
+                Type.Literal('600'),
+                Type.Literal('700'),
+              ]),
+              file: Type.String({ pattern: '^fonts/[a-z0-9-]+\\.woff2$' }),
+              range: Type.Union([Type.Literal('latin'), Type.Literal('latin-ext')]),
+            },
+            { additionalProperties: false },
+          ),
+          { maxItems: 24 },
+        ),
         families: Type.Object(
           { sans: Type.String({ minLength: 1 }), mono: Type.String({ minLength: 1 }) },
           { additionalProperties: false },

@@ -47,7 +47,7 @@ export const en = {
   'sidebar.channels': 'Channels',
   'sidebar.people': 'People',
   'sidebar.newChannel': 'New channel',
-  'sidebar.jump': 'to jump',
+  'sidebar.jump': 'Jump to…',
   'sidebar.private': 'private',
   'sidebar.you': 'you',
   'sidebar.mentions': {

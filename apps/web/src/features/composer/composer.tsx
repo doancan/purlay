@@ -1,7 +1,7 @@
 /**
- * The composer: a prompt line, not a card (`UX.md` §5, the approved prototype).
+ * The composer: one rounded card at the foot of the channel (`UX.md` §2, D-100).
  *
- * Plain text in a plain textarea. What it adds is what a person who types all day
+ * Plain text in a plain textarea, and a send button on the card's right edge. What it adds is what a person who types all day
  * needs and nothing a toolbar would: Enter sends and Shift+Enter does not; a fence
  * opened with ``` keeps Enter as a newline until it is closed, and Cmd/Ctrl+Enter sends
  * from inside it; a long paste becomes a code block with an Undo; the draft is
@@ -23,13 +23,14 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent } from '@purlay/types';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useEngine } from '../../realtime/realtime-provider';
-import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Kbd } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 import {
   broadcastMention,
   insideFence,
@@ -58,16 +59,6 @@ export interface ComposerProps {
 /** How long after the last keystroke the draft is written: often enough to lose nothing, rarely enough to cost nothing. */
 export const DRAFT_DEBOUNCE_MS = 300;
 
-/**
- * What sits in the 56px gutter before the box: the channel's name when it fits ("api ›"), and
- * the bare prompt when it does not or when this is a thread's reply box, whose name is a sentence.
- * A name cut to "deplo…" says less than no name, so it is never cut; the full name is the
- * element's title and the textarea's own label.
- */
-const PROMPT_FITS = 5;
-export const promptOf = (channelName: string, isReply: boolean): string =>
-  isReply || channelName.length > PROMPT_FITS ? '›' : `${channelName} ›`;
-
 const Inner = ({
   channelId,
   channelName,
@@ -83,6 +74,9 @@ const Inner = ({
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
   const [error, setError] = useState<string | null>(null);
+  // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
+  const [focused, setFocused] = useState(false);
+  const hintsId = useId();
   // Where the caret goes after a change that is made by script (a paste, an undo).
   const caret = useRef<number | null>(null);
   const composing = useRef(false);
@@ -219,65 +213,110 @@ const Inner = ({
   };
 
   const left = unitsLeft(text);
-  const rows = rowsFor(text);
+  const rows = rowsFor(text, 1);
+
+  const compact = parentId !== undefined;
+  const empty = trimEnd(text) === '';
+  const hints = (
+    <>
+      <span>
+        <Kbd>Enter</Kbd> {t('composer.hint.send')}
+      </span>
+      <span>
+        <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
+      </span>
+      <span>
+        <Kbd>```</Kbd> {t('composer.hint.code')}
+      </span>
+    </>
+  );
+  const hintsBlock = focused ? (
+    <span id={hintsId} className="flex gap-3 text-caption text-ink-muted">
+      {hints}
+    </span>
+  ) : (
+    <VisuallyHidden>
+      <span id={hintsId}>{hints}</span>
+    </VisuallyHidden>
+  );
+  const counter = (
+    <span aria-live="polite" className="ml-auto text-caption text-ink-muted">
+      {left === null
+        ? null
+        : left >= 0
+          ? t('composer.remaining', { count: left })
+          : t('composer.tooLong', { count: -left })}
+    </span>
+  );
+  const sendButton = (
+    <button
+      type="button"
+      onClick={send}
+      aria-disabled={empty}
+      aria-label={t('composer.send')}
+      className="inline-flex size-control shrink-0 items-center justify-center rounded-pill bg-accent text-on-accent aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:size-touch"
+    >
+      <Icon name="send" />
+    </button>
+  );
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 border-t-hairline border-border-subtle px-4 py-3">
-      <div className="flex max-w-feed items-start gap-3">
-        <span
-          aria-hidden="true"
-          title={channelName}
-          className="w-gutter shrink-0 text-right font-mono text-body text-ink-muted"
-        >
-          {promptOf(channelName, parentId !== undefined)}
-        </span>
-        <textarea
-          data-composer=""
-          ref={field}
-          rows={rows}
-          value={text}
-          aria-label={t('composer.label', { channel: channelName })}
-          aria-invalid={error === null ? undefined : true}
-          placeholder={t('composer.placeholder', { channel: channelName })}
-          className="min-w-0 flex-1 resize-none text-body text-ink placeholder:text-ink-muted"
-          onChange={(event) => {
-            change(event.target.value);
+    <div className="shrink-0 pb-4 pt-2">
+      <div className="mx-auto flex w-full max-w-feed flex-col gap-2 px-4">
+        <div
+          data-composer-card=""
+          onFocus={() => {
+            setFocused(true);
           }}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-        />
-        <Button variant="primary" onClick={send}>
-          {t('composer.send')} <span aria-hidden="true">↵</span>
-        </Button>
-      </div>
-      <div className="flex max-w-feed items-center gap-3 text-caption text-ink-muted">
-        <span aria-hidden="true" className="w-gutter shrink-0" />
-        <span>
-          <Kbd>Enter</Kbd> {t('composer.hint.send')}
-        </span>
-        <span>
-          <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
-        </span>
-        <span>
-          <Kbd>```</Kbd> {t('composer.hint.code')}
-        </span>
-        <span aria-live="polite" className="flex-1 text-right">
-          {left === null
-            ? null
-            : left >= 0
-              ? t('composer.remaining', { count: left })
-              : t('composer.tooLong', { count: -left })}
-        </span>
-      </div>
-      {error !== null && (
-        <div className="flex max-w-feed gap-3">
-          <span aria-hidden="true" className="w-gutter shrink-0" />
-          <p role="alert" className="flex items-center gap-2 text-label text-danger-text">
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+          }}
+          className={cn(
+            'flex flex-col rounded-lg border-hairline border-border-strong bg-surface-100',
+            focused && 'outline-focus outline-focus-ring outline-offset-focus',
+          )}
+        >
+          <div className={cn('flex gap-2 px-4', compact ? 'items-center py-2' : 'pt-3')}>
+            <textarea
+              data-composer=""
+              ref={field}
+              rows={rows}
+              value={text}
+              aria-label={t('composer.label', { channel: channelName })}
+              aria-invalid={error === null ? undefined : true}
+              aria-describedby={hintsId}
+              placeholder={t('composer.placeholder', { channel: channelName })}
+              className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
+              onChange={(event) => {
+                change(event.target.value);
+              }}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+            />
+            {compact && sendButton}
+          </div>
+          {compact && !focused && left === null ? (
+            hintsBlock
+          ) : (
+            <div
+              className={cn(
+                'flex items-center gap-3 px-4',
+                compact ? 'pb-2' : 'pb-3 pl-4 pr-3 pt-2',
+              )}
+            >
+              {hintsBlock}
+              {counter}
+              {!compact && sendButton}
+            </div>
+          )}
+        </div>
+        {error !== null && (
+          <p role="alert" className="flex items-center gap-2 px-1 text-label text-danger-text">
             <Icon name="failed" size="sm" />
             {error}
           </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

@@ -19,6 +19,26 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - **`bun run budget:web`** fails above 250 KB of initial gzipped JavaScript, names the chunks (and, with a
   source map, the sources inside the largest), and fails a highlighter grammar or a second locale in the
   initial chunks. It is in `verify` and CI.
+### Feature — 2026-10-10: the interface has an identity (D-100)
+
+- **Cards on a canvas.** The window is a tinted ground and the sidebar and the channel are two rounded
+  cards on it, with one soft shadow; the sign-in screen and every empty state are the same card. A control's
+  corner is 8px, a card's 14px. Both themes.
+- **Avatars, and still no bubbles.** Initials on one of six tints chosen from the username (stable, nothing
+  to fetch or fail), in a fixed column beside the text; the time is next to the name. Code blocks keep the
+  whole width of the column. There is no presence dot because there is no presence.
+- **One typeface, served from here.** IBM Plex Sans and Mono in Latin and Latin Extended (ğ ş İ are in the
+  second), self-hosted under `public/fonts` with the OFL beside them; `tokens.json` refuses a URL, and a
+  browser test checks the faces really load, Turkish letters included, from this origin.
+- **A new shape for the chrome.** A jump field in the sidebar that opens the palette, the two views as a
+  segmented control in the header, a composer that is one card with a round Send button and hints only
+  while it has focus, a palette whose rows carry an icon tile or an avatar, a skeleton that looks like a
+  row. The phone header no longer clips; an open-question's text wraps on two lines instead of being cut.
+- **Test and record.** `UX.md` §2, §3 and §9 are rewritten, D-100 records what was amended (no avatars, no
+  depth, system fonts) and what was rejected (bubbles, a variable font, a font service, GitHub photographs);
+  the visual baselines are regenerated and looked at. The connection-bar test now waits for the app to be
+  connected rather than for the browser's socket, which had made it race.
+
 ### Feature — 2026-10-10: the channel feed (D-98, D-99)
 
 - **A channel reads like a log**, as the approved prototype draws it: a 56px time gutter, no avatars, the

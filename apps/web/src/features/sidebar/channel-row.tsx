@@ -2,7 +2,7 @@
  * One line of the sidebar that goes somewhere: a channel, or a conversation with a person.
  *
  * The treatment is the same for both because the signal is the same (`UX.md` §2): a row
- * with something unread is **bold**, the row you are in is on `surface-200`, and a count
+ * with something unread is **bold**, the row you are in is on `accent-subtle`, and a count
  * — the only one in the product — appears only for what *needs you*, a mention or a
  * message in a direct message. Bold is the unread signal, never a dot or a colour, so it
  * survives colour-blindness and a screen reader hears it as the word "unread" before the
@@ -16,12 +16,12 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
 const rowClasses =
-  'flex h-control w-full items-center gap-2 rounded-md px-3 text-body hover:bg-surface-200 max-narrow:h-touch';
+  'flex h-control w-full items-center gap-2 rounded-md px-2 text-body hover:bg-surface-200 max-narrow:h-touch';
 
 const toneClasses = {
   quiet: 'text-ink-muted',
   unread: 'text-ink font-semibold',
-  current: 'bg-surface-200 text-ink font-medium',
+  current: 'bg-accent-subtle text-ink font-medium hover:bg-accent-subtle',
 } as const;
 
 /** What a row looks like, from what is true of it: where you are beats what is unread. */
@@ -30,6 +30,8 @@ const rowTone = (current: boolean, unread: boolean): keyof typeof toneClasses =>
 
 interface RowContentProps {
   readonly glyph?: GlyphName;
+  /** A person's avatar, in the place a channel has its `#`: a row has one or the other. */
+  readonly avatar?: React.ReactNode;
   readonly mono?: boolean;
   readonly unread: boolean;
   readonly mentions: number;
@@ -40,6 +42,7 @@ interface RowContentProps {
 /** What is inside a row, so a row that is a button and one that is a link look the same. */
 const RowContent = ({
   glyph,
+  avatar,
   mono = false,
   unread,
   mentions,
@@ -49,6 +52,7 @@ const RowContent = ({
   return (
     <>
       {glyph === undefined ? null : <Icon name={glyph} />}
+      {avatar}
       <span className={cn('min-w-0 flex-1 truncate', mono && 'font-mono')}>
         {unread ? <VisuallyHidden>{t('sidebar.unread')} </VisuallyHidden> : null}
         {children}

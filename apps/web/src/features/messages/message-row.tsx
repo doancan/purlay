@@ -1,12 +1,13 @@
 /**
- * One message, the way the approved prototype draws it (`UX.md` §3, D-98): a fixed
- * 56px gutter on the left holding the time in the mono face, then who and what — no
- * avatars, so a channel scans like a log, down a single edge.
+ * One message (`UX.md` §3, D-100): an avatar in a fixed column, then a header line — the name
+ * and the time side by side — and the content under it. No bubbles: a bubble turns a code block
+ * into a box inside a box, and a message here is half code.
  *
- * **Nothing here reflows.** The gutter is a fixed width; the time of a grouped message
- * (the same author within five minutes) is in the gutter but invisible until the row is
- * hovered or focused; the actions are an overlay in the row's corner, there from the
- * start and only faded in. A row is the same height whether the pointer is on it or not.
+ * **Nothing here reflows.** The avatar column is a fixed width; a grouped message (the same
+ * author within five minutes) has no avatar and no header, and its time is in that column but
+ * invisible until the row is hovered or focused; the actions are an overlay in the row's corner,
+ * there from the start and only faded in. A row is the same height whether the pointer is on it
+ * or not.
  *
  * **The row serves threads too.** It takes a `children` slot below the content for the
  * thread's summary line and its replies, and an `actions` slot beside the reaction
@@ -21,6 +22,7 @@
 import { memo, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
+import { Avatar } from '../../ui/avatar';
 import { failureKey, type FailureCode } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Delivery } from '../../realtime/engine';
@@ -52,6 +54,8 @@ export interface MessageRowProps {
    * questions close (`UX.md` §4.3). Colour is not the only signal — the status line says so.
    */
   readonly dimmed?: boolean;
+  /** A thread's reply: a smaller avatar, so the root stays the larger thing in the block. */
+  readonly compact?: boolean;
   /** More hover actions beside React — the thread slice's Reply. */
   readonly actions?: React.ReactNode;
   /** Below the content and the reactions: a thread's summary line and its replies. */
@@ -70,6 +74,7 @@ const MessageRowView = ({
   onRetry,
   onDiscard,
   dimmed = false,
+  compact = false,
   actions,
   children,
 }: MessageRowProps): React.JSX.Element => {
@@ -93,6 +98,19 @@ const MessageRowView = ({
     event.target.closest('[data-message-row]') === event.currentTarget;
   const on = pointed || focused;
 
+  const time = (
+    <time
+      dateTime={message.createdAt}
+      title={absolute}
+      className={cn('font-mono text-caption text-ink-muted', grouped && !on && 'opacity-0')}
+    >
+      {format.time(message.createdAt, new Date(nowMinute))}
+    </time>
+  );
+  const sending = delivery === 'sending' && (
+    <Icon name="sending" size="sm" label={t('delivery.sending')} />
+  );
+
   return (
     <article
       onPointerOver={(event) => {
@@ -112,24 +130,39 @@ const MessageRowView = ({
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: message.sender.username, when: absolute })}
       className={cn(
-        'relative flex gap-3 px-4 py-1',
-        mentionsMe ? 'bg-accent-subtle' : 'hover:bg-surface-200',
+        'relative flex gap-3 rounded-md px-2 py-1',
+        mentionsMe ? 'bg-accent-subtle' : on && 'bg-surface-200',
         failed && 'border-l-marker border-danger',
       )}
     >
-      <div className="flex w-gutter shrink-0 items-start justify-end gap-1 font-mono text-caption text-ink-muted">
-        {delivery === 'sending' && <Icon name="sending" size="sm" label={t('delivery.sending')} />}
-        <time
-          dateTime={message.createdAt}
-          title={absolute}
-          className={grouped && !on ? 'opacity-0' : undefined}
-        >
-          {format.time(message.createdAt, new Date(nowMinute))}
-        </time>
+      <div
+        className={cn(
+          'flex h-auto shrink-0 items-start justify-center gap-1',
+          compact ? 'size-avatar-sm' : 'size-avatar',
+        )}
+      >
+        {grouped ? (
+          <>
+            {sending}
+            {time}
+          </>
+        ) : (
+          <Avatar
+            name={message.sender.displayName}
+            username={message.sender.username}
+            size={compact ? 'sm' : 'md'}
+          />
+        )}
       </div>
 
       <div className="min-w-0 flex-1">
-        {!grouped && <span className="text-heading text-ink">{message.sender.username}</span>}
+        {!grouped && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-heading text-ink">{message.sender.username}</span>
+            {time}
+            {sending}
+          </div>
+        )}
         {mentionsMe && <VisuallyHidden>{`${t('message.mention')}. `}</VisuallyHidden>}
         <div className={dimmed ? 'text-ink-muted' : undefined}>
           {renderContent(message.content, { mentioned })}

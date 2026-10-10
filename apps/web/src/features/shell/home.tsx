@@ -3,7 +3,8 @@
  *
  * A person with a workspace is sent to the first one (`replace`, so Back does not
  * land on a page that only redirects). A person with none sees why, and — because a
- * workspace is the one thing the API lets anybody create — a form to make the first.
+ * workspace is the one thing the API lets anybody create — a form to make the first, on a card
+ * with the product's mark like the sign-in screen it follows (D-100).
  */
 import { useDescribeFailure } from '../../data/failure';
 import { useEffect, useState } from 'react';
@@ -14,6 +15,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { Main } from '../../ui/main';
+import { LogoMark } from './notice';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 
@@ -73,7 +75,7 @@ const CreateWorkspace = (): React.JSX.Element => {
       onSubmit={(event) => {
         void submit(event);
       }}
-      className="flex max-w-dialog flex-col gap-4"
+      className="flex flex-col gap-4 border-t-hairline border-border-subtle pt-6"
     >
       <h2 className="text-title text-ink">{t('workspace.create.title')}</h2>
       <p className="text-body text-ink-muted">{t('workspace.create.body')}</p>
@@ -127,12 +129,15 @@ export const Home = (): React.JSX.Element | null => {
 
   if (first !== undefined) return null;
   return (
-    <Main className="flex min-h-screen flex-col gap-6 bg-surface-100 px-4 py-8 text-ink">
-      <section className="flex max-w-feed flex-col gap-2">
-        <h1 className="text-display">{t('workspace.none.title')}</h1>
-        <p className="text-body text-ink-muted">{t('workspace.none.body')}</p>
-      </section>
-      <CreateWorkspace />
+    <Main className="flex min-h-screen items-center justify-center bg-canvas p-4 text-ink">
+      <div className="flex w-full max-w-dialog flex-col gap-6 rounded-lg bg-surface-100 p-8 shadow-card">
+        <LogoMark />
+        <section className="flex flex-col gap-2">
+          <h1 className="text-display">{t('workspace.none.title')}</h1>
+          <p className="text-body text-ink-muted">{t('workspace.none.body')}</p>
+        </section>
+        <CreateWorkspace />
+      </div>
     </Main>
   );
 };

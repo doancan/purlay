@@ -87,6 +87,14 @@ interface Mounted {
   readonly closed: () => boolean[];
 }
 
+/** What a screen reader gets from a row: its text without what is hidden from it (a person's avatar letters). */
+const spoken = (node: Element | null): string | null => {
+  if (node === null) return null;
+  const copy = node.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+  return copy.textContent;
+};
+
 const mount = async (
   api: Api = apiWith(),
   path = `/w/acme/c/${IDS.api}`,
@@ -106,10 +114,10 @@ const mount = async (
   return {
     view,
     input,
-    options: () => view.queryAllByRole('option').map((option) => option.textContent),
+    options: () => view.queryAllByRole('option').map((option) => spoken(option) ?? ''),
     selected: (): string | null | undefined => {
       const id = input().getAttribute('aria-activedescendant');
-      return id === null ? null : document.getElementById(id)?.textContent;
+      return id === null ? null : spoken(document.getElementById(id));
     },
     here: () => view.world.history.stack.at(-1) ?? '',
     closed: () => closed,
@@ -162,6 +170,26 @@ describe('what is on offer before anything is typed', () => {
   test('passes the accessibility audit', async () => {
     const { view } = await mount();
     await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+});
+
+describe('a row has a tile', () => {
+  test('a person has their avatar and everything else has its glyph, none of it read aloud', async () => {
+    const { view } = await mount();
+    const rows = view.queryAllByRole('option');
+    const people = rows.filter((row) => row.textContent.includes('Bob'));
+    expect(people.length).toBeGreaterThan(0);
+    for (const row of people) {
+      const avatar = row.querySelector('.rounded-pill');
+      expect(avatar?.getAttribute('aria-hidden')).toBe('true');
+      expect(avatar?.className).toContain('size-avatar-sm');
+      expect(avatar?.textContent).toBe('BO');
+    }
+    const channel = rows.find((row) => spoken(row)?.startsWith('api') === true);
+    expect(channel?.querySelector('.rounded-pill')).toBeNull();
+    expect(channel?.querySelector('svg')).not.toBeNull();
+    // The search field is the pill at the top.
+    expect(view.getByRole('combobox').parentElement?.className).toContain('rounded-pill');
   });
 });
 

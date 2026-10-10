@@ -48,7 +48,7 @@ export const tr = {
   'sidebar.channels': 'Kanallar',
   'sidebar.people': 'Kişiler',
   'sidebar.newChannel': 'Yeni kanal',
-  'sidebar.jump': 'ile git',
+  'sidebar.jump': 'Şuraya geç…',
   'sidebar.private': 'özel',
   'sidebar.you': 'sen',
   'sidebar.mentions': {

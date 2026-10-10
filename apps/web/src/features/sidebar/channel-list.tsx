@@ -32,7 +32,7 @@ export const ChannelList = (): React.JSX.Element => {
 
   return (
     <nav aria-label={t('sidebar.channels')} className="flex flex-col gap-1">
-      <div className="flex items-center justify-between pl-3">
+      <div className="flex items-center justify-between pl-2">
         <h2 className="text-label text-ink-muted">{t('sidebar.channels')}</h2>
         <div className="flex">
           <IconButton

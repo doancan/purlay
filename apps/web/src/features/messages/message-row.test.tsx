@@ -55,6 +55,51 @@ describe("a resolved thread's root", () => {
   });
 });
 
+describe('the avatar column', () => {
+  test("a first message has the sender's avatar, hidden from a screen reader, and the time beside the name", async () => {
+    const view = await mount(props({ message: aMessage(1, { sender: ALICE }) }));
+    const avatar = view.container.querySelector('[aria-hidden="true"].rounded-pill');
+    expect(avatar?.textContent).toBe('AL');
+    expect(avatar?.className).toContain('size-avatar');
+    const header = view.getByText('alice').parentElement;
+    expect(header?.querySelector('time')).not.toBeNull();
+  });
+
+  test('a grouped message has no avatar and no name; its time waits in the column for the pointer', async () => {
+    const view = await mount(props({ grouped: true, message: aMessage(1, { sender: ALICE }) }));
+    expect(view.container.querySelector('.rounded-pill')).toBeNull();
+    expect(view.queryByText('alice')).toBeNull();
+    expect(view.container.querySelector('time')?.className).toContain('opacity-0');
+  });
+
+  test('a thread reply is the same row with a smaller avatar and a smaller column', async () => {
+    const view = await mount(props({ compact: true, message: aMessage(1, { sender: ALICE }) }));
+    expect(view.container.querySelector('.rounded-pill')?.className).toContain('size-avatar-sm');
+    expect(view.getByRole('article').firstElementChild?.className).toContain('size-avatar-sm');
+  });
+
+  test('the row under the pointer is tinted and a mention keeps its own tint', async () => {
+    const view = await mount(props());
+    const row = view.getByRole('article');
+    expect(row.className).not.toContain('bg-surface-200');
+    act(() => {
+      fireEvent.pointerOver(row);
+    });
+    expect(row.className).toContain('bg-surface-200');
+    const mention = await mount(
+      props({ message: aMessage(2, { mentions: [ME.id], content: 'hi @dogancan' }) }),
+    );
+    const tinted = mention.container.querySelector('article');
+    if (tinted === null) throw new Error('the row did not render');
+    act(() => {
+      fireEvent.pointerOver(tinted);
+    });
+    expect(tinted.className).toContain('bg-accent-subtle');
+    expect(tinted.className).not.toContain('bg-surface-200');
+    expect(tinted.className).toContain('rounded-md');
+  });
+});
+
 describe('what a row shows', () => {
   test('the name, the time as a real element with the full time on hover, and the body', async () => {
     const view = await mount(props());

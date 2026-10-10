@@ -216,11 +216,20 @@ describe('the validator refuses', () => {
     expect(problemsOf(file).join('\n')).toContain('cubic-bezier');
   });
 
-  test('a font file, because the stack is the system’s own', () => {
+  test('a font that is a URL rather than a file this app serves, so no third party is asked', () => {
     const file = copy();
     const type = file['type'];
     if (typeof type !== 'object' || type === null) throw new Error('no type');
-    Object.assign(type, { fonts: [{ family: 'Inter', file: 'fonts/Inter.woff2', weight: '400' }] });
+    Object.assign(type, {
+      fonts: [
+        {
+          family: 'Inter',
+          file: 'https://fonts.example/Inter.woff2',
+          weight: '400',
+          range: 'latin',
+        },
+      ],
+    });
     expect(problemsOf(file)).not.toEqual([]);
   });
 

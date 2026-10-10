@@ -66,8 +66,8 @@ const Chip = ({
       onClick={onToggle}
       className={
         mine
-          ? 'inline-flex h-badge items-center gap-1 rounded-md border-hairline border-accent bg-accent-subtle px-2 text-label text-ink'
-          : 'inline-flex h-badge items-center gap-1 rounded-md border-hairline border-border-strong px-2 text-label text-ink-muted hover:bg-surface-200 hover:text-ink'
+          ? 'inline-flex h-badge items-center gap-1 rounded-pill border-hairline border-accent bg-accent-subtle px-2 text-label text-ink'
+          : 'inline-flex h-badge items-center gap-1 rounded-pill border-hairline border-border-strong px-2 text-label text-ink-muted hover:bg-surface-200 hover:text-ink'
       }
     >
       <span aria-hidden="true">{reaction.emoji}</span>

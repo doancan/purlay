@@ -23,7 +23,7 @@ const lefts = async (page: Page, selector: string): Promise<number[]> =>
   );
 
 test.describe('the columns of a channel', () => {
-  test('the gutter is one column and the text is one column: rows, dividers, threads, composer', async ({
+  test('the avatar is one column and the text is one column: rows, the day chip, threads, the composer card', async ({
     page,
     signIn,
     world,
@@ -33,7 +33,7 @@ test.describe('the columns of a channel', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('article').first()).toBeVisible();
 
-    // Rows: the time gutter, then the body — each at one x, however many messages there are.
+    // Rows: the avatar column, then the body — each at one x, however many messages there are.
     const gutters = await lefts(page, 'article > div:first-child');
     const bodies = await lefts(page, 'article > div:nth-child(2)');
     expect(gutters).toHaveLength(1);
@@ -41,15 +41,23 @@ test.describe('the columns of a channel', () => {
     const [gutter] = gutters;
     const [body] = bodies;
     if (gutter === undefined || body === undefined) throw new Error('no message rows on screen');
-    expect(body - gutter).toBe(68); // 56px gutter + a 12px gap: the prototype's measure
+    expect(body - gutter).toBe(44); // the 32px avatar + a 12px gap
 
-    // Everything else that lines up with the text lines up with the rows' text.
-    const composer = await lefts(page, 'textarea[data-composer]');
-    expect(composer).toEqual([body]);
-    for (const day of ['Today', 'Yesterday']) {
-      const label = page.getByText(day, { exact: true }).first();
-      if ((await label.count()) === 0) continue;
-      expect(Math.round((await label.boundingBox())?.x ?? -1), `${day} divider`).toBe(body);
+    // The composer is a card whose edge is the rows' edge, so the column reads as one.
+    const cards = await lefts(page, '[data-composer-card]');
+    const rows = await lefts(page, 'article');
+    expect(cards).toHaveLength(1);
+    expect(rows).toContain(cards[0]);
+    // The day is a chip in the middle of the column, not a rule hung from its edge.
+    const chip = page.getByText('Yesterday', { exact: true }).first();
+    if ((await chip.count()) > 0) {
+      const box = await chip.boundingBox();
+      const column = await page.locator('[role="feed"]').boundingBox();
+      expect(
+        Math.abs(
+          (box?.x ?? 0) + (box?.width ?? 0) / 2 - ((column?.x ?? 0) + (column?.width ?? 0) / 2),
+        ),
+      ).toBeLessThanOrEqual(2);
     }
     const status = page.getByRole('button', { name: /^(Open ·|Resolved by)/ }).first();
     if ((await status.count()) > 0) {

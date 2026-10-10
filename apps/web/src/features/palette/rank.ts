@@ -44,6 +44,8 @@ export interface PaletteItem {
   /** A quiet second line: where a view leads, what a setting is now. */
   readonly hint?: string;
   readonly glyph: GlyphName;
+  /** A person: the row shows their avatar where other rows show the glyph (the glyph is still the fallback for assistive text). */
+  readonly avatar?: { readonly name: string; readonly username: string };
   /** When it was last active, ISO; `''` when that means nothing (a setting). Newest first. */
   readonly recency: string;
   /** Do it. A promise means the palette stays open until it settles. */

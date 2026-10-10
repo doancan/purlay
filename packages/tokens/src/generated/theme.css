@@ -9,6 +9,7 @@
 @theme inline {
   /* Colour: bg-, text-, border-, outline-, fill- … with the token name */
   --color-surface-000: var(--surface-000);
+  --color-canvas: var(--canvas);
   --color-surface-100: var(--surface-100);
   --color-surface-200: var(--surface-200);
   --color-code-bg: var(--code-bg);
@@ -19,6 +20,12 @@
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
   --color-accent-subtle: var(--accent-subtle);
+  --color-avatar-1: var(--avatar-1);
+  --color-avatar-2: var(--avatar-2);
+  --color-avatar-3: var(--avatar-3);
+  --color-avatar-4: var(--avatar-4);
+  --color-avatar-5: var(--avatar-5);
+  --color-avatar-6: var(--avatar-6);
   --color-focus-ring: var(--focus-ring);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
@@ -58,7 +65,6 @@
   --height-touch: var(--size-touch);
   --container-touch: var(--size-touch);
   --height-header: var(--size-header);
-  --container-gutter: var(--size-gutter);
   --height-badge: var(--size-badge);
   --container-badge: var(--size-badge);
   --height-code: var(--size-code-clamp);
@@ -162,8 +168,16 @@
   border-radius: var(--radius-md);
 }
 
+@utility rounded-lg {
+  border-radius: var(--radius-lg);
+}
+
 @utility rounded-pill {
   border-radius: var(--radius-pill);
+}
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
 }
 
 @utility shadow-float {
@@ -173,11 +187,6 @@
 @utility size-dot {
   width: var(--size-dot);
   height: var(--size-dot);
-}
-
-@utility size-avatar {
-  width: var(--size-avatar);
-  height: var(--size-avatar);
 }
 
 @utility size-icon-sm {
@@ -193,6 +202,21 @@
 @utility size-icon-lg {
   width: var(--size-icon-lg);
   height: var(--size-icon-lg);
+}
+
+@utility size-avatar {
+  width: var(--size-avatar);
+  height: var(--size-avatar);
+}
+
+@utility size-avatar-sm {
+  width: var(--size-avatar-sm);
+  height: var(--size-avatar-sm);
+}
+
+@utility size-avatar-lg {
+  width: var(--size-avatar-lg);
+  height: var(--size-avatar-lg);
 }
 
 @utility font-sans {

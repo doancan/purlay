@@ -33,14 +33,14 @@ test.describe('the tokens, as computed', () => {
         mono: read('--font-mono'),
       };
     });
-    expect(values.radius).toBe('6px');
+    expect(values.radius).toBe('8px');
     expect(values.pill).toBe('9999px');
     expect(values.icon).toBe('12px');
-    expect(values.sans).toContain('system-ui');
-    expect(values.mono).toContain('ui-monospace');
+    expect(values.sans).toContain('IBM Plex Sans');
+    expect(values.mono).toContain('IBM Plex Mono');
   });
 
-  test('what the screen is drawn with: the system font, mono names, sized icons, rounded controls', async ({
+  test('what the screen is drawn with: the Plex faces, mono names, sized icons, rounded controls', async ({
     page,
   }) => {
     const drawn = await page.evaluate(() => {
@@ -58,9 +58,35 @@ test.describe('the tokens, as computed', () => {
       };
     });
     // The browser's default serif is what a broken font stack looks like.
-    expect(drawn.body).toContain('system-ui');
+    expect(drawn.body).toContain('IBM Plex Sans');
     expect(['12px', '16px', '20px']).toContain(drawn.iconWidth);
     expect(drawn.iconHeight).toBe(drawn.iconWidth);
     expect(drawn.iconStroke).toBe('2.25px');
+  });
+
+  test('the faces are really served and loaded, Turkish letters included, and from this origin', async ({
+    page,
+  }) => {
+    const loaded = await page.evaluate(async () => {
+      const sans = await document.fonts.load('400 14px "IBM Plex Sans"', 'ğşİıçöü');
+      const bold = await document.fonts.load('600 14px "IBM Plex Sans"', 'Aa');
+      const mono = await document.fonts.load('400 13px "IBM Plex Mono"', '0123');
+      const origins = performance
+        .getEntriesByType('resource')
+        .filter((entry) => entry.name.endsWith('.woff2'))
+        .map((entry) => new URL(entry.name).origin);
+      return {
+        sans: sans.length,
+        bold: bold.length,
+        mono: mono.length,
+        origins: [...new Set(origins)],
+        here: location.origin,
+      };
+    });
+    // `load` resolves to the faces that matched; an empty list is a family that was never declared.
+    expect(loaded.sans).toBeGreaterThan(0);
+    expect(loaded.bold).toBeGreaterThan(0);
+    expect(loaded.mono).toBeGreaterThan(0);
+    expect(loaded.origins).toEqual([loaded.here]);
   });
 });

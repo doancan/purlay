@@ -83,6 +83,24 @@ describe('the workspace in the address', () => {
   });
 });
 
+describe('the frame', () => {
+  test('is two cards on the canvas: the sidebar, and the main column that holds the screen', async () => {
+    const view = await visit(`/w/acme/c/${IDS.api}`, aSignedInApi());
+    const side = view.getByRole('complementary', { name: 'Workspace' });
+    const main = view.getByRole('main');
+    const frame = side.parentElement;
+    expect(frame?.className).toContain('bg-canvas');
+    for (const card of [side, main.parentElement]) {
+      expect(card?.className).toContain('rounded-lg');
+      expect(card?.className).toContain('shadow-card');
+      expect(card?.className).toContain('bg-surface-100');
+    }
+    // Both cards are the frame's children, side by side, and `<main>` is still the one landmark.
+    expect(main.parentElement?.parentElement).toBe(frame);
+    expect(view.getAllByRole('main')).toHaveLength(1);
+  });
+});
+
 describe('the front door', () => {
   test('a person with a workspace is sent to it, and from it to a channel they are in', async () => {
     const view = await visit('/', aSignedInApi());
@@ -275,6 +293,20 @@ describe('the sign-in screen', () => {
   ])('%s says what happened', async (path, words) => {
     const view = await visit(path, out());
     expect(view.getByRole('status').textContent).toContain(words);
+  });
+
+  test('is a card on the canvas, with the product mark above the title and the button the width of the card', async () => {
+    const view = await visit('/sign-in', out());
+    const main = view.getByRole('main');
+    expect(main.className).toContain('bg-canvas');
+    const card = view
+      .getByRole('heading', { level: 1, name: 'Sign in to Purlay' })
+      .closest('section');
+    expect(card?.className).toContain('rounded-lg');
+    expect(card?.className).toContain('shadow-card');
+    const mark = card?.querySelector('[aria-hidden="true"]');
+    expect(mark?.textContent).toBe('P');
+    expect(view.getByRole('link', { name: 'Continue with GitHub' }).className).toContain('w-full');
   });
 
   test('says nothing when there is nothing to say', async () => {

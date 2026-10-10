@@ -85,7 +85,7 @@ describe('the header', () => {
     const view = await mountChannel({ messages: page([aMessage(1)]) });
     const title = view.getByRole('heading', { level: 1 });
     expect(title.textContent).toBe('api');
-    expect(title.querySelector('.font-mono')).not.toBeNull();
+    expect(title.className).toContain('font-mono');
     expect(view.getByText('Backend deploys and incident follow-ups')).toBeDefined();
     const feedTab = view.getByRole('link', { name: 'Feed' });
     expect(feedTab.getAttribute('aria-current')).toBe('page');
@@ -93,6 +93,28 @@ describe('the header', () => {
     expect(view.getByRole('link', { name: 'Open questions' }).getAttribute('href')).toBe(
       '/w/acme/questions',
     );
+    view.unmountAll();
+  });
+
+  test('draws the two views as one segmented control: a track, with the current view raised out of it', async () => {
+    const view = await mountChannel({ messages: page([aMessage(1)]) });
+    const track = view.getByRole('navigation', { name: 'Channel views' });
+    expect(track.className).toContain('rounded-pill');
+    expect(track.className).toContain('bg-surface-200');
+    expect(track.querySelectorAll('a')).toHaveLength(2);
+    const raised = view.getByRole('link', { name: 'Feed' });
+    expect(raised.className).toContain('bg-surface-100');
+    expect(raised.className).toContain('rounded-pill');
+    // The one that is not current is on the track, not raised.
+    expect(view.getByRole('link', { name: 'Open questions' }).className).not.toContain(
+      'bg-surface-100',
+    );
+    // A glyph in a tile stands for a channel and says nothing a screen reader needs.
+    expect(
+      view
+        .getByRole('heading', { level: 1 })
+        .parentElement?.previousElementSibling?.getAttribute('aria-hidden'),
+    ).toBe('true');
     view.unmountAll();
   });
 
@@ -135,6 +157,10 @@ describe('the header', () => {
       messages: page([aMessage(1, { channelId: IDS.dm })]),
     });
     expect(other.getByRole('heading', { level: 1 }).textContent).toBe('bob');
+    // A conversation with a person is headed by the person's own avatar, not a glyph.
+    expect(
+      other.getByRole('heading', { level: 1 }).parentElement?.previousElementSibling?.textContent,
+    ).toBe('BO');
     expect(other.queryByText('No topic yet')).toBeNull();
     other.unmountAll();
     const note = await mountChannel({
@@ -249,6 +275,18 @@ describe('the feed, populated', () => {
     expect(time?.getAttribute('datetime')).toBe(rich[0]?.createdAt);
     expect(time?.getAttribute('title')).toContain('Sep 9, 2026');
     expect(view.container.textContent).toContain('Today');
+    view.unmountAll();
+  });
+
+  test('the day is a centred chip between messages, not a rule', async () => {
+    const view = await mountChannel({ messages: page(rich) });
+    const chip = Array.from(view.container.querySelectorAll('span')).find(
+      (node) => node.textContent === 'Today',
+    );
+    expect(chip?.className).toContain('rounded-pill');
+    expect(chip?.className).toContain('bg-surface-200');
+    expect(chip?.parentElement?.className).toContain('justify-center');
+    expect(view.container.querySelector('[role="feed"]')?.className).toContain('max-w-feed');
     view.unmountAll();
   });
 

@@ -86,6 +86,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
         keywords: you ? [person.username, person.displayName] : [person.username],
         hint: `@${person.username}`,
         glyph: 'person',
+        avatar: { name: person.displayName, username: person.username },
         recency: existing?.lastMessageAt ?? '',
         run: async () => {
           const channel = existing ?? (await openDirectMessage(workspace.id, person.id));
