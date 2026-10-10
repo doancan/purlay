@@ -56,7 +56,12 @@ const SYNTAX = [
 
 export const PAIRS: readonly Pair[] = [
   ...cross(['ink', 'ink-muted'], READING, TEXT, 'message text and secondary text'),
-  ...cross(['ink', 'ink-muted'], ['canvas'], TEXT, 'the sign-in card sits on it, and its words with it'),
+  ...cross(
+    ['ink', 'ink-muted'],
+    ['canvas'],
+    TEXT,
+    'the sign-in card sits on it, and its words with it',
+  ),
   ...cross(['ink'], AVATARS, TEXT, 'the initials in an avatar'),
   // A link is `accent` on whatever the message sits on, including a mention's tint.
   ...cross(['accent'], [...SURFACES, 'accent-subtle'], TEXT, 'link text'),
