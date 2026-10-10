@@ -44,5 +44,8 @@ export default defineConfig({
     // The bundle budget is measured in `PRD.md` §5 terms. Reporting compressed
     // size keeps the number in the build output rather than in somebody's head.
     reportCompressedSize: true,
+    // Kept only when asked for: `bun run budget:web` uses a source map to name what grew
+    // inside the largest chunk, and a map served to everyone is not something to ship.
+    sourcemap: process.env['PURLAY_SOURCEMAP'] === '1' ? 'hidden' : false,
   },
 });

@@ -6,6 +6,20 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-10: the browser tests, the demo and the budgets (D-49, D-50, D-98)
+
+- **`bun run demo`** builds the client, recreates a scratch database, seeds a believable workspace
+  through the real API (sixty messages in #api with three threads, two hundred deploy notices to page
+  through, reactions, mentions, a read position) and serves it on one origin, with a demo-only sign-in.
+- **Playwright and `@axe-core/playwright`**, against that harness, in dark and light at 1440 and 820 px:
+  the sign-in screen, the 404, the gallery, the skip link and the focus that follows a navigation, a
+  theme that is set before first paint, the seeded data through the browser's own `fetch`.
+- **The shell is prerendered**: `AppSkeleton` is rendered into `dist/index.html`, so the first response is
+  layout (a test photographs it with JavaScript off and checks the real frame's sidebar is the same width).
+- **`bun run budget:web`** fails above 250 KB of initial gzipped JavaScript, names the chunks (and, with a
+  source map, the sources inside the largest), and fails a highlighter grammar or a second locale in the
+  initial chunks. It is in `verify` and CI.
+
 ### Feature — 2026-10-10: the client's foundations, in both themes and two languages (D-98)
 
 - **Light and dark ship together.** The theme is the operating system's until a person chooses, kept per

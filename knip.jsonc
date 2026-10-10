@@ -19,6 +19,12 @@
         "scripts/rehearsal-seed-bucket.ts",
       ],
     },
+    "apps/api": {
+      // Run by `scripts/demo.ts` as a subprocess (`bun run apps/api/src/cli/seed-demo.ts`),
+      // which knip does not read. Not dead: it is how the demo and the browser tests get
+      // their workspace, and it lives in `cli/` beside `write-env-example.ts` for the same reason.
+      "entry": ["src/index.ts", "src/cli/seed-demo.ts"],
+    },
     "apps/web": {
       // The first exemption. The realtime client library and the browser clock
       // that feeds it are finished and tested, and nothing imports them until the
