@@ -19,6 +19,7 @@ import type { Clock } from '../../platform/clock';
 import { requireChannelById } from '../../platform/channels';
 import {
   NO_LOG,
+  publication,
   publishAfterCommit,
   publishChannelAdded,
   publishChannelState,
@@ -124,11 +125,9 @@ export const readUpTo = async (
   );
   await publishAfterCommit(log, [
     [
-      {
-        label: 'CHANNEL_STATE',
-        run: async () =>
-          await publishChannelState(bus, clock, userId, channelId, outcome.state, outcome.version),
-      },
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(bus, clock, userId, channelId, outcome.state, outcome.version),
+      ),
     ],
   ]);
   return outcome.state;
@@ -155,12 +154,7 @@ export const openDirectMessageWith = async (
   const forPeer = opened.forPeer;
   if (forPeer !== null) {
     await publishAfterCommit(log, [
-      [
-        {
-          label: 'CHANNEL_ADDED',
-          run: async () => await publishChannelAdded(bus, clock, input.userId, forPeer),
-        },
-      ],
+      [publication('CHANNEL_ADDED', () => publishChannelAdded(bus, clock, input.userId, forPeer))],
     ]);
   }
   return { channel: opened.channel, created: opened.created };

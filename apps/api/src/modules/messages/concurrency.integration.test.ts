@@ -44,18 +44,16 @@ const idOf = (room: Room, name: string): string => room.members[name]?.userId ??
 
 const recordingBus = (): { bus: EventBus; frames: ServerFrame[] } => {
   const frames: ServerFrame[] = [];
-  return {
-    frames,
-    bus: {
-      publish: (_topic, frame) => {
-        frames.push(frame);
-        return Promise.resolve();
-      },
-      subscribe: () => false,
-      unsubscribe: () => undefined,
-      forget: () => undefined,
+  const bus: EventBus = {
+    publish: (_topic, frame) => {
+      frames.push(frame);
+      return Promise.resolve();
     },
+    subscribe: () => false,
+    unsubscribe: () => undefined,
+    forget: () => undefined,
   };
+  return { frames, bus };
 };
 
 /** Resolves true if the promise settles within the window, false if it is still waiting. */

@@ -19,6 +19,7 @@ import { requireMessageById } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import {
   NO_LOG,
+  publication,
   publishAfterCommit,
   publishReactionsUpdated,
   type EventBus,
@@ -150,16 +151,14 @@ export const setReaction = async (
   if (outcome.changed) {
     await publishAfterCommit(log, [
       [
-        {
-          label: 'REACTIONS_UPDATED',
-          run: async () =>
-            await publishReactionsUpdated(
-              bus,
-              clock,
-              { channelId: outcome.channelId, messageId, reactions: outcome.reactions },
-              outcome.version,
-            ),
-        },
+        publication('REACTIONS_UPDATED', () =>
+          publishReactionsUpdated(
+            bus,
+            clock,
+            { channelId: outcome.channelId, messageId, reactions: outcome.reactions },
+            outcome.version,
+          ),
+        ),
       ],
     ]);
   }

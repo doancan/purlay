@@ -22,6 +22,7 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
 import {
   NO_LOG,
+  publication,
   publishAfterCommit,
   publishThreadUpdated,
   type EventBus,
@@ -235,16 +236,14 @@ export const setResolved = async (
   if (outcome.changed) {
     await publishAfterCommit(log, [
       [
-        {
-          label: 'THREAD_UPDATED',
-          run: async () =>
-            await publishThreadUpdated(
-              bus,
-              clock,
-              { channelId: outcome.channelId, messageId, thread: outcome.summary },
-              outcome.version,
-            ),
-        },
+        publication('THREAD_UPDATED', () =>
+          publishThreadUpdated(
+            bus,
+            clock,
+            { channelId: outcome.channelId, messageId, thread: outcome.summary },
+            outcome.version,
+          ),
+        ),
       ],
     ]);
   }

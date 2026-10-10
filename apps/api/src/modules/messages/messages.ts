@@ -32,6 +32,7 @@ import type { ChannelContext } from '../../platform/channels';
 import {
   channelTopic,
   NO_LOG,
+  publication,
   publishAfterCommit,
   publishChannelState,
   publishThreadUpdated,
@@ -481,37 +482,32 @@ export const send = async (
   // fails is logged and the rest still go; the write is not an error.
   const stages: Publish[][] = [
     [
-      {
-        label: 'MESSAGE_CREATED',
-        run: async () =>
-          await bus.publish(channelTopic(context.channelId), {
-            event: 'MESSAGE_CREATED',
-            data: sent.message,
-            ts: clock.now().getTime(),
-          }),
-      },
+      publication('MESSAGE_CREATED', () =>
+        bus.publish(channelTopic(context.channelId), {
+          event: 'MESSAGE_CREATED',
+          data: sent.message,
+          ts: clock.now().getTime(),
+        }),
+      ),
     ],
   ];
   if (sent.thread !== null) {
     const { rootId, summary, version } = sent.thread;
     stages.push([
-      {
-        label: 'THREAD_UPDATED',
-        run: async () =>
-          await publishThreadUpdated(
-            bus,
-            clock,
-            { channelId: context.channelId, messageId: rootId, thread: summary },
-            version,
-          ),
-      },
+      publication('THREAD_UPDATED', () =>
+        publishThreadUpdated(
+          bus,
+          clock,
+          { channelId: context.channelId, messageId: rootId, thread: summary },
+          version,
+        ),
+      ),
     ]);
   }
   stages.push(
-    sent.recipients.map((recipient) => ({
-      label: 'CHANNEL_STATE',
-      run: async () =>
-        await publishChannelState(
+    sent.recipients.map((recipient) =>
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(
           bus,
           clock,
           recipient.userId,
@@ -519,7 +515,8 @@ export const send = async (
           recipient.state,
           recipient.version,
         ),
-    })),
+      ),
+    ),
   );
   await publishAfterCommit(log, stages);
   return sent.message;

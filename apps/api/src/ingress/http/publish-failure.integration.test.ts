@@ -12,7 +12,12 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
-import { publishAfterCommit, PUBLISH_CHUNK, type EventBus } from '../../platform/events';
+import {
+  publication,
+  publishAfterCommit,
+  PUBLISH_CHUNK,
+  type EventBus,
+} from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { aRecordingLogger, NOW } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
@@ -62,12 +67,12 @@ describe('publishAfterCommit', () => {
     const { log, lines } = aRecordingLogger();
     const order: string[] = [];
     await publishAfterCommit(log, [
-      [{ label: 'first', run: () => mark(order, 'first') }],
+      [publication('first', () => mark(order, 'first'))],
       [
-        { label: 'second-a', run: () => Promise.reject(new Error('boom')) },
-        { label: 'second-b', run: () => mark(order, 'second-b') },
+        publication('second-a', () => Promise.reject(new Error('boom'))),
+        publication('second-b', () => mark(order, 'second-b')),
       ],
-      [{ label: 'third', run: () => mark(order, 'third') }],
+      [publication('third', () => mark(order, 'third'))],
     ]);
     expect(order).toEqual(['first', 'second-b', 'third']);
     expect(lines.map((line) => [line['msg'], line['what']])).toEqual([

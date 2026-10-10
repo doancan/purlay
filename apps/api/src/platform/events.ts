@@ -191,6 +191,9 @@ export interface Publish {
   readonly run: () => Promise<void>;
 }
 
+/** A named publish, for `publishAfterCommit`. */
+export const publication = (label: string, run: () => Promise<void>): Publish => ({ label, run });
+
 /** How many publishes of one stage are in flight at once. */
 export const PUBLISH_CHUNK = 32;
 
@@ -216,7 +219,11 @@ export const publishAfterCommit = async (
   for (const stage of stages) {
     for (let at = 0; at < stage.length; at += PUBLISH_CHUNK) {
       const chunk = stage.slice(at, at + PUBLISH_CHUNK);
-      const settled = await Promise.allSettled(chunk.map(async (publish) => await publish.run()));
+      const settled = await Promise.allSettled(
+        chunk.map(async (publish) => {
+          await publish.run();
+        }),
+      );
       settled.forEach((outcome, index) => {
         if (outcome.status === 'rejected') {
           log.error('publish failed after commit', {
