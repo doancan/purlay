@@ -221,6 +221,7 @@ const Inner = ({
           {channelName} ›
         </span>
         <textarea
+          data-composer=""
           ref={field}
           rows={rows}
           value={text}

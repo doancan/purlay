@@ -100,8 +100,13 @@ export const measure = (dist: string): Report => {
 
 const kb = (bytes: number): string => `${(bytes / 1024).toFixed(2)} KB`;
 
-/** Markers that only a syntax-highlighting grammar carries. */
-const GRAMMAR = /\bshiki\b|\btextmate\b|"scopeName"|source\.(?:ts|js|python|rust|go)\b/;
+/**
+ * Markers that only a syntax-highlighting grammar carries: a TextMate grammar names its own
+ * scope, and the scope names of the languages we ship. The word "shiki" is **not** one: the
+ * loader that imports the highlighter on first use is legitimately in the initial chunk and
+ * names the library and its CSS-variable prefix; what must stay out is the grammars.
+ */
+const GRAMMAR = /\btextmate\b|"scopeName"|source\.(?:ts|js|python|rust|go)\b/;
 const LOCALE_CHUNK = /(?:^|\/)(?:en|tr)-[\w-]+\.js$/;
 
 /** What is wrong with the initial chunks beyond their size, one sentence each. */

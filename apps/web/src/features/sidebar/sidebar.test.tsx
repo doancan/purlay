@@ -82,7 +82,8 @@ describe('the channels section', () => {
 
   test('the channel you are in is the current page, and nothing else is', async () => {
     const view = await open();
-    const current = view
+    // The sidebar's own links: the header's Feed tab is current too, and is not its business.
+    const current = within(view.getByRole('complementary', { name: 'Workspace' }))
       .getAllByRole('link')
       .filter((a) => a.getAttribute('aria-current') === 'page');
     expect(current.map((a) => a.textContent.trim())).toEqual(['api']);

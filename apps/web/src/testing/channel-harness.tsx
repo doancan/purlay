@@ -7,7 +7,6 @@
  * Escape goes "to the composer" and the composer is another slice's component.
  */
 import { act } from '@testing-library/react';
-import { useRef } from 'react';
 import type { Channel, Message, MessagePage, User } from '@purlay/types';
 import type { Api } from '../data/api';
 import { ChannelScreen } from '../features/channel/channel-screen';
@@ -68,13 +67,10 @@ const Region = ({
   readonly channelId: string;
   readonly capture: (engine: Engine) => void;
 }): React.JSX.Element => {
-  // A composer stand-in with the attribute the feed looks for.
-  const box = useRef<HTMLTextAreaElement>(null);
   return (
     <main>
       <EngineProbe capture={capture} />
       <ChannelScreen channelId={channelId} />
-      <textarea ref={box} data-composer="" aria-label="Write a message" />
     </main>
   );
 };

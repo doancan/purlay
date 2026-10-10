@@ -639,7 +639,7 @@ describe('the keyboard', () => {
       b.focus();
     });
     press(b, 'Escape');
-    expect(document.activeElement).toBe(view.getByLabelText('Write a message'));
+    expect(document.activeElement).toBe(view.getByLabelText('Message api'));
     act(() => {
       b.focus();
     });
@@ -659,7 +659,7 @@ describe('the keyboard', () => {
   test('Escape finds the composer even without its mark, and does nothing when there is none', async () => {
     const view = await mountChannel({ messages: page(three) });
     const [, b] = rowsOf(view) as [HTMLElement, HTMLElement];
-    const box = view.getByLabelText('Write a message');
+    const box = view.getByLabelText('Message api');
     box.removeAttribute('data-composer');
     act(() => {
       b.focus();
