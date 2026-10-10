@@ -217,7 +217,7 @@ const ThreadView = ({
           onClick={() => {
             threads.toggle(root.id);
           }}
-          className="mt-1 flex h-control w-full items-center gap-2 rounded-sm text-label text-ink-muted hover:text-ink"
+          className="mt-1 flex h-control w-full items-center gap-2 rounded-md px-2 text-label text-ink-muted hover:bg-surface-200 hover:text-ink"
         >
           {resolved ? (
             <span className="inline-flex items-center gap-2">
@@ -255,7 +255,7 @@ const ThreadView = ({
       })}
       className="mt-2"
     >
-      <div ref={body} className="flex flex-col gap-2 border-l-marker border-border-strong pl-3">
+      <div ref={body} className="flex flex-col gap-2 border-l-marker border-border-subtle pl-3">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
@@ -317,6 +317,7 @@ const ThreadView = ({
             delivery={item.delivery}
             failure={item.failure}
             grouped={item.grouped}
+            compact
             meId={meId}
             nowMinute={nowMinute}
             members={members}

@@ -113,6 +113,9 @@ describe('where a channel opens', () => {
       api: m.api,
     });
     expect(view.getByText('New')).toBeDefined();
+    // The marker is a chip on a line in the accent, so it is seen as a place and not as a word.
+    expect(view.getByText('New').className).toContain('bg-accent');
+    expect(view.getByText('New').className).toContain('rounded-pill');
     expect(view.metrics.assigned.at(-1)).toBe(252); // 300 − 48
     advance(view, READ_DEBOUNCE_MS * 4);
     expect(m.calls).toEqual([]);

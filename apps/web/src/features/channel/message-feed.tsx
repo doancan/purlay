@@ -181,6 +181,7 @@ const FeedList = ({
     <div
       ref={content}
       role="feed"
+      className="mx-auto max-w-feed px-4"
       aria-label={ariaLabel}
       aria-busy={busy}
       onKeyDown={onKeyDown}
@@ -189,14 +190,10 @@ const FeedList = ({
       {items.map((item) => {
         if (item.kind === 'day') {
           return (
-            <div
-              key={item.key}
-              aria-hidden="true"
-              className="flex items-center gap-3 px-4 pb-2 pt-4"
-            >
-              <span className="w-gutter shrink-0" />
-              <span className="text-label text-ink-muted">{item.label}</span>
-              <span className="flex-1 border-t-hairline border-border-subtle" />
+            <div key={item.key} aria-hidden="true" className="flex justify-center pb-2 pt-4">
+              <span className="rounded-pill bg-surface-200 px-3 py-1 text-caption text-ink-muted">
+                {item.label}
+              </span>
             </div>
           );
         }
@@ -205,9 +202,11 @@ const FeedList = ({
             <div
               key={item.key}
               data-feed-marker=""
-              className="flex items-center gap-3 px-4 pb-1 pt-3 text-label text-accent"
+              className="flex items-center gap-3 px-2 pb-1 pt-3 text-label"
             >
-              <span className="w-gutter shrink-0 text-right">{t('message.newMarker')}</span>
+              <span className="shrink-0 rounded-pill bg-accent px-2 text-on-accent">
+                {t('message.newMarker')}
+              </span>
               <span className="flex-1 border-t-hairline border-accent" />
             </div>
           );
@@ -420,11 +419,11 @@ export const MessageFeed = ({
     return (
       <LoadingStatus
         label={t('state.feed.loading')}
-        className="flex flex-1 flex-col gap-4 overflow-hidden px-4 py-4"
+        className="mx-auto flex w-full max-w-feed flex-1 flex-col gap-4 overflow-hidden px-6 py-4"
       >
         {[0, 1, 2, 3].map((row) => (
           <div key={row} className="flex gap-3">
-            <span className="w-gutter shrink-0" />
+            <span className="size-avatar shrink-0 rounded-pill bg-surface-200" />
             <div className="flex flex-col gap-2">
               <Skeleton className="w-members" />
               <Skeleton className="w-feed" />
@@ -479,8 +478,10 @@ export const MessageFeed = ({
       )}
       <div ref={scroller} onScroll={onScroll} className="relative flex-1 overflow-y-auto py-2">
         {/* The top row is one height whatever it says, so loading above never pushes what is below. */}
-        <div ref={top} className="flex h-control items-center px-4 text-caption text-ink-muted">
-          <span className="w-gutter shrink-0" />
+        <div
+          ref={top}
+          className="mx-auto flex h-control max-w-feed items-center px-6 text-caption text-ink-muted"
+        >
           {feed.isFetchNextPageError ? (
             <span className="flex items-center gap-2 text-danger-text">
               <Icon name="failed" size="sm" />

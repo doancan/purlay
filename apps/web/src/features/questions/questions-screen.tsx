@@ -23,18 +23,22 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { threadHref } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
+import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
 import { useFeedPorts } from '../channel/feed-ports';
-import { useChannelTitle } from '../channel/channel-header';
+import {
+  activeSegmentClasses,
+  HeaderTile,
+  segmentClasses,
+  segmentTrackClasses,
+  useChannelTitle,
+} from '../channel/channel-header';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
 import { lastChannel } from './last-channel';
 import { useOpenCount } from './use-open-count';
-
-const tabClasses =
-  'inline-flex h-control items-center gap-2 whitespace-nowrap rounded-md px-3 text-label hover:bg-surface-200 hover:text-ink max-narrow:h-touch';
 
 interface Group {
   readonly channelId: string;
@@ -74,19 +78,22 @@ const Header = (): React.JSX.Element => {
     <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
       <div className="flex min-w-0 items-center gap-2">
         <NavToggle />
-        <div className="flex min-w-0 items-baseline gap-3">
+        <HeaderTile>
+          <Icon name="open-question" size="lg" />
+        </HeaderTile>
+        <div className="flex min-w-0 flex-col">
           <h1 className="whitespace-nowrap text-title text-ink">{t('questions.title')}</h1>
           <span className="truncate text-caption text-ink-muted max-narrow:hidden">
             {t('questions.lede')}
           </span>
         </div>
       </div>
-      <nav aria-label={t('header.views')} className="flex gap-1">
+      <nav aria-label={t('header.views')} className={segmentTrackClasses}>
         {back === undefined ? (
           <Link
             to="workspace"
             params={{ slug: workspace.slug }}
-            className={cn(tabClasses, 'text-ink-muted')}
+            className={cn(segmentClasses, 'text-ink-muted')}
           >
             {t('header.feed')}
           </Link>
@@ -94,7 +101,7 @@ const Header = (): React.JSX.Element => {
           <Link
             to="channel"
             params={{ slug: workspace.slug, channelId: back.id }}
-            className={cn(tabClasses, 'text-ink-muted')}
+            className={cn(segmentClasses, 'text-ink-muted')}
           >
             {t('header.feed')}
           </Link>
@@ -103,7 +110,7 @@ const Header = (): React.JSX.Element => {
           to="questions"
           params={{ slug: workspace.slug }}
           aria-current="page"
-          className={cn(tabClasses, 'bg-surface-200 text-ink max-narrow:hidden')}
+          className={cn(segmentClasses, activeSegmentClasses)}
         >
           {t('header.questions')}
           {open !== null && open.count > 0 && (
@@ -131,7 +138,7 @@ const GroupTitle = ({
   // A hook cannot be called conditionally, so a channel the person can no longer see gets a
   // stand-in that never reaches `useChannelTitle`.
   return channel === undefined ? (
-    <h2 id={id} className="px-4 pb-2 text-label text-ink-muted">
+    <h2 id={id} className="px-3 pb-2 text-label text-ink-muted">
       {t('questions.unnamed')}
     </h2>
   ) : (
@@ -151,7 +158,7 @@ const KnownGroupTitle = ({
   const { t } = useI18n();
   const title = useChannelTitle(channel);
   return (
-    <h2 id={id} className="flex items-center gap-1 px-4 pb-2 text-label text-ink-muted">
+    <h2 id={id} className="flex items-center gap-1 px-3 pb-2 text-label text-ink-muted">
       <Icon name={channel.type === 'direct_message' ? 'person' : 'channel'} size="sm" />
       <span className="font-mono">{title}</span>
       <span aria-hidden="true">·</span>
@@ -179,18 +186,19 @@ const QuestionRow = ({
         onClick={() => {
           navigate(threadHref(workspace.slug, question.channelId, question.id));
         }}
-        className="flex w-full items-start justify-between gap-4 rounded-md px-4 py-2 text-left hover:bg-surface-200"
+        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left hover:bg-surface-200"
       >
+        <Avatar name={question.sender.displayName} username={question.sender.username} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className="text-heading text-ink">{question.sender.username}</span>
-            <time dateTime={question.createdAt} className="text-caption text-ink-muted">
+            <time dateTime={question.createdAt} className="font-mono text-caption text-ink-muted">
               {format.time(question.createdAt, now)}
             </time>
           </span>
           <span className="block truncate text-body text-ink">{question.content}</span>
         </span>
-        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-label text-warning-text">
+        <span className="inline-flex h-badge shrink-0 items-center gap-1 whitespace-nowrap rounded-pill border-hairline border-border-subtle px-2 text-label text-warning-text">
           <Icon name="reply" size="sm" />
           {t('questions.replies', { replies, when: format.time(last, now) })}
         </span>
@@ -213,7 +221,10 @@ export const QuestionsScreen = (): React.JSX.Element => {
   let body: React.JSX.Element;
   if (query.isPending) {
     body = (
-      <LoadingStatus label={t('state.questions.loading')} className="flex flex-col gap-4 px-4 py-4">
+      <LoadingStatus
+        label={t('state.questions.loading')}
+        className="mx-auto flex w-full max-w-feed flex-col gap-4 px-4 py-4"
+      >
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
             <Skeleton className="w-members" />
@@ -235,23 +246,24 @@ export const QuestionsScreen = (): React.JSX.Element => {
     );
   } else if (groups.length === 0) {
     body = (
-      <section className="flex flex-col items-start gap-2 px-4 py-8">
-        <h2 className="flex items-center gap-2 text-display text-ink">
-          <span className="inline-flex text-success-text">
-            <Icon name="resolved" size="lg" />
-          </span>
-          {t('state.questions.empty.title')}
-        </h2>
-        <p className="max-w-feed text-body text-ink-muted">{t('state.questions.empty.body')}</p>
+      <section className="mx-auto flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
+        <span
+          aria-hidden="true"
+          className="inline-flex size-avatar-lg items-center justify-center rounded-md bg-surface-200 text-success-text"
+        >
+          <Icon name="resolved" size="lg" />
+        </span>
+        <h2 className="text-title text-ink">{t('state.questions.empty.title')}</h2>
+        <p className="text-body text-ink-muted">{t('state.questions.empty.body')}</p>
       </section>
     );
   } else {
     body = (
-      <div className="flex flex-col gap-6 px-0 py-4">
+      <div className="mx-auto flex w-full max-w-feed flex-col gap-6 px-1 py-4">
         {groups.map((group) => {
           const id = `questions-${group.channelId}`;
           return (
-            <section key={group.channelId} aria-labelledby={id} className="max-w-feed">
+            <section key={group.channelId} aria-labelledby={id}>
               <GroupTitle
                 channel={byId.get(group.channelId)}
                 count={group.questions.length}
@@ -266,7 +278,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
           );
         })}
         {query.hasNextPage && (
-          <div className="px-4">
+          <div className="px-3">
             <Button
               variant="secondary"
               busy={query.isFetchingNextPage}
@@ -278,7 +290,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
             </Button>
           </div>
         )}
-        <p className="max-w-feed px-4 text-caption text-ink-muted">{t('questions.footer')}</p>
+        <p className="px-3 text-caption text-ink-muted">{t('questions.footer')}</p>
       </div>
     );
   }
