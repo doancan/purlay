@@ -168,6 +168,10 @@ const ThreadView = ({
   }, [replyRequested, expanded, clearReplyRequest]);
 
   // ── A reply arriving near the end keeps the end in view ─────────────────
+  // Measured in the scroller's own coordinates (where the end *is in the content*), not on the
+  // screen: on the screen the end moves whenever the reader does, and a reader carried from the
+  // bottom of the channel to this thread by a link would read as a thread that grew by the whole
+  // distance (found in a browser: the page was dragged straight back down).
   const lastEnd = useRef<number | null>(null);
   useLayoutEffect(() => {
     const marker = end.current;
@@ -176,13 +180,17 @@ const ThreadView = ({
       lastEnd.current = null;
       return;
     }
-    const bottom = marker.getBoundingClientRect().bottom;
-    const edge = scroller.getBoundingClientRect().bottom;
+    const inContent = (): number =>
+      marker.getBoundingClientRect().bottom -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+    const now = inContent();
     const before = lastEnd.current;
-    if (before !== null && bottom > before && before - edge <= NEAR_END_PX) {
-      scroller.scrollTop += bottom - before;
+    const edge = scroller.scrollTop + scroller.clientHeight;
+    if (before !== null && now > before && before - edge <= NEAR_END_PX) {
+      scroller.scrollTop += now - before;
     }
-    lastEnd.current = marker.getBoundingClientRect().bottom;
+    lastEnd.current = inContent();
   }, [items.length, threads.scroller]);
 
   const live = (

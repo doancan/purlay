@@ -61,6 +61,9 @@ export default defineConfig({
     timezoneId: 'UTC',
   },
   expect: {
+    // A flow crosses a socket, a server transaction and a cache; on a busy machine five seconds is
+    // a guess, ten is a verdict. (Latency *claims* are measured in the page, not by this timeout.)
+    timeout: 10_000,
     toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: 'disabled' },
   },
   projects: [

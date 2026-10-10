@@ -150,6 +150,11 @@ export const ThreadsProvider = ({
     const row = rowOf(reveal.current);
     if (row === null) return;
     reveal.current = null;
+    // The reader was at the bottom when the feed opened, and the feed follows the bottom while the
+    // box around it changes size: without letting go first, the resize that comes with the thread
+    // opening and the older pages above it carries the reader straight back down, out of sight of
+    // the thing the link was for (found in a browser, in a channel with a hundred messages).
+    holdPlace();
     row.scrollIntoView({ block: 'center' });
   });
 
@@ -192,8 +197,11 @@ export const ThreadsProvider = ({
       const key = event.key.toLowerCase();
 
       if (event.key === 'Escape') {
-        // Out of a thread: fold it and keep the person on its root.
-        if (inThread === null || !latest.current.has(rootId)) return false;
+        // Out of a thread: fold it and keep the person on its root. Focus on the root itself counts —
+        // the thread is *its* content, so Esc on the question closes the thread under it, which is
+        // what "Esc closes the topmost thing" (`UX.md` §7) means when the thread is the topmost thing
+        // and the person has not moved into it (found in a browser: T opened it, Esc did not close it).
+        if (!latest.current.has(rootId)) return false;
         event.preventDefault();
         collapse(rootId);
         rowOf(rootId)?.focus();

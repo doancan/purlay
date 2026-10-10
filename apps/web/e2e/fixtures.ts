@@ -17,8 +17,17 @@ import {
 } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  apiAs,
+  makeRoom,
+  type ApiClient,
+  type Persona,
+  type Room,
+  type RoomOptions,
+  type Tenant,
+} from './support';
 
-type Persona = 'dogancan' | 'alice' | 'bob' | 'carol';
+export type { Persona, Room };
 
 /** What `scripts/demo.ts` wrote after seeding (`apps/api/src/cli/demo-seed.ts`). */
 interface World {
@@ -41,6 +50,17 @@ interface Fixtures {
   readonly signIn: (persona?: Persona) => Promise<void>;
   /** Fails with every violation, named, if axe finds any on the page as it is now. */
   readonly expectNoAxe: (scope?: Locator) => Promise<void>;
+  /** The workspace as the API clients see it. */
+  readonly tenant: Tenant;
+  /** Speaks to the API as one of the seeded people, with their genuine session. */
+  readonly api: (persona: Persona) => ApiClient;
+  /** A channel of the test's own, with its people in it and its history written (`support.ts`). */
+  readonly room: (options?: RoomOptions) => Promise<Room>;
+  /**
+   * Another person's browser, in the same colour scheme and window as this project's, already
+   * signed in and closed with the test. The page under test is `page`; this is who it talks to.
+   */
+  readonly asPerson: (persona: Persona) => Promise<Page>;
 }
 
 export const test = base.extend<Fixtures>({
@@ -55,6 +75,49 @@ export const test = base.extend<Fixtures>({
     await use(async (persona = 'dogancan') => {
       await signInAs(context, baseURL ?? '', world.personas[persona].token);
     });
+  },
+
+  tenant: async ({ world, baseURL }, use) => {
+    const tokens = {} as Record<Persona, string>;
+    const userIds = {} as Record<Persona, string>;
+    for (const persona of ['dogancan', 'alice', 'bob', 'carol'] as const) {
+      tokens[persona] = world.personas[persona].token;
+      userIds[persona] = world.personas[persona].userId;
+    }
+    await use({
+      baseURL: baseURL ?? '',
+      slug: world.workspace.slug,
+      workspaceId: world.workspace.id,
+      tokens,
+      userIds,
+    });
+  },
+
+  api: async ({ tenant }, use) => {
+    await use((persona) => apiAs(tenant, persona));
+  },
+
+  room: async ({ tenant }, use) => {
+    await use((options) => makeRoom(tenant, options));
+  },
+
+  asPerson: async ({ browser, baseURL, world }, use, testInfo) => {
+    const contexts: BrowserContext[] = [];
+    await use(async (persona) => {
+      const { colorScheme, viewport, reducedMotion, locale, timezoneId } = testInfo.project.use;
+      const context = await browser.newContext({
+        ...(baseURL === undefined ? {} : { baseURL }),
+        ...(colorScheme === undefined ? {} : { colorScheme }),
+        ...(viewport === undefined ? {} : { viewport }),
+        ...(reducedMotion === undefined ? {} : { reducedMotion }),
+        ...(locale === undefined ? {} : { locale }),
+        ...(timezoneId === undefined ? {} : { timezoneId }),
+      });
+      contexts.push(context);
+      await signInAs(context, baseURL ?? '', world.personas[persona].token);
+      return await context.newPage();
+    });
+    for (const context of contexts) await context.close();
   },
 
   expectNoAxe: async ({ page }, use) => {
@@ -128,24 +191,3 @@ export const focused = (page: Page): Promise<string> =>
       element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 40)
     }`;
   });
-
-/**
- * Milliseconds from a user's action to the next frame that painted its effect: the clock
- * starts as `action` begins and stops on the second animation frame after it settles —
- * the first is when the browser is asked to render, the second is when it had.
- */
-export const timeToPaint = async (page: Page, action: () => Promise<void>): Promise<number> => {
-  const start = await page.evaluate(() => performance.now());
-  await action();
-  const end = await page.evaluate(
-    () =>
-      new Promise<number>((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            resolve(performance.now());
-          });
-        });
-      }),
-  );
-  return end - start;
-};

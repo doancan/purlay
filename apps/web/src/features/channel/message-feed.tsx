@@ -81,11 +81,21 @@ const useDeliveryAnnouncer = (items: readonly FeedItem[]): string => {
   return said;
 };
 
-/** The composer, wherever the screen put it: the one text box in this region that is for writing. */
-const composerIn = (region: Element | null): HTMLElement | null =>
-  region?.querySelector<HTMLElement>('[data-composer]') ??
-  region?.querySelector<HTMLElement>('textarea') ??
-  null;
+/**
+ * The channel's composer, wherever the screen put it: the text box in this region that is for
+ * writing *to the channel*. A thread has a reply box of its own, earlier in the document than the
+ * channel's, and Esc "to the composer" must not land in it (found in a browser: with a thread open,
+ * Esc moved focus into its reply box).
+ */
+const composerIn = (region: Element | null): HTMLElement | null => {
+  const outsideThreads = (candidates: Iterable<HTMLElement>): HTMLElement | undefined =>
+    Array.from(candidates).find((box) => box.closest('[data-thread-root]') === null);
+  return (
+    outsideThreads(region?.querySelectorAll<HTMLElement>('[data-composer]') ?? []) ??
+    outsideThreads(region?.querySelectorAll<HTMLElement>('textarea') ?? []) ??
+    null
+  );
+};
 
 const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
@@ -223,6 +233,13 @@ const FeedList = ({
   );
 };
 
+/**
+ * How many pages back the feed will read to find the reader's place before opening where it
+ * is. Ten pages is five hundred messages: a place older than that is not a place the reader is
+ * coming back to, and the cost of finding it is a wait they would notice.
+ */
+export const SEEK_LIMIT_PAGES = 10;
+
 export interface MessageFeedProps {
   readonly channelId: string;
   readonly channelName: string;
@@ -287,9 +304,29 @@ export const MessageFeed = ({
     [format, nowMinute, today, yesterday],
   );
 
+  // **A channel opens where the reader's place is, so the place has to be in hand first.** The
+  // read position may be older than everything the first page holds (ninety unread in a page of
+  // fifty); the marker would then sit above the oldest *loaded* message, the reader would be
+  // placed there, and the pages that arrive above would carry them nowhere near the real line
+  // (found in a browser, in a channel with two hundred messages and the position at the 120th).
+  // Until the position is inside what is loaded — or the reader has been placed once, or the
+  // search has gone `SEEK_LIMIT_PAGES` back — older pages are read and the feed is not shown.
+  const placed = useRef(false);
+  const behind =
+    typeof markerAfter === 'string' &&
+    messages.length > 0 &&
+    !messages.some((m) => m.id <= markerAfter);
+  const seeking =
+    !placed.current &&
+    behind &&
+    feed.hasNextPage &&
+    (feed.data?.pages.length ?? 0) < SEEK_LIMIT_PAGES;
+  useEffect(() => {
+    if (feed.isSuccess && !seeking) placed.current = true;
+  }, [feed.isSuccess, seeking]);
   // "Never read anything" means the marker is above the oldest message — which is only
   // the oldest *loaded* one until the first page reaches the beginning.
-  const marker = markerAfter === null && feed.hasNextPage ? undefined : markerAfter;
+  const marker = seeking || (markerAfter === null && feed.hasNextPage) ? undefined : markerAfter;
   const items = useMemo(
     () => buildFeed({ messages, pending, me, markerAfter: marker, dayLabel }),
     [messages, pending, me, marker, dayLabel],
@@ -310,7 +347,7 @@ export const MessageFeed = ({
     [focusedId, items, lastRowId],
   );
 
-  const ready = feed.isSuccess;
+  const ready = feed.isSuccess && !seeking;
   const { atBottom, newBelow, onScroll, jumpToBottom, holdPlace } = useFeedScroll({
     scroller,
     content,
@@ -340,6 +377,14 @@ export const MessageFeed = ({
     });
   }, [ready, hasNextPage, isFetchingNextPage, fetchNextPage, ports]);
 
+  // Reading back to the reader's place (see `seeking`), one page at a time.
+  // The count of pages is a dependency because a page that arrives before the render that would
+  // have shown `isFetchingNextPage` leaves every other dependency as it was.
+  const pagesLoaded = feed.data?.pages.length ?? 0;
+  useEffect(() => {
+    if (seeking && !isFetchingNextPage) void fetchNextPage();
+  }, [seeking, isFetchingNextPage, fetchNextPage, pagesLoaded]);
+
   // A thread the address asks for may be older than the first page: read back until its root
   // is here or there is nothing older, one page at a time.
   const wanted = openThread !== null && !messages.some((m) => m.id === openThread);
@@ -361,7 +406,7 @@ export const MessageFeed = ({
     [engine],
   );
 
-  if (feed.isPending) {
+  if (feed.isPending || seeking) {
     return (
       <LoadingStatus
         label={t('state.feed.loading')}

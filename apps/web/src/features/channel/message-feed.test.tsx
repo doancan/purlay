@@ -31,6 +31,7 @@ import {
 import { person } from '../../testing/user';
 import { ACK_DEADLINE_MS } from '../../realtime/engine';
 import * as Content from '../content/render-content';
+import { SEEK_LIMIT_PAGES } from './message-feed';
 import { READ_DEBOUNCE_MS } from './use-mark-read';
 
 installDom();
@@ -141,6 +142,69 @@ describe('where a channel opens', () => {
       await Promise.resolve();
     });
     expect(view.container.querySelectorAll('[data-feed-marker]')).toHaveLength(1);
+    view.unmountAll();
+  });
+
+  test('a read position older than the first page is looked for before the feed is shown, and the reader opens on the real line', async () => {
+    const asked: (string | undefined)[] = [];
+    let release: (value: ReturnType<typeof page>) => void = () => undefined;
+    const view = await mountChannel({
+      channels: channelsWith({
+        lastReadMessageId: messageIdAt(2),
+        unreadCount: 4,
+        unreadMentionCount: 0,
+      }),
+      api: {
+        messages: (_c, query) => {
+          asked.push(query?.before);
+          return query?.before === undefined
+            ? Promise.resolve(page([aMessage(5), aMessage(6)], messageIdAt(5)))
+            : new Promise((resolve) => {
+                release = resolve;
+              });
+        },
+      },
+      layout: { markerTop: 300 },
+    });
+    // The first page holds nothing at or before the read position: the feed waits, with the
+    // loading state, and asks for the next page by itself — no marker above the wrong message.
+    expect(asked).toEqual([undefined, messageIdAt(5)]);
+    expect(view.container.querySelector('[data-message-row]')).toBeNull();
+    expect(view.getByText('Loading messages')).toBeDefined();
+    await act(async () => {
+      release(page([aMessage(1), aMessage(2), aMessage(3), aMessage(4)]));
+      await Promise.resolve();
+    });
+    await settle();
+    // The position is in hand: the marker is above the first message past it (the third), and the
+    // reader is placed at it, once.
+    const markers = view.container.querySelectorAll('[data-feed-marker]');
+    expect(markers).toHaveLength(1);
+    expect(markers[0]?.nextElementSibling?.getAttribute('data-message-id')).toBe(messageIdAt(3));
+    expect(view.metrics.assigned.at(-1)).toBe(252);
+    expect(asked).toHaveLength(2);
+    view.unmountAll();
+  });
+
+  test('looking for the place stops after ten pages: the reader is shown what is there, not made to wait for ever', async () => {
+    const asked: (string | undefined)[] = [];
+    const view = await mountChannel({
+      channels: channelsWith({
+        lastReadMessageId: messageIdAt(1),
+        unreadCount: 40,
+        unreadMentionCount: 0,
+      }),
+      api: {
+        messages: (_c, query) => {
+          asked.push(query?.before);
+          const n = asked.length + 10;
+          return Promise.resolve(page([aMessage(n)], messageIdAt(n)));
+        },
+      },
+    });
+    for (let turn = 0; turn < 12; turn++) await settle();
+    expect(asked).toHaveLength(SEEK_LIMIT_PAGES);
+    expect(view.container.querySelector('[data-message-row]')).not.toBeNull();
     view.unmountAll();
   });
 

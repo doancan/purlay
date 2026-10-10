@@ -3,7 +3,7 @@
  * lists the screens read come out. No React, no network.
  */
 import { describe, expect, test } from 'bun:test';
-import { QueryClient, type InfiniteData } from '@tanstack/react-query';
+import { InfiniteQueryObserver, QueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Channel, Message, MessagePage } from '@purlay/types';
 import {
   channelAdded,
@@ -119,6 +119,42 @@ describe('a message arrives', () => {
     const client = seeded();
     messageCreated(client, message(8, { parentId: id(1), thread: null }));
     expect(cached(client, keys.thread(id(1)))).toBeUndefined();
+  });
+
+  test('a list that is still on its way when the message arrives is asked for again, not left to answer without it', async () => {
+    // The first answer was written before the message existed; if it were kept, the message
+    // would be in the count and in the socket's frame and nowhere on the screen.
+    const client = new QueryClient();
+    let asked = 0;
+    let release: (page: MessagePage) => void = (): void => undefined;
+    const observer = new InfiniteQueryObserver(client, {
+      queryKey: keys.thread(id(1)),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (page: MessagePage): string | undefined => page.nextCursor ?? undefined,
+      queryFn: (): Promise<MessagePage> => {
+        asked += 1;
+        return asked === 1
+          ? new Promise<MessagePage>((resolve): void => {
+              release = resolve;
+            })
+          : Promise.resolve<MessagePage>({
+              data: [message(8, { parentId: id(1), thread: null })],
+              nextCursor: null,
+            });
+      },
+    });
+    const stop = observer.subscribe(() => undefined);
+    await Promise.resolve();
+    messageCreated(client, message(8, { parentId: id(1), thread: null }));
+    release({ data: [], nextCursor: null });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    stop();
+    expect(asked).toBe(2);
+    expect(client.getQueryData<Pages>(keys.thread(id(1)))?.pages[0]?.data.map((m) => m.id)).toEqual(
+      [id(8)],
+    );
   });
 
   test('a thread with no page yet takes nothing', () => {
