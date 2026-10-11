@@ -108,6 +108,22 @@ recognised, because the lint rule refuses a `default` over a union.
   of the narrowed tree. The engine is now tested on its own (`engine.test.ts`) and both mutations are
   caught.
 
+## What the independent review found after this was written
+
+A security review of the finished package, and its numbers measured here afterwards:
+
+- **A lone `\r` hid a line from the nesting check**, which split on `\n` while the engine also ends
+  a line at `\r`. `x\r` then `1. ` repeated to 16k took **2 284 ms**, and `x\r` then `> ` 218 ms.
+  The check now splits as the engine does.
+- **The autolink pass is quadratic in an unbroken run of `[-.+\w]`.** It is a regular expression
+  over every text node, outside the tokenizer the other bounds measure. `.-` repeated to 16k took
+  101 ms (4k: 7.3 ms, 8k: 25.5 ms, 16k: 100.9 ms). With the run limited to 1024 characters the worst
+  measured was 8.4 ms, so the run is a fourth bound; inside code it is not counted, because the pass
+  does not read code.
+- **The mention parser missed a `~~~` fence.** A name inside one was a mention while the renderer
+  would draw it as code. Not the engine's fault, but the same mistake as the first bound: a second
+  set of rules for where code is.
+
 ## Not measured
 
 The browser's own stack depth (Chrome, Firefox, Safari), and parse time in a browser rather than

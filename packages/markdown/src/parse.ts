@@ -8,7 +8,7 @@
  */
 import type { Nodes, PhrasingContent, Root, RootContent } from 'mdast';
 import { blockTreeOf, codeRangesOf, syntaxTreeOf } from './engine';
-import { delimitersOutside, MARKDOWN_DELIMITERS_MAX, nestsTooDeep } from './scan';
+import { MARKDOWN_DELIMITERS_MAX, MARKDOWN_RUN_MAX, measureOutside, nestsTooDeep } from './scan';
 import type { Align, Block, Inline, ListItem, MessageTree, TableRow } from './tree';
 
 /** Nesting, on the tree, beyond which a body is shown as typed: what the line scan cannot see, like emphasis inside emphasis. */
@@ -17,12 +17,30 @@ export const MARKDOWN_DEPTH_MAX = 100;
 /** The only addresses a link may go to; anything else — relative, `//host`, `javascript:` — is its label's text. */
 const SAFE_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:', 'mailto:']);
 
-const isSafeUrl = (url: string): boolean =>
-  URL.canParse(url) && SAFE_PROTOCOLS.has(new URL(url).protocol);
+/**
+ * The address a link may carry, or null. What is returned is the URL as the browser will read it
+ * (`href`), not the characters that were typed, so the string that was checked is the string that
+ * is rendered.
+ */
+const safeHrefOf = (url: string): string | null => {
+  if (!URL.canParse(url)) return null;
+  const parsed = new URL(url);
+  return SAFE_PROTOCOLS.has(parsed.protocol) ? parsed.href : null;
+};
+
+/** The engine's two readings, as arguments, so a failure inside the bounds can be injected and seen. */
+export interface Engine {
+  readonly blocks: (text: string) => Root;
+  readonly full: (text: string) => Root;
+}
+
+const ENGINE: Engine = { blocks: blockTreeOf, full: syntaxTreeOf };
 
 export type Reading =
   | { readonly tree: MessageTree }
-  | { readonly tree: null; readonly reason: 'nesting' | 'delimiters' | 'depth' | 'engine' };
+  | { readonly tree: null; readonly reason: 'nesting' | 'delimiters' | 'run' | 'depth' }
+  /** The engine threw inside the bounds: a gap in them, carried with its cause to be logged (D-101). */
+  | { readonly tree: null; readonly reason: 'engine'; readonly error: unknown };
 
 /** Thrown out of the narrowing when the tree is deeper than `MARKDOWN_DEPTH_MAX`; never escapes `readMarkdown`. */
 class TooDeep extends Error {
@@ -47,7 +65,10 @@ const joined = (nodes: readonly Inline[]): Inline[] => {
 const sourceOf = (node: Nodes, text: string): string => {
   const start = node.position?.start.offset;
   const end = node.position?.end.offset;
-  return start === undefined || end === undefined ? '' : text.slice(start, end);
+  // The engine always records offsets; a node without them is a defect to see, not text to drop.
+  if (start === undefined || end === undefined)
+    throw new Error(`a ${node.type} node has no position`);
+  return text.slice(start, end);
 };
 
 /**
@@ -80,8 +101,9 @@ export const narrowTree = (root: Root, text: string): MessageTree => {
           break;
         case 'link': {
           const children = inlines(node.children, depth + 1);
-          if (isSafeUrl(node.url)) out.push({ type: 'link', url: node.url, children });
-          else out.push(...children);
+          const url = safeHrefOf(node.url);
+          if (url === null) out.push(...children);
+          else out.push({ type: 'link', url, children });
           break;
         }
         // Never recognised (`DISABLED`, and no footnotes): shown as the characters that were typed.
@@ -117,13 +139,16 @@ export const narrowTree = (root: Root, text: string): MessageTree => {
           out.push({ type: 'thematicBreak' });
           break;
         case 'list': {
-          const ordered = node.ordered === true;
           const children = node.children.map((item): ListItem => ({
             type: 'listItem',
             checked: item.checked ?? null,
             children: blocks(item.children, depth + 2),
           }));
-          out.push({ type: 'list', ordered, start: ordered ? (node.start ?? 1) : null, children });
+          out.push(
+            node.ordered === true
+              ? { type: 'list', ordered: true, start: node.start ?? 1, children }
+              : { type: 'list', ordered: false, children },
+          );
           break;
         }
         case 'table': {
@@ -170,18 +195,26 @@ export const narrowTree = (root: Root, text: string): MessageTree => {
   return { type: 'root', children: blocks(root.children, 1) };
 };
 
-/** A body's tree, or why it is shown as typed. Never throws. */
-export const readMarkdown = (text: string): Reading => {
+/**
+ * A body's tree, or why it is shown as typed. The engine's own failures are caught and returned;
+ * a defect in this package's code is not, and throws.
+ */
+export const readMarkdown = (text: string, engine: Engine = ENGINE): Reading => {
   if (nestsTooDeep(text)) return { tree: null, reason: 'nesting' };
+  let blocks: Root;
+  try {
+    blocks = engine.blocks(text);
+  } catch (error) {
+    return { tree: null, reason: 'engine', error };
+  }
+  const prose = measureOutside(text, codeRangesOf(blocks));
+  if (prose.delimiters > MARKDOWN_DELIMITERS_MAX) return { tree: null, reason: 'delimiters' };
+  if (prose.longestRun > MARKDOWN_RUN_MAX) return { tree: null, reason: 'run' };
   let root: Root;
   try {
-    if (delimitersOutside(text, codeRangesOf(blockTreeOf(text))) > MARKDOWN_DELIMITERS_MAX) {
-      return { tree: null, reason: 'delimiters' };
-    }
-    root = syntaxTreeOf(text);
-  } catch {
-    // The bounds exist so this is unreachable; the server logs it as a gap in them (D-101).
-    return { tree: null, reason: 'engine' };
+    root = engine.full(text);
+  } catch (error) {
+    return { tree: null, reason: 'engine', error };
   }
   try {
     return { tree: narrowTree(root, text) };
@@ -193,3 +226,30 @@ export const readMarkdown = (text: string): Reading => {
 
 /** A body's tree, or null when it is shown as typed. */
 export const parseMarkdown = (text: string): MessageTree | null => readMarkdown(text).tree;
+
+/**
+ * The body with every fenced block the engine reads blanked to spaces, line breaks kept, so a
+ * mention is looked for where the reader sees prose (D-12, D-101). The mention parser has rules for
+ * code of its own, and they missed a `~~~` fence; asking the engine where code is closes that, and
+ * any other case its rules and the renderer's would disagree on. A body whose block reading the
+ * bounds forbid, or that the engine fails on, is returned as it is: the mention parser's own rules
+ * still apply, and `readMarkdown` reports the failure.
+ */
+export const withoutFencedCode = (text: string, engine: Engine = ENGINE): string => {
+  if (nestsTooDeep(text)) return text;
+  let blocks: Root;
+  try {
+    blocks = engine.blocks(text);
+  } catch {
+    // Reported by `readMarkdown` on the same body, which the server runs beside this.
+    return text;
+  }
+  let out = '';
+  let from = 0;
+  for (const range of codeRangesOf(blocks)) {
+    out +=
+      text.slice(from, range.start) + text.slice(range.start, range.end).replace(/[^\r\n]/g, ' ');
+    from = range.end;
+  }
+  return out + text.slice(from);
+};

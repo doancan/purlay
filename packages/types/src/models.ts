@@ -171,10 +171,15 @@ export const TextMetadata = Type.Object(
     codeLanguages: Type.Optional(Type.Array(Type.String())),
     /** GitHub pull request and issue addresses, unique, in the order they appear. */
     githubLinks: Type.Optional(
-      Type.Array(Type.String({ minLength: 1 }), { maxItems: GITHUB_LINKS_PER_MESSAGE_MAX }),
+      Type.Array(
+        Type.String({
+          pattern: '^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/(pull|issues)/[0-9]+$',
+        }),
+        { maxItems: GITHUB_LINKS_PER_MESSAGE_MAX, uniqueItems: true },
+      ),
     ),
-    /** True when the body is a single fenced block, which renders full-bleed. */
-    isCodeOnly: Type.Optional(Type.Boolean()),
+    /** Present, and true, when the body is a single fenced block, which renders full-bleed; absent otherwise. */
+    isCodeOnly: Type.Optional(Type.Literal(true)),
   },
   { additionalProperties: false },
 );

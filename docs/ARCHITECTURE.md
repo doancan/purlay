@@ -45,7 +45,7 @@
 | Server state | TanStack Query | `@tanstack/react-query` | (D-18) |
 | Realtime state | Zustand | `zustand` | (D-18) |
 | Object storage | S3-compatible; Garage locally | `garage` | An extra service locally, set up by a script because its image has no shell; no console. Any S3-compatible store works in production, and a filesystem driver exists for simple self-hosts (D-20; `docs/spikes/object-storage.md`) |
-| Markdown | one engine on both sides — micromark through `mdast-util-from-markdown`, four GFM extensions — narrowed and bounded in `packages/markdown` | `mdast-util-from-markdown`, `micromark-extension-gfm-*`, `mdast-util-gfm-*` | 29.9 KB gzipped in the browser; superlinear past bounds that are enforced before it runs, so a body past them is shown as typed (D-101, `docs/spikes/markdown.md`) |
+| Markdown | one engine on both sides — micromark through `mdast-util-from-markdown`, four GFM extensions — narrowed and bounded in `packages/markdown` | `mdast-util-from-markdown`, `micromark-extension-gfm-*`, `mdast-util-gfm-*` | Its browser cost, and superlinear past bounds that are enforced before it runs, so a body past them is shown as typed — both measured in `docs/spikes/markdown.md` (D-101) |
 | Highlighting | Shiki, grammars loaded lazily | `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
 | Thumbnails | `Bun.Image`, built into the runtime | built in | A young API, and its decoder differs by platform — `docs/spikes/image-pipeline.md`; thumbnails must use `fit: 'inside'`, because the two-dimension form stretches (D-75) |
 
@@ -161,6 +161,8 @@ purlay/
 ├── packages/
 │   ├── types/                   models.ts · events.ts · api.ts — the contract
 │   ├── db/                      schema.ts (Kysely) · migrations/ · client.ts
+│   ├── markdown/                the one reading of a body, for the server and the browser (D-101)
+│   ├── tokens/                  tokens.json and what is generated from it (D-97)
 │   └── config/                  eslint · prettier · tailwind · tsconfig bases
 │
 ├── docs/                        PRD · DECISIONS · ARCHITECTURE · SCHEMA · OVERVIEW · UX · API
@@ -173,6 +175,8 @@ imports from nothing above it. `realtime` never imports `ingress` (ingress compo
 production code never imports `testing/` — both are lint rules. A route handler or frame handler validates, calls one service and
 serializes: sign-in, the `/me` read and the fan-out that ends a session's sockets are in `modules` and
 `platform/events.ts` (D-47). `apps/web` never imports from `apps/api` — only from `packages/*`.
+`packages/markdown` runs in both, so it imports no database, no app and no Node or Bun module
+(D-101).
 
 *(`apps/desktop` arrives in Phase 3. It is absent from Phase 0–2 on purpose — D-14.)*
 
@@ -611,8 +615,8 @@ this document claimed otherwise. The client renders the markdown and memoises th
 3. Record fenced code block languages → `metadata.codeLanguages`.
 4. Detect GitHub PR/Issue URLs → `metadata.githubLinks`.
 5. Sanitise by narrowing: the engine never recognises raw HTML, and the tree a renderer is given
-   holds only the kinds the product draws, with links only to `http:`, `https:` and `mailto:`. The
-   same function runs where the browser renders. External images are links until the proxy exists
+   holds only the kinds the product draws, and links only to the addresses D-101 §2 allows. The same
+   function runs where the browser renders. External images are links until the proxy exists
    (#110), which is when they become images.
 
 ### 8.2. Rendering
@@ -702,7 +706,7 @@ layering rule. (D-46)
 | **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** | `testing/cross-tenant*`, from `API.md` (D-63) |
 | **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search and open questions (D-34)** | `ingress/http/channel-visibility*` (D-64) |
 | Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) | `message-id.test.ts`, `messages.integration.test.ts` |
-| **Content safety** | **Every construct the product does not render is the characters that were typed; a link goes only to `http:`, `https:` or `mailto:`; the engine never recognises what it is configured not to; a body past the bounds is shown as typed and never throws (D-101)** | `packages/markdown/src/*.test.ts`; the rendering half with #43 |
+| **Content safety** | **Every construct the product does not render is the characters that were typed; a link goes only where D-101 §2 allows; the engine never recognises what it is configured not to; no body reaches an engine failure, and one past the bounds is shown as typed (D-101)** | `packages/markdown/src/*.test.ts`; the rendering half with #43 |
 | Permission | Every role-gated action, per role | With the first role-gated action (#51, #74) |
 | Realtime | Two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency | `realtime/*.integration.test.ts` |
 | Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |

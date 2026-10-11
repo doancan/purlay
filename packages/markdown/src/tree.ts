@@ -3,8 +3,8 @@
  *
  * This is a narrowed copy of the parser's tree, not the tree itself. Every kind the renderer
  * draws is listed here, and nothing reaches a renderer that is not: raw HTML, images, reference
- * definitions and footnotes are not parsed at all, and a link whose address is not an absolute
- * `http:`, `https:` or `mailto:` URL arrives as its label's text. The narrowing *is* the
+ * definitions and footnotes are not parsed at all, and a link whose address is not one
+ * `SAFE_PROTOCOLS` in `parse.ts` allows arrives as its label's text. The narrowing *is* the
  * sanitiser (`ARCHITECTURE.md` §8.1): one function, shared by the server and the client, so what
  * one accepts the other renders.
  */
@@ -42,13 +42,15 @@ export type Block =
   /** Only a fence makes one; `lang` is the info string's first word, or null. */
   | { readonly type: 'code'; readonly lang: string | null; readonly value: string }
   | { readonly type: 'blockquote'; readonly children: readonly Block[] }
+  /** Numbered from `start`. */
   | {
       readonly type: 'list';
-      readonly ordered: boolean;
-      /** The first number of an ordered list; null for a bulleted one. */
-      readonly start: number | null;
+      readonly ordered: true;
+      readonly start: number;
       readonly children: readonly ListItem[];
     }
+  /** Bulleted: there is no number to start from. */
+  | { readonly type: 'list'; readonly ordered: false; readonly children: readonly ListItem[] }
   | {
       readonly type: 'table';
       readonly align: readonly Align[];

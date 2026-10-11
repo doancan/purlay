@@ -1038,7 +1038,7 @@ puts `remark`'s tree in the browser bundle, against a 250 KB budget (`PRD.md` §
 the highlighter already spend most of.
 
 > **Amended 2026-10-11 by D-101.** The rejection above was never measured, and when it was the
-> engine `remark` wraps cost 29.9 KB (`docs/spikes/markdown.md`). D-101 chooses one engine on both
+> engine `remark` wraps fit the budget with room to spare (`docs/spikes/markdown.md`). D-101 chooses one engine on both
 > sides; the two category rows of the table above are what it names. Parts 1–3 stand.
 
 **Rejected — highlighting in a Web Worker by default.** Unchanged from §8.2: for a clamped
@@ -3911,7 +3911,8 @@ and its renderer and the server's sanitiser are chosen together (O-6), so this d
 choose a markdown package. The renderer recognises fenced code, inline code and bare `http(s)` links,
 emits React nodes (never `dangerouslySetInnerHTML`, so there is no HTML to sanitise), and shows
 everything else literally with its line breaks. It is one function, `renderContent`, which O-6's
-renderer replaces without touching a caller. Fenced code is highlighted by Shiki with grammars
+renderer replaces without touching a caller. *(Amended 2026-10-11: O-6 is closed by D-101 — one
+engine on both sides, so there is no separate server sanitiser to choose; the renderer is #43.)* Fenced code is highlighted by Shiki with grammars
 loaded on first use (D-36), coloured by the `--syntax-*` tokens, so the initial chunk holds none.
 
 **5 · Read position is the server's.** The unread marker is placed at `last_read_message_id`,
@@ -4123,12 +4124,14 @@ purpose, which is why they are decided again here and not patched.
 
 O-6 left the two markdown packages D-36 named as categories, and #42 and #43 are the moment they
 are needed. Decided by the owner on 2026-10-11, on the measurements in `docs/spikes/markdown.md`.
+Each number below is measured there; the bounds themselves are constants in the code, named here.
 
 **1 · One engine.** `mdast-util-from-markdown` (micromark) with four GFM extensions —
 autolink literals, strikethrough, tables and task lists — on the server at write time and in the
 browser to render. It is the engine `remark-parse` wraps; its trees and remark's were identical on
-every probe, it costs the browser 29.9 KB gzipped, and with one engine there is no second parser to
-keep aligned, so D-36's shared fixture suite becomes the package's own tests. The reading lives in
+every probe, and with one engine there is no second parser to
+keep aligned, so D-36's shared fixture suite becomes the package's own tests. Its browser cost is in
+the spike. The reading lives in
 `packages/markdown` (`@purlay/markdown`), which a lint rule keeps free of anything a browser cannot
 run.
 
@@ -4150,19 +4153,38 @@ the continuation of a list is not turned into a block without a language. Decide
 same reasoning switches off the setext underline: only explicit syntax formats.
 
 **5 · Bounded, and a body past a bound is shown as typed — never refused.** The engine is
-superlinear on runs of inline delimiters (308 ms for 16k of `*a`) and overflows the stack on
-containers opened on one line, inconsistently. So a body is formatted only when no line opens more
-than 32 containers, it has at most 1000 inline delimiters outside code, and its narrowed tree is at
-most 100 deep. Where code is, is the engine's own block reading, never a pattern: the first version
-of this bound was one, and the agreement test showed it could not follow a fence inside a list item.
+superlinear on runs of inline delimiters and on unbroken address-like runs (its autolink pass
+backtracks), and slow or out of stack on containers opened on one line, inconsistently
+(`docs/spikes/markdown.md`). So a body is formatted only inside four bounds, each a constant in
+`packages/markdown/src/scan.ts` or `parse.ts`: containers opened on one line
+(`MARKDOWN_NESTING_MAX`, with a line ended by `\r\n`, `\r` or `\n`, as the engine ends one),
+inline delimiters outside code (`MARKDOWN_DELIMITERS_MAX`), the longest address-like run outside
+code (`MARKDOWN_RUN_MAX`), and the depth of the narrowed tree (`MARKDOWN_DEPTH_MAX`). Where code is,
+is the engine's own block reading, never a pattern: the first version of this bound was one, and the
+agreement test showed it could not follow a fence inside a list item.
 A body past a bound is still sent, stored and searchable; it is not formatted. Refusing it was
 rejected: it would make a pasted log a failure, a retry after the bounds tighten a different answer
 from the first (D-8), and a new error the composer must explain.
 
-**6 · GitHub links: at most five per message**, unique and canonical, in the order they appear
-(`GITHUB_LINKS_PER_MESSAGE_MAX`). Each becomes a request to GitHub when it is unfurled (#66).
-Decided by the owner, with ten and three rejected. `metadata` is not on the wire until something
-reads it (#44, #66).
+**6 · GitHub links: a bounded few per message** (`GITHUB_LINKS_PER_MESSAGE_MAX`), unique and
+canonical, in the order they appear. Each becomes a request to GitHub when it is unfurled (#66).
+Decided by the owner (five, with ten and three rejected). `metadata` is not on the wire until
+something reads it (#44, #66).
+
+**7 · A mention is looked for where the reader sees prose.** The mention parser kept rules of its
+own for code and missed a `~~~` fence, so a name quoted in what renders as code notified the person.
+The body it reads now has every fenced block the engine reads blanked, so what is drawn as code and
+what notifies cannot disagree.
+
+**8 · The engine failing inside the bounds is a defect, not a refusal.** It is caught around the two
+engine calls only — a defect in this package's own code throws — and returned with its cause. The
+message is stored and shown as typed, and the server logs an error with the cause and never the
+content. Rejected: re-throwing, which would make a body the bounds should have caught a failed send;
+and catching around the whole reading, which hid this package's own bugs as the engine's.
+
+**9 · A link carries the address as the browser reads it** (`new URL(…).href`), so the string that
+was checked is the string that is rendered. Making an unchecked link impossible to construct — a
+brand on the tree, the way D-54 brands a context — belongs with the renderer that consumes it (#43).
 
 **Rejected.**
 

@@ -49,7 +49,13 @@ import {
   resolveMentions,
   type ChannelStateUpdate,
 } from './delivery';
-import { metadataOf, readMarkdown, type Reading } from '@purlay/markdown';
+import {
+  metadataOf,
+  readMarkdown,
+  withoutFencedCode,
+  type Engine,
+  type Reading,
+} from '@purlay/markdown';
 import { parseMentions } from './mentions';
 import {
   buildMessages,
@@ -89,6 +95,8 @@ export interface Sent {
    * call that inserted the row reads the body; a retry answers from the row and reads nothing.
    */
   readonly unformatted: Extract<Reading, { tree: null }>['reason'] | null;
+  /** The engine's failure inside the bounds, when that is the reason; logged with its cause by `send`. */
+  readonly engineFailure?: unknown;
 }
 
 /** The root a reply goes under, if it is a root of this channel that can be replied to. */
@@ -156,6 +164,7 @@ export const sendMessage = async (
   clock: Clock,
   context: ChannelContext,
   input: OutgoingMessage,
+  engine?: Engine,
 ): Promise<Sent> => {
   const again = async (row: MessageRow): Promise<Sent> => {
     const [message] = await buildMessages(executor, [row]);
@@ -195,8 +204,9 @@ export const sendMessage = async (
     });
   }
 
-  // The parser's refusal (D-12): `@here` and its kin are not a thing this product has.
-  const mentions = parseMentions(input.content);
+  // The parser's refusal (D-12): `@here` and its kin are not a thing this product has. Looked for
+  // only where the reader sees prose: fenced code is blanked by the engine that renders it (D-101).
+  const mentions = parseMentions(withoutFencedCode(input.content, engine));
   if (mentions.broadcast.length > 0) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
@@ -207,11 +217,13 @@ export const sendMessage = async (
 
   // Read once, here (`ARCHITECTURE.md` §8.1). Never a refusal: a body too complex to format is
   // still a message, shown as typed, and records nothing (D-101).
-  const reading = readMarkdown(input.content);
+  const reading = readMarkdown(input.content, engine);
   const metadata = metadataOf(reading.tree);
   if (!Value.Check(TextMetadata, metadata)) {
-    // The parser's own output outside the contract is a defect in this code, not in the message.
-    throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
+    // The parser's own output outside the contract is a defect in this code, not in the message:
+    // a 500, and the log names the fields that broke it — their paths, never their values.
+    const paths = [...Value.Errors(TextMetadata, metadata)].map((error) => error.path);
+    throw new Error(`metadata outside the contract at ${paths.join(', ')}`);
   }
 
   const root =
@@ -317,6 +329,9 @@ export const sendMessage = async (
     thread,
     recipients,
     unformatted: reading.tree === null ? reading.reason : null,
+    ...(reading.tree === null && reading.reason === 'engine'
+      ? { engineFailure: reading.error }
+      : {}),
   };
 };
 
@@ -473,6 +488,8 @@ export interface SendDependencies {
   readonly bus: EventBus;
   /** Where a failed publish is written; the write it follows is already committed. */
   readonly log?: Logger;
+  /** The markdown engine; an argument so a failure inside its bounds can be injected (D-101). */
+  readonly engine?: Engine;
 }
 
 /**
@@ -494,18 +511,19 @@ export const send = async (
   input: OutgoingMessage,
   sessionId?: string,
 ): Promise<Message> => {
-  const { atomically, clock, bus, log = NO_LOG } = dependencies;
+  const { atomically, clock, bus, log = NO_LOG, engine } = dependencies;
   const sent = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
-    return await sendMessage(transaction, clock, context, input);
+    return await sendMessage(transaction, clock, context, input, engine);
   });
   if (sent.unformatted === 'engine') {
-    // Inside the bounds the engine should never throw (D-101); this is a gap in them to close,
-    // not a broken message: it is stored, sent and shown as typed. Never the content (ARCHITECTURE §10).
-    log.warn('markdown engine failed inside its bounds', {
+    // Inside the bounds the engine should never fail (D-101): a gap in them to close, not a broken
+    // message — it is stored, sent and shown as typed. The cause, and never the content (§10).
+    log.error('markdown engine failed inside its bounds', {
       messageId: sent.message.id,
       length: input.content.length,
+      err: sent.engineFailure,
     });
   }
   // The room first, then what moved under it, then each person's own numbers: a

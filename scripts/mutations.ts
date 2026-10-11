@@ -92,9 +92,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'send-announces-before-the-commit',
     why: 'subscribers receive a message that then rolls back, and nothing can retract the frame',
     file: MESSAGES,
-    find: `    return await sendMessage(transaction, clock, context, input);
+    find: `    return await sendMessage(transaction, clock, context, input, engine);
   });`,
-    replace: `    const early = await sendMessage(transaction, clock, context, input);
+    replace: `    const early = await sendMessage(transaction, clock, context, input, engine);
     await bus.publish(channelTopic(context.channelId), {
       event: 'MESSAGE_CREATED',
       data: early.message,
@@ -298,7 +298,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'markdown-nesting-unbounded',
-    why: 'one line of `1. 1. 1. …` takes the engine most of a second, or out of stack, on every write and every render of it',
+    why: 'one line of `1. 1. 1. …` takes the engine seconds, or out of stack, on every write and every render of it',
     file: 'packages/markdown/src/parse.ts',
     find: "  if (nestsTooDeep(text)) return { tree: null, reason: 'nesting' };\n",
     replace: '',
@@ -306,10 +306,10 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'markdown-delimiters-unbounded',
-    why: 'sixteen thousand characters of `*a` cost the server a third of a second of CPU per write',
+    why: 'a long run of `*a` costs the server superlinear CPU on every write (`docs/spikes/markdown.md`)',
     file: 'packages/markdown/src/parse.ts',
-    find: 'codeRangesOf(blockTreeOf(text))) > MARKDOWN_DELIMITERS_MAX',
-    replace: 'codeRangesOf(blockTreeOf(text))) > Infinity',
+    find: 'if (prose.delimiters > MARKDOWN_DELIMITERS_MAX) return',
+    replace: 'if (prose.delimiters > Infinity) return',
     tests: ['packages/markdown/src/scan.test.ts'],
   },
   {
@@ -340,8 +340,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'markdown-any-link-scheme',
     why: "a `javascript:` link in a message runs in the reader's session when it is clicked",
     file: 'packages/markdown/src/parse.ts',
-    find: 'if (isSafeUrl(node.url)) out.push(',
-    replace: "if (node.url !== '') out.push(",
+    find: 'return SAFE_PROTOCOLS.has(parsed.protocol) ? parsed.href : null;',
+    replace: 'return parsed.href;',
     tests: ['packages/markdown/src/parse.test.ts'],
   },
   {
@@ -359,5 +359,48 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "  'definition',\n",
     replace: '',
     tests: ['packages/markdown/src/engine.test.ts', 'packages/markdown/src/parse.test.ts'],
+  },
+  {
+    id: 'markdown-address-runs-unbounded',
+    why: 'a long unbroken run like `.-.-.-` makes the autolink pass backtrack: quadratic CPU on every write',
+    file: 'packages/markdown/src/parse.ts',
+    find: 'if (prose.longestRun > MARKDOWN_RUN_MAX) return',
+    replace: 'if (prose.longestRun > Infinity) return',
+    tests: ['packages/markdown/src/scan.test.ts'],
+  },
+  {
+    id: 'markdown-lone-carriage-return-hides-a-line',
+    why: 'a lone `\\r` hides a line from the nesting scan, and `x\\r1. 1. 1. …` costs seconds of CPU',
+    file: 'packages/markdown/src/scan.ts',
+    find: 'const LINE_ENDING = /\\r\\n|\\r|\\n/;',
+    replace: 'const LINE_ENDING = /\\n/;',
+    tests: ['packages/markdown/src/scan.test.ts'],
+  },
+  {
+    id: 'markdown-engine-failure-thrown',
+    why: 'an engine failure inside the bounds becomes a failed send instead of a message shown as typed',
+    file: 'packages/markdown/src/parse.ts',
+    find: "    root = engine.full(text);\n  } catch (error) {\n    return { tree: null, reason: 'engine', error };\n  }",
+    replace: '    root = engine.full(text);\n  } finally {\n    // mutated\n  }',
+    tests: [
+      'packages/markdown/src/parse.test.ts',
+      'apps/api/src/modules/messages/markdown.integration.test.ts',
+    ],
+  },
+  {
+    id: 'mentions-read-inside-fenced-code',
+    why: 'a name quoted inside a `~~~` fence, which the reader sees as code, notifies the person',
+    file: 'apps/api/src/modules/messages/messages.ts',
+    find: 'parseMentions(withoutFencedCode(input.content, engine))',
+    replace: 'parseMentions(input.content)',
+    tests: ['apps/api/src/modules/messages/markdown.integration.test.ts'],
+  },
+  {
+    id: 'markdown-engine-failure-unlogged',
+    why: 'the engine failing inside its bounds leaves no trace, and the gap in the bounds is never found',
+    file: 'apps/api/src/modules/messages/messages.ts',
+    find: "    log.error('markdown engine failed inside its bounds', {",
+    replace: "    log.debug('markdown engine failed inside its bounds', {",
+    tests: ['apps/api/src/modules/messages/markdown.integration.test.ts'],
   },
 ];

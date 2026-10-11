@@ -10,9 +10,10 @@ import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 import { blockTreeOf, codeRangesOf, syntaxTreeOf } from './engine';
 import { readMarkdown } from './parse';
 import {
-  delimitersOutside,
+  measureOutside,
   MARKDOWN_DELIMITERS_MAX,
   MARKDOWN_NESTING_MAX,
+  MARKDOWN_RUN_MAX,
   nestsTooDeep,
   type CodeRange,
 } from './scan';
@@ -24,18 +25,19 @@ const reason = (text: string): string | null => {
 
 describe('delimiters outside code', () => {
   test('at the limit the body is formatted, one more and it is shown as typed', () => {
-    expect(reason('_a'.repeat(MARKDOWN_DELIMITERS_MAX))).toBeNull();
-    expect(reason(`${'_a'.repeat(MARKDOWN_DELIMITERS_MAX)}_`)).toBe('delimiters');
+    // Spaced, so no run of address characters forms: this measures one bound, not two.
+    expect(reason('_ '.repeat(MARKDOWN_DELIMITERS_MAX))).toBeNull();
+    expect(reason(`${'_ '.repeat(MARKDOWN_DELIMITERS_MAX)}_`)).toBe('delimiters');
   });
 
   test('every kind the engine pairs is counted', () => {
     for (const delimiter of ['*', '_', '[', ']', '`', '~', '|', '!', '<']) {
-      expect(delimitersOutside(`${delimiter}a`.repeat(10), [])).toBe(10);
+      expect(measureOutside(`${delimiter}a`.repeat(10), []).delimiters).toBe(10);
     }
   });
 
   test('inside a code range they are not', () => {
-    expect(delimitersOutside('_a_`b`_', [{ start: 1, end: 6 }])).toBe(2);
+    expect(measureOutside('_a_`b`_', [{ start: 1, end: 6 }]).delimiters).toBe(2);
   });
 
   test.each([
@@ -50,8 +52,23 @@ describe('delimiters outside code', () => {
   ])('a pasted file in %s is formatted: its underscores are not emphasis', (_, wrap) => {
     const line = 'def handle(self, *args, **kwargs): return self._dispatch(__name__) ';
     const inside = line.repeat(200).slice(0, 12_000);
-    expect(delimitersOutside(inside, [])).toBeGreaterThan(MARKDOWN_DELIMITERS_MAX);
+    expect(measureOutside(inside, []).delimiters).toBeGreaterThan(MARKDOWN_DELIMITERS_MAX);
     expect(reason(wrap(inside))).toBeNull();
+  });
+});
+
+describe('address-like runs outside code', () => {
+  // The autolink pass backtracks over a run of the characters an address is made of: quadratic in its length.
+  test('at the limit the body is formatted, one more and it is shown as typed', () => {
+    expect(reason('.-'.repeat(MARKDOWN_RUN_MAX / 2))).toBeNull();
+    expect(reason(`${'.-'.repeat(MARKDOWN_RUN_MAX / 2)}a`)).toBe('run');
+  });
+
+  test('a space, or a fence around it, ends the run', () => {
+    expect(measureOutside('a.b c.d', []).longestRun).toBe(3);
+    const long = '.-'.repeat(MARKDOWN_RUN_MAX);
+    expect(reason(`\`\`\`\n${long}\n\`\`\``)).toBeNull();
+    expect(reason(long.match(/.{1,100}/g)?.join(' ') ?? '')).toBeNull();
   });
 });
 
@@ -63,6 +80,11 @@ describe('containers opened on one line', () => {
       expect(reason(`${marker.repeat(MARKDOWN_NESTING_MAX + 1)}a`)).toBe('nesting');
     },
   );
+
+  test.each(['\r', '\r\n'])('a line ended by %j is a line, as the engine reads it', (ending) => {
+    // Splitting on \n alone let `x\r1. 1. 1. …` hide its second line: 2.3 s of CPU in the spike.
+    expect(reason(`x${ending}${'1. '.repeat(MARKDOWN_NESTING_MAX + 1)}a`)).toBe('nesting');
+  });
 
   test('indentation alone is not a container, and a number that is not a marker is not either', () => {
     expect(nestsTooDeep(`${' '.repeat(200)}a`)).toBe(false);
@@ -116,7 +138,13 @@ describe('the block reading and the full one agree on where code is', () => {
       ).join('\n');
       seen.add(text);
       const full = codeRangesOf(syntaxTreeOf(text));
-      for (const range of codeRangesOf(blockTreeOf(text))) {
+      const blocks = codeRangesOf(blockTreeOf(text));
+      // What `measureOutside` assumes of its ranges: in order, and not overlapping.
+      blocks.forEach((range, index) => {
+        expect(range.start).toBeLessThanOrEqual(range.end);
+        expect(range.start).toBeGreaterThanOrEqual(blocks[index - 1]?.end ?? 0);
+      });
+      for (const range of blocks) {
         if (!covered(range, full))
           throw new Error(
             `${JSON.stringify(text)}: ${JSON.stringify(range)} is code to the block reading only`,
@@ -128,7 +156,9 @@ describe('the block reading and the full one agree on where code is', () => {
   });
 });
 
-describe('never throws', () => {
+describe('the bounds keep the engine inside them', () => {
+  // Not "never throws": a failure inside the engine is caught and would pass that. The claim is that
+  // no hostile body of the longest length ever reaches a failure — each is formatted or bounded.
   test.each([
     '*a',
     '_a',
@@ -149,10 +179,17 @@ describe('never throws', () => {
     '\n',
     '```\n',
     '- ```\n',
+    'a.',
+    '.-',
+    '+.',
+    'a@',
+    'x\r1. ',
+    '\r> ',
   ])('on the longest body made of %j', (shape) => {
     const body = shape
       .repeat(Math.ceil(MESSAGE_CONTENT_MAX / shape.length))
       .slice(0, MESSAGE_CONTENT_MAX);
-    expect(() => readMarkdown(body)).not.toThrow();
+    const reading = readMarkdown(body);
+    expect(reading.tree === null ? reading.reason : 'formatted').not.toBe('engine');
   });
 });

@@ -6,9 +6,15 @@
  * renderer is given and nothing outside it can reach the page.
  */
 import { describe, expect, test } from 'bun:test';
-import { MESSAGE_CONTENT_MAX } from '@purlay/types';
-import type { Root } from 'mdast';
-import { narrowTree, parseMarkdown, MARKDOWN_DEPTH_MAX } from './parse';
+import type { PhrasingContent, Root } from 'mdast';
+import {
+  narrowTree,
+  parseMarkdown,
+  readMarkdown,
+  withoutFencedCode,
+  MARKDOWN_DEPTH_MAX,
+  type Engine,
+} from './parse';
 import { MARKDOWN_DELIMITERS_MAX } from './scan';
 import type { Block, Inline, MessageTree } from './tree';
 
@@ -131,7 +137,8 @@ describe('what is rendered', () => {
   test('links to http, https and mailto, written or bare', () => {
     expect(
       urls(tree('[a](https://a.example/x) [b](http://b.example) [c](mailto:c@d.example)')),
-    ).toEqual(['https://a.example/x', 'http://b.example', 'mailto:c@d.example']);
+      // As the browser reads them: the checked string is the rendered one, so `http://b.example` gains its `/`.
+    ).toEqual(['https://a.example/x', 'http://b.example/', 'mailto:c@d.example']);
     expect(urls(tree('see www.github.com/o/r and e@f.example'))).toEqual([
       'http://www.github.com/o/r',
       'mailto:e@f.example',
@@ -203,32 +210,18 @@ describe('a body too complex to format is shown as typed', () => {
     expect(parseMarkdown(nested(10))).not.toBeNull();
   });
 
-  test('the longest body of every hostile shape returns, and never throws', () => {
-    const shapes = [
-      '*a',
-      '_a',
-      '[',
-      ']',
-      '`a',
-      '>',
-      '1. ',
-      '- ',
-      '|a',
-      '~a',
-      ' ',
-      '\\',
-      '<',
-      '&#1;',
-      '[a](',
-      '![',
-      '\n',
-    ];
-    for (const shape of shapes) {
-      const body = shape
-        .repeat(Math.ceil(MESSAGE_CONTENT_MAX / shape.length))
-        .slice(0, MESSAGE_CONTENT_MAX);
-      expect(() => parseMarkdown(body)).not.toThrow();
-    }
+  test('the engine failing inside the bounds is returned with its cause, never thrown', () => {
+    const cause = new RangeError('Maximum call stack size exceeded');
+    const failing = (): never => {
+      throw cause;
+    };
+    const working: Engine = { blocks: () => ({ type: 'root', children: [] }), full: failing };
+    expect(readMarkdown('a', working)).toEqual({ tree: null, reason: 'engine', error: cause });
+    expect(readMarkdown('a', { ...working, blocks: failing })).toEqual({
+      tree: null,
+      reason: 'engine',
+      error: cause,
+    });
   });
 });
 
@@ -291,17 +284,82 @@ describe('the narrowing alone, on what the engine is configured never to produce
     ]);
   });
 
-  test('a node with no position in the source is shown as nothing, never as its url', () => {
+  test('a node with no position in the source is a defect that throws, not text that vanishes', () => {
     const root: Root = {
       type: 'root',
       children: [
         { type: 'paragraph', children: [{ type: 'image', url: 'javascript:x', alt: 'a' }] },
       ],
     };
-    expect(urls(narrowTree(root, ''))).toEqual([]);
+    expect(() => narrowTree(root, '')).toThrow('has no position');
+  });
+});
+
+describe('the depth of the narrowed tree', () => {
+  /** A paragraph holding `levels` emphases, one inside the next. */
+  const nested = (levels: number): Root => {
+    let inner: PhrasingContent = { type: 'text', value: 'a' };
+    for (let level = 0; level < levels; level += 1) inner = { type: 'emphasis', children: [inner] };
+    return { type: 'root', children: [{ type: 'paragraph', children: [inner] }] };
+  };
+  // The root's blocks are depth 1 and a paragraph's inlines depth 2; each emphasis is one more.
+  const deepestAllowed = MARKDOWN_DEPTH_MAX - 2;
+
+  test('at the limit and one below it is narrowed, one above it is not', () => {
+    expect(() => narrowTree(nested(deepestAllowed - 1), 'a')).not.toThrow();
+    expect(() => narrowTree(nested(deepestAllowed), 'a')).not.toThrow();
+    expect(() => narrowTree(nested(deepestAllowed + 1), 'a')).toThrow();
+  });
+
+  test('lists nested across lines, which no line scan sees, are bounded there too', () => {
+    const outline = Array.from(
+      { length: MARKDOWN_DEPTH_MAX },
+      (_, level) => `${'  '.repeat(level)}- a`,
+    ).join('\n');
+    expect(readMarkdown(outline)).toEqual({ tree: null, reason: 'depth' });
+  });
+});
+
+describe('a link in other spellings', () => {
+  test.each([
+    ['an angle-bracket autolink', '<javascript:alert(1)>'],
+    ['an escaped colon', '[a](javascript\\:alert(1))'],
+    ['a scheme split by an entity', '[a](java&#115;cript:alert(1))'],
+  ])('to javascript: as %s is no link', (_, body) => {
+    expect(urls(tree(body))).toEqual([]);
   });
 });
 
 test('a link that became its label leaves the sentence in one piece', () => {
   expect(inline('x [a](rel/path) y')).toEqual([text('x a y')]);
+});
+
+describe('the body with fenced code blanked, for the mention parser', () => {
+  test.each([
+    ['a tilde fence', '~~~\n@bob\n~~~'],
+    ['a fence inside a list item', '- item\n\n  ```\n  @bob\n  ```'],
+    ['a fence inside a quotation', '> ```\n> @bob\n> ```'],
+    ['an indented fence', '      ```\n@bob\n      ```'],
+  ])('blanks %s, keeping every line where it was', (_, body) => {
+    const blanked = withoutFencedCode(body);
+    expect(blanked).not.toContain('@bob');
+    expect(blanked.length).toBe(body.length);
+    expect(blanked.split('\n').length).toBe(body.split('\n').length);
+  });
+
+  test('leaves prose, and inline code, to the mention parser', () => {
+    expect(withoutFencedCode('hi @bob, `@carol`')).toBe('hi @bob, `@carol`');
+  });
+
+  test('returns the body unchanged when the bounds forbid its block reading, or the engine fails', () => {
+    const deep = `${'> '.repeat(64)}~~~\n@bob\n~~~`;
+    expect(withoutFencedCode(deep)).toBe(deep);
+    const failing: Engine = {
+      blocks: () => {
+        throw new Error('engine');
+      },
+      full: () => ({ type: 'root', children: [] }),
+    };
+    expect(withoutFencedCode('~~~\n@bob\n~~~', failing)).toBe('~~~\n@bob\n~~~');
+  });
 });

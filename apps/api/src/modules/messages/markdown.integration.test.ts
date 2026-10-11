@@ -4,11 +4,14 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { MARKDOWN_DELIMITERS_MAX } from '@purlay/markdown';
+import { MARKDOWN_DELIMITERS_MAX, type Engine } from '@purlay/markdown';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
-import { aRoom, type Room } from '../../testing/rooms';
-import { sendMessage, type Sent } from './messages';
+import type { EventBus } from '../../platform/events';
+import { atomicallyOn } from '../../platform/transactions';
+import { aRecordingLogger } from '../../testing/doubles';
+import { aRoom, notificationsOf, type Room } from '../../testing/rooms';
+import { send, sendMessage, type Sent } from './messages';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -16,6 +19,12 @@ afterAll(async () => {
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
+
+const idOf = (room: Room, name: string): string => {
+  const member = room.members[name];
+  if (member === undefined) throw new Error(`no member ${name}`);
+  return member.context.userId;
+};
 
 const post = async (
   db: Executor,
@@ -85,10 +94,87 @@ describe('integration: a message written', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const id = messageId(NOW);
+      const tooComplex = '*a'.repeat(MARKDOWN_DELIMITERS_MAX + 1);
+      // The first call read it and said why it is not formatted; a re-read would say so again.
+      expect((await post(db, room, tooComplex, id)).unformatted).toBe('delimiters');
+      expect((await post(db, room, tooComplex, id)).unformatted).toBeNull();
+      // A retry carrying other content changes nothing that was recorded.
       await post(db, room, '```ts\na\n```', id);
-      const again = await post(db, room, '```ts\na\n```', id);
-      expect(again.unformatted).toBeNull();
-      expect((await stored(db, id)).metadata).toEqual({ codeLanguages: ['ts'], isCodeOnly: true });
+      expect(await stored(db, id)).toEqual({ content: tooComplex, metadata: {} });
+    });
+  });
+});
+
+describe('integration: who a message names, read where the reader sees prose', () => {
+  /** A mention of a member by the username the room gave them: `@bob` names nobody real. */
+  const mention = (room: Room, name: string): string => `@${room.members[name]?.username ?? name}`;
+
+  test.each([
+    ['a tilde fence', (at: string): string => `~~~\n${at}\n~~~`],
+    ['a fence inside a list item', (at: string): string => `- step\n\n  \`\`\`\n  ${at}\n  \`\`\``],
+  ])('a name inside %s, which renders as code, tells nobody', async (_, wrap) => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      await post(db, room, wrap(mention(room, 'bob')));
+      expect(await notificationsOf(db, idOf(room, 'bob'))).toEqual([]);
+    });
+  });
+
+  test('the same name in prose does tell them: the test above could have failed', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      await post(db, room, `${mention(room, 'bob')} have a look`);
+      expect(await notificationsOf(db, idOf(room, 'bob'))).toHaveLength(1);
+    });
+  });
+
+  test('a body too complex to format still tells the person it names', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const sent = await post(
+        db,
+        room,
+        `${mention(room, 'bob')} ${'*a'.repeat(MARKDOWN_DELIMITERS_MAX + 1)}`,
+      );
+      expect(sent.unformatted).toBe('delimiters');
+      expect(await notificationsOf(db, idOf(room, 'bob'))).toHaveLength(1);
+    });
+  });
+});
+
+describe('integration: the engine failing inside its bounds', () => {
+  const quiet: EventBus = {
+    publish: () => Promise.resolve(),
+    subscribe: () => false,
+    unsubscribe: () => undefined,
+    forget: () => undefined,
+  };
+
+  test('is stored and shown as typed, and logged as an error with its cause and not the body', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = room.members['alice'];
+      if (alice === undefined) throw new Error('room');
+      const fails = (): never => {
+        throw new RangeError('Maximum call stack size exceeded');
+      };
+      const engine: Engine = { blocks: () => ({ type: 'root', children: [] }), full: fails };
+      const { log, lines } = aRecordingLogger();
+      const body = 'a secret plan in **bold**';
+      const dependencies = { atomically: atomicallyOn(db), clock, bus: quiet, log, engine };
+      const answer = await send(dependencies, alice.context, { id: messageId(NOW), content: body });
+      expect(await stored(db, answer.id)).toEqual({ content: body, metadata: {} });
+      const failures = lines.filter(
+        (line) => line['msg'] === 'markdown engine failed inside its bounds',
+      );
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toMatchObject({
+        level: 'error',
+        messageId: answer.id,
+        length: body.length,
+      });
+      expect(JSON.stringify(failures[0])).toContain('Maximum call stack size exceeded');
+      expect(JSON.stringify(lines)).not.toContain('secret plan');
     });
   });
 });
