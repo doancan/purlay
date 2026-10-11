@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-11: a link's address can only be made by the check that allows it (D-101 §9)
+
+- A link in the narrowed tree carries a `SafeHref`, which only `SafeHref.of` can make: an object
+  with an `href`, a string, or a spread of a real one does not compile, and asserting one fails
+  lint, demonstrated by `verify:enforcement`. The renderer (#43) can take the tree on trust.
+- The shape of an `@username` is one pattern in `@purlay/markdown`, used by the server to resolve
+  names; the renderer (#43) is to highlight with it in place of the client's own copy.
+
 ### Feature — 2026-10-11: markdown is read once when a message is written, by the engine the browser will use (D-101)
 
 - **One engine on both sides.** `packages/markdown` reads a body with micromark (the engine

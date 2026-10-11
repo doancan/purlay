@@ -15,6 +15,7 @@ import {
   MARKDOWN_DEPTH_MAX,
   type Engine,
 } from './parse';
+import { SafeHref } from './href';
 import { MARKDOWN_DELIMITERS_MAX } from './scan';
 import type { Block, Inline, MessageTree } from './tree';
 
@@ -47,7 +48,11 @@ const urls = (value: MessageTree): string[] => {
   const out: string[] = [];
   const walk = (node: unknown): void => {
     if (typeof node !== 'object' || node === null) return;
-    if ('url' in node && typeof node.url === 'string') out.push(node.url);
+    if ('url' in node) {
+      // A url of any other kind would be skipped here, and every "no link" test would pass on it.
+      if (!(node.url instanceof SafeHref)) throw new Error('a link carries an unchecked address');
+      out.push(node.url.href);
+    }
     if ('children' in node && Array.isArray(node.children)) node.children.forEach(walk);
   };
   walk(value);
@@ -170,10 +175,10 @@ describe('what is not, and stays the characters that were typed', () => {
   });
 
   test('an image is a link to the image, labelled with its alt text, until there is a proxy (#110)', () => {
-    expect(inline('![diagram](https://e.example/d.png)')).toEqual([
-      text('!'),
-      { type: 'link', url: 'https://e.example/d.png', children: [text('diagram')] },
-    ]);
+    const [bang, link] = inline('![diagram](https://e.example/d.png)');
+    expect(bang).toEqual(text('!'));
+    expect(link?.type === 'link' ? link.children : null).toEqual([text('diagram')]);
+    expect(urls(tree('![diagram](https://e.example/d.png)'))).toEqual(['https://e.example/d.png']);
   });
 
   test('a reference definition does not exist, so neither does a link that uses it', () => {

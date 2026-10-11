@@ -4,11 +4,8 @@
  * **Parsed once, at write time**, so a notification fan-out never re-reads a body and
  * a client never has to. The rules are the ones D-99 states and no more:
  *
- * - a mention is `@name` where `name` has GitHub's shape (letters and digits, single
- *   hyphens inside, at most 39) and is not the start of a longer word;
- * - it is not preceded by a word character, an `@` or a backtick — `a@b.c` is an
- *   address, `@@name` is not a mention of `name`, and a name glued to the end of a
- *   code span is not addressed to anyone;
+ * - a mention is `@name` in the shape `mentionsIn` (`@purlay/markdown`) reads, which the
+ *   client highlights with too;
  * - it is not inside inline or fenced code, where somebody is quoting;
  * - `@here`, `@channel` and `@everyone` are **refused**, not ignored: the broadcast
  *   mentions the product does not have (D-12).
@@ -18,19 +15,13 @@
  * below backtracks over its input more than a bounded number of steps.
  */
 
+import { mentionsIn } from '@purlay/markdown';
+
 /** The names the parser refuses outright. Lower case: matching is case-insensitive. */
 const BROADCAST: ReadonlySet<string> = new Set(['here', 'channel', 'everyone']);
 
 /** More than this many distinct names in one message are ignored: a bound on what one write may fan out to. */
 export const MENTIONS_PER_MESSAGE_MAX = 50;
-
-/**
- * GitHub's own rule for a username: alphanumeric, hyphens only between, no two
- * together, 39 at most. The hyphen is allowed only when an alphanumeric follows it,
- * so the pattern has no nested quantifier and cannot backtrack exponentially.
- */
-const MENTION =
-  /(?<![\p{L}\p{N}_@`])@([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})(?![\p{L}\p{N}_])/gu;
 
 interface Run {
   /** Where the run of backticks starts. */
@@ -100,9 +91,7 @@ export const parseMentions = (content: string): ParsedMentions => {
   const names: string[] = [];
   const broadcast: string[] = [];
   const known = new Set<string>();
-  for (const match of withoutCode(content).matchAll(MENTION)) {
-    const name = match[1];
-    if (name === undefined) continue;
+  for (const { name } of mentionsIn(withoutCode(content))) {
     const key = name.toLowerCase();
     if (BROADCAST.has(key)) {
       if (!broadcast.includes(key)) broadcast.push(key);

@@ -106,6 +106,8 @@ const inlineOf = (text: string): Inline[] => {
         continue;
       }
     } else if (c === '@' && (i === 0 || !/[A-Za-z0-9_@`]/.test(text.charAt(i - 1)))) {
+      // TODO(#43): a copy of `mentionsIn` (`@purlay/markdown`), which disagrees on letters outside
+      // ASCII; the renderer that replaces this file highlights with the shared pattern.
       let end = i + 1;
       while (end < text.length && end - i <= 39 && isNameChar(text.charAt(end))) end += 1;
       // A name starts and ends with a letter or digit, so a trailing hyphen is not part of it.

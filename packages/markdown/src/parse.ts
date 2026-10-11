@@ -8,25 +8,12 @@
  */
 import type { Nodes, PhrasingContent, Root, RootContent } from 'mdast';
 import { blockTreeOf, codeRangesOf, syntaxTreeOf } from './engine';
+import { SafeHref } from './href';
 import { MARKDOWN_DELIMITERS_MAX, MARKDOWN_RUN_MAX, measureOutside, nestsTooDeep } from './scan';
 import type { Align, Block, Inline, ListItem, MessageTree, TableRow } from './tree';
 
 /** Nesting, on the tree, beyond which a body is shown as typed: what the line scan cannot see, like emphasis inside emphasis. */
 export const MARKDOWN_DEPTH_MAX = 100;
-
-/** The only addresses a link may go to; anything else — relative, `//host`, `javascript:` — is its label's text. */
-const SAFE_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:', 'mailto:']);
-
-/**
- * The address a link may carry, or null. What is returned is the URL as the browser will read it
- * (`href`), not the characters that were typed, so the string that was checked is the string that
- * is rendered.
- */
-const safeHrefOf = (url: string): string | null => {
-  if (!URL.canParse(url)) return null;
-  const parsed = new URL(url);
-  return SAFE_PROTOCOLS.has(parsed.protocol) ? parsed.href : null;
-};
 
 /** The engine's two readings, as arguments, so a failure inside the bounds can be injected and seen. */
 export interface Engine {
@@ -101,7 +88,7 @@ export const narrowTree = (root: Root, text: string): MessageTree => {
           break;
         case 'link': {
           const children = inlines(node.children, depth + 1);
-          const url = safeHrefOf(node.url);
+          const url = SafeHref.of(node.url);
           if (url === null) out.push(...children);
           else out.push({ type: 'link', url, children });
           break;

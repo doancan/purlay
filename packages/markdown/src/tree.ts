@@ -3,11 +3,12 @@
  *
  * This is a narrowed copy of the parser's tree, not the tree itself. Every kind the renderer
  * draws is listed here, and nothing reaches a renderer that is not: raw HTML, images, reference
- * definitions and footnotes are not parsed at all, and a link whose address is not one
- * `SAFE_PROTOCOLS` in `parse.ts` allows arrives as its label's text. The narrowing *is* the
+ * definitions and footnotes are not parsed at all, and a link whose address `SafeHref` (`href.ts`)
+ * does not allow arrives as its label's text. The narrowing *is* the
  * sanitiser (`ARCHITECTURE.md` §8.1): one function, shared by the server and the client, so what
  * one accepts the other renders.
  */
+import type { SafeHref } from './href';
 
 export type Inline =
   | { readonly type: 'text'; readonly value: string }
@@ -15,7 +16,8 @@ export type Inline =
   | { readonly type: 'emphasis'; readonly children: readonly Inline[] }
   | { readonly type: 'strong'; readonly children: readonly Inline[] }
   | { readonly type: 'delete'; readonly children: readonly Inline[] }
-  | { readonly type: 'link'; readonly url: string; readonly children: readonly Inline[] }
+  /** The address is one `SafeHref.of` allowed: no other code can make one. */
+  | { readonly type: 'link'; readonly url: SafeHref; readonly children: readonly Inline[] }
   | { readonly type: 'break' };
 
 export interface ListItem {
