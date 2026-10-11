@@ -586,4 +586,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  const root = normalize(dist);',
     tests: CLIENT_TESTS,
   },
+  {
+    id: 'release-pushes-after-a-failed-smoke-test',
+    why: 'an image that does not start is published, and its digest printed for production',
+    file: 'scripts/release-image.sh',
+    find: 'scripts/image-smoke.sh "$TAG"\n',
+    replace: 'scripts/image-smoke.sh "$TAG" || true\n',
+    tests: ['scripts/release-image.test.ts'],
+  },
+  {
+    id: 'release-trusts-the-registry-tag',
+    why: 'a digest the registry holds under the tag is printed although it is not the image that was smoke-tested',
+    file: 'scripts/release-image.sh',
+    find: '| grep -qxF "$IMAGE@$DIGEST" ||',
+    replace: '| grep -q . ||',
+    tests: ['scripts/release-image.test.ts'],
+  },
+  {
+    id: 'release-builds-the-working-tree',
+    why: 'a file git ignores — a stale compiled module, a local secret — reaches the published image',
+    file: 'scripts/release-image.sh',
+    find: 'git archive --format=tar "$SHA" | docker buildx build',
+    replace: 'docker buildx build',
+    tests: ['scripts/release-image.test.ts'],
+  },
 ];

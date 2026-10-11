@@ -44,19 +44,26 @@ echo "releasing $SHA as $TAG for $PLATFORM"
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL is unset: verify would run the unit tests alone (CONTRIBUTING §2)"
 bun run verify
 
-# ── 3. One build ─────────────────────────────────────────────────────────────
-docker buildx build --platform "$PLATFORM" --load \
+# ── 3. One build, of the commit and nothing beside it ────────────────────────
+# The context is the commit's own tree, so a file git ignores — a stale compiled `.js` beside
+# its source, a local `.env` — cannot reach the image, whatever the working tree holds.
+LICENSE="$(bun -e 'console.log(require("./package.json").license)')"
+git archive --format=tar "$SHA" | docker buildx build --platform "$PLATFORM" --load \
   --label "org.opencontainers.image.source=https://github.com/$REPOSITORY" \
   --label "org.opencontainers.image.revision=$SHA" \
-  --label "org.opencontainers.image.licenses=$(bun -e 'console.log(require("./package.json").license)')" \
-  --tag "$TAG" .
+  --label "org.opencontainers.image.licenses=$LICENSE" \
+  --tag "$TAG" -
 
 # ── 4. That image, started the way production starts it ─────────────────────
 scripts/image-smoke.sh "$TAG"
 
 # ── 5. Published, and named by what it is ────────────────────────────────────
 docker push "$TAG"
-DIGEST="$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$TAG" | grep "^$IMAGE@sha256:" | head -n 1)"
-[ -n "$DIGEST" ] || fail "the push reported no digest for $IMAGE"
+# What the registry holds for the tag, not what this machine remembers; and it must be the
+# image that was smoke-tested. Captures end in `|| true` so the check below says why.
+DIGEST="$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}' || true)"
+[[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "the registry reports no digest for $TAG"
+docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$TAG" | grep -qxF "$IMAGE@$DIGEST" ||
+  fail "the registry's $TAG is not the image that was smoke-tested"
 echo
-echo "PURLAY_IMAGE=$DIGEST"
+echo "PURLAY_IMAGE=$IMAGE@$DIGEST"
