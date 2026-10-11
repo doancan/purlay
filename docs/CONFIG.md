@@ -173,7 +173,7 @@ above, plus the three the stack itself needs:
 
 | Variable | Required | Notes |
 |---|---|---|
-| `PURLAY_IMAGE` | ✅ | The API image: `ghcr.io/<owner>/purlay-api@sha256:…` (a digest) or `:sha-<commit>`. Never a moving tag |
+| `PURLAY_IMAGE` | ✅ | The API image: `ghcr.io/<owner>/purlay-api@sha256:…` (a digest) or `:sha-<commit>`. Never a moving tag. Published by `image.yml` from main; while the pipeline cannot run, `scripts/release-image.sh` publishes a merged commit from a machine in the same order — the gate, one build for the server's platform, the smoke test of that build, the push — and prints the digest |
 | `POSTGRES_PASSWORD` | ✅ | **Secret.** Used as-is inside `DATABASE_URL`, so it must be URL-safe: `openssl rand -hex 16` |
 | `GARAGE_RPC_SECRET` | ✅ | **Secret.** 64 hex characters: `openssl rand -hex 32` |
 
