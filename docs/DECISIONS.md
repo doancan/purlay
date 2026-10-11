@@ -1180,6 +1180,8 @@ actually contain.
 **5 · A content security policy baseline. Phase 1.**
 `default-src 'self'`, no `unsafe-inline` script, images from `'self'` and the proxy only. It lands
 with the content pipeline, because that is when there is user-controlled markup to constrain.
+*(Amended 2026-10-11 by D-102: the document carries this baseline, with inline style and GitHub's
+avatar host as two measured exceptions; the API's own responses keep `default-src 'none'`.)*
 
 **6 · `ENCRYPTION_KEY` is AES-256-GCM.** A random 96-bit nonce per record, stored as a prefix on
 the ciphertext, with the record id as additional authenticated data. `CONFIG.md` named the key and
@@ -4218,6 +4220,42 @@ retired the client's own copy — it disagreed on any letter outside ASCII.
 
 **Cost of reversing.** Low: no migration, and stored content is unchanged markdown. A different
 engine means a different `packages/markdown`, and its tests say what the next one must do.
+
+---
+
+### D-102. The document carries its own security policy, with two measured exceptions — closes #112's baseline
+
+D-39 item 5 fixed the baseline — `default-src 'self'`, no inline script, images from `'self'` and the
+proxy — and D-61 put the built client on the API's origin. Until the API served that client (#224) the
+question had no response to answer it on: every response carried the API's own policy,
+`default-src 'none'`, which on a document would load nothing at all. The demo's front server never sent
+a policy, which is why nothing had noticed.
+
+**Decided: two policies, chosen per response, both in `apps/api/src/ingress/http/edge.ts`.** An API
+response keeps `default-src 'none'; frame-ancestors 'none'` — it is data, and loads nothing. The client's
+HTML document gets `DOCUMENT_SECURITY_POLICY`: `default-src 'self'`, `script-src 'self'` (no inline
+script and no `eval`; `theme-init.js` is a file so it needs no hash), `connect-src 'self'` (a same-origin
+`wss:` under CSP Level 3), `font-src 'self'`, `object-src 'none'`, `base-uri 'none'`,
+`form-action 'self'`, `frame-ancestors 'none'`.
+
+**Two exceptions, each observed rather than argued:**
+
+- **`style-src 'self' 'unsafe-inline'`.** The dialog primitive (Radix, D-52) locks scrolling by writing a
+  `<style>` element. With `style-src 'self'` Chromium reports `style-src-elem refused inline` when the
+  command palette opens, and the lock silently does not apply. Inline **style** cannot run code; inline
+  script stays refused.
+- **`img-src` adds `https://avatars.githubusercontent.com`.** Avatars are GitHub's, and the image proxy
+  that would serve them from `'self'` is #110. The exception is marked `TODO(#110)` beside the policy and
+  is removed with it.
+
+**Rejected: initials instead of avatars until #110.** A stricter policy bought by taking back D-100's
+identity for a source that is GitHub's own avatar host. **Rejected: a nonce for the style element.** The
+primitive reads one from a global the bundle would have to set per response, which turns a static shell
+into a rendered one for a style that cannot execute. **Rejected: the proxy (Caddy) setting the policy.**
+Two places would set headers, and a self-hoster running the image behind their own proxy would get none.
+
+**Reopened when** #110 lands (drop the avatar host), or when a primitive that needs inline style is
+replaced or learns to take a stylesheet.
 
 ---
 

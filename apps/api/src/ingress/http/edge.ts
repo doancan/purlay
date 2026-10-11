@@ -90,6 +90,30 @@ export const responseHeaders = (appUrl: string): Record<string, string> => ({
   ...(appUrl.startsWith('https://') ? { 'strict-transport-security': 'max-age=15552000' } : {}),
 });
 
+/**
+ * The policy of the client's HTML document (D-102), which replaces the API's on that one
+ * response: an API answer loads nothing, a document loads the client from its own origin.
+ *
+ * No inline script and no `eval`: the build emits files, and `theme-init.js` is one so it
+ * needs no hash. Two exceptions, each D-102's: inline **style**, because the dialog
+ * primitive's scroll lock writes a `<style>` element (D-52), and GitHub's avatar host,
+ * until avatars come through the image proxy. `connect-src 'self'` covers the socket, a
+ * same-origin `wss:` under CSP Level 3.
+ */
+export const DOCUMENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  // TODO(#110): 'self' alone once avatars are served through the image proxy.
+  "img-src 'self' https://avatars.githubusercontent.com",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 /** Bounded in length and in alphabet: it is written into logs and echoed in a header. */
 const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 

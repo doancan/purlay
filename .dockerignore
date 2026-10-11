@@ -23,10 +23,12 @@ coverage
 .claude
 .DS_Store
 
-# Not part of the API image. The web client contributes only its manifest, which the
-# lockfile needs to validate.
-apps/web/*
-!apps/web/package.json
+# Not part of either image. The client stage copies the client's sources and builds
+# them; its browser tests, their screenshots and their reports stay out.
+apps/web/e2e
+apps/web/test-results
+apps/web/playwright-report
+apps/web/playwright.config.ts
 docs
 scripts
 docker

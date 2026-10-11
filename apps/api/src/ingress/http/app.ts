@@ -40,7 +40,9 @@ import {
   isCrossSiteMutation,
   unsupportedMediaTypeResponse,
   responseHeaders,
+  DOCUMENT_SECURITY_POLICY,
 } from './edge';
+import { clientFileFor, routeOf, type Client } from './client';
 import { refusalFor } from './errors';
 import {
   createMyWorkspace,
@@ -88,6 +90,11 @@ export interface Dependencies {
    * published on either is shown to reach the other's sockets (D-85).
    */
   readonly backplane?: Backplane;
+  /**
+   * The built client this node answers for (D-61). Absent in development, where Vite
+   * serves it, and in a deployment that puts the API behind something else.
+   */
+  readonly client?: Client;
 }
 
 /**
@@ -347,6 +354,29 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await changeReaction(sending, request, params.messageId, params.emoji, false),
     )
+
+    /**
+     * The built client, after every route of the API's own: a path the API owns is never
+     * answered with HTML, so a mistyped call fails as the API's 404 at the call, not as a
+     * parse error somewhere else.
+     */
+    .get('*', ({ path, request, set }) => {
+      const file =
+        dependencies.client === undefined || routeOf(path) !== 'client'
+          ? undefined
+          : clientFileFor(dependencies.client, path);
+      if (file === undefined)
+        throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
+      set.headers['cache-control'] = file.cacheControl;
+      set.headers.etag = file.etag;
+      if (file.document) set.headers['content-security-policy'] = DOCUMENT_SECURITY_POLICY;
+      // The browser already has this version: nothing to send (RFC 9110 §13.1.2).
+      if (request.headers.get('if-none-match') === file.etag) {
+        set.status = 304;
+        return null;
+      }
+      return Bun.file(file.path);
+    })
 
     /**
      * The socket.

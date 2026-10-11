@@ -588,8 +588,10 @@ describe('what API.md publishes for this phase is what the application serves', 
     );
 
   const served = [
+    // A route is a link of the chain, at the start of its line; `request.headers.get('…')`
+    // inside a handler is not one.
     ...readFileSync('apps/api/src/ingress/http/app.ts', 'utf8').matchAll(
-      /\.(get|post|put|patch|delete)\(\s*'([^']+)'/g,
+      /^\s*\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm,
     ),
   ].map((match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`);
 

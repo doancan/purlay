@@ -5,8 +5,12 @@
 # ports 80 and 443 reach it; for `https://localhost` it uses its internal CA, which
 # is how this file is tried without a domain.
 {$APP_URL} {
-	# The API serves HTTP, the WebSocket upgrade and (later) the built client on
-	# the same origin (D-61), so there is one upstream and no routing here.
+	# The API serves HTTP, the WebSocket upgrade and the built client on the same
+	# origin (D-61), so there is one upstream and no routing here.
+	#
+	# Compression is the proxy's: the API sends files and JSON as they are.
+	encode zstd gzip
+
 	reverse_proxy api:3001 {
 		# Only a ready node receives traffic (readiness answers 503 while it drains
 		# or while migrations are pending).

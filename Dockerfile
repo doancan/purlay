@@ -1,13 +1,15 @@
 # syntax=docker/dockerfile:1
 #
-# The API image (#248, D-87).
+# The API image (#248, D-87), and the built client it serves from the one origin (D-61).
 #
-# Two stages. The first has a shell and a package manager and installs the
-# production dependencies; the second is distroless — the Bun runtime and our
-# files, with no shell, no package manager and no coreutils for an attacker (or a
-# curious operator) to reach for. Nothing is built: Bun runs the TypeScript the
-# repository contains, which is also what the tests run, so there is no second
-# artefact that could differ from the one that was tested.
+# Three stages. The first has a shell and a package manager and installs the
+# production dependencies; the second builds the client; the last is distroless —
+# the Bun runtime and our files, with no shell, no package manager and no coreutils
+# for an attacker (or a curious operator) to reach for. The API is not built: Bun
+# runs the TypeScript the repository contains, which is also what the tests run, so
+# there is no second artefact that could differ from the one that was tested. The
+# client is built, because a browser runs a bundle; only its output, `dist`, reaches
+# the final stage — no React toolchain, no source.
 #
 # Both bases are pinned by digest. A tag is a pointer its owner can move
 # (D-86); Dependabot's docker ecosystem proposes the next digest.
@@ -34,11 +36,39 @@ COPY packages/types/package.json packages/types/package.json
 # React. `--frozen-lockfile` refuses to resolve anything the lockfile does not name.
 RUN bun install --frozen-lockfile --production --filter @purlay/api
 
+# The client: the same lockfile, every manifest (the install validates them all), and
+# the sources the bundle is made of. Development dependencies are needed here and
+# nowhere after.
+FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS client
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/config/package.json packages/config/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/markdown/package.json packages/markdown/package.json
+COPY packages/tokens/package.json packages/tokens/package.json
+COPY packages/types/package.json packages/types/package.json
+RUN bun install --frozen-lockfile --filter @purlay/web
+COPY packages/config ./packages/config
+# The bundler follows the client's project references, so each referenced project's
+# configuration is needed beside its sources.
+COPY packages/markdown/tsconfig.json ./packages/markdown/tsconfig.json
+COPY packages/markdown/src ./packages/markdown/src
+COPY packages/tokens/src ./packages/tokens/src
+COPY packages/types/tsconfig.json ./packages/types/tsconfig.json
+COPY packages/types/src ./packages/types/src
+COPY apps/web/index.html apps/web/vite.config.ts apps/web/tsconfig.json ./apps/web/
+COPY apps/web/public ./apps/web/public
+COPY apps/web/src ./apps/web/src
+RUN bun run --cwd apps/web build
+
 FROM oven/bun:1.4.2-distroless@sha256:1a0c31c7c5f9d193aedf60fe1cebdeb76ac8f6e29f24be8dd8cbd6df72df26ec AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
-    PORT=3001
+    PORT=3001 \
+    CLIENT_DIST=/app/apps/web/dist
 
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
@@ -55,6 +85,7 @@ COPY packages/markdown/package.json ./packages/markdown/package.json
 COPY packages/markdown/src ./packages/markdown/src
 COPY packages/types/package.json ./packages/types/package.json
 COPY packages/types/src ./packages/types/src
+COPY --from=client /app/apps/web/dist ./apps/web/dist
 
 # Not root, and not a name: distroless has no /etc/passwd entry to resolve, so the
 # user is a number. Nothing in the image is owned by it — everything is root-owned
