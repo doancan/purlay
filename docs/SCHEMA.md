@@ -536,15 +536,9 @@ type SystemEventMetadata =
   | { event: 'topic_changed';    topic: string | null; byUserId: string }
   | { event: 'thread_resolved';  byUserId: string };
 
-/** message_type = 'text' — renderer hints produced by the parser at write time. */
-interface TextMetadata {
-  /** Languages of fenced code blocks, in order. Drives the language badge. */
-  codeLanguages?: string[];
-  /** GitHub URLs detected in the body, to be unfurled. */
-  githubLinks?: string[];
-  /** True when the body is a single fenced block, which renders full-bleed. */
-  isCodeOnly?: boolean;
-}
+/** message_type = 'text' — renderer hints produced by the parser at write time: code languages,
+ *  GitHub links, whether the body is only code. The shape is `TextMetadata` in
+ *  `packages/types/src/models.ts`, and it lives only there; it is validated before insert (D-101). */
 ```
 
 ---

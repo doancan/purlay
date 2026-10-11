@@ -125,6 +125,7 @@ describe('the workspace manifests', () => {
     'apps/web/package.json',
     'packages/config/package.json',
     'packages/db/package.json',
+    'packages/markdown/package.json',
     'packages/types/package.json',
   ];
   const notice = readFileSync(join(repo, 'NOTICE'), 'utf8');

@@ -28,3 +28,4 @@ A spike that only reports "it works" has not been written down. (D-57)
 | [`design-tokens.md`](design-tokens.md) | 2026-10-10 | A reset theme stops the palette but not `z-50`, `duration-300` or `w-[13px]`; Lucide over Tabler by 1.2 KB, for a lighter dev server |
 | [`backup-restore.md`](backup-restore.md) | 2026-10-09 | A backup restores and compares identical, including after a total loss — and the rebuild path found two defects the first restore could not |
 | [`knip.md`](knip.md) | 2026-10-09 | Finds 19 things on the first run, nothing needed loosening — the one exemption is a named entry for the realtime client until #26 |
+| [`markdown.md`](markdown.md) | 2026-10-11 | One engine on both sides for 29.9 KB; superlinear and stack-overflowing past bounds it now enforces — and the first bound was a grammar copy the fuzz test broke |

@@ -154,6 +154,38 @@ export const MessageContent = Type.String({
 });
 
 /**
+ * The most GitHub links one message records for unfurling (D-101). Each becomes a
+ * request to GitHub when it is unfurled (#66), so a sixteen-thousand-character body
+ * cannot be a few hundred of them. The rest stay ordinary links.
+ */
+export const GITHUB_LINKS_PER_MESSAGE_MAX = 5;
+
+/**
+ * What the parser records about a text message when it is written: hints for the
+ * renderer, derived once (`SCHEMA.md` §6.4, `ARCHITECTURE.md` §8.1). Not on the wire
+ * yet: nothing reads it until the code block badge (#44) and unfurling (#66) do.
+ */
+export const TextMetadata = Type.Object(
+  {
+    /** Languages of fenced code blocks, in order; an unlabelled fence is `''`. */
+    codeLanguages: Type.Optional(Type.Array(Type.String())),
+    /** GitHub pull request and issue addresses, unique, in the order they appear. */
+    githubLinks: Type.Optional(
+      Type.Array(
+        Type.String({
+          pattern: '^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/(pull|issues)/[0-9]+$',
+        }),
+        { maxItems: GITHUB_LINKS_PER_MESSAGE_MAX, uniqueItems: true },
+      ),
+    ),
+    /** Present, and true, when the body is a single fenced block, which renders full-bleed; absent otherwise. */
+    isCodeOnly: Type.Optional(Type.Literal(true)),
+  },
+  { additionalProperties: false },
+);
+export type TextMetadata = Static<typeof TextMetadata>;
+
+/**
  * One emoji and the people who used it. The people, not a count: every client
  * needs to know whether *it* is among them, and a frame broadcast to a channel
  * cannot say that per recipient. The count is the length.

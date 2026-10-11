@@ -6,6 +6,35 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-11: markdown is read once when a message is written, by the engine the browser will use (D-101)
+
+- **One engine on both sides.** `packages/markdown` reads a body with micromark (the engine
+  `remark-parse` wraps) and four GFM extensions; the server records the code languages, whether the
+  body is only code, and a bounded few GitHub pull requests and issues in `messages.metadata`,
+  validated against the contract before insert. The browser renders from the same reading next (#43).
+- **Narrowed: the narrowing is the sanitiser.** Raw HTML, reference definitions, images, indented
+  code, setext headings, character references and footnotes are never recognised; a link goes only
+  where D-101 allows, as the browser reads its address, and anything else is its label's text.
+- **Bounded, never refused.** The engine is superlinear on runs of delimiters and of address-like
+  characters, and overflows the stack on containers opened on one line, so a body past the bounds
+  is sent and stored as typed and records nothing. A lone `\r` no longer hides a line from the
+  check. Where code is comes from the engine's own block reading: a pattern for it was tried, and a
+  fuzz test showed it could not follow a fence inside a list item (`docs/spikes/markdown.md`).
+- **A name quoted inside a `~~~` fence no longer notifies anyone.** The mention parser had code
+  rules of its own and missed that fence; it now reads the body with every fenced block the engine
+  reads blanked.
+- An engine failure inside the bounds is logged as an error with its cause, never the content; a
+  lint rule keeps the package free of anything a browser cannot run; thirteen mutations prove each
+  bound and each half of the sanitiser is held by a test. Closes O-6.
+
+### Fix — 2026-10-11: the API image builds again (#326)
+
+- `docker build` had failed since 2026-10-10: the web client gained a dependency on
+  `packages/tokens`, and the image's install stage did not copy that manifest, which a frozen
+  lockfile requires. Nothing noticed because CI could not run. The manifest is copied, the image
+  workflow now runs when it changes, and `scripts/dockerfile.test.ts` fails on any workspace whose
+  manifest the install stage leaves out.
+
 ### Fix — 2026-10-10: answering your own thread is held to telling you nothing (D-29)
 
 - The rule held, but nothing would have noticed it going: the test for a self-reply checked the

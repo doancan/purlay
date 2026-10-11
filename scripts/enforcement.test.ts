@@ -171,6 +171,7 @@ describe('build output stays outside the source tree', () => {
   const projects = [
     'packages/types',
     'packages/db',
+    'packages/markdown',
     'packages/tokens',
     'apps/api',
     'apps/web',
