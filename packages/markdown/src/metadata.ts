@@ -33,7 +33,7 @@ export const metadataOf = (tree: MessageTree | null): TextMetadata => {
 
   const inline = (node: Inline): void => {
     if (node.type === 'link') {
-      const item = githubItemOf(node.url);
+      const item = githubItemOf(node.url.href);
       if (item !== null && !links.includes(item) && links.length < GITHUB_LINKS_PER_MESSAGE_MAX) {
         links.push(item);
       }

@@ -4185,6 +4185,23 @@ and catching around the whole reading, which hid this package's own bugs as the 
 **9 · A link carries the address as the browser reads it** (`new URL(…).href`), so the string that
 was checked is the string that is rendered. Making an unchecked link impossible to construct — a
 brand on the tree, the way D-54 brands a context — belongs with the renderer that consumes it (#43).
+*(Amended 2026-10-11, #43: the brand is on the address, not the tree.)* A link's `url` is a
+`SafeHref` (`packages/markdown/src/href.ts`): a class whose constructor is private and whose one
+factory, `SafeHref.of`, is the check, with a private field that makes the type nominal. An object
+literal, a string, or a spread of a real one is not a `SafeHref`; the instance, its prototype and the
+class are frozen. An assertion to one is a lint error with no exemption, as D-54's is for a context,
+and inside `packages/markdown` any assertion is, because a cast to a node that holds an address
+(`as unknown as Inline`) skips the check without naming it. A rule by name cannot see an alias or a
+type guard, so the renderer (#43) is to check `instanceof SafeHref` too, drawing the label as text
+when a link fails it: types and lint stop the mistake, the check at the point of use holds against it. Rejected: *D-54's symbol key on the tree's
+root*, because a spread copies a symbol key, so `{ ...tree, children: [any link] }` would type-check
+as a checked tree — the brand guarded the container, and the danger is one field inside it; and *a
+branded string*, which cannot be produced without the very assertion the lint rule forbids, so the
+rule would need an exemption in the file that matters most. D-54 rejected a class for a context
+because a context must survive serialisation; a tree is built where it is drawn and is never sent.
+The shape of a mention (`mentionsIn`) lives in the same package for the same reason as §7: the
+server resolves the names it matches, and the renderer (#43) is to highlight with the same pattern,
+retiring the copy the client keeps until then, which disagrees on any letter outside ASCII.
 
 **Rejected.**
 

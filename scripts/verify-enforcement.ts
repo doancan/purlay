@@ -256,6 +256,30 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "interface WorkspaceContext {\n  readonly workspaceId: string;\n}\nexport const forged = { workspaceId: 'w' } as WorkspaceContext;\n",
   },
+  // A link's address is checked once, by `SafeHref.of`, and a renderer trusts the tree.
+  // Asserting one is the only way past the type, in a test as anywhere. (D-101 §9)
+  {
+    rule: "a link's address may not be asserted into existence (D-101)",
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/modules/messages/__enforcement__.test.ts',
+    source:
+      "import type { SafeHref } from '@purlay/markdown';\nexport const forged = { href: 'javascript:x' } as unknown as SafeHref;\n",
+  },
+  {
+    rule: 'the package that makes a checked tree asserts nothing: a cast to a node skips the check (D-101)',
+    ruleId: '@typescript-eslint/consistent-type-assertions',
+    path: 'packages/markdown/src/__enforcement__.ts',
+    source:
+      "import type { Inline } from './tree';\nexport const forged = { type: 'link', url: 'javascript:x', children: [] } as unknown as Inline;\n",
+  },
+  {
+    rule: "a link's address is made by its check, which the rule leaves alone (D-101)",
+    ruleId: 'no-restricted-syntax',
+    path: 'packages/markdown/src/__enforcement__.ts',
+    source:
+      "import { SafeHref } from './href';\nexport const checked: SafeHref | null = SafeHref.of('https://a.example');\n",
+    allowed: true,
+  },
   // The design vocabulary is the tokens and nothing else: a literal colour, size
   // or duration in a component fails the build, and a token passes. (D-97, #137)
   ...(

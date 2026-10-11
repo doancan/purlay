@@ -62,6 +62,25 @@ const CONTEXT_SELECTORS = [
 ];
 
 /**
+ * The same hole for a link's address: `SafeHref` is minted only by its check, and an assertion
+ * is the one way past the type. Its check never needs a cast either, so there is no exemption.
+ * (D-101 §9)
+ */
+const HREF_MESSAGE =
+  "A link's address is made by SafeHref.of, never asserted. Casting one puts an unchecked address in a tree a renderer trusts. (D-101)";
+const BRAND_SELECTORS = [
+  ...CONTEXT_SELECTORS,
+  {
+    selector: 'TSAsExpression > TSTypeReference > Identifier[name="SafeHref"]',
+    message: HREF_MESSAGE,
+  },
+  {
+    selector: 'TSTypeAssertion > TSTypeReference > Identifier[name="SafeHref"]',
+    message: HREF_MESSAGE,
+  },
+];
+
+/**
  * The escape hatches, made to cost something (CONTRIBUTING.md §1.13, D-48, #136).
  *
  * Local rules rather than a plugin: the rule this repository states — every
@@ -408,7 +427,7 @@ export default defineConfig([
 
       'no-console': 'error', // logging goes through the structured logger (ARCHITECTURE.md §10)
       eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'no-restricted-syntax': ['error', ...CLOCK_SELECTORS, ...CONTEXT_SELECTORS],
+      'no-restricted-syntax': ['error', ...CLOCK_SELECTORS, ...BRAND_SELECTORS],
     },
   },
 
@@ -498,6 +517,9 @@ export default defineConfig([
           message: 'packages/markdown runs in a browser too. Bun APIs do not exist there.',
         },
       ],
+      // The package that mints the checked address needs no assertion, and one to any node that
+      // holds an address skips the check without naming `SafeHref` (D-101 §9).
+      '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
     },
   },
 
@@ -601,8 +623,8 @@ export default defineConfig([
   },
 
   // The clock itself, and code that measures real elapsed time — a test's
-  // deadline, a script's timeout — read the time. Nothing else does. The context
-  // selectors stay: no file may forge a context.
+  // deadline, a script's timeout — read the time. Nothing else does. The brand
+  // selectors stay: no file may forge a context or a link's address.
   {
     files: [
       'apps/api/src/platform/clock.ts',
@@ -611,7 +633,7 @@ export default defineConfig([
       '**/*.test.tsx',
       'scripts/**/*.ts',
     ],
-    rules: { 'no-restricted-syntax': ['error', ...CONTEXT_SELECTORS] },
+    rules: { 'no-restricted-syntax': ['error', ...BRAND_SELECTORS] },
   },
 
   // Tests may reach further, but they may not weaken the type rules.

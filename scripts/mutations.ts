@@ -339,10 +339,29 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'markdown-any-link-scheme',
     why: "a `javascript:` link in a message runs in the reader's session when it is clicked",
-    file: 'packages/markdown/src/parse.ts',
-    find: 'return SAFE_PROTOCOLS.has(parsed.protocol) ? parsed.href : null;',
-    replace: 'return parsed.href;',
-    tests: ['packages/markdown/src/parse.test.ts'],
+    file: 'packages/markdown/src/href.ts',
+    find: 'return SAFE_PROTOCOLS.has(parsed.protocol) ? new SafeHref(parsed.href) : null;',
+    replace: 'return new SafeHref(parsed.href);',
+    tests: ['packages/markdown/src/href.test.ts', 'packages/markdown/src/parse.test.ts'],
+  },
+  {
+    id: 'link-keeps-what-was-typed',
+    why: 'the address checked is not the address rendered: `HTTPS://` or a stray space reads one way to the check and another to the browser',
+    file: 'packages/markdown/src/href.ts',
+    find: 'new SafeHref(parsed.href)',
+    replace: 'new SafeHref(url)',
+    tests: ['packages/markdown/src/href.test.ts'],
+  },
+  {
+    id: 'mention-after-a-letter',
+    why: 'an address like `a@bob.example` notifies bob, and the client highlights it',
+    file: 'packages/markdown/src/mentions.ts',
+    find: '(?<![\\p{L}\\p{N}_@`])',
+    replace: '(?<![@`])',
+    tests: [
+      'packages/markdown/src/mentions.test.ts',
+      'apps/api/src/modules/messages/mentions.test.ts',
+    ],
   },
   {
     id: 'markdown-raw-html-parsed',
