@@ -3477,6 +3477,15 @@ main publishes it to GHCR tagged by commit and by branch (never `latest`: an ope
 or a release), with provenance and an SBOM attached as attestations. The publish job can be exercised
 for real only once it is on main.
 
+*(Amended 2026-10-11: while Actions cannot run, `scripts/release-image.sh` publishes a merged commit
+from a machine — a commit on `origin/main`, from a clean tree, after `verify` with the database, built
+once for the server's platform, smoke-tested, then pushed as `sha-<commit>` and named by digest. It is
+not the workflow's equal and says so: the image carries no provenance or SBOM, it is smoke-tested
+before the push rather than as the pushed digest, and no `main` tag moves. It is for the gap and
+nothing else; when the pipeline runs, it publishes. Rejected: waiting for the pipeline, which would
+leave S-1 with nothing to dogfood; building on the server, which puts a toolchain on it and runs an
+image no digest names.)*
+
 **What stays with #224.** This is the API. Serving the built client from the same origin waits for
 the prerendered shell (#141), and the image grows a stage for it then; the production compose
 assumes only that one origin fronts the API. *(Amended 2026-10-11: #224 added the middle stage, which

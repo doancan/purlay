@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Publish the image from this machine, while the pipeline cannot (docs/CONFIG.md,
-# "Production deployment"). It does what `image.yml` does on main, in the same order, and
-# refuses anything that workflow would not have published:
+# Publish the image from this machine, while the pipeline cannot (D-92, amended). It is not
+# `image.yml`'s equal: no provenance or SBOM is attached, the image is smoke-tested before it
+# is pushed rather than as the pushed digest, and no `main` tag moves. What it keeps is the
+# point of the workflow — only a merged commit, judged, built once, started before it ships:
 #
 #   scripts/release-image.sh            # linux/amd64, the image for the server
 #   PLATFORM=linux/arm64 scripts/release-image.sh
@@ -47,7 +48,7 @@ bun run verify
 docker buildx build --platform "$PLATFORM" --load \
   --label "org.opencontainers.image.source=https://github.com/$REPOSITORY" \
   --label "org.opencontainers.image.revision=$SHA" \
-  --label "org.opencontainers.image.licenses=AGPL-3.0-or-later" \
+  --label "org.opencontainers.image.licenses=$(bun -e 'console.log(require("./package.json").license)')" \
   --tag "$TAG" .
 
 # ── 4. That image, started the way production starts it ─────────────────────
