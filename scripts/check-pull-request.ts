@@ -44,8 +44,8 @@ const UNMETERED = [
  * `security` — is cross-cutting by nature and restricts nothing.
  */
 const AREA_PATHS: Readonly<Record<string, readonly string[]>> = {
-  web: ['apps/web/', 'packages/types/'],
-  api: ['apps/api/', 'packages/types/', 'packages/db/'],
+  web: ['apps/web/', 'packages/types/', 'packages/markdown/'],
+  api: ['apps/api/', 'packages/types/', 'packages/db/', 'packages/markdown/'],
   realtime: ['apps/api/', 'packages/types/'],
   database: ['packages/db/', 'apps/api/'],
   contracts: ['packages/types/', 'apps/api/', 'apps/web/'],

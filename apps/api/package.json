@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "@purlay/db": "workspace:*",
+    "@purlay/markdown": "workspace:*",
     "@purlay/types": "workspace:*",
     "@sinclair/typebox": "0.34.52",
     "elysia": "1.4.30",

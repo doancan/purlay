@@ -45,8 +45,7 @@
 | Server state | TanStack Query | `@tanstack/react-query` | (D-18) |
 | Realtime state | Zustand | `zustand` | (D-18) |
 | Object storage | S3-compatible; Garage locally | `garage` | An extra service locally, set up by a script because its image has no shell; no console. Any S3-compatible store works in production, and a filesystem driver exists for simple self-hosts (D-20; `docs/spikes/object-storage.md`) |
-| Server markdown | `unified` / `remark` + sanitising serialiser | not yet · `unified` | Server-only, so no bundle cost; a large dependency tree to audit (D-36) |
-| Client markdown | a small CommonMark/GFM renderer | undecided · O-6 | Two parsers to keep aligned; a shared fixture suite is the guard (D-36) |
+| Markdown | one engine on both sides — micromark through `mdast-util-from-markdown`, four GFM extensions — narrowed and bounded in `packages/markdown` | `mdast-util-from-markdown`, `micromark-extension-gfm-*`, `mdast-util-gfm-*` | 29.9 KB gzipped in the browser; superlinear past bounds that are enforced before it runs, so a body past them is shown as typed (D-101, `docs/spikes/markdown.md`) |
 | Highlighting | Shiki, grammars loaded lazily | `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
 | Thumbnails | `Bun.Image`, built into the runtime | built in | A young API, and its decoder differs by platform — `docs/spikes/image-pipeline.md`; thumbnails must use `fit: 'inside'`, because the two-dimension form stretches (D-75) |
 
@@ -596,7 +595,8 @@ membership first. Both refuse identically.
 ### 8.1. Parsing, at write time
 
 Parsing happens **once, on the server, when the message is written**. The parser produces
-`metadata` (`SCHEMA.md` §6.4) and the `mentions` rows.
+`metadata` (`SCHEMA.md` §6.4) and the `mentions` rows. The browser runs the same reading,
+`packages/markdown`, to render (D-101).
 
 It exists for three reasons: mentions are resolved once and stored as rows, `metadata` is derived
 once rather than per feed render, and sanitisation happens in exactly one place. It does **not**
@@ -604,12 +604,16 @@ exist to save client render cost — the rendered output is not stored, and an e
 this document claimed otherwise. The client renders the markdown and memoises the result per
 `(message.id, edited_at)`. Markdown remains the only stored representation. (D-36)
 
-1. Parse GFM via `unified`/`remark`.
+1. Read the body with the one engine (D-101), inside its bounds; a body past them is not formatted
+   and records no `metadata` — it is still sent and stored as typed.
 2. Extract `@username` mentions → resolve against workspace members → `mentions` rows.
    **`@here` and `@channel` are rejected here**, structurally, not by convention. (D-12)
 3. Record fenced code block languages → `metadata.codeLanguages`.
 4. Detect GitHub PR/Issue URLs → `metadata.githubLinks`.
-5. Sanitize: no raw HTML, no `javascript:` URLs, external images proxied.
+5. Sanitise by narrowing: the engine never recognises raw HTML, and the tree a renderer is given
+   holds only the kinds the product draws, with links only to `http:`, `https:` and `mailto:`. The
+   same function runs where the browser renders. External images are links until the proxy exists
+   (#110), which is when they become images.
 
 ### 8.2. Rendering
 
@@ -698,6 +702,7 @@ layering rule. (D-46)
 | **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** | `testing/cross-tenant*`, from `API.md` (D-63) |
 | **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search and open questions (D-34)** | `ingress/http/channel-visibility*` (D-64) |
 | Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) | `message-id.test.ts`, `messages.integration.test.ts` |
+| **Content safety** | **Every construct the product does not render is the characters that were typed; a link goes only to `http:`, `https:` or `mailto:`; the engine never recognises what it is configured not to; a body past the bounds is shown as typed and never throws (D-101)** | `packages/markdown/src/*.test.ts`; the rendering half with #43 |
 | Permission | Every role-gated action, per role | With the first role-gated action (#51, #74) |
 | Realtime | Two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency | `realtime/*.integration.test.ts` |
 | Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |

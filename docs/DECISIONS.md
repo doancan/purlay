@@ -1037,6 +1037,10 @@ was built on libraries no document had chosen:
 puts `remark`'s tree in the browser bundle, against a 250 KB budget (`PRD.md` §5) that React and
 the highlighter already spend most of.
 
+> **Amended 2026-10-11 by D-101.** The rejection above was never measured, and when it was the
+> engine `remark` wraps cost 29.9 KB (`docs/spikes/markdown.md`). D-101 chooses one engine on both
+> sides; the two category rows of the table above are what it names. Parts 1–3 stand.
+
 **Rejected — highlighting in a Web Worker by default.** Unchanged from §8.2: for a clamped
 12-line block the `postMessage` round-trip costs more than the highlight.
 
@@ -4115,6 +4119,68 @@ purpose, which is why they are decided again here and not patched.
 
 ---
 
+### D-101. One markdown engine on both sides, narrowed to what the product renders, and bounded — closes O-6
+
+O-6 left the two markdown packages D-36 named as categories, and #42 and #43 are the moment they
+are needed. Decided by the owner on 2026-10-11, on the measurements in `docs/spikes/markdown.md`.
+
+**1 · One engine.** `mdast-util-from-markdown` (micromark) with four GFM extensions —
+autolink literals, strikethrough, tables and task lists — on the server at write time and in the
+browser to render. It is the engine `remark-parse` wraps; its trees and remark's were identical on
+every probe, it costs the browser 29.9 KB gzipped, and with one engine there is no second parser to
+keep aligned, so D-36's shared fixture suite becomes the package's own tests. The reading lives in
+`packages/markdown` (`@purlay/markdown`), which a lint rule keeps free of anything a browser cannot
+run.
+
+**2 · Narrowed: the narrowing is the sanitiser.** The engine is configured never to recognise raw
+HTML, reference definitions, images, indented code, setext headings, character references or
+footnotes; what it does recognise is copied into a tree of the kinds the product draws and nothing
+else (`packages/markdown/src/tree.ts`). A link is a link only to an absolute `http:`, `https:` or
+`mailto:` URL; anything else is its label's text. An image is a link to the image, labelled with its
+alt text, until the proxy exists (#110). Stored content stays markdown (D-36 §2): the server cannot
+make stored markdown safe for a renderer it does not run, so the narrowing is applied where a tree
+is made — on the server for metadata, in the browser for rendering — and both run the same function.
+
+**3 · Headings are emphasis.** `#` makes a heading, drawn at the body's size in bold: a heading in a
+conversation is emphasis, not a title, and a full-size one breaks the feed's rhythm. Decided by the
+owner, with *as typed* and *a real heading* rejected.
+
+**4 · Code is a fence.** Four spaces are indentation; only a fence makes code, so an indented log or
+the continuation of a list is not turned into a block without a language. Decided by the owner. The
+same reasoning switches off the setext underline: only explicit syntax formats.
+
+**5 · Bounded, and a body past a bound is shown as typed — never refused.** The engine is
+superlinear on runs of inline delimiters (308 ms for 16k of `*a`) and overflows the stack on
+containers opened on one line, inconsistently. So a body is formatted only when no line opens more
+than 32 containers, it has at most 1000 inline delimiters outside code, and its narrowed tree is at
+most 100 deep. Where code is, is the engine's own block reading, never a pattern: the first version
+of this bound was one, and the agreement test showed it could not follow a fence inside a list item.
+A body past a bound is still sent, stored and searchable; it is not formatted. Refusing it was
+rejected: it would make a pasted log a failure, a retry after the bounds tighten a different answer
+from the first (D-8), and a new error the composer must explain.
+
+**6 · GitHub links: at most five per message**, unique and canonical, in the order they appear
+(`GITHUB_LINKS_PER_MESSAGE_MAX`). Each becomes a request to GitHub when it is unfurled (#66).
+Decided by the owner, with ten and three rejected. `metadata` is not on the wire until something
+reads it (#44, #66).
+
+**Rejected.**
+
+- *Two engines (remark and `marked`).* D-36's original plan. `marked` is 13.3 KB and faster on the
+  worst inputs (16 ms), but it is a second reading of the same characters, held to the first by a
+  fixture suite that can only test the cases somebody thought of.
+- *Extending the hand-written parser.* No dependency, and a grammar the size of GFM to own.
+- *A sanitising serialiser to HTML, or `dangerouslySetInnerHTML` behind DOMPurify.* A second
+  representation (D-36 §2) and a renderer that trusts markup; the narrowed tree is rendered as
+  elements and has no markup in it to be wrong about.
+- *Running the parse in a Worker with a timeout.* It bounds time but not the stack, costs a thread
+  per process, and a body that times out on a slow machine formats on a fast one.
+
+**Cost of reversing.** Low: no migration, and stored content is unchanged markdown. A different
+engine means a different `packages/markdown`, and its tests say what the next one must do.
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.
@@ -4139,12 +4205,9 @@ Recorded so they are not silently assumed. None block Phase 0.
   measurement used; a listbox hand-built on `@radix-ui/react-popover` is the alternative, and the
   argument for primitives — that focus and ARIA fail *silently* when hand-written — applies hardest
   to exactly this component. *Decide with #138, and measure it.*
-- **O-6 · The two markdown packages D-36 named as categories.** *"A small CommonMark/GFM
-  renderer"* and *"a sanitising serialiser"* are descriptions, not choices — they sat in the stack
-  table beside real packages as though something had been decided. Surfaced by D-59's column, which
-  had nowhere to put them. Both are Phase 1, both are chosen together because the client renderer
-  and the server sanitiser have to agree on what they accept, and the fixture suite D-36 requires is
-  what will prove they do. *Decide when the markdown pipeline is built.*
+- ~~**O-6 · The two markdown packages D-36 named as categories.**~~ **Closed by D-101:** one
+  engine, `mdast-util-from-markdown` with four GFM extensions, on both sides, narrowed to what the
+  product renders and bounded so a body past the bounds is shown as typed.
 - **O-5 · Scroll virtualization.** Inline expandable threads produce variable-height rows,
   which is the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
   ship **unvirtualized** with a 50-message window — and the scroll-anchoring rules that hold

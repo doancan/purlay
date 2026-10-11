@@ -40,7 +40,7 @@ jobs:
       pull-requests: read
     env:
       # What the image is made of; the same list the paths filter used to hold.
-      PATTERN: '^(Dockerfile|\.dockerignore|\.github/workflows/image\.yml|apps/api/|packages/(db|types)/|packages/tokens/package\.json|bun\.lock|package\.json|scripts/(image-smoke|pr-touches)\.sh|docker-compose[^/]*\.yml)'
+      PATTERN: '^(Dockerfile|\.dockerignore|\.github/workflows/image\.yml|apps/api/|packages/(db|markdown|types)/|packages/tokens/package\.json|bun\.lock|package\.json|scripts/(image-smoke|pr-touches)\.sh|docker-compose[^/]*\.yml)'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

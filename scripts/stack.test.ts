@@ -82,10 +82,25 @@ const present = (name: string): boolean =>
     ? [...packages].some((installedName) => installedName.startsWith(name.slice(0, -1)))
     : packages.has(name) || running.has(name);
 
+/** What is wrong with a row: empty when the row is true of this repository. */
+const problemsOf = (row: Row): readonly string[] => {
+  const isMarker = MARKERS.some((marker) => row.status.startsWith(marker));
+  if (!isMarker && row.names.length === 0) return ['names nothing and is no marker'];
+  if (row.status.startsWith('not yet')) {
+    // Named, so the row cannot stay behind once the thing is installed.
+    if (row.names.length === 0) return ['says not yet and names nothing'];
+    return row.names.filter(present).map((name) => `says not yet, but ${name} is installed`);
+  }
+  if (row.status.startsWith('undecided')) {
+    // Nothing to install, so something must be watching for the decision.
+    return /(#\d+|O-\d+)/.test(row.status) ? [] : ['undecided with no issue or open question'];
+  }
+  return row.names.filter((name) => !present(name)).map((name) => `${name} is not installed`);
+};
+
 describe('the stack table describes this repository', () => {
   test('there is a table, with rows, and it is not trivially satisfied', () => {
     expect(rows.length).toBeGreaterThan(15);
-    expect(rows.filter((row) => row.status.startsWith('not yet')).length).toBeGreaterThan(0);
     expect(
       rows.filter((row) => row.names.length > 0 && !row.status.startsWith('not yet')).length,
     ).toBeGreaterThan(5);
@@ -94,25 +109,38 @@ describe('the stack table describes this repository', () => {
     expect(running.size).toBeGreaterThan(1);
   });
 
+  // Every branch can refuse. These used to be proven by whatever rows the table happened to
+  // hold; when the last `not yet` row was installed (D-101), that proof went with it.
+  test.each([
+    ['a not-yet row whose package is installed', 'not yet · `zustand`'],
+    ['a not-yet row that names nothing', 'not yet'],
+    ['an undecided row with nothing watching it', 'undecided'],
+    ['a row naming a package nothing installs', '`a-package-nobody-installs`'],
+  ])('refuses %s', (_, status) => {
+    const row = {
+      layer: 'probe',
+      status,
+      names: [...status.matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? ''),
+    };
+    expect(problemsOf(row).length).toBeGreaterThan(0);
+  });
+
+  test.each([
+    ['a not-yet row whose package is absent', 'not yet · `a-package-nobody-installs`'],
+    ['an undecided row with an issue', 'undecided · #123'],
+    ['a row naming an installed package', '`zustand`'],
+  ])('accepts %s', (_, status) => {
+    const row = {
+      layer: 'probe',
+      status,
+      names: [...status.matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? ''),
+    };
+    expect(problemsOf(row)).toEqual([]);
+  });
+
   for (const row of rows) {
     test(`${row.layer}: "${row.status}" is true of this repository`, () => {
-      const isMarker = MARKERS.some((marker) => row.status.startsWith(marker));
-      expect(isMarker || row.names.length > 0).toBe(true);
-
-      if (row.status.startsWith('not yet')) {
-        // Named, so the row cannot stay behind once the thing is installed.
-        expect(row.names.length).toBeGreaterThan(0);
-        expect(row.names.filter(present)).toEqual([]);
-        return;
-      }
-
-      if (row.status.startsWith('undecided')) {
-        // Nothing to install, so something must be watching for the decision.
-        expect(row.status).toMatch(/(#\d+|O-\d+)/);
-        return;
-      }
-
-      expect(row.names.filter((name) => !present(name))).toEqual([]);
+      expect(problemsOf(row)).toEqual([]);
     });
   }
 });

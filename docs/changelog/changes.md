@@ -6,6 +6,23 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-11: markdown is read once when a message is written, by the engine the browser will use (D-101)
+
+- **One engine on both sides.** `packages/markdown` reads a body with micromark (the engine
+  `remark-parse` wraps) and four GFM extensions; the server records `codeLanguages`, `isCodeOnly`
+  and up to five GitHub pull requests and issues in `messages.metadata`, validated against the
+  contract before insert. The browser renders from the same reading in the next change (#43).
+- **Narrowed: the narrowing is the sanitiser.** Raw HTML, reference definitions, images, indented
+  code, setext headings, character references and footnotes are never recognised; a link goes only
+  to an absolute `http:`, `https:` or `mailto:` address, and anything else is its label's text.
+- **Bounded, never refused.** The engine is superlinear on runs of delimiters and overflows the
+  stack on containers opened on one line, so a body past the bounds — 32 containers on a line, 1000
+  delimiters outside code, a tree 100 deep — is sent and stored as typed and records nothing. Where
+  code is comes from the engine's own block reading: a pattern for it was tried and a fuzz test
+  showed it could not follow a fence inside a list item (`docs/spikes/markdown.md`).
+- A lint rule keeps the package free of anything a browser cannot run, and eight mutations prove
+  each bound and each half of the sanitiser is held by a test. Closes O-6.
+
 ### Fix — 2026-10-10: answering your own thread is held to telling you nothing (D-29)
 
 - The rule held, but nothing would have noticed it going: the test for a self-reply checked the

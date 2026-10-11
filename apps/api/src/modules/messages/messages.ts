@@ -16,11 +16,13 @@
  * the last id seen — no timestamp, no tie-break, because a UUIDv7 already sorts
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
+import { Value } from '@sinclair/typebox/value';
 import { sql, type Executor } from '@purlay/db';
 import {
   isMessageIdShape,
   isPlausibleMessageId,
   PAGE_LIMIT,
+  TextMetadata,
   type Message,
   type MessagePage,
   type ThreadSummary,
@@ -47,6 +49,7 @@ import {
   resolveMentions,
   type ChannelStateUpdate,
 } from './delivery';
+import { metadataOf, readMarkdown, type Reading } from '@purlay/markdown';
 import { parseMentions } from './mentions';
 import {
   buildMessages,
@@ -81,6 +84,11 @@ export interface Sent {
     readonly version: number;
   } | null;
   readonly recipients: readonly ChannelStateUpdate[];
+  /**
+   * Why this write's body is shown as typed rather than formatted (D-101), or null. Only the
+   * call that inserted the row reads the body; a retry answers from the row and reads nothing.
+   */
+  readonly unformatted: Extract<Reading, { tree: null }>['reason'] | null;
 }
 
 /** The root a reply goes under, if it is a root of this channel that can be replied to. */
@@ -166,6 +174,7 @@ export const sendMessage = async (
       // now: a retry usually means the first answer did not arrive, and if the frames behind
       // it were lost too, this is what repairs the other people's badges (H-API 4).
       recipients: await currentStates(executor, context),
+      unformatted: null,
     };
   };
 
@@ -196,6 +205,15 @@ export const sendMessage = async (
     });
   }
 
+  // Read once, here (`ARCHITECTURE.md` §8.1). Never a refusal: a body too complex to format is
+  // still a message, shown as typed, and records nothing (D-101).
+  const reading = readMarkdown(input.content);
+  const metadata = metadataOf(reading.tree);
+  if (!Value.Check(TextMetadata, metadata)) {
+    // The parser's own output outside the contract is a defect in this code, not in the message.
+    throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
+  }
+
   const root =
     input.parentId === undefined ? undefined : await requireRoot(executor, context, input.parentId);
 
@@ -208,6 +226,7 @@ export const sendMessage = async (
       sender_id: context.userId,
       parent_id: input.parentId ?? null,
       content: input.content,
+      metadata,
       created_at: clock.now(),
     })
     .onConflict((conflict) => conflict.column('id').doNothing())
@@ -293,7 +312,12 @@ export const sendMessage = async (
     .where((eb) => eb.or([eb('last_message_at', 'is', null), eb('last_message_at', '<', sentAt)]))
     .execute();
 
-  return { message: written, thread, recipients };
+  return {
+    message: written,
+    thread,
+    recipients,
+    unformatted: reading.tree === null ? reading.reason : null,
+  };
 };
 
 export interface HistoryQuery {
@@ -476,6 +500,14 @@ export const send = async (
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
     return await sendMessage(transaction, clock, context, input);
   });
+  if (sent.unformatted === 'engine') {
+    // Inside the bounds the engine should never throw (D-101); this is a gap in them to close,
+    // not a broken message: it is stored, sent and shown as typed. Never the content (ARCHITECTURE §10).
+    log.warn('markdown engine failed inside its bounds', {
+      messageId: sent.message.id,
+      length: input.content.length,
+    });
+  }
   // The room first, then what moved under it, then each person's own numbers: a
   // client that hears a reply has already heard the message, and one that hears a
   // count change has heard what changed it (D-99 §2). Committed already, so a publish that
