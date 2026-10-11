@@ -1,8 +1,8 @@
 /**
  * What an `@username` looks like (D-12, D-99 §3), for both sides: the server, which resolves it to a
  * person, and the client, which highlights the ones the server resolved. One pattern, so the shape a
- * notification is sent for and the shape that is drawn as one cannot drift. (The client's hand-written
- * copy, which disagrees on any letter outside ASCII, goes with the renderer that replaces it, #43.)
+ * notification is sent for and the shape that is drawn as one cannot drift — the client's own copy
+ * disagreed on any letter outside ASCII.
  *
  * A name has GitHub's shape — letters and digits, single hyphens inside, at most 39 — and is not
  * preceded by a letter, digit, underscore, `@` or backtick (`a@b.c` is an address, `@@name` is not a

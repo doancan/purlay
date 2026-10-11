@@ -9,8 +9,8 @@
  * `href`, or a spread of a real one, is not a `SafeHref` — a spread copies no private field. What a
  * type system cannot refuse, an assertion, lint refuses (`eslint.config.mjs`): by name everywhere,
  * and in this package any assertion at all, since a cast to a node that holds the address — an
- * `Inline` — skips the brand without naming it. The renderer (#43) is to check `instanceof` as well,
- * so a cast the lint rules do not see draws text, not a link.
+ * `Inline` — skips the brand without naming it. The renderer checks `instanceof` as well, so a cast
+ * the lint rules do not see draws text, not a link.
  *
  * A class here, where D-54 chose a symbol key for a context: the symbol key survives a spread, and
  * a context's argument against a class — a value that must survive serialisation — does not apply to

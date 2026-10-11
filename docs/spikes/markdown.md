@@ -124,8 +124,31 @@ A security review of the finished package, and its numbers measured here afterwa
   would draw it as code. Not the engine's fault, but the same mistake as the first bound: a second
   set of rules for where code is.
 
-## Not measured
+## In a browser (#43, 2026-10-11)
 
-The browser's own stack depth (Chrome, Firefox, Safari), and parse time in a browser rather than
-Bun. The client slice (#43) renders the narrowed tree and runs the same bounds, so its worst case is
-the one above; the browser test that sends the deepest body allowed is part of that slice.
+The package bundled for the browser (`bun build --target=browser --minify`), each body read seven
+times with `readMarkdown` and the median taken, in Playwright's browsers on an Apple-silicon laptop.
+Every body at a bound was formatted and none threw; the stack held at the deepest tree allowed.
+
+| Body | Chromium 156 | WebKit 27.2 |
+|---|---|---|
+| 32 containers on one line | 0.6 ms | 1.0 ms |
+| 1000 delimiters, `*a` | 3.0 ms | 3.0 ms |
+| 1000 delimiters, `[]` | 1.7 ms | 2.0 ms |
+| 1000 delimiters, `_a` | 1.1 ms | 1.0 ms |
+| an address-like run of 1024, `.-` | 0.6 ms | 1.0 ms |
+| the deepest tree allowed: 48 nested list items | 7.4 ms | 10.0 ms |
+| one fenced block, 16k | 4.2 ms | 6.0 ms |
+
+The feed draws the same bodies end to end in `apps/web/e2e/hostile.e2e.ts`: at each bound
+formatted, one past it as typed, no error in the page, and the page answering.
+
+**Not measured: Firefox.** Playwright's Firefox (build 1555) would not start on this machine
+(*Could not find profile folder*, with and without a sandbox), so its stack and timings are
+unknown; the suite runs Chromium only. Which browsers are supported at all is not recorded
+anywhere yet, and is its own decision.
+
+**Observed: a long, formatted message passes the delimiter bound.** Prose with bold, code, a link
+and emphasis every seventy characters, repeated to 16k, holds about 2 500 delimiters and is shown
+as typed. Measured as 2.8 ms in Chromium — the bound is far from what the engine can take for prose
+like this, and is set by the adversarial cases above.

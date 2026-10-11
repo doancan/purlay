@@ -6,6 +6,19 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-11: messages are drawn as the markdown they were written in (D-101)
+
+- `renderContent` draws the tree the server read: emphasis, strong, strikethrough, inline and fenced
+  code, links, quotations, lists with their first number, task boxes that say whether they are done
+  (in both languages), tables that scroll inside a box a keyboard can reach, rules and line breaks.
+  A heading is bold at the body's size; four spaces are not code. Nothing is markup: the tree is drawn
+  as elements, and a link is drawn only when its address is a `SafeHref`, checked again at the page.
+- A body past a bound, one the engine fails on, or one that fails to draw is shown as typed — that
+  body alone; the feed around it stands. The deepest bodies the bounds allow are drawn in Chromium
+  and WebKit (`docs/spikes/markdown.md`).
+- A mention is highlighted with the server's own pattern, in prose only, never inside code. The
+  hand-written client parser is gone.
+
 ### Security — 2026-10-11: a link's address can only be made by the check that allows it (D-101 §9)
 
 - A link in the narrowed tree carries a `SafeHref`, which only `SafeHref.of` can make: an object

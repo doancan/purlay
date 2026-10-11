@@ -6,6 +6,13 @@
  * (`window.__pwned`), by whether it still answers, and by whether anything scrolls sideways.
  */
 import type { Page } from '@playwright/test';
+import {
+  MARKDOWN_DELIMITERS_MAX,
+  MARKDOWN_NESTING_MAX,
+  MARKDOWN_RUN_MAX,
+  readMarkdown,
+} from '@purlay/markdown';
+import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 import { expect, test } from './fixtures';
 
 const PAYLOADS: readonly { readonly name: string; readonly text: string }[] = [
@@ -120,6 +127,88 @@ test.describe('hostile content', () => {
       ).length;
     });
     expect(overflowing).toBe(0);
+  });
+
+  test('the deepest bodies the bounds allow are formatted in a browser, and one past each is shown as typed (D-101 §5)', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    test.setTimeout(120_000);
+    // Each level an item of the one above; only the innermost says which body it is, in bold.
+    const nestedList = (levels: number, mark: string): string =>
+      Array.from({ length: levels }, (_, level) =>
+        level === levels - 1 ? `${'  '.repeat(level)}- **${mark}**` : `${'  '.repeat(level)}- x`,
+      ).join('\n');
+    // Where the depth bound falls is `readMarkdown`'s to say; found here, never copied.
+    let levels = 1;
+    while (
+      readMarkdown(nestedList(levels, 'depth-at')).tree !== null &&
+      levels < MESSAGE_CONTENT_MAX
+    )
+      levels += 1;
+    expect(readMarkdown(nestedList(levels, 'depth-at'))).toEqual({ tree: null, reason: 'depth' });
+    const bodies: readonly { readonly mark: string; readonly at: string; readonly past: string }[] =
+      [
+        {
+          mark: 'nesting',
+          at: `${'> '.repeat(MARKDOWN_NESTING_MAX)}**nesting-at**`,
+          past: `${'> '.repeat(MARKDOWN_NESTING_MAX + 1)}**nesting-past**`,
+        },
+        {
+          mark: 'delimiters',
+          at: `**delimiters-at** ${'*'.repeat(MARKDOWN_DELIMITERS_MAX - 4)}`,
+          past: `**delimiters-past** ${'*'.repeat(MARKDOWN_DELIMITERS_MAX - 3)}`,
+        },
+        {
+          mark: 'run',
+          at: `**run-at** ${'a'.repeat(MARKDOWN_RUN_MAX)}`,
+          past: `**run-past** ${'a'.repeat(MARKDOWN_RUN_MAX + 1)}`,
+        },
+        {
+          mark: 'depth',
+          at: nestedList(levels - 1, 'depth-at'),
+          past: nestedList(levels, 'depth-past'),
+        },
+      ];
+    const wideTable = `| ${Array.from({ length: 40 }, (_, i) => `column ${String(i)}`).join(' | ')} |\n|${' - |'.repeat(40)}\n| ${'cell | '.repeat(40)}`;
+
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+
+    const made = await room({ members: ['dogancan', 'alice'] });
+    for (const body of bodies) {
+      await api('carol').say(made.id, body.at);
+      await api('carol').say(made.id, body.past);
+    }
+    await api('carol').say(made.id, wideTable);
+    await signIn();
+    await page.goto(made.path);
+    await expect(page.locator('[data-message-row]')).toHaveCount(bodies.length * 2 + 1);
+
+    for (const body of bodies) {
+      // At the bound: formatted, so the words are bold and the asterisks are gone.
+      await expect(
+        page.locator('[data-message-body] strong', { hasText: `${body.mark}-at` }),
+      ).toHaveCount(1);
+      // One past: the characters as they were sent, asterisks and all, and nothing bold.
+      await expect(
+        page.locator('[data-message-body] strong', { hasText: `${body.mark}-past` }),
+      ).toHaveCount(0);
+      await expect(page.getByText(`**${body.mark}-past**`, { exact: false })).toHaveCount(1);
+      // And for the reason the bound names, not some other failure.
+      await expect(page.locator(`[data-as-typed="${body.mark}"]`)).toHaveCount(1);
+    }
+    await expect(page.getByRole('group', { name: 'Table' })).toBeVisible();
+
+    expect(errors, 'errors in the page').toEqual([]);
+    const sideways = await sidewaysScroll(page);
+    expect(sideways.feed).toBeLessThanOrEqual(1);
+    expect(sideways.document).toBeLessThanOrEqual(1);
   });
 
   test('inside a thread, the same', async ({ page, signIn, room, api }) => {
