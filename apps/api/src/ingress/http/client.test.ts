@@ -3,11 +3,19 @@
  * file a path means, and what the API refuses to start with.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigurationError } from '../../platform/config';
-import { clientFileFor, fileFor, openClient, routeOf, type Route } from './client';
+import {
+  IMMUTABLE,
+  clientFileFor,
+  fileFor,
+  isUnchanged,
+  openClient,
+  routeOf,
+  type Route,
+} from './client';
 
 const dist = mkdtempSync(join(tmpdir(), 'client-dist-'));
 mkdirSync(join(dist, 'assets'));
@@ -24,6 +32,7 @@ afterAll(() => {
 describe('which paths are whose', () => {
   test.each<[string, Route]>([
     ['/ws', 'socket'],
+    ['/ws/x', 'api'],
     ['/api/me', 'api'],
     ['/api', 'api'],
     ['/api/', 'api'],
@@ -69,7 +78,7 @@ describe('which file a path is answered with', () => {
     expect(clientFileFor(client, '/assets/app-abc123.js')).toMatchObject({
       path: join(dist, 'assets', 'app-abc123.js'),
       document: false,
-      cacheControl: 'public, max-age=31536000, immutable',
+      cacheControl: IMMUTABLE,
     });
   });
 
@@ -95,12 +104,19 @@ describe('which file a path is answered with', () => {
     expect(clientFileFor(client, '/theme-init.js')?.etag).not.toBe(shell);
   });
 
-  test.each(['/assets/gone.js', '/favicon.ico', '/../etc/passwd', '/assets'])(
-    '%s is not a file and not a client route: nothing',
-    (path) => {
-      expect(clientFileFor(client, path)).toBeUndefined();
-    },
-  );
+  test.each([
+    '/assets/gone.js',
+    '/favicon.ico',
+    '/../etc/passwd',
+    '/assets',
+    // The API's paths, spelled so the raw path does not start with them: still the API's.
+    '/%61pi/me',
+    '/api%2Fme',
+    '/ws%2f',
+    '/%68ealth',
+  ])('%s is not a file and not a client route: nothing', (path) => {
+    expect(clientFileFor(client, path)).toBeUndefined();
+  });
 });
 
 describe('opening the build', () => {
@@ -113,7 +129,48 @@ describe('opening the build', () => {
     expect(() => openClient(empty)).toThrow(/CLIENT_DIST/);
   });
 
+  test('a trailing separator names the same build, not one every path falls outside', () => {
+    const client = openClient(`${dist}/`);
+    expect(clientFileFor(client, '/')?.path).toBe(join(dist, 'index.html'));
+    expect(clientFileFor(client, '/assets/app-abc123.js')?.path).toBe(
+      join(dist, 'assets', 'app-abc123.js'),
+    );
+  });
+
+  test('a relative path refuses to start: what is served must not depend on where it was started', () => {
+    expect(() => openClient('apps/web/dist')).toThrow(/CLIENT_DIST: must be an absolute path/);
+  });
+
   test('a directory that is not there refuses to start', () => {
     expect(() => openClient(join(empty, 'missing'))).toThrow(/CLIENT_DIST/);
+  });
+});
+
+describe('whether the browser already has it', () => {
+  const etag = 'W/"a-b"';
+  test.each<[string | null, boolean]>([
+    ['W/"a-b"', true],
+    ['"a-b"', true],
+    ['W/"x-y", W/"a-b"', true],
+    ['*', true],
+    ['W/"x-y"', false],
+    ['', false],
+    [null, false],
+  ])('If-None-Match %p is %p', (header, unchanged) => {
+    expect(isUnchanged(header, etag)).toBe(unchanged);
+  });
+});
+
+describe('a build that cannot be read', () => {
+  test('is named for what it is, not as missing', () => {
+    const locked = mkdtempSync(join(tmpdir(), 'client-locked-'));
+    writeFileSync(join(locked, 'index.html'), 'x');
+    chmodSync(locked, 0o000);
+    try {
+      expect(() => openClient(locked)).toThrow(/cannot be read \(EACCES\)/);
+    } finally {
+      chmodSync(locked, 0o700);
+      rmSync(locked, { recursive: true, force: true });
+    }
   });
 });

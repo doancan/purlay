@@ -40,9 +40,9 @@ import {
   isCrossSiteMutation,
   unsupportedMediaTypeResponse,
   responseHeaders,
-  DOCUMENT_SECURITY_POLICY,
+  DOCUMENT_HEADERS,
 } from './edge';
-import { clientFileFor, routeOf, type Client } from './client';
+import { clientFileFor, isUnchanged, routeOf, type Client } from './client';
 import { refusalFor } from './errors';
 import {
   createMyWorkspace,
@@ -360,22 +360,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      * answered with HTML, so a mistyped call fails as the API's 404 at the call, not as a
      * parse error somewhere else.
      */
-    .get('*', ({ path, request, set }) => {
+    .get('*', async ({ path, request, set }) => {
+      const notFound = new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
       const file =
         dependencies.client === undefined || routeOf(path) !== 'client'
           ? undefined
           : clientFileFor(dependencies.client, path);
-      if (file === undefined)
-        throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
+      if (file === undefined) throw notFound;
       set.headers['cache-control'] = file.cacheControl;
       set.headers.etag = file.etag;
-      if (file.document) set.headers['content-security-policy'] = DOCUMENT_SECURITY_POLICY;
+      if (file.document) Object.assign(set.headers, DOCUMENT_HEADERS);
       // The browser already has this version: nothing to send (RFC 9110 §13.1.2).
-      if (request.headers.get('if-none-match') === file.etag) {
+      if (isUnchanged(request.headers.get('if-none-match'), file.etag)) {
         set.status = 304;
         return null;
       }
-      return Bun.file(file.path);
+      // Opened here, so a file gone since it was found is this handler's 404 and not the
+      // runtime's own error page, which the one error handler never sees.
+      const body = Bun.file(file.path);
+      if (!(await body.exists())) throw notFound;
+      return body;
     })
 
     /**

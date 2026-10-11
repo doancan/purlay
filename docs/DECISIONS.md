@@ -2764,6 +2764,9 @@ could sign every device out.
 no-referrer`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`,
 `Cache-Control: no-store`, and `Strict-Transport-Security: max-age=15552000` when `APP_URL` is
 https. No `includeSubDomains` and no `preload`: both bind a domain this product does not own.
+*(Amended 2026-10-11 by D-102: the client's files are the exception — the HTML document carries its
+own policy, a hashed asset is cached for good and every other file is revalidated by entity tag; every
+API response keeps the headers above.)*
 
 **Decided: an inbound `x-request-id` matching `[A-Za-z0-9._-]{1,64}` is kept**; anything else is
 replaced by a fresh id. It is a label for correlating an edge trace — never trusted as identity.
@@ -3476,7 +3479,9 @@ for real only once it is on main.
 
 **What stays with #224.** This is the API. Serving the built client from the same origin waits for
 the prerendered shell (#141), and the image grows a stage for it then; the production compose
-assumes only that one origin fronts the API.
+assumes only that one origin fronts the API. *(Amended 2026-10-11: #224 added the middle stage, which
+builds the client; only `apps/web/dist` reaches the runtime stage, which sets `CLIENT_DIST` (D-61,
+D-102).)*
 
 **Rejected: an Alpine or Debian base.** A shell, a package manager and musl or glibc differences for
 no benefit to a program that needs only its runtime. **Rejected: `bun build --compile` into one
@@ -3601,8 +3606,12 @@ dynamic configuration model for one upstream. A platform ingress is the PaaS D-7
 is the incident the stack exists to prevent. **Rejected: a `.env.example` for production.** A second
 list of the variables beside `CONFIG.md`, which owns them; the test binds the file to the document.
 
-**Not here, deliberately:** the built client (the proxy has one upstream until #224 adds the client
-stage), the scheduler container (D-30; there are no jobs yet), and multiple API nodes (D-25; the
+*(Amended 2026-10-11: the built client is served by the API itself (D-102), so the proxy keeps one
+upstream. Compression is the proxy's — `encode zstd gzip` — and the API sends bodies as they are.
+Rejected: compressing in the API, which a self-hoster behind a proxy of their own would pay for twice,
+in the process whose memory is budgeted.)*
+
+**Not here, deliberately:** the scheduler container (D-30; there are no jobs yet), and multiple API nodes (D-25; the
 compose file is the single-node shape, and a second node is `--scale api=2` behind a sticky balancer
 only after Phase 3 builds the shared adapters).
 
@@ -4253,6 +4262,17 @@ identity for a source that is GitHub's own avatar host. **Rejected: a nonce for 
 primitive reads one from a global the bundle would have to set per response, which turns a static shell
 into a rendered one for a style that cannot execute. **Rejected: the proxy (Caddy) setting the policy.**
 Two places would set headers, and a self-hoster running the image behind their own proxy would get none.
+
+**Caching, decided with it.** A file under `/assets` has a content hash in its name and is
+`public, max-age=31536000, immutable`; every other file — the shell, `theme-init.js`, the fonts — is
+`no-cache` with a weak entity tag made of its size and modification time, answered `304` when it has
+not changed. The runtime sends neither an entity tag nor a modification date for a file (measured: a
+conditional request was a full `200`), so without the tag every load downloaded the fonts whole. A file
+in an image keeps its time for the image's life, so the tag changes with a deployment and not with a
+restart. Rejected: hashing each file's bytes per request, which costs a read for an answer the
+metadata already gives; a long lifetime for the fonts, whose names carry no hash, so a changed font
+would be stale for a year. The document also carries `Cross-Origin-Opener-Policy: same-origin`: sign-in
+is a top-level navigation, never a pop-up, so nothing it opens needs a handle back to it.
 
 **Reopened when** #110 lands (drop the avatar host), or when a primitive that needs inline style is
 replaced or learns to take a stylesheet.

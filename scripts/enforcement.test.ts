@@ -587,13 +587,23 @@ describe('what API.md publishes for this phase is what the application serves', 
       (cells) => `${(cells[2] ?? '').replaceAll('`', '')} ${(cells[3] ?? '').replaceAll('`', '')}`,
     );
 
-  const served = [
-    // A route is a link of the chain, at the start of its line; `request.headers.get('…')`
-    // inside a handler is not one.
-    ...readFileSync('apps/api/src/ingress/http/app.ts', 'utf8').matchAll(
-      /^\s*\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm,
-    ),
-  ].map((match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`);
+  // A route is a link of the chain, at the start of its line; `request.headers.get('…')`
+  // inside a handler is not one.
+  const routesIn = (source: string): string[] =>
+    [...source.matchAll(/^\s*\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm)].map(
+      (match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`,
+    );
+  const served = routesIn(readFileSync('apps/api/src/ingress/http/app.ts', 'utf8'));
+
+  test('the route reader sees a link of the chain and not a lookup inside a handler', () => {
+    const source = [
+      "  .get('/a', () => 1)",
+      '  .post(',
+      "    '/b',",
+      "  .get('*', ({ request }) => request.headers.get('if-none-match'))",
+    ].join('\n');
+    expect(routesIn(source)).toEqual(['GET /a', 'POST /b', 'GET *']);
+  });
 
   // `.ws('/ws')` is a route too, and it is in the table.
   const sockets = readFileSync('apps/api/src/ingress/http/app.ts', 'utf8').includes(".ws('/ws'")

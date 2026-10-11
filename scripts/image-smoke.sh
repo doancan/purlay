@@ -91,14 +91,19 @@ echo "readiness: $(curl -s "http://localhost:$HOST_PORT/health/ready")"
 # The client is served from the same origin (D-61): the shell with the document's policy,
 # and the first script it names, cached for good. A shell that names no script, or names
 # one that is not there, is a page that never starts — the failure nobody's probe sees.
-headers="$(curl -s -D - -o /dev/null "http://localhost:$HOST_PORT/")"
-shell="$(curl -s "http://localhost:$HOST_PORT/")"
+# Each capture ends in `|| true` so that the check after it, with its reason, is what fails —
+# under `set -e` a capture that fails would end the script there, saying nothing.
+headers="$(curl -s -D - -o /dev/null "http://localhost:$HOST_PORT/" || true)"
+shell="$(curl -s "http://localhost:$HOST_PORT/" || true)"
 grep -q '<div id="root">' <<<"$shell" || { echo "FAIL: / is not the client's shell" >&2; exit 1; }
 grep -qi "^content-security-policy:.*script-src 'self'" <<<"$headers" ||
   { echo "FAIL: the shell does not carry the document's policy" >&2; exit 1; }
-asset="$(grep -o '/assets/[^"]*\.js' <<<"$shell" | head -n 1)"
+# Exactly one policy: two are both enforced, and the API's would load nothing.
+[ "$(grep -ci '^content-security-policy:' <<<"$headers" || true)" = "1" ] ||
+  { echo "FAIL: the shell carries more than one policy" >&2; exit 1; }
+asset="$(grep -o '/assets/[^"]*\.js' <<<"$shell" | head -n 1 || true)"
 [ -n "$asset" ] || { echo "FAIL: the shell names no script" >&2; exit 1; }
-asset_headers="$(curl -s -D - -o /dev/null "http://localhost:$HOST_PORT$asset")"
+asset_headers="$(curl -s -D - -o /dev/null "http://localhost:$HOST_PORT$asset" || true)"
 grep -q '^HTTP/[0-9.]* 200' <<<"$asset_headers" || { echo "FAIL: $asset is not served" >&2; exit 1; }
 grep -qi '^cache-control:.*immutable' <<<"$asset_headers" ||
   { echo "FAIL: $asset is not cached for good" >&2; exit 1; }

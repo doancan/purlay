@@ -747,9 +747,8 @@ would have created for them.
 
 **One public origin.** `APP_URL` is the origin the browser uses. In development Vite proxies
 `/auth`, `/api` and `/ws` to the API process so the two look identical to a browser — that is
-built. In a deployment the API serves the built client from the same origin: a hashed asset is cached
-for good, every other file is revalidated by its entity tag, any path the API does not own is the
-shell, and the document carries its own security policy (D-102). There is therefore no CORS to configure, the socket's `Origin`
+built. In a deployment the API serves the built client from the same origin (`API.md` §8, D-102).
+There is therefore no CORS to configure, the socket's `Origin`
 check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
 
 **Still to come in the deployment.** The development `docker compose` runs the database and object
@@ -812,7 +811,7 @@ recovery, off-host copies, encryption.
 **The production stack.** `docker-compose.production.yml` runs the API, PostgreSQL, Garage and Caddy
 behind one origin with automatic TLS: only the proxy publishes ports, the API starts when its
 dependencies are healthy and the proxy when the API is ready, and the file's only inputs are the
-variables in `CONFIG.md` (D-94, D-73). A test resolves it with `docker compose config` and checks
+variables in `CONFIG.md` (D-94, D-73). The proxy compresses; the API does not (D-94). A test resolves it with `docker compose config` and checks
 those properties rather than trusting the YAML.
 
 **The image.** The API builds into a three-stage image whose runtime stage is distroless and runs as

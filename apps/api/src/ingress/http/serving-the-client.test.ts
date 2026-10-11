@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { createApp } from './app';
-import { openClient } from './client';
+import { IMMUTABLE, openClient } from './client';
 import { testConfig, testDependencies } from '../../testing/doubles';
 
 const dist = mkdtempSync(join(tmpdir(), 'served-dist-'));
@@ -52,16 +52,23 @@ describe('the shell', () => {
   });
 
   test('carries the document policy: nothing inline runs, nothing frames it', async () => {
-    const policy = directives((await send('/')).headers.get('content-security-policy'));
-    expect(policy.get('default-src')).toEqual(["'self'"]);
-    expect(policy.get('script-src')).toEqual(["'self'"]);
-    expect(policy.get('connect-src')).toEqual(["'self'"]);
-    expect(policy.get('frame-ancestors')).toEqual(["'none'"]);
-    expect(policy.get('base-uri')).toEqual(["'none'"]);
-    expect(policy.get('object-src')).toEqual(["'none'"]);
-    // The two exceptions D-102 names, and no third.
-    expect(policy.get('style-src')).toEqual(["'self'", "'unsafe-inline'"]);
-    expect(policy.get('img-src')).toEqual(["'self'", 'https://avatars.githubusercontent.com']);
+    const response = await send('/');
+    const policy = directives(response.headers.get('content-security-policy'));
+    // The whole policy, so a directive added or dropped is a decision and not a slip (D-102).
+    expect(Object.fromEntries(policy)).toEqual({
+      'default-src': ["'self'"],
+      'script-src': ["'self'"],
+      // The two exceptions D-102 names, and no third.
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'img-src': ["'self'", 'https://avatars.githubusercontent.com'],
+      'font-src': ["'self'"],
+      'connect-src': ["'self'"],
+      'object-src': ["'none'"],
+      'base-uri': ["'none'"],
+      'form-action': ["'self'"],
+      'frame-ancestors': ["'none'"],
+    });
+    expect(response.headers.get('cross-origin-opener-policy')).toBe('same-origin');
   });
 
   test('and the headers every response carries', async () => {
@@ -79,7 +86,7 @@ describe('a file of the build', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('console.log(1)');
     expect(response.headers.get('content-type')).toContain('javascript');
-    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(response.headers.get('cache-control')).toBe(IMMUTABLE);
     expect(response.headers.get('content-security-policy')).toBe(
       "default-src 'none'; frame-ancestors 'none'",
     );
@@ -97,6 +104,9 @@ describe('asking again', () => {
     expect(again.status).toBe(304);
     expect(await again.text()).toBe('');
     expect(again.headers.get('etag')).toBe(etag);
+    // Still the document's: a 304 updates the stored response's headers.
+    expect(again.headers.get('cache-control')).toBe('no-cache');
+    expect(again.headers.get('cross-origin-opener-policy')).toBe('same-origin');
   });
 
   test('a version that is not the current one is answered with the file', async () => {
@@ -105,6 +115,36 @@ describe('asking again', () => {
     );
     expect(stale.status).toBe(200);
     expect(await stale.text()).toContain('<div id="root">');
+  });
+});
+
+describe('a file gone between being found and being sent', () => {
+  test('is the not-found envelope, through the one error handler', async () => {
+    const own = mkdtempSync(join(tmpdir(), 'vanishing-'));
+    writeFileSync(join(own, 'index.html'), '<!doctype html>');
+    writeFileSync(join(own, 'gone.txt'), 'here, then not');
+    const application = createApp(testDependencies({ client: openClient(own) }));
+    // Found by the lookup, removed before the handler opens it: the race a mounted build can lose.
+    const original = Bun.file;
+    let removed = false;
+    Bun.file = ((path: string) => {
+      if (!removed && path.endsWith('gone.txt')) {
+        rmSync(path);
+        removed = true;
+      }
+      return original(path);
+    }) as typeof Bun.file;
+    try {
+      const response = await send('/gone.txt', 'GET', application);
+      expect(removed).toBe(true);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: { code: 'ROUTE_NOT_FOUND', message: 'No such route.' },
+      });
+    } finally {
+      Bun.file = original;
+      rmSync(own, { recursive: true, force: true });
+    }
   });
 });
 
@@ -121,7 +161,7 @@ describe('what is never the shell', () => {
     },
   );
 
-  test.each(['/api/nope', '/api', '/auth/nope', '/health/nope'])(
+  test.each(['/api/nope', '/api', '/auth/nope', '/health/nope', '/%61pi/me', '/api%2Fme', '/ws/x'])(
     '%s is the API answering, never HTML a client would try to parse',
     async (path) => {
       const response = await send(path);
@@ -137,6 +177,19 @@ describe('what is never the shell', () => {
     // `%2e%2e` is `..` to the parser, so this arrives as `/etc/passwd`: a client route.
     const response = await send('/%2e%2e/%2e%2e/etc/passwd');
     expect(await response.text()).toContain('<div id="root">');
+  });
+
+  test('a plain request to /ws is not the shell', async () => {
+    const response = await send('/ws');
+    expect(response.headers.get('content-type') ?? '').not.toContain('text/html');
+    expect(response.status).toBeGreaterThanOrEqual(400);
+  });
+
+  test('HEAD is answered as GET is, without the body', async () => {
+    const response = await send('/', 'HEAD');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-security-policy')).toContain("script-src 'self'");
+    expect(await response.text()).toBe('');
   });
 
   test('a write to a client path is not the shell either', async () => {

@@ -100,7 +100,7 @@ export const responseHeaders = (appUrl: string): Record<string, string> => ({
  * until avatars come through the image proxy. `connect-src 'self'` covers the socket, a
  * same-origin `wss:` under CSP Level 3.
  */
-export const DOCUMENT_SECURITY_POLICY = [
+const DOCUMENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
@@ -113,6 +113,13 @@ export const DOCUMENT_SECURITY_POLICY = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join('; ');
+
+/** What the document carries in place of the API's policy (D-102). */
+export const DOCUMENT_HEADERS: Readonly<Record<string, string>> = {
+  'content-security-policy': DOCUMENT_SECURITY_POLICY,
+  // Sign-in is a top-level navigation, never a pop-up: nothing it opens needs a handle back.
+  'cross-origin-opener-policy': 'same-origin',
+};
 
 /** Bounded in length and in alphabet: it is written into logs and echoed in a header. */
 const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;

@@ -7,7 +7,7 @@
  * and the same error handler as every other route.
  */
 import { existsSync, statSync } from 'node:fs';
-import { isAbsolute, join, normalize, sep } from 'node:path';
+import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { ConfigurationError } from '../../platform/config';
 
 /** The paths the API owns. Anything else is the client's. */
@@ -17,24 +17,34 @@ export type Route = 'socket' | 'api' | 'client';
 
 export const routeOf = (pathname: string): Route => {
   if (pathname === '/ws') return 'socket';
-  if (API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+  if (
+    [...API_PREFIXES, '/ws'].some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+  ) {
     return 'api';
   }
   return 'client';
 };
 
+/** The path as a name, or null when its percent-encoding is malformed. */
+const decoded = (pathname: string): string | null => {
+  try {
+    return decodeURIComponent(pathname);
+  } catch (error) {
+    if (error instanceof URIError) return null;
+    throw error;
+  }
+};
+
 /** The file a path means inside `dist`, or null when it would climb out or cannot be a name. */
 export const fileFor = (dist: string, pathname: string): string | null => {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    return null;
-  }
+  const name = decoded(pathname);
+  if (name === null) return null;
   // A NUL ends the name at the system call, so `x.js%00.html` would be read as `x.js` after
   // being judged as `.html`.
-  if (decoded.includes('\0')) return null;
-  const candidate = normalize(join(dist, decoded));
+  if (name.includes('\0')) return null;
+  const candidate = normalize(join(dist, name));
   return candidate === dist || candidate.startsWith(dist + sep) ? candidate : null;
 };
 
@@ -52,12 +62,34 @@ export const openClient = (dist: string): Client => {
   if (!isAbsolute(dist)) {
     throw new ConfigurationError([`CLIENT_DIST: must be an absolute path (${dist})`]);
   }
-  const shell = join(dist, 'index.html');
-  if (!existsSync(shell) || !statSync(shell).isFile()) {
-    throw new ConfigurationError([`CLIENT_DIST: no index.html in ${dist}; build the client`]);
+  // Without a trailing separator, or every path would be judged outside `dist/`.
+  const root = resolve(dist);
+  const shell = join(root, 'index.html');
+  try {
+    if (!statSync(shell).isFile())
+      throw new ConfigurationError([`CLIENT_DIST: ${shell} is not a file`]);
+  } catch (error) {
+    if (error instanceof ConfigurationError) throw error;
+    // Named for what it is: an unreadable build is not a missing one.
+    const code = error instanceof Error && 'code' in error ? String(error.code) : 'unknown';
+    throw new ConfigurationError([
+      code === 'ENOENT'
+        ? `CLIENT_DIST: no index.html in ${root}; build the client`
+        : `CLIENT_DIST: ${shell} cannot be read (${code})`,
+    ]);
   }
-  return { dist: normalize(dist) };
+  return { dist: root };
 };
+
+/**
+ * Whether a request's `If-None-Match` names this version: one of a list, or `*` (RFC 9110
+ * §13.1.2, weak comparison).
+ */
+export const isUnchanged = (ifNoneMatch: string | null, etag: string): boolean =>
+  ifNoneMatch
+    ?.split(',')
+    .map((tag) => tag.trim())
+    .some((tag) => tag === '*' || tag.replace(/^W\//, '') === etag.replace(/^W\//, '')) ?? false;
 
 export interface ClientFile {
   readonly path: string;
@@ -85,7 +117,7 @@ const answer = (path: string, document: boolean, cacheControl: string): ClientFi
 };
 
 /** A file with a hash in its name never changes; everything else is asked about every time. */
-const IMMUTABLE = 'public, max-age=31536000, immutable';
+export const IMMUTABLE = 'public, max-age=31536000, immutable';
 const REVALIDATE = 'no-cache';
 
 const isAssetPath = (pathname: string): boolean =>
@@ -98,6 +130,9 @@ const isAssetPath = (pathname: string): boolean =>
  * other path is a client route, and the shell decides what it means.
  */
 export const clientFileFor = (client: Client, pathname: string): ClientFile | undefined => {
+  // Judged as the name it means: `/%61pi/me` is the API's path, spelled differently.
+  const name = decoded(pathname);
+  if (name === null || routeOf(name) !== 'client') return undefined;
   const path = fileFor(client.dist, pathname);
   if (path === null) return undefined;
   if (existsSync(path) && statSync(path).isFile()) {
