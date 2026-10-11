@@ -47,9 +47,12 @@ const SESSION_COOKIE = '__Host-purlay_session';
 /** The page's way to tell the test that the policy refused something. */
 const POLICY_REPORT = 'reportPolicyViolation';
 
+/** Sent through the same binding to mark that every report before it has arrived. */
+const SETTLED = '[settled]';
+
 declare global {
   interface Window {
-    reportPolicyViolation?: (text: string) => void;
+    reportPolicyViolation?: (text: string) => Promise<void>;
   }
 }
 
@@ -65,7 +68,11 @@ interface Fixtures {
    * the server's, so a refusal is a part of the interface that silently does not work in
    * production; every test fails on one. (Automatic: every test has it.)
    */
-  readonly securityPolicy: { readonly watch: (context: BrowserContext) => Promise<void> };
+  readonly securityPolicy: {
+    readonly watch: (context: BrowserContext) => Promise<void>;
+    /** Waits until every open page of the context has delivered what it reported. */
+    readonly settle: (context: BrowserContext) => Promise<void>;
+  };
   readonly world: World;
   /** Carries the genuine session cookie of one of the seeded people; returns where it signed in. */
   readonly signIn: (persona?: Persona) => Promise<void>;
@@ -107,19 +114,46 @@ export const test = base.extend<Fixtures>({
       const refused: string[] = [];
       const watch = async (watched: BrowserContext): Promise<void> => {
         await watched.exposeBinding(POLICY_REPORT, (_source, text: string) => {
-          refused.push(text);
+          if (text !== SETTLED) refused.push(text);
+        });
+        // A second witness, which needs no script in the page: the browser's own line. A page
+        // with JavaScript off is held to the policy too.
+        watched.on('console', (message) => {
+          if (message.type() === 'error' && message.text().includes('Content Security Policy')) {
+            refused.push(message.text());
+          }
         });
         // Before any script of the page runs, so a refusal during the first paint is seen.
         await watched.addInitScript(() => {
-          document.addEventListener('securitypolicyviolation', (event) => {
-            window.reportPolicyViolation?.(
-              `${event.effectiveDirective} refused ${event.blockedURI || 'inline'}`,
-            );
-          });
+          document.addEventListener(
+            'securitypolicyviolation',
+            (event) => {
+              void window.reportPolicyViolation?.(
+                `${event.effectiveDirective} refused ${event.blockedURI || 'inline'}`,
+              );
+            },
+            true,
+          );
         });
       };
+      const settle = async (watched: BrowserContext): Promise<void> => {
+        for (const page of watched.pages()) {
+          if (page.isClosed()) continue;
+          // A report is delivered after the event that caused it, and in order: a frame, a task,
+          // then a mark through the same binding means everything before it has arrived.
+          await page.evaluate(async (mark) => {
+            await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => {
+                setTimeout(resolve, 0);
+              });
+            });
+            await window.reportPolicyViolation?.(mark);
+          }, SETTLED);
+        }
+      };
       await watch(context);
-      await use({ watch });
+      await use({ watch, settle });
+      await settle(context);
       expect(refused, "the document's security policy refused these").toEqual([]);
     },
     { auto: true },
@@ -181,6 +215,8 @@ export const test = base.extend<Fixtures>({
       await signInAs(context, baseURL ?? '', world.personas[persona].token);
       return await context.newPage();
     });
+    // Before they close: what the last action made a page report must not die with it.
+    for (const context of contexts) await securityPolicy.settle(context);
     for (const context of contexts) await context.close();
   },
 

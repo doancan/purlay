@@ -57,16 +57,23 @@ const proxy = async (request: Request, url: URL, api: string): Promise<Response>
   for (const name of HOP_BY_HOP) headers.delete(name);
   // Asked for plain bytes so the answer can be passed on as it came, headers and all.
   headers.set('accept-encoding', 'identity');
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  // Read before the call, so a client that went away is not blamed on the API.
+  const body =
+    request.method !== 'GET' && request.method !== 'HEAD' ? await request.arrayBuffer() : null;
   let upstream: Response;
   try {
     upstream = await fetch(`${api}${url.pathname}${url.search}`, {
       method: request.method,
       headers,
       redirect: 'manual',
-      ...(hasBody ? { body: await request.arrayBuffer() } : {}),
+      ...(body === null ? {} : { body }),
     });
-  } catch {
+  } catch (error) {
+    // Every page and file comes through here: a 502 with no cause would leave a browser test
+    // failing on a missing chunk with nothing to say why.
+    process.stderr.write(
+      `demo proxy: ${request.method} ${url.pathname} failed: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     return new Response('The API is not answering.', { status: 502 });
   }
   const answer = new Headers(upstream.headers);
