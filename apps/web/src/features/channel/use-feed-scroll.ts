@@ -76,36 +76,57 @@ export const useFeedScroll = ({
   // False until the reader has been placed: a read position must not be sent on a guess made before layout.
   const [atBottom, setAtBottom] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
-  // The truth as of the last scroll or placement, read before an update lands: whether the
-  // reader *was* at the bottom is what decides whether to follow what arrived.
-  const wasAtBottom = useRef(true);
+  // Set by `holdPlace` until the reader is next placed or scrolls: what changes below is theirs.
+  const held = useRef(false);
   const placed = useRef(false);
   const before = useRef({
     first: null as string | null,
     last: null as string | null,
     top: 0,
     height: 0,
+    client: 0,
     anchor: null as Anchor | null,
   });
 
   const settle = useCallback((el: HTMLElement): void => {
     const near = isNearBottom(el);
-    wasAtBottom.current = near;
+    held.current = false;
     setAtBottom(near);
     if (near) setNewBelow(0);
   }, []);
+
+  /**
+   * Whether the reader was at the bottom before this change — measured now, not taken from
+   * the last scroll report. A browser reports a scroll on the next frame, and under load a
+   * message can land first: the report would still say "at the bottom" and the reader who had
+   * just scrolled up would be carried down. The position is current; the heights are the ones
+   * the content and the box had before the change.
+   */
+  const wasAtBottom = (el: HTMLElement): boolean =>
+    !held.current &&
+    isNearBottom({
+      scrollTop: el.scrollTop,
+      scrollHeight: before.current.height,
+      clientHeight: before.current.client,
+    });
+
+  /** The place a later change is measured from: where the reader is now. */
+  const remember = (el: HTMLElement, ids: { first: string | null; last: string | null }): void => {
+    before.current = {
+      ...ids,
+      top: el.scrollTop,
+      height: el.scrollHeight,
+      client: el.clientHeight,
+      anchor: readAnchor(el),
+    };
+  };
 
   const onScroll = useCallback((): void => {
     const el = scroller.current;
     if (el === null) return;
     settle(el);
     // Where the reader is *now* is what a later prepend must give back to them.
-    before.current = {
-      ...before.current,
-      top: el.scrollTop,
-      height: el.scrollHeight,
-      anchor: readAnchor(el),
-    };
+    remember(el, before.current);
   }, [scroller, settle]);
 
   const jumpToBottom = useCallback((): void => {
@@ -139,7 +160,7 @@ export const useFeedScroll = ({
     } else if (last !== previous.last) {
       const own =
         [...items].reverse().find((item) => item.kind === 'message')?.message.sender.id === meId;
-      if (wasAtBottom.current || own) {
+      if (own || wasAtBottom(el)) {
         scrollToBottom(el);
         settle(el);
       } else {
@@ -151,15 +172,12 @@ export const useFeedScroll = ({
             item.message.sender.id !== meId,
         ).length;
         setNewBelow((count) => count + arrived);
+        // The scroll that put them here may not be reported yet; the pill, and whether this
+        // counts as read, follow the place measured now.
+        settle(el);
       }
     }
-    before.current = {
-      first,
-      last,
-      top: el.scrollTop,
-      height: el.scrollHeight,
-      anchor: readAnchor(el),
-    };
+    remember(el, { first, last });
   }, [items, ready, meId, scroller, settle]);
 
   // The box around the feed or the content inside it changed size: a reader at the bottom stays there.
@@ -168,18 +186,13 @@ export const useFeedScroll = ({
     const inner = content.current;
     if (el === null || inner === null) return undefined;
     return ports.whenResized([el, inner], () => {
-      if (wasAtBottom.current) scrollToBottom(el);
-      before.current = {
-        ...before.current,
-        top: el.scrollTop,
-        height: el.scrollHeight,
-        anchor: readAnchor(el),
-      };
+      if (wasAtBottom(el)) scrollToBottom(el);
+      remember(el, before.current);
     });
   }, [scroller, content, ports, showing]);
 
   const holdPlace = useCallback((): void => {
-    wasAtBottom.current = false;
+    held.current = true;
   }, []);
 
   return { atBottom, newBelow, onScroll, jumpToBottom, holdPlace };

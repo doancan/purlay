@@ -463,4 +463,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "    log.debug('markdown engine failed inside its bounds', {",
     tests: ['apps/api/src/modules/messages/markdown.integration.test.ts'],
   },
+  {
+    id: 'feed-measures-against-the-box-as-it-is-now',
+    why: 'a reader at the bottom of a box that just shrank reads as scrolled up, and is left above what arrives',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: 'clientHeight: before.current.client,',
+    replace: 'clientHeight: el.clientHeight,',
+    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+  },
+  {
+    id: 'feed-pill-waits-for-the-scroll-report',
+    why: 'a reader not carried down is shown no pill and counted as at the bottom until the browser reports the scroll',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: '        // counts as read, follow the place measured now.\n        settle(el);\n',
+    replace: '        // counts as read, follow the place measured now.\n',
+    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+  },
 ];

@@ -273,6 +273,55 @@ describe('what arrives while the reader is somewhere', () => {
     view.unmountAll();
   });
 
+  // A browser reports a scroll on the next frame. Under load a message can land before that
+  // frame, so the reader's place is what the scroller says now, not what the last report said.
+  test('a scroll up the browser has not reported yet still keeps the reader where they are', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.top = 100; // scrolled up; no scroll event yet
+    view.metrics.assigned.length = 0;
+    await arrive(view, aMessage(3, { sender: BOB }));
+    expect(view.metrics.assigned).toEqual([]);
+    expect(view.getByRole('button', { name: '1 new message' })).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('a scroll down to the bottom the browser has not reported yet is followed', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    scrollTo(view, 0);
+    view.metrics.top = 590; // back at the bottom; no scroll event yet
+    view.metrics.assigned.length = 0;
+    await arrive(view, aMessage(3, { sender: BOB }));
+    expect(view.metrics.assigned).toContain(BOTTOM);
+    view.unmountAll();
+  });
+
+  test('a box that changes size before a scroll up is reported leaves the reader alone', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.top = 100; // scrolled up; no scroll event yet
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1200;
+    act(() => {
+      view.feed.resize();
+    });
+    expect(view.metrics.assigned).toEqual([]);
+    view.unmountAll();
+  });
+
+  test('a box that shrinks under a reader at the bottom keeps them there', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.clientHeight = 100; // the window got 300px shorter; the content did not move
+    act(() => {
+      view.feed.resize();
+    });
+    expect(view.metrics.assigned).toEqual([900]);
+    view.unmountAll();
+  });
+
   test("the person's own send always takes them to it, wherever they were", async () => {
     const view = await mountChannel({ messages: page(first) });
     open(view);
