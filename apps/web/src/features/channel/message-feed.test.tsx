@@ -286,6 +286,17 @@ describe('what arrives while the reader is somewhere', () => {
     view.unmountAll();
   });
 
+  test('at the bottom when a tall message lands, the reader follows it: judged by where the bottom was', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300; // the message that arrives is 300px tall
+    await arrive(view, aMessage(3, { sender: BOB }));
+    expect(view.metrics.assigned).toContain(900);
+    expect(view.queryByRole('button', { name: /new message/ })).toBeNull();
+    view.unmountAll();
+  });
+
   test('a scroll down to the bottom the browser has not reported yet is followed', async () => {
     const view = await mountChannel({ messages: page(first) });
     open(view);
@@ -404,6 +415,37 @@ describe('older messages', () => {
     expect(view.metrics.assigned.at(-1)).toBe(700); // 100 + 600
     expect(view.getByText('This is the beginning of the channel')).toBeDefined();
     expect(view.feed.live.visible).toBe(0);
+    view.unmountAll();
+  });
+
+  test('a page that lands after the box changed size gives the reader the place they had since', async () => {
+    let release: (value: ReturnType<typeof page>) => void = () => undefined;
+    const view = await mountChannel({
+      api: {
+        messages: (_c, query) =>
+          query?.before === undefined
+            ? Promise.resolve(page(newer, messageIdAt(5)))
+            : new Promise((resolve) => {
+                release = resolve;
+              }),
+      },
+    });
+    scrollTo(view, 200);
+    view.metrics.scrollHeight = 1600; // something below grew while the reader read
+    act(() => {
+      view.feed.resize();
+    });
+    act(() => {
+      view.feed.sentinelVisible();
+    });
+    await settle();
+    view.metrics.scrollHeight = 2000; // the older page is 400px taller
+    await act(async () => {
+      release(page(older));
+      await Promise.resolve();
+    });
+    await settle();
+    expect(view.metrics.assigned.at(-1)).toBe(600); // 200 + 400, measured from 1600
     view.unmountAll();
   });
 

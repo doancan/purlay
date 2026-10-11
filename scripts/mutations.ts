@@ -479,4 +479,48 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '        // counts as read, follow the place measured now.\n',
     tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
   },
+  {
+    id: 'feed-hold-for-a-thread-ignored',
+    why: 'opening a thread on the last message drags the reader to the bottom of the feed',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: '    held.current = true;\n',
+    replace: '',
+    tests: [
+      'apps/web/src/features/channel/message-feed.test.tsx',
+      'apps/web/src/features/threads/thread.test.tsx',
+    ],
+  },
+  {
+    id: 'feed-hold-never-released',
+    why: 'a reader who once opened a thread is never followed to the bottom again in that channel',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: '    held.current = false;\n',
+    replace: '',
+    tests: [
+      'apps/web/src/features/channel/message-feed.test.tsx',
+      'apps/web/src/features/threads/thread.test.tsx',
+    ],
+  },
+  {
+    id: 'feed-resize-forgets-the-place',
+    why: 'an older page that lands after the box changed size sends the reader to where they were before it',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: '      if (wasAtBottom(el)) scrollToBottom(el);\n      remember(el, before.current);\n',
+    replace: '      if (wasAtBottom(el)) scrollToBottom(el);\n',
+    tests: [
+      'apps/web/src/features/channel/message-feed.test.tsx',
+      'apps/web/src/features/threads/thread.test.tsx',
+    ],
+  },
+  {
+    id: 'feed-arrival-judged-after-it-landed',
+    why: 'a reader at the bottom is left above any message taller than 80px, the commonest arrival there is',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: 'if (own || wasAtBottom(el)) {',
+    replace: 'if (own || (!held.current && isNearBottom(el))) {',
+    tests: [
+      'apps/web/src/features/channel/message-feed.test.tsx',
+      'apps/web/src/features/threads/thread.test.tsx',
+    ],
+  },
 ];
