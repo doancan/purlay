@@ -8,7 +8,7 @@
  * the properties a later edit can lose without any test noticing.
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const repo = join(import.meta.dir, '..');
@@ -54,6 +54,34 @@ describe('the Dockerfile', () => {
 
   test('is copied from explicit paths, never from the whole context', () => {
     expect(dockerfile).not.toMatch(/^COPY\s+\.\s/m);
+  });
+});
+
+/** Every workspace in the repository: each directory under `apps/` and `packages/` with a manifest. */
+const workspaces = (): readonly string[] =>
+  ['apps', 'packages'].flatMap((root) =>
+    readdirSync(join(repo, root))
+      .map((name) => `${root}/${name}`)
+      .filter((dir) => existsSync(join(repo, dir, 'package.json'))),
+  );
+
+/** The workspaces whose manifest the stage that installs does not copy. */
+const uncopiedManifests = (text: string, dirs: readonly string[]): readonly string[] => {
+  const install = text.slice(0, text.search(/^RUN bun install/m));
+  return dirs.filter((dir) => !install.includes(`COPY ${dir}/package.json ${dir}/package.json`));
+};
+
+// `--frozen-lockfile` refuses a checkout that lacks any workspace another one depends on. The tokens
+// manifest was missing for as long as CI could not run, so the image did not build at all (#326).
+describe('the install stage', () => {
+  test('the checker reports a manifest that is not copied', () => {
+    const one = 'COPY apps/api/package.json apps/api/package.json\nRUN bun install\n';
+    expect(uncopiedManifests(one, ['apps/api', 'packages/tokens'])).toEqual(['packages/tokens']);
+  });
+
+  test('copies the manifest of every workspace, before it installs', () => {
+    expect(workspaces().length).toBeGreaterThan(5);
+    expect(uncopiedManifests(dockerfile, workspaces())).toEqual([]);
   });
 });
 

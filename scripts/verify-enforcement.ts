@@ -148,6 +148,21 @@ const VIOLATIONS: readonly Violation[] = [
       "import { systemClock } from '../../api/src/platform/clock';\n\nexport const use = (): unknown => systemClock;\n",
   },
   {
+    rule: 'the markdown reading runs in the browser: no Node module (D-101)',
+    ruleId: 'no-restricted-imports',
+    path: 'packages/markdown/src/__enforcement__.ts',
+    source:
+      "import { readFileSync } from 'node:fs';\n\nexport const use = (): unknown => readFileSync;\n",
+  },
+  {
+    rule: 'the markdown reading may use the contracts',
+    ruleId: 'no-restricted-imports',
+    path: 'packages/markdown/src/__enforcement__.ts',
+    source:
+      "import { MESSAGE_CONTENT_MAX } from '@purlay/types';\n\nexport const use = (): number => MESSAGE_CONTENT_MAX;\n",
+    allowed: true,
+  },
+  {
     rule: 'the browser may not reach for Bun APIs (ARCHITECTURE.md §4)',
     ruleId: 'no-restricted-globals',
     path: 'apps/web/src/__enforcement__.ts',

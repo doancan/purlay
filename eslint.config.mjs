@@ -472,6 +472,35 @@ export default defineConfig([
     },
   },
 
+  // The markdown reading runs on both sides: the server parses at write time and the browser
+  // renders the same tree (D-101). One import of a server-only module and the client build
+  // breaks, or worse, bundles something it cannot run — so it imports neither.
+  {
+    files: ['packages/markdown/src/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@purlay/db', '**/apps/**', 'node:*', 'bun', 'bun:*'],
+              message:
+                'packages/markdown runs in the browser as well as the server: no database, no app, no Node or Bun module. (D-101)',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'Bun',
+          message: 'packages/markdown runs in a browser too. Bun APIs do not exist there.',
+        },
+      ],
+    },
+  },
+
   // This file configures the linter; it is not product code and has no tsconfig
   // project of its own. Format and syntax still apply; type-aware rules do not,
   // and neither does a rule asking for return-type annotations in a JavaScript

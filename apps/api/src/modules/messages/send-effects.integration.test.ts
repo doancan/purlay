@@ -348,12 +348,14 @@ describe('integration: a reply', () => {
     });
   });
 
-  test('answering your own thread tells nobody who has not joined it', async () => {
+  test('answering your own thread tells nobody who has not joined it, yourself included', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const root = await post(db, room, 'alice', 'question');
       await post(db, room, 'alice', 'an update', { parentId: root.message.id });
       expect(await notificationsOf(db, idOf(room, 'bob'))).toEqual([]);
+      // The root's author is a thread participant, and here also the sender: told nothing.
+      expect(await notificationsOf(db, idOf(room, 'alice'))).toEqual([]);
       expect(await counters(db, room, idOf(room, 'alice'))).toMatchObject({
         unread: 0,
         mentions: 0,

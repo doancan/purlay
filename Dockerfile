@@ -26,6 +26,8 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/markdown/package.json packages/markdown/package.json
+COPY packages/tokens/package.json packages/tokens/package.json
 COPY packages/types/package.json packages/types/package.json
 
 # Production dependencies of the API and the packages it uses; no dev tooling, no
@@ -41,6 +43,7 @@ ENV NODE_ENV=production \
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=dependencies /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=dependencies /app/packages/markdown/node_modules ./packages/markdown/node_modules
 COPY --from=dependencies /app/packages/types/node_modules ./packages/types/node_modules
 COPY package.json ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -48,6 +51,8 @@ COPY apps/api/src ./apps/api/src
 COPY packages/db/package.json ./packages/db/package.json
 COPY packages/db/src ./packages/db/src
 COPY packages/db/migrations ./packages/db/migrations
+COPY packages/markdown/package.json ./packages/markdown/package.json
+COPY packages/markdown/src ./packages/markdown/src
 COPY packages/types/package.json ./packages/types/package.json
 COPY packages/types/src ./packages/types/src
 

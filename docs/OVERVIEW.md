@@ -62,6 +62,7 @@ looking for the error codes to a file that does not have them.
 | What the database schema *is* | `packages/db/migrations/` — the types are generated from it, never written (D-45) |
 | The wire contract: models, socket frames, HTTP shapes, error codes | `packages/types/` — authored as schemas, the types derived (`ARCHITECTURE.md` §2) |
 | Which string formats exist | `packages/types/src/formats.ts` — an unregistered format rejects every value |
+| What markdown the product accepts, what it renders, and the bounds past which a body is shown as typed | `packages/markdown/` — one reading for the server and the browser; its tests are the definition (D-101) |
 | What a message id is, and how a client makes one | `packages/types/src/message-id.ts` — the rule and the generator together, bound by a test (D-8, D-33) |
 | The CSS custom properties, the Tailwind vocabulary and the token names | `packages/tokens/src/generated/` — generated from `tokens.json`, never written (D-97) |
 | Which icons exist, and what each means | `glyphs` in `apps/web/src/components/icon.tsx` (D-97) |
