@@ -62,6 +62,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   sender's counters, which a different filter keeps, and never the sender's notification rows. It now
   does, and `scripts/mutations.ts` removes the guard to prove the test goes red.
 
+### Docs — 2026-10-10: one verification command, and how a fresh clone reaches the database
+
+- `CONTRIBUTING.md` §7 and §8 named `typecheck && lint && bun test` as the check before a PR — the unit
+  tests alone — while §2 says `bun run verify` is the gate CI runs. Both now point at `verify`.
+- §2 says where `DATABASE_URL` comes from locally (a `.env` Bun reads, the compose database's URL);
+  without it the integration tests were skipped behind a banner and nothing said how to turn them on.
+
 ### Feature — 2026-10-10: the browser tests, the demo and the budgets (D-49, D-50, D-98)
 
 - **`bun run demo`** builds the client, recreates a scratch database, seeds a believable workspace
