@@ -54,7 +54,7 @@ test.describe('the swap', () => {
     // The skeleton, as a browser without JavaScript paints it (with the same cookie: it is
     // the same page, and a signed-in person sees exactly this first).
     const bare = await browser.newContext({ javaScriptEnabled: false, baseURL: baseURL ?? '' });
-    await securityPolicy.watch(bare);
+    await securityPolicy.watch(bare, { scripts: false });
     await bare.addCookies(await context.cookies());
     const before = await bare.newPage();
     await before.goto(route);

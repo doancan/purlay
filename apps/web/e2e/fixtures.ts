@@ -69,7 +69,8 @@ interface Fixtures {
    * production; every test fails on one. (Automatic: every test has it.)
    */
   readonly securityPolicy: {
-    readonly watch: (context: BrowserContext) => Promise<void>;
+    /** `scripts: false` for a context made with JavaScript off: its pages cannot be asked anything. */
+    readonly watch: (context: BrowserContext, options?: { scripts?: boolean }) => Promise<void>;
     /** Waits until every open page of the context has delivered what it reported. */
     readonly settle: (context: BrowserContext) => Promise<void>;
   };
@@ -110,9 +111,16 @@ export const test = base.extend<Fixtures>({
   ],
 
   securityPolicy: [
-    async ({ context }, use): Promise<void> => {
+    async ({ context, javaScriptEnabled }, use): Promise<void> => {
       const refused: string[] = [];
-      const watch = async (watched: BrowserContext): Promise<void> => {
+      // A page with JavaScript off runs no script and answers no evaluation — not even
+      // Playwright's — so it is settled by the console witness alone.
+      const scriptless = new WeakSet<BrowserContext>();
+      const watch = async (
+        watched: BrowserContext,
+        options: { scripts?: boolean } = {},
+      ): Promise<void> => {
+        if (options.scripts === false) scriptless.add(watched);
         await watched.exposeBinding(POLICY_REPORT, (_source, text: string) => {
           if (text !== SETTLED) refused.push(text);
         });
@@ -137,21 +145,24 @@ export const test = base.extend<Fixtures>({
         });
       };
       const settle = async (watched: BrowserContext): Promise<void> => {
+        if (scriptless.has(watched)) return;
         for (const page of watched.pages()) {
           if (page.isClosed()) continue;
           // A report is delivered after the event that caused it, and in order: a frame, a task,
           // then a mark through the same binding means everything before it has arrived.
           await page.evaluate(async (mark) => {
+            const report = window.reportPolicyViolation;
+            if (report === undefined) return;
             await new Promise<void>((resolve) => {
               requestAnimationFrame(() => {
                 setTimeout(resolve, 0);
               });
             });
-            await window.reportPolicyViolation?.(mark);
+            await report(mark);
           }, SETTLED);
         }
       };
-      await watch(context);
+      await watch(context, { scripts: javaScriptEnabled });
       await use({ watch, settle });
       await settle(context);
       expect(refused, "the document's security policy refused these").toEqual([]);
