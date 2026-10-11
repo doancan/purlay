@@ -44,6 +44,15 @@ interface World {
 
 const SESSION_COOKIE = '__Host-purlay_session';
 
+/** The page's way to tell the test that the policy refused something. */
+const POLICY_REPORT = 'reportPolicyViolation';
+
+declare global {
+  interface Window {
+    reportPolicyViolation?: (text: string) => void;
+  }
+}
+
 interface Fixtures {
   /**
    * Every answer `429` the server gave to a page of this test, named. The write budget is per
@@ -51,6 +60,12 @@ interface Fixtures {
    * later; this fails it first, saying what happened. (Automatic: every test has it.)
    */
   readonly throttling: { readonly watch: (context: BrowserContext) => void };
+  /**
+   * Every load or style the document's security policy refused (D-102), named. The policy is
+   * the server's, so a refusal is a part of the interface that silently does not work in
+   * production; every test fails on one. (Automatic: every test has it.)
+   */
+  readonly securityPolicy: { readonly watch: (context: BrowserContext) => Promise<void> };
   readonly world: World;
   /** Carries the genuine session cookie of one of the seeded people; returns where it signed in. */
   readonly signIn: (persona?: Persona) => Promise<void>;
@@ -83,6 +98,29 @@ export const test = base.extend<Fixtures>({
       watch(context);
       await use({ watch });
       expect(refused, 'the server refused these for want of write budget (429)').toEqual([]);
+    },
+    { auto: true },
+  ],
+
+  securityPolicy: [
+    async ({ context }, use): Promise<void> => {
+      const refused: string[] = [];
+      const watch = async (watched: BrowserContext): Promise<void> => {
+        await watched.exposeBinding(POLICY_REPORT, (_source, text: string) => {
+          refused.push(text);
+        });
+        // Before any script of the page runs, so a refusal during the first paint is seen.
+        await watched.addInitScript(() => {
+          document.addEventListener('securitypolicyviolation', (event) => {
+            window.reportPolicyViolation?.(
+              `${event.effectiveDirective} refused ${event.blockedURI || 'inline'}`,
+            );
+          });
+        });
+      };
+      await watch(context);
+      await use({ watch });
+      expect(refused, "the document's security policy refused these").toEqual([]);
     },
     { auto: true },
   ],
@@ -125,7 +163,7 @@ export const test = base.extend<Fixtures>({
     await use((options) => makeRoom(tenant, options));
   },
 
-  asPerson: async ({ browser, baseURL, world, throttling }, use, testInfo) => {
+  asPerson: async ({ browser, baseURL, world, throttling, securityPolicy }, use, testInfo) => {
     const contexts: BrowserContext[] = [];
     await use(async (persona) => {
       const { colorScheme, viewport, reducedMotion, locale, timezoneId } = testInfo.project.use;
@@ -139,6 +177,7 @@ export const test = base.extend<Fixtures>({
       });
       contexts.push(context);
       throttling.watch(context);
+      await securityPolicy.watch(context);
       await signInAs(context, baseURL ?? '', world.personas[persona].token);
       return await context.newPage();
     });

@@ -5,6 +5,9 @@
  * client's files as well as for itself. What is here decides, for a path, whose it is
  * and which file it means; `app.ts` turns that into a response through the same hooks
  * and the same error handler as every other route.
+ *
+ * The demo's front server sends everything but its login to the API, so the browser tests
+ * exercise this file rather than a copy of it.
  */
 import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
