@@ -3912,7 +3912,8 @@ choose a markdown package. The renderer recognises fenced code, inline code and 
 emits React nodes (never `dangerouslySetInnerHTML`, so there is no HTML to sanitise), and shows
 everything else literally with its line breaks. It is one function, `renderContent`, which O-6's
 renderer replaces without touching a caller. *(Amended 2026-10-11: O-6 is closed by D-101 — one
-engine on both sides, so there is no separate server sanitiser to choose; the renderer is #43.)* Fenced code is highlighted by Shiki with grammars
+engine on both sides, so there is no separate server sanitiser to choose. #43 replaced the renderer:
+`renderContent` now draws D-101's narrowed tree, and the three exceptions are gone.)* Fenced code is highlighted by Shiki with grammars
 loaded on first use (D-36), coloured by the `--syntax-*` tokens, so the initial chunk holds none.
 
 **5 · Read position is the server's.** The unread marker is placed at `last_read_message_id`,
@@ -4192,16 +4193,16 @@ literal, a string, or a spread of a real one is not a `SafeHref`; the instance, 
 class are frozen. An assertion to one is a lint error with no exemption, as D-54's is for a context,
 and inside `packages/markdown` any assertion is, because a cast to a node that holds an address
 (`as unknown as Inline`) skips the check without naming it. A rule by name cannot see an alias or a
-type guard, so the renderer (#43) is to check `instanceof SafeHref` too, drawing the label as text
-when a link fails it: types and lint stop the mistake, the check at the point of use holds against it. Rejected: *D-54's symbol key on the tree's
+type guard, so the renderer checks `instanceof SafeHref` too, drawing the label as text when a link
+fails it: types and lint stop the mistake, the check at the point of use holds against it. Rejected: *D-54's symbol key on the tree's
 root*, because a spread copies a symbol key, so `{ ...tree, children: [any link] }` would type-check
 as a checked tree — the brand guarded the container, and the danger is one field inside it; and *a
 branded string*, which cannot be produced without the very assertion the lint rule forbids, so the
 rule would need an exemption in the file that matters most. D-54 rejected a class for a context
 because a context must survive serialisation; a tree is built where it is drawn and is never sent.
 The shape of a mention (`mentionsIn`) lives in the same package for the same reason as §7: the
-server resolves the names it matches, and the renderer (#43) is to highlight with the same pattern,
-retiring the copy the client keeps until then, which disagrees on any letter outside ASCII.
+server resolves the names it matches, and the renderer highlights with the same pattern, which
+retired the client's own copy — it disagreed on any letter outside ASCII.
 
 **Rejected.**
 
