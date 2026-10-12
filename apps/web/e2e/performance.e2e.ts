@@ -230,6 +230,15 @@ test.describe('interaction latency', () => {
       description: `p50 ${numbers.p50.toFixed(1)} ms · p95 ${numbers.p95.toFixed(1)} ms · max ${numbers.max.toFixed(1)} ms`,
     });
     expect(numbers.p95).toBeLessThan(100);
+    // The page measured each switch itself (O-5): what a week of real use is read from, with nothing
+    // sent anywhere. Same order of magnitude as the test's own clock, which starts a click earlier.
+    const inPage = await page.evaluate(() =>
+      performance
+        .getEntriesByName('purlay:channel-switch', 'measure')
+        .map((entry) => entry.duration),
+    );
+    expect(inPage.length).toBeGreaterThanOrEqual(22);
+    expect(summary(inPage).p95).toBeLessThan(100);
   });
 });
 

@@ -10,6 +10,7 @@
  * snapshots by identity; building a fresh one on every read would make every
  * subscriber re-render on every render.
  */
+import { markRoute } from '../app/switch-timing';
 import { matchRoute, type Match } from './routes';
 
 export interface HistoryPort {
@@ -65,6 +66,8 @@ export const createRouter = (history: HistoryPort): Router => {
     const next = locate();
     if (next.pathname === current.pathname && next.search === current.search) return;
     current = next;
+    // Where a channel switch begins, for the feed to measure to (O-5).
+    markRoute();
     for (const listener of listeners) listener();
   };
 
