@@ -230,7 +230,8 @@ test.describe('resolving', () => {
     const instant = await measure('reduce');
     // No size in between. How many frames it takes is the server's answer time, not motion.
     expect(instant.length).toBeGreaterThan(0);
-    expect(new Set(instant).size).toBe(1);
+    // The heights travel with a failure: it has been seen once under load (#347).
+    expect(new Set(instant).size, `heights: ${JSON.stringify(instant)}`).toBe(1);
   });
 });
 

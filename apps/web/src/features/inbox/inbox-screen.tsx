@@ -1,0 +1,224 @@
+/**
+ * The inbox (D-106, `UX.md` §8): what the person was told in this workspace — named, written to
+ * directly, answered in a thread, their question resolved — newest first, from channels they can
+ * still see.
+ *
+ * A row is a button that takes the person to the message: its thread when it is a reply or the
+ * question that was resolved, its channel otherwise. Unread is said as the sidebar says it.
+ */
+import { useMemo } from 'react';
+import type { Channel, Notification } from '@purlay/types';
+import { Icon, type GlyphName } from '../../components/icon';
+import { useChannels, useNotifications } from '../../data/queries';
+import { useI18n } from '../../i18n/i18n-provider';
+import { href, threadHref } from '../../router/routes';
+import { useRoute } from '../../router/router-provider';
+import { Avatar } from '../../ui/avatar';
+import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
+import { LoadingStatus, Skeleton } from '../../ui/skeleton';
+import { ErrorState } from '../../ui/states';
+import { VisuallyHidden } from '../../ui/visually-hidden';
+import { HeaderTile, useChannelTitle } from '../channel/channel-header';
+import { useFeedPorts } from '../channel/feed-ports';
+import { NavToggle } from '../shell/nav';
+import { useWorkspace } from '../shell/workspace';
+
+const glyphOf = (type: Notification['type']): GlyphName => {
+  switch (type) {
+    case 'mention':
+      return 'notifications';
+    case 'direct_message':
+      return 'person';
+    case 'thread_reply':
+      return 'reply';
+    case 'thread_resolved':
+      return 'resolved';
+  }
+};
+
+/** Why the person was told, in words: who did it, except for a resolution of their own question. */
+const useWhy = (): ((notification: Notification) => string) => {
+  const { t } = useI18n();
+  return (notification) => {
+    const name = notification.message.sender.username;
+    switch (notification.type) {
+      case 'mention':
+        return t('inbox.why.mention', { name });
+      case 'direct_message':
+        return t('inbox.why.direct', { name });
+      case 'thread_reply':
+        return t('inbox.why.reply', { name });
+      case 'thread_resolved':
+        return t('inbox.why.resolved');
+    }
+  };
+};
+
+/** Where a notification takes the person: the thread a reply or a resolution belongs to, or the channel. */
+export const targetOf = (slug: string, notification: Notification): string => {
+  const { message } = notification;
+  if (message.parentId !== null) return threadHref(slug, message.channelId, message.parentId);
+  if (notification.type === 'thread_resolved' || notification.type === 'thread_reply') {
+    return threadHref(slug, message.channelId, message.id);
+  }
+  return href('channel', { slug, channelId: message.channelId });
+};
+
+const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
+  <span className="font-mono">{useChannelTitle(channel)}</span>
+);
+
+const Row = ({
+  notification,
+  channel,
+  now,
+  onOpen,
+}: {
+  readonly notification: Notification;
+  readonly channel: Channel | undefined;
+  readonly now: Date;
+  readonly onOpen: (notification: Notification) => void;
+}): React.JSX.Element => {
+  const { t, format } = useI18n();
+  const { message } = notification;
+  const why = useWhy();
+  const unread = notification.readAt === null;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => {
+          onOpen(notification);
+        }}
+        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left hover:bg-surface-200"
+      >
+        <Avatar name={message.sender.displayName} username={message.sender.username} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-2 text-label text-ink-muted">
+            <Icon name={glyphOf(notification.type)} size="sm" />
+            <span className={cn(unread && 'font-medium text-ink')}>
+              {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
+              {why(notification)}
+            </span>
+            <span aria-hidden="true">·</span>
+            {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
+            <time dateTime={notification.createdAt} className="ml-auto font-mono text-caption">
+              {format.time(notification.createdAt, now)}
+            </time>
+          </span>
+          {/* Unread is said as the sidebar says it: in full ink, and read is muted (#58). */}
+          <span className={cn('block truncate text-body', unread ? 'text-ink' : 'text-ink-muted')}>
+            {message.content}
+          </span>
+        </span>
+      </button>
+    </li>
+  );
+};
+
+export const InboxScreen = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  const { navigate } = useRoute();
+  const ports = useFeedPorts();
+  const query = useNotifications(workspace.id);
+  const channels = useChannels(workspace.id);
+  const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
+  const all = useMemo(() => (query.data?.pages ?? []).flatMap((page) => page.data), [query.data]);
+  const now = ports.clock.now();
+
+  const open = (notification: Notification): void => {
+    navigate(targetOf(workspace.slug, notification));
+  };
+
+  let body: React.JSX.Element;
+  if (query.isPending) {
+    body = (
+      <LoadingStatus
+        label={t('state.inbox.loading')}
+        className="mx-auto flex w-full max-w-feed flex-col gap-4 px-4 py-4"
+      >
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="flex flex-col gap-2">
+            <Skeleton className="w-members" />
+            <Skeleton className="w-feed" />
+          </div>
+        ))}
+      </LoadingStatus>
+    );
+  } else if (query.isError && query.data === undefined) {
+    body = (
+      <ErrorState
+        title={t('state.inbox.error.title')}
+        body={t('state.inbox.error.body')}
+        retryLabel={t('common.retry')}
+        onRetry={() => {
+          void query.refetch();
+        }}
+      />
+    );
+  } else if (all.length === 0) {
+    body = (
+      <section className="mx-auto flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
+        <span
+          aria-hidden="true"
+          className="inline-flex size-avatar-lg items-center justify-center rounded-md bg-surface-200 text-success-text"
+        >
+          <Icon name="notifications" size="lg" />
+        </span>
+        <h2 className="text-title text-ink">{t('state.inbox.empty.title')}</h2>
+        <p className="text-body text-ink-muted">{t('state.inbox.empty.body')}</p>
+      </section>
+    );
+  } else {
+    body = (
+      <div className="mx-auto flex w-full max-w-feed flex-col gap-4 px-1 py-4">
+        <ul className="flex flex-col">
+          {all.map((notification) => (
+            <Row
+              key={notification.id}
+              notification={notification}
+              channel={byId.get(notification.channelId)}
+              now={now}
+              onOpen={open}
+            />
+          ))}
+        </ul>
+        {query.hasNextPage && (
+          <div className="px-3">
+            <Button
+              variant="secondary"
+              busy={query.isFetchingNextPage}
+              onClick={() => {
+                void query.fetchNextPage();
+              }}
+            >
+              {t('inbox.more')}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <NavToggle />
+          <HeaderTile>
+            <Icon name="notifications" size="lg" />
+          </HeaderTile>
+          <div className="flex min-w-0 flex-col">
+            <h1 className="whitespace-nowrap text-title text-ink">{t('inbox.title')}</h1>
+            <span className="truncate text-caption text-ink-muted max-narrow:hidden">
+              {t('inbox.lede')}
+            </span>
+          </div>
+        </div>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+    </>
+  );
+};

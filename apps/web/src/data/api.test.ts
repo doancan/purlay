@@ -130,6 +130,32 @@ describe('the endpoints', () => {
     });
   });
 
+  test('the inbox: the workspace in the query, and the answer read against the contract', async () => {
+    const notification = {
+      id: ID,
+      type: 'mention',
+      channelId: ID,
+      message,
+      createdAt: WHEN,
+      readAt: null,
+    };
+    const inbox = harness({ data: [notification], nextCursor: null });
+    const page = await inbox.api.notifications(ID, { before: 'b' });
+    expect(page.data[0]?.type).toBe('mention');
+    await inbox.api.notifications(ID);
+    expect(inbox.calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      `GET /api/notifications?workspaceId=${ID}&before=b`,
+      `GET /api/notifications?workspaceId=${ID}`,
+    ]);
+    // A row the contract does not describe is refused, not shown.
+    const wrong = harness({ data: [{ ...notification, type: 'everyone' }], nextCursor: null });
+    let refused = false;
+    await wrong.api.notifications(ID).catch(() => {
+      refused = true;
+    });
+    expect(refused).toBe(true);
+  });
+
   test('resolution and reactions, the emoji percent-encoded into the path', async () => {
     const msg = harness(message);
     await msg.api.resolve(ID);

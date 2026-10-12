@@ -286,6 +286,21 @@ export const en = {
   'state.channels.empty.title': 'No channels yet',
   'state.channels.empty.body': 'Create the first one; it takes a name and nothing else.',
 
+  // ── Inbox (D-106) ──────────────────────────────────────────────────────
+  'inbox.title': 'Inbox',
+  'inbox.lede': 'What you were told, newest first',
+  'inbox.why.mention': '{name} mentioned you',
+  'inbox.why.direct': '{name} wrote to you',
+  'inbox.why.reply': '{name} replied in your thread',
+  'inbox.why.resolved': 'Your question was resolved',
+  'inbox.more': 'Load more',
+  'state.inbox.loading': 'Loading your inbox',
+  'state.inbox.error.title': "Couldn't load your inbox",
+  'state.inbox.error.body': 'The server did not answer. Try again.',
+  'state.inbox.empty.title': 'Nothing needs you',
+  'state.inbox.empty.body':
+    'When somebody names you, writes to you or answers your thread, it is here.',
+
   // ── Open questions (UX §4.4) ────────────────────────────────────────────
   'questions.title': 'Open questions',
   'questions.lede': 'Unresolved threads with replies, newest first',

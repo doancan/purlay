@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the inbox, in the client (D-106)
+
+- Inbox, under Open questions in the sidebar: what you were told — named, written to, answered in your
+  thread, your question resolved — newest first, each saying who and where; unread in full ink, as
+  the sidebar says it. Opening one takes you to the message or its thread. A new mention arriving
+  while it is open appears in it. Loading, failure (with Retry) and nothing waiting are each said in
+  words.
+
 ### Fix — 2026-10-12: deleting a message no longer deadlocks with somebody reading (D-106, amended)
 
 - A person reading a channel, or their inbox, at the moment its author deleted a message naming them

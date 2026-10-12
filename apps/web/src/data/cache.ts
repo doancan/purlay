@@ -219,7 +219,15 @@ export const channelStateChanged = (
   channelId: string,
   state: ChannelState,
 ): void => {
+  const before = client
+    .getQueriesData<Channel[]>({ queryKey: families.channels })
+    .flatMap(([, list]) => list ?? [])
+    .find((c) => c.id === channelId);
   editChannels(client, channelId, (c) => ({ ...c, state }));
+  // More waiting for you is a new notification: the inbox, if it is open, asks again (D-106).
+  if (before !== undefined && state.unreadMentionCount > (before.state?.unreadMentionCount ?? 0)) {
+    void client.invalidateQueries({ queryKey: keys.notifications(before.workspaceId) });
+  }
 };
 
 /** A channel appeared for the caller. Added once, however many frames say so. */
