@@ -76,6 +76,13 @@ describe('the body limit', () => {
       expect(streamed.status).toBe(411);
       expect(await code(streamed)).toBe('LENGTH_REQUIRED');
 
+      // Not only a mutation: any method's body is held to it, so a route that one day reads the
+      // body of an OPTIONS or a GET is not the hole the server's own limit used to close.
+      const options = await fetch(url, { method: 'OPTIONS', headers, body: over });
+      expect(options.status).toBe(413);
+      // And the connection is not kept to read what was refused.
+      expect(options.headers.get('connection')).toBe('close');
+
       // Under the limit it reaches the application, which here refuses it for the
       // (unauthenticated) reason the database double would otherwise throw on.
       const within = await fetch(url, { method: 'POST', headers, body: '{}' });
