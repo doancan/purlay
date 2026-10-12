@@ -1186,6 +1186,10 @@ avatar host as two measured exceptions; the API's own responses keep `default-sr
 **6 · `ENCRYPTION_KEY` is AES-256-GCM.** A random 96-bit nonce per record, stored as a prefix on
 the ciphertext, with the record id as additional authenticated data. `CONFIG.md` named the key and
 never named the algorithm, which is how two call sites end up encrypting differently.
+*Amended 2026-10-12 (#113): the cipher's key is derived from the root as D-62 derives the state
+key — `HMAC(ENCRYPTION_KEY, "purlay:credential:v1")` — so the two cannot interact; a version byte
+precedes the nonce so a later key or algorithm is told apart rather than guessed. One helper,
+`platform/crypto.ts`, and a test that no other production source encrypts.*
 
 **Reversibility:** items 1 and 6 are free now and expensive after the first session and the first
 stored token. The rest arrive with the features they protect.
