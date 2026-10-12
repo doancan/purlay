@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the permission matrix is a test (#74)
+
+- Every role-gated action is tried as an owner, an admin and a member, each in a workspace of its own,
+  against a table of what §7.4 allows; a role-gated endpoint `API.md` serves without cases in the table
+  fails the build.
+
 ### Feature — 2026-10-12: reading the audit trail (D-26)
 
 - `GET /api/workspaces/:id/audit` gives an owner or admin the workspace's trail, newest first, a page

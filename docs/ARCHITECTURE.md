@@ -718,7 +718,7 @@ layering rule. (D-46)
 | **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search, open questions and the inbox (D-34)** | `ingress/http/channel-visibility*` (D-64) |
 | Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) | `message-id.test.ts`, `messages.integration.test.ts` |
 | **Content safety** | **Every construct the product does not render is the characters that were typed; a link goes only where D-101 §2 allows; the engine never recognises what it is configured not to; no body reaches an engine failure, and one past the bounds is shown as typed (D-101)** | `packages/markdown/src/*.test.ts`; the rendering half with #43 |
-| Permission | Every role-gated action, per role | With the first role-gated action (#51, #74) |
+| Permission | Every role-gated action, per role, and every role-gated endpoint in the table | `testing/permissions*`, `ingress/http/permissions*` (#74) |
 | Realtime | Two sockets, ordering, ACK, reconnect replay, duplicate-send idempotency | `realtime/*.integration.test.ts` |
 | Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |
 | Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) | Lint and `scripts/`; the rest is #130 |
