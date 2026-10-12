@@ -1258,4 +1258,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/shell/deep-work.test.tsx'],
   },
+  {
+    id: 'edge-lets-a-chunked-body-in',
+    why: 'a body with no length is read before its size is known: a JSON route buffers whatever the server lets an upload carry',
+    file: 'apps/api/src/ingress/http/edge.ts',
+    find: '  if (chunked) {\n',
+    replace: '  if (chunked && header !== null) {\n',
+    tests: ['apps/api/src/ingress/http/edge.test.ts'],
+  },
+  {
+    id: 'edge-json-length-not-held',
+    why: 'with the server’s limit raised for uploads, a megabyte of JSON reaches the parser on any route',
+    file: 'apps/api/src/ingress/http/edge.ts',
+    find: '  if (!Number.isSafeInteger(length) || length > limit) {\n',
+    replace: '  if (!Number.isSafeInteger(length)) {\n',
+    tests: ['apps/api/src/ingress/http/edge.test.ts'],
+  },
+  {
+    id: 'attachment-size-constant-drifts',
+    why: 'the contract says one size and the database another: an upload the client allows is refused by a CHECK, as a 500',
+    file: 'packages/types/src/api.ts',
+    find: 'export const ATTACHMENT_BYTES_MAX = 26_214_400;\n',
+    replace: 'export const ATTACHMENT_BYTES_MAX = 52_428_800;\n',
+    tests: ['apps/api/src/modules/attachments/bounds.integration.test.ts'],
+  },
 ];

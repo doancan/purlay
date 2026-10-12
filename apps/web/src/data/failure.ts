@@ -28,6 +28,7 @@ export type FailureKey =
   | 'failure.session'
   | 'failure.gone'
   | 'failure.slow'
+  | 'failure.tooLarge'
   | 'failure.refused'
   | 'failure.generic';
 
@@ -53,6 +54,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.gone';
     case 'RATE_LIMITED':
       return 'failure.slow';
+    case 'PAYLOAD_TOO_LARGE':
+    case 'LENGTH_REQUIRED':
+      return 'failure.tooLarge';
     case 'VALIDATION_FAILED':
     case 'INVALID_MESSAGE_ID':
     case 'UNSUPPORTED_MEDIA_TYPE':

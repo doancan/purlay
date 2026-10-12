@@ -36,6 +36,8 @@ import {
   JSON_BODY_MAX_BYTES,
   crossSiteResponse,
   inboundRequestId,
+  bodyRefusal,
+  edgeRefusalResponse,
   hasUnsupportedMediaType,
   isCrossSiteMutation,
   unsupportedMediaTypeResponse,
@@ -76,7 +78,7 @@ import {
 import { changeReaction } from './reactions';
 import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
-import { MAX_FRAME_BYTES } from '@purlay/types';
+import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 
@@ -181,8 +183,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const edgeHeaders = responseHeaders(dependencies.config.APP_URL);
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
-    // Refused by the server before the body is buffered or parsed (`edge.ts`).
-    serve: { maxRequestBodySize: JSON_BODY_MAX_BYTES },
+    // What an upload needs, and no more: every other body is bounded at the edge by its length,
+    // before it is read (`bodyRefusal`, D-109 §4).
+    serve: { maxRequestBodySize: ATTACHMENT_BYTES_MAX },
   })
     /**
      * One error handler for the whole surface, so a status is decided in exactly
@@ -205,6 +208,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         return crossSiteResponse(headers);
       }
       if (hasUnsupportedMediaType(request)) return unsupportedMediaTypeResponse(headers);
+      const tooMuch = bodyRefusal(request, JSON_BODY_MAX_BYTES);
+      if (tooMuch !== null) return edgeRefusalResponse(tooMuch, headers);
       return undefined;
     })
     // Before the handler, after the body is parsed: the body is already bounded by the

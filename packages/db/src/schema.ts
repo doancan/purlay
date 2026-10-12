@@ -5,6 +5,8 @@
 
 import type { ColumnType } from "kysely";
 
+export type AttachmentKind = "audio" | "file" | "image" | "video";
+
 export type ChannelType = "direct_message" | "private" | "public";
 
 export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
@@ -34,6 +36,22 @@ export type NotificationType = "channel_message" | "direct_message" | "mention" 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserRole = "admin" | "member" | "owner";
+
+export interface Attachments {
+  created_at: Generated<Timestamp>;
+  file_name: string;
+  height: number | null;
+  id: string;
+  kind: Generated<AttachmentKind>;
+  message_id: string | null;
+  mime_type: string;
+  size_bytes: Int8;
+  storage_key: string;
+  thumbnail_key: string | null;
+  uploader_id: string;
+  width: number | null;
+  workspace_id: string;
+}
 
 export interface ChannelMembers {
   channel_id: string;
@@ -160,6 +178,7 @@ export interface Workspaces {
 }
 
 export interface DB {
+  attachments: Attachments;
   channel_members: ChannelMembers;
   channels: Channels;
   mentions: Mentions;

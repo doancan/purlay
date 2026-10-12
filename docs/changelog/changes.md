@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: the edge ready for attachments (D-109 §4)
+
+- The server's own body limit rises to what an upload needs; every other request is still held to
+  64 KiB, now by its `Content-Length` at the edge (`413 PAYLOAD_TOO_LARGE`), and a chunked body is
+  refused (`411 LENGTH_REQUIRED`) — both before anything is read.
+- Migration `0018`: the `attachments` table, its bounds as CHECKs bound to the contract, and the
+  composite key that keeps an attachment in its message's workspace.
+
 ### Feature — 2026-10-12: Deep Work, in the client (D-108, `UX.md` §7, §8)
 
 - `Cmd/Ctrl+Shift+D` starts Deep Work for an hour, or ends it. While it lasts a quiet bar says until

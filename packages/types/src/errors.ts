@@ -12,13 +12,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
-export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 415 | 429 | 500 | 503;
-
-/**
- * `413` is in `API.md` §1's table and is **not** here: no code maps to it yet,
- * because uploads are not built. A status this type permits but no code produces
- * is a case a client is asked to handle and will never see.
- */
+export type HttpStatus = 400 | 401 | 403 | 404 | 409 | 411 | 413 | 415 | 429 | 500 | 503;
 
 /**
  * Every failure this API can express.
@@ -72,6 +66,13 @@ export const ErrorCode = Type.Union([
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
   // Volume
   /**
+   * A body larger than the route takes, refused at the edge before it is read: 64 KiB for JSON
+   * (`JSON_BODY_MAX_BYTES`), `ATTACHMENT_BYTES_MAX` for an upload (D-80, D-109 §4).
+   */
+  Type.Literal('PAYLOAD_TOO_LARGE'),
+  /** A body with no `Content-Length`: its size cannot be judged before it is read (D-109 §4). */
+  Type.Literal('LENGTH_REQUIRED'),
+  /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
    */
@@ -116,6 +117,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   UNSUPPORTED_MEDIA_TYPE: 415,
 
+  PAYLOAD_TOO_LARGE: 413,
+  LENGTH_REQUIRED: 411,
   RATE_LIMITED: 429,
 
   INTERNAL: 500,
