@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the latency budgets block on a regression against main (D-49, #73)
+
+- CI's database job restores the ACK and fan-out p95 that main last recorded, fails a run that
+  jumps past it, and, on main alone, keeps the run's numbers as the next baseline. A first run with
+  no baseline says so and records one.
+
 ### Fix — 2026-10-12: a message that lands while its feed is being read again stays on the screen (#347)
 
 - A list already on the screen and being read again — the subscription's answer re-reads every

@@ -5,6 +5,8 @@
  *   bun run budget:latency                          measure and report
  *   bun run budget:latency -- --record <file>       … and keep the result for the next run
  *   bun run budget:latency -- --baseline <file>     … and fail if either p95 jumped past the last one
+ *   bun run budget:latency -- --keep <file>         both, against the file if there is one, and keep
+ *                                                   the run only if it passed (what CI does)
  *
  * A real API process, started as the image starts it, against a clone of the integration database
  * that is dropped afterwards; two people signed in on two real sockets in one channel; one sends at a
@@ -258,14 +260,22 @@ export const main = async (
   args: readonly string[],
   measure: (count: number) => Promise<Latency> = measureLatency,
 ): Promise<{ readonly lines: readonly string[]; readonly code: number }> => {
-  const baselineFile = optionOf(args, '--baseline');
+  const keepFile = optionOf(args, '--keep');
+  const firstKept = keepFile !== undefined && !(await Bun.file(keepFile).exists());
+  const baselineFile = firstKept ? undefined : (keepFile ?? optionOf(args, '--baseline'));
   const recordFile = optionOf(args, '--record');
   const baseline =
     baselineFile === undefined ? null : ((await Bun.file(baselineFile).json()) as Latency);
   const now = await measure(60);
   const { regressed, lines } = judge(now, baseline);
-  if (recordFile !== undefined) await Bun.write(recordFile, `${JSON.stringify(now, null, 2)}\n`);
-  return { lines, code: regressed ? 1 : 0 };
+  const write = async (file: string): Promise<void> => {
+    await Bun.write(file, `${JSON.stringify(now, null, 2)}\n`);
+  };
+  if (recordFile !== undefined) await write(recordFile);
+  // A regression is not adopted: the next run is judged against the last one that passed.
+  if (keepFile !== undefined && !regressed) await write(keepFile);
+  const said = firstKept ? ['no baseline yet: this run is recorded, nothing compared'] : [];
+  return { lines: [...said, ...lines], code: regressed ? 1 : 0 };
 };
 
 if (import.meta.main) {
