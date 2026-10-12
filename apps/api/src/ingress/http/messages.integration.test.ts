@@ -457,3 +457,57 @@ describe('integration: editing over HTTP', () => {
     });
   });
 });
+
+describe('integration: deleting over HTTP', () => {
+  const aConversation = async (
+    db: Executor,
+  ): Promise<{ alice: SignedInUser; bob: SignedInUser; channelId: string; id: string }> => {
+    const alice = await signedIn(db, 'del-alice');
+    const bob = await signedIn(db, 'del-bob');
+    const channelId = await aChannel(db, alice, 'del-acme');
+    const { workspace_id: workspaceId } = await db
+      .selectFrom('channels')
+      .select('workspace_id')
+      .where('id', '=', channelId)
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('workspace_members')
+      .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member' })
+      .execute();
+    await call(db, 'POST', `/api/channels/${channelId}/join`, { cookie: bob.cookie });
+    const id = messageId(NOW);
+    expect((await send(db, alice.cookie, channelId, id, 'regrettable')).status).toBe(201);
+    return { alice, bob, channelId, id };
+  };
+
+  test('the author is answered 204, the content is the tombstone, and again is 204', async () => {
+    await withRollback(async (db) => {
+      const { alice, channelId, id } = await aConversation(db);
+      const first = await call(db, 'DELETE', `/api/messages/${id}`, { cookie: alice.cookie });
+      expect(first.status).toBe(204);
+      expect(await first.text()).toBe('');
+      expect(await messagesIn(db, channelId)).toEqual([{ content: '' }]);
+      expect(
+        (await call(db, 'DELETE', `/api/messages/${id}`, { cookie: alice.cookie })).status,
+      ).toBe(204);
+    });
+  });
+
+  test('a member who neither wrote it nor moderates is refused 403, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const { bob, channelId, id } = await aConversation(db);
+      const response = await call(db, 'DELETE', `/api/messages/${id}`, { cookie: bob.cookie });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      expect(await messagesIn(db, channelId)).toEqual([{ content: 'regrettable' }]);
+    });
+  });
+
+  test('without a session it is 401', async () => {
+    await withRollback(async (db) => {
+      const { channelId, id } = await aConversation(db);
+      expect((await call(db, 'DELETE', `/api/messages/${id}`)).status).toBe(401);
+      expect(await messagesIn(db, channelId)).toEqual([{ content: 'regrettable' }]);
+    });
+  });
+});

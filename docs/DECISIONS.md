@@ -4344,7 +4344,9 @@ replaced by an empty tombstone (D-9) and the client draws the words; reactions a
 A deleted **root with replies** stays in the feed as a tombstone with its thread; a deleted root with
 none leaves the feed. A deleted **reply** stays in its thread as a tombstone (`Message.deletedAt`:
 it occupies its place), so `thread_reply_count` does not drop — a resolved thread cannot lose its last
-reply and break I-8. The note in `0014_open_questions_index.sql` that such a thread "drops out of the
+reply and break I-8. What the message added to unread and mention counts is taken back, never
+below zero: a message older than the counters (0013) was never counted, and an author deleting it
+must not be refused by a check; the next read recounts exactly. The note in `0014_open_questions_index.sql` that such a thread "drops out of the
 index when the count does" is superseded here; the migration is applied and is not edited (D-45).
 
 **Reopened when** Phase 2's edit history lands (§2), or dogfooding shows an edit used to rewrite what

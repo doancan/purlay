@@ -215,15 +215,24 @@ export interface VisibleMessage {
  * how long the refusal took say which of them it was (D-34, #200).
  *
  * A tombstoned message (D-9) is not one to act on: it has nothing to resolve, react
- * to or reply under, and its thread, if any, is read through the channel.
+ * to, edit or reply under. Its thread is still read, and it can be deleted again,
+ * which is what `deleted: 'include'` is for.
  */
 export const requireMessageById = async (
   executor: Executor,
   userId: string,
   messageId: string,
+  options: {
+    /**
+     * A deleted message is not there for anything that would act on it — a reply, a reaction, an
+     * edit. Reading its thread, and deleting it again, are the two that still find its tombstone
+     * (D-103 §7): a root with replies keeps its place, and a second delete is the first's answer.
+     */
+    readonly deleted?: 'include';
+  } = {},
 ): Promise<VisibleMessage> => {
   if (!Value.Check(Uuid, messageId)) throw messageNotFound();
-  const row = await visibleChannels(executor, userId)
+  let statement = visibleChannels(executor, userId)
     .innerJoin('messages', 'messages.channel_id', 'channels.id')
     .select([
       'channels.id as id',
@@ -231,9 +240,9 @@ export const requireMessageById = async (
       'channels.type as type',
       'messages.parent_id as parentId',
     ])
-    .where('messages.id', '=', messageId)
-    .where('messages.deleted_at', 'is', null)
-    .executeTakeFirst();
+    .where('messages.id', '=', messageId);
+  if (options.deleted !== 'include') statement = statement.where('messages.deleted_at', 'is', null);
+  const row = await statement.executeTakeFirst();
   if (row === undefined) throw messageNotFound();
   return {
     context: mint(userId, row),

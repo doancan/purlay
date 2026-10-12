@@ -68,9 +68,8 @@ const asPage = async (
 /**
  * A root's replies. **Oldest first** by default and with `after` — the order a thread
  * is read in, and the order a reconnecting client appends in — and newest first with
- * `before`, as every other page in this API is (`API.md` §1). Replies that were
- * tombstoned are not listed: `idx_messages_thread` is partial on live rows, and
- * deletion is not built yet (D-9 decides what a tombstone shows when it is).
+ * `before`, as every other page in this API is (`API.md` §1). A deleted reply is listed
+ * as its tombstone: it keeps its place in the thread, and the thread its count (D-103 §7).
  */
 export const threadReplies = async (
   executor: Executor,
@@ -90,7 +89,6 @@ export const threadReplies = async (
     .innerJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.parent_id', '=', root.messageId)
-    .where('messages.deleted_at', 'is', null)
     .orderBy('messages.id', backwards ? 'desc' : 'asc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);

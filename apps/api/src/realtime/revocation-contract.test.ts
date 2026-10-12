@@ -114,6 +114,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/messages/edit.ts#countMentions': {
     none: 'raises the mention counters of existing memberships and changes no access (#47)',
   },
+  // A deleted message takes back the unread counters it added. It changes no membership,
+  // so nobody's access moves (D-103 §7, #47).
+  'apps/api/src/modules/messages/delete.ts#uncount': {
+    none: 'lowers the unread counters of existing memberships and changes no access (#47)',
+  },
   // Nothing calls it yet. It deletes rows that are already revoked (announced when
   // they were revoked) or past their expiry (the hub's own timer ends the socket).
   'packages/db/src/sessions.ts#purgeDeadSessions': {
