@@ -45,4 +45,19 @@ describe('the latency budget', () => {
     expect(worse.code).toBe(1);
     expect(worse.lines[0]).toContain('was 30.0 ms) — REGRESSED');
   });
+
+  test('--keep compares with the file when there is one, says so when there is not, and keeps only a run that passed', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    const first = await main(['--keep', file], () => Promise.resolve(run(30, 30)));
+    expect(first.code).toBe(0);
+    expect(first.lines[0]).toBe('no baseline yet: this run is recorded, nothing compared');
+    expect(await Bun.file(file).json()).toEqual(run(30, 30));
+    const worse = await main(['--keep', file], () => Promise.resolve(run(100, 30)));
+    expect(worse.code).toBe(1);
+    // A regression is not adopted as the next run's baseline.
+    expect(await Bun.file(file).json()).toEqual(run(30, 30));
+    const steady = await main(['--keep', file], () => Promise.resolve(run(32, 31)));
+    expect(steady.code).toBe(0);
+    expect(await Bun.file(file).json()).toEqual(run(32, 31));
+  });
 });

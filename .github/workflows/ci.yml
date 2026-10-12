@@ -200,10 +200,25 @@ jobs:
       - name: the API's idle memory is inside its budget
         run: bun run budget:api
 
-      # The ACK round-trip and fan-out p95 (D-49): measured on two real sockets, reported. They block
-      # on a regression against a recorded baseline, which this job does not keep yet (#73).
-      - name: the latency budgets are measured
-        run: bun run budget:latency
+      # The ACK round-trip and fan-out p95 (D-49): measured on two real sockets, and blocking on a
+      # regression against the last measurement on main — never on the line itself, which a shared
+      # runner moves by tens of percent. A pull request reads main's baseline (the cache is shared
+      # downward); only main writes one, and only after its own run passed, so a regression that
+      # reached main fails there and does not become the new normal (#73).
+      - name: the last latency measured on main
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .budget/latency.json
+          key: budget-latency-${{ github.sha }}
+          restore-keys: budget-latency-
+      - name: the latency budgets hold against main's last measurement
+        run: bun run budget:latency -- --keep .budget/latency.json
+      - name: keep this measurement as main's baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .budget/latency.json
+          key: budget-latency-${{ github.sha }}
 
   documents:
     runs-on: ubuntu-latest
