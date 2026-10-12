@@ -69,6 +69,41 @@ export const hasUnsupportedMediaType = (request: Request): boolean => {
 };
 
 /**
+ * Whether a state-changing request's body may be read at all, judged by its `Content-Length`
+ * before a byte of it is (D-80, D-109 §4).
+ *
+ * The server's own limit is what an upload needs, so it no longer bounds a JSON body: this does.
+ * On the wire a body has a `Content-Length` or is chunked (HTTP/1.1, which is what the proxy speaks
+ * to us). A chunked body is refused outright, because its size cannot be known until it has been
+ * read, and reading it is the cost the limit exists to avoid; one with a length is held to it. A
+ * request with neither has no body to judge (logout, join — and a request built in-process).
+ */
+export const bodyRefusal = (request: Request, limit: number): AppError | null => {
+  if (!STATE_CHANGING.has(request.method)) return null;
+  const chunked = /\bchunked\b/i.test(request.headers.get('transfer-encoding') ?? '');
+  const header = request.headers.get('content-length');
+  if (chunked) {
+    return new AppError({
+      code: 'LENGTH_REQUIRED',
+      message: 'A request body needs a Content-Length.',
+    });
+  }
+  if (header === null) return null;
+  const length = Number(header);
+  if (!Number.isSafeInteger(length) || length > limit) {
+    return new AppError({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'The request body is larger than this route takes.',
+    });
+  }
+  return null;
+};
+
+/** A refusal the edge decided, in the API's own error shape. */
+export const edgeRefusalResponse = (error: AppError, headers: Record<string, string>): Response =>
+  refused(error, headers);
+
+/**
  * Headers every response carries, decided once from `APP_URL`.
  *
  * - `nosniff`: a JSON body is never reinterpreted as script or markup.

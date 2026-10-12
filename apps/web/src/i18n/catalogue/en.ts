@@ -362,6 +362,7 @@ export const en = {
   'failure.gone':
     'This is no longer available. It may have been removed, or you may have lost access.',
   'failure.slow': 'You are going too fast. Wait a moment and try again.',
+  'failure.tooLarge': 'It is larger than Purlay takes.',
   'failure.refused': 'That was refused. Check what you entered and try again.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",

@@ -55,7 +55,8 @@ account for it. `message` is for humans and may change. (D-47)
 | `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a member editing a message they did not write, or deleting one without moderating the workspace (D-103), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
-| `413` | A JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame — refused by the server before it is read), or an upload over `attachment_size_limit` |
+| `411` | `LENGTH_REQUIRED` — a `POST`/`PUT`/`PATCH`/`DELETE` with a body and no `Content-Length` (chunked): its size cannot be judged before it is read (D-109 §4) |
+| `413` | `PAYLOAD_TOO_LARGE` — a JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame), or an upload over `attachment_size_limit`, refused at the edge by its `Content-Length` before it is read (D-80, D-109 §4) |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` — a `POST`/`PUT`/`PATCH`/`DELETE` whose body is not `application/json` (a form, `text/plain`, or a body with no type). A request with no body at all, such as logout, is unaffected (D-80) |
 | `429` | Rate limited |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |

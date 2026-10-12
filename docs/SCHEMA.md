@@ -433,6 +433,8 @@ CREATE TABLE messages (
     -- The tenant keys, added by 0010 (NOT VALID, then validated). Each contains, and so replaces,
     -- the single-column key it was written beside. (I-1 in part, I-3, I-4, D-90)
     CONSTRAINT messages_id_channel_id_key UNIQUE (id, channel_id),
+    -- The target of an attachment's key: it is in its message's workspace (0018, D-109).
+    CONSTRAINT messages_id_workspace_id_key UNIQUE (id, workspace_id),
     CONSTRAINT messages_channel_workspace_fkey
         FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
         ON DELETE CASCADE,
@@ -573,43 +575,51 @@ CREATE INDEX idx_reactions_user ON reactions (user_id);
 ### 7.2. `attachments`
 
 Uploaded before the message exists — the client uploads on paste, then sends the message
-referencing the returned ids — so `message_id` is nullable until the message lands. (D-16)
+referencing the returned ids — so `message_id` is nullable until the message lands. (D-16, D-109)
+Migration `0018` is the definition; the bounds below are bound to the contract's `ATTACHMENT_*`
+constants by a test that inserts at each and one past it.
 
 ```sql
 CREATE TABLE attachments (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- The client's UUIDv7, so a retried upload finds the row it made (D-109 §3).
+    id            UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- NULL while unattached: the uploader's own until then (D-109 §6).
+    message_id    UUID,
+    uploader_id   UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
-    -- NULL while the upload is orphaned. A sweeper deletes orphans older than 24h.
-    message_id   UUID REFERENCES messages(id) ON DELETE CASCADE,
-    uploader_id  UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    -- Opaque keys in the object store. Never a public URL: reads are brokered.
+    storage_key   TEXT NOT NULL UNIQUE,
+    thumbnail_key TEXT UNIQUE,
 
-    -- Opaque key in the object store. Never a public URL: access is always
-    -- brokered by the API so tenant permissions are actually checked.
-    storage_key  TEXT NOT NULL UNIQUE,
-    thumbnail_key TEXT,
+    file_name     VARCHAR(255) NOT NULL,
+    mime_type     VARCHAR(128) NOT NULL,
+    size_bytes    BIGINT NOT NULL,
+    kind          attachment_kind NOT NULL DEFAULT 'file',
+    -- Present for an image, so the client reserves its space before it loads.
+    width         INTEGER,
+    height        INTEGER,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    file_name    VARCHAR(255) NOT NULL,
-    mime_type    VARCHAR(128) NOT NULL,
-    size_bytes   BIGINT NOT NULL,
-    kind         attachment_kind NOT NULL DEFAULT 'file',
-
-    -- Present for images and video, so the client can reserve space and avoid
-    -- layout shift before the file loads.
-    width        INTEGER,
-    height       INTEGER,
-
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at   TIMESTAMPTZ,
-
-    -- 25 MiB. Lowered from the earlier 50 MB. (D-16)
+    CONSTRAINT attachments_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    -- In its message's workspace, by a key, not by care (D-90).
+    CONSTRAINT attachments_message_workspace_fkey
+        FOREIGN KEY (message_id, workspace_id) REFERENCES messages (id, workspace_id)
+        ON DELETE CASCADE,
+    -- 25 MiB. (D-16)
     CONSTRAINT attachment_size_limit
-        CHECK (size_bytes > 0 AND size_bytes <= 26214400)
+        CHECK (size_bytes > 0 AND size_bytes <= 26214400),
+    -- Both sides or neither; each ≤ 16384; ≤ 40 million pixels. (D-109 §2)
+    CONSTRAINT attachment_dimensions CHECK (...)
 );
 
-CREATE INDEX idx_attachments_message ON attachments (message_id) WHERE message_id IS NOT NULL;
-CREATE INDEX idx_attachments_orphans ON attachments (created_at) WHERE message_id IS NULL;
-CREATE INDEX idx_attachments_workspace ON attachments (workspace_id);
+CREATE INDEX idx_attachments_message    ON attachments (message_id) WHERE message_id IS NOT NULL;
+-- A person's unattached uploads: counted against the bound (D-109 §5), and swept (#71).
+CREATE INDEX idx_attachments_unattached ON attachments (workspace_id, uploader_id, created_at)
+    WHERE message_id IS NULL;
+CREATE INDEX idx_attachments_uploader   ON attachments (uploader_id);
+CREATE INDEX idx_attachments_workspace  ON attachments (workspace_id);
 ```
 
 ### 7.3. `mentions`
@@ -957,14 +967,15 @@ file that leaves its transaction runs statement by statement and must be safe to
 0015_state_versions.sql      channel_members.state_version, messages.state_version  (D-99, amended)
 0016_tombstones_keep_their_place.sql  idx_messages_channel_feed and idx_messages_thread keep tombstones  (D-103)
 0017_channel_message_notifications.sql  notification_type gains channel_message  (D-107)
+0018_attachments.sql         attachments; messages (id, workspace_id) unique  (D-16, D-109)
 ```
 
 ```
-0018_integrations.sql        github_integrations, link_previews
-0019_administration.sql      audit_log, job_runs  (Phase 1)
+0019_integrations.sql        github_integrations, link_previews
+0020_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0020_github_feeds.sql`; Phase 2's magic links add `0021_email_auth.sql`.
+Phase 2 adds `0021_github_feeds.sql`; Phase 2's magic links add `0022_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration

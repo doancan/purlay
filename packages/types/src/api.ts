@@ -275,3 +275,12 @@ export const SetDeepWorkRequest = Type.Union([
 export type SetDeepWorkRequest = Static<typeof SetDeepWorkRequest>;
 export const DeepWorkResponse = Type.Object({ until: Type.Union([Timestamp, Type.Null()]) });
 export type DeepWorkResponse = Static<typeof DeepWorkResponse>;
+
+/**
+ * The bounds of an attachment (D-16, D-109 §2). The database holds the same numbers as CHECKs
+ * (`attachment_size_limit`, `attachment_dimensions`, migration 0018), and a test inserts at each
+ * bound and one past it, so the two cannot drift.
+ */
+export const ATTACHMENT_BYTES_MAX = 26_214_400;
+export const ATTACHMENT_SIDE_MAX = 16_384;
+export const ATTACHMENT_PIXELS_MAX = 40_000_000;

@@ -41,7 +41,7 @@ describe('the body limit', () => {
    * was buffered, which is the bug. A real listener, a real oversized body, and a
    * database that throws if it is reached.
    */
-  test('a body over the limit is refused with 413 by the server, before any handler', async () => {
+  test('a body over the limit is refused with 413 at the edge, before any handler', async () => {
     const server = app();
     const port = server.listen(0);
     try {
@@ -50,8 +50,17 @@ describe('the body limit', () => {
       const over = JSON.stringify({ name: 'x'.repeat(JSON_BODY_MAX_BYTES + 1) });
       const refused = await fetch(url, { method: 'POST', headers, body: over });
       expect(refused.status).toBe(413);
+      expect(await code(refused)).toBe('PAYLOAD_TOO_LARGE');
 
-      // The same size without a Content-Length: a chunked body cannot dodge it.
+      // Far over it — a megabyte, under what the server lets an upload carry (D-109 §4): still
+      // refused by its length, and still before the database double could be reached.
+      const megabyte = JSON.stringify({ name: 'x'.repeat(1024 * 1024) });
+      const big = await fetch(url, { method: 'POST', headers, body: megabyte });
+      expect(big.status).toBe(413);
+      expect(await code(big)).toBe('PAYLOAD_TOO_LARGE');
+
+      // The same size without a Content-Length: a chunked body cannot dodge it — it is refused
+      // for having no length at all, because its size cannot be judged before it is read.
       const chunks = new ReadableStream<Uint8Array>({
         start(controller): void {
           controller.enqueue(new TextEncoder().encode(over));
@@ -64,7 +73,8 @@ describe('the body limit', () => {
         body: chunks,
         duplex: 'half',
       });
-      expect(streamed.status).toBe(413);
+      expect(streamed.status).toBe(411);
+      expect(await code(streamed)).toBe('LENGTH_REQUIRED');
 
       // Under the limit it reaches the application, which here refuses it for the
       // (unauthenticated) reason the database double would otherwise throw on.

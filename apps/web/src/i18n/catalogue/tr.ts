@@ -351,6 +351,7 @@ export const tr = {
   'failure.gone':
     'Bu artık kullanılamıyor. Kaldırılmış olabilir ya da erişimini kaybetmiş olabilirsin.',
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',
+  'failure.tooLarge': 'Purlay’ın aldığından büyük.',
   'failure.refused': 'Bu reddedildi. Girdiğini kontrol edip tekrar dene.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
