@@ -43,17 +43,18 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
  │ ?3 │  # deploys    2  │      ┌ ts · 14 lines ──────────── Copy ┐       │         │
  │ ⌕  │ People           │      └─────────────────────────────────┘       │         │
  │    │  (SC) Sarah Chen │ ┌──────────────────────────────────────┐       │         │
- │ ⚙  │ (DÖ) you  ☾      │ └────────────────────────────────── ➤ ┘       │         │
+ │ ⚙  │ (DÖ) you         │ └────────────────────────────────── ➤ ┘       │         │
  └────┴──────────────────┴────────────────────────────────────────────────┴─────────┘
 ```
 
 - **Rail (56px)** — the workspace tile, which opens the workspace switcher; then channels, the
-  inbox (a dot while anything in it is unread), open questions (its count) and search; at the foot,
+  inbox (a dot while anything needs you — the same fact as the mention badges, D-106), open
+  questions (a neutral count: they are the team's, not a summons) and search; at the foot,
   settings — theme, language and the shortcut reference. Every entry is a route or a menu that
   exists without the rail; it adds no destination. Its top is an empty drag strip for the desktop
   shell (D-14).
 - **Sidebar (240px)** — the workspace name, the jump field (the palette's door, `⌘K`), the channels,
-  then the people, and your own row at the foot with Deep Work's state. Unread channels are bold;
+  then the people, and your own row at the foot. Unread channels are bold;
   unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar and no
   presence dot: there is no presence to show (Phase 2), and a dot that is always one colour would be
   a lie.

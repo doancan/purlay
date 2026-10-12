@@ -4651,7 +4651,8 @@ state `UX.md` §8 requires.
    GitHub card), which get a one-pixel border and a one-pixel shadow. Amends D-100's cards and UX §9.
 3. **The rail returns, holding only existing destinations.** 56px, left of the sidebar: the workspace
    tile (the switcher menu that was in the sidebar header), then channels, the inbox (a dot while
-   anything is unread), open questions (its count) and search, and at the foot a settings menu —
+   anything needs you — the mention badges' fact, D-106), open questions (a neutral count, since the
+   badge is for what needs you) and search, and at the foot a settings menu —
    theme, language, shortcuts. Every entry is a route or a menu that exists today; the rail adds no
    destination. Its top 28px is left empty as a drag strip for the desktop shell (D-14). The sidebar
    narrows to 240px and keeps the workspace name, the jump field, channels, people and your own row.
@@ -4671,7 +4672,7 @@ state `UX.md` §8 requires.
 5. **Scale.** Type 12/16, 13/20, 14/22, 15/22, 16/24, and a message body of 14px at 1.6. Radius 4
    for a key, 6 for a control, 8 for a row and an avatar, 10 for a card, 12 for the composer and an
    overlay. Avatars are rounded squares — initials on a tint, as D-100 decided — at 36px in the feed,
-   28px in a thread, 20px in the sidebar. The feed is at most 760px and **hangs from the left edge**,
+   28px in a thread and for your own row, 20px in the sidebar's lists. The feed is at most 760px and **hangs from the left edge**,
    which settles the disagreement between UX §2 ("centred") and the token's note ("left-aligned").
 6. **Density is in what is shown, not in how tightly it is set.** A sidebar row is 32px and message
    groups are 16px apart; the product stays dense because it shows one column and no chrome, which is
