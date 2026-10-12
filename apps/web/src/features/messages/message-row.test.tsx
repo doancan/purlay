@@ -266,6 +266,17 @@ describe('a revised message', () => {
   });
 });
 
+describe("a row of one's own outside a channel screen", () => {
+  test('offers its menu, and choosing Edit there opens nothing: no screen holds an editor', async () => {
+    const view = await mount(props({ message: aMessage(1, { sender: ME, content: 'mine' }) }));
+    const user = person();
+    await user.click(view.getByRole('button', { name: 'More' }));
+    await user.click(view.getByRole('menuitem', { name: /Edit/ }));
+    expect(view.queryByRole('textbox', { name: 'Edit your message' })).toBeNull();
+    expect(view.getByText('mine')).toBeDefined();
+  });
+});
+
 describe('delivery', () => {
   test('sending is a clock in the gutter at full strength, and no actions yet', async () => {
     const view = await mount(props({ delivery: 'sending' }));

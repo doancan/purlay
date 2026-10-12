@@ -30,10 +30,14 @@ import {
 } from './cache';
 import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
+import type { Clock } from '../realtime/clock';
+import { systemClock } from '../system-clock';
 
 export interface Actions {
   readonly react: (message: Message, emoji: string) => Promise<void>;
   readonly unreact: (message: Message, emoji: string) => Promise<void>;
+  /** The caller's own message, new words: on screen at once, put back if refused (D-103). */
+  readonly edit: (message: Message, content: string) => Promise<void>;
   readonly resolve: (message: Message) => Promise<void>;
   readonly reopen: (message: Message) => Promise<void>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
@@ -48,6 +52,8 @@ export const createActions = (
   api: Api,
   client: QueryClient,
   storage: ClientStorage | null = null,
+  // The guess painted before the server answers is replaced by the server's own time.
+  clock: Clock = systemClock,
 ): Actions => {
   const settled = (updated: Message): void => {
     // The root as the server now has it, in every list that shows it; and the
@@ -64,6 +70,31 @@ export const createActions = (
     unreact: async (message, emoji): Promise<void> => {
       const { reactions } = await api.unreact(message.id, emoji);
       reactionsUpdated(client, message.id, reactions);
+    },
+    edit: async (message, content): Promise<void> => {
+      // Painted before the answer (CONTRIBUTING §1.9); the server's time and mentions replace it.
+      const before = {
+        content: message.content,
+        editedAt: message.editedAt,
+        mentions: message.mentions,
+      };
+      patchMessage(client, message.id, (m) => ({
+        ...m,
+        content,
+        editedAt: clock.now().toISOString(),
+      }));
+      try {
+        const saved = await api.editMessage(message.id, content);
+        patchMessage(client, message.id, (m) => ({
+          ...m,
+          content: saved.content,
+          editedAt: saved.editedAt,
+          mentions: saved.mentions,
+        }));
+      } catch (error) {
+        patchMessage(client, message.id, (m) => ({ ...m, ...before }));
+        throw error;
+      }
     },
     resolve: async (message): Promise<void> => {
       settled(await api.resolve(message.id));

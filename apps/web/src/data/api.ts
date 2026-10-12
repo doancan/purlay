@@ -69,6 +69,8 @@ export interface Api {
   ) => Promise<UnresolvedPage>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   readonly unreact: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
+  /** The author's new words (D-103); the answer is the message as it now is. */
+  readonly editMessage: (messageId: string, content: string) => Promise<Message>;
 
   readonly signOut: () => Promise<void>;
 }
@@ -173,6 +175,13 @@ export const createApi = (http: Http): Api => {
         options(),
       ),
 
+    editMessage: (messageId, content) =>
+      http.request(
+        'PATCH',
+        `/api/messages/${at(messageId)}`,
+        Message,
+        options({ body: { content } }),
+      ),
     signOut: () => http.send('POST', '/auth/logout', options()),
   };
 };

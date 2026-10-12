@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: edit your own message (D-103, `UX.md` §5, §7)
+
+- Your own message has a menu, and Edit opens the words in the row — Enter saves, Shift+Enter is a new
+  line, Esc lets go. `E` on a focused message of yours, and `↑` in an empty composer, open the same
+  editor.
+- Painted before the server answers. A refused edit puts the old words back, says why, and opens the
+  editor on what was written.
+- Choosing Edit from the menu leaves focus in the editor, not on the menu's button.
+
 ### Feature — 2026-10-12: an edit and a delete reach every open screen at once (D-103)
 
 - `MESSAGE_REVISED` on the channel's topic carries what an edit or a delete changed — the words, the

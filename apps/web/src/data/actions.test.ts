@@ -81,6 +81,43 @@ describe('reactions', () => {
   });
 });
 
+describe('editing', () => {
+  test('the new words are on screen before the server answers, and its answer is kept', async () => {
+    const { client } = world();
+    let answer: (message: Message) => void = () => undefined;
+    const actions = createActions(
+      anApi({
+        editMessage: () =>
+          new Promise<Message>((resolve) => {
+            answer = resolve;
+          }),
+      }),
+      client,
+    );
+    const editing = actions.edit(root, 'why 4 seconds?');
+    expect(rootInCache(client)?.content).toBe('why 4 seconds?');
+    expect(rootInCache(client)?.editedAt).not.toBeNull();
+    answer({ ...root, content: 'why 4 seconds?', editedAt: '2026-09-09T09:00:00.000Z' });
+    await editing;
+    expect(rootInCache(client)?.editedAt).toBe('2026-09-09T09:00:00.000Z');
+  });
+
+  test('refused, the words go back to what they were, and the caller hears why', async () => {
+    const { client } = world();
+    const actions = createActions(
+      anApi({ editMessage: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'no')) }),
+      client,
+    );
+    let heard: unknown;
+    await actions.edit(root, 'not mine to change').catch((error: unknown) => {
+      heard = error;
+    });
+    expect(heard).toBeInstanceOf(ApiError);
+    expect(rootInCache(client)?.content).toBe('why 4s?');
+    expect(rootInCache(client)?.editedAt).toBeNull();
+  });
+});
+
 describe('resolution', () => {
   test('resolving writes the resolved root everywhere it is shown, and reopening undoes it', async () => {
     const { client } = world();

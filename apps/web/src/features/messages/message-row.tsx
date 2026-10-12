@@ -30,6 +30,7 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { renderContent } from '../content/render-content';
 import { ReactMenu, ReactionBar } from './reactions';
+import { MessageEditor, OwnActions, useEditing } from './editing';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -90,6 +91,9 @@ const MessageRowView = ({
   const failed = delivery === 'failed';
   // A tombstone (D-103 §7): its words are gone, and so is anything to do with them.
   const deleted = message.deletedAt !== null;
+  // The author's own, sent and not deleted: theirs to edit and delete (D-103).
+  const mine = message.sender.id === meId && delivery === 'sent' && !deleted;
+  const editing = useEditing().editingId === message.id && mine;
   // Whether the pointer or focus is on THIS row and not on a row nested inside it. A thread's
   // replies are rows inside the root's row, so CSS `group-hover` would show every reply's actions
   // whenever the root is hovered; the nearest row is the one that answers.
@@ -115,6 +119,7 @@ const MessageRowView = ({
 
   return (
     <article
+      data-editable={mine ? '' : undefined}
       onPointerOver={(event) => {
         setPointed(own(event));
       }}
@@ -167,7 +172,13 @@ const MessageRowView = ({
         )}
         {mentionsMe && <VisuallyHidden>{`${t('message.mention')}. `}</VisuallyHidden>}
         <div className={dimmed || deleted ? 'text-ink-muted' : undefined}>
-          {deleted ? <p>{t('message.deleted')}</p> : renderContent(message.content, { mentioned })}
+          {editing ? (
+            <MessageEditor message={message} />
+          ) : deleted ? (
+            <p>{t('message.deleted')}</p>
+          ) : (
+            renderContent(message.content, { mentioned })
+          )}
           {!deleted && message.editedAt !== null && (
             <span className="text-caption text-ink-muted" title={format.absolute(message.editedAt)}>
               {t('message.edited')}
@@ -216,6 +227,7 @@ const MessageRowView = ({
         >
           <ReactMenu message={message} meId={meId} />
           {actions}
+          {mine && <OwnActions message={message} />}
         </div>
       )}
     </article>

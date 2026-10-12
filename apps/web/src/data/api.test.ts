@@ -146,6 +146,16 @@ describe('the endpoints', () => {
     expect(reactions.calls[1]).toMatchObject({ method: 'DELETE' });
   });
 
+  test('an edit sends the new words', async () => {
+    const edited = harness(message);
+    await edited.api.editMessage(ID, 'better words');
+    expect(edited.calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: `/api/messages/${ID}`,
+      body: { content: 'better words' },
+    });
+  });
+
   test('signing out asks and does not read an answer', async () => {
     const out = harness(null);
     await out.api.signOut();
