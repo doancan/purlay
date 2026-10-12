@@ -44,6 +44,18 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/workspaces/:workspaceId/integrations/github',
     allowed: { owner: true, admin: true, member: false },
   },
+  'make an invitation link': {
+    endpoint: 'POST /api/workspaces/:workspaceId/invitations',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'list the invitation links': {
+    endpoint: 'GET /api/workspaces/:workspaceId/invitations',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'revoke an invitation link': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/invitations/:invitationId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'delete somebody else’s message': {
     endpoint: 'DELETE /api/messages/:messageId',
     allowed: { owner: true, admin: true, member: false },

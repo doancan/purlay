@@ -1,5 +1,5 @@
 /**
- * Bearer secrets: a session's cookie (D-11), and whatever else is handed out to be presented back.
+ * Bearer secrets: a session's cookie (D-11) and an invitation's link (D-115).
  * One scheme, so two of them cannot differ in strength or in what they store.
  *
  * - **256 bits from the platform's generator**, hex-encoded — nothing to guess along, so looking one

@@ -65,6 +65,8 @@ export interface Ids {
   readonly unsentAttachmentId: string;
   /** A member of the workspace who is not its owner: what managing a member acts on. */
   readonly memberId: string;
+  /** A link of the workspace that still opens: what revoking acts on. */
+  readonly invitationId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -84,6 +86,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'messageId') return ids.messageId;
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
+    if (name === 'invitationId') return ids.invitationId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -328,6 +331,22 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'only an upload nobody has sent can be discarded, and it is in no channel yet',
     },
   },
+  'POST /api/workspaces/:workspaceId/invitations': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'a link into the workspace, which joins no channel' },
+  },
+  'GET /api/workspaces/:workspaceId/invitations': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s links and who made them; no channel' },
+  },
+  'DELETE /api/workspaces/:workspaceId/invitations/:invitationId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'names a link and no channel; another workspace’s link under your own is `invitations.integration.test.ts`',
+    },
+  },
   'GET /api/notifications': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },
@@ -357,6 +376,10 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'GET /api/workspaces': 'lists the caller’s own memberships and names no workspace',
   'POST /api/workspaces': 'creates a workspace; there is nothing yet to be outside of',
+  'POST /api/invitations/preview':
+    'names no workspace: the token is the capability, and opens only its own (`invitations.integration.test.ts`)',
+  'POST /api/invitations/accept':
+    'names no workspace: the token is the capability, and admits only to its own, into no channel',
 };
 
 /**

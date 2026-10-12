@@ -474,7 +474,8 @@ is refreshed at most once an hour rather than on every request. (D-60)
 
 **Open join.** When `WORKSPACE_OPEN_JOIN_SLUG` is set, a user who is not yet a member of that
 workspace is joined as `member` here; an existing membership, whatever its role, is left as it is. Unset by default; Phase 0 cannot reach its exit criterion
-without it, because invitations are Phase 1. (D-37)
+without it, because invitations are Phase 1. (D-37) Invitation links (D-115) are how a person enters
+now; the variable is retired once nothing depends on it (#50).
 
 ### 7.2. WebSocket upgrade
 

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a workspace invites by link (D-115, closes O-2, #50)
+
+- An owner or an admin makes a link that opens for seven days to anyone signed in, lists the open
+  ones and revokes them; joining by one makes a member of no channel, never changes an existing
+  role, and does not bring back somebody removed since the link was made. The token is shown once,
+  stored only as its digest, and travels in bodies, never in a logged path. The screens follow.
+
 ### Feature — 2026-10-12: the composer says who else is typing (D-114, #411)
 
 - Typing in a channel's composer tells the room, rationed as the server rations it and only over an

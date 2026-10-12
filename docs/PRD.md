@@ -278,7 +278,7 @@ Four questions are deliberately unresolved — O-3 was closed by D-27. None bloc
 is recorded with its context, its candidate answers and the phase it must be decided in.
 
 > **Single source of truth:** `DECISIONS.md` Part D. Summarised here only as a pointer —
-> ~~O-1 message editing~~ (closed by D-103) · O-2 invitations · ~~O-3 retention & export~~ (closed by D-27) ·
+> ~~O-1 message editing~~ (closed by D-103) · ~~O-2 invitations~~ (closed by D-115) · ~~O-3 retention & export~~ (closed by D-27) ·
 > O-4 rate limiting · O-5 list virtualization.
 
 A task that runs into one of these has found a decision to be made, not a gap to be filled

@@ -193,6 +193,16 @@ export interface Users {
   username: string;
 }
 
+export interface WorkspaceInvitations {
+  created_at: Timestamp;
+  created_by: string | null;
+  expires_at: Timestamp;
+  id: string;
+  revoked_at: Timestamp | null;
+  token_hash: string;
+  workspace_id: string;
+}
+
 export interface WorkspaceMembers {
   deep_work_until: Timestamp | null;
   id: Generated<string>;
@@ -231,6 +241,7 @@ export interface DB {
   reactions: Reactions;
   sessions: Sessions;
   users: Users;
+  workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;
   workspaces: Workspaces;
 }

@@ -114,6 +114,33 @@ describe('integration: multi-write requests are atomic', () => {
     expect(retry.status).toBe(201);
   });
 
+  test('a join whose record fails to write leaves nobody in, and the link still opens (D-115)', async () => {
+    const owner = await aSignedInUser(cloned.db, clock, 'atomic-inv');
+    const joiner = await aSignedInUser(cloned.db, clock, 'atomic-joiner');
+    const created = await postJson('/api/workspaces', owner.cookie, {
+      name: 'Invited',
+      slug: aUniqueSlug('atomic-inv'),
+    });
+    const workspace = (await created.json()) as { id: string };
+    const made = await postJson(`/api/workspaces/${workspace.id}/invitations`, owner.cookie, {});
+    const { token } = (await made.json()) as { token: string };
+
+    await whileRefusingInserts('audit_log', async () => {
+      const response = await postJson('/api/invitations/accept', joiner.cookie, { token });
+      expect(response.status).toBe(500);
+    });
+    const left = await cloned.db
+      .selectFrom('workspace_members')
+      .select('id')
+      .where('workspace_id', '=', workspace.id)
+      .where('user_id', '=', joiner.userId)
+      .execute();
+    expect(left).toEqual([]);
+
+    const retry = await postJson('/api/invitations/accept', joiner.cookie, { token });
+    expect(retry.status).toBe(200);
+  });
+
   test('a sign-in whose session fails to write leaves no account behind', async () => {
     const login = `atomic-${crypto.randomUUID().slice(0, 8)}`;
     const email = `${login}@example.test`;

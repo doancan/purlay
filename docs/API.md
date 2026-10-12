@@ -107,12 +107,20 @@ an instance-administrator role this product does not have.
 | ○ | `PATCH` | `/api/workspaces/:workspaceId/members/:userId` | admin — `{ role }` (`UpdateMemberRoleRequest`); answers the `WorkspaceMember`. An admin manages members and admins; making somebody an owner, or changing an owner, is an owner's (§7.4). A member is `403 FORBIDDEN`; somebody not in the workspace `404 USER_NOT_FOUND`; leaving no owner `409 LAST_OWNER` (I-2) |
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin — `204`: out of the workspace and its channels; their sockets are sent `ACCESS_REVOKED` for every channel they could see. An owner is an owner's to remove; the last one `409 LAST_OWNER` (I-2) |
 | ○ | `PUT` | `/api/workspaces/:workspaceId/deep-work` | The caller's own — `{ active: true, until }` (ahead, at most `DEEP_WORK_MAX_HOURS`) or `{ active: false }` (`SetDeepWorkRequest`); answers `DeepWorkResponse`. Ends by itself at `until`; each membership in `/api/me` carries `deepWorkUntil`. While it lasts notifications are written `suppressed_by_deep_work` and still counted (D-15, D-108) |
-| ① | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — **shape pending O-2** |
-| ○ | `GET` | `/api/workspaces/:workspaceId/audit` | admin — `?before=&limit=` (`AuditQuery`); an `AuditPage` of `AuditEntry`, newest first, keyset on the id (D-26). Who did what to whom, never anything written; a member is `403 FORBIDDEN` |
+| ○ | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — `201` `CreatedInvitation`: a link valid for `INVITATION_TTL_DAYS`, its `token` in this answer and never again (D-115). A member is `403 FORBIDDEN` |
+| ○ | `GET` | `/api/workspaces/:workspaceId/invitations` | admin — `?before=&limit=` (`OlderPageQuery`); an `InvitationPage` of the links that still open, newest first, never their tokens |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/invitations/:invitationId` | admin — `204`: the link stops opening. Revoked or expired already is `204` again; another workspace's is `404 INVITATION_NOT_FOUND` |
+| ○ | `POST` | `/api/invitations/preview` | signed in — `{ token }` (`InvitationTokenRequest`); the `InvitationPreview`: which workspace, until when, and whether the caller is in it already |
+| ○ | `POST` | `/api/invitations/accept` | signed in — `{ token }`; in as `member`, into no channel, answered with the `Membership`. Already in: the same answer, the role unchanged. A link that does not open — unknown, expired, revoked, its workspace deleted, or the caller removed since it was made — is one `404 INVITATION_NOT_FOUND` |
+| ○ | `GET` | `/api/workspaces/:workspaceId/audit` | admin — `?before=&limit=` (`OlderPageQuery`); an `AuditPage` of `AuditEntry`, newest first, keyset on the id (D-26). Who did what to whom, never anything written; a member is `403 FORBIDDEN` |
 | ② | `PUT` | `/api/workspaces/:workspaceId/retention` | owner — `{ retentionDays: number \| null }`, min 30 (D-27) |
 | ② | `POST` | `/api/workspaces/:workspaceId/export` | owner — NDJSON + blobs (D-27) |
 
 Demoting or removing the last `owner` returns `409` (invariant I-2).
+
+**An invitation's token is never in a path or a query** (D-115): the request log writes every path,
+so the token travels in the body, and in the client's address only after `#`, which no request
+carries.
 
 ---
 

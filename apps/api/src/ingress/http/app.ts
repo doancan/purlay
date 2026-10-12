@@ -90,6 +90,13 @@ import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
 import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
+import {
+  dropInvitation,
+  joinByInvitation,
+  lookAtInvitation,
+  makeInvitation,
+  readInvitations,
+} from './invitations';
 import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
@@ -352,6 +359,31 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         set.status = 204;
         return null;
       },
+    )
+    .post('/api/workspaces/:workspaceId/invitations', async ({ request, params, set }) => {
+      set.status = 201;
+      return await makeInvitation(dependencies, request, params.workspaceId);
+    })
+    .get(
+      '/api/workspaces/:workspaceId/invitations',
+      async ({ request, params }) =>
+        await readInvitations(dependencies, request, params.workspaceId),
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/invitations/:invitationId',
+      async ({ request, params, set }) => {
+        await dropInvitation(dependencies, request, params.workspaceId, params.invitationId);
+        set.status = 204;
+        return null;
+      },
+    )
+    .post(
+      '/api/invitations/preview',
+      async ({ request, body }) => await lookAtInvitation(dependencies, request, body),
+    )
+    .post(
+      '/api/invitations/accept',
+      async ({ request, body }) => await joinByInvitation(dependencies, request, body),
     )
     .get(
       '/api/workspaces/:workspaceId/audit',
