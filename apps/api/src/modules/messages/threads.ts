@@ -30,6 +30,7 @@ import {
 import type { Logger } from '../../platform/logging';
 import { requireLiveSession } from '../auth/sessions';
 import { stillSeeing } from './delivery';
+import { inDeepWork } from '../workspaces/deep-work';
 import { buildMessages, MESSAGE_COLUMNS, readBuilt, readSummary, type MessageRow } from './reader';
 
 export interface PageQuery {
@@ -205,7 +206,7 @@ export const setResolved = async (
         .where('id', '=', messageId)
         .execute();
       if (resolved && root.sender_id !== userId) {
-        await notifyResolved(transaction, target, root.sender_id);
+        await notifyResolved(transaction, target, root.sender_id, now);
       }
     }
 
@@ -259,6 +260,7 @@ const notifyResolved = async (
   executor: Executor,
   target: VisibleMessage,
   authorId: string,
+  now: Date,
 ): Promise<void> => {
   if (!(await stillSeeing(executor, target.context, [authorId])).has(authorId)) return;
   const membership = await executor
@@ -276,6 +278,9 @@ const notifyResolved = async (
       channel_id: target.context.channelId,
       message_id: target.messageId,
       type: 'thread_resolved',
+      suppressed_by_deep_work: (
+        await inDeepWork(executor, target.context.workspaceId, [authorId], now)
+      ).has(authorId),
     })
     .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
     .execute();

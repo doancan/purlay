@@ -12,6 +12,8 @@
 import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
+  SetDeepWorkRequest,
+  type DeepWorkResponse,
   type MeResponse,
   type Membership,
   type Workspace,
@@ -27,6 +29,7 @@ import {
   membershipsOf,
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
+import { setDeepWork } from '../../modules/workspaces/deep-work';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -48,7 +51,7 @@ export const readMe = async (
 ): Promise<MeResponse> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
-  return await meOf(database, userId);
+  return await meOf(database, clock, userId);
 };
 
 export const listMyWorkspaces = async (
@@ -57,7 +60,7 @@ export const listMyWorkspaces = async (
 ): Promise<readonly Membership[]> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
-  return await membershipsOf(database, userId);
+  return await membershipsOf(database, clock, userId);
 };
 
 export const createMyWorkspace = async (
@@ -93,4 +96,21 @@ export const listWorkspaceMembers = async (
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await membersIn(database, context);
+};
+
+/**
+ * `PUT /api/workspaces/:workspaceId/deep-work` — the caller's own Deep Work here (D-108): started
+ * until an instant, or ended. A workspace they are not in is the stranger's `404`.
+ */
+export const setMyDeepWork = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<DeepWorkResponse> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const input = validated(SetDeepWorkRequest, body);
+  return await setDeepWork(database, clock, context, input);
 };

@@ -22,6 +22,7 @@
 import { sql, type Executor } from '@purlay/db';
 import type { ChannelState } from '@purlay/types';
 import type { ChannelContext } from '../../platform/channels';
+import { inDeepWork } from '../workspaces/deep-work';
 
 /**
  * The notifications that make a message one that needs the person (D-99 §1, D-107): every reason a
@@ -136,6 +137,8 @@ export interface Delivery {
   readonly mentioned: readonly string[];
   /** The root a reply answers, and who wrote it; null for a root. */
   readonly thread: { readonly rootId: string; readonly rootAuthorId: string } | null;
+  /** The send's instant, from its clock: whose Deep Work is on is a question about it (D-108). */
+  readonly now: Date;
 }
 
 /** Who is told about a message, and why: the strongest reason each person has. */
@@ -154,6 +157,7 @@ export const notify = async (
   context: ChannelContext,
   messageId: string,
   reasons: Reasons,
+  now: Date,
   writtenAt?: Date,
 ): Promise<readonly string[]> => {
   const candidates = [...reasons.keys()].filter((userId) => userId !== context.userId);
@@ -174,6 +178,8 @@ export const notify = async (
   }
   const notified = candidates.filter((userId) => !muted.has(userId));
   if (notified.length === 0) return [];
+  // Written and counted all the same: only how it may interrupt is held back (D-15, D-108).
+  const deep = await inDeepWork(executor, context.workspaceId, notified, now);
   const inserted = await executor
     .insertInto('notifications')
     .values(
@@ -188,6 +194,7 @@ export const notify = async (
                 channel_id: context.channelId,
                 message_id: messageId,
                 type,
+                suppressed_by_deep_work: deep.has(userId),
                 // Behind the person's position: it exists for the inbox and needs nothing.
                 ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),
               },
@@ -208,7 +215,7 @@ export const recordDelivery = async (
   executor: Executor,
   delivery: Delivery,
 ): Promise<readonly ChannelStateUpdate[]> => {
-  const { context, messageId, mentioned, thread } = delivery;
+  const { context, messageId, mentioned, thread, now } = delivery;
   const sender = context.userId;
 
   if (mentioned.length > 0) {
@@ -272,7 +279,7 @@ export const recordDelivery = async (
     for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }
 
-  const notified = await notify(executor, context, messageId, reasons);
+  const notified = await notify(executor, context, messageId, reasons, now);
 
   // Counted only for a member whose position is before this message. One whose position is
   // at or past it has read beyond it, and the read recount (`id > position`) would not find it:

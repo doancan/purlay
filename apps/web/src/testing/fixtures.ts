@@ -46,7 +46,7 @@ export const WORKSPACE: Workspace = {
 
 export const aSession = (): MeResponse => ({
   user: { ...ME, email: 'dogancan@example.test' },
-  memberships: [{ workspace: WORKSPACE, role: 'owner', joinedAt: WHEN }],
+  memberships: [{ workspace: WORKSPACE, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
 });
 
 export const aChannel = (

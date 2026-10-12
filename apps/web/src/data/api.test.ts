@@ -60,12 +60,12 @@ describe('the endpoints', () => {
   test('identity and workspaces', async () => {
     const me = harness({
       user: { ...user, email: 'a@example.test' },
-      memberships: [{ workspace, role: 'owner', joinedAt: WHEN }],
+      memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
 
-    const list = harness([{ workspace, role: 'member', joinedAt: WHEN }]);
+    const list = harness([{ workspace, role: 'member', joinedAt: WHEN, deepWorkUntil: null }]);
     expect(await list.api.workspaces()).toHaveLength(1);
     expect(list.calls[0]?.url).toBe('/api/workspaces');
 

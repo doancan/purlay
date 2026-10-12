@@ -169,6 +169,7 @@ export const reviseMessage = async (
         .filter((mentioned) => !alreadyTold.has(mentioned))
         .map((mentioned) => [mentioned, 'mention' as const]),
     ),
+    clock.now(),
     new Date(row.created_at),
   );
   const recipients =

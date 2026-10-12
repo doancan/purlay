@@ -259,3 +259,19 @@ export const ReadNotificationsRequest = Type.Union([
   FromClient({ workspaceId: Uuid, before: Type.Optional(Uuid) }),
 ]);
 export type ReadNotificationsRequest = Static<typeof ReadNotificationsRequest>;
+
+/** The longest Deep Work may be set for at once: it ends by itself, so it cannot be forgotten on (D-108). */
+export const DEEP_WORK_MAX_HOURS = 24;
+
+/**
+ * `PUT /api/workspaces/:workspaceId/deep-work` — start it, until an instant within
+ * `DEEP_WORK_MAX_HOURS`, or end it (D-108). Whether `until` is in that window is the server's to say:
+ * it is a question about the clock.
+ */
+export const SetDeepWorkRequest = Type.Union([
+  FromClient({ active: Type.Literal(true), until: Timestamp }),
+  FromClient({ active: Type.Literal(false) }),
+]);
+export type SetDeepWorkRequest = Static<typeof SetDeepWorkRequest>;
+export const DeepWorkResponse = Type.Object({ until: Type.Union([Timestamp, Type.Null()]) });
+export type DeepWorkResponse = Static<typeof DeepWorkResponse>;

@@ -104,6 +104,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
   },
+  // Deep Work is a member's own quiet; it changes what interrupts them, not what they may see
+  // (D-108, #59).
+  'apps/api/src/modules/workspaces/deep-work.ts#setDeepWork': {
+    none: 'sets a member’s own Deep Work; nobody gains or loses sight of anything (#59)',
+  },
   // Setting a notification level changes what a member is told, not what they may see (D-107, #52).
   'apps/api/src/modules/channels/notification-level.ts#setNotificationLevel': {
     none: 'sets what an existing member is told about; nobody gains or loses sight of a channel (#52)',

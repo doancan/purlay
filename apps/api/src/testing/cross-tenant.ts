@@ -223,6 +223,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ level: 'none' }),
     visibility: CHANNEL,
   },
+  'PUT /api/workspaces/:workspaceId/deep-work': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ active: false }),
+    visibility: {
+      kind: 'none',
+      reason: 'the caller’s own membership of the workspace; no channel is named',
+    },
+  },
   'GET /api/notifications': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },

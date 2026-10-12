@@ -47,6 +47,7 @@ import { refusalFor } from './errors';
 import {
   createMyWorkspace,
   listMyWorkspaces,
+  setMyDeepWork,
   listWorkspaceMembers,
   readMe,
   readWorkspace,
@@ -285,6 +286,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/deep-work',
+      async ({ request, params, body }) =>
+        await setMyDeepWork(dependencies, request, params.workspaceId, body),
     )
 
     .get(

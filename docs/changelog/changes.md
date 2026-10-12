@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: Deep Work, on the server (D-15, D-108)
+
+- `PUT /api/workspaces/:workspaceId/deep-work` starts it until an instant (at most a day ahead) or ends
+  it; it also ends by itself. While it lasts, what you are told is still written and counted, marked
+  as held back. `/api/me` says until when.
+
 ### Feature — 2026-10-12: choose what a channel tells you (D-107)
 
 - A channel's header has a bell: Every message, Mentions and replies (the default), or Nothing — the

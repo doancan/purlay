@@ -17,6 +17,7 @@ import {
   NotificationQuery,
   PAGE_LIMIT,
   ReadNotificationsRequest,
+  SetDeepWorkRequest,
   SetNotificationLevelRequest,
   Page,
   ReactionsResponse,
@@ -215,6 +216,15 @@ describe('http shapes', () => {
     }
     expect(Value.Check(SetNotificationLevelRequest, { level: 'loud' })).toBe(false);
     expect(Value.Check(SetNotificationLevelRequest, { level: 'none', userId: id })).toBe(false);
+  });
+
+  test('Deep Work is started until an instant, or ended; never started open-ended', () => {
+    const until = '2026-09-09T13:00:00.000Z';
+    expect(Value.Check(SetDeepWorkRequest, { active: true, until })).toBe(true);
+    expect(Value.Check(SetDeepWorkRequest, { active: false })).toBe(true);
+    expect(Value.Check(SetDeepWorkRequest, { active: true })).toBe(false);
+    expect(Value.Check(SetDeepWorkRequest, { active: false, until })).toBe(false);
+    expect(Value.Check(SetDeepWorkRequest, { active: true, until: 'tomorrow' })).toBe(false);
   });
 
   test('adding to a channel names one person and nothing else', () => {
