@@ -191,6 +191,7 @@ const created = (channelId: string, id: string): string => {
       thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
       reactions: [],
       mentions: [],
+      attachments: [],
     },
   };
   return JSON.stringify(frame);

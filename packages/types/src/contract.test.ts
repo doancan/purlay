@@ -86,6 +86,7 @@ describe('models', () => {
       thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
       reactions: [],
       mentions: [],
+      attachments: [],
     };
     expect(Value.Check(Message, message)).toBe(true);
     expect(Value.Check(Message, { ...message, sender: id })).toBe(false);
@@ -327,6 +328,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     thread: { replyCount: 2, lastReplyAt: when, resolvedAt: when, resolvedBy: user },
     reactions: [{ emoji: '👍', userIds: [id] }],
     mentions: [id],
+    attachments: [],
   };
 
   test('a root carries its thread summary, a reply carries none', () => {

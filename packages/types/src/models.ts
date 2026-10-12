@@ -228,6 +228,40 @@ export const ThreadSummary = Type.Object({
 });
 export type ThreadSummary = Static<typeof ThreadSummary>;
 
+/**
+ * The bounds of an attachment (D-16, D-109 §2). The database holds the same numbers as CHECKs
+ * (`attachment_size_limit`, `attachment_dimensions`, migration 0018), and a test inserts at each
+ * bound and one past it, so the two cannot drift.
+ */
+export const ATTACHMENT_BYTES_MAX = 26_214_400;
+export const ATTACHMENT_SIDE_MAX = 16_384;
+export const ATTACHMENT_PIXELS_MAX = 40_000_000;
+
+/** What a file is to the product: an image Purlay re-encoded and can draw, or anything else (D-109 §1). */
+export const AttachmentKind = Type.Union([
+  Type.Literal('image'),
+  Type.Literal('video'),
+  Type.Literal('audio'),
+  Type.Literal('file'),
+]);
+export type AttachmentKind = Static<typeof AttachmentKind>;
+
+/** An uploaded file, as its uploader and the readers of its message see it (D-109). */
+export const Attachment = Type.Object({
+  id: Uuid,
+  fileName: Type.String({ minLength: 1, maxLength: 255 }),
+  mimeType: Type.String({ minLength: 1, maxLength: 128 }),
+  sizeBytes: Type.Integer({ minimum: 1, maximum: ATTACHMENT_BYTES_MAX }),
+  kind: AttachmentKind,
+  /** Present for an image, so the client reserves its space before it loads. */
+  width: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  height: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+});
+export type Attachment = Static<typeof Attachment>;
+
+/** The most attachments one message carries (D-109 §7). */
+export const ATTACHMENTS_PER_MESSAGE_MAX = 10;
+
 export const Message = Type.Object({
   /** A UUIDv7 the client generated. It is also the pagination cursor. (D-8) */
   id: Uuid,
@@ -252,5 +286,7 @@ export const Message = Type.Object({
    * (D-12) so no client re-parses a body to find out who was addressed.
    */
   mentions: Type.Array(Uuid),
+  /** What it carries, in upload order; none on a tombstone (D-109 §6). */
+  attachments: Type.Array(Attachment, { maxItems: ATTACHMENTS_PER_MESSAGE_MAX }),
 });
 export type Message = Static<typeof Message>;

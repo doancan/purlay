@@ -42,6 +42,7 @@ const message = (n: number, over: Partial<Message> = {}): Message => ({
   thread: empty,
   reactions: [],
   mentions: [],
+  attachments: [],
   ...over,
 });
 const state = { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 };

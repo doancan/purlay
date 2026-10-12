@@ -34,6 +34,7 @@ const message = {
   thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
   reactions: [],
   mentions: [],
+  attachments: [],
 };
 const workspace = { id: ID, name: 'acme', slug: 'acme', avatarUrl: null };
 

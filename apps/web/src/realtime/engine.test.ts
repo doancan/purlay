@@ -62,6 +62,7 @@ const echo = (id: string, over: Partial<Message> = {}): Message => ({
   thread: summary,
   reactions: [],
   mentions: [],
+  attachments: [],
   ...over,
 });
 const channel = (id: string, over: Partial<Channel> = {}): Channel => ({

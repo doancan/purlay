@@ -37,6 +37,7 @@ const message = (n: number): Message => ({
   parentId: null,
   reactions: [],
   mentions: [],
+  attachments: [],
   thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
 });
 const page = (nextCursor: string | null, ...n: number[]): MessagePage => ({

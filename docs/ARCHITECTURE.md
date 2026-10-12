@@ -664,15 +664,20 @@ export interface GitHubCardMetadata {
 
 ## 9. Attachments
 
-1. `POST /api/uploads` with the file → validate MIME and size against the `attachment_size_limit`
-   constraint in `SCHEMA.md` §7.2, which is the single source of truth → check the workspace
-   quota → store under an opaque key → return an `attachment.id`. `message_id` is still null.
+The rules are D-109's; this is the path through the code.
+
+1. `POST /api/workspaces/:workspaceId/uploads` with the file's bytes (`API.md`) → the edge judges
+   its type and length before anything is read → `modules/attachments/images.ts` re-encodes an
+   image, or leaves a file as sent → `uploads.ts` stores it under an opaque key and checks the quota
+   with its row → the `Attachment`, `message_id` still null.
 2. The message is sent carrying those ids; the service links them and adds to
    `storage_used_bytes` in the same transaction.
-3. Orphans older than 24 h are swept.
+3. Every page of messages carries each message's attachments, read in one query for the page
+   (`messages/sets.ts`); a tombstone carries none.
+4. Orphans older than 24 h are swept (#71).
 
 Downloads are always brokered by the API so membership is actually checked; storage keys are
-never public URLs. Images are downscaled and a thumbnail is stored alongside.
+never public URLs.
 
 ---
 

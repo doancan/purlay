@@ -57,7 +57,8 @@ interface Row {
   readonly height: number | null;
 }
 
-const asAttachment = (row: Row): Attachment => ({
+/** The contract's attachment for a row: one mapping, for the upload's answer and a message's. */
+export const asAttachment = (row: Row): Attachment => ({
   id: row.id,
   fileName: row.file_name,
   mimeType: row.mime_type,
@@ -88,7 +89,8 @@ const conflict = (): AppError =>
     message: 'That attachment id is already used for another upload.',
   });
 
-const COLUMNS = [
+/** The columns `asAttachment` reads. */
+export const ATTACHMENT_COLUMNS = [
   'id',
   'workspace_id',
   'uploader_id',
@@ -124,7 +126,7 @@ export const storeUpload = async (
     async (transaction) =>
       await transaction
         .selectFrom('attachments')
-        .select(COLUMNS)
+        .select(ATTACHMENT_COLUMNS)
         .where('id', '=', input.id)
         .executeTakeFirst(),
   );
@@ -158,7 +160,7 @@ export const storeUpload = async (
 
       const raced = await transaction
         .selectFrom('attachments')
-        .select(COLUMNS)
+        .select(ATTACHMENT_COLUMNS)
         .where('id', '=', input.id)
         .executeTakeFirst();
       if (raced !== undefined) {
@@ -207,7 +209,7 @@ export const storeUpload = async (
           width: image?.width ?? null,
           height: image?.height ?? null,
         })
-        .returning(COLUMNS)
+        .returning(ATTACHMENT_COLUMNS)
         .executeTakeFirstOrThrow();
       return { attachment: asAttachment(row), created: true, own: true };
     }).then(async (outcome) => {

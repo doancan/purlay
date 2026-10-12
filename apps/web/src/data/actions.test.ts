@@ -39,6 +39,7 @@ const root: Message = {
   thread: summary,
   reactions: [],
   mentions: [],
+  attachments: [],
 };
 const state = { lastReadMessageId: null, unreadCount: 3, unreadMentionCount: 1 };
 const channel: Channel = {
