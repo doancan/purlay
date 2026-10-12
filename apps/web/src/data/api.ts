@@ -25,6 +25,7 @@ import {
   SearchPage,
   ReadChannelResponse,
   ThreadPage,
+  UnfurlResponse,
   UnresolvedPage,
   Workspace,
   WorkspaceMemberList,
@@ -62,6 +63,12 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<InvitationPage>;
   readonly revokeInvitation: (workspaceId: string, invitationId: string) => Promise<void>;
+  /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
+  readonly unfurl: (
+    workspaceId: string,
+    url: string,
+    signal?: AbortSignal,
+  ) => Promise<UnfurlResponse>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
 
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
@@ -163,6 +170,13 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/invitations`,
         InvitationPage,
         options(before === undefined ? {} : { query: { before } }, signal),
+      ),
+    unfurl: (workspaceId, url, signal) =>
+      http.request(
+        'POST',
+        '/api/integrations/github/unfurl',
+        UnfurlResponse,
+        options({ body: { workspaceId, url } }, signal),
       ),
     revokeInvitation: (workspaceId, invitationId) =>
       http.send(

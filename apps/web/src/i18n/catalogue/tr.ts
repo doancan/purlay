@@ -90,6 +90,11 @@ export const tr = {
   'invite.gone.body': 'Süresi dolmuş ya da iptal edilmiş olabilir. Yenisini iste.',
   'invite.failed.title': 'Davet okunamadı',
   'invite.home': 'Ana sayfaya dön',
+  'github.state.open': 'Açık',
+  'github.state.closed': 'Kapalı',
+  'github.state.merged': 'Birleştirildi',
+  'github.openedPr': '{login} tarafından açılan pull request',
+  'github.openedIssue': '{login} tarafından açılan issue',
   'invite.admin.entry': 'İnsanları davet et…',
   'invite.admin.title': '{workspace} çalışma alanına davet et',
   'invite.admin.description':

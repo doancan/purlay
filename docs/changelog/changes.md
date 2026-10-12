@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: GitHub links are cards (D-23, #67)
+
+- A pull request or issue linked in a message is drawn under it as a card: the kind, the repository
+  and number, its state, its title linking out, and who opened it — read with the workspace's token,
+  never its author's avatar. No card, nothing drawn; the link stays a link. CI and reviews: #423.
+
 ### Changed — 2026-10-12: open join is retired; people are invited (D-115, closes #50)
 
 - Signing in no longer joins anybody to a workspace. `WORKSPACE_OPEN_JOIN_SLUG` is refused at boot,
