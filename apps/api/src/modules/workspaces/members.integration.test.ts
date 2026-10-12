@@ -17,7 +17,10 @@ import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import { aRoom, type Room } from '../../testing/rooms';
+import { fixedClock } from '../../platform/clock';
 import { changeRole, removeMember } from './members';
+
+const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
 let cloned: ClonedDatabase;
 beforeAll(async () => {
@@ -70,9 +73,15 @@ describe('integration: changing a role', () => {
   test('an owner may make a member an admin, and back; the answer is the member as listed', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
-      const changed = await changeRole(db, await as(db, room, 'alice'), idOf(room, 'bob'), 'admin');
+      const changed = await changeRole(
+        db,
+        clock,
+        await as(db, room, 'alice'),
+        idOf(room, 'bob'),
+        'admin',
+      );
       expect(changed).toMatchObject({ user: { id: idOf(room, 'bob') }, role: 'admin' });
-      await changeRole(db, await as(db, room, 'alice'), idOf(room, 'bob'), 'member');
+      await changeRole(db, clock, await as(db, room, 'alice'), idOf(room, 'bob'), 'member');
       expect(await roleOf(db, room, 'bob')).toBe('member');
     });
   });
@@ -82,11 +91,15 @@ describe('integration: changing a role', () => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       await setRole(db, room, 'bob', 'admin');
       const bob = await as(db, room, 'bob');
-      await changeRole(db, bob, idOf(room, 'carol'), 'admin');
+      await changeRole(db, clock, bob, idOf(room, 'carol'), 'admin');
       expect(await roleOf(db, room, 'carol')).toBe('admin');
-      expect(await refusalOf(changeRole(db, bob, idOf(room, 'carol'), 'owner'))).toBe('FORBIDDEN');
-      expect(await refusalOf(changeRole(db, bob, idOf(room, 'alice'), 'member'))).toBe('FORBIDDEN');
-      expect(await refusalOf(removeMember(db, bob, idOf(room, 'alice')))).toBe('FORBIDDEN');
+      expect(await refusalOf(changeRole(db, clock, bob, idOf(room, 'carol'), 'owner'))).toBe(
+        'FORBIDDEN',
+      );
+      expect(await refusalOf(changeRole(db, clock, bob, idOf(room, 'alice'), 'member'))).toBe(
+        'FORBIDDEN',
+      );
+      expect(await refusalOf(removeMember(db, clock, bob, idOf(room, 'alice')))).toBe('FORBIDDEN');
     });
   });
 
@@ -94,9 +107,13 @@ describe('integration: changing a role', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       const bob = await as(db, room, 'bob');
-      expect(await refusalOf(changeRole(db, bob, idOf(room, 'carol'), 'admin'))).toBe('FORBIDDEN');
-      expect(await refusalOf(changeRole(db, bob, idOf(room, 'bob'), 'admin'))).toBe('FORBIDDEN');
-      expect(await refusalOf(removeMember(db, bob, idOf(room, 'carol')))).toBe('FORBIDDEN');
+      expect(await refusalOf(changeRole(db, clock, bob, idOf(room, 'carol'), 'admin'))).toBe(
+        'FORBIDDEN',
+      );
+      expect(await refusalOf(changeRole(db, clock, bob, idOf(room, 'bob'), 'admin'))).toBe(
+        'FORBIDDEN',
+      );
+      expect(await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol')))).toBe('FORBIDDEN');
     });
   });
 
@@ -104,12 +121,14 @@ describe('integration: changing a role', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const alice = await as(db, room, 'alice');
-      expect(await refusalOf(changeRole(db, alice, idOf(room, 'alice'), 'member'))).toBe(
+      expect(await refusalOf(changeRole(db, clock, alice, idOf(room, 'alice'), 'member'))).toBe(
         'LAST_OWNER',
       );
-      expect(await refusalOf(removeMember(db, alice, idOf(room, 'alice')))).toBe('LAST_OWNER');
-      await changeRole(db, alice, idOf(room, 'bob'), 'owner');
-      await changeRole(db, alice, idOf(room, 'alice'), 'member');
+      expect(await refusalOf(removeMember(db, clock, alice, idOf(room, 'alice')))).toBe(
+        'LAST_OWNER',
+      );
+      await changeRole(db, clock, alice, idOf(room, 'bob'), 'owner');
+      await changeRole(db, clock, alice, idOf(room, 'alice'), 'member');
       expect([await roleOf(db, room, 'alice'), await roleOf(db, room, 'bob')]).toEqual([
         'member',
         'owner',
@@ -122,10 +141,10 @@ describe('integration: changing a role', () => {
       const room = await aRoom(db, ['alice']);
       const elsewhere = await aRoom(db, ['dave']);
       const alice = await as(db, room, 'alice');
-      expect(await refusalOf(changeRole(db, alice, idOf(elsewhere, 'dave'), 'admin'))).toBe(
+      expect(await refusalOf(changeRole(db, clock, alice, idOf(elsewhere, 'dave'), 'admin'))).toBe(
         'USER_NOT_FOUND',
       );
-      expect(await refusalOf(removeMember(db, alice, 'not-a-uuid'))).toBe('USER_NOT_FOUND');
+      expect(await refusalOf(removeMember(db, clock, alice, 'not-a-uuid'))).toBe('USER_NOT_FOUND');
     });
   });
 });
@@ -169,7 +188,7 @@ describe('integration: removing a member', () => {
         })
         .execute();
 
-      const removed = await removeMember(db, await as(db, room, 'alice'), idOf(room, 'bob'));
+      const removed = await removeMember(db, clock, await as(db, room, 'alice'), idOf(room, 'bob'));
       // What they could see: the public channels, joined or not, and the private ones they were in.
       expect([...removed.channelIds].sort()).toEqual(
         [room.channelId, theirSecret, publicUnjoined].sort(),
@@ -191,8 +210,10 @@ describe('integration: removing a member', () => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       await setRole(db, room, 'bob', 'admin');
       const bob = await as(db, room, 'bob');
-      await removeMember(db, bob, idOf(room, 'carol'));
-      expect(await refusalOf(removeMember(db, bob, idOf(room, 'carol')))).toBe('USER_NOT_FOUND');
+      await removeMember(db, clock, bob, idOf(room, 'carol'));
+      expect(await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol')))).toBe(
+        'USER_NOT_FOUND',
+      );
     });
   });
 });
@@ -210,7 +231,7 @@ describe('integration: two owners stepping down at once', () => {
             idOf(room, who),
             room.workspaceId,
           );
-          return await changeRole(transaction, context, idOf(room, other), 'member');
+          return await changeRole(transaction, clock, context, idOf(room, other), 'member');
         }),
       );
     const outcomes = await Promise.all([step('alice', 'bob'), step('bob', 'alice')]);

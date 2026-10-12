@@ -11,6 +11,7 @@
  * ordering nobody chose and it changes as soon as there are two.
  */
 import type { Executor } from '@purlay/db';
+import { recordAudit } from '../audit/audit';
 import type { Clock } from '../../platform/clock';
 
 /** What signing in did. Every outcome is a success: none of them may block sign-in. */
@@ -49,7 +50,15 @@ export const joinOpenWorkspace = async (
     .onConflict((conflict) => conflict.columns(['workspace_id', 'user_id']).doNothing())
     .returning('id')
     .executeTakeFirst();
-  return inserted === undefined ? 'already a member' : 'joined';
+  if (inserted === undefined) return 'already a member';
+  await recordAudit(executor, clock, {
+    workspaceId: workspace.id,
+    actorUserId: userId,
+    action: 'member.joined',
+    targetType: 'user',
+    targetId: userId,
+  });
+  return 'joined';
 };
 
 /**

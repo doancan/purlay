@@ -16,6 +16,8 @@ import { sql, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type UserRole, type WorkspaceMember } from '@purlay/types';
 import { visibleChannelIds } from '../../platform/channels';
+import type { Clock } from '../../platform/clock';
+import { recordAudit } from '../audit/audit';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 
@@ -73,6 +75,7 @@ const keepAnOwner = async (executor: Executor, context: WorkspaceContext): Promi
 /** Inside the caller's transaction. Answers the member as the members list shows them. */
 export const changeRole = async (
   executor: Executor,
+  clock: Clock,
   context: WorkspaceContext,
   userId: string,
   role: UserRole,
@@ -82,6 +85,17 @@ export const changeRole = async (
   const { caller, target } = await rolesUnderLock(executor, context, userId);
   if (!mayManage(caller, target, role)) throw forbidden();
   if (target === 'owner' && role !== 'owner') await keepAnOwner(executor, context);
+  // The same role again changes nothing, and records nothing.
+  if (target !== role) {
+    await recordAudit(executor, clock, {
+      workspaceId: context.workspaceId,
+      actorUserId: context.userId,
+      action: 'member.role_changed',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { from: target, to: role },
+    });
+  }
   const row = await executor
     .updateTable('workspace_members')
     .set({ role })
@@ -109,6 +123,7 @@ export const changeRole = async (
 /** Inside the caller's transaction. Answers the channels the removed member could see. */
 export const removeMember = async (
   executor: Executor,
+  clock: Clock,
   context: WorkspaceContext,
   userId: string,
 ): Promise<{ readonly channelIds: readonly string[] }> => {
@@ -132,5 +147,13 @@ export const removeMember = async (
     .where('workspace_id', '=', context.workspaceId)
     .where('user_id', '=', userId)
     .execute();
+  await recordAudit(executor, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'member.removed',
+    targetType: 'user',
+    targetId: userId,
+    metadata: { role: target },
+  });
   return { channelIds };
 };

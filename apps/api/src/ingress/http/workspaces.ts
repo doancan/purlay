@@ -143,7 +143,7 @@ export const updateMemberRole = async (
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { role } = validated(UpdateMemberRoleRequest, body);
   return await atomicallyOn(database)(
-    async (transaction) => await changeRole(transaction, context, userId, role),
+    async (transaction) => await changeRole(transaction, clock, context, userId, role),
   );
 };
 
@@ -161,7 +161,7 @@ export const removeWorkspaceMember = async (
   const caller = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { channelIds } = await atomicallyOn(database)(
-    async (transaction) => await removeMember(transaction, context, userId),
+    async (transaction) => await removeMember(transaction, clock, context, userId),
   );
   await publishAfterCommit(log, [
     [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],

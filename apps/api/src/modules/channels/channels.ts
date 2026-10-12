@@ -14,6 +14,7 @@
  * (null when they can see it and have not joined) and, for a direct message, the
  * other person (D-98, D-99).
  */
+import { recordAudit } from '../audit/audit';
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -195,6 +196,15 @@ export const createChannel = async (
     .insertInto('channel_members')
     .values({ channel_id: row.id, user_id: context.userId, joined_at: clock.now() })
     .execute();
+
+  await recordAudit(executor, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'channel.created',
+    targetType: 'channel',
+    targetId: row.id,
+    metadata: { type: input.type ?? 'public' },
+  });
 
   return await channelFor(executor, context.userId, row.id);
 };
