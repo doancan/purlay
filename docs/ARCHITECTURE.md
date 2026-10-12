@@ -323,7 +323,9 @@ is not ten thousand frames from one. (D-69)
 **The subscription is made before the replay is read.** Live frames for the connection are held
 until the acknowledgement and the replay are written, then sent, minus any message the replay already
 carried by id. Read first, a message committed between the read and the subscription would be in
-neither. (D-83)
+neither. (D-83) A channel the subscription is then refused, or that is revoked while frames are held,
+loses **every** frame held for it — each kind of frame says which channel it is about, or that it is
+about none, so one added later cannot slip past (#412).
 
 ### 5.5. Backpressure and limits
 

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: a refused subscription no longer releases a channel's held frames (#412)
+
+- Frames held while a `SUBSCRIBE` was being authorised were dropped for a refused channel only if
+  they were new messages; an edit's words, a thread summary, a reaction set or a read position
+  published in that moment reached the refused socket with its error. Every kind is dropped now, and
+  the same behind a revocation.
+
 ### Quality — 2026-10-12: the API's idle memory is a budget the build holds (D-49, #73)
 
 - `bun run budget:api` starts the API against the database, waits for it to be ready and settled, and

@@ -207,6 +207,30 @@ export interface HubOptions {
   readonly timers?: Timers;
 }
 
+/**
+ * The channel a frame is about, or null for one that is about the connection. What is kept for a
+ * channel the socket may not see is forgotten by this, so every kind says which it is: a frame added
+ * to the contract does not compile here until it does (#412).
+ */
+const channelOf = (frame: ServerFrame): string | null => {
+  switch (frame.event) {
+    case 'MESSAGE_CREATED':
+    case 'THREAD_UPDATED':
+    case 'REACTIONS_UPDATED':
+    case 'MESSAGE_REVISED':
+    case 'CHANNEL_STATE':
+      return frame.data.channelId;
+    // An invitation into a channel, not news from one: a later revocation follows it in order.
+    case 'CHANNEL_ADDED':
+    case 'ACK':
+    case 'ERROR':
+    case 'SESSION_ENDED':
+    case 'ACCESS_REVOKED':
+    case 'PONG':
+      return null;
+  }
+};
+
 export const createSocketHub = (
   database: Executor,
   clock: Clock,
@@ -237,9 +261,10 @@ export const createSocketHub = (
   };
 
   const purge = (socket: Held, channelIds: ReadonlySet<string>): void => {
-    socket.holding = socket.holding?.filter(
-      (kept) => kept.event !== 'MESSAGE_CREATED' || !channelIds.has(kept.data.channelId),
-    );
+    socket.holding = socket.holding?.filter((kept) => {
+      const channelId = channelOf(kept);
+      return channelId === null || !channelIds.has(channelId);
+    });
   };
 
   const deliver = (socketId: string, frame: ServerFrame): void => {

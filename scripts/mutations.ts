@@ -1895,4 +1895,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  if (inFlight.count < 0) {\n',
     tests: ['apps/api/src/ingress/http/uploads.integration.test.ts'],
   },
+  {
+    id: 'held-edit-released-to-a-refused-socket',
+    why: "an edit's words published while a subscription is being refused reach the socket that was refused (#412)",
+    file: 'apps/api/src/realtime/hub.ts',
+    find: "    case 'MESSAGE_REVISED':\n",
+    replace: '',
+    tests: ['apps/api/src/realtime/revocation.test.ts'],
+  },
 ];
