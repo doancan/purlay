@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: choose what a channel tells you (D-107)
+
+- A channel's header has a bell: Every message, Mentions and replies (the default), or Nothing — the
+  bell crossed out when it is Nothing. Changed at once; refused, the old choice comes back and the toast
+  says why. Offered only in a channel you are in.
+
 ### Feature — 2026-10-12: a notification level per channel, on the server (D-107)
 
 - `PUT /api/channels/:channelId/notification-level` sets what you are told about in a channel: `all`

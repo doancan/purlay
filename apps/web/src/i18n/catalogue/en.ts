@@ -305,6 +305,17 @@ export const en = {
   'state.search.error.title': "Couldn't search",
   'state.search.error.body': 'The server did not answer. Your words are kept; try again.',
 
+  // ── Notification level (D-107) ─────────────────────────────────────────
+  'level.label': 'Notify me about',
+  'level.button': 'Notifications: {level}',
+  'level.all': 'Every message',
+  'level.mentions': 'Mentions and replies',
+  'level.none': 'Nothing',
+  'level.all.short': 'every message',
+  'level.mentions.short': 'mentions and replies',
+  'level.none.short': 'nothing',
+  'level.failed': 'The notification level was not changed.',
+
   // ── Inbox (D-106) ──────────────────────────────────────────────────────
   'inbox.title': 'Inbox',
   'inbox.lede': 'What you were told, newest first',

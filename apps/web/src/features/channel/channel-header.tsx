@@ -21,6 +21,7 @@ import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { IconButton } from '../../ui/icon-button';
 import { AddPeopleDialog } from './add-people';
+import { NotificationLevelMenu } from './notification-level-menu';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -112,6 +113,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           )}
         </Link>
       </nav>
+      <NotificationLevelMenu channel={channel} />
       {canAdd && (
         <>
           <IconButton

@@ -24,6 +24,7 @@ import type {
   Reaction,
   ThreadSummary,
   MessageRevision,
+  NotificationLevel,
 } from '@purlay/types';
 import { families, keys } from './keys';
 
@@ -228,6 +229,15 @@ export const channelStateChanged = (
   if (before !== undefined && state.unreadMentionCount > (before.state?.unreadMentionCount ?? 0)) {
     void client.invalidateQueries({ queryKey: keys.notifications(before.workspaceId) });
   }
+};
+
+/** The caller's notification level in a channel, as they chose it or as it was before a refusal. */
+export const channelLevelChanged = (
+  client: QueryClient,
+  channelId: string,
+  notificationLevel: NotificationLevel,
+): void => {
+  editChannels(client, channelId, (c) => ({ ...c, notificationLevel }));
 };
 
 /** A channel appeared for the caller. Added once, however many frames say so. */
