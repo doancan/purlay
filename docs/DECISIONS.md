@@ -4763,7 +4763,9 @@ Recorded so they are not silently assumed. None block Phase 0.
   confirm or refute the number; typing indicators (Phase 1) are the volume that will. *Closed by a
   measurement during Phase 1 dogfooding:* the highest frame rate a connection reaches in normal
   use, as the 99th percentile over a week, and the count of `RATE_LIMITED` refusals that week —
-  which must be zero for legitimate use. Recording both needs the structured logger (#127).
+  which must be zero for legitimate use. Both are recorded: each socket's closing line carries
+  `frames`, `peakPerSecond` and `refused` (#61, `realtime/frame-meter.ts`), so the week is a query
+  over the log.
 - **O-7 · What the command palette is built on.** D-52 named a Radix combobox; Radix does not
   publish one (`docs/spikes/frontend-budget.md`). `cmdk` is built on Radix and is what the budget
   measurement used; a listbox hand-built on `@radix-ui/react-popover` is the alternative, and the
