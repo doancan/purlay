@@ -110,6 +110,16 @@ type Visibility =
  * stranger's request carries the same body, which is how a refusal that came before
  * the body was read is told from one that came after.
  */
+/**
+ * The query string a case needs to be a request the endpoint can answer at all — search needs `q`.
+ * Without it the owner's own request would be a `400`, and every crossing would be refused for the
+ * wrong reason.
+ */
+export const queryFor = (crossing: CrossTenantCase): string =>
+  crossing.visibility.kind === 'workspace-wide' && crossing.visibility.query !== undefined
+    ? `?${crossing.visibility.query}`
+    : '';
+
 export interface OwnerIds {
   readonly userId: string;
   readonly messageId: string;
@@ -200,6 +210,10 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId/unresolved': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide' },
+  },
+  'GET /api/workspaces/:workspaceId/search': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide', query: 'q=question' },
   },
 };
 

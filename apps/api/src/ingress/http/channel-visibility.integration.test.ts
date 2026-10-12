@@ -19,7 +19,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor, type OwnerIds } from '../../testing/cross-tenant';
+import { CROSS_TENANT, pathFor, queryFor, type OwnerIds } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -297,7 +297,7 @@ describe('integration: channel visibility', () => {
       test(`${key} returns nothing from a channel the caller cannot see`, async () => {
         await withRollback(async (db) => {
           const world = await aWorld(db);
-          const query = visibility.query === undefined ? '' : `?${visibility.query}`;
+          const query = queryFor(crossing);
           const read = async (cookie: string): Promise<string> => {
             const response = await call(
               db,

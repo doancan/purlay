@@ -64,6 +64,7 @@ import {
   postMessage,
   readHistory,
   readThread,
+  readSearch,
   readUnresolved,
   setThreadResolution,
   editMessage,
@@ -365,6 +366,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/unresolved',
       async ({ request, params }) =>
         await readUnresolved(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/search',
+      async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),
     )
 
     .put(

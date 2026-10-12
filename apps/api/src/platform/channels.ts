@@ -38,7 +38,7 @@ export interface ChannelContext {
  * channel is in another workspace, private and not yours, deleted, or was never
  * a channel at all — one value, so the four cannot drift apart (D-34).
  */
-const channelNotFound = (): AppError =>
+export const channelNotFound = (): AppError =>
   new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
 
 interface VisibleChannel {

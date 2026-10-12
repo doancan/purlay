@@ -21,7 +21,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor, type Ids } from '../../testing/cross-tenant';
+import { CROSS_TENANT, pathFor, queryFor, type Ids } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -114,20 +114,38 @@ describe('integration: cross-tenant isolation', () => {
           messageId: theirs.messageId,
         });
 
-        const across = await call(db, method, pathFor(path, theirs), stranger, body);
+        const across = await call(
+          db,
+          method,
+          `${pathFor(path, theirs)}${queryFor(crossing)}`,
+          stranger,
+          body,
+        );
         expect(across.status).toBe(404);
         const refusal: unknown = await across.json();
         expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
         for (const ids of [NEVER_EXISTED, NOT_A_UUID]) {
-          const elsewhere = await call(db, method, pathFor(path, ids), stranger, body);
+          const elsewhere = await call(
+            db,
+            method,
+            `${pathFor(path, ids)}${queryFor(crossing)}`,
+            stranger,
+            body,
+          );
           expect({ status: elsewhere.status, body: await elsewhere.json() }).toEqual({
             status: 404,
             body: refusal,
           });
         }
 
-        const own = await call(db, method, pathFor(path, theirs), owner, body);
+        const own = await call(
+          db,
+          method,
+          `${pathFor(path, theirs)}${queryFor(crossing)}`,
+          owner,
+          body,
+        );
         expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
       });
     });

@@ -12,6 +12,9 @@ const WORKSPACES_TESTS = ['apps/api/src/modules/workspaces/workspaces.integratio
 const MESSAGES = 'apps/api/src/modules/messages/messages.ts';
 const MESSAGES_TESTS = ['apps/api/src/modules/messages/messages.integration.test.ts'];
 
+const SEARCH = 'apps/api/src/modules/search/search.ts';
+const SEARCH_TESTS = ['apps/api/src/modules/search/search.integration.test.ts'];
+
 const SOCKET = 'apps/api/src/ingress/ws/socket.ts';
 const SOCKET_TESTS = ['apps/api/src/realtime/sockets.integration.test.ts'];
 
@@ -858,5 +861,53 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "        ...(secret ? { type: 'private' as const } : {}),\n",
     replace: '',
     tests: ['apps/web/src/features/sidebar/sidebar.test.tsx'],
+  },
+  {
+    id: 'search-pattern-not-escaped',
+    why: 'a search for 100% finds every message with 100 in it, and _ matches any character: the words are read as a pattern',
+    file: SEARCH,
+    find: '`%${words.replace(/[\\\\%_]/g, (character) => `\\\\${character}`)}%`',
+    replace: '`%${words}%`',
+    tests: SEARCH_TESTS,
+  },
+  {
+    id: 'search-finds-deleted-messages',
+    why: 'a deleted message is found by its words, so search is the way back to what its author took away',
+    file: SEARCH,
+    find: "    .where('messages.deleted_at', 'is', null)\n",
+    replace: '',
+    tests: SEARCH_TESTS,
+  },
+  {
+    id: 'search-not-narrowed-to-visible-channels',
+    why: 'a member finds the words of a private channel or a direct message they are not in',
+    file: SEARCH,
+    find: "    .where('messages.channel_id', 'in', channelIds)\n",
+    replace: '',
+    tests: SEARCH_TESTS,
+  },
+  {
+    id: 'search-channel-not-checked',
+    why: 'a channelId the caller cannot see is searched anyway, and an empty answer is no longer the refusal it must be',
+    file: SEARCH,
+    find: '  if (query.channelId !== undefined && !visible.includes(query.channelId)) throw channelNotFound();\n',
+    replace: '',
+    tests: SEARCH_TESTS,
+  },
+  {
+    id: 'search-case-sensitive',
+    why: 'DEPLOY does not find deploy, which is not how a person searches',
+    file: SEARCH,
+    find: "    .where('messages.content', 'ilike', literalPattern(query.q))\n",
+    replace: "    .where('messages.content', 'like', literalPattern(query.q))\n",
+    tests: SEARCH_TESTS,
+  },
+  {
+    id: 'search-words-not-trimmed',
+    why: 'two spaces and a letter are measured as three characters, a search the trigram index cannot serve',
+    file: 'apps/api/src/ingress/http/messages.ts',
+    find: "    if (value !== null) query[key] = key === 'q' ? value.trim() : value;\n",
+    replace: '    if (value !== null) query[key] = value;\n',
+    tests: ['apps/api/src/ingress/http/search.integration.test.ts'],
   },
 ];

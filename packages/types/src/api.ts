@@ -143,6 +143,28 @@ export type MessagePage = Static<typeof MessagePage>;
 export const ChannelList = Type.Array(Channel);
 export type ChannelList = Static<typeof ChannelList>;
 
+/** The shortest search that a trigram index can answer; shorter would read every visible message. */
+export const SEARCH_QUERY_MIN = 3;
+export const SEARCH_QUERY_MAX = 200;
+
+/**
+ * `GET /api/workspaces/:workspaceId/search` — messages whose words contain `q`, ignoring case, in
+ * the channels the caller can see, or in one of them (D-10, D-34, D-105). Newest first, keyset by
+ * `before`. `%`, `_` and `\` are themselves, not patterns.
+ */
+export const SearchQuery = FromClient({
+  q: Type.String({ minLength: SEARCH_QUERY_MIN, maxLength: SEARCH_QUERY_MAX }),
+  channelId: Type.Optional(Uuid),
+  before: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type SearchQuery = Static<typeof SearchQuery>;
+
+export const SearchPage = Page(Message);
+export type SearchPage = Static<typeof SearchPage>;
+
 /** `GET /api/messages/:messageId/thread` — replies, keyset, **oldest first**. */
 export const ThreadPage = Page(Message);
 export type ThreadPage = Static<typeof ThreadPage>;
