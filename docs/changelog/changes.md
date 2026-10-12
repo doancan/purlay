@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: the one credential cipher (D-39 §6, #113)
+
+- `platform/crypto.ts` seals a stored secret with AES-256-GCM under a key derived from
+  `ENCRYPTION_KEY`, a fresh nonce per seal, and the record's id bound in, so a sealed value opens only
+  with the same key, for the same row, unaltered. Nothing else in the API encrypts, and a test holds it.
+
 ### Fix — 2026-10-12: the class vocabulary check judges each class alone (#385)
 
 - Each class is now built by a compiler of its own. On one shared, incremental compiler a raw class
