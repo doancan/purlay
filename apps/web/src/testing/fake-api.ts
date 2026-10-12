@@ -14,6 +14,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   me: unexpected('me'),
   workspaces: unexpected('workspaces'),
   createWorkspace: unexpected('createWorkspace'),
+  previewInvitation: unexpected('previewInvitation'),
+  acceptInvitation: unexpected('acceptInvitation'),
   members: unexpected('members'),
   channels: unexpected('channels'),
   createChannel: unexpected('createChannel'),

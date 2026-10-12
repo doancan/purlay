@@ -14,6 +14,7 @@
  */
 const ROUTES = {
   signIn: '/sign-in',
+  invite: '/invite',
   home: '/',
   workspace: '/w/:slug',
   channel: '/w/:slug/c/:channelId',
