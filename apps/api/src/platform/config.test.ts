@@ -417,3 +417,34 @@ describe('a retired variable', () => {
     expect(() => loadConfig({ ...valid, WORKSPACE_OPEN_JOIN_SLUG: '' })).not.toThrow();
   });
 });
+
+describe('the directory store (D-117)', () => {
+  test('is a development store: production refuses it, as it refuses to run without the bucket', () => {
+    expect(
+      refusal({
+        ...valid,
+        NODE_ENV: 'production',
+        APP_URL: 'https://chat.example.com',
+        DATABASE_SSL: 'true',
+        ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+        STORAGE_DIRECTORY: '/var/purlay/files',
+      }),
+    ).toContain('STORAGE_DIRECTORY: production keeps attachments in the bucket');
+  });
+
+  test('is one store or the other, never both', () => {
+    expect(
+      refusal({
+        ...valid,
+        STORAGE_DIRECTORY: '/tmp/files',
+        S3_ENDPOINT: 'http://127.0.0.1:9000',
+        S3_BUCKET: 'b',
+        S3_ACCESS_KEY_ID: 'k',
+        S3_SECRET_ACCESS_KEY: 's',
+      }),
+    ).toContain('STORAGE_DIRECTORY: one store or the other');
+    expect(loadConfig({ ...valid, STORAGE_DIRECTORY: '/tmp/files' }).STORAGE_DIRECTORY).toBe(
+      '/tmp/files',
+    );
+  });
+});
