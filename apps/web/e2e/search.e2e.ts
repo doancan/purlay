@@ -7,7 +7,7 @@
  * unique name — because the four projects share one database.
  */
 import { expect, tabTo, test } from './fixtures';
-import { navLink, shellReady } from './support';
+import { railLink, shellReady } from './support';
 
 test.describe('search', () => {
   test('finds the words in a channel the person is in, and not in one they are not', async ({
@@ -31,7 +31,7 @@ test.describe('search', () => {
     await signIn();
     await page.goto(`/w/${tenant.slug}/c/${open.id}`);
     await shellReady(page);
-    await (await navLink(page, 'Search')).click();
+    await (await railLink(page, 'Search')).click();
     const field = page.getByRole('searchbox', { name: 'Search messages' });
     // Arriving focuses the page, as every navigation does; the field is its first stop after the
     // header (which, narrow, holds the navigation toggle).

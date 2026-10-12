@@ -84,7 +84,6 @@ export const ChannelList = (): React.JSX.Element => {
                 slug={workspace.slug}
                 channelId={channel.id}
                 glyph={channel.type === 'private' ? 'private-channel' : 'channel'}
-                mono
                 current={channel.id === currentId}
                 unread={(channel.state?.unreadCount ?? 0) > 0}
                 mentions={channel.state?.unreadMentionCount ?? 0}

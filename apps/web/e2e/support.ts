@@ -253,6 +253,12 @@ export const openNav = async (page: Page): Promise<Locator> => {
   return sidebar;
 };
 
+/** A place on the rail — the inbox, the open questions, search — with the navigation open (D-110). */
+export const railLink = async (page: Page, name: string): Promise<Locator> => {
+  await openNav(page);
+  return page.getByRole('navigation', { name: 'Places' }).getByRole('link', { name });
+};
+
 /** The sidebar entry of a channel (its name may be preceded by "unread"), with the sidebar open. */
 export const navLink = async (page: Page, name: string): Promise<Locator> =>
   (await openNav(page)).getByRole('link', { name: new RegExp(`^(unread )?${name}`) });

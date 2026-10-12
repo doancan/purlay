@@ -9,7 +9,11 @@ const PAGE = `<!doctype html><html><body>${ROOT}<script src="/a.js"></script></b
 describe('the shell as markup', () => {
   test('is the skeleton: sidebar, header and feed rows as layout, with no words and no script', () => {
     const markup = renderShell();
+    expect(markup).toContain('w-rail');
     expect(markup).toContain('w-sidebar');
+    // The first paint is the frame the page will have: flat, no canvas behind cards (D-110).
+    expect(markup).not.toContain('bg-canvas');
+    expect(markup).not.toContain('shadow-card');
     expect(markup).toContain('h-header');
     expect(markup).toContain('w-gutter');
     expect(markup).not.toContain('<script');

@@ -8,7 +8,7 @@
  * explains that it got here because the session ended, and `?error` that the round trip
  * did not finish; both say what to do, neither blames.
  *
- * It is the first thing anyone sees of the product, so it is a card on the canvas with the
+ * It is the first thing anyone sees of the product, so it is a card on the navigation tone with the
  * product's mark, not a heading on a blank page (D-100).
  */
 import { useEffect } from 'react';
@@ -38,7 +38,7 @@ export const SignInScreen = (): React.JSX.Element => {
   }, [me.isSuccess, navigate]);
 
   return (
-    <Main className="flex min-h-screen items-center justify-center bg-canvas p-4 text-ink">
+    <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-lg text-center bg-surface-100 p-8 shadow-card">
         <LogoMark />
         <div className="flex flex-col items-center gap-2">

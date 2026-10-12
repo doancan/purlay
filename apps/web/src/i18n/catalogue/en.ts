@@ -375,6 +375,7 @@ export const en = {
   'message.link.opens': 'Opens {host}',
 
   // ── Theme and language ──────────────────────────────────────────────────
+  'rail.label': 'Places',
   'settings.label': 'Settings',
   'theme.label': 'Theme',
   'theme.system': 'System',

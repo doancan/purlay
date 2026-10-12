@@ -20,11 +20,11 @@ const iconButtonClasses =
 /**
  * Two sizes. A control sits in a row with other controls and is as tall as they are; a rail
  * button is a larger square on the window's edge, with a larger glyph and its tip opening
- * inward (D-109).
+ * inward (D-110).
  */
 const sizeClasses = {
   control: 'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted',
-  rail: 'size-rail-item rounded-lg text-ink-subtle',
+  rail: 'size-rail-item rounded-lg text-ink-subtle max-narrow:h-touch max-narrow:w-touch',
 } as const;
 
 export interface IconButtonProps extends Omit<

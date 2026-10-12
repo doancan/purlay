@@ -1,5 +1,5 @@
 /**
- * Settings, at the foot of the rail: the theme, the language and the shortcut reference (D-109).
+ * Settings, at the foot of the rail: the theme, the language and the shortcut reference (D-110).
  *
  * One menu rather than three buttons, because none of them is used often and each used to cost
  * the sidebar a permanent control. The theme and the language stay radio groups — each is one

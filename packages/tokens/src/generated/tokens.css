@@ -97,7 +97,6 @@
   color-scheme: dark;
   --surface-000: #0f0f11;
   --surface-050: #1b1b1e;
-  --canvas: #0f0f11;
   --surface-100: #161618;
   --surface-200: #202024;
   --code-bg: #111113;
@@ -144,7 +143,6 @@
   color-scheme: light;
   --surface-000: #f7f7f8;
   --surface-050: #fafafa;
-  --canvas: #f7f7f8;
   --surface-100: #ffffff;
   --surface-200: #f4f4f5;
   --code-bg: #f6f8fa;

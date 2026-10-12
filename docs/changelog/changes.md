@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a flat frame, with the rail back (D-110)
+
+- The rail, down the left edge: the workspace tile (the switcher), then channels, the inbox, the open
+  questions and search, and settings at the foot. The inbox carries a dot while something needs you;
+  the open questions carry their count, neutral, because they are the team's and not a summons.
+- One settings menu holds the theme, the language and the keyboard shortcuts.
+- No canvas and no floating cards: the rail and the sidebar share one tone, the conversation sits on the
+  window's ground, and one hairline divides them. The sidebar is the workspace's name, the jump field,
+  the channels and the people, with your own row at the foot. Channel names are set in the sans.
+- On a narrow window the rail and the sidebar open together, as one panel.
+
 ### Feature — 2026-10-12: a flat, quiet interface — tokens and type (D-110)
 
 - Inter for prose and JetBrains Mono for machine text, served from this origin (`@fontsource/inter`

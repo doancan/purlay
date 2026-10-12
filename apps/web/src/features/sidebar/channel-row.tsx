@@ -17,12 +17,12 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useDeepWork } from '../shell/deep-work';
 
 const rowClasses =
-  'flex h-control w-full items-center gap-2 rounded-md px-2 text-body hover:bg-surface-200 max-narrow:h-touch';
+  'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard hover:bg-surface-200 max-narrow:h-touch';
 
 const toneClasses = {
-  quiet: 'text-ink-muted',
+  quiet: 'text-ink-subtle',
   unread: 'text-ink font-semibold',
-  current: 'bg-accent-subtle text-ink font-medium hover:bg-accent-subtle',
+  current: 'bg-accent-subtle text-accent-text font-medium hover:bg-accent-subtle',
 } as const;
 
 /** What a row looks like, from what is true of it: where you are beats what is unread. */
@@ -33,7 +33,6 @@ interface RowContentProps {
   readonly glyph?: GlyphName;
   /** A person's avatar, in the place a channel has its `#`: a row has one or the other. */
   readonly avatar?: React.ReactNode;
-  readonly mono?: boolean;
   readonly unread: boolean;
   readonly mentions: number;
   readonly current: boolean;
@@ -44,7 +43,6 @@ interface RowContentProps {
 const RowContent = ({
   glyph,
   avatar,
-  mono = false,
   unread,
   mentions,
   children,
@@ -55,7 +53,7 @@ const RowContent = ({
     <>
       {glyph === undefined ? null : <Icon name={glyph} />}
       {avatar}
-      <span className={cn('min-w-0 flex-1 truncate', mono && 'font-mono')}>
+      <span className="min-w-0 flex-1 truncate">
         {unread ? <VisuallyHidden>{t('sidebar.unread')} </VisuallyHidden> : null}
         {children}
       </span>

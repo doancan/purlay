@@ -61,12 +61,6 @@ export const PAIRS: readonly Pair[] = [
     TEXT,
     'message text, secondary text and meta',
   ),
-  ...cross(
-    ['ink', 'ink-muted'],
-    ['canvas'],
-    TEXT,
-    'the sign-in card sits on it, and its words with it',
-  ),
   ...cross(['ink'], AVATARS, TEXT, 'the initials in an avatar'),
   // `accent` is a fill; its words are `accent-text`, on whatever the message sits on,
   // including a mention's tint and the active row (D-110).
@@ -107,7 +101,6 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   'surface-050': 'a background; it is the `background` of the pairs above',
   'surface-100': 'a background; it is the `background` of the pairs above',
   'surface-200': 'a background; it is the `background` of the pairs above',
-  canvas: 'a background; it is the `background` of the pairs above',
   'avatar-1': 'a background; it is the `background` of the pairs above',
   'avatar-2': 'a background; it is the `background` of the pairs above',
   'avatar-3': 'a background; it is the `background` of the pairs above',
