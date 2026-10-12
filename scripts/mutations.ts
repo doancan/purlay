@@ -1178,4 +1178,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    and n.read_at is null and n.type in (${sql.join(NEEDS_YOU.slice(0, 3))})\n',
     tests: ['apps/api/src/modules/channels/notification-level.integration.test.ts'],
   },
+  {
+    id: 'level-not-painted-first',
+    why: 'the bell keeps the old level until the server answers, and on a slow network the choice looks ignored',
+    file: 'apps/web/src/features/channel/notification-level-menu.tsx',
+    find: '    channelLevelChanged(client, channel.id, level);\n',
+    replace: '',
+    tests: ['apps/web/src/features/channel/notification-level-menu.test.tsx'],
+  },
+  {
+    id: 'level-refusal-not-put-back',
+    why: 'a refused change stays on screen, and the bell says a level the server never took',
+    file: 'apps/web/src/features/channel/notification-level-menu.tsx',
+    find: '      channelLevelChanged(client, channel.id, current);\n',
+    replace: '',
+    tests: ['apps/web/src/features/channel/notification-level-menu.test.tsx'],
+  },
 ];

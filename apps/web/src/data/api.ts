@@ -25,6 +25,7 @@ import {
   WorkspaceMemberList,
   type CreateChannelRequest,
   type CreateWorkspaceRequest,
+  type NotificationLevel,
   type ReadNotificationsRequest,
   type SendMessageRequest,
 } from '@purlay/types';
@@ -51,6 +52,8 @@ export interface Api {
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   /** Brings somebody from the workspace into the channel (D-104); they are told by the server. */
   readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
+  /** What the caller is told about in this channel (D-107). */
+  readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
 
@@ -133,6 +136,12 @@ export const createApi = (http: Http): Api => {
       ),
     addChannelMember: (channelId, userId) =>
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
+    setNotificationLevel: (channelId, level) =>
+      http.send(
+        'PUT',
+        `/api/channels/${at(channelId)}/notification-level`,
+        options({ body: { level } }),
+      ),
     joinChannel: (channelId) =>
       http.request('POST', `/api/channels/${at(channelId)}/join`, Channel, options()),
     openDirectMessage: (workspaceId, userId) =>

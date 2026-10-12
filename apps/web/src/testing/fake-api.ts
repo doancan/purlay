@@ -33,6 +33,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   unreact: unexpected('unreact'),
   editMessage: unexpected('editMessage'),
   addChannelMember: unexpected('addChannelMember'),
+  setNotificationLevel: unexpected('setNotificationLevel'),
   deleteMessage: unexpected('deleteMessage'),
   signOut: unexpected('signOut'),
   ...overrides,

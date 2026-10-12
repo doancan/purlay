@@ -163,6 +163,14 @@ describe('the endpoints', () => {
     expect(refused).toBe(true);
   });
 
+  test('the notification level goes in the body, to the channel it is for', async () => {
+    const set = harness(null);
+    await set.api.setNotificationLevel(ID, 'none');
+    expect(set.calls).toEqual([
+      { method: 'PUT', url: `/api/channels/${ID}/notification-level`, body: { level: 'none' } },
+    ]);
+  });
+
   test('search: the words and the cursor in the query', async () => {
     const found = harness({ data: [message], nextCursor: null });
     await found.api.search(ID, { q: 'a b&c' });

@@ -295,6 +295,17 @@ export const tr = {
   'state.search.error.title': 'Aranamadı',
   'state.search.error.body': 'Sunucu yanıt vermedi. Kelimelerin duruyor; yeniden dene.',
 
+  // ── Notification level (D-107) ─────────────────────────────────────────
+  'level.label': 'Bana haber ver',
+  'level.button': 'Bildirimler: {level}',
+  'level.all': 'Her mesaj',
+  'level.mentions': 'Bahsetmeler ve yanıtlar',
+  'level.none': 'Hiçbir şey',
+  'level.all.short': 'her mesaj',
+  'level.mentions.short': 'bahsetmeler ve yanıtlar',
+  'level.none.short': 'hiçbir şey',
+  'level.failed': 'Bildirim düzeyi değiştirilemedi.',
+
   // ── Inbox (D-106) ──────────────────────────────────────────────────────
   'inbox.title': 'Gelen kutusu',
   'inbox.lede': 'Sana söylenenler, en yenisi önce',
