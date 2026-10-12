@@ -45,23 +45,76 @@ const Cached = Type.Union([
   Type.Object({ kind: Type.Literal('missing') }),
 ]);
 
+/** A pull request's checks and reviews, as GitHub's GraphQL API answers them (#423): checked, not trusted. */
+const PullChecks = Type.Object({
+  data: Type.Object({
+    repository: Type.Object({
+      pullRequest: Type.Object({
+        reviewDecision: Type.Union([Type.String(), Type.Null()]),
+        commits: Type.Object({
+          nodes: Type.Array(
+            Type.Object({
+              commit: Type.Object({
+                statusCheckRollup: Type.Union([Type.Object({ state: Type.String() }), Type.Null()]),
+              }),
+            }),
+          ),
+        }),
+      }),
+    }),
+  }),
+});
+
+const CHECKS_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewDecision
+      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    }
+  }
+}`;
+
+type Checks = Pick<GitHubCardMetadata, 'ciStatus' | 'reviewDecision'>;
+
+/** GitHub's words for a rollup and a decision, in the contract's; one GitHub may add later is left out. */
+const CI: Readonly<Record<string, NonNullable<Checks['ciStatus']>>> = {
+  SUCCESS: 'success',
+  FAILURE: 'failure',
+  ERROR: 'failure',
+  PENDING: 'pending',
+  EXPECTED: 'pending',
+};
+const REVIEW: Readonly<Record<string, NonNullable<Checks['reviewDecision']>>> = {
+  APPROVED: 'approved',
+  CHANGES_REQUESTED: 'changes_requested',
+  REVIEW_REQUIRED: 'review_required',
+};
+
+interface Part {
+  readonly owner: string;
+  readonly repo: string;
+  readonly kind: 'pull' | 'issues';
+  readonly number: number;
+}
+
 export interface GitHubApi {
   /** The item's card; `'missing'` for GitHub's 404. Anything else throws. */
-  readonly item: (
-    part: { owner: string; repo: string; kind: 'pull' | 'issues'; number: number },
-    token: string,
-  ) => Promise<GitHubCardMetadata | 'missing'>;
+  readonly item: (part: Part, token: string) => Promise<GitHubCardMetadata | 'missing'>;
+  /** A pull request's checks and reviews, each absent when GitHub has none to say. Failing throws. */
+  readonly checks: (part: Part, token: string) => Promise<Checks>;
 }
+
+const headers = (token: string): Record<string, string> => ({
+  accept: 'application/vnd.github+json',
+  authorization: `Bearer ${token}`,
+  'user-agent': 'purlay',
+});
 
 export const githubApi = (base = 'https://api.github.com'): GitHubApi => ({
   item: async ({ owner, repo, kind, number }, token): Promise<GitHubCardMetadata | 'missing'> => {
     const path = kind === 'pull' ? 'pulls' : 'issues';
     const response = await fetch(`${base}/repos/${owner}/${repo}/${path}/${String(number)}`, {
-      headers: {
-        accept: 'application/vnd.github+json',
-        authorization: `Bearer ${token}`,
-        'user-agent': 'purlay',
-      },
+      headers: headers(token),
       signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
     });
     if (response.status === 404) return 'missing';
@@ -76,6 +129,27 @@ export const githubApi = (base = 'https://api.github.com'): GitHubApi => ({
       title: body.title,
       state: body.merged_at != null ? 'merged' : body.state,
       author: { login: body.user.login, avatarUrl: body.user.avatar_url },
+    };
+  },
+  checks: async ({ owner, repo, number }, token): Promise<Checks> => {
+    // Variables, never interpolation: the query is a constant and the parts are data.
+    const response = await fetch(`${base}/graphql`, {
+      method: 'POST',
+      headers: { ...headers(token), 'content-type': 'application/json' },
+      body: JSON.stringify({ query: CHECKS_QUERY, variables: { owner, name: repo, number } }),
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`GitHub answered ${String(response.status)}`);
+    const body: unknown = await response.json();
+    if (!Value.Check(PullChecks, body))
+      throw new Error('GitHub answered something that is not checks');
+    const { reviewDecision, commits } = body.data.repository.pullRequest;
+    const rollup = commits.nodes[0]?.commit.statusCheckRollup?.state;
+    const ciStatus = rollup === undefined ? undefined : CI[rollup];
+    const review = reviewDecision === null ? undefined : REVIEW[reviewDecision];
+    return {
+      ...(ciStatus === undefined ? {} : { ciStatus }),
+      ...(review === undefined ? {} : { reviewDecision: review }),
     };
   },
 });
@@ -142,16 +216,36 @@ export const unfurl = async (
   const token = await githubTokenOf(database, cipher, log, context);
   if (token === null) return null;
   try {
-    const item = await github.item(
-      { owner, repo, kind: kind === 'pull' ? 'pull' : 'issues', number: Number(number) },
-      token,
-    );
+    const part: Part = {
+      owner,
+      repo,
+      kind: kind === 'pull' ? 'pull' : 'issues',
+      number: Number(number),
+    };
+    const item = await github.item(part, token);
     if (item === 'missing') {
       await remember(database, key, url, { kind: 'missing' }, now, NEGATIVE_TTL_MS);
       return null;
     }
-    await remember(database, key, url, { kind: 'card', card: item }, now, CARD_TTL_MS);
-    return item;
+    if (item.type === 'issue') {
+      await remember(database, key, url, { kind: 'card', card: item }, now, CARD_TTL_MS);
+      return item;
+    }
+    // A pull request's checks and reviews are a second question; the card does not wait on it.
+    let card: GitHubCardMetadata = item;
+    let ttl = CARD_TTL_MS;
+    try {
+      card = { ...item, ...(await github.checks(part, token)) };
+    } catch (error) {
+      // The card without them, said, and kept a minute so they are asked about again soon.
+      log.warn('GitHub did not answer a card’s checks', {
+        workspaceId: context.workspaceId,
+        error,
+      });
+      ttl = UNAVAILABLE_TTL_MS;
+    }
+    await remember(database, key, url, { kind: 'card', card }, now, ttl);
+    return card;
   } catch (error) {
     // Said, and held off for a minute so a GitHub outage is not asked about on every render.
     log.warn('GitHub did not answer an unfurl', { workspaceId: context.workspaceId, error });

@@ -291,6 +291,18 @@ export const GitHubCardMetadata = Type.Object({
   title: Type.String({ maxLength: 1024 }),
   state: Type.Union([Type.Literal('open'), Type.Literal('closed'), Type.Literal('merged')]),
   author: Type.Object({ login: Type.String({ maxLength: 100 }), avatarUrl: Type.String() }),
+  /** A pull request's checks on its last commit, rolled up; absent for an issue, or with no checks (#423). */
+  ciStatus: Type.Optional(
+    Type.Union([Type.Literal('success'), Type.Literal('failure'), Type.Literal('pending')]),
+  ),
+  /** What its reviews decided; absent for an issue, or when nothing is required or given (#423). */
+  reviewDecision: Type.Optional(
+    Type.Union([
+      Type.Literal('approved'),
+      Type.Literal('changes_requested'),
+      Type.Literal('review_required'),
+    ]),
+  ),
 });
 export type GitHubCardMetadata = Static<typeof GitHubCardMetadata>;
 /** The endpoint's answer: the card, or none — no token, nothing there, or GitHub did not answer. */

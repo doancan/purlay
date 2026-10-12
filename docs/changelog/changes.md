@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a pull request's card says its checks and its reviews (#423)
+
+- Passed, failed or running, and approved, changes requested or review required — asked of GitHub's
+  GraphQL API with the workspace's token, alongside the card. If that question fails the card is
+  drawn without them and asked again within a minute.
+
 ### Feature — 2026-10-12: GitHub links are cards (D-23, #67)
 
 - A pull request or issue linked in a message is drawn under it as a card: the kind, the repository

@@ -25,14 +25,16 @@ const cipher = credentialCipher(Buffer.alloc(32, 9).toString('base64'));
 
 /** GitHub, as far as these tests need it: what was asked, with which token, and what it answers. */
 const asked: { path: string; authorization: string | null }[] = [];
+const queried: unknown[] = [];
 let answer: (path: string) => Response = () => new Response('{}', { status: 404 });
 let server: ReturnType<typeof Bun.serve>;
 beforeAll(() => {
   server = Bun.serve({
     port: 0,
-    fetch: (request) => {
+    fetch: async (request) => {
       const path = new URL(request.url).pathname;
       asked.push({ path, authorization: request.headers.get('authorization') });
+      if (path === '/graphql') queried.push(await request.json());
       return answer(path);
     },
   });
@@ -49,6 +51,20 @@ const pull = {
   user: { login: 'octo', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
 };
 const PR = 'https://github.com/acme/api/pull/42';
+
+/** GitHub's GraphQL answer for a pull request's checks and reviews. */
+const checks = (rollup: string | null, decision: string | null): unknown => ({
+  data: {
+    repository: {
+      pullRequest: {
+        reviewDecision: decision,
+        commits: {
+          nodes: [{ commit: { statusCheckRollup: rollup === null ? null : { state: rollup } } }],
+        },
+      },
+    },
+  },
+});
 
 const aWorkspaceWithToken = async (
   db: Executor,
@@ -77,7 +93,9 @@ describe('integration: unfurling a GitHub link', () => {
       answer = (path): Response =>
         path === '/repos/acme/api/pulls/42'
           ? Response.json(pull)
-          : new Response('{}', { status: 404 });
+          : path === '/graphql'
+            ? Response.json(checks(null, null))
+            : new Response('{}', { status: 404 });
       const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
       const card = await unfurl(dependencies(db), context, PR);
       expect(card).toEqual({
@@ -91,7 +109,80 @@ describe('integration: unfurling a GitHub link', () => {
       expect(await unfurl(dependencies(db), context, PR)).toEqual(card);
       expect(asked).toEqual([
         { path: '/repos/acme/api/pulls/42', authorization: 'Bearer ghp_workspace_a' },
+        { path: '/graphql', authorization: 'Bearer ghp_workspace_a' },
       ]);
+    });
+  });
+
+  test('an open pull request carries its checks and its reviews, asked of GraphQL by its parts', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      queried.length = 0;
+      answer = (path): Response =>
+        path === '/graphql'
+          ? Response.json(checks('SUCCESS', 'APPROVED'))
+          : Response.json({ ...pull, state: 'open', merged_at: null });
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      expect(await unfurl(dependencies(db), context, PR)).toMatchObject({
+        state: 'open',
+        ciStatus: 'success',
+        reviewDecision: 'approved',
+      });
+      expect(queried).toEqual([
+        {
+          query: expect.stringContaining('statusCheckRollup') as unknown,
+          variables: { owner: 'acme', name: 'api', number: 42 },
+        },
+      ]);
+    });
+  });
+
+  test.each([
+    ['FAILURE', 'CHANGES_REQUESTED', 'failure', 'changes_requested'],
+    ['ERROR', 'REVIEW_REQUIRED', 'failure', 'review_required'],
+    ['PENDING', null, 'pending', undefined],
+    ['EXPECTED', null, 'pending', undefined],
+  ] as const)(
+    'GitHub’s %s and %s are said as %s and %s',
+    async (rollup, decision, ciStatus, reviewDecision) => {
+      await withRollback(async (db) => {
+        answer = (path): Response =>
+          path === '/graphql' ? Response.json(checks(rollup, decision)) : Response.json(pull);
+        const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+        const card = await unfurl(dependencies(db), context, PR);
+        expect(card?.ciStatus).toBe(ciStatus);
+        expect(card?.reviewDecision).toBe(reviewDecision);
+      });
+    },
+  );
+
+  test('an issue asks nothing of GraphQL', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (): Response => Response.json({ ...pull, state: 'open', merged_at: undefined });
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const card = await unfurl(dependencies(db), context, 'https://github.com/acme/api/issues/7');
+      expect(card).not.toHaveProperty('ciStatus');
+      expect(asked.map((a) => a.path)).toEqual(['/repos/acme/api/issues/7']);
+    });
+  });
+
+  test('checks that do not come leave the card without them, said, and asked again within a minute', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (path): Response =>
+        path === '/graphql' ? new Response('nope', { status: 502 }) : Response.json(pull);
+      const recorded = aRecordingLogger();
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const card = await unfurl({ ...dependencies(db), log: recorded.log }, context, PR);
+      expect(card).toMatchObject({ title: pull.title, state: 'merged' });
+      expect(card).not.toHaveProperty('ciStatus');
+      expect(recorded.lines.map((line) => line['msg'])).toContain(
+        'GitHub did not answer a card’s checks',
+      );
+      const after = new Date(NOW.getTime() + UNAVAILABLE_TTL_MS);
+      await unfurl(dependencies(db, after), context, PR);
+      expect(asked.filter((a) => a.path === '/graphql')).toHaveLength(2);
     });
   });
 
@@ -124,7 +215,7 @@ describe('integration: unfurling a GitHub link', () => {
       expect(await unfurl(dependencies(db), theirs, PR)).not.toBeNull();
       // No token here, and no borrowing from the cache another workspace filled.
       expect(await unfurl(dependencies(db), ours, PR)).toBeNull();
-      expect(asked).toHaveLength(1);
+      expect(asked.filter((a) => a.path !== '/graphql')).toHaveLength(1);
     });
   });
 

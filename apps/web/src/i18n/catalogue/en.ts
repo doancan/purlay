@@ -95,6 +95,12 @@ export const en = {
   'github.state.merged': 'Merged',
   'github.openedPr': 'Pull request by {login}',
   'github.openedIssue': 'Issue by {login}',
+  'github.ci.success': 'Checks passed',
+  'github.ci.failure': 'Checks failed',
+  'github.ci.pending': 'Checks running',
+  'github.review.approved': 'Approved',
+  'github.review.changes_requested': 'Changes requested',
+  'github.review.review_required': 'Review required',
   'invite.admin.entry': 'Invite people…',
   'invite.admin.title': 'Invite people to {workspace}',
   'invite.admin.description':

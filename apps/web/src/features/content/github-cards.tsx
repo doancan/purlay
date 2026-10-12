@@ -3,6 +3,7 @@
  * `ARCHITECTURE.md` §8.3, `UX.md` §3): the kind, `owner/repo#number`, the state, the title as a link,
  * and who opened it.
  *
+ * - **With a pull request's checks and reviews** when GitHub said them (#423), in words and a glyph.
  * - **The links are read from the words with the same engine as everything else** (`metadataOf`,
  *   D-101), so the client and the server agree on what counts and on the cap.
  * - **A card is a decoration of a link that is already there.** Until it arrives, and when there is
@@ -37,6 +38,20 @@ const stateClasses: Readonly<Record<GitHubCardMetadata['state'], string>> = {
   merged: 'bg-accent-subtle text-accent-text',
 };
 
+type CiStatus = NonNullable<GitHubCardMetadata['ciStatus']>;
+
+const ciGlyph: Readonly<Record<CiStatus, GlyphName>> = {
+  success: 'confirm',
+  failure: 'ci-failed',
+  pending: 'sending',
+};
+
+const ciClasses: Readonly<Record<CiStatus, string>> = {
+  success: 'text-success-text',
+  failure: 'text-danger-text',
+  pending: 'text-ink-muted',
+};
+
 const Card = ({
   url,
   card,
@@ -65,10 +80,21 @@ const Card = ({
       >
         {card.title}
       </a>
-      <span className="text-caption text-ink-muted">
-        {t(card.type === 'pr' ? 'github.openedPr' : 'github.openedIssue', {
-          login: card.author.login,
-        })}
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-muted">
+        <span>
+          {t(card.type === 'pr' ? 'github.openedPr' : 'github.openedIssue', {
+            login: card.author.login,
+          })}
+        </span>
+        {card.ciStatus !== undefined && (
+          <span className={cn('inline-flex items-center gap-1', ciClasses[card.ciStatus])}>
+            <Icon name={ciGlyph[card.ciStatus]} size="sm" />
+            {t(`github.ci.${card.ciStatus}`)}
+          </span>
+        )}
+        {card.reviewDecision !== undefined && (
+          <span>{t(`github.review.${card.reviewDecision}`)}</span>
+        )}
       </span>
     </article>
   );
