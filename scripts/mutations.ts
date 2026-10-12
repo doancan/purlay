@@ -1666,6 +1666,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/revocation.integration.test.ts'],
   },
   {
+    id: 'frame-meter-forgets-the-peak',
+    why: 'the busiest second is overwritten by the last one, and O-4 is closed on a number that hides the bursts',
+    file: 'apps/api/src/realtime/frame-meter.ts',
+    find: 'meter.peakPerSecond = Math.max(meter.peakPerSecond, meter.inSecond);',
+    replace: 'meter.peakPerSecond = meter.inSecond;',
+    tests: ['apps/api/src/realtime/frame-meter.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',

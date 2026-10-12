@@ -28,6 +28,7 @@ import {
   SOCKET_FRAME_BUDGET,
   type RateLimiter,
 } from '../../realtime/rate-limiter';
+import { metered } from '../../realtime/frame-meter';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
@@ -125,7 +126,8 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
   });
   const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
-  const limiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET);
+  // Measured, so the closing line says what the budget met (O-4).
+  const limiter = metered(inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET), clock);
   // The transaction boundary both doors share: a new transaction per write, or
   // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
   const atomically = atomicallyOn(database);
@@ -252,7 +254,12 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
 
     close: (socket, code): void => {
-      log.info('socket closed', { socketId: socket.id, code });
+      // `closeCode`, not `code`: a field named `code` is withheld from the log, as an OAuth code is.
+      log.info('socket closed', {
+        socketId: socket.id,
+        closeCode: code,
+        ...limiter.report(socket.id),
+      });
       bus.forget(socket.id);
       limiter.forget(socket.id);
       hub.closed(socket.id);

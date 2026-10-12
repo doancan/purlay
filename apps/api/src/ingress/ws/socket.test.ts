@@ -77,3 +77,32 @@ describe('a socket whose identity cannot be read when it opens', () => {
     expect(closed).toEqual([{ code: CLOSE_CODES.TOO_BUSY, reason: 'failed-to-open' }]);
   });
 });
+
+describe('a socket that closes', () => {
+  test('says what its frame budget met: frames, the busiest second, refusals (O-4)', () => {
+    const { log, lines } = aRecordingLogger();
+    const lifecycle = createSocketLifecycle({
+      config: testConfig(),
+      database: aDatabaseThatMustNotBeTouched(new Error('unused')),
+      clock,
+      log,
+      userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+    });
+    lifecycle.close(
+      {
+        id: 's9',
+        raw: Object.assign({ send: (): number => 0 }, { getBufferedAmount: (): number => 0 }),
+        data: { request: new Request('https://purlay.test/ws') },
+        close: () => undefined,
+      },
+      1000,
+    );
+    expect(lines.find((line) => line['msg'] === 'socket closed')).toMatchObject({
+      socketId: 's9',
+      closeCode: 1000,
+      frames: 0,
+      peakPerSecond: 0,
+      refused: 0,
+    });
+  });
+});

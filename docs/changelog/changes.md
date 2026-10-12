@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Operations — 2026-10-12: the frame budget is measured (O-4)
+
+- Each socket's closing log line says how many frames it sent, the most in any one second, and how
+  many the budget refused, so a week of dogfooding can confirm or correct ten a second with a burst of
+  twenty. The line also says its close code again: a field named `code` was withheld from the log as
+  an OAuth code is, so every socket closed without one.
+
 ### Feature — 2026-10-12: managing members and roles (D-111)
 
 - An owner or admin changes a member's role (`PATCH …/members/:userId`) or removes them (`DELETE`).
