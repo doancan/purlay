@@ -910,4 +910,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    if (value !== null) query[key] = value;\n',
     tests: ['apps/api/src/ingress/http/search.integration.test.ts'],
   },
+  {
+    id: 'search-words-may-hold-a-nul',
+    why: 'a NUL in q reaches ILIKE, which PostgreSQL refuses: a 500 and an error report for a malformed search',
+    file: 'packages/types/src/api.ts',
+    find: "maxLength: SEARCH_QUERY_MAX,\n    format: 'plain-text',\n",
+    replace: 'maxLength: SEARCH_QUERY_MAX,\n',
+    tests: ['apps/api/src/ingress/http/search.integration.test.ts'],
+  },
 ];

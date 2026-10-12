@@ -6,9 +6,9 @@ Single source of truth for the HTTP surface. WebSocket frames are specified sepa
 The endpoint list previously existed only as scattered mentions across `ARCHITECTURE.md`. It is
 consolidated here so that adding an endpoint has one obvious place to be recorded.
 
-**Phase markers:** ○ built · ① Phase 1 · ② Phase 2. An endpoint not marked ○ is not built. The
-thread, resolution and open-questions endpoints were pulled forward by the owner (D-98, D-99) and are
-marked ○ with the rest; the other Phase 1 rows are unchanged.
+**Phase markers:** ○ built · ① Phase 1 · ② Phase 2. An endpoint not marked ○ is not built. Rows
+pulled forward from a later phase by the owner carry ○ like the rest, and the decision that pulled
+them is named in the row.
 
 ---
 

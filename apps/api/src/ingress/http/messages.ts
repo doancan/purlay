@@ -11,6 +11,7 @@ import {
   EditMessageRequest,
   PageQuery,
   SearchQuery,
+  type SearchPage,
   SendMessageRequest,
   type Message,
   type MessagePage,
@@ -164,7 +165,7 @@ export const readSearch = async (
   dependencies: HistoryDependencies,
   request: Request,
   workspaceId: string,
-): Promise<MessagePage> => {
+): Promise<SearchPage> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);

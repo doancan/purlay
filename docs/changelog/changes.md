@@ -10,7 +10,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 - `GET /api/workspaces/:workspaceId/search?q=` finds the words as typed, ignoring case, in roots and
   replies, resolved threads too — in the channels the caller can see and nowhere else; a deleted
-  message is never found. `channelId` narrows to one channel. Three to two hundred characters,
+  message is never found. `channelId` narrows to one channel. Bounded in length (D-105 §2),
   newest first, a page at a time.
 
 ### Feature — 2026-10-12: private channels in the client, and bringing people in (D-104)

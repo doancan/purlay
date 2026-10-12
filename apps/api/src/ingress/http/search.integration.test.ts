@@ -95,6 +95,8 @@ describe('integration: the search door', () => {
         at(SEARCH_QUERY_MAX + 1),
         encodeURIComponent(` ${'e'.repeat(SEARCH_QUERY_MIN - 1)} `),
         '',
+        // PostgreSQL cannot compare a NUL: refused at the contract, not a 500 from the database.
+        'abc%00',
       ]) {
         const response = await search(db, world, `q=${q}`);
         expect(response.status).toBe(400);

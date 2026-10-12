@@ -173,6 +173,7 @@ describe('http shapes', () => {
     expect(Value.Check(SearchQuery, { q: at(SEARCH_QUERY_MAX) })).toBe(true);
     expect(Value.Check(SearchQuery, { q: at(SEARCH_QUERY_MAX + 1) })).toBe(false);
     expect(Value.Check(SearchQuery, { q: 'abc', after: id })).toBe(false);
+    expect(Value.Check(SearchQuery, { q: 'abc\u0000' })).toBe(false);
     expect(Value.Check(SearchQuery, { q: 'abc', channelId: id, before: id, limit: 5 })).toBe(true);
   });
 
