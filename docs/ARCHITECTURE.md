@@ -606,8 +606,10 @@ Parsing happens **once, on the server, when the message is written**. The parser
 It exists for three reasons: mentions are resolved once and stored as rows, `metadata` is derived
 once rather than per feed render, and sanitisation happens in exactly one place. It does **not**
 exist to save client render cost — the rendered output is not stored, and an earlier version of
-this document claimed otherwise. The client renders the markdown and memoises the result per
-`(message.id, edited_at)`. Markdown remains the only stored representation. (D-36)
+this document claimed otherwise. The client renders the markdown and keeps each body's reading for
+the session, keyed by its text — which changes exactly when `edited_at` does — and bounded, so a row
+that mounts again is not read again (`features/content/reading-cache.ts`). Markdown remains the only
+stored representation. (D-36)
 
 1. Read the body with the one engine (D-101), inside its bounds; a body past them is not formatted
    and records no `metadata` — it is still sent and stored as typed.

@@ -34,6 +34,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { CodeBlock } from './code-block';
+import { readingCache } from './reading-cache';
 
 /**
  * Bidirectional controls: the embeddings, overrides and isolates (U+202A–202E, U+2066–2069).
@@ -323,9 +324,18 @@ interface BodyProps {
   readonly engine: Engine | undefined;
 }
 
+/** Readings kept for the session (#46): enough for many channels' windows, never unbounded. */
+const READINGS_KEPT = 1000;
+
+/** The real engine's readings, once per text. A test's engine is never cached: it is the test's. */
+export const readBody = readingCache((text: string) => readMarkdown(text), READINGS_KEPT);
+
 const Body = ({ content, mentioned, engine }: BodyProps): React.JSX.Element => {
   // Read inside render, so a defect in the reading is caught by the boundary around it.
-  const reading = useMemo(() => readMarkdown(content, engine), [content, engine]);
+  const reading = useMemo(
+    () => (engine === undefined ? readBody(content) : readMarkdown(content, engine)),
+    [content, engine],
+  );
   const scope = useMemo(() => ({ mentioned, inLabel: false }), [mentioned]);
   // The engine failing inside the bounds is a gap in them (D-101 §8): thrown to the boundary, which
   // shows the body as typed and has React report the cause, never silently drawn as text.

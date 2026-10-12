@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Performance — 2026-10-12: a message is read once a session (D-36)
+
+- Going back to a channel no longer parses its messages again: each body's reading is kept for the
+  session, keyed by its text, and bounded.
+
 ### Fix — 2026-10-12: a clamped code block shows that there is more (`ARCHITECTURE.md` §8.2)
 
 - A block over twelve lines now fades into its background at the clamp, instead of ending on a cut
