@@ -219,6 +219,7 @@ export const en = {
   'feed.olderError': "Couldn't load older messages",
   'feed.olderRetry': 'Try again',
   'feed.start': 'This is the beginning of the channel',
+  'feed.startConversation': 'This is the beginning of the conversation',
   'channel.join.notice': 'You are reading #{name} without being a member.',
   'channel.join.action': 'Join channel',
   'channel.join.failed': 'Could not join the channel.',

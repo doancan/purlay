@@ -215,6 +215,7 @@ export const tr = {
   'feed.olderError': 'Eski mesajlar yüklenemedi',
   'feed.olderRetry': 'Tekrar dene',
   'feed.start': 'Kanalın başı burası',
+  'feed.startConversation': 'Konuşmanın başı burası',
   'channel.join.notice': '#{name} kanalını üye olmadan okuyorsun.',
   'channel.join.action': 'Kanala katıl',
   'channel.join.failed': 'Kanala katılınamadı.',

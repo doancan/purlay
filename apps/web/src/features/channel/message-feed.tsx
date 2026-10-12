@@ -257,6 +257,8 @@ export const SEEK_LIMIT_PAGES = 10;
 export interface MessageFeedProps {
   readonly channelId: string;
   readonly channelName: string;
+  /** A direct message: its top is the beginning of a conversation, not of a channel. */
+  readonly conversation: boolean;
   /**
    * The read position when the channel was opened, frozen by the screen for as long as it
    * stays open; `undefined` when there was nothing unread to mark.
@@ -273,6 +275,7 @@ export interface MessageFeedProps {
 export const MessageFeed = ({
   channelId,
   channelName,
+  conversation,
   markerAfter,
   readAtOpen,
   member,
@@ -508,7 +511,7 @@ export const MessageFeed = ({
           ) : isFetchingNextPage ? (
             <span role="status">{t('feed.olderLoading')}</span>
           ) : hasNextPage ? null : (
-            <span>{t('feed.start')}</span>
+            <span>{t(conversation ? 'feed.startConversation' : 'feed.start')}</span>
           )}
         </div>
         <ThreadsProvider scroller={scroller} holdPlace={holdPlace} openThread={openThread}>

@@ -178,6 +178,22 @@ describe('the header', () => {
   });
 });
 
+describe('the top of a conversation', () => {
+  test('a direct message begins a conversation, not a channel; a channel begins a channel', async () => {
+    const dm = await mountChannel({
+      channelId: IDS.dm,
+      channels: [aChannel(IDS.dm, null, { type: 'direct_message', peer: BOB })],
+      messages: page([aMessage(1, { channelId: IDS.dm })]),
+    });
+    expect(dm.getByText('This is the beginning of the conversation')).toBeDefined();
+    expect(dm.queryByText('This is the beginning of the channel')).toBeNull();
+    dm.unmountAll();
+    const channel = await mountChannel({ messages: page([aMessage(1)]) });
+    expect(channel.getByText('This is the beginning of the channel')).toBeDefined();
+    channel.unmountAll();
+  });
+});
+
 describe('a channel the person has not joined', () => {
   const channels = someChannels();
 
