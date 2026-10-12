@@ -18,7 +18,6 @@ import { createLogger } from './platform/logging';
 import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
 import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
-import { openJoinNotice } from './modules/workspaces/open-join';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
 
@@ -42,9 +41,6 @@ const errorTracker = createErrorTracker({
   },
 });
 const log = withErrorTracking(plainLog, errorTracker);
-
-// Which workspace is open, said before anything else (D-37).
-log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
 
 // Opened before anything listens: a build without its shell refuses to start (D-61).
 const client = config.CLIENT_DIST === undefined ? undefined : openClient(config.CLIENT_DIST);

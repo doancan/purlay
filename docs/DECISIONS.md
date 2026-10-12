@@ -1048,6 +1048,10 @@ the highlighter already spend most of.
 
 ### D-37. Phase 0 gets one explicit open-join variable, because its exit criterion is otherwise unreachable
 
+**Superseded by D-115 (2026-10-12).** Invitation links replaced it; the variable is retired, and the
+loader refuses it when set so an operator who left it in is told rather than ignored. What follows is
+kept as the record of why Phase 0 had it.
+
 Phase 0 ends when "two browser tabs, signed in as two different GitHub users, exchange a message
 in real time". The Phase 0 endpoint list in `API.md` cannot produce that state: invitations are
 Phase 1 (pending O-2), changing a member's role is Phase 1, and `POST /api/channels/:id/join`
@@ -4903,7 +4907,7 @@ their reversal.
 list shows what is still open, and each join is in the trail with the link it used. Links are rows
 that stay: the list reads the open ones by the workspace index, and a workspace that made thousands
 is a sweep job's to tidy (D-30), not built until it is measured. `WORKSPACE_OPEN_JOIN_SLUG` (D-37)
-remains until the demonstration and the browser suite enter by links; then it goes (#50).
+is retired with the screens: set, the API refuses to start, naming what replaced it.
 
 ---
 

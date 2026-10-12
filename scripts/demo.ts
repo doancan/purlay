@@ -118,7 +118,6 @@ const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
     GITHUB_CLIENT_ID: 'demo',
     GITHUB_CLIENT_SECRET: 'demo',
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
-    WORKSPACE_OPEN_JOIN_SLUG: 'acme-eng',
     // The API serves the build itself, as the image does (D-61).
     CLIENT_DIST: join(root, 'apps/web/dist'),
   },

@@ -10,7 +10,7 @@ import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aRoom, type Room } from '../../testing/rooms';
 import { createChannel } from '../channels/channels';
-import { joinOpenWorkspace } from '../workspaces/open-join';
+import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { changeRole, removeMember } from '../workspaces/members';
 import { auditTrail } from './audit';
 
@@ -86,11 +86,6 @@ describe('integration: the audit trail', () => {
       // Inside the test's own transaction, as a route runs it inside its own.
       if (!isTransaction(db)) throw new Error('withRollback gives a transaction');
       const channel = await createChannel(db, clock, alice, { name: 'audited', type: 'public' });
-      const { slug } = await db
-        .selectFrom('workspaces')
-        .select('slug')
-        .where('id', '=', room.workspaceId)
-        .executeTakeFirstOrThrow();
       const newcomer = (
         await db
           .insertInto('users')
@@ -98,14 +93,20 @@ describe('integration: the audit trail', () => {
           .returning('id')
           .executeTakeFirstOrThrow()
       ).id;
-      // A moment later: the trail's order is its ids', which are their instants'.
+      // Moments apart: the trail's order is its ids', which are their instants'.
+      const { invitation, token } = await createInvitation(
+        db,
+        fixedClock(new Date(NOW.getTime() + 500)),
+        alice,
+      );
       const later = fixedClock(new Date(NOW.getTime() + 1_000));
-      await joinOpenWorkspace(db, later, slug, newcomer);
-      await joinOpenWorkspace(db, later, slug, newcomer);
+      await acceptInvitation(db, later, newcomer, token);
+      await acceptInvitation(db, later, newcomer, token);
       expect(
         (await trail(db, room)).map((row) => [row.action, row.actor_user_id, row.target_id]),
       ).toEqual([
         ['channel.created', idOf(room, 'alice'), channel.id],
+        ['invitation.created', idOf(room, 'alice'), invitation.id],
         ['member.joined', newcomer, newcomer],
       ]);
     });

@@ -401,3 +401,19 @@ describe('the loader and the document agree', () => {
     }
   });
 });
+
+/**
+ * A variable the product no longer reads is refused, by name and with what replaced it: left set,
+ * an operator would expect what it used to do, and nothing would say it does nothing (D-115).
+ */
+describe('a retired variable', () => {
+  test('open join is refused with where invitations live now', () => {
+    const message = refusal({ ...valid, WORKSPACE_OPEN_JOIN_SLUG: 'acme' });
+    expect(message).toContain('WORKSPACE_OPEN_JOIN_SLUG');
+    expect(message).toContain('D-115');
+  });
+
+  test('set to nothing, as an example file leaves it, is not set', () => {
+    expect(() => loadConfig({ ...valid, WORKSPACE_OPEN_JOIN_SLUG: '' })).not.toThrow();
+  });
+});

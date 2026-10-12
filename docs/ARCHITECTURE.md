@@ -472,10 +472,8 @@ not keep a live session. Every reason to refuse produces the same answer, so an 
 caller cannot learn from it whether a token was ever real or an account ever existed. `last_used_at`
 is refreshed at most once an hour rather than on every request. (D-60)
 
-**Open join.** When `WORKSPACE_OPEN_JOIN_SLUG` is set, a user who is not yet a member of that
-workspace is joined as `member` here; an existing membership, whatever its role, is left as it is. Unset by default; Phase 0 cannot reach its exit criterion
-without it, because invitations are Phase 1. (D-37) Invitation links (D-115) are how a person enters
-now; the variable is retired once nothing depends on it (#50).
+**Signing in joins nothing.** A person enters a workspace by creating it or by an invitation link
+(D-115); Phase 0's open join (D-37) is retired, and its variable is refused at boot.
 
 ### 7.2. WebSocket upgrade
 

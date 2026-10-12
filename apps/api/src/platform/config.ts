@@ -89,11 +89,18 @@ export const Environment = Type.Object({
   S3_BUCKET: Type.Optional(Type.String({ minLength: 1 })),
   S3_ACCESS_KEY_ID: Type.Optional(Type.String({ minLength: 1 })),
   S3_SECRET_ACCESS_KEY: Type.Optional(Type.String({ minLength: 1 })),
-
-  /** Phase 0 has no invitations, so without this a second person cannot join a
-   *  workspace and the phase cannot reach its own exit criterion (D-37). */
-  WORKSPACE_OPEN_JOIN_SLUG: Type.Optional(Type.String({ minLength: 1 })),
 });
+
+/**
+ * Variables the product read once and reads no longer, each with what replaced it. Set, they are
+ * refused rather than ignored: an operator who left one in expects what it used to do, and an
+ * ignored variable would never say that it does nothing.
+ */
+const RETIRED: Readonly<Record<string, string>> = {
+  WORKSPACE_OPEN_JOIN_SLUG:
+    'retired by D-115: nobody is joined on sign-in any more; an owner or an admin invites people ' +
+    'with a link (Invite people… in the workspace menu). Remove the variable.',
+};
 
 export type Config = Static<typeof Environment>;
 
@@ -131,6 +138,10 @@ export class ConfigurationError extends Error {
  * as an argument (D-46).
  */
 export const loadConfig = (environment: Record<string, string | undefined>): Config => {
+  const retired = Object.entries(RETIRED)
+    .filter(([key]) => (environment[key] ?? '') !== '')
+    .map(([key, why]) => `${key}: ${why}`);
+  if (retired.length > 0) throw new ConfigurationError(retired);
   const present: Record<string, unknown> = {};
   for (const key of CONFIGURED) {
     const raw = environment[key];

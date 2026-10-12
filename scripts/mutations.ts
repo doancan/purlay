@@ -2115,4 +2115,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    if (!next) {\n',
     tests: ['apps/web/src/features/sidebar/invite-dialog.test.tsx'],
   },
+  {
+    id: 'retired-variable-ignored',
+    why: 'an operator who left WORKSPACE_OPEN_JOIN_SLUG set expects open join, and nothing tells them it is gone',
+    file: 'apps/api/src/platform/config.ts',
+    find: "    .filter(([key]) => (environment[key] ?? '') !== '')\n",
+    replace: '    .filter(() => false)\n',
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
 ];
