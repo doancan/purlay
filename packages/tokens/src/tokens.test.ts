@@ -405,7 +405,7 @@ describe('the generated CSS', () => {
   });
 
   test('keeps an alias an alias, so the link survives a change to its target', () => {
-    expect(files['tokens.css']).toContain('--focus-ring: var(--accent);');
+    expect(files['tokens.css']).toContain('--focus-ring: var(--accent-text);');
     expect(files['tokens.css']).toContain('--danger-text: var(--danger);');
   });
 

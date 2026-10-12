@@ -15,9 +15,9 @@
 1. **The feed is the product.** Everything important happens in one column. There is no
    right-hand drawer, no separate thread view, no modal that hides the conversation behind it.
    A drawer turns a discussion into a footnote — which is precisely how knowledge gets lost.
-2. **Density over comfort.** This is a tool for people who read a lot of text quickly. Default
-   line height is tight, avatars are small, padding is minimal. Slack's spacing is designed for
-   a wider audience than ours.
+2. **Density over comfort.** This is a tool for people who read a lot of text quickly. The
+   density is in what is shown — one column, no chrome, nothing decorative — not in how tightly it
+   is set: prose gets a readable line, and the screen gets nothing else. (D-110)
 3. **Keyboard first, mouse optional.** Every action reachable by mouse has a key. The command
    palette is the primary navigation surface, not a power-user extra.
 4. **Never move content under the reader.** Late-arriving content, expanding threads and
@@ -29,44 +29,45 @@
 
 ## 2. Layout
 
-One fixed shell: two floating cards on a tinted canvas, and an optional third. No resizable panes
-in Phase 1 — a saved layout is one more state to sync for no benefit at this size. The cards are
-the shape of the interface (D-100): the sidebar is one, the channel is the other, and the canvas
-between and around them is what makes each read as an object rather than a region of one big
-surface.
+One fixed shell, flat: a rail and a sidebar in one tone, the channel on the window's ground, and an
+optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
+for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-110).
 
 ```
- canvas
- ┌──────────────┐ ┌────────────────────────────────────────────────┐ ┌─────────┐
- │ ◆ acme-eng ⇅ │ │ ▣ api  Backend deploys…   (Feed)(Questions 3)  │ │         │
- │ ⌕ Jump ⌘K    │ ├────────────────────────────────────────────────┤ │ members │
- │ ? Questions 3│ │  (a) alice  14:30                              │ │ (opt.)  │
- │ Channels     │ │      Merged the rate-limit fix.                │ │         │
- │  # api       │ │  (a) bob  14:32                                │ │  200px  │
- │  # deploys 3 │ │      ┌ ts ────────────────────────┐            │ │         │
- │ People       │ │      └────────────────────────────┘            │ │         │
- │  (a) Alice   │ │ ┌────────────────────────────────────────┐ (➤) │ │         │
- │  272px       │ │ └────────────────────────────────────────┘     │ └─────────┘
- └──────────────┘ └────────────────────────────────────────────────┘
+ ┌────┬──────────────────┬────────────────────────────────────────────────┬─────────┐
+ │    │                  │ # api  Backend API…     (Feed)(Questions 3) ⍟ │         │
+ │ AE │ Acme Engineering │────────────────────────────────────────────────│ members │
+ │    │ ⌕ Search… ⌘K     │ Today ──────────────────────────────           │ (opt.)  │
+ │ ▢  │ Channels         │ (SC) Sarah Chen  09:14                         │         │
+ │ ✉• │  # api           │      Here's the updated session hook…          │  200px  │
+ │ ?3 │  # deploys    2  │      ┌ ts · 14 lines ──────────── Copy ┐       │         │
+ │ ⌕  │ People           │      └─────────────────────────────────┘       │         │
+ │    │  (SC) Sarah Chen │ ┌──────────────────────────────────────┐       │         │
+ │ ⚙  │ (DÖ) you         │ └────────────────────────────────── ➤ ┘       │         │
+ └────┴──────────────────┴────────────────────────────────────────────────┴─────────┘
 ```
 
-- **Workspace switcher** — a menu in the sidebar card's header, not a rail: the product is used
-  inside one workspace at a time, and a column of workspace icons beside the sidebar is the part of
-  a chat layout that reads as somebody else's product.
-- **Sidebar (272px)** — a card. The jump field (the palette's door, `⌘K`), the open-questions
-  view, the channels, then the people. Channel names are set in the mono face with a `#`. Unread
-  channels are bold; unread **mentions** carry a count badge. Nothing else gets a badge. A person
-  has an avatar and no presence dot: there is no presence to show (Phase 2), and a dot that is
-  always one colour would be a lie.
-- **Channel card** — header, feed, composer, in that order, one column. The header names the
-  channel in a tile and carries the two views as a segmented control: the feed, and **open
-  questions** with its live count, which is the product's argument and so is always one click away.
-- **Feed** — the single column. Max width 780px, centred in its card: a card has two edges, and a
-  column hung from one of them leaves the other as dead space.
+- **Rail (56px)** — the workspace tile, which opens the workspace switcher; then channels, the
+  inbox (a dot while anything needs you — the same fact as the mention badges, D-106), open
+  questions (a neutral count: they are the team's, not a summons) and search; at the foot,
+  settings — theme, language and the shortcut reference. Every entry is a route or a menu that
+  exists without the rail; it adds no destination. Its top is an empty drag strip for the desktop
+  shell (D-14).
+- **Sidebar (240px)** — the workspace name, the jump field (the palette's door, `⌘K`), the channels,
+  then the people, and your own row at the foot. Unread channels are bold;
+  unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar and no
+  presence dot: there is no presence to show (Phase 2), and a dot that is always one colour would be
+  a lie.
+- **Channel** — header, feed, composer, in that order, one column. The header names the channel and
+  carries the two views as a segmented control: the feed, and **open questions** with its live count,
+  which is the product's argument and so is always one click away.
+- **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
+  eye does not travel back across the window to find where a line starts.
 - **Member list** — collapsed by default. Presence is decoration, not information.
 
-**Below 900px** the sidebar becomes an overlay and the channel card fills the window. Purlay is
-not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow window.
+**Below 900px** the rail and the sidebar become one overlay and the channel fills the window.
+Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
+window.
 
 ---
 
@@ -82,7 +83,7 @@ not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a n
       ○ Open · 4 replies · last 12m ago                  Show thread T
 ```
 
-- **Avatars, and no bubbles.** An avatar in a fixed column names who is speaking before a word is
+- **Avatars, and no bubbles** (D-100). An avatar in a fixed column names who is speaking before a word is
   read; the text is not put in a bubble, because a bubble makes a code block a box inside a box and
   narrows every line it holds. Your own messages are on the same edge as everyone else's: a chat
   with two edges is read by following the speaker, and this one is read by following the thread.
@@ -94,7 +95,7 @@ not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a n
 - **A message that mentions you** sits in a rounded tint, and says so to a screen reader.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
-- **The day** is a centred chip between messages, not a rule.
+- **The day** is a label at the column's left edge with a rule after it. (D-110)
 
 ### 3.1. Delivery state
 
@@ -174,7 +175,8 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 
 ## 5. Composer
 
-Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1).
+Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1). Three buttons sit under it — bold, a code
+block, a mention — and each only *inserts markdown* that the keys below also produce (D-110).
 
 | Key | Action |
 |---|---|
@@ -274,20 +276,22 @@ Decided here so Phase 0 does not invent one at random.
 > (D-52, D-97) The numbers quoted in this document are the file's, repeated where a diagram
 > needs them, and a test fails if they drift.
 
-- **Type:** IBM Plex Sans for prose and IBM Plex Mono for code, the time and a channel's name,
-  served from this origin in Latin and Latin Extended (the Turkish letters are in the second) with a
-  system stack behind them while they load (D-100). Base 14px, code 13px, line-height 1.5 prose /
-  1.45 code.
+- **Type:** Inter for prose and JetBrains Mono for what is machine text — code, a time, a count, a
+  key, a hash — served from this origin in Latin and Latin Extended (the Turkish letters are in the
+  second) with a system stack behind them while they load (D-110). Base 14px, code 13px, line-height
+  1.6 prose / 1.54 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
-  choice kept per device. Dark is designed first — this is a tool that sits open beside an editor —
-  and every colour pair is computed in both. Never colour alone to carry meaning: resolved, failed and unread each pair colour
-  with a glyph or weight, for contrast and colour-blindness both.
+  choice kept per device. Both are designed together: neutral greys and one deep navy accent, with
+  dark derived in the same terms (D-110). Every colour pair is computed in both. Never colour alone
+  to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
+  and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
-- **Motion:** effectively none. The only transitions are the thread collapse on resolve (§4.3)
-  and the reconnect bar. No message entry animation — at conversational speed it reads as lag.
-- **Radius / elevation:** 8px for a control, 14px for a card. The two floating cards have one soft
-  shadow on the canvas; a message, a code block and a control are separated by border and
-  background, never by depth.
+- **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread collapses
+  on resolve (§4.3) and the reconnect bar slides. No message entry animation — at conversational
+  speed it reads as lag. Everything is instant under reduced motion.
+- **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
+  and an overlay. The interface is flat: regions are told apart by tone, and only what sits above
+  something — an overlay, the hover controls, the composer, a card inside a message — has a shadow.
 
 ---
 

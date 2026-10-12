@@ -9,6 +9,7 @@
 @theme inline {
   /* Colour: bg-, text-, border-, outline-, fill- … with the token name */
   --color-surface-000: var(--surface-000);
+  --color-surface-050: var(--surface-050);
   --color-canvas: var(--canvas);
   --color-surface-100: var(--surface-100);
   --color-surface-200: var(--surface-200);
@@ -17,7 +18,12 @@
   --color-border-strong: var(--border-strong);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
-  --color-accent: var(--accent);
+  --color-ink-subtle: var(--ink-subtle);
+  --background-color-accent: var(--accent);
+  --border-color-accent: var(--accent);
+  --background-color-accent-hover: var(--accent-hover);
+  --border-color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
   --color-on-accent: var(--on-accent);
   --color-accent-subtle: var(--accent-subtle);
   --color-avatar-1: var(--avatar-1);
@@ -34,6 +40,9 @@
   --color-danger-text: var(--danger-text);
   --color-warning-text: var(--warning-text);
   --color-success-text: var(--success-text);
+  --color-danger-subtle: var(--danger-subtle);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-success-subtle: var(--success-subtle);
   --color-scrim: var(--scrim);
   --color-syntax-keyword: var(--syntax-keyword);
   --color-syntax-string: var(--syntax-string);
@@ -58,6 +67,7 @@
   /* Shadow (a utility: see `map`, and it differs by theme) */
 
   /* Sizes */
+  --container-rail: var(--size-rail);
   --container-sidebar: var(--size-sidebar);
   --container-members: var(--size-members);
   --container-feed: var(--size-feed-max);
@@ -73,6 +83,8 @@
   --height-palette-list: var(--size-palette-list);
   --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
+  --height-row: var(--size-row);
+  --height-drag: var(--size-drag);
   --breakpoint-narrow: 900px;
 
   /* Stroke widths */
@@ -90,6 +102,8 @@
   /* Motion: duration-, ease- */
   --transition-duration-collapse: var(--duration-collapse);
   --transition-duration-bar: var(--duration-bar);
+  --transition-duration-hover: var(--duration-hover);
+  --transition-duration-overlay: var(--duration-overlay);
   --ease-standard: var(--easing-standard);
 
   /* Type: families, weights; the sizes are the text- utilities below */
@@ -172,6 +186,14 @@
   border-radius: var(--radius-lg);
 }
 
+@utility rounded-xl {
+  border-radius: var(--radius-xl);
+}
+
+@utility rounded-2xl {
+  border-radius: var(--radius-2xl);
+}
+
 @utility rounded-pill {
   border-radius: var(--radius-pill);
 }
@@ -217,6 +239,11 @@
 @utility size-avatar-lg {
   width: var(--size-avatar-lg);
   height: var(--size-avatar-lg);
+}
+
+@utility size-rail-item {
+  width: var(--size-rail-item);
+  height: var(--size-rail-item);
 }
 
 @utility font-sans {

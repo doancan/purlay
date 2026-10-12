@@ -79,7 +79,7 @@ const Prose = ({
     if (scope.glued && span.start === 0) continue;
     out.push(
       text.slice(from, span.start),
-      <span key={span.start} data-mention="" className="font-medium text-accent">
+      <span key={span.start} data-mention="" className="font-medium text-accent-text">
         {text.slice(span.start, span.end)}
       </span>,
     );
@@ -104,7 +104,7 @@ const ExternalLink = ({
       target="_blank"
       rel="noopener noreferrer"
       title={host === '' ? undefined : t('message.link.opens', { host })}
-      className="break-all text-accent underline"
+      className="break-all text-accent-text underline"
     >
       {/* Isolated and left-to-right: whatever the label says, it cannot reorder the text around it. */}
       <bdi dir="ltr">{children}</bdi>

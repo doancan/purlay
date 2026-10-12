@@ -11,6 +11,7 @@ export const themes = [
 
 export const colorTokens = [
   'surface-000',
+  'surface-050',
   'canvas',
   'surface-100',
   'surface-200',
@@ -19,7 +20,10 @@ export const colorTokens = [
   'border-strong',
   'ink',
   'ink-muted',
+  'ink-subtle',
   'accent',
+  'accent-hover',
+  'accent-text',
   'on-accent',
   'accent-subtle',
   'avatar-1',
@@ -36,6 +40,9 @@ export const colorTokens = [
   'danger-text',
   'warning-text',
   'success-text',
+  'danger-subtle',
+  'warning-subtle',
+  'success-subtle',
   'scrim',
   'syntax-keyword',
   'syntax-string',
@@ -61,6 +68,8 @@ export const radiusTokens = [
   'radius-sm',
   'radius-md',
   'radius-lg',
+  'radius-xl',
+  'radius-2xl',
   'radius-pill',
 ] as const;
 
@@ -70,6 +79,7 @@ export const shadowTokens = [
 ] as const;
 
 export const sizeTokens = [
+  'size-rail',
   'size-sidebar',
   'size-members',
   'size-feed-max',
@@ -91,6 +101,9 @@ export const sizeTokens = [
   'size-avatar',
   'size-avatar-sm',
   'size-avatar-lg',
+  'size-rail-item',
+  'size-row',
+  'size-drag',
 ] as const;
 
 export const zIndexTokens = [
@@ -111,6 +124,8 @@ export const borderWidthTokens = [
 export const durationTokens = [
   'duration-collapse',
   'duration-bar',
+  'duration-hover',
+  'duration-overlay',
 ] as const;
 
 export const easingTokens = [

@@ -67,6 +67,8 @@ export interface ColorToken {
   readonly source: Readonly<Record<string, ColorSource>>;
   /** The value after following every alias, per theme: a literal colour. */
   readonly resolved: Readonly<Record<string, string>>;
+  /** `fill`: a background and a border only — never a text colour (D-110). */
+  readonly role: 'any' | 'fill';
 }
 
 export interface PlainToken {
@@ -258,6 +260,7 @@ export const parseTokens = (raw: unknown): Parsed => {
       usage: token.usage,
       source: writtenByName.get(token.name) ?? {},
       resolved,
+      role: token.role ?? 'any',
     });
   }
 

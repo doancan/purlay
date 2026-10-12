@@ -168,7 +168,7 @@ describe('links', () => {
   test('a bare email address is a mailto link, and names nobody', async () => {
     const view = await mount('mail@host.test', { mentioned: ['host'] });
     expect(view.getByRole('link').getAttribute('href')).toBe('mailto:mail@host.test');
-    expect(body(view).querySelectorAll('.text-accent:not(a)')).toHaveLength(0);
+    expect(body(view).querySelectorAll('.text-accent-text:not(a)')).toHaveLength(0);
   });
 
   test('an image is a link to it, labelled with its alt text, and never an image (#110)', async () => {
@@ -365,7 +365,7 @@ describe('past a bound, the body is shown as typed (D-101 §5)', () => {
     if (view === undefined) throw new Error('not drawn');
     expect(asTyped(view, '**b** and @alice', 'failed')).toBe(true);
     // As typed means as typed: no highlight either, since where code is is unknown.
-    expect(body(view).querySelector('.text-accent')).toBeNull();
+    expect(body(view).querySelector('.text-accent-text')).toBeNull();
     expect(reported).toContain('the engine ran out of stack');
   });
 
@@ -432,36 +432,36 @@ describe('past a bound, the body is shown as typed (D-101 §5)', () => {
     const words = Math.floor(MESSAGE_CONTENT_MAX / 3);
     const content = '@a '.repeat(words).trimEnd();
     const view = await mount(content, { mentioned: ['a'] });
-    expect(body(view).querySelectorAll('.text-accent')).toHaveLength(words);
+    expect(body(view).querySelectorAll('.text-accent-text')).toHaveLength(words);
   });
 });
 
 describe('mentions', () => {
   test('a real one is highlighted, case-insensitively; one that names nobody stays plain', async () => {
     const view = await mount('hi @Alice and @ghost', { mentioned: ['alice'] });
-    expect(view.getByText('@Alice').className).toContain('text-accent');
-    expect(view.container.querySelectorAll('.text-accent')).toHaveLength(1);
+    expect(view.getByText('@Alice').className).toContain('text-accent-text');
+    expect(view.container.querySelectorAll('.text-accent-text')).toHaveLength(1);
     expect(body(view).textContent).toBe('hi @Alice and @ghost');
   });
 
   test('with nobody mentioned nothing is highlighted', async () => {
     const view = await mount('@alice');
-    expect(view.container.querySelectorAll('.text-accent')).toHaveLength(0);
+    expect(view.container.querySelectorAll('.text-accent-text')).toHaveLength(0);
   });
 
   test('inside emphasis and a list it is still prose, and highlighted', async () => {
     const view = await mount('**@alice**\n\n- @alice', { mentioned: ['alice'] });
-    expect(body(view).querySelectorAll('.text-accent')).toHaveLength(2);
+    expect(body(view).querySelectorAll('.text-accent-text')).toHaveLength(2);
   });
 
   test('inside code, inline or fenced, it is quoted, not addressed', async () => {
     const view = await mount('`@alice`\n\n~~~\n@alice\n~~~', { mentioned: ['alice'] });
-    expect(body(view).querySelectorAll('.text-accent')).toHaveLength(0);
+    expect(body(view).querySelectorAll('.text-accent-text')).toHaveLength(0);
   });
 
   test("the shape is the server's: after a letter outside ASCII it is part of a word", async () => {
     const view = await mount('é@alice', { mentioned: ['alice'] });
-    expect(body(view).querySelectorAll('.text-accent')).toHaveLength(0);
+    expect(body(view).querySelectorAll('.text-accent-text')).toHaveLength(0);
   });
 });
 

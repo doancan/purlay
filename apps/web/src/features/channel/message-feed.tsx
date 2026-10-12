@@ -219,7 +219,7 @@ const FeedList = ({
               <span className="shrink-0 rounded-pill bg-accent px-2 text-on-accent">
                 {t('message.newMarker')}
               </span>
-              <span className="flex-1 border-t-hairline border-accent" />
+              <span className="flex-1 border-t-hairline border-accent-text" />
             </div>
           );
         }

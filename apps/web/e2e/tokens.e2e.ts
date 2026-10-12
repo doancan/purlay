@@ -33,16 +33,14 @@ test.describe('the tokens, as computed', () => {
         mono: read('--font-mono'),
       };
     });
-    expect(values.radius).toBe('8px');
+    expect(values.radius).toBe('6px');
     expect(values.pill).toBe('9999px');
     expect(values.icon).toBe('12px');
-    expect(values.sans).toContain('IBM Plex Sans');
-    expect(values.mono).toContain('IBM Plex Mono');
+    expect(values.sans).toContain('Inter');
+    expect(values.mono).toContain('JetBrains Mono');
   });
 
-  test('what the screen is drawn with: the Plex faces, mono names, sized icons, rounded controls', async ({
-    page,
-  }) => {
+  test('what the screen is drawn with: Inter, sized icons, rounded controls', async ({ page }) => {
     const drawn = await page.evaluate(() => {
       const style = (selector: string): CSSStyleDeclaration | null => {
         const node = document.querySelector(selector);
@@ -58,19 +56,19 @@ test.describe('the tokens, as computed', () => {
       };
     });
     // The browser's default serif is what a broken font stack looks like.
-    expect(drawn.body).toContain('IBM Plex Sans');
+    expect(drawn.body).toContain('Inter');
     expect(['12px', '16px', '20px']).toContain(drawn.iconWidth);
     expect(drawn.iconHeight).toBe(drawn.iconWidth);
-    expect(drawn.iconStroke).toBe('2.25px');
+    expect(drawn.iconStroke).toBe('1.5px');
   });
 
   test('the faces are really served and loaded, Turkish letters included, and from this origin', async ({
     page,
   }) => {
     const loaded = await page.evaluate(async () => {
-      const sans = await document.fonts.load('400 14px "IBM Plex Sans"', 'ğşİıçöü');
-      const bold = await document.fonts.load('600 14px "IBM Plex Sans"', 'Aa');
-      const mono = await document.fonts.load('400 13px "IBM Plex Mono"', '0123');
+      const sans = await document.fonts.load('400 14px "Inter"', 'ğşİıçöü');
+      const bold = await document.fonts.load('600 14px "Inter"', 'Aa');
+      const mono = await document.fonts.load('400 13px "JetBrains Mono"', 'ğş0123');
       const origins = performance
         .getEntriesByType('resource')
         .filter((entry) => entry.name.endsWith('.woff2'))
@@ -79,6 +77,9 @@ test.describe('the tokens, as computed', () => {
         sans: sans.length,
         bold: bold.length,
         mono: mono.length,
+        extended: performance
+          .getEntriesByType('resource')
+          .some((entry) => entry.name.endsWith('/fonts/inter-latin-ext-400-normal.woff2')),
         origins: [...new Set(origins)],
         here: location.origin,
       };
@@ -88,5 +89,7 @@ test.describe('the tokens, as computed', () => {
     expect(loaded.bold).toBeGreaterThan(0);
     expect(loaded.mono).toBeGreaterThan(0);
     expect(loaded.origins).toEqual([loaded.here]);
+    // ğ ş İ live in the Latin Extended file: if it was never fetched, they were drawn by a fallback.
+    expect(loaded.extended).toBe(true);
   });
 });

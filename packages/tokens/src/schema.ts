@@ -39,6 +39,16 @@ const ThemedToken = Type.Object(
   { additionalProperties: false },
 );
 
+/**
+ * A colour, which may say it is a **fill**: drawn behind something and never as words or a
+ * line of its own. A fill builds `bg-` and `border-` and nothing else, so the text colour
+ * that would be illegible in some theme is not a class anyone can write (D-110).
+ */
+const ColorToken = Type.Object(
+  { name: Name, value: Themed, usage: Usage, role: Type.Optional(Type.Literal('fill')) },
+  { additionalProperties: false },
+);
+
 const PlainFamily = Type.Object(
   { note: Note, tokens: Type.Array(Token, { minItems: 1 }) },
   { additionalProperties: false },
@@ -76,7 +86,7 @@ export const TokensFile = Type.Object(
           ),
           { minItems: 1, maxItems: 8 },
         ),
-        tokens: Type.Array(ThemedToken, { minItems: 1 }),
+        tokens: Type.Array(ColorToken, { minItems: 1 }),
       },
       { additionalProperties: false },
     ),

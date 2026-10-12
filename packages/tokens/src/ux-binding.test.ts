@@ -25,6 +25,7 @@ const valueOf = (name: string): string => {
 
 describe('UX.md §2 layout', () => {
   test.each([
+    ['size-rail', 'Rail'],
     ['size-sidebar', 'Sidebar'],
     ['size-members', '200px'],
     ['size-feed-max', 'Max width'],
@@ -39,7 +40,7 @@ describe('UX.md §2 layout', () => {
     const section = ux.slice(ux.indexOf('## 2. Layout'), ux.indexOf('## 3.'));
     const stated = new Set(section.match(/\b\d+px\b/g));
     const owned = new Set(
-      ['size-sidebar', 'size-members', 'size-feed-max', 'size-narrow'].map(valueOf),
+      ['size-rail', 'size-sidebar', 'size-members', 'size-feed-max', 'size-narrow'].map(valueOf),
     );
     expect([...stated].filter((value) => !owned.has(value))).toEqual([]);
   });
