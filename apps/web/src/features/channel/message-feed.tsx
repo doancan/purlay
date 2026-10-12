@@ -31,6 +31,7 @@ import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { ThreadsProvider, useThreads } from '../threads/thread-context';
 import { ThreadedMessageRow } from '../threads/threaded-row';
+import { useEditing } from '../messages/editing';
 import { buildFeed, newestConfirmedId, type FeedItem } from './feed-model';
 import { useFeedPorts, type FeedPorts } from './feed-ports';
 import { useFeedScroll } from './use-feed-scroll';
@@ -144,6 +145,7 @@ const FeedList = ({
   const rows = (): HTMLElement[] =>
     Array.from(scroller.current?.querySelectorAll<HTMLElement>('[data-message-row]') ?? []);
 
+  const editing = useEditing();
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     // Menus and their items render in a portal but bubble here through React; they are not ours.
     if (event.defaultPrevented || !scroller.current?.contains(event.target as Node)) return;
@@ -153,6 +155,16 @@ const FeedList = ({
       return;
     }
     if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+    const focusedRow = (event.target as HTMLElement).closest<HTMLElement>('[data-message-row]');
+    if (event.key.toLowerCase() === 'e' && focusedRow?.hasAttribute('data-editable') === true) {
+      // `E` edits a focused message of one's own (`UX.md` §7).
+      const id = focusedRow.dataset['messageId'];
+      if (id !== undefined) {
+        event.preventDefault();
+        editing.start(id);
+        return;
+      }
+    }
     const all = rows();
     const current = all.findIndex(
       (row) => row === (event.target as HTMLElement).closest('[data-message-row]'),

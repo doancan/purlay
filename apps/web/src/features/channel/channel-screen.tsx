@@ -21,6 +21,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { EmptyState } from '../../ui/states';
+import { EditingProvider } from '../messages/editing';
 import { Composer } from '../composer/composer';
 import { threadInSearch } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
@@ -82,7 +83,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
   }));
 
   return (
-    <>
+    <EditingProvider>
       <ChannelHeader channel={channel} />
       <MessageFeed
         channelId={channel.id}
@@ -97,7 +98,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
       ) : (
         <JoinBar channel={channel} />
       )}
-    </>
+    </EditingProvider>
   );
 };
 

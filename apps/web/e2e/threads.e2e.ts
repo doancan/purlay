@@ -228,7 +228,9 @@ test.describe('resolving', () => {
     // Resolved once already: reopen through the API so the second run starts from an open thread.
     await api('dogancan').del(`/api/messages/${made.rootId}/resolve`);
     const instant = await measure('reduce');
-    expect(instant.length).toBeLessThanOrEqual(2);
+    // No size in between. How many frames it takes is the server's answer time, not motion.
+    expect(instant.length).toBeGreaterThan(0);
+    expect(new Set(instant).size).toBe(1);
   });
 });
 

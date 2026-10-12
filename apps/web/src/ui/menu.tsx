@@ -34,9 +34,16 @@ interface MenuProps {
   readonly trigger: React.ReactElement;
   readonly align?: 'start' | 'center' | 'end';
   readonly children: React.ReactNode;
+  /** Whether focus returns to the trigger on close: not when the item chosen put it elsewhere. */
+  readonly returnFocus?: () => boolean;
 }
 
-export const Menu = ({ trigger, align = 'start', children }: MenuProps): React.JSX.Element => (
+export const Menu = ({
+  trigger,
+  align = 'start',
+  children,
+  returnFocus,
+}: MenuProps): React.JSX.Element => (
   <RadixMenu.Root>
     <RadixMenu.Trigger asChild>{trigger}</RadixMenu.Trigger>
     <RadixMenu.Portal>
@@ -45,6 +52,9 @@ export const Menu = ({ trigger, align = 'start', children }: MenuProps): React.J
         align={align}
         sideOffset={4}
         collisionPadding={8}
+        onCloseAutoFocus={(event) => {
+          if (returnFocus?.() === false) event.preventDefault();
+        }}
       >
         {children}
       </RadixMenu.Content>

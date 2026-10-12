@@ -27,6 +27,9 @@ import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useEngine } from '../../realtime/realtime-provider';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from '../session/session';
+import { lastOwnMessage, useEditing } from '../messages/editing';
 import { cn } from '../../ui/cn';
 import { Kbd } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
@@ -71,6 +74,9 @@ const Inner = ({
   const engine = useEngine();
   const toast = useToast();
   const key = draftKey(channelId, parentId);
+  const client = useQueryClient();
+  const session = useSession();
+  const editing = useEditing();
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +174,23 @@ const Inner = ({
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (
+      event.key === 'ArrowUp' &&
+      parentId === undefined &&
+      event.currentTarget.value === '' &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      // `↑` on an empty composer edits the last message of one's own (`UX.md` §5).
+      const last = lastOwnMessage(client, channelId, session.user.id);
+      if (last !== undefined) {
+        event.preventDefault();
+        editing.start(last.id);
+        return;
+      }
+    }
     // A key that ends an IME composition (a Japanese or Chinese candidate) is not the
     // person pressing Enter: the event says so itself, an engine that reports `Process`
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
