@@ -6,18 +6,11 @@
  * anything.
  */
 import { describe, expect, test } from 'bun:test';
-import type { Clock } from '../platform/clock';
+import { aMovableClock } from '../testing/doubles';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 
-const movable = (): Clock & { advance: (ms: number) => void } => {
-  let now = new Date('2026-09-09T12:00:00.000Z').getTime();
-  return {
-    now: (): Date => new Date(now),
-    advance: (ms: number): void => {
-      now += ms;
-    },
-  };
-};
+const movable = (): ReturnType<typeof aMovableClock> =>
+  aMovableClock(new Date('2026-09-09T12:00:00.000Z'));
 
 const spend = async (
   limiter: ReturnType<typeof inProcessRateLimiter>,

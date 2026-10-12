@@ -22,6 +22,7 @@ import { aUniqueSlug } from '../testing/users';
 import { inProcessEventBus, type InspectableEventBus } from './bus';
 import { createSocketHub, type SocketHub } from './hub';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
+import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame, type RouterDependencies } from './router';
 
 afterAll(async () => {
@@ -93,6 +94,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           bus,
           limiter,
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+          presence: inMemoryPresenceRegistry(clock),
           log: createLogger({ level: 'silent' }),
           socket: hub,
           atomically: atomicallyOn(db),

@@ -215,8 +215,12 @@ What the shape is for, which the types do not say:
   HTTP and are heard here as `THREAD_UPDATED`, `REACTIONS_UPDATED` and, on the person's own `user:`
   topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). An edit and a delete are heard as
   `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
-  version, never its reactions or thread (D-103). Typing arrives with its feature — added to the union then, so an exhaustive switch over it breaks where a case is
-  unhandled rather than carrying stubs for features that do not exist.
+  version, never its reactions or thread (D-103). Typing is a `TYPING` frame
+  each way (D-114): the client names a channel it can see and is answered with nothing; the room
+  hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
+  listener forgets a person when that runs out or their message arrives. Each frame joined the union
+  with its feature, so an exhaustive switch breaks where a case is unhandled rather than carrying
+  stubs for features that do not exist.
 
 ### 5.3. Send and reconcile
 
@@ -399,15 +403,17 @@ node would see half the workspace and report the other half offline.
 
 ```typescript
 export interface PresenceRegistry {
-  markOnline(workspaceId: string, userId: string, socketId: string): void;
-  markOffline(socketId: string): void;
-  onlineIn(workspaceId: string): Promise<ReadonlySet<string>>;
-  startTyping(channelId: string, userId: string, ttlMs: number): void;
-  typingIn(channelId: string): Promise<ReadonlySet<string>>;
+  /** True when the room should be told: the first announcement, or the last one half spent. */
+  startTyping(channelId: string, userId: string, ttlMs: number): boolean;
+  /** Their message arrived: the next keystroke is announced at once. */
+  stopTyping(channelId: string, userId: string): void;
 }
 ```
 
-Phase 0–2: `InMemoryPresenceRegistry`. Phase 3: the same interface over the shared bus.
+The interface grows with its features (D-114): typing now, online presence when it is built. Phase
+0–2: `inMemoryPresenceRegistry` (`realtime/presence.ts`). Phase 3: the same interface over the shared
+bus — on two nodes a person typing on both is announced once by each, a frame too many and never a
+wrong answer.
 
 ### 6.2. `RateLimiter`
 

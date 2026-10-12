@@ -16,6 +16,7 @@ import { fixedClock } from '../platform/clock';
 import { createLogger, withinRequest, type Logger } from '../platform/logging';
 import { inProcessEventBus } from './bus';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
+import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
@@ -35,6 +36,7 @@ const subscribeWith = async (
           bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+          presence: inMemoryPresenceRegistry(clock),
           log,
           socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
           atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: who is typing is heard, and rationed (D-114, #411)
+
+- A `TYPING` frame each way: a client names a channel it can see, the room hears who and for how
+  long — at most once per three seconds per person, whatever the client sends. The web client keeps
+  who is typing per channel, never shows the person themselves, and forgets someone when the
+  announcement runs out or their message arrives. The composer and the line under the feed follow.
+
 ### Security — 2026-10-12: a refused subscription no longer releases a channel's held frames (#412)
 
 - Frames held while a `SUBSCRIBE` was being authorised were dropped for a refused channel only if

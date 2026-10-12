@@ -23,6 +23,7 @@ import { channelTopic } from '../platform/events';
 import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
 import { REPLAY_BYTES_MAX, replayPerChannel } from '../modules/messages/replay';
+import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
@@ -150,6 +151,7 @@ describe('integration: the frame router', () => {
         bus,
         limiter,
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+        presence: inMemoryPresenceRegistry(clock),
         log: createLogger({ level: 'silent' }),
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
         // The production boundary: inside the harness's transaction it joins it.

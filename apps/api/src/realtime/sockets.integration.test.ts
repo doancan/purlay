@@ -26,6 +26,7 @@ import {
   MESSAGE_ID_SKEW,
   messageId,
   ServerFrame,
+  TYPING_TTL_MS,
 } from '@purlay/types';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
@@ -101,7 +102,12 @@ const aUser = async (name: string): Promise<{ id: string; cookie: string }> => {
 };
 
 /** Alice owns a workspace with one channel; Bob is a member who has joined it. */
-const aRoom = async (): Promise<{ alice: string; bob: string; channelId: string }> => {
+const aRoom = async (): Promise<{
+  alice: string;
+  aliceId: string;
+  bob: string;
+  channelId: string;
+}> => {
   const alice = await aUser('alice');
   const bob = await aUser('bob');
   const slug = aUniqueSlug('rt');
@@ -116,7 +122,7 @@ const aRoom = async (): Promise<{ alice: string; bob: string; channelId: string 
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   expect((await http('POST', `/api/channels/${channelId}/join`, bob.cookie)).ok).toBe(true);
-  return { alice: alice.cookie, bob: bob.cookie, channelId };
+  return { alice: alice.cookie, aliceId: alice.id, bob: bob.cookie, channelId };
 };
 
 interface Client {
@@ -251,6 +257,24 @@ describe('integration: two real sockets', () => {
     expect(bob.frames.find((f) => f.event === 'MESSAGE_CREATED')?.data).toMatchObject({
       id,
       content: 'hello',
+    });
+    await alice.close();
+    await bob.close();
+  });
+
+  test('typing on one socket reaches the other over the wire, within the contract (#411)', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+    const bob = await connect(room.bob);
+    await subscribe(alice, room.channelId);
+    await subscribe(bob, room.channelId);
+
+    alice.send({ id: messageId(NOW), op: 'TYPING', payload: { channelId: room.channelId } });
+    await bob.until((frames) => frames.some((f) => f.event === 'TYPING'), 'the announcement');
+    expect(bob.frames.find((f) => f.event === 'TYPING')?.data).toEqual({
+      channelId: room.channelId,
+      userId: room.aliceId,
+      ttlMs: TYPING_TTL_MS,
     });
     await alice.close();
     await bob.close();
