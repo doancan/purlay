@@ -286,6 +286,10 @@ export const en = {
   'state.channels.empty.title': 'No channels yet',
   'state.channels.empty.body': 'Create the first one; it takes a name and nothing else.',
 
+  // ── A new build (#334) ──────────────────────────────────────────────────
+  'update.available': 'Purlay was updated. Reload to get the new version; your drafts are kept.',
+  'update.reload': 'Reload',
+
   // ── Search (D-105) ─────────────────────────────────────────────────────
   'search.title': 'Search',
   'search.label': 'Search messages',

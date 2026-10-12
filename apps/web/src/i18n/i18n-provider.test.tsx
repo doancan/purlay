@@ -1,5 +1,6 @@
 import { installDom } from '../testing/dom';
 import { describe, expect, spyOn, test } from 'bun:test';
+import { Component } from 'react';
 import { act, render, waitFor } from '@testing-library/react';
 import { en } from './catalogue/en';
 import { tr } from './catalogue/tr';
@@ -16,11 +17,14 @@ const ports = (
   attributes: Record<string, string>;
   data: Record<string, string>;
   release: (locale: Locale) => void;
+  /** The catalogue's chunk did not arrive: a build that has gone (#334), or the network. */
+  fail: (locale: Locale) => void;
   asked: Locale[];
 } => {
   const attributes: Record<string, string> = {};
   const data: Record<string, string> = {};
   const waiting = new Map<Locale, (catalogue: Catalogue) => void>();
+  const refusing = new Map<Locale, (failure: Error) => void>();
   const asked: Locale[] = [];
   return {
     attributes,
@@ -40,12 +44,16 @@ const ports = (
       },
     },
     load: (locale) =>
-      new Promise<Catalogue>((resolve) => {
+      new Promise<Catalogue>((resolve, reject) => {
         asked.push(locale);
         waiting.set(locale, resolve);
+        refusing.set(locale, reject);
       }),
     release: (locale): void => {
       waiting.get(locale)?.(locale === 'tr' ? tr : en);
+    },
+    fail: (locale): void => {
+      refusing.get(locale)?.(new Error(`the ${locale} chunk did not arrive`));
     },
     ...overrides,
   };
@@ -124,7 +132,8 @@ describe('I18nProvider', () => {
     // Still English, still `en`, while Turkish is on its way.
     expect(getByText('Close')).toBeDefined();
     expect(getByTestId('locale').textContent).toBe('en');
-    expect(fake.data[LOCALE_KEY]).toBe('tr');
+    // Not remembered yet: a language whose words never came must not be the next visit's.
+    expect(fake.data[LOCALE_KEY]).toBeUndefined();
     act(() => {
       fake.release('tr');
     });
@@ -134,6 +143,96 @@ describe('I18nProvider', () => {
     expect(getByTestId('locale').textContent).toBe('tr');
     expect(getByTestId('time').textContent).toBe('1.234');
     expect(fake.attributes['lang']).toBe('tr');
+    expect(fake.data[LOCALE_KEY]).toBe('tr');
+  });
+
+  test('a catalogue that does not arrive leaves the page in its language, not remembered, and a later try can work', async () => {
+    const fake = ports();
+    const { getByText, getByRole, getByTestId } = render(
+      <I18nProvider ports={fake}>
+        <Probe />
+      </I18nProvider>,
+    );
+    act(() => {
+      fake.release('en');
+    });
+    await waitFor(() => {
+      expect(getByText('Close')).toBeDefined();
+    });
+    act(() => {
+      getByRole('button').click();
+    });
+    await act(async () => {
+      fake.fail('tr');
+      await Promise.resolve();
+    });
+    expect(getByTestId('locale').textContent).toBe('en');
+    expect(fake.data[LOCALE_KEY]).toBeUndefined();
+    expect(fake.attributes['lang']).toBe('en');
+    act(() => {
+      getByRole('button').click();
+    });
+    act(() => {
+      fake.release('tr');
+    });
+    await waitFor(() => {
+      expect(getByText('Kapat')).toBeDefined();
+    });
+  });
+
+  test('a remembered language that does not arrive at the start falls back to English', async () => {
+    const fake = ports();
+    fake.data[LOCALE_KEY] = 'tr';
+    const { getByText } = render(
+      <I18nProvider ports={fake} fallback={<p>skeleton</p>}>
+        <Probe />
+      </I18nProvider>,
+    );
+    await act(async () => {
+      fake.fail('tr');
+      await Promise.resolve();
+    });
+    act(() => {
+      fake.release('en');
+    });
+    await waitFor(() => {
+      expect(getByText('Close')).toBeDefined();
+    });
+    expect(fake.asked).toEqual(['tr', 'en']);
+  });
+
+  test('English not arriving at the start is said, loudly, not a page left on its skeleton', async () => {
+    const fake = ports();
+    const quiet = spyOn(console, 'error').mockImplementation(() => undefined);
+    let caught: unknown = null;
+    class Catch extends Component<{ children: React.ReactNode }, { failed: boolean }> {
+      override state = { failed: false };
+      static getDerivedStateFromError(): { failed: boolean } {
+        return { failed: true };
+      }
+      override componentDidCatch(error: unknown): void {
+        caught = error;
+      }
+      override render(): React.ReactNode {
+        return this.state.failed ? <p>caught</p> : this.props.children;
+      }
+    }
+    const { getByText } = render(
+      <Catch>
+        <I18nProvider ports={fake} fallback={<p>skeleton</p>}>
+          <Probe />
+        </I18nProvider>
+      </Catch>,
+    );
+    await act(async () => {
+      fake.fail('en');
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(getByText('caught')).toBeDefined();
+    });
+    expect(String(caught)).toContain('the en chunk did not arrive');
+    quiet.mockRestore();
   });
 
   test('a catalogue that arrives after the page moved on is ignored', async () => {

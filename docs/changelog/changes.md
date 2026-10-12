@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a tab left open across a deployment offers a reload (D-102)
+
+- When a part of the interface the server no longer has is asked for, a bar says Purlay was updated
+  and offers Reload; drafts are kept.
+- A language whose words did not arrive is no longer remembered for the next visit, and the page
+  stays in the language it had; English not arriving at the start is an error, not a page left on its
+  skeleton.
+
 ### Testing — 2026-10-12: a visible focus ring is checked, not remembered (`UX.md` §7)
 
 - A browser test tabs through a channel with a thread open, in both themes and at both widths, and

@@ -277,6 +277,10 @@ export const tr = {
   'state.channels.empty.title': 'Henüz kanal yok',
   'state.channels.empty.body': 'İlkini oluştur; yalnızca bir ad yeter.',
 
+  // ── A new build (#334) ──────────────────────────────────────────────────
+  'update.available': 'Purlay güncellendi. Yeni sürüm için yenile; taslakların korunur.',
+  'update.reload': 'Yenile',
+
   // ── Search (D-105) ─────────────────────────────────────────────────────
   'search.title': 'Ara',
   'search.label': 'Mesajlarda ara',

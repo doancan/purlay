@@ -13,7 +13,15 @@
  * switch and a slow chunk by hand (D-46). The defaults are the browser's, built
  * when the provider first renders and not when this module is imported.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createFormatters, type Formatters } from './format';
 import {
   detectLocale,
@@ -76,25 +84,45 @@ export const I18nProvider = ({
     detectLocale(resolved.storage, resolved.languages),
   );
 
+  // The language the person chose, remembered only once its words have arrived (#334).
+  const chosen = useRef<Locale | null>(null);
+  // The language showing, for where to fall back to; read, never a reason to load again.
+  const showing = useRef<Locale | null>(null);
+  const [failure, setFailure] = useState<Error | null>(null);
+
   useEffect(() => {
     let current = true;
-    void resolved.load(wanted).then((catalogue) => {
-      if (!current) return;
-      resolved.target.setAttribute('lang', wanted);
-      setLoaded({ locale: wanted, catalogue });
-    });
+    resolved.load(wanted).then(
+      (catalogue) => {
+        if (!current) return;
+        resolved.target.setAttribute('lang', wanted);
+        if (chosen.current === wanted) rememberLocale(resolved.storage, wanted);
+        showing.current = wanted;
+        setLoaded({ locale: wanted, catalogue });
+      },
+      (error: unknown) => {
+        if (!current) return;
+        chosen.current = null;
+        // A catalogue that did not arrive — a build that has gone, the network — leaves the page
+        // in the language it has, or English if it has none yet; the update bar offers the reload
+        // that brings the rest. English itself not arriving leaves nothing to say anything in.
+        const instead = showing.current ?? (wanted === 'en' ? null : 'en');
+        if (instead === null) {
+          setFailure(error instanceof Error ? error : new Error(String(error)));
+        } else {
+          setWanted(instead);
+        }
+      },
+    );
     return (): void => {
       current = false;
     };
   }, [resolved, wanted]);
 
-  const setLocale = useCallback(
-    (locale: Locale): void => {
-      rememberLocale(resolved.storage, locale);
-      setWanted(locale);
-    },
-    [resolved],
-  );
+  const setLocale = useCallback((locale: Locale): void => {
+    chosen.current = locale;
+    setWanted(locale);
+  }, []);
 
   const value = useMemo<I18n | null>(
     () =>
@@ -109,6 +137,7 @@ export const I18nProvider = ({
     [loaded, setLocale, resolved],
   );
 
+  if (failure !== null) throw failure;
   if (value === null) return <>{fallback}</>;
   return <I18nContext value={value}>{children}</I18nContext>;
 };
