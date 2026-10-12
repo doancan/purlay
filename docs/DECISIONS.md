@@ -1190,6 +1190,10 @@ never named the algorithm, which is how two call sites end up encrypting differe
 **Reversibility:** items 1 and 6 are free now and expensive after the first session and the first
 stored token. The rest arrive with the features they protect.
 
+
+> **Amended 2026-10-12 by D-109.** §2: the one upload route takes `application/octet-stream` — a type a
+> form cannot send either, so the defence stands; every other mutation is still JSON. §3: an image is
+> served inline only as Purlay re-encoded it; every other file, SVG included, as a download.
 ---
 
 ### D-40. The database is created with a deterministic collation, and `citext` is dropped
@@ -2787,6 +2791,10 @@ statuses. *Rejected: also requiring `Origin`* — the same reasoning as above.
 
 **Reversibility:** free; nothing is stored.
 
+
+> **Amended 2026-10-12 by D-109 §4.** The server's own limit rises to what an upload needs; the 64 KiB
+> bound on every other body is kept at the edge, by `Content-Length`, before parsing — and a bodied
+> request with no length is refused.
 ---
 
 ### D-81. HTTP is rate limited by client address for sign-in and by user for writes, and a client is only who the socket says
@@ -4529,6 +4537,66 @@ until when (`UX.md` §8).
 holding them back would make them disagree with the rows, and lose what came in during the quiet.
 **Rejected: an open-ended Deep Work.** D-15 asks for expiry so it cannot be left on; a bound is the
 expiry nobody has to remember to set.
+
+### D-109. Attachments: what is stored, who may read it, and the edge that lets 25 MiB in
+
+D-16 ships attachments in Phase 1; `ARCHITECTURE.md` §9 gives the flow; the spikes chose Garage and
+Bun's `S3Client` (`docs/spikes/object-storage.md`) and `Bun.Image` (`docs/spikes/image-pipeline.md`),
+nothing installed. An adversarial review of the first plan found the edge, memory and tenancy questions
+below unanswered. Decided in the owner's standing instruction to decide and proceed, each on the
+restrictive side, and open to their reversal. Served by #53, #54, #111, #369, #370.
+
+**1 · An image is stored re-encoded, never as uploaded.** PNG, JPEG, GIF and WebP — recognised by their
+bytes, the declared type never trusted — are decoded, turned upright, downscaled to at most 2560 pixels
+on the longer side (never up), and stored as WebP; the thumbnail is the same, at 512. The re-encoding is
+what strips EXIF (GPS position, camera serial — the spike), and it is the condition D-39 §3 sets for
+serving an image inline. Anything else is a file: stored as sent, always served as
+`application/octet-stream` with `Content-Disposition: attachment`. An SVG is such a file: downloaded,
+never drawn — "never served as SVG" (D-39 §3) by the same rule as every other non-image.
+
+**2 · Memory is bounded before a decode, not after.** A side of at most 16384 pixels and at most 40
+million pixels, read from the header before decoding (`Bun.Image`'s own default is a backstop, not the
+bound); at most two decodes at once per node. A 25 MiB PNG can decompress to gigabytes; the size limit
+bounds the wire, these bound the process. The numbers are bound to the database's CHECKs by a test.
+
+**3 · `POST /api/workspaces/:workspaceId/uploads?id=&name=`, raw bytes, `application/octet-stream`.**
+The workspace is the quota's axis; there is no channel until the message. `id` is a UUIDv7 the client
+chose, so a retry after a timeout finds the row it made (D-33's rule); `name` is the file's name, at
+most 255 characters with no control or bidirectional-override characters. The body is the file's
+bytes with exactly `application/octet-stream` — not `multipart/form-data`, which a cross-site form can
+send: D-39 §2's defence is that a form cannot send the type, and this keeps it with a type a form cannot
+send either. A missing type is still refused. The route reads no body (`parse: 'none'`) until the
+session, the membership and `Content-Length` (required; at most `attachment_size_limit`) have passed, and
+then reads it with a cap: 25 MiB is never buffered for somebody who is not let in.
+
+**4 · Every other request keeps the 64 KiB edge.** The server's limit rises to what an upload needs; a
+JSON route refuses a body over `JSON_BODY_MAX_BYTES` by its `Content-Length`, and a bodied request with
+no length (chunked) with `411`, before it is parsed (D-80's promise, kept by a different mechanism).
+
+**5 · Quota and orphans.** An upload is refused (`413 STORAGE_QUOTA_EXCEEDED`) when the workspace's
+`storage_used_bytes`, plus what is uploaded and not yet attached, plus this file, would pass
+`storage_quota_bytes` — checked and inserted under a lock on the workspace row, with the object written
+*outside* the transaction so no pool connection waits on the store. A person holds at most 20
+unattached uploads per workspace and may delete their own; the sweeper of the rest is #71's.
+
+**6 · Who may read one.** The uploader, while it is unattached; afterwards whoever can see the channel
+of its message (D-34) — and nobody once that message is deleted (D-103 §7: the tombstone hides what was
+said, and what was shown with it). One guarding query, one refusal (`404 ATTACHMENT_NOT_FOUND`), as
+`requireMessageById` (#200). An attachment belongs to its message's workspace by a constraint, not by
+care (D-90). Downloads carry `nosniff`, `Cross-Origin-Resource-Policy: same-origin`, a sandboxing CSP,
+an RFC 6266 file name, and `Cache-Control: private, max-age=31536000, immutable`: the bytes behind an id
+never change, and the cache is the person's own.
+
+**7 · A message may be its attachments alone.** A pasted screenshot needs no words; the words become
+optional only when there is at least one attachment, at most 10 per message.
+
+**Rejected: the original kept beside the re-encoding.** It is the copy that leaks GPS, and nothing in
+the product shows it. **Rejected: `POST /api/uploads` with `multipart/form-data`** (the earlier
+`API.md` row): the form type the CSRF defence exists to refuse. **Rejected: a channel-scoped upload
+route.** `attachments` has no channel; the scope would mean nothing the schema can hold.
+**Accepted, stated:** the S3 adapter is exercised against Garage locally and in the deployment's smoke
+test, not by CI, which runs PostgreSQL alone (`CONTRIBUTING.md` §2); the store is a port, and every
+test of the rules runs against a double.
 
 ---
 
