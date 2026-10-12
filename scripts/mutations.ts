@@ -2301,4 +2301,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    if (key === "never") throw',
     tests: ['apps/api/src/platform/storage.test.ts'],
   },
+  {
+    id: 'o4-closed-despite-refusals',
+    why: 'a week in which legitimate use was refused would be reported as closing O-4',
+    file: 'apps/api/src/cli/frame-report.ts',
+    find: '    refusals === 0 && report.peakP99 <= burst\n',
+    replace: '    report.peakP99 <= burst\n',
+    tests: ['apps/api/src/cli/frame-report.test.ts'],
+  },
 ];

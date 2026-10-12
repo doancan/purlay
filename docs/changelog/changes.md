@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the week that closes O-4 is one command (#61)
+
+- `bun run report:frames <log>` reads the API's log and answers what O-4 is closed by: each
+  connection's peak frames in a second as the p99 and the maximum, beside the budget, and every
+  refusal of frames, sends and HTTP requests.
+
 ### Quality — 2026-10-12: attachments work in the demonstration and the browser suite (D-117, #387)
 
 - `STORAGE_DIRECTORY` keeps attachments in a directory instead of a bucket, refused in production
