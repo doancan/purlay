@@ -38,7 +38,7 @@ export interface PageQuery {
   readonly limit?: number | undefined;
 }
 
-const limitOf = (query: PageQuery): number =>
+export const limitOf = (query: PageQuery): number =>
   Math.min(Math.max(query.limit ?? PAGE_LIMIT.default, 1), PAGE_LIMIT.max);
 
 /** Two directions at once has no meaning, and picking one silently is how a client reads a page it did not ask for. */
@@ -53,7 +53,7 @@ const refuseBothDirections = (query: PageQuery): void => {
 };
 
 /** A page of rows built into messages, and the cursor to continue in the direction travelled. */
-const asPage = async (
+export const asPage = async (
   executor: Executor,
   rows: readonly MessageRow[],
   limit: number,

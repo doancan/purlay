@@ -18,6 +18,9 @@ import {
   ReactionsResponse,
   ReadChannelRequest,
   AddChannelMemberRequest,
+  SEARCH_QUERY_MAX,
+  SEARCH_QUERY_MIN,
+  SearchQuery,
   CreateChannelRequest,
   EditMessageRequest,
   SendMessageRequest,
@@ -161,6 +164,16 @@ describe('http shapes', () => {
     expect(Value.Check(CreateChannelRequest, { name: 'leads', type: 'private' })).toBe(true);
     expect(Value.Check(CreateChannelRequest, { name: 'x', type: 'public' })).toBe(true);
     expect(Value.Check(CreateChannelRequest, { name: 'x', type: 'direct_message' })).toBe(false);
+  });
+
+  test('a search is at least a trigram long and bounded, and takes no forward cursor', () => {
+    const at = (n: number): string => 'x'.repeat(n);
+    expect(Value.Check(SearchQuery, { q: at(SEARCH_QUERY_MIN) })).toBe(true);
+    expect(Value.Check(SearchQuery, { q: at(SEARCH_QUERY_MIN - 1) })).toBe(false);
+    expect(Value.Check(SearchQuery, { q: at(SEARCH_QUERY_MAX) })).toBe(true);
+    expect(Value.Check(SearchQuery, { q: at(SEARCH_QUERY_MAX + 1) })).toBe(false);
+    expect(Value.Check(SearchQuery, { q: 'abc', after: id })).toBe(false);
+    expect(Value.Check(SearchQuery, { q: 'abc', channelId: id, before: id, limit: 5 })).toBe(true);
   });
 
   test('adding to a channel names one person and nothing else', () => {

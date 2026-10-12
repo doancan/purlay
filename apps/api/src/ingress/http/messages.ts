@@ -10,6 +10,7 @@ import type { Executor } from '@purlay/db';
 import {
   EditMessageRequest,
   PageQuery,
+  SearchQuery,
   SendMessageRequest,
   type Message,
   type MessagePage,
@@ -27,6 +28,7 @@ import {
   unresolvedIn,
   type ResolveDependencies,
 } from '../../modules/messages/threads';
+import { searchIn } from '../../modules/search/search';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -44,7 +46,7 @@ export interface MessageDependencies extends HistoryDependencies, SendDependenci
  * `limit` is converted before validation rather than after — a string `"50"`
  * would otherwise be refused by the very schema that documents the default.
  */
-const asPageQuery = (url: URL): unknown => {
+const asPageQuery = (url: URL): Record<string, unknown> => {
   const query: Record<string, unknown> = {};
   for (const key of ['before', 'after'] as const) {
     const value = url.searchParams.get(key);
@@ -152,4 +154,26 @@ export const readUnresolved = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(PageQuery, asPageQuery(new URL(request.url)));
   return await unresolvedIn(database, context, await visibleChannelIds(database, context), query);
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/search` — the words, in the channels the caller can see
+ * (D-105, D-34). `q` is trimmed before it is measured: three spaces and a letter are not a search.
+ */
+export const readSearch = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<MessagePage> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const url = new URL(request.url);
+  const query = asPageQuery(url);
+  for (const key of ['q', 'channelId'] as const) {
+    const value = url.searchParams.get(key);
+    if (value !== null) query[key] = key === 'q' ? value.trim() : value;
+  }
+  const search = validated(SearchQuery, query);
+  return await searchIn(database, context, await visibleChannelIds(database, context), search);
 };

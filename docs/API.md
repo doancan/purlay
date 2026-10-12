@@ -195,7 +195,7 @@ the same answer for all of them.
 
 | | Method | Path | Notes |
 |:-:|---|---|---|
-| ① | `GET` | `/api/workspaces/:workspaceId/search` | `?q=` required, `?channelId=` optional, keyset. Substring/identifier match (D-10). **Restricted to channels the caller can see** (D-34) |
+| ○ | `GET` | `/api/workspaces/:workspaceId/search` | `?q=` required, trimmed, then `SEARCH_QUERY_MIN`–`SEARCH_QUERY_MAX` characters (`SearchQuery`); `?channelId=` narrows to one channel, `404 CHANNEL_NOT_FOUND` when the caller cannot see it; `?before=` and `?limit=`, newest first (`SearchPage`). The words as typed, ignoring case — `%`, `_` and `\` are literal — in roots and replies, open threads and resolved ones, never a deleted message (D-10, D-105). **Restricted to channels the caller can see** (D-34) |
 | ① | `GET` | `/api/notifications` | `?workspaceId=`, `?unreadOnly=`, keyset |
 | ① | `PUT` | `/api/notifications/read` | `{ ids }` or `{ workspaceId, before }` |
 | ① | `POST` | `/api/uploads` | `multipart/form-data`. Returns an `attachment.id` with `message_id` still null |
