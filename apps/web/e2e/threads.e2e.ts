@@ -202,7 +202,9 @@ test.describe('resolving', () => {
           b.textContent.startsWith('Resolve'),
         );
         if (section === null || button === undefined) return [-1];
-        const samples: number[] = [];
+        // Its height before the press, taken now rather than on a frame: under reduced motion the
+        // thread can be gone by the first frame, and a run that measured nothing proved nothing (#347).
+        const samples: number[] = [section.getBoundingClientRect().height];
         button.click();
         await new Promise<void>((resolve) => {
           const step = (): void => {
@@ -231,7 +233,8 @@ test.describe('resolving', () => {
     // Resolved once already: reopen through the API so the second run starts from an open thread.
     await api('dogancan').del(`/api/messages/${made.rootId}/resolve`);
     const instant = await measure('reduce');
-    // No size in between. How many frames it takes is the server's answer time, not motion.
+    // No size in between. How many frames it takes is the server's answer time, not motion; the
+    // first is the height before the press, so there is always one to compare.
     expect(instant.length).toBeGreaterThan(0);
     // The heights travel with a failure: it has been seen once under load (#347).
     expect(new Set(instant).size, `heights: ${JSON.stringify(instant)}`).toBe(1);
