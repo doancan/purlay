@@ -254,6 +254,19 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'an upload names no channel; it is the uploader’s alone until a message carries it',
     },
   },
+  'GET /api/workspaces/:workspaceId/integrations/github': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own credential, no channel' },
+  },
+  'PUT /api/workspaces/:workspaceId/integrations/github': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ token: 'ghp_crossing' }),
+    visibility: { kind: 'none', reason: 'the workspace’s own credential, no channel' },
+  },
+  'DELETE /api/workspaces/:workspaceId/integrations/github': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'the workspace’s own credential, no channel' },
+  },
   'GET /api/workspaces/:workspaceId/audit': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: {

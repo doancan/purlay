@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the workspace's GitHub token (D-11, D-23, #65)
+
+- An owner or admin sets, replaces or removes the one GitHub token a workspace's cards will be
+  fetched with (`…/integrations/github`). It is sealed at rest with the one cipher, bound to its row,
+  never returned and never in the audit trail; the trail says it was set or removed, and by whom.
+  Migration `0020` adds `github_integrations` and the unfurl cache `link_previews`.
+
 ### Security — 2026-10-12: the one credential cipher (D-39 §6, #113)
 
 - `platform/crypto.ts` seals a stored secret with AES-256-GCM under a key derived from

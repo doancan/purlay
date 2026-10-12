@@ -13,6 +13,8 @@ import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
   AuditQuery,
+  SetGitHubTokenRequest,
+  type GitHubIntegration,
   SetDeepWorkRequest,
   type AuditPage,
   UpdateMemberRoleRequest,
@@ -35,6 +37,12 @@ import {
 import { setDeepWork } from '../../modules/workspaces/deep-work';
 import { changeRole, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
+import {
+  githubIntegrationOf,
+  removeGitHubToken,
+  setGitHubToken,
+} from '../../modules/integrations/github';
+import type { CredentialCipher } from '../../platform/crypto';
 import {
   NO_LOG,
   publication,
@@ -182,4 +190,38 @@ export const readAuditTrail = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(AuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await auditTrail(database, context, query);
+};
+
+/** `GET /api/workspaces/:workspaceId/integrations/github` — whether a token is set. Never the token. */
+export const readGitHubIntegration = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<GitHubIntegration> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  return await githubIntegrationOf(database, context);
+};
+
+/** `PUT` sets the workspace's token, sealed; `DELETE` removes it (D-11, D-39 §6). */
+export const changeGitHubToken = async (
+  dependencies: WorkspaceDependencies & { readonly cipher: CredentialCipher },
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<void> => {
+  const { database, clock, cipher } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  if (request.method === 'DELETE') {
+    await atomicallyOn(database)(async (transaction) => {
+      await removeGitHubToken(transaction, clock, context);
+    });
+    return;
+  }
+  const { token } = validated(SetGitHubTokenRequest, body);
+  await atomicallyOn(database)(async (transaction) => {
+    await setGitHubToken(transaction, clock, cipher, context, token);
+  });
 };

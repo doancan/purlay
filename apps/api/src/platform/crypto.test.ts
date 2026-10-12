@@ -21,14 +21,14 @@ const brokenBy = async (attempt: Promise<unknown>): Promise<string> =>
 
 describe('the credential cipher', () => {
   test('opens what it sealed, for the same record: text of any kind', async () => {
-    const cipher = await credentialCipher(key(1));
+    const cipher = credentialCipher(key(1));
     for (const secret of ['ghp_abc123', '', 'şifre ğüş 🔑']) {
       expect(await cipher.open(await cipher.seal(secret, ID), ID)).toBe(secret);
     }
   });
 
   test('is its version, a 12-byte nonce, the ciphertext and a 16-byte tag; never the same twice', async () => {
-    const cipher = await credentialCipher(key(1));
+    const cipher = credentialCipher(key(1));
     const first = await cipher.seal('ghp_abc123', ID);
     const second = await cipher.seal('ghp_abc123', ID);
     expect(first[0]).toBe(SEAL_VERSION);
@@ -38,10 +38,10 @@ describe('the credential cipher', () => {
   });
 
   test('does not open for another record, under another key, or altered by one bit', async () => {
-    const cipher = await credentialCipher(key(1));
+    const cipher = credentialCipher(key(1));
     const sealed = await cipher.seal('ghp_abc123', ID);
     expect(await brokenBy(cipher.open(sealed, OTHER))).toBe('SealBroken');
-    expect(await brokenBy((await credentialCipher(key(2))).open(sealed, ID))).toBe('SealBroken');
+    expect(await brokenBy(credentialCipher(key(2)).open(sealed, ID))).toBe('SealBroken');
     for (const at of [0, 5, sealed.length - 1]) {
       const altered = Uint8Array.from(sealed);
       altered[at] = (altered[at] ?? 0) ^ 1;
@@ -55,7 +55,7 @@ describe('the credential cipher', () => {
 
   test('is under a key of its own, not the root: the OAuth state key and this cannot interact', async () => {
     const root = Buffer.alloc(32, 1);
-    const sealed = await (await credentialCipher(root.toString('base64'))).seal('x', ID);
+    const sealed = await credentialCipher(root.toString('base64')).seal('x', ID);
     const underRoot = await crypto.subtle.importKey('raw', root, 'AES-GCM', false, ['decrypt']);
     const opened = await crypto.subtle
       .decrypt(

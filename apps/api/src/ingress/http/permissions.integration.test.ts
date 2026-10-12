@@ -113,6 +113,14 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     ),
   'read the audit trail': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit`, as),
+  'see whether the GitHub token is set': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/integrations/github`, as),
+  'set the GitHub token': async (world, as) =>
+    await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/integrations/github`, as, {
+      token: 'ghp_permission',
+    }),
+  'remove the GitHub token': async (world, as) =>
+    await call(world, 'DELETE', `/api/workspaces/${world.workspaceId}/integrations/github`, as),
   'delete somebody else’s message': async (world, as) =>
     await call(world, 'DELETE', `/api/messages/${world.messageId}`, as),
 };

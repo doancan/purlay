@@ -33,19 +33,26 @@ export interface CredentialCipher {
   readonly open: (sealed: Uint8Array, recordId: string) => Promise<string>;
 }
 
-export const credentialCipher = async (rootBase64: string): Promise<CredentialCipher> => {
-  const root = await crypto.subtle.importKey(
-    'raw',
-    Buffer.from(rootBase64, 'base64'),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const derived = await crypto.subtle.sign('HMAC', root, new TextEncoder().encode(PURPOSE));
-  const key = await crypto.subtle.importKey('raw', derived, 'AES-GCM', false, [
-    'encrypt',
-    'decrypt',
-  ]);
+/** Made at boot without waiting: the key is derived on first use, once. */
+export const credentialCipher = (rootBase64: string): CredentialCipher => {
+  let derivedKey: Promise<CryptoKey> | undefined;
+  const keyOf = async (): Promise<CryptoKey> => {
+    derivedKey ??= (async (): Promise<CryptoKey> => {
+      const root = await crypto.subtle.importKey(
+        'raw',
+        Buffer.from(rootBase64, 'base64'),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+      );
+      const derived = await crypto.subtle.sign('HMAC', root, new TextEncoder().encode(PURPOSE));
+      return await crypto.subtle.importKey('raw', derived, 'AES-GCM', false, [
+        'encrypt',
+        'decrypt',
+      ]);
+    })();
+    return await derivedKey;
+  };
   const bound = (recordId: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(recordId);
 
   return {
@@ -54,7 +61,7 @@ export const credentialCipher = async (rootBase64: string): Promise<CredentialCi
       const ciphertext = new Uint8Array(
         await crypto.subtle.encrypt(
           { name: 'AES-GCM', iv: nonce, additionalData: bound(recordId) },
-          key,
+          await keyOf(),
           new TextEncoder().encode(secret),
         ),
       );
@@ -77,7 +84,7 @@ export const credentialCipher = async (rootBase64: string): Promise<CredentialCi
             iv: sealed.subarray(1, 1 + NONCE_BYTES),
             additionalData: bound(recordId),
           },
-          key,
+          await keyOf(),
           sealed.subarray(1 + NONCE_BYTES),
         );
         return new TextDecoder().decode(plaintext);
