@@ -9,6 +9,10 @@
  * about taking as an argument rather than the pattern it forbids. So the place
  * the rule points at needs no exception to the rule.
  */
+/** Lengths of time a rule is written in, defined once. */
+export const HOUR_MS = 60 * 60 * 1000;
+export const DAY_MS = 24 * HOUR_MS;
+
 export interface Clock {
   readonly now: () => Date;
 }

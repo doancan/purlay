@@ -21,9 +21,7 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { sessionTokenFrom } from '../../platform/cookies';
-
-/** 32 bytes, hex-encoded. The cookie value. */
-const TOKEN_BYTES = 32;
+import { randomToken, tokenDigest } from '../../platform/tokens';
 
 /**
  * How stale `last_used_at` may get before a resolve refreshes it.
@@ -54,17 +52,6 @@ export interface IssueOptions {
   readonly ipAddress?: string | undefined;
 }
 
-const sha256 = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
-
-const randomToken = (): string => {
-  const bytes = new Uint8Array(TOKEN_BYTES);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
-
 export const issueSession = async (
   executor: Executor,
   clock: Clock,
@@ -80,7 +67,7 @@ export const issueSession = async (
     .insertInto('sessions')
     .values({
       user_id: userId,
-      token_hash: await sha256(token),
+      token_hash: await tokenDigest(token),
       // From the clock, never the column default: `resolveSession` compares
       // `last_used_at` against `clock.now()`, and two clocks in one comparison
       // made the staleness check depend on the wall date the test ran on.
@@ -118,7 +105,7 @@ export const resolveSession = async (
       'sessions.last_used_at',
       'sessions.expires_at',
     ])
-    .where('sessions.token_hash', '=', await sha256(token))
+    .where('sessions.token_hash', '=', await tokenDigest(token))
     .where('sessions.revoked_at', 'is', null)
     .where('sessions.expires_at', '>', now)
     .where('users.deleted_at', 'is', null)
@@ -175,7 +162,7 @@ export const revokeSession = async (
   const revoked = await executor
     .updateTable('sessions')
     .set({ revoked_at: clock.now() })
-    .where('token_hash', '=', await sha256(token))
+    .where('token_hash', '=', await tokenDigest(token))
     .where('revoked_at', 'is', null)
     .returning('id')
     .executeTakeFirst();
