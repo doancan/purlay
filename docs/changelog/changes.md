@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: reading the inbox (D-106)
+
+- Opening a notification marks it read; Mark all read reads up to the newest on screen, so what arrives
+  after you looked still waits. Both are painted before the server answers; refused, the toast says
+  why and the list is read again. The channels' mention badges come down on every device.
+
 ### Feature — 2026-10-12: the inbox, in the client (D-106)
 
 - Inbox, under Open questions in the sidebar: what you were told — named, written to, answered in your

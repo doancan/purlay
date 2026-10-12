@@ -1,9 +1,9 @@
 /**
- * The inbox (D-106, `UX.md` §8): what each row says, where it takes the person, and the three
- * states.
+ * The inbox (D-106, `UX.md` §8): what each row says, where it takes the person, reading one and
+ * reading all — painted first, and what a refusal leaves — and the three states.
  */
 import { describe, expect, test } from 'bun:test';
-import type { Notification, NotificationPage } from '@purlay/types';
+import type { Notification, NotificationPage, ReadNotificationsRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
 import type { Api } from '../../data/api';
@@ -102,12 +102,64 @@ describe('the list', () => {
     view.unmount();
   });
 
-  test('opening one goes to it', async () => {
+  test('opening an unread one marks it read before the server answers, and goes to it', async () => {
+    const asked: ReadNotificationsRequest[] = [];
     const view = await visit({
-      notifications: () => Promise.resolve(page([told(4, 'mention')])),
+      notifications: () => Promise.resolve(page([told(4, 'mention'), told(3, 'mention')])),
+      readNotifications: (input) => {
+        asked.push(input);
+        return new Promise<void>(() => undefined);
+      },
     });
     await person().click(view.getByRole('button', { name: /words 4/ }));
+    expect(asked).toEqual([{ ids: [notificationId(4)] }]);
     expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
+    view.unmount();
+  });
+
+  test('opening one already read asks nothing', async () => {
+    const view = await visit({
+      notifications: () =>
+        Promise.resolve(page([told(4, 'mention', { readAt: '2026-09-09T09:00:00.000Z' })])),
+    });
+    // `readNotifications` is not given: the fake fails the test if it is called.
+    await person().click(view.getByRole('button', { name: /words 4/ }));
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
+    view.unmount();
+  });
+
+  test('Mark all read reads up to the newest on screen, painted at once', async () => {
+    const asked: ReadNotificationsRequest[] = [];
+    const view = await visit({
+      notifications: () => Promise.resolve(page([told(4, 'mention'), told(3, 'mention')])),
+      readNotifications: (input) => {
+        asked.push(input);
+        return new Promise<void>(() => undefined);
+      },
+    });
+    expect(view.getAllByText(/unread/)).toHaveLength(2);
+    await person().click(view.getByRole('button', { name: 'Mark all read' }));
+    expect(asked).toEqual([{ workspaceId: IDS.workspace, before: notificationId(4) }]);
+    expect(view.queryByText(/unread/)).toBeNull();
+    // Nothing left to read: the button goes.
+    expect(view.queryByRole('button', { name: 'Mark all read' })).toBeNull();
+    view.unmount();
+  });
+
+  test('a refusal says why, and the list is asked for again', async () => {
+    let asks = 0;
+    const view = await visit({
+      notifications: () => {
+        asks += 1;
+        return Promise.resolve(page([told(4, 'mention')]));
+      },
+      readNotifications: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+    });
+    await person().click(view.getByRole('button', { name: 'Mark all read' }));
+    expect(await view.findByText(/Not marked read\./)).toBeDefined();
+    await settle();
+    expect(asks).toBe(2);
+    expect(view.getByText(/unread/)).toBeDefined();
     view.unmount();
   });
 
@@ -150,6 +202,7 @@ describe('the states', () => {
     answer(page([]));
     await settle();
     expect(view.getByRole('heading', { name: 'Nothing needs you' })).toBeDefined();
+    expect(view.queryByRole('button', { name: 'Mark all read' })).toBeNull();
     await expectNoAxeViolations(view.container);
     view.unmount();
   });
@@ -178,6 +231,7 @@ describe('the states', () => {
     );
     expect(view.getByRole('heading', { level: 1, name: 'Gelen kutusu' })).toBeDefined();
     expect(view.getByText(/alice senden bahsetti/)).toBeDefined();
+    expect(view.getByRole('button', { name: 'Tümünü okundu yap' })).toBeDefined();
     view.unmount();
   });
 });

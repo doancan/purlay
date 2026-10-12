@@ -1041,4 +1041,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  if (before !== undefined && state.unreadMentionCount < 0) {\n',
     tests: ['apps/web/src/data/cache.test.ts'],
   },
+  {
+    id: 'inbox-read-not-painted-first',
+    why: 'a notification opened or Mark all read stays unread on screen until the server answers, and on a slow network looks ignored',
+    file: 'apps/web/src/features/inbox/inbox-screen.tsx',
+    find: '    markLocally(client, workspace.id, marked, ports.clock.now().toISOString());\n',
+    replace: '',
+    tests: ['apps/web/src/features/inbox/inbox-screen.test.tsx'],
+  },
+  {
+    id: 'inbox-reads-what-is-already-read',
+    why: 'every notification opened asks the server again, read or not',
+    file: 'apps/web/src/features/inbox/inbox-screen.tsx',
+    find: '    if (notification.readAt === null) {\n',
+    replace: '    if (notification.readAt === null || notification.readAt !== null) {\n',
+    tests: ['apps/web/src/features/inbox/inbox-screen.test.tsx'],
+  },
 ];

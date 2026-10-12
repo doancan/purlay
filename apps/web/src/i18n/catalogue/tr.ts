@@ -284,6 +284,8 @@ export const tr = {
   'inbox.why.direct': '{name} sana yazdı',
   'inbox.why.reply': '{name} thread’ine yanıt verdi',
   'inbox.why.resolved': 'Sorun çözüldü',
+  'inbox.readAll': 'Tümünü okundu yap',
+  'inbox.readFailed': 'Okundu yapılamadı.',
   'inbox.more': 'Daha fazla yükle',
   'state.inbox.loading': 'Gelen kutun yükleniyor',
   'state.inbox.error.title': 'Gelen kutun yüklenemedi',
