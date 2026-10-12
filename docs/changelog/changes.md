@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the latency budgets measured at the build target (`docs/spikes/capacity.md`)
+
+- One API process with 300 sockets in a channel and 20 messages a second: ACK p95 19–21 ms, fan-out
+  p95 14–16 ms, every message to every socket; at twice that, still under 20 ms. Memory under that load
+  is 128–136 MiB, past the idle budget, which nothing else had measured.
+
 ### Operations — 2026-10-13: the production containers' logs are bounded
 
 - Every service of `docker-compose.production.yml` keeps at most five 50 MB log files. Docker's

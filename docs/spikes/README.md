@@ -30,3 +30,4 @@ A spike that only reports "it works" has not been written down. (D-57)
 | [`knip.md`](knip.md) | 2026-10-09 | Finds 19 things on the first run, nothing needed loosening — the one exemption is a named entry for the realtime client until #26 |
 | [`markdown.md`](markdown.md) | 2026-10-11 | One engine on both sides for 29.9 KB; superlinear and stack-overflowing past bounds it now enforces — and the first bound was a grammar copy the fuzz test broke |
 | [`image-proxy.md`](image-proxy.md) | 2026-10-12 | `node:https` with a checking `lookup` connects to the checked address with TLS for the name; `fetch` cannot — and a kept-alive socket skips `lookup` unless `agent: false` |
+| [`capacity.md`](capacity.md) | 2026-10-13 | One process at 300 sockets and 20 msg/s: ACK p95 19–21 ms, fan-out 14–16 ms, all delivered — and 128–136 MiB under load, past the idle budget |
