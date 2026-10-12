@@ -135,6 +135,19 @@ const VIOLATIONS: readonly Violation[] = [
     allowed: true,
   },
   {
+    rule: 'the supported browsers: a web API one of them lacks is refused (D-113)',
+    ruleId: 'compat/compat',
+    path: 'apps/web/src/__enforcement__.ts',
+    source: "export const route = (): unknown => new URLPattern({ pathname: '/x' });\n",
+  },
+  {
+    rule: 'the supported browsers: an API all of them have is let through (D-113)',
+    ruleId: 'compat/compat',
+    path: 'apps/web/src/__enforcement__.ts',
+    source: 'export const copy = (value: object): unknown => structuredClone(value);\n',
+    allowed: true,
+  },
+  {
     rule: 'layering: the browser may not import the database (ARCHITECTURE.md §4)',
     ruleId: 'no-restricted-imports',
     path: 'apps/web/src/__enforcement__.ts',

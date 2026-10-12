@@ -155,6 +155,9 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 - Forms use `react-hook-form` + `zod`.
 - **Accessibility is not optional:** keyboard navigation, visible focus, WCAG AA contrast,
   labels on interactive controls. This product is keyboard-driven; there is no excuse.
+- **The supported browsers are named once**, as `browserslist` in `apps/web/package.json`. A web
+  API one of them lacks fails lint, an ES2024 built-in fails to compile, and the build targets the
+  same list — with what none of these sees written down in D-113.
 - **Do not move work to a Web Worker by default.** Move it only when a measurement shows a
   dropped frame. For a clamped 12-line code block, the `postMessage` round-trip costs more than
   the highlight.
