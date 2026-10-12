@@ -35,7 +35,9 @@ import { cleanup } from '@testing-library/react';
  */
 export const installDom = (): void => {
   beforeAll(() => {
-    GlobalRegistrator.register();
+    // An origin, as the deployed client has: `about:blank` resolves no relative URL, so an
+    // `<img src="/api/…">` would fail the moment it was drawn.
+    GlobalRegistrator.register({ url: 'https://purlay.test/' });
   });
 
   /**

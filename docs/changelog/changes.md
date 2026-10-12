@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: attachments drawn in the feed (D-109 §6)
+
+- A message's images show as thumbnails under its words, in space kept for them before they load,
+  and open the full image; its files show their name and size as a download. A thumbnail that does
+  not load says so, with Retry. A deleted message shows none of them, in both languages.
+
 ### Feature — 2026-10-12: the other screens and the overlays in the flat style (D-110)
 
 - The open questions, the inbox and search have the channel's header and its rows; the inbox and the

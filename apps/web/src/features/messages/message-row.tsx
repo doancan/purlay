@@ -29,6 +29,7 @@ import type { Delivery } from '../../realtime/engine';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { renderContent } from '../content/render-content';
+import { Attachments } from './attachments';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
 
@@ -189,6 +190,8 @@ const MessageRowView = ({
             </span>
           )}
         </div>
+        {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
+        {!deleted && <Attachments attachments={message.attachments} />}
         {!deleted && <ReactionBar message={message} meId={meId} />}
         {failed && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-label text-danger-text">

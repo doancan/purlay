@@ -83,6 +83,7 @@ export const sizeTokens = [
   'size-members',
   'size-feed-max',
   'size-narrow',
+  'size-attachment',
   'size-control',
   'size-touch',
   'size-header',

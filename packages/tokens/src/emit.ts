@@ -29,6 +29,7 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',
+  'size-attachment': '--container-attachment',
   'size-control': '--height-control',
   'size-header': '--height-header',
   // A touch target is a height and a minimum width: a row is as wide as its container, an icon button is a square.
