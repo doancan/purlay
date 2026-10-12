@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the connection-bar test says what the page held when it fails (#347)
+
+- `states.e2e.ts` "the connection" fails now and then under the full suite's load and never alone.
+  Instead of a bare timeout it now reports every socket's address and state, and every status on the
+  screen, so the next failure names its cause.
+
 ### Quality — 2026-10-13: the wedge's order test waits for the sender's own frames first (#347)
 
 - `wedge.integration.test.ts` marked where Alice's frames began before her own send's ACK had

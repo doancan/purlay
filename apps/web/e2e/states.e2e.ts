@@ -247,7 +247,24 @@ test.describe('the connection', () => {
         socket.close();
     });
     const bar = page.getByRole('status').filter({ hasText: 'Reconnecting' });
-    await expect(bar).toBeVisible();
+    // Under the full suite's load this has failed now and then, alone never (#347). If it fails, it
+    // says what the page held: every socket's address and state, and every status on the screen.
+    await expect(bar)
+      .toBeVisible()
+      .catch(async (error: unknown) => {
+        const held = await page.evaluate(() => ({
+          sockets: (window as unknown as { __sockets: WebSocket[] }).__sockets.map(
+            (socket) => `${socket.url} ${String(socket.readyState)}`,
+          ),
+          statuses: [...document.querySelectorAll('[role="status"]')]
+            .map((status) => status.textContent)
+            .filter((text) => text !== ''),
+          heard: (window as unknown as { __heard: number }).__heard,
+        }));
+        throw new Error(
+          `the bar never showed; the page held ${JSON.stringify(held)}: ${String(error)}`,
+        );
+      });
     // Writing is never refused (UX §8): the composer and Send stay enabled.
     await expect(page.locator('textarea[data-composer]')).toBeEnabled();
     // An empty box has nothing to send, and says so with aria-disabled; with a draft in it Send is live.
