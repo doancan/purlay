@@ -32,6 +32,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   messageId,
+  type Attachment,
   type Channel,
   type ClientFrame,
   type ErrorCode,
@@ -94,6 +95,8 @@ export interface PendingMessage {
   readonly delivery: Delivery;
   /** Why it failed, as a code a screen turns into words (`data/failure.ts`); null while it has not. */
   readonly reason: FailureCode | null;
+  /** The uploads it carries, drawn on its row before the server has it (D-109 §7). */
+  readonly attachments: readonly Attachment[];
 }
 
 export interface RealtimeState {
@@ -107,6 +110,7 @@ export interface Outgoing {
   readonly channelId: string;
   readonly content: string;
   readonly parentId?: string | undefined;
+  readonly attachments?: readonly Attachment[] | undefined;
 }
 
 export interface EngineOptions {
@@ -164,6 +168,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     ...m,
     delivery: 'failed',
     reason: null,
+    attachments: m.attachments ?? [],
   }));
   const store = createStore<RealtimeState>(() => ({
     status: 'idle',
@@ -198,12 +203,13 @@ export const createEngine = (options: EngineOptions): Engine => {
   const persist = (pending: readonly PendingMessage[]): void => {
     const keep: StoredMessage[] = pending
       .filter((p) => p.delivery !== 'sent')
-      .map(({ id, channelId, parentId, content, createdAt }) => ({
+      .map(({ id, channelId, parentId, content, createdAt, attachments }) => ({
         id,
         channelId,
         parentId,
         content,
         createdAt,
+        attachments,
       }));
     saveStored(storage, options.userId, keep);
   };
@@ -244,6 +250,12 @@ export const createEngine = (options: EngineOptions): Engine => {
     if (find(id) !== undefined) update(id, { delivery: 'failed', reason });
   };
 
+  /** The ids a send names, on either door; none when it carries nothing. */
+  const carried = (pending: PendingMessage): { attachmentIds?: string[] } =>
+    pending.attachments.length === 0
+      ? {}
+      : { attachmentIds: pending.attachments.map((attachment) => attachment.id) };
+
   /** HTTP is the door when the socket is not: the same service, the same id. */
   const overHttp = async (pending: PendingMessage): Promise<void> => {
     try {
@@ -251,6 +263,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         id: pending.id,
         content: pending.content,
         ...(pending.parentId === null ? {} : { parentId: pending.parentId }),
+        ...carried(pending),
       });
       messageCreated(client, message);
       forget(pending.id);
@@ -267,6 +280,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         channelId: pending.channelId,
         content: pending.content,
         ...(pending.parentId === null ? {} : { parentId: pending.parentId }),
+        ...carried(pending),
       },
     };
     if (connection?.send(frame) !== true) {
@@ -529,7 +543,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         }
       }
     },
-    send: ({ channelId, content, parentId }): string => {
+    send: ({ channelId, content, parentId, attachments }): string => {
       const id = messageId(serverClock.now());
       const pending: PendingMessage = {
         id,
@@ -539,6 +553,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         createdAt: serverClock.now().toISOString(),
         delivery: 'sending',
         reason: null,
+        attachments: attachments ?? [],
       };
       // Painted before anything leaves: the store is what the screen reads.
       change((all) => [...all, pending]);

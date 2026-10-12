@@ -4682,6 +4682,9 @@ state `UX.md` §8 requires.
    already enforces. Amends UX §9's "effectively none".
 8. **The composer has three buttons**: bold, a code block and a mention. Each *inserts markdown* into
    the plain textarea and each has a key; none of them is a WYSIWYG control, which UX §5 still refuses.
+   *Amended 2026-10-12 (#370):* a fourth, **Attach a file**, beside them. It inserts no markdown: it
+   picks files to upload (D-109), as pasting and dropping one do. It is no formatting control, so the
+   rule that the composer has no WYSIWYG stands.
 9. **The day** is a label at the column's left with a rule after it, not a centred chip. Amends UX §3.
 
 **Not taken from the brief, and why.**

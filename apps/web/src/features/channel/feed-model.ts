@@ -58,7 +58,7 @@ const asMessage = (pending: PendingMessage, me: User): Message => ({
   thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
   reactions: [],
   mentions: [],
-  attachments: [],
+  attachments: [...pending.attachments],
 });
 
 interface Entry {

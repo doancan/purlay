@@ -45,7 +45,7 @@ const asReply = (pending: PendingMessage, me: User): Message => ({
   thread: null,
   reactions: [],
   mentions: [],
-  attachments: [],
+  attachments: [...pending.attachments],
 });
 
 interface Entry {

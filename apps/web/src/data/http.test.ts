@@ -55,6 +55,18 @@ describe('a request', () => {
     });
   });
 
+  test('raw bytes go as they are, said to be octet-stream, never as JSON (D-109 §3)', async () => {
+    const { client, seen } = http(() => answer(201, { id: 'a' }));
+    const bytes = new Blob([new Uint8Array([1, 2, 3])]);
+    await client.request('POST', '/api/up', Thing, { bytes, query: { id: 'x', name: 'a b' } });
+    expect(seen[0]?.url).toBe('/api/up?id=x&name=a+b');
+    expect(seen[0]?.init.body).toBe(bytes);
+    expect(seen[0]?.init.headers).toEqual({
+      accept: 'application/json',
+      'content-type': 'application/octet-stream',
+    });
+  });
+
   test('carries the abort signal it was given', async () => {
     const { client, seen } = http(() => answer(200, { id: 'a' }));
     const controller = new AbortController();

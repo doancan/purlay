@@ -37,6 +37,7 @@ const pendingOf = (n: number, over: Partial<PendingMessage> = {}): PendingMessag
   createdAt: at(n),
   delivery: 'sending',
   reason: null,
+  attachments: [],
   ...over,
 });
 

@@ -22,6 +22,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   markRead: unexpected('markRead'),
   messages: unexpected('messages'),
   send: unexpected('send'),
+  upload: unexpected('upload'),
+  discardAttachment: unexpected('discardAttachment'),
   thread: unexpected('thread'),
   resolve: unexpected('resolve'),
   reopen: unexpected('reopen'),

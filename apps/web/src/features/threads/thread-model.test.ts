@@ -16,6 +16,7 @@ const pending = (n: number, over: Partial<PendingMessage> = {}): PendingMessage 
   createdAt: aMessage(n).createdAt,
   delivery: 'sending',
   reason: null,
+  attachments: [],
   ...over,
 });
 
