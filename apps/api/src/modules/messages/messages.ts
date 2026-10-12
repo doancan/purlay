@@ -16,13 +16,11 @@
  * the last id seen — no timestamp, no tie-break, because a UUIDv7 already sorts
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
-import { Value } from '@sinclair/typebox/value';
 import { sql, type Executor } from '@purlay/db';
 import {
   isMessageIdShape,
   isPlausibleMessageId,
   PAGE_LIMIT,
-  TextMetadata,
   type Message,
   type MessagePage,
   type ThreadSummary,
@@ -49,14 +47,8 @@ import {
   resolveMentions,
   type ChannelStateUpdate,
 } from './delivery';
-import {
-  metadataOf,
-  readMarkdown,
-  withoutFencedCode,
-  type Engine,
-  type Reading,
-} from '@purlay/markdown';
-import { parseMentions } from './mentions';
+import { type Engine, type Reading } from '@purlay/markdown';
+import { readBody } from './body';
 import {
   buildMessages,
   MESSAGE_COLUMNS,
@@ -204,27 +196,8 @@ export const sendMessage = async (
     });
   }
 
-  // The parser's refusal (D-12): `@here` and its kin are not a thing this product has. Looked for
-  // only where the reader sees prose: fenced code is blanked by the engine that renders it (D-101).
-  const mentions = parseMentions(withoutFencedCode(input.content, engine));
-  if (mentions.broadcast.length > 0) {
-    throw new AppError({
-      code: 'VALIDATION_FAILED',
-      message: 'Mention people by name: there is no @here, @channel or @everyone.',
-      details: { fields: { content: 'broadcast mentions are not available' } },
-    });
-  }
-
-  // Read once, here (`ARCHITECTURE.md` §8.1). Never a refusal: a body too complex to format is
-  // still a message, shown as typed, and records nothing (D-101).
-  const reading = readMarkdown(input.content, engine);
-  const metadata = metadataOf(reading.tree);
-  if (!Value.Check(TextMetadata, metadata)) {
-    // The parser's own output outside the contract is a defect in this code, not in the message:
-    // a 500, and the log names the fields that broke it — their paths, never their values.
-    const paths = [...Value.Errors(TextMetadata, metadata)].map((error) => error.path);
-    throw new Error(`metadata outside the contract at ${paths.join(', ')}`);
-  }
+  // Read once, here (`ARCHITECTURE.md` §8.1), or refused for a broadcast (D-12).
+  const { names, reading, metadata } = readBody(input.content, engine);
 
   const root =
     input.parentId === undefined ? undefined : await requireRoot(executor, context, input.parentId);
@@ -296,7 +269,7 @@ export const sendMessage = async (
   const recipients = await recordDelivery(executor, {
     context,
     messageId: input.id,
-    mentioned: await resolveMentions(executor, context, mentions.names),
+    mentioned: await resolveMentions(executor, context, names),
     thread:
       input.parentId === undefined || root === undefined
         ? null

@@ -130,6 +130,68 @@ export interface Delivery {
   readonly thread: { readonly rootId: string; readonly rootAuthorId: string } | null;
 }
 
+/** Who is told about a message, and why: the strongest reason each person has. */
+type Reasons = ReadonlyMap<string, Reason>;
+
+/**
+ * Writes the notifications for `reasons` and returns the people told **for the first time** —
+ * one already holding a notification of that kind for this message is not told again.
+ *
+ * A membership that has muted the channel is told nothing, and the author never. Somebody who
+ * has read past the message is told for the inbox, already read; so is somebody who joined the
+ * channel after it was written (`writtenAt`), for whom it was never counted unread.
+ */
+const notify = async (
+  executor: Executor,
+  context: ChannelContext,
+  messageId: string,
+  reasons: Reasons,
+  writtenAt?: Date,
+): Promise<readonly string[]> => {
+  const candidates = [...reasons.keys()].filter((userId) => userId !== context.userId);
+  if (candidates.length === 0) return [];
+  const muted = new Set<string>();
+  const alreadyRead = new Set<string>();
+  const levels = await executor
+    .selectFrom('channel_members')
+    .select(['user_id', 'notification_level', 'last_read_message_id', 'joined_at'])
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', 'in', candidates)
+    .execute();
+  for (const row of levels) {
+    if (row.notification_level === 'none') muted.add(row.user_id);
+    if (isBehind(row.last_read_message_id, messageId)) alreadyRead.add(row.user_id);
+    if (writtenAt !== undefined && new Date(row.joined_at) > writtenAt)
+      alreadyRead.add(row.user_id);
+  }
+  const notified = candidates.filter((userId) => !muted.has(userId));
+  if (notified.length === 0) return [];
+  const inserted = await executor
+    .insertInto('notifications')
+    .values(
+      notified.flatMap((userId) => {
+        const type = reasons.get(userId);
+        return type === undefined
+          ? []
+          : [
+              {
+                user_id: userId,
+                workspace_id: context.workspaceId,
+                channel_id: context.channelId,
+                message_id: messageId,
+                type,
+                // Behind the person's position: it exists for the inbox and needs nothing.
+                ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),
+              },
+            ];
+      }),
+    )
+    .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
+    .returning('user_id')
+    .execute();
+  return inserted.map((row) => row.user_id);
+};
+
 /**
  * Writes the mentions and notifications for a new message and moves the counters,
  * returning the channel members whose numbers changed.
@@ -158,7 +220,6 @@ export const recordDelivery = async (
 
   const reasons = new Map<string, Reason>();
   const consider = (userId: string, reason: Reason): void => {
-    if (userId === sender) return;
     const known = reasons.get(userId);
     if (known === undefined || STRENGTH[reason] > STRENGTH[known]) reasons.set(userId, reason);
   };
@@ -193,50 +254,7 @@ export const recordDelivery = async (
     for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }
 
-  // A membership that has muted the channel is told nothing. The same read says who has
-  // already read *past* this message: an id may be up to a minute in the past, so a message
-  // can arrive behind somebody's position, and what is behind it is read (see the counters).
-  const candidates = [...reasons.keys()];
-  const muted = new Set<string>();
-  const alreadyRead = new Set<string>();
-  if (candidates.length > 0) {
-    const levels = await executor
-      .selectFrom('channel_members')
-      .select(['user_id', 'notification_level', 'last_read_message_id'])
-      .where('channel_id', '=', context.channelId)
-      .where('user_id', 'in', candidates)
-      .execute();
-    for (const row of levels) {
-      if (row.notification_level === 'none') muted.add(row.user_id);
-      if (isBehind(row.last_read_message_id, messageId)) alreadyRead.add(row.user_id);
-    }
-  }
-  const notified = candidates.filter((userId) => !muted.has(userId));
-
-  if (notified.length > 0) {
-    await executor
-      .insertInto('notifications')
-      .values(
-        notified.flatMap((userId) => {
-          const type = reasons.get(userId);
-          return type === undefined
-            ? []
-            : [
-                {
-                  user_id: userId,
-                  workspace_id: context.workspaceId,
-                  channel_id: context.channelId,
-                  message_id: messageId,
-                  type,
-                  // Behind the person's position: it exists for the inbox and needs nothing.
-                  ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),
-                },
-              ];
-        }),
-      )
-      .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
-      .execute();
-  }
+  const notified = await notify(executor, context, messageId, reasons);
 
   // Counted only for a member whose position is before this message. One whose position is
   // at or past it has read beyond it, and the read recount (`id > position`) would not find it:

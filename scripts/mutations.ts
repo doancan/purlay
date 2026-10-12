@@ -202,7 +202,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'broadcast-mention-accepted',
     why: '@here wakes a channel that was promised it never would be, and the parser D-12 describes does nothing',
-    file: MESSAGES,
+    file: 'apps/api/src/modules/messages/body.ts',
     find: 'if (mentions.broadcast.length > 0) {',
     replace: 'if (false) {',
     tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
@@ -219,7 +219,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sender-notified-of-their-own-reply',
     why: 'answering your own thread puts a notification in your own inbox, for something you just wrote',
     file: 'apps/api/src/modules/messages/delivery.ts',
-    find: '    if (userId === sender) return;\n',
+    find: '.filter((userId) => userId !== context.userId)',
     replace: '',
     tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
   },
@@ -457,9 +457,9 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'mentions-read-inside-fenced-code',
     why: 'a name quoted inside a `~~~` fence, which the reader sees as code, notifies the person',
-    file: 'apps/api/src/modules/messages/messages.ts',
-    find: 'parseMentions(withoutFencedCode(input.content, engine))',
-    replace: 'parseMentions(input.content)',
+    file: 'apps/api/src/modules/messages/body.ts',
+    find: 'parseMentions(withoutFencedCode(content, engine))',
+    replace: 'parseMentions(content)',
     tests: ['apps/api/src/modules/messages/markdown.integration.test.ts'],
   },
   {
