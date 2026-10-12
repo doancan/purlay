@@ -15,6 +15,7 @@ import {
   Membership,
   Message,
   MessagePage,
+  DeepWorkResponse,
   NotificationPage,
   ReactionsResponse,
   SearchPage,
@@ -26,6 +27,7 @@ import {
   type CreateChannelRequest,
   type CreateWorkspaceRequest,
   type NotificationLevel,
+  type SetDeepWorkRequest,
   type ReadNotificationsRequest,
   type SendMessageRequest,
 } from '@purlay/types';
@@ -52,6 +54,11 @@ export interface Api {
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   /** Brings somebody from the workspace into the channel (D-104); they are told by the server. */
   readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
+  /** The caller's own Deep Work in a workspace (D-108). */
+  readonly setDeepWork: (
+    workspaceId: string,
+    input: SetDeepWorkRequest,
+  ) => Promise<DeepWorkResponse>;
   /** What the caller is told about in this channel (D-107). */
   readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
@@ -136,6 +143,13 @@ export const createApi = (http: Http): Api => {
       ),
     addChannelMember: (channelId, userId) =>
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
+    setDeepWork: (workspaceId, input) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/deep-work`,
+        DeepWorkResponse,
+        options({ body: input }),
+      ),
     setNotificationLevel: (channelId, level) =>
       http.send(
         'PUT',

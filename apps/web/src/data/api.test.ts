@@ -163,6 +163,14 @@ describe('the endpoints', () => {
     expect(refused).toBe(true);
   });
 
+  test('Deep Work goes in the body, to the workspace it is for, and its answer is read', async () => {
+    const set = harness({ until: null });
+    expect(await set.api.setDeepWork(ID, { active: false })).toEqual({ until: null });
+    expect(set.calls).toEqual([
+      { method: 'PUT', url: `/api/workspaces/${ID}/deep-work`, body: { active: false } },
+    ]);
+  });
+
   test('the notification level goes in the body, to the channel it is for', async () => {
     const set = harness(null);
     await set.api.setNotificationLevel(ID, 'none');

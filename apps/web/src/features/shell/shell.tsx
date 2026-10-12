@@ -16,6 +16,7 @@ import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
 import { ConnectionBar } from './connection-bar';
 import { UpdateBar } from './update-bar';
+import { DeepWorkBar, DeepWorkProvider } from './deep-work';
 import { GlobalKeys } from './global-keys';
 import { NotFound } from './not-found';
 import { NavProvider } from './nav';
@@ -34,17 +35,20 @@ export const Shell = ({
     <WorkspaceScopeProvider slug={slug} notFound={<NotFound />}>
       <RealtimeProvider>
         <OverlayProvider>
-          <GlobalKeys />
-          <NavProvider>
-            <div className="flex h-screen gap-2 bg-canvas p-2 text-ink max-narrow:p-1">
-              <SidebarSlot />
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-100 shadow-card">
-                <ConnectionBar />
-                <UpdateBar />
-                <Main className="flex min-h-0 flex-1 flex-col">{children}</Main>
+          <DeepWorkProvider>
+            <GlobalKeys />
+            <NavProvider>
+              <div className="flex h-screen gap-2 bg-canvas p-2 text-ink max-narrow:p-1">
+                <SidebarSlot />
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-100 shadow-card">
+                  <ConnectionBar />
+                  <UpdateBar />
+                  <DeepWorkBar />
+                  <Main className="flex min-h-0 flex-1 flex-col">{children}</Main>
+                </div>
               </div>
-            </div>
-          </NavProvider>
+            </NavProvider>
+          </DeepWorkProvider>
         </OverlayProvider>
       </RealtimeProvider>
     </WorkspaceScopeProvider>

@@ -47,12 +47,11 @@ describe('the reference', () => {
       'Send the message',
       'Add a line to the message',
       'Send from inside a code block',
+      'Edit your own message',
+      'Start or end Deep Work',
     ]) {
       expect(text).toContain(sentence);
     }
-    // Editing and Deep Work are not built (O-1): a reference must not teach keys that do nothing.
-    expect(text.toLowerCase()).not.toContain('edit');
-    expect(text.toLowerCase()).not.toContain('deep work');
   });
 
   test('spells the modifiers for a Mac', async () => {

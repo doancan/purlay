@@ -14,6 +14,7 @@ import { Link } from '../../router/router-provider';
 import { Badge } from '../../ui/badge';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
+import { useDeepWork } from '../shell/deep-work';
 
 const rowClasses =
   'flex h-control w-full items-center gap-2 rounded-md px-2 text-body hover:bg-surface-200 max-narrow:h-touch';
@@ -49,6 +50,7 @@ const RowContent = ({
   children,
 }: Omit<RowContentProps, 'current'>): React.JSX.Element => {
   const { t } = useI18n();
+  const quiet = useDeepWork().until;
   return (
     <>
       {glyph === undefined ? null : <Icon name={glyph} />}
@@ -57,7 +59,8 @@ const RowContent = ({
         {unread ? <VisuallyHidden>{t('sidebar.unread')} </VisuallyHidden> : null}
         {children}
       </span>
-      {mentions > 0 ? (
+      {/* In Deep Work the count is kept and not drawn: nothing in the sidebar asks for attention. */}
+      {mentions > 0 && quiet === null ? (
         <Badge count={mentions} label={t('sidebar.mentions', { count: mentions })} />
       ) : null}
     </>

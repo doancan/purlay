@@ -295,6 +295,12 @@ export const tr = {
   'state.search.error.title': 'Aranamadı',
   'state.search.error.body': 'Sunucu yanıt vermedi. Kelimelerin duruyor; yeniden dene.',
 
+  // ── Deep Work (D-108) ──────────────────────────────────────────────────
+  'deepWork.on': '{until} saatine kadar Deep Work: hiçbir şey seni bölmüyor.',
+  'deepWork.end': 'Bitir',
+  'deepWork.failed': 'Deep Work değiştirilemedi.',
+  'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
+
   // ── Notification level (D-107) ─────────────────────────────────────────
   'level.label': 'Bana haber ver',
   'level.button': 'Bildirimler: {level}',
@@ -400,6 +406,7 @@ export const tr = {
   'shortcuts.move': 'Mesajlar arasında gez',
   'shortcuts.thread': 'Odaktaki thread’i aç ya da daralt',
   'shortcuts.reply': 'Odaktaki mesajı yanıtla',
+  'shortcuts.edit': 'Kendi mesajını düzenle',
   'shortcuts.resolve': 'Odaktaki thread’i çöz ya da yeniden aç',
   'shortcuts.channels': 'Önceki ya da sonraki okunmamış kanal',
   'shortcuts.send': 'Mesajı gönder',
