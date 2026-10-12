@@ -2252,4 +2252,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    const costly = false;\n',
     tests: ['apps/api/src/ingress/http/images.integration.test.ts'],
   },
+  {
+    id: 'picture-from-its-own-host',
+    why: "a picture link is loaded from its own host, which learns every reader's address",
+    file: 'apps/web/src/features/content/image-links.tsx',
+    find: '        src={`/api/images?url=${encodeURIComponent(href)}`}\n',
+    replace: '        src={href}\n',
+    tests: ['apps/web/src/features/content/image-links.test.tsx'],
+  },
+  {
+    id: 'picture-over-plain-http',
+    why: 'a picture link over plain http is fetched, though the proxy refuses it — a broken image on every row',
+    file: 'apps/web/src/features/content/image-links.tsx',
+    find: "    return url.protocol === 'https:' && PICTURE.test(url.pathname);\n",
+    replace: '    return PICTURE.test(url.pathname);\n',
+    tests: ['apps/web/src/features/content/image-links.test.tsx'],
+  },
 ];

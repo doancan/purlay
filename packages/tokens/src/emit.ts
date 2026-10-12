@@ -29,7 +29,8 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',
-  'size-attachment': '--container-attachment',
+  // A picture's box is bounded on its longest side: a width, and a height for one taller than wide.
+  'size-attachment': ['--container-attachment', '--height-attachment'],
   // A control is a height, and a square for an icon-only one (the send button).
   'size-control': ['--height-control', '--size-control'],
   'size-header': '--height-header',

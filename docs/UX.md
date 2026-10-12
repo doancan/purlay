@@ -100,6 +100,9 @@ chat the team already uses.
   GitHub has them — never their avatar, which is another host's image (#110). Up to five, in the order
   written. A link with no card — no token, nothing there, GitHub silent — stays a link, with nothing
   drawn and nothing said.
+- **A link to a picture is the picture, under the words** — up to three, in the order written, each a
+  link to the original, drawn through the API's proxy so the picture's host never sees who is reading
+  (#110). One the proxy cannot show draws nothing; the link stays a link.
 - **Avatars, and no bubbles** (D-100). An avatar in a fixed column names who is speaking before a word is
   read; the text is not put in a bubble, because a bubble makes a code block a box inside a box and
   narrows every line it holds. Your own messages are on the same edge as everyone else's: a chat
