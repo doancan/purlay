@@ -18,7 +18,7 @@ import type { ServerFrame } from '@purlay/types';
 import { sendMessage, type Sent } from './messages';
 import { setResolved } from './threads';
 import { atomicallyOn } from '../../platform/transactions';
-import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
+import { NO_LOG, channelTopic, userTopic, type EventBus } from '../../platform/events';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -628,10 +628,29 @@ describe('integration: the one way in', () => {
         `hi ${at(room, 'bob')} and ${at(room, 'carol')}`,
       );
       expect(message.editedAt).toBe(LATER.toISOString());
-      expect(frames.map((frame) => frame.event)).toEqual(['CHANNEL_STATE']);
-      // To Carol's own topic, about this channel, with the version her row now holds.
-      expect(topics).toEqual([userTopic(member(room, 'carol').userId)]);
-      const [frame] = frames;
+      expect(frames.map((frame) => frame.event)).toEqual(['MESSAGE_REVISED', 'CHANNEL_STATE']);
+      // The room first, with the revision at the message's version; then Carol's own numbers.
+      expect(topics).toEqual([
+        channelTopic(room.channelId),
+        userTopic(member(room, 'carol').userId),
+      ]);
+      const [revision, frame] = frames;
+      if (revision?.event !== 'MESSAGE_REVISED') throw new Error('no revision');
+      expect(revision.data).toEqual({
+        channelId: room.channelId,
+        messageId: sent.message.id,
+        parentId: null,
+        content: message.content,
+        editedAt: LATER.toISOString(),
+        deletedAt: null,
+        mentions: message.mentions,
+      });
+      const stored = await db
+        .selectFrom('messages')
+        .select('state_version')
+        .where('id', '=', sent.message.id)
+        .executeTakeFirstOrThrow();
+      expect(revision.version).toBe(stored.state_version);
       if (frame?.event !== 'CHANNEL_STATE') throw new Error('no channel state');
       expect(frame.data.channelId).toBe(room.channelId);
       expect(frame.data.state.unreadMentionCount).toBe(1);
@@ -642,6 +661,27 @@ describe('integration: the one way in', () => {
         .where('user_id', '=', member(room, 'carol').userId)
         .executeTakeFirstOrThrow();
       expect(frame.version).toBe(row.state_version);
+    });
+  });
+
+  test('the same words again tell nobody anything', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const sent = await post(db, room, 'alice', 'once');
+      await issueSession(db, later, member(room, 'alice').userId, 30);
+      const session = await db
+        .selectFrom('sessions')
+        .select('id')
+        .where('user_id', '=', member(room, 'alice').userId)
+        .executeTakeFirstOrThrow();
+      const { bus, frames } = recording();
+      await editMessage(
+        { atomically: atomicallyOn(db), clock: later, bus },
+        { userId: member(room, 'alice').userId, sessionId: session.id },
+        sent.message.id,
+        'once',
+      );
+      expect(frames).toEqual([]);
     });
   });
 

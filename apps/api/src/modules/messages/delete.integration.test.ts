@@ -11,7 +11,11 @@ import { AppError } from '../../platform/errors';
 import { markRead } from '../channels/read-state';
 import { requireChannelById, requireMessageById } from '../../platform/channels';
 import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms';
-import { removeMessage } from './delete';
+import { deleteMessage, removeMessage } from './delete';
+import { issueSession } from '../auth/sessions';
+import { atomicallyOn } from '../../platform/transactions';
+import { channelTopic, userTopic, type EventBus } from '../../platform/events';
+import type { ServerFrame } from '@purlay/types';
 import { messageHistory, sendMessage, type Sent } from './messages';
 import { threadReplies } from './threads';
 
@@ -300,6 +304,50 @@ describe('integration: what stays in the conversation', () => {
       expect(await refusal(post(db, room, 'alice', 'a', root.message.id))).toBe(
         'MESSAGE_NOT_FOUND',
       );
+    });
+  });
+});
+
+describe('integration: the one way in', () => {
+  test('tells the room it is a tombstone, then the numbers that came down; a second time, nothing', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const root = await post(db, room, 'alice', `look ${at(room, 'bob')}`);
+      await issueSession(db, later, member(room, 'alice').userId, 30);
+      const session = await db
+        .selectFrom('sessions')
+        .select('id')
+        .where('user_id', '=', member(room, 'alice').userId)
+        .executeTakeFirstOrThrow();
+      const topics: string[] = [];
+      const frames: ServerFrame[] = [];
+      const bus: EventBus = {
+        publish: (topic, frame): Promise<void> => {
+          topics.push(topic);
+          frames.push(frame);
+          return Promise.resolve();
+        },
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      };
+      const dependencies = { atomically: atomicallyOn(db), clock: later, bus };
+      const caller = { userId: member(room, 'alice').userId, sessionId: session.id };
+      await deleteMessage(dependencies, caller, root.message.id);
+      expect(topics).toEqual([channelTopic(room.channelId), userTopic(member(room, 'bob').userId)]);
+      const [revision] = frames;
+      if (revision?.event !== 'MESSAGE_REVISED') throw new Error('no revision');
+      expect(revision.data).toEqual({
+        channelId: room.channelId,
+        messageId: root.message.id,
+        parentId: null,
+        content: '',
+        editedAt: null,
+        deletedAt: LATER.toISOString(),
+        mentions: [],
+      });
+      await deleteMessage(dependencies, caller, root.message.id);
+      expect(frames).toHaveLength(2);
     });
   });
 });

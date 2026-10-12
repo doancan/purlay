@@ -314,6 +314,29 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     expect(Value.Check(CreateDirectMessageRequest, { userId: id })).toBe(true);
   });
 
+  test('a revision carries what an edit or a delete changes, and nothing it does not', () => {
+    const revision = {
+      event: 'MESSAGE_REVISED',
+      data: {
+        channelId: id,
+        messageId: id,
+        parentId: null,
+        content: '',
+        editedAt: null,
+        deletedAt: when,
+        mentions: [],
+      },
+      version: 3,
+      ts: 1,
+    };
+    expect(Value.Check(ServerFrame, revision)).toBe(true);
+    // Reactions have their own frame and their own version: a late revision must not carry them.
+    expect(
+      Value.Check(ServerFrame, { ...revision, data: { ...revision.data, reactions: [] } }),
+    ).toBe(false);
+    expect(Value.Check(ServerFrame, { ...revision, version: 0 })).toBe(false);
+  });
+
   test('the new frames validate, and each carries what it must', () => {
     const state = { lastReadMessageId: null, unreadCount: 3, unreadMentionCount: 1 };
     const frames = [
@@ -330,6 +353,20 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
         ts: 1,
       },
       { event: 'CHANNEL_STATE', data: { channelId: id, state }, version: 1, ts: 1 },
+      {
+        event: 'MESSAGE_REVISED',
+        data: {
+          channelId: id,
+          messageId: id,
+          parentId: null,
+          content: 'better words',
+          editedAt: when,
+          deletedAt: null,
+          mentions: [id],
+        },
+        version: 2,
+        ts: 1,
+      },
       {
         event: 'CHANNEL_ADDED',
         data: {

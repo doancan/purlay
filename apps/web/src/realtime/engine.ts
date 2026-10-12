@@ -43,6 +43,7 @@ import {
   channelStateChanged,
   channelsRevoked,
   messageCreated,
+  messageRevised,
   reactionsUpdated,
   threadUpdated,
 } from '../data/cache';
@@ -422,6 +423,11 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'REACTIONS_UPDATED':
         if (isNewest('reactions', frame.data.messageId, frame.version)) {
           reactionsUpdated(client, frame.data.messageId, frame.data.reactions);
+        }
+        return;
+      case 'MESSAGE_REVISED':
+        if (isNewest('revision', frame.data.messageId, frame.version)) {
+          messageRevised(client, frame.data);
         }
         return;
       case 'CHANNEL_STATE':

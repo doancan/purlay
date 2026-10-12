@@ -215,6 +215,57 @@ describe('what a row shows', () => {
   });
 });
 
+describe('a revised message', () => {
+  test('an edited one says so, with when on hover, and is otherwise the same row', async () => {
+    const view = await mount(
+      props({
+        message: aMessage(1, { content: 'better words', editedAt: '2026-09-09T11:58:00.000Z' }),
+      }),
+    );
+    expect(view.getByText('better words')).toBeDefined();
+    const note = view.getByText('edited');
+    expect(note.getAttribute('title')).not.toBeNull();
+    expect(view.getByRole('button', { name: 'Add reaction' })).toBeDefined();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('a deleted one is its tombstone: no words, no reactions, nothing to act on, and the thread stays', async () => {
+    const view = await mount(
+      props({
+        message: aMessage(1, {
+          content: '',
+          deletedAt: '2026-09-09T11:58:00.000Z',
+          editedAt: '2026-09-09T11:57:00.000Z',
+          reactions: [{ emoji: '👍', userIds: [BOB.id] }],
+        }),
+        actions: <button type="button">Reply</button>,
+        children: <p>thread summary</p>,
+      }),
+    );
+    expect(view.getByText('This message was deleted.')).toBeDefined();
+    expect(view.queryByText('edited')).toBeNull();
+    expect(view.queryByRole('button', { name: /👍/ })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Add reaction' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Reply' })).toBeNull();
+    expect(view.getByText('thread summary')).toBeDefined();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('both are said in Turkish when the interface is', async () => {
+    const edited = await mount(
+      props({ message: aMessage(1, { editedAt: '2026-09-09T11:58:00.000Z' }) }),
+      { locale: 'tr' },
+    );
+    expect(edited.getByText('düzenlendi')).toBeDefined();
+    edited.unmount();
+    const deleted = await mount(
+      props({ message: aMessage(2, { content: '', deletedAt: '2026-09-09T11:58:00.000Z' }) }),
+      { locale: 'tr' },
+    );
+    expect(deleted.getByText('Bu mesaj silindi.')).toBeDefined();
+  });
+});
+
 describe('delivery', () => {
   test('sending is a clock in the gutter at full strength, and no actions yet', async () => {
     const view = await mount(props({ delivery: 'sending' }));

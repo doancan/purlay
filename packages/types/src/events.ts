@@ -18,6 +18,7 @@ import {
   MessageContent,
   Reaction,
   ThreadSummary,
+  Timestamp,
   Uuid,
 } from './models';
 
@@ -135,8 +136,8 @@ const envelope = { ts: Type.Number(), refId: Type.Optional(Uuid) };
  * the older state would overwrite the newer. The version is the row's own count of its
  * changes, taken in the statement that made them, so a client keeps the newest it has applied
  * for each thing and drops a frame that is not newer. Not for ordering across *kinds*:
- * `THREAD_UPDATED` and `REACTIONS_UPDATED` share a message's counter, and are compared only
- * with frames of their own kind.
+ * `THREAD_UPDATED`, `REACTIONS_UPDATED` and `MESSAGE_REVISED` share a message's counter, and
+ * are compared only with frames of their own kind.
  */
 const stateVersion = { version: Type.Integer({ minimum: 1 }) };
 
@@ -208,6 +209,34 @@ export const ReactionsUpdatedFrame = Type.Object({
   ...stateVersion,
   ...envelope,
 });
+
+/**
+ * A message was edited or deleted (D-103): what changes when one is, and nothing else. Not the whole
+ * message — its reactions and its thread have frames and versions of their own, and a late revision
+ * carrying them would put back what a newer frame of those kinds had replaced. A deletion is the
+ * revision to the tombstone: empty content, `deletedAt` set, nobody mentioned. On the channel's
+ * topic, so everybody watching the channel hears it.
+ */
+export const MessageRevisedFrame = Type.Object({
+  event: Type.Literal('MESSAGE_REVISED'),
+  data: Type.Object(
+    {
+      channelId: Uuid,
+      messageId: Uuid,
+      /** Null for a root: a client removes a deleted root nobody answered, as the feed does. */
+      parentId: Type.Union([Uuid, Type.Null()]),
+      content: Type.String(),
+      editedAt: Type.Union([Timestamp, Type.Null()]),
+      deletedAt: Type.Union([Timestamp, Type.Null()]),
+      mentions: Type.Array(Uuid),
+    },
+    { additionalProperties: false },
+  ),
+  ...stateVersion,
+  ...envelope,
+});
+
+export type MessageRevision = Static<typeof MessageRevisedFrame>['data'];
 
 /**
  * *Your* read position and counters in one channel changed — a message arrived for
@@ -283,6 +312,7 @@ export const ServerFrame = Type.Union([
   MessageCreatedFrame,
   ThreadUpdatedFrame,
   ReactionsUpdatedFrame,
+  MessageRevisedFrame,
   ChannelStateFrame,
   ChannelAddedFrame,
   SessionEndedFrame,

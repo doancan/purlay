@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: an edit and a delete reach every open screen at once (D-103)
+
+- `MESSAGE_REVISED` on the channel's topic carries what an edit or a delete changed — the words, the
+  times, the mentions — at the message's version, and never its reactions or thread, whose own frames
+  a late revision must not undo. A client keeps the newest revision of each message.
+- A row says it was edited, with when on hover; a deleted message is drawn as its tombstone, in both
+  languages, with no reactions and nothing to act on, and keeps its thread; a deleted message nobody
+  answered leaves the screen, as it leaves the feed the server reads.
+
 ### Feature — 2026-10-12: private channels, and any member brings people in (D-104)
 
 - A channel can be created `private`: seen by its members only. `POST /api/channels/:channelId/members`

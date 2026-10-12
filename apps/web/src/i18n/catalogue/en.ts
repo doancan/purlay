@@ -123,6 +123,7 @@ export const en = {
   'message.reacted': 'Reacted',
   'message.reply': 'Reply',
   'message.edited': 'edited',
+  'message.deleted': 'This message was deleted.',
   'message.more': 'More',
   'message.mention': 'You were mentioned',
   'message.newMarker': 'New',

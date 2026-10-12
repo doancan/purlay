@@ -213,8 +213,9 @@ What the shape is for, which the types do not say:
 - **A frame exists when the feature that sends it is built.** The client sends messages (a reply
   carries `parentId`), subscribes, unsubscribes and pings. Resolution, reactions and read state are
   HTTP and are heard here as `THREAD_UPDATED`, `REACTIONS_UPDATED` and, on the person's own `user:`
-  topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). Editing, deleting and typing arrive with
-  their features — added to the union then, so an exhaustive switch over it breaks where a case is
+  topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). An edit and a delete are heard as
+  `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
+  version, never its reactions or thread (D-103). Typing arrives with its feature — added to the union then, so an exhaustive switch over it breaks where a case is
   unhandled rather than carrying stubs for features that do not exist.
 
 ### 5.3. Send and reconcile
