@@ -26,6 +26,7 @@ describe('the next run of a slot', () => {
   test('the deployment’s plan names every job the runner knows, each once', () => {
     expect(PLAN.map((slot) => slot.job).sort()).toEqual([
       'reconcile:storage',
+      'sweep:link-previews',
       'sweep:orphans',
       'sweep:sessions',
     ]);
@@ -60,7 +61,7 @@ describe('the loop', () => {
       '2026-09-09T03:00:00.000Z sweep:orphans',
       '2026-09-09T03:15:00.000Z sweep:sessions',
       '2026-09-09T03:30:00.000Z reconcile:storage',
-      '2026-09-09T04:15:00.000Z sweep:sessions',
+      '2026-09-09T04:00:00.000Z sweep:link-previews',
     ]);
     expect(said.find((s) => s.fields['job'] === 'reconcile:storage')).toMatchObject({
       msg: 'a scheduled job exited with a failure',

@@ -92,7 +92,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run audit:gate` | The dependency audit, blocking at high severity; a finding with no fix is allowed only by an expiring entry in `scripts/audit-allowlist.json` (#247) |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
-| `bun run job <name>` | A scheduled job (D-30): `sweep:orphans`, `sweep:sessions`, `reconcile:storage`; `jobs:status` says what each last did and exits non-zero when one is overdue or never ran. Reads the same configuration as the API |
+| `bun run job <name>` | A scheduled job (D-30): `sweep:orphans`, `sweep:sessions`, `sweep:link-previews`, `reconcile:storage`; `jobs:status` says what each last did and exits non-zero when one is overdue or never ran. Reads the same configuration as the API |
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |
 | `bun run lint:fix` | Fix what the linter can fix on its own |

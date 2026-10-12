@@ -213,7 +213,8 @@ issued only if 80 and 443 can be reached from the internet, so moving them is fo
 uses them, a deployment behind another proxy, or one with certificates of its own.
 
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
-(D-30): sessions hourly, the orphan sweep and the storage reconciliation nightly, in UTC. Every run is
+(D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
+nightly, in UTC. Every run is
 recorded; to see when each last succeeded, and whether one is overdue or has never run:
 
 ```

@@ -4,13 +4,14 @@
  *   sweep:orphans      unsent uploads older than a day, and their objects (D-109 §5)
  *   sweep:sessions     sessions that expired or were revoked
  *   reconcile:storage  each workspace's storage count put back to the bytes it holds (I-7)
+ *   sweep:link-previews  the unfurl cache past its expiry (D-23)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *
  * It reads the deployment's own configuration, as the API does, so it runs in the same image with
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
-import { reconcileStorage, runJob, sweepOrphans } from '../modules/jobs/jobs';
+import { reconcileStorage, runJob, sweepLinkPreviews, sweepOrphans } from '../modules/jobs/jobs';
 import { jobReport } from '../modules/jobs/report';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
@@ -37,6 +38,7 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
     return { removed };
   },
   'reconcile:storage': async () => await reconcileStorage({ database, log }),
+  'sweep:link-previews': async () => await sweepLinkPreviews({ database, clock }),
 };
 
 const name = process.argv[2] ?? '';

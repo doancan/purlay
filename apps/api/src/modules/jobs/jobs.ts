@@ -160,3 +160,18 @@ export const reconcileStorage = async (dependencies: {
   }
   return { workspaces: ids.length, corrected };
 };
+
+/**
+ * `sweep:link-previews` (D-23): the unfurl cache past its expiry. The expiry is also enforced where
+ * the cache is read, so a sweep that did not run serves nothing stale — it only lets the table grow.
+ */
+export const sweepLinkPreviews = async (dependencies: {
+  readonly database: Executor;
+  readonly clock: Clock;
+}): Promise<{ removed: number }> => {
+  const result = await dependencies.database
+    .deleteFrom('link_previews')
+    .where('expires_at', '<=', dependencies.clock.now())
+    .executeTakeFirst();
+  return { removed: Number(result.numDeletedRows) };
+};

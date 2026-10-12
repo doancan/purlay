@@ -18,6 +18,7 @@ export const PLAN: readonly Slot[] = [
   { job: 'sweep:sessions', every: 'hour', minute: 15 },
   { job: 'sweep:orphans', every: 'day', hour: 3, minute: 0 },
   { job: 'reconcile:storage', every: 'day', hour: 3, minute: 30 },
+  { job: 'sweep:link-previews', every: 'day', hour: 4, minute: 0 },
 ];
 
 const HOUR_MS = 60 * 60 * 1000;

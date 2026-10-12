@@ -1796,6 +1796,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/integrations/github.integration.test.ts'],
   },
   {
+    id: 'link-preview-kept-at-its-expiry',
+    why: 'a preview at the instant it expires is kept another day, and the cache answers stale',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "    .where('expires_at', '<=', dependencies.clock.now())\n",
+    replace: "    .where('expires_at', '<', dependencies.clock.now())\n",
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',
