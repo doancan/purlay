@@ -8,16 +8,18 @@ import type { ObjectStore } from '../platform/storage';
 export interface MemoryStore extends ObjectStore {
   /** Every key held now, sorted. */
   readonly keys: () => string[];
-  /** The next calls of this kind throw this error. */
-  readonly failing: (kind: 'put' | 'delete', error: Error) => void;
+  /** Calls of this kind throw this error, after the first `succeeding` of them have worked. */
+  readonly failing: (kind: 'put' | 'delete', error: Error, succeeding?: number) => void;
 }
 
 export const aMemoryStore = (): MemoryStore => {
   const objects = new Map<string, Blob>();
-  const failures = new Map<'put' | 'delete', Error>();
+  const failures = new Map<'put' | 'delete', { error: Error; succeeding: number }>();
   const failIf = (kind: 'put' | 'delete'): void => {
     const failure = failures.get(kind);
-    if (failure !== undefined) throw failure;
+    if (failure === undefined) return;
+    if (failure.succeeding > 0) failure.succeeding -= 1;
+    else throw failure.error;
   };
   return {
     put: (key, bytes, type): Promise<void> => {
@@ -32,8 +34,8 @@ export const aMemoryStore = (): MemoryStore => {
       return Promise.resolve();
     },
     keys: (): string[] => [...objects.keys()].sort(),
-    failing: (kind, error): void => {
-      failures.set(kind, error);
+    failing: (kind, error, succeeding = 0): void => {
+      failures.set(kind, { error, succeeding });
     },
   };
 };

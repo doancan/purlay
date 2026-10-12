@@ -72,6 +72,10 @@ export const ErrorCode = Type.Union([
   Type.Literal('PAYLOAD_TOO_LARGE'),
   /** A body with no `Content-Length`: its size cannot be judged before it is read (D-109 §4). */
   Type.Literal('LENGTH_REQUIRED'),
+  /** An image whose pixels could not be read, though its first bytes said it was one (D-109 §1). */
+  Type.Literal('IMAGE_UNREADABLE'),
+  /** An image with more pixels, or a longer side, than an attachment may have (D-109 §2). */
+  Type.Literal('IMAGE_TOO_LARGE'),
   /** The workspace's storage would pass its quota with this file (D-109 §5). */
   Type.Literal('STORAGE_QUOTA_EXCEEDED'),
   /** The person already holds as many unattached uploads here as they may (D-109 §5). */
@@ -133,6 +137,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   PAYLOAD_TOO_LARGE: 413,
   LENGTH_REQUIRED: 411,
+  IMAGE_UNREADABLE: 400,
+  IMAGE_TOO_LARGE: 413,
   STORAGE_QUOTA_EXCEEDED: 413,
   TOO_MANY_PENDING_UPLOADS: 409,
   ATTACHMENT_ID_CONFLICT: 409,

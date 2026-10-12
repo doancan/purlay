@@ -57,7 +57,10 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'PAYLOAD_TOO_LARGE':
     case 'LENGTH_REQUIRED':
     case 'STORAGE_QUOTA_EXCEEDED':
+    case 'IMAGE_TOO_LARGE':
       return 'failure.tooLarge';
+    case 'IMAGE_UNREADABLE':
+      return 'failure.refused';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
       return 'failure.refused';

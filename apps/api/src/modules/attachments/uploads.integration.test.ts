@@ -10,6 +10,7 @@ import { aRecordingLogger } from '../../testing/doubles';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import { aRoom, type Room } from '../../testing/rooms';
+import { twoColourPng } from '../../testing/png';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from './uploads';
 
@@ -194,6 +195,126 @@ describe('integration: when the store refuses', () => {
       const line = lines.find((l) => l['msg'] === 'an upload’s object was left behind');
       expect(line?.['level']).toBe('error');
       expect(String(line?.['key'])).toContain(`w/${room.workspaceId}/`);
+    });
+  });
+
+  test('an image is stored re-encoded, with its thumbnail beside it; both go if the row does not', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const store = aMemoryStore();
+      const context = await requireWorkspaceMembership(db, who(room, 'alice'), room.workspaceId);
+      const deps = { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log };
+      const id = anId();
+      const png = twoColourPng(400, 200);
+      const { attachment } = await storeUpload(deps, context, { id, name: 'shot.png', bytes: png });
+      expect(attachment).toMatchObject({
+        kind: 'image',
+        mimeType: 'image/webp',
+        width: 400,
+        height: 200,
+      });
+      const row = await db
+        .selectFrom('attachments')
+        .select(['storage_key', 'thumbnail_key', 'size_bytes'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+      expect(row.thumbnail_key).toBe(`${row.storage_key}.thumb`);
+      expect(store.keys()).toEqual([row.storage_key, `${row.storage_key}.thumb`].sort());
+      const stored = await store.get(row.storage_key);
+      expect(Number(row.size_bytes)).toBe(stored?.size ?? -1);
+      expect(attachment.sizeBytes).not.toBe(png.length);
+
+      // Its retry is the same upload, though what was stored is not what was sent.
+      const again = await storeUpload(deps, context, { id, name: 'shot.png', bytes: png });
+      expect(again.created).toBe(false);
+
+      await quota(db, room, 1);
+      expect(
+        await refusalOf(storeUpload(deps, context, { id: anId(), name: 'b.png', bytes: png })),
+      ).toBe('STORAGE_QUOTA_EXCEEDED');
+      expect(store.keys()).toHaveLength(2);
+    });
+  });
+
+  test('a thumbnail that cannot be written leaves neither object behind', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const store = aMemoryStore();
+      const context = await requireWorkspaceMembership(db, who(room, 'alice'), room.workspaceId);
+      const deps = { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log };
+      store.failing('put', new Error('the bucket is down'), 1);
+      const attempt = storeUpload(deps, context, {
+        id: anId(),
+        name: 'a.png',
+        bytes: twoColourPng(64, 64),
+      });
+      expect(
+        await attempt.then(
+          () => 'stored',
+          (error: unknown) => String(error),
+        ),
+      ).toContain('the bucket is down');
+      expect(store.keys()).toEqual([]);
+    });
+  });
+
+  test('an image that cannot be read is refused before anything is stored', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const store = aMemoryStore();
+      const context = await requireWorkspaceMembership(db, who(room, 'alice'), room.workspaceId);
+      const deps = { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log };
+      const truncated = twoColourPng(64, 64).subarray(0, 60);
+      expect(
+        await refusalOf(
+          storeUpload(deps, context, { id: anId(), name: 'a.png', bytes: truncated }),
+        ),
+      ).toBe('IMAGE_UNREADABLE');
+      expect(store.keys()).toEqual([]);
+    });
+  });
+
+  test('another image under an id already used is a conflict, and the first is untouched', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const store = aMemoryStore();
+      const context = await requireWorkspaceMembership(db, who(room, 'alice'), room.workspaceId);
+      const deps = { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log };
+      const id = anId();
+      await storeUpload(deps, context, { id, name: 'a.png', bytes: twoColourPng(400, 200) });
+      const before = store.keys();
+      expect(
+        await refusalOf(
+          storeUpload(deps, context, { id, name: 'a.png', bytes: twoColourPng(90, 90) }),
+        ),
+      ).toBe('ATTACHMENT_ID_CONFLICT');
+      expect(store.keys()).toEqual(before);
+    });
+  });
+
+  test('an image whose object cannot be written stores nothing at all', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const store = aMemoryStore();
+      const context = await requireWorkspaceMembership(db, who(room, 'alice'), room.workspaceId);
+      const deps = { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log };
+      store.failing('put', new Error('the bucket is down'));
+      const id = anId();
+      const attempt = storeUpload(deps, context, {
+        id,
+        name: 'a.png',
+        bytes: twoColourPng(64, 64),
+      });
+      expect(
+        await attempt.then(
+          () => 'stored',
+          (error: unknown) => String(error),
+        ),
+      ).toContain('the bucket is down');
+      expect(store.keys()).toEqual([]);
+      expect(
+        await db.selectFrom('attachments').select('id').where('id', '=', id).execute(),
+      ).toEqual([]);
     });
   });
 });
