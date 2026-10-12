@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Testing — 2026-10-12: a visible focus ring is checked, not remembered (`UX.md` §7)
+
+- A browser test tabs through a channel with a thread open, in both themes and at both widths, and
+  fails on any stop without a ring at least the focus stroke wide — on the control, or on the box
+  that draws it for its field.
+
 ### Performance — 2026-10-12: a message is read once a session (D-36)
 
 - Going back to a channel no longer parses its messages again: each body's reading is kept for the
