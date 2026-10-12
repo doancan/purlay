@@ -240,12 +240,27 @@ test.describe('the connection', () => {
         ) && (window as unknown as { __heard: number }).__heard > 0,
     );
 
-    await context.setOffline(true);
+    // Closed while the network is still there, so the closing handshake completes and the page is
+    // told; only then offline. The other order left a socket in CLOSING — seen under the full suite's
+    // load as `ws://…/ws 2`, the app still believing it was open (#347). A real network that dies is
+    // found by the connection's own heartbeat, which this test is not about.
     await page.evaluate(() => {
-      (window as unknown as { __refuse: boolean }).__refuse = true;
-      for (const socket of (window as unknown as { __sockets: WebSocket[] }).__sockets)
-        socket.close();
+      const state = window as unknown as {
+        __refuse: boolean;
+        __sockets: WebSocket[];
+        __closed: WebSocket[];
+      };
+      state.__refuse = true;
+      // These, and not the reconnects that follow them, are the ones to see closed.
+      state.__closed = [...state.__sockets];
+      for (const socket of state.__closed) socket.close();
     });
+    await page.waitForFunction(() =>
+      (window as unknown as { __closed: WebSocket[] }).__closed.every(
+        (socket) => socket.readyState === WebSocket.CLOSED,
+      ),
+    );
+    await context.setOffline(true);
     const bar = page.getByRole('status').filter({ hasText: 'Reconnecting' });
     // Under the full suite's load this has failed now and then, alone never (#347). If it fails, it
     // says what the page held: every socket's address and state, and every status on the screen.
