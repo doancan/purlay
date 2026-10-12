@@ -194,6 +194,21 @@ describe('the three buttons under the box (D-110): markdown, inserted where the 
     });
   });
 
+  test('code in the middle of a line closes on a line of its own, so the rest is not swallowed', () => {
+    // A closing fence with words after it is not a closing fence: everything below would be code.
+    expect(insertMarkdown('see this code and more', { start: 4, end: 13 }, 'code')).toEqual({
+      text: 'see \n```\nthis code\n```\n and more',
+      selection: { start: 9, end: 18 },
+    });
+  });
+
+  test('code before a line that already starts below adds no blank line', () => {
+    expect(insertMarkdown('x\ny', { start: 1, end: 1 }, 'code')).toEqual({
+      text: 'x\n```\n\n```\ny',
+      selection: { start: 6, end: 6 },
+    });
+  });
+
   test('a mention starts a name after a space, so the @ is not glued to a word', () => {
     expect(insertMarkdown('hi', { start: 2, end: 2 }, 'mention')).toEqual({
       text: 'hi @',

@@ -100,10 +100,10 @@ export type MarkdownKind = 'bold' | 'code' | 'mention';
  * The text and the caret after a button is pressed, as one pure answer so a key can share it.
  *
  * Bold wraps what is selected and keeps it selected; with nothing selected the caret waits
- * between the markers. A code block opens on a line of its own — a fence glued to the end of a
+ * between the markers. A code block opens and closes on lines of its own — a fence glued to a
  * sentence is not a fence — around the selection or around an empty line for the caret. A mention
- * is an `@` after a space, so it never glues itself to the word before; the composer's member
- * autocomplete takes it from there.
+ * is an `@` after a space, so it never glues itself to the word before; the person types the name
+ * (there is no member autocomplete yet, `UX.md` §5).
  */
 export const insertMarkdown = (
   text: string,
@@ -122,9 +122,11 @@ export const insertMarkdown = (
   }
   if (kind === 'code') {
     const lead = before === '' || before.endsWith('\n') ? '' : '\n';
+    // A closing fence with words after it is not one, and would swallow the rest of the message.
+    const trail = after === '' || after.startsWith('\n') ? '' : '\n';
     const open = `${lead}\`\`\`\n`;
     return {
-      text: `${before}${open}${chosen}\n\`\`\`${after}`,
+      text: `${before}${open}${chosen}\n\`\`\`${trail}${after}`,
       selection: { start: at + open.length, end: at + open.length + chosen.length },
     };
   }

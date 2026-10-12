@@ -17,7 +17,6 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - The composer is a card with three buttons under the box — Bold, Code block and Mention — that each
   insert the markdown the keys would type.
 
-### Feature — 2026-10-12: a flat frame, with the rail back (D-109)
 ### Feature — 2026-10-12: a flat frame, with the rail back (D-110)
 
 - The rail, down the left edge: the workspace tile (the switcher), then channels, the inbox, the open
