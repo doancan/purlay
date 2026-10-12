@@ -59,6 +59,10 @@ export interface Ids {
   readonly workspaceId: string;
   readonly channelId: string;
   readonly messageId: string;
+  /** An image the message carries. */
+  readonly attachmentId: string;
+  /** An upload not sent yet: what a discard acts on. */
+  readonly unsentAttachmentId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -76,6 +80,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
     if (name === 'messageId') return ids.messageId;
+    if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -121,8 +126,10 @@ export interface CrossTenantCase {
   /** What a stranger is told — and, identically, somebody naming an id that never existed. */
   readonly refusal: Extract<
     ErrorCode,
-    'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND' | 'MESSAGE_NOT_FOUND'
+    'WORKSPACE_NOT_FOUND' | 'CHANNEL_NOT_FOUND' | 'MESSAGE_NOT_FOUND' | 'ATTACHMENT_NOT_FOUND'
   >;
+  /** It acts on an upload not sent yet, so the crossing names that one (`unsentAttachmentId`). */
+  readonly unsent?: true;
   /**
    * A body the owner's identical request succeeds with. Without it a `POST` would
    * be refused for its body, and the `404` would never have been reached.
@@ -242,6 +249,30 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: {
       kind: 'none',
       reason: 'an upload names no channel; it is the uploader’s alone until a message carries it',
+    },
+  },
+  'GET /api/attachments/:attachmentId': {
+    refusal: 'ATTACHMENT_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'its channel is its message’s, judged by `requireAttachmentById` on `visibleChannels`; a member outside a private channel, an unsent upload and a deleted message are asserted in `attachments.integration.test.ts`',
+    },
+  },
+  'GET /api/attachments/:attachmentId/thumbnail': {
+    refusal: 'ATTACHMENT_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'the same guard as the original’s, asserted with it in `attachments.integration.test.ts`',
+    },
+  },
+  'DELETE /api/attachments/:attachmentId': {
+    refusal: 'ATTACHMENT_NOT_FOUND',
+    unsent: true,
+    visibility: {
+      kind: 'none',
+      reason: 'only an upload nobody has sent can be discarded, and it is in no channel yet',
     },
   },
   'GET /api/notifications': {

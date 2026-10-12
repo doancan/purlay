@@ -26,6 +26,7 @@ import {
   type Attachment,
   type AttachmentKind,
 } from '@purlay/types';
+import { attachmentNotFound } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
@@ -220,6 +221,36 @@ export const storeUpload = async (
     await removeLeftovers(storage, log, keys);
     throw error;
   }
+};
+
+/**
+ * Deletes one of the person's own unsent uploads (D-109 §5): the row, then its objects once nothing
+ * points at them. Anything else — sent, somebody else's, never there — is one refusal; a send that
+ * links it first wins, and this finds nothing to delete.
+ */
+export const discardUpload = async (
+  dependencies: UploadDependencies,
+  userId: string,
+  attachmentId: string,
+): Promise<void> => {
+  const { atomically, storage, log } = dependencies;
+  if (!isMessageIdShape(attachmentId)) throw attachmentNotFound();
+  const gone = await atomically(
+    async (transaction) =>
+      await transaction
+        .deleteFrom('attachments')
+        .where('id', '=', attachmentId)
+        .where('uploader_id', '=', userId)
+        .where('message_id', 'is', null)
+        .returning(['storage_key', 'thumbnail_key'])
+        .executeTakeFirst(),
+  );
+  if (gone === undefined) throw attachmentNotFound();
+  await removeLeftovers(
+    storage,
+    log,
+    gone.thumbnail_key === null ? [gone.storage_key] : [gone.storage_key, gone.thumbnail_key],
+  );
 };
 
 /** Deletes objects no row points at; one that cannot be deleted is reported, never dropped. */
