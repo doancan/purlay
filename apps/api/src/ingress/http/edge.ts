@@ -69,8 +69,9 @@ export const hasUnsupportedMediaType = (request: Request): boolean => {
 };
 
 /**
- * Whether a state-changing request's body may be read at all, judged by its `Content-Length`
- * before a byte of it is (D-80, D-109 §4).
+ * Whether a request's body may be read at all, judged by its `Content-Length` before a byte of it
+ * is (D-80, D-109 §4) — any method's: no route reads the body of an `OPTIONS` or a `GET` today, and
+ * the bound must not depend on that staying true.
  *
  * The server's own limit is what an upload needs, so it no longer bounds a JSON body: this does.
  * On the wire a body has a `Content-Length` or is chunked (HTTP/1.1, which is what the proxy speaks
@@ -79,7 +80,6 @@ export const hasUnsupportedMediaType = (request: Request): boolean => {
  * request with neither has no body to judge (logout, join — and a request built in-process).
  */
 export const bodyRefusal = (request: Request, limit: number): AppError | null => {
-  if (!STATE_CHANGING.has(request.method)) return null;
   const chunked = /\bchunked\b/i.test(request.headers.get('transfer-encoding') ?? '');
   const header = request.headers.get('content-length');
   if (chunked) {
@@ -99,9 +99,12 @@ export const bodyRefusal = (request: Request, limit: number): AppError | null =>
   return null;
 };
 
-/** A refusal the edge decided, in the API's own error shape. */
+/**
+ * A refusal the edge decided about a body, in the API's own error shape — and the connection closed,
+ * so the server does not read the rest of what it refused (up to the upload limit) to keep it alive.
+ */
 export const edgeRefusalResponse = (error: AppError, headers: Record<string, string>): Response =>
-  refused(error, headers);
+  refused(error, { ...headers, connection: 'close' });
 
 /**
  * Headers every response carries, decided once from `APP_URL`.
