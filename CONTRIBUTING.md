@@ -95,7 +95,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run report:frames <log>…` | The measurement that closes O-4: over a stretch of the API's log (files, or standard input), each socket's peak frames in a second as the p99 and the maximum, beside the budget, and every refusal — frames, sends, HTTP `429` — which for legitimate use must be none (#61) |
 | `bun run audit:gate` | The dependency audit, blocking at high severity; a finding with no fix is allowed only by an expiring entry in `scripts/audit-allowlist.json` (#247) |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
-| `bun run job <name>` | A scheduled job (D-30): `sweep:orphans`, `sweep:sessions`, `sweep:link-previews`, `reconcile:storage`; `jobs:status` says what each last did and exits non-zero when one is overdue or never ran. Reads the same configuration as the API |
+| `bun run job <name>` | A scheduled job (D-30), which owns the list; an unknown name prints every job. `jobs:status` says what each last did and exits non-zero when one is overdue or never ran; `jobs:first` runs, once, each that never succeeded (what the scheduler does as it starts). Reads the same configuration as the API |
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |
 | `bun run lint:fix` | Fix what the linter can fix on its own |

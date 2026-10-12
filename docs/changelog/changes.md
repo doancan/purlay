@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: what review found in the scheduler, the latency baseline and the pool test (#445)
+
+- A job whose database fails before it starts is now said in the log; a failure is logged before it
+  is recorded, since recording needs the database. `budget:latency` refuses a baseline it cannot read
+  and an option with no file instead of comparing with nothing. The busy-pool test says which holding
+  query failed, and always cancels them. The documents that still listed jobs, or said there was no
+  scheduler, point at D-30.
+
 ### Quality — 2026-10-12: the busy-pool test waits for what it needs instead of a guess (#347)
 
 - `client.integration.test.ts` waited a fixed 100 ms for two queries to hold the pool's connections;

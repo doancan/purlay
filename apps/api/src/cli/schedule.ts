@@ -1,6 +1,6 @@
 /**
- * The scheduler container's process (D-30, #72): runs each job of `PLAN` at its time, each as its
- * own `bun run job` process with the same environment. The configuration is read once here so a
+ * The scheduler container's process (D-30, #72): runs, once as it starts, each job that never succeeded
+ * (`jobs:first`), then each job of `PLAN` at its time, each as its own `bun run job` process with the same environment. The configuration is read once here so a
  * scheduler that could not run a single job refuses to start, rather than failing every night.
  *
  * SIGTERM ends the wait at once; a job already running is let finish, within the stop grace.

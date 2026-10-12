@@ -782,7 +782,9 @@ tomorrow. `CONTRIBUTING.md` §1.11 forbids the infrastructure until a measuremen
 running `jobs:first`: once, each job that has never succeeded. Without it a new deployment's
 `jobs:status` was red for up to a day, so a monitor alarmed on every install, and whether a job worked
 there at all was known only the next night. A restart of a deployment whose jobs have all succeeded
-once runs nothing more, so fixed times still mean no job runs twice in a row. *Rejected:* running
+once runs nothing more. Two cases do run a job twice in a row, and are accepted because every job is
+an idempotent sweep: a first start just before a job's slot, and a job that has never succeeded,
+tried again at each restart. *Rejected:* running
 every job at each start, which repeats the nightly work on every restart; and running them from
 `scripts/production-init.sh`, which may run before the API has migrated the database.
 

@@ -252,7 +252,27 @@ export const measureLatency = async (count: number): Promise<Latency> => {
 
 const optionOf = (args: readonly string[], name: string): string | undefined => {
   const at = args.indexOf(name);
-  return at === -1 ? undefined : args[at + 1];
+  if (at === -1) return undefined;
+  const value = args[at + 1];
+  if (value === undefined || value.startsWith('--')) throw new Error(`${name} needs a file`);
+  return value;
+};
+
+/** A kept measurement, read back; anything else is refused rather than compared with nothing. */
+const readLatency = async (file: string): Promise<Latency> => {
+  const read: unknown = await Bun.file(file).json();
+  const field = (name: keyof Latency): number | null => {
+    const value: unknown =
+      typeof read === 'object' && read !== null ? Reflect.get(read, name) : null;
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  };
+  const ackP95Ms = field('ackP95Ms');
+  const fanOutP95Ms = field('fanOutP95Ms');
+  const messages = field('messages');
+  if (ackP95Ms === null || fanOutP95Ms === null || messages === null) {
+    throw new Error(`${file} is not a latency measurement`);
+  }
+  return { ackP95Ms, fanOutP95Ms, messages };
 };
 
 /** The command: measure, compare with `--baseline`, keep with `--record`; answers what to print and the exit code. */
@@ -264,8 +284,7 @@ export const main = async (
   const firstKept = keepFile !== undefined && !(await Bun.file(keepFile).exists());
   const baselineFile = firstKept ? undefined : (keepFile ?? optionOf(args, '--baseline'));
   const recordFile = optionOf(args, '--record');
-  const baseline =
-    baselineFile === undefined ? null : ((await Bun.file(baselineFile).json()) as Latency);
+  const baseline = baselineFile === undefined ? null : await readLatency(baselineFile);
   const now = await measure(60);
   const { regressed, lines } = judge(now, baseline);
   const write = async (file: string): Promise<void> => {
