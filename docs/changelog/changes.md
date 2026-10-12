@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Spike — 2026-10-12: fetching an external image without becoming an SSRF endpoint (#110)
+
+- `docs/spikes/image-proxy.md`: Bun's `fetch` cannot be told which address to connect to;
+  `node:https` with a `lookup` that checks every address can, and TLS still names the host. A
+  kept-alive socket skips `lookup` — the proxy must not reuse connections.
+
 ### Fix — 2026-10-12: a connection lost before it was drawn as open is still said (#347)
 
 - "Reconnecting…" appeared only if the page had rendered the connection as open; one that opened and
