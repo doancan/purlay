@@ -294,6 +294,7 @@ describe('the workspace menu', () => {
       'acme-eng',
       'side-project',
       'Invite people…',
+      'Members…',
       'GitHub connection…',
       'Sign out',
     ]);

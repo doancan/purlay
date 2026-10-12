@@ -204,6 +204,18 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('a member’s role is sent in the body and the member read back; removing is by id (§7.4)', async () => {
+    const member = { user, role: 'admin' as const, joinedAt: WHEN };
+    const changed = harness(member);
+    expect(await changed.api.updateMemberRole(ID, ID, 'admin')).toEqual(member);
+    const removed = harness(null);
+    await removed.api.removeMember(ID, ID);
+    expect([...changed.calls, ...removed.calls]).toEqual([
+      { method: 'PATCH', url: `/api/workspaces/${ID}/members/${ID}`, body: { role: 'admin' } },
+      { method: 'DELETE', url: `/api/workspaces/${ID}/members/${ID}`, body: undefined },
+    ]);
+  });
+
   test('the GitHub token: its status read, the token sent in the body, and taken away (D-23)', async () => {
     const status = { configured: true, updatedAt: WHEN };
     const read = harness(status);

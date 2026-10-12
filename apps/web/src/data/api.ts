@@ -29,7 +29,9 @@ import {
   UnfurlResponse,
   UnresolvedPage,
   Workspace,
+  WorkspaceMember,
   WorkspaceMemberList,
+  type UserRole,
   type CreateChannelRequest,
   type CreateWorkspaceRequest,
   type NotificationLevel,
@@ -78,6 +80,14 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<UnfurlResponse>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
+  /** An owner's or an admin's (`ARCHITECTURE.md` §7.4): a member's new role. */
+  readonly updateMemberRole: (
+    workspaceId: string,
+    userId: string,
+    role: UserRole,
+  ) => Promise<WorkspaceMember>;
+  /** Out of the workspace and its channels (D-111). */
+  readonly removeMember: (workspaceId: string, userId: string) => Promise<void>;
 
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
@@ -209,6 +219,15 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/invitations/${at(invitationId)}`,
         options(),
       ),
+    updateMemberRole: (workspaceId, userId, role) =>
+      http.request(
+        'PATCH',
+        `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`,
+        WorkspaceMember,
+        options({ body: { role } }),
+      ),
+    removeMember: (workspaceId, userId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`, options()),
     members: (workspaceId, signal) =>
       http.request(
         'GET',
