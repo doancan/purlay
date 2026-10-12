@@ -25,6 +25,8 @@ export interface Formatters {
   /** The label of a day divider; `today` and `yesterday` are the catalogue's words. */
   readonly day: (value: Date | string, now: Date, words: DayWords) => string;
   readonly number: (value: number) => string;
+  /** A file's size: bytes, then kilobytes and megabytes of 1024, one decimal at most. */
+  readonly bytes: (value: number) => string;
 }
 
 interface DayWords {
@@ -72,6 +74,13 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
   });
   const year = new Intl.DateTimeFormat('en-CA', { year: 'numeric', ...zone });
   const numbers = new Intl.NumberFormat(locale);
+  const inUnit = (unit: 'byte' | 'kilobyte' | 'megabyte'): Intl.NumberFormat =>
+    new Intl.NumberFormat(locale, { style: 'unit', unit, maximumFractionDigits: 1 });
+  const [inBytes, inKilobytes, inMegabytes] = [
+    inUnit('byte'),
+    inUnit('kilobyte'),
+    inUnit('megabyte'),
+  ];
 
   // Yesterday is a calendar day, not 24 hours ago: on the two days a year the
   // clocks change, those are different days.
@@ -100,5 +109,11 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
       return (sameYear(date, now) ? weekdayDay : monthDayYear).format(date);
     },
     number: (value) => numbers.format(value),
+    bytes: (value) =>
+      value < 1024
+        ? inBytes.format(value)
+        : value < 1024 * 1024
+          ? inKilobytes.format(value / 1024)
+          : inMegabytes.format(value / (1024 * 1024)),
   };
 };

@@ -208,6 +208,16 @@ describe('numbers', () => {
     expect(createFormatters('en').number(1234567)).toBe('1,234,567');
     expect(createFormatters('tr').number(1234567)).toBe('1.234.567');
   });
+
+  test('a size in bytes, kilobytes or megabytes, in each language’s way', () => {
+    const en = createFormatters('en');
+    const tr = createFormatters('tr');
+    expect(en.bytes(512)).toBe('512 byte');
+    expect(en.bytes(1536)).toBe('1.5 kB');
+    expect(en.bytes(3 * 1024 * 1024)).toBe('3 MB');
+    expect(tr.bytes(1536)).toBe('1,5 kB');
+    expect(tr.bytes(25 * 1024 * 1024)).toBe('25 MB');
+  });
 });
 
 describe('choosing a locale', () => {

@@ -1530,6 +1530,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {
+    id: 'tombstone-draws-its-attachments',
+    why: 'a message deleted live still shows what was sent with it, until the page is read again',
+    file: 'apps/web/src/features/messages/message-row.tsx',
+    find: '{!deleted && <Attachments attachments={message.attachments} />}',
+    replace: '<Attachments attachments={message.attachments} />',
+    tests: ['apps/web/src/features/messages/attachments.test.tsx'],
+  },
+  {
+    id: 'thumbnail-failure-drawn-as-nothing',
+    why: 'an image that does not load is a broken icon with no word and no way to ask again',
+    file: 'apps/web/src/features/messages/attachments.tsx',
+    find: '          setFailed(true);\n',
+    replace: '',
+    tests: ['apps/web/src/features/messages/attachments.test.tsx'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',
