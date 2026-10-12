@@ -187,6 +187,23 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('an owner’s invitation links: made, listed by cursor, revoked by id (D-115)', async () => {
+    const invitation = { id: ID, createdBy: user, createdAt: WHEN, expiresAt: WHEN };
+    const made = harness({ invitation, token: 'd'.repeat(64) });
+    await made.api.createInvitation(ID);
+    const listed = harness({ data: [invitation], nextCursor: null });
+    await listed.api.invitations(ID, ID);
+    await listed.api.invitations(ID);
+    const revoked = harness(null);
+    await revoked.api.revokeInvitation(ID, ID);
+    expect([...made.calls, ...listed.calls, ...revoked.calls]).toEqual([
+      { method: 'POST', url: `/api/workspaces/${ID}/invitations`, body: {} },
+      { method: 'GET', url: `/api/workspaces/${ID}/invitations?before=${ID}`, body: undefined },
+      { method: 'GET', url: `/api/workspaces/${ID}/invitations`, body: undefined },
+      { method: 'DELETE', url: `/api/workspaces/${ID}/invitations/${ID}`, body: undefined },
+    ]);
+  });
+
   test('the notification level goes in the body, to the channel it is for', async () => {
     const set = harness(null);
     await set.api.setNotificationLevel(ID, 'none');
