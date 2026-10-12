@@ -113,6 +113,10 @@ describe('integration: GET /api/notifications', () => {
       }
       const none = await call(db, 'GET', '/api/notifications', world.bob);
       expect(none.status).toBe(400);
+      // Two of one key: the guard and the schema would otherwise each read a different one.
+      const twice = await inbox(db, world, `&workspaceId=${world.workspaceId}`);
+      expect(twice.status).toBe(400);
+      expect(await codeOf(twice)).toBe('VALIDATION_FAILED');
     });
   });
 });
@@ -164,6 +168,23 @@ describe('integration: PUT /api/notifications/read', () => {
       // Read again: nothing moved, so nothing is said.
       await markNotificationsRead({ database: db, clock, bus }, request(), body);
       expect(heard).toHaveLength(1);
+    });
+  });
+
+  test('a workspace that never existed is the stranger’s answer; a malformed one is the body’s 400', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const put = async (workspaceId: string): Promise<Response> =>
+        await call(db, 'PUT', '/api/notifications/read', world.bob, { workspaceId });
+      const never = await put('00000000-0000-4000-8000-000000000000');
+      const stranger = await call(db, 'PUT', '/api/notifications/read', world.alice, {
+        workspaceId: world.workspaceId,
+      });
+      expect(stranger.status).toBe(204);
+      expect(never.status).toBe(404);
+      expect(await codeOf(never)).toBe('WORKSPACE_NOT_FOUND');
+      // Every body is read against the contract before anything is looked up (D-106 §5).
+      expect((await put('not-a-uuid')).status).toBe(400);
     });
   });
 

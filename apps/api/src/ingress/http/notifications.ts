@@ -7,6 +7,7 @@
  */
 import { NotificationQuery, ReadNotificationsRequest, type NotificationPage } from '@purlay/types';
 import { visibleChannelIds } from '../../platform/channels';
+import { AppError } from '../../platform/errors';
 import {
   NO_LOG,
   publication,
@@ -32,23 +33,33 @@ export const readInbox = async (
   // ignored. Query strings are text: the two that are not are converted, and anything but the words
   // they expect is left as it came, for the schema to refuse.
   const query: Record<string, unknown> = Object.fromEntries(url.searchParams);
+  const repeated = [...url.searchParams.keys()].find((key, at, keys) => keys.indexOf(key) !== at);
+  if (repeated !== undefined) {
+    // The guard and the schema would each read a different one of the two.
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'Each parameter is given once.',
+      details: { fields: { [repeated]: 'given more than once' } },
+    });
+  }
   const unreadOnly = url.searchParams.get('unreadOnly');
   if (unreadOnly === 'true' || unreadOnly === 'false') query['unreadOnly'] = unreadOnly === 'true';
   const limit = url.searchParams.get('limit');
   if (limit !== null) query['limit'] = Number(limit);
-  const workspaceId = url.searchParams.get('workspaceId');
-  const context =
-    workspaceId === null
-      ? undefined
-      : await requireWorkspaceMembership(database, userId, workspaceId);
+  // The workspace is asked of the guard before the rest is read, so a stranger is told 404 whatever
+  // else the query says (D-34); with none at all, the schema says what is missing.
+  const context = await requireWorkspaceMembership(
+    database,
+    userId,
+    url.searchParams.get('workspaceId') ?? validated(NotificationQuery, query).workspaceId,
+  );
   const input = validated(NotificationQuery, query);
-  if (context === undefined) throw new Error('validated a query without a workspaceId');
   return await inboxOf(database, context, await visibleChannelIds(database, context), input);
 };
 
 /**
- * `PUT /api/notifications/read` — marks the caller's notifications read; each channel whose badge
- * moved is told to the caller's devices after the commit, on their own topic (D-99 §4).
+ * `PUT /api/notifications/read` — marks the caller's notifications read; each channel with one newly
+ * read is told to the caller's devices after the commit, on their own topic (D-99 §4, D-106).
  */
 export const markNotificationsRead = async (
   dependencies: ChannelWriteDependencies,

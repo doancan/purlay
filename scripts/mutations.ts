@@ -993,4 +993,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    told.slice(0, 0).map((channel) =>\n',
     tests: ['apps/api/src/ingress/http/notifications.integration.test.ts'],
   },
+  {
+    id: 'reading-a-workspace-reads-every-workspace',
+    why: 'Mark all read in one workspace reads the person’s notifications in all of them, and their other badges go down',
+    file: INBOX,
+    find: "    unread = unread.where('notifications.workspace_id', '=', context.workspaceId);\n",
+    replace: '',
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'inbox-cursor-from-another-workspace',
+    why: 'a cursor from the same person’s other workspace is taken as a place in this one, and the page starts somewhere arbitrary',
+    file: INBOX,
+    find: "    .where('user_id', '=', userId)\n    .where('workspace_id', '=', workspaceId)\n",
+    replace: "    .where('user_id', '=', userId)\n",
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'inbox-query-key-repeated',
+    why: 'the guard checks the first workspaceId and the schema the last, so the two disagree about which workspace is asked for',
+    file: 'apps/api/src/ingress/http/notifications.ts',
+    find: '  if (repeated !== undefined) {\n',
+    replace: '  if (repeated === "never") {\n',
+    tests: ['apps/api/src/ingress/http/notifications.integration.test.ts'],
+  },
 ];

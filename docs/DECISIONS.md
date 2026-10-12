@@ -4440,12 +4440,24 @@ as the read position locks its own, so a read here and a read of the channel at 
 **4 · `{ workspaceId, before }` reads up to and including `before`.** "Mark all read" sends the newest
 notification the person saw, so one that arrived after they looked is still waiting for them.
 
+**5 · The query's workspace is asked of the guard first; a body is read against the contract first.**
+`GET` names the workspace in its query, so a stranger, a workspace that never existed and a malformed
+id are the same `404` before anything else is read, and a key given twice is `400` (the guard and
+the schema would each read a different one). `PUT` names it in a body, and every body in this API is
+validated before anything is looked up: a malformed id there is `400`, a well-formed one the caller
+is not in is the stranger's `404`.
+
 **Rejected: reading a notification moves the channel's read position to its message.** It would mark
 everything before it read, which the person has not seen. **Rejected: deleting a notification once
 read.** It is the history the inbox exists to keep (D-15). **Accepted:** the full list (not
 `unreadOnly`) has no index of its own and is found through the `(user_id, message_id, type)` unique
 index, sorted per request; a person's notifications are few enough that this is measured before it is
-indexed (D-49).
+indexed (D-49). **Accepted:** `created_at` is the time the writing transaction *started*, so a send
+that commits after a later one sorts behind it. A page already read past it, or a "mark all read" sent
+with a `before` the person saw, can pass over a notification that arrived late by the length of one
+send — it is then not on that page, or read without being shown. The window is milliseconds and the
+message is still in its channel, unread; ordering by a commit-ordered key is the fix if dogfooding
+shows it (#58).
 
 ---
 

@@ -675,7 +675,7 @@ CREATE TABLE notifications (
         ON DELETE CASCADE
 );
 
--- The badge query: unread notifications for one user, newest first.
+-- The inbox's unread list: one person's unread notifications in a workspace, newest first (D-106).
 CREATE INDEX idx_notifications_unread
     ON notifications (user_id, workspace_id, created_at DESC)
     WHERE read_at IS NULL;

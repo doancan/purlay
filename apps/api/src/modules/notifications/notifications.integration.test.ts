@@ -44,6 +44,18 @@ const mentions = async (db: Executor, room: Room, contents: readonly string[]): 
   }
 };
 
+/** Puts `userId` in `room`'s workspace and channel too: one person, two inboxes. */
+const alsoIn = async (db: Executor, room: Room, userId: string): Promise<void> => {
+  await db
+    .insertInto('workspace_members')
+    .values({ workspace_id: room.workspaceId, user_id: userId, role: 'member' })
+    .execute();
+  await db
+    .insertInto('channel_members')
+    .values({ channel_id: room.channelId, user_id: userId, joined_at: new Date('2026-01-01') })
+    .execute();
+};
+
 const inbox = async (
   db: Executor,
   room: Room,
@@ -213,6 +225,29 @@ describe('integration: marking read', () => {
       await read(db, bob, { workspaceId: room.workspaceId });
       expect((await inbox(db, room, bob, { unreadOnly: true })).contents).toEqual([]);
       expect(await counters(db, room, bob)).toMatchObject({ unread: 3, mentions: 0 });
+    });
+  });
+
+  test('a workspace is that workspace: the same person’s other inbox is untouched', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const other = await aRoom(db, ['carol']);
+      const bob = member(room, 'bob');
+      await alsoIn(db, other, bob.userId);
+      await mentions(db, room, ['here']);
+      await sendMessage(db, clock, member(other, 'carol').context, {
+        id: nextId(),
+        content: `@${bob.username} there`,
+      });
+      const [theirs] = (await inbox(db, other, bob.userId)).ids;
+      // A cursor from the other workspace is not a place in this one.
+      const refusal = await refusalOf(inbox(db, room, bob.userId, { before: theirs ?? '' }));
+      expect(refusal.body.code).toBe('VALIDATION_FAILED');
+      await read(db, bob.userId, { workspaceId: room.workspaceId });
+      expect((await inbox(db, room, bob.userId, { unreadOnly: true })).contents).toEqual([]);
+      expect((await inbox(db, other, bob.userId, { unreadOnly: true })).contents).toEqual([
+        'there',
+      ]);
     });
   });
 
