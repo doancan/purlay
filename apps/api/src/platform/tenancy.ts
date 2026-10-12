@@ -47,7 +47,7 @@ export interface WorkspaceContext {
  * workspace" are indistinguishable because they are the same object, not because
  * two branches were kept in step.
  */
-const workspaceNotFound = (): AppError =>
+export const workspaceNotFound = (): AppError =>
   new AppError({ code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found.' });
 
 /**

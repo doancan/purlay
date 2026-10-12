@@ -9,7 +9,7 @@
  * which `append-only.test.ts` holds.
  */
 import type { Executor } from '@purlay/db';
-import { PAGE_LIMIT, messageId, type AuditPage, type AuditQuery } from '@purlay/types';
+import { PAGE_LIMIT, messageId, type AuditPage, type OlderPageQuery } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
@@ -21,14 +21,16 @@ type AuditAction =
   | 'member.joined'
   | 'channel.created'
   | 'integration.token_set'
-  | 'integration.token_removed';
+  | 'integration.token_removed'
+  | 'invitation.created'
+  | 'invitation.revoked';
 
 export interface AuditEntry {
   readonly workspaceId: string;
   /** Who did it; null only when nobody did (a job). */
   readonly actorUserId: string | null;
   readonly action: AuditAction;
-  readonly targetType: 'user' | 'channel' | 'integration';
+  readonly targetType: 'user' | 'channel' | 'integration' | 'invitation';
   readonly targetId: string;
   /** What changed, by name: never content, never a token, never an email address. */
   readonly metadata?: Readonly<Record<string, string>>;
@@ -64,7 +66,7 @@ export const recordAudit = async (
 export const auditTrail = async (
   executor: Executor,
   context: WorkspaceContext,
-  query: AuditQuery,
+  query: OlderPageQuery,
 ): Promise<AuditPage> => {
   if (context.role === 'member') {
     throw new AppError({

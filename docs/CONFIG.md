@@ -108,7 +108,7 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 | `REDIS_URL` | cloud | — | Shared `EventBus`, `PresenceRegistry` and `RateLimiter` adapters (D-7, D-25). **Never required for self-hosting** |
 | `BILLING_PROVIDER_KEY` | cloud | — | **Secret.** Merchant of record (D-43) |
 | `BILLING_WEBHOOK_SECRET` | cloud | — | **Secret.** Signature verification on subscription events |
-| `SMTP_URL` | cloud | — | **Secret.** Transactional email: invitations, receipts, and Phase 2 magic links |
+| `SMTP_URL` | cloud | — | **Secret.** Transactional email: receipts and Phase 2 magic links. Invitations are links, not email (D-115) |
 
 ## Limits
 

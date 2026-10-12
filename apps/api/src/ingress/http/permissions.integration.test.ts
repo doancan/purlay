@@ -121,6 +121,26 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     }),
   'remove the GitHub token': async (world, as) =>
     await call(world, 'DELETE', `/api/workspaces/${world.workspaceId}/integrations/github`, as),
+  'make an invitation link': async (world, as) =>
+    await call(world, 'POST', `/api/workspaces/${world.workspaceId}/invitations`, as),
+  'list the invitation links': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/invitations`, as),
+  'revoke an invitation link': async (world, as) => {
+    // Made by the owner, so each role is tried on a link that exists and still opens.
+    const made = await call(
+      world,
+      'POST',
+      `/api/workspaces/${world.workspaceId}/invitations`,
+      world.people.owner,
+    );
+    const { invitation } = (await made.json()) as { invitation: { id: string } };
+    return await call(
+      world,
+      'DELETE',
+      `/api/workspaces/${world.workspaceId}/invitations/${invitation.id}`,
+      as,
+    );
+  },
   'delete somebody else’s message': async (world, as) =>
     await call(world, 'DELETE', `/api/messages/${world.messageId}`, as),
 };

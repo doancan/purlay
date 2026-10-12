@@ -216,6 +216,34 @@ CREATE INDEX idx_workspace_members_user ON workspace_members (user_id);
 -- enforced in the membership service and covered by a test. (D-21)
 ```
 
+### 4.3. `workspace_invitations`
+
+The links that let a person in (D-115). Only the token's digest is kept, as a session's is; a link is
+revoked by setting `revoked_at`, never by deleting the row, which stays the record of what was handed
+out. Who joined by which link is in `audit_log` (`member.joined`, `metadata.invitationId`), so a join
+writes no counter here.
+
+```sql
+CREATE TABLE workspace_invitations (
+    id            UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
+    token_hash    TEXT NOT NULL UNIQUE,
+    created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL,
+    expires_at    TIMESTAMPTZ NOT NULL,
+    revoked_at    TIMESTAMPTZ,
+
+    CONSTRAINT workspace_invitations_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT workspace_invitations_token_is_a_digest CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT workspace_invitations_expire_after_made CHECK (expires_at > created_at)
+);
+
+CREATE INDEX idx_workspace_invitations_workspace ON workspace_invitations (workspace_id, id DESC);
+CREATE INDEX idx_workspace_invitations_created_by ON workspace_invitations (created_by)
+    WHERE created_by IS NOT NULL;
+```
+
 ---
 
 ## 5. Channels
@@ -978,12 +1006,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0018_attachments.sql         attachments; messages (id, workspace_id) unique  (D-16, D-109)
 0019_administration.sql      audit_log, job_runs  (D-26, D-30)
 0020_integrations.sql        github_integrations, link_previews  (D-11, D-23, D-39 §6)
+0021_invitations.sql         workspace_invitations  (D-115)
 ```
 
-Phase 2 adds `0021_github_feeds.sql`; Phase 2's magic links add `0022_email_auth.sql`.
+Phase 2 adds `0022_github_feeds.sql`; Phase 2's magic links add `0023_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations did. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

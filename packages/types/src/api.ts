@@ -33,6 +33,7 @@ import {
   Reaction,
   Timestamp,
   User,
+  Workspace,
   UserRole,
   Uuid,
 } from './models';
@@ -296,14 +297,17 @@ export type GitHubCardMetadata = Static<typeof GitHubCardMetadata>;
 export const UnfurlResponse = Type.Union([GitHubCardMetadata, Type.Null()]);
 export type UnfurlResponse = Static<typeof UnfurlResponse>;
 
-/** `GET /api/workspaces/:workspaceId/audit` — newest first, keyset by `before` (D-26, #70). */
-export const AuditQuery = FromClient({
+/**
+ * A list read newest first, older pages by `before`: the audit trail (D-26, #70) and the invitation
+ * links (D-115).
+ */
+export const OlderPageQuery = FromClient({
   before: Type.Optional(Uuid),
   limit: Type.Optional(
     Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
   ),
 });
-export type AuditQuery = Static<typeof AuditQuery>;
+export type OlderPageQuery = Static<typeof OlderPageQuery>;
 
 /**
  * One administrative action: who, what, to whom, and for a change from what to what. Never anything
@@ -321,6 +325,46 @@ export const AuditEntry = Type.Object({
 export type AuditEntry = Static<typeof AuditEntry>;
 export const AuditPage = Page(AuditEntry);
 export type AuditPage = Static<typeof AuditPage>;
+
+/** How long an invitation link lets people in, from when it is made (D-115). */
+export const INVITATION_TTL_DAYS = 7;
+
+/**
+ * The secret an invitation link carries: 32 random bytes as 64 hex digits, as a session's. It
+ * travels in a request's body and a page's fragment, never a path or a query, which are logged.
+ */
+export const InvitationToken = Type.String({ pattern: '^[0-9a-f]{64}$' });
+
+/** One of a workspace's links as its admins see it — never the token, which is shown once. */
+export const Invitation = Type.Object({
+  id: Uuid,
+  /** Null once the person who made it was erased (D-27). */
+  createdBy: Type.Union([User, Type.Null()]),
+  createdAt: Timestamp,
+  expiresAt: Timestamp,
+});
+export type Invitation = Static<typeof Invitation>;
+
+/** `POST …/invitations` — the link just made, with its token, this once. */
+export const CreatedInvitation = Type.Object({ invitation: Invitation, token: InvitationToken });
+export type CreatedInvitation = Static<typeof CreatedInvitation>;
+
+/** `GET …/invitations` — the links that still let people in, newest first. */
+export const InvitationPage = Page(Invitation);
+export type InvitationPage = Static<typeof InvitationPage>;
+
+/** `POST /api/invitations/preview` and `…/accept` — the link's token, in the body. */
+export const InvitationTokenRequest = FromClient({ token: InvitationToken });
+export type InvitationTokenRequest = Static<typeof InvitationTokenRequest>;
+
+/** What a link opens, shown before the person joins. */
+export const InvitationPreview = Type.Object({
+  workspace: Workspace,
+  expiresAt: Timestamp,
+  /** Already in it: the page offers to open the workspace rather than to join. */
+  member: Type.Boolean(),
+});
+export type InvitationPreview = Static<typeof InvitationPreview>;
 
 /**
  * `PUT /api/notifications/read` — these, by id; or everything in a workspace, up to and including

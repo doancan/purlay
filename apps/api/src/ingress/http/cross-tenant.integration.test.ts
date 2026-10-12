@@ -105,6 +105,10 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     .insertInto('workspace_members')
     .values({ workspace_id: workspaceId, user_id: member.userId, role: 'member', joined_at: NOW })
     .execute();
+  // A link to revoke.
+  const invitation = await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie);
+  expect(invitation.status).toBe(201);
+  const { invitation: made } = (await invitation.json()) as { invitation: { id: string } };
   return {
     workspaceId,
     channelId,
@@ -112,6 +116,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     attachmentId,
     unsentAttachmentId,
     memberId: member.userId,
+    invitationId: made.id,
   };
 };
 
@@ -122,6 +127,7 @@ const NEVER_EXISTED: Ids = {
   attachmentId: '00000000-0000-4000-8000-000000000000',
   unsentAttachmentId: '00000000-0000-4000-8000-000000000000',
   memberId: '00000000-0000-4000-8000-000000000000',
+  invitationId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
@@ -131,6 +137,7 @@ const NOT_A_UUID: Ids = {
   attachmentId: 'not-a-uuid',
   unsentAttachmentId: 'not-a-uuid',
   memberId: 'not-a-uuid',
+  invitationId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {

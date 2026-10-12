@@ -105,9 +105,11 @@ export const membershipsOf = async (
   executor: Executor,
   clock: Clock,
   userId: string,
+  /** Only this one, when given: what joining by an invitation answers (D-115). */
+  workspaceId?: string,
 ): Promise<readonly Membership[]> => {
   const now = clock.now();
-  const rows = await executor
+  let statement = executor
     .selectFrom('workspace_members')
     .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
     .select([
@@ -122,8 +124,9 @@ export const membershipsOf = async (
     ])
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
-    .orderBy('workspace_members.joined_at', 'asc')
-    .execute();
+    .orderBy('workspace_members.joined_at', 'asc');
+  if (workspaceId !== undefined) statement = statement.where('workspaces.id', '=', workspaceId);
+  const rows = await statement.execute();
 
   return rows.map((row) => ({
     workspace: asWorkspace(row),

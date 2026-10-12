@@ -12,7 +12,7 @@
 import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
-  AuditQuery,
+  OlderPageQuery,
   SetGitHubTokenRequest,
   type GitHubIntegration,
   SetDeepWorkRequest,
@@ -188,7 +188,7 @@ export const readAuditTrail = async (
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const query = validated(AuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await auditTrail(database, context, query);
 };
 
