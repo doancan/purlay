@@ -2284,4 +2284,21 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/composer/composer.test.tsx'],
   },
+  {
+    id: 'directory-store-in-production',
+    why: 'a production instance keeps attachments on its own disk, outside the bucket the backups take',
+    file: 'apps/api/src/platform/config.ts',
+    find: "    if (production) {\n      problems.push(\n        'STORAGE_DIRECTORY: production",
+    replace:
+      "    if (production && false) {\n      problems.push(\n        'STORAGE_DIRECTORY: production",
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
+  {
+    id: 'directory-store-key-unchecked',
+    why: 'a storage key with .. reads or writes outside the attachment directory',
+    file: 'apps/api/src/platform/storage.ts',
+    find: '    if (!KEY.test(key)) throw',
+    replace: '    if (key === "never") throw',
+    tests: ['apps/api/src/platform/storage.test.ts'],
+  },
 ];

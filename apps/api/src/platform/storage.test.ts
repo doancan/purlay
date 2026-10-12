@@ -5,7 +5,9 @@
 import { describe, expect, test } from 'bun:test';
 import { testConfig } from '../testing/doubles';
 import { AppError } from './errors';
-import { s3Store, storeFor, type S3Like } from './storage';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { directoryStore, s3Store, storeFor, type S3Like } from './storage';
 
 const refusal = async (attempt: Promise<unknown>): Promise<string> => {
   try {
@@ -101,5 +103,49 @@ describe('the S3 adapter’s rules (a stand-in client; `test:storage` runs the r
       thrown = error instanceof Error ? error.message : '';
     });
     expect(thrown).toBe('denied');
+  });
+});
+
+/**
+ * The directory store (D-117, #387): a development store, so the demonstration and the browser suite
+ * can upload without a bucket. Production refuses it (`config.test.ts`); here, that it is a store —
+ * what is put is got, absence is null, removal is idempotent — and that a key cannot reach outside it.
+ */
+describe('the directory store', () => {
+  const root = (): string => join(tmpdir(), `purlay-store-${crypto.randomUUID()}`);
+
+  test('what is put is got back whole, with its size; what is not there is null; removing is idempotent', async () => {
+    const store = directoryStore(root());
+    const key = 'workspace-1/0199155c-6200-7b7f-8c11-000000000001/original';
+    await store.put(key, new Uint8Array([1, 2, 3]), 'application/octet-stream');
+    const got = await store.get(key);
+    expect(got?.size).toBe(3);
+    expect(new Uint8Array(await new Response(got?.body).arrayBuffer())).toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+    await store.delete(key);
+    await store.delete(key);
+    expect(await store.get(key)).toBeNull();
+    expect(await store.get('never/put')).toBeNull();
+  });
+
+  test('a key that would leave the directory is refused, never read or written', async () => {
+    const store = directoryStore(root());
+    const refused = async (work: Promise<unknown>): Promise<string> =>
+      await work.then(
+        () => 'done',
+        (error: unknown) => (error instanceof Error ? error.message : 'other'),
+      );
+    for (const key of ['../escape', 'a/../../escape', '/etc/passwd', 'a//b', '', 'a\\b']) {
+      expect(await refused(store.put(key, new Uint8Array([1]), 'x'))).toContain(
+        'not a storage key',
+      );
+      expect(await refused(store.get(key))).toContain('not a storage key');
+    }
+  });
+
+  test('the configuration names it when it names a directory and no bucket', () => {
+    const store = storeFor(testConfig({ STORAGE_DIRECTORY: root() }));
+    expect(store).not.toEqual(storeFor(testConfig()));
   });
 });

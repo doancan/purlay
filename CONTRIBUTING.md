@@ -197,7 +197,8 @@ What belongs here is the discipline around them:
 - **See it, and test it, the way it is deployed.** `bun run demo` builds the client, recreates a
   scratch database named `purlay_demo`, seeds a believable workspace *through the real API*
   (`apps/api/src/cli/demo-seed.ts`: four people, six channels, two days of conversation, threads,
-  reactions, a read position) and serves it all on one origin at `http://localhost:4173`; the
+  reactions, a read position) and serves it all on one origin at `http://localhost:4173`, keeping
+  attachments in a directory of the run's own when no bucket is configured (D-117); the
   startup banner prints `/__demo/login?as=dogancan`, which hands the browser the genuine session
   cookie GitHub would have (use Chromium or Firefox: the cookie is `Secure`, which they accept on
   `localhost`). That login is a route of the demo's front server only — the API has none and never

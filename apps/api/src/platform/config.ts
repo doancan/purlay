@@ -89,6 +89,9 @@ export const Environment = Type.Object({
   S3_BUCKET: Type.Optional(Type.String({ minLength: 1 })),
   S3_ACCESS_KEY_ID: Type.Optional(Type.String({ minLength: 1 })),
   S3_SECRET_ACCESS_KEY: Type.Optional(Type.String({ minLength: 1 })),
+  /** A directory attachments are kept in instead of a bucket: development and the browser suite only
+   *  (D-117). Production refuses it. */
+  STORAGE_DIRECTORY: Type.Optional(Type.String({ minLength: 1 })),
 });
 
 /**
@@ -223,6 +226,15 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     );
   } else if (production && storage === 0) {
     problems.push('S3_ENDPOINT: production refuses to start without the attachment bucket');
+  }
+  if (config.STORAGE_DIRECTORY !== undefined) {
+    if (production) {
+      problems.push(
+        'STORAGE_DIRECTORY: production keeps attachments in the bucket, never in a directory (D-117)',
+      );
+    } else if (storage !== 0) {
+      problems.push('STORAGE_DIRECTORY: one store or the other — a directory or the S3 bucket');
+    }
   }
 
   if (problems.length > 0) throw new ConfigurationError(problems);

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: attachments work in the demonstration and the browser suite (D-117, #387)
+
+- `STORAGE_DIRECTORY` keeps attachments in a directory instead of a bucket, refused in production
+  and beside the `S3_*` variables. `bun run demo` uses one per run when no bucket is configured, and
+  a browser test picks an image, sends it and sees it on the other person's screen.
+
 ### Feature — 2026-10-12: an upload says how far it has got (D-109, #388)
 
 - The chip reads *Uploading… 42%*, a progress bar a screen reader can read, in both languages. An

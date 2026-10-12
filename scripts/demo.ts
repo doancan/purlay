@@ -105,6 +105,16 @@ const sessions = Object.fromEntries(
 );
 
 // ── 4. The API ───────────────────────────────────────────────────────────────
+// Attachments: the bucket when one is configured (`bun run db:up`); otherwise a directory of this
+// run's own, thrown away with its database on the next start (D-117), so an upload works here too.
+const files =
+  process.env['S3_ENDPOINT'] === undefined || process.env['S3_ENDPOINT'] === ''
+    ? join(tmpdir(), `purlay-files-${databaseName}`)
+    : null;
+if (files !== null) {
+  rmSync(files, { recursive: true, force: true });
+  say(`attachments are kept in ${files}`);
+}
 say(`starting the API on :${String(apiPort)}…`);
 const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
@@ -118,6 +128,7 @@ const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
     GITHUB_CLIENT_ID: 'demo',
     GITHUB_CLIENT_SECRET: 'demo',
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
+    ...(files === null ? {} : { STORAGE_DIRECTORY: files }),
     // The API serves the build itself, as the image does (D-61).
     CLIENT_DIST: join(root, 'apps/web/dist'),
   },

@@ -74,6 +74,7 @@ ignoring it and leaving an operator to wonder why nobody is let in.
 | `S3_BUCKET` | production | — | |
 | `S3_ACCESS_KEY_ID` | production | — | Garage's format: `GK` and 24 hex digits |
 | `S3_SECRET_ACCESS_KEY` | production | — | **Secret** |
+| `STORAGE_DIRECTORY` | — | — | A directory attachments are kept in **instead of a bucket** — the demonstration and the browser suite (D-117). Production refuses to start with it; with the `S3_*` variables it is refused too: one store or the other |
 
 The four without a default are **all set or none** (D-109). None, outside production, is a server that
 refuses every upload with `503 STORAGE_UNAVAILABLE` rather than pretending; production does not start

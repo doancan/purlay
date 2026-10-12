@@ -12,6 +12,8 @@
  * redirect to a presigned URL — a public address for the bytes D-109 §6 brokers — and refuses one
  * that carries headers. So the adapter hands out a stream and its size, which serve as themselves.
  */
+import { mkdir, rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { S3Client } from 'bun';
 import type { Config } from './config';
 import { AppError } from './errors';
@@ -93,13 +95,46 @@ const unconfiguredStore = (): ObjectStore => {
   return { put: unavailable, get: unavailable, delete: unavailable };
 };
 
-/** The store the configuration names, or the unconfigured one when it names none. */
+/** What a storage key is: the store's own names (`workspace/upload-id/variant`), nothing a path could escape by. */
+const KEY = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*(?:\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)*$/;
+
+/**
+ * Attachments in a directory instead of a bucket (D-117): what the demonstration and the browser suite
+ * run on, so an upload works there without Garage. The configuration refuses it in production.
+ * A key is checked before it becomes a path: segments of letters, digits, `_`, `-` and inner dots —
+ * no `..`, no absolute path, no empty segment — so nothing outside the directory is read or written.
+ */
+export const directoryStore = (root: string): ObjectStore => {
+  const pathOf = (key: string): string => {
+    if (!KEY.test(key)) throw new Error(`not a storage key: ${JSON.stringify(key)}`);
+    return join(root, key);
+  };
+  return {
+    put: async (key, bytes): Promise<void> => {
+      const path = pathOf(key);
+      await mkdir(dirname(path), { recursive: true });
+      await Bun.write(path, bytes);
+    },
+    get: async (key): Promise<StoredObject | null> => {
+      const file = Bun.file(pathOf(key));
+      if (!(await file.exists())) return null;
+      return { body: file.stream(), size: file.size };
+    },
+    delete: async (key): Promise<void> => {
+      await rm(pathOf(key), { force: true });
+    },
+  };
+};
+
+/** The store the configuration names — the bucket, a development directory — or the unconfigured one. */
 export const storeFor = (config: Config): ObjectStore =>
   config.S3_ENDPOINT === undefined ||
   config.S3_BUCKET === undefined ||
   config.S3_ACCESS_KEY_ID === undefined ||
   config.S3_SECRET_ACCESS_KEY === undefined
-    ? unconfiguredStore()
+    ? config.STORAGE_DIRECTORY === undefined
+      ? unconfiguredStore()
+      : directoryStore(config.STORAGE_DIRECTORY)
     : s3Store({
         endpoint: config.S3_ENDPOINT,
         region: config.S3_REGION,
