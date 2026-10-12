@@ -52,7 +52,6 @@ x-environment: &environment
   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
   # Off unless set; nothing is reported by default (D-44, D-96).
   ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
-  WORKSPACE_OPEN_JOIN_SLUG: ${WORKSPACE_OPEN_JOIN_SLUG:-}
   # The attachment bucket (CONFIG.md, D-109); production refuses to start without it.
   STORAGE_DRIVER: s3
   S3_ENDPOINT: http://garage:3900

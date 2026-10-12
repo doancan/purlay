@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Changed — 2026-10-12: open join is retired; people are invited (D-115, closes #50)
+
+- Signing in no longer joins anybody to a workspace. `WORKSPACE_OPEN_JOIN_SLUG` is refused at boot,
+  naming what replaced it: **remove it from `production.env`** and invite the team with a link from
+  the workspace menu.
+
 ### Feature — 2026-10-12: owners and admins invite from the workspace menu (D-115, #50)
 
 - **Invite people…** opens a dialog that makes a link, shows it once to copy, and lists the links

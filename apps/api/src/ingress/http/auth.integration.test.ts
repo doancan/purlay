@@ -11,9 +11,8 @@ import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { createApp } from './app';
 import { SESSION_COOKIE, STATE_COOKIE } from '../../platform/cookies';
-import { NOW, aGitHubAccount, testConfig, testDependencies } from '../../testing/doubles';
+import { NOW, aGitHubAccount, testDependencies } from '../../testing/doubles';
 import type { Config } from '../../platform/config';
-import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -266,97 +265,6 @@ describe('integration: signing in with GitHub', () => {
         .executeTakeFirstOrThrow();
       const expected = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000);
       expect(new Date(session.expires_at).toISOString()).toBe(expected.toISOString());
-    });
-  });
-});
-
-/**
- * Phase 0's exit criterion, up to the socket: two different GitHub users end up
- * in one workspace through the real sign-in path, with no fixture and no bypass
- * (D-37). Without open join the second user has no way in at all.
- */
-describe('integration: open join on sign-in', () => {
-  const OPEN_SLUG = aUniqueSlug('phase-zero');
-
-  const hubot = aGitHubAccount({ id: 2, login: 'hubot', name: 'Hubot', avatarUrl: null }, [
-    { email: 'hubot@example.test', primary: true, verified: true },
-  ]);
-
-  const sessionFrom = (response: Response): string =>
-    (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-
-  const asJson = async (
-    db: Executor,
-    config: Config,
-    method: string,
-    path: string,
-    cookie: string,
-    body?: unknown,
-  ): Promise<Response> =>
-    await appFor(db, undefined, config).handle(
-      new Request(`${ORIGIN}${path}`, {
-        method,
-        headers: {
-          cookie,
-          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      }),
-    );
-
-  /** Mona signs in and creates the workspace; then Hubot signs in. */
-  const twoUsers = async (
-    db: Executor,
-    config: Config,
-  ): Promise<{ hubot: string; workspaceId: string; channelId: string }> => {
-    const mona = sessionFrom(await startAndCallback(db, { config }));
-    const created = await asJson(db, config, 'POST', '/api/workspaces', mona, {
-      name: 'Phase zero',
-      slug: OPEN_SLUG,
-    });
-    expect(created.status).toBe(201);
-    const workspaceId = ((await created.json()) as { id: string }).id;
-    const channel = await asJson(
-      db,
-      config,
-      'POST',
-      `/api/workspaces/${workspaceId}/channels`,
-      mona,
-      {
-        name: 'general',
-      },
-    );
-    expect(channel.status).toBe(201);
-    const channelId = ((await channel.json()) as { id: string }).id;
-
-    const signedIn = await startAndCallback(db, { config, github: hubot });
-    expect(signedIn.status).toBe(302);
-    return { hubot: sessionFrom(signedIn), workspaceId, channelId };
-  };
-
-  test('with the slug set, a second GitHub user lands in the workspace and can join its channel', async () => {
-    await withRollback(async (db) => {
-      const config = testConfig({ WORKSPACE_OPEN_JOIN_SLUG: OPEN_SLUG });
-      const { hubot: cookie, workspaceId, channelId } = await twoUsers(db, config);
-
-      const mine = await asJson(db, config, 'GET', '/api/workspaces', cookie);
-      expect(await mine.json()).toMatchObject([{ workspace: { id: workspaceId }, role: 'member' }]);
-
-      const joined = await asJson(db, config, 'POST', `/api/channels/${channelId}/join`, cookie);
-      expect(joined.ok).toBe(true);
-    });
-  });
-
-  test('unset, the instance is closed: the same second user has no way in', async () => {
-    await withRollback(async (db) => {
-      const config = testConfig();
-      const { hubot: cookie, channelId } = await twoUsers(db, config);
-
-      const mine = await asJson(db, config, 'GET', '/api/workspaces', cookie);
-      expect(await mine.json()).toEqual([]);
-
-      const joined = await asJson(db, config, 'POST', `/api/channels/${channelId}/join`, cookie);
-      expect(joined.status).toBe(404);
     });
   });
 });

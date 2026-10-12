@@ -11,7 +11,6 @@ import { AppError } from '../../platform/errors';
 import { publishSessionsEnded, type EventBus } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
 import { atomicallyOn } from '../../platform/transactions';
-import { joinOpenWorkspace } from '../workspaces/open-join';
 import { authorizeUrl, type GitHubClient } from './github';
 import { resolveIdentity } from './identity';
 import { revokeAllSessions, revokeSession, issueSession, type IssuedSession } from './sessions';
@@ -20,12 +19,7 @@ import { issueState, verifyState } from './state';
 export interface SignInDependencies {
   readonly config: Pick<
     Config,
-    | 'APP_URL'
-    | 'ENCRYPTION_KEY'
-    | 'GITHUB_CLIENT_ID'
-    | 'GITHUB_CLIENT_SECRET'
-    | 'SESSION_TTL_DAYS'
-    | 'WORKSPACE_OPEN_JOIN_SLUG'
+    'APP_URL' | 'ENCRYPTION_KEY' | 'GITHUB_CLIENT_ID' | 'GITHUB_CLIENT_SECRET' | 'SESSION_TTL_DAYS'
   >;
   readonly database: Executor;
   readonly clock: Clock;
@@ -94,20 +88,11 @@ export const completeSignIn = async (
     github.emails(accessToken),
   ]);
 
-  // One boundary for the account, the open-join membership and the session: a
-  // failure on any of them leaves no half-made account to trip the next attempt.
+  // One boundary for the account and the session: a failure on either leaves no half-made
+  // account to trip the next attempt.
   const { userId, usernameCollision, session } = await atomicallyOn(database)(
     async (transaction) => {
       const identity = await resolveIdentity(transaction, clock, profile, emails);
-      if (config.WORKSPACE_OPEN_JOIN_SLUG !== undefined) {
-        // Every outcome is a success; which one it was is the boot notice's to explain (D-37).
-        await joinOpenWorkspace(
-          transaction,
-          clock,
-          config.WORKSPACE_OPEN_JOIN_SLUG,
-          identity.userId,
-        );
-      }
       const issued = await issueSession(
         transaction,
         clock,

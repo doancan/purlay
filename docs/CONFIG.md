@@ -54,22 +54,16 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
-| `WORKSPACE_OPEN_JOIN_SLUG` | — | — | When set, any authenticated user is joined to that workspace as `member` on sign-in. Unset means the instance is closed. (D-37) |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
 The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/github/callback`. That is
 the client's origin **and** the API's: the browser talks to one origin, and development is
 proxied so it matches (D-61). There is no separate API URL to configure.
 
-**On `WORKSPACE_OPEN_JOIN_SLUG`.** Phase 0 cannot reach its exit criterion without it —
-invitations are Phase 1, so a second user otherwise has no way into a workspace. The boot log
-states which workspace is open, and says so when none is: an instance that quietly accepts anyone
-with a GitHub account is not something an operator should discover by accident.
-
-A slug that names no workspace yet admits nobody, and does not stop anyone signing in — it is the
-normal state before the operator creates the workspace. Whoever **first** creates a workspace with
-that slug owns the one everyone then joins, so create it before telling anyone the URL. An existing
-membership is never changed by signing in: the owner stays the owner.
+**Nobody is joined to a workspace by signing in.** The first person creates one; everyone after
+is invited with a link (D-115). `WORKSPACE_OPEN_JOIN_SLUG`, which joined every signed-in user to
+one workspace in Phase 0 (D-37), is retired: set, the API refuses to start and says so, rather than
+ignoring it and leaving an operator to wonder why nobody is let in.
 
 ## Object storage
 
@@ -189,7 +183,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
-`SESSION_TTL_DAYS`, `WORKSPACE_OPEN_JOIN_SLUG`, `S3_REGION`, `S3_BUCKET` (optional). `docker compose`
+`SESSION_TTL_DAYS`, `S3_REGION`, `S3_BUCKET` (optional). `docker compose`
 refuses to start with a required one missing, and names it. Garage wants its own key format:
 `S3_ACCESS_KEY_ID` is `GK` plus 24 hex digits (`echo GK$(openssl rand -hex 12)`) and
 `S3_SECRET_ACCESS_KEY` is 64 hex digits.
@@ -242,7 +236,6 @@ whatever the umask). It holds every message and every e-mail address in the clea
 copied, and whether it is encrypted there, is the operator's decision. `ENCRYPTION_KEY` is **not** in
 the backup, by design: keep it separately.
 
-**Production checklist:** `WORKSPACE_OPEN_JOIN_SLUG` is unset unless open join is genuinely
-intended · `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and
+**Production checklist:** `APP_URL` is `https://` · `ENCRYPTION_KEY` generated with a CSPRNG and
 backed up · `DATABASE_SSL=true` on managed PostgreSQL · `TRUST_PROXY=true` behind a proxy ·
 `LOG_LEVEL=info` or higher, never `debug` (it is verbose, not secret-leaking, but noisy).
