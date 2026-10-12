@@ -11,12 +11,13 @@ import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody } from './errors';
 import {
+  AttachmentIds,
   Channel,
   ChannelState,
   FromClient,
   Message,
-  MessageContent,
   Reaction,
+  SendContent,
   ThreadSummary,
   Timestamp,
   Uuid,
@@ -50,9 +51,11 @@ export const MessageSendFrame = FromClient({
   op: Type.Literal('MESSAGE_SEND'),
   payload: FromClient({
     channelId: Uuid,
-    content: MessageContent,
+    /** Empty only beside an attachment, as in the HTTP request (D-109 §7). */
+    content: SendContent,
     /** Makes it a reply to this root, as in the HTTP request (I-1). */
     parentId: Type.Optional(Uuid),
+    attachmentIds: Type.Optional(AttachmentIds),
   }),
 });
 

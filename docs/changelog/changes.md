@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: sending a message with attachments (D-109 §7)
+
+- A send — over the socket or HTTP — names the uploads it carries, up to ten; they become the
+  message's in the same transaction, and their bytes the workspace's stored count. A message may be
+  its attachments alone. An upload that is not the sender's own and unsent is `404
+  ATTACHMENT_NOT_FOUND`, and the message is not written.
+
 ### Feature — 2026-10-12: a message carries its attachments (D-109 §6)
 
 - Every message the API returns or sends — history, a thread, search, the inbox, a live frame —

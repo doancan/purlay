@@ -51,6 +51,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'CHANNEL_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
     case 'USER_NOT_FOUND':
+    case 'ATTACHMENT_NOT_FOUND':
       return 'failure.gone';
     case 'RATE_LIMITED':
       return 'failure.slow';

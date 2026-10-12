@@ -63,6 +63,8 @@ export interface OutgoingMessage {
   readonly content: string;
   /** Makes this a reply to the root with this id, in this channel (I-1). */
   readonly parentId?: string | undefined;
+  /** The sender's own unattached uploads, linked to it (D-109 §7). */
+  readonly attachmentIds?: readonly string[] | undefined;
 }
 
 /**
@@ -142,6 +144,38 @@ const currentSummary = async (
 };
 
 /**
+ * Links the sender's own unattached uploads in this workspace to the message, and answers how many
+ * bytes they hold. Any other id — unknown, somebody else's, already sent, another workspace's — is
+ * one refusal that tells nothing apart, and the transaction writes nothing (D-109 §6, §7). The rows
+ * are locked as they are linked, so two sends racing for one upload cannot both have it.
+ */
+const linkAttachments = async (
+  executor: Executor,
+  context: ChannelContext,
+  messageId: string,
+  ids: readonly string[],
+): Promise<bigint> => {
+  if (ids.length === 0) return 0n;
+  const linked = await executor
+    .updateTable('attachments')
+    .set({ message_id: messageId })
+    .where('id', 'in', ids)
+    .where('workspace_id', '=', context.workspaceId)
+    .where('uploader_id', '=', context.userId)
+    .where('message_id', 'is', null)
+    .returning('size_bytes')
+    .execute();
+  if (linked.length !== ids.length) {
+    throw new AppError({
+      code: 'ATTACHMENT_NOT_FOUND',
+      message: 'That attachment is not there to send.',
+    });
+  }
+  // BIGINT arrives as text: summed as integers, never as strings.
+  return linked.reduce((sum, row) => sum + BigInt(row.size_bytes), 0n);
+};
+
+/**
  * Writes the message, or recognises that it is already written.
  *
  * Idempotent for the sender who sent it: re-sending the same id in the same
@@ -196,6 +230,16 @@ export const sendMessage = async (
     });
   }
 
+  // Words, or something attached: an empty message is a blank row (D-109 §7). Named as the contract
+  // would name it, so a client points at the field.
+  if (input.content === '' && (input.attachmentIds ?? []).length === 0) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'A message needs words, or something attached.',
+      details: { fields: { content: 'words, or an attachment beside it' } },
+    });
+  }
+
   // Read once, here (`ARCHITECTURE.md` §8.1), or refused for a broadcast (D-12).
   const { names, reading, metadata } = readBody(input.content, engine);
 
@@ -235,6 +279,8 @@ export const sendMessage = async (
   }
 
   const sentAt = clock.now();
+
+  const carried = await linkAttachments(executor, context, input.id, input.attachmentIds ?? []);
 
   // A reply moves its root's summary, in this transaction (`SCHEMA.md` §11: the
   // service keeps the counter equal to the rows). `greatest` so two repliers whose
@@ -297,6 +343,16 @@ export const sendMessage = async (
     .where('id', '=', context.channelId)
     .where((eb) => eb.or([eb('last_message_at', 'is', null), eb('last_message_at', '<', sentAt)]))
     .execute();
+
+  // What it carries is now the workspace's stored bytes (`SCHEMA.md` I-7). Last, beside the channel's
+  // row, for the same reason: every upload into the workspace waits on this row's lock (D-88).
+  if (carried > 0n) {
+    await executor
+      .updateTable('workspaces')
+      .set({ storage_used_bytes: sql<string>`storage_used_bytes + ${String(carried)}::bigint` })
+      .where('id', '=', context.workspaceId)
+      .execute();
+  }
 
   return {
     message: written,

@@ -34,6 +34,10 @@ import { createConnection } from 'node:net';
 import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
+import { requireWorkspaceMembership } from '../platform/tenancy';
+import { atomicallyOn } from '../platform/transactions';
+import { storeUpload } from '../modules/attachments/uploads';
+import { aMemoryStore } from '../testing/storage';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { aSignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
@@ -247,6 +251,45 @@ describe('integration: two real sockets', () => {
     expect(bob.frames.find((f) => f.event === 'MESSAGE_CREATED')?.data).toMatchObject({
       id,
       content: 'hello',
+    });
+    await alice.close();
+    await bob.close();
+  });
+
+  test('a send over the socket carries its attachments to the room, words or none (D-109 §7)', async () => {
+    const room = await aRoom();
+    const { workspace_id: workspaceId } = await db
+      .selectFrom('channels')
+      .select('workspace_id')
+      .where('id', '=', room.channelId)
+      .executeTakeFirstOrThrow();
+    const { user_id: aliceId } = await db
+      .selectFrom('workspace_members')
+      .select('user_id')
+      .where('workspace_id', '=', workspaceId)
+      .where('role', '=', 'owner')
+      .executeTakeFirstOrThrow();
+    const upload = messageId(new Date(NOW.getTime() - 1_000));
+    await storeUpload(
+      { atomically: atomicallyOn(db), storage: aMemoryStore(), log: aRecordingLogger().log },
+      await requireWorkspaceMembership(db, aliceId, workspaceId),
+      { id: upload, name: 'shot.txt', bytes: new Uint8Array([1, 2, 3]) },
+    );
+    const alice = await connect(room.alice);
+    const bob = await connect(room.bob);
+    await subscribe(bob, room.channelId);
+
+    const id = messageId(NOW);
+    alice.send({
+      id,
+      op: 'MESSAGE_SEND',
+      payload: { channelId: room.channelId, content: '', attachmentIds: [upload] },
+    });
+    await bob.until((frames) => createdIds(frames).includes(id), 'the message on the other socket');
+    expect(bob.frames.find((f) => f.event === 'MESSAGE_CREATED')?.data).toMatchObject({
+      id,
+      content: '',
+      attachments: [{ id: upload, fileName: 'shot.txt' }],
     });
     await alice.close();
     await bob.close();

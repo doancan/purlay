@@ -13,7 +13,7 @@ import { Value } from '@sinclair/typebox/value';
 import './formats';
 import { MAX_FRAME_BYTES, MessageSendFrame } from './events';
 import { messageId } from './message-id';
-import { MESSAGE_CONTENT_MAX, MessageContent } from './models';
+import { ATTACHMENTS_PER_MESSAGE_MAX, MESSAGE_CONTENT_MAX, MessageContent } from './models';
 
 const isContent = (value: string): boolean =>
   FormatRegistry.Get('message-content')?.(value) ?? false;
@@ -68,10 +68,16 @@ describe('message content', () => {
   test('the longest, most expensive message fits one frame, envelope included', () => {
     // U+0800 is the first code unit UTF-8 spends three bytes on.
     const worst = 'ࠀ'.repeat(MESSAGE_CONTENT_MAX);
+    const at = (n: number): string => messageId(new Date(Date.UTC(2026, 8, 9, 12, 0, 0, n)));
     const frame = {
-      id: messageId(new Date('2026-09-09T12:00:00.000Z')),
+      id: at(0),
       op: 'MESSAGE_SEND',
-      payload: { channelId: '00000000-0000-4000-8000-000000000000', content: worst },
+      payload: {
+        channelId: '00000000-0000-4000-8000-000000000000',
+        content: worst,
+        // As many attachments as a message may carry (D-109 §7).
+        attachmentIds: Array.from({ length: ATTACHMENTS_PER_MESSAGE_MAX }, (_, n) => at(n + 1)),
+      },
     };
     expect(Value.Check(MessageSendFrame, frame)).toBe(true);
 
