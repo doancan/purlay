@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: Deep Work, in the client (D-108, `UX.md` §7, §8)
+
+- `Cmd/Ctrl+Shift+D` starts Deep Work for an hour, or ends it. While it lasts a quiet bar says until
+  when, with End, and the sidebar draws no mention badges — the counts are kept for when it ends. It
+  ends by itself at its time.
+- The shortcuts reference now lists Edit (`E`) and Deep Work, both of which work.
+
 ### Feature — 2026-10-12: Deep Work, on the server (D-15, D-108)
 
 - `PUT /api/workspaces/:workspaceId/deep-work` starts it until an instant (at most a day ahead) or ends

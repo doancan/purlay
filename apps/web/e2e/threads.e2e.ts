@@ -192,6 +192,9 @@ test.describe('resolving', () => {
       await tab.getByRole('button', { name: /Open · 2 replies/ }).click();
       const thread = threadOf(tab, made.rootId);
       await expect(thread).toBeVisible();
+      // Its replies drawn before anything is measured: under load they arrived after Resolve was
+      // pressed, and the thread grew as it went — `[163,163,231]`, a size that is not motion (#347).
+      await expect(thread.getByText('documented in the postmortem')).toBeVisible();
       // Press Resolve in the page and sample the thread's height on every frame until it is gone.
       const heights = await tab.evaluate(async (rootId) => {
         const section = document.querySelector<HTMLElement>(`[data-thread-root="${rootId}"]`);

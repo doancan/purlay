@@ -24,9 +24,11 @@ type RowKey =
   | 'shortcuts.reference'
   | 'shortcuts.close'
   | 'shortcuts.channels'
+  | 'shortcuts.deepWork'
   | 'shortcuts.move'
   | 'shortcuts.thread'
   | 'shortcuts.reply'
+  | 'shortcuts.edit'
   | 'shortcuts.resolve'
   | 'shortcuts.send'
   | 'shortcuts.newline'
@@ -55,6 +57,7 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
           [k.alt, '↓'],
         ],
       },
+      { label: 'shortcuts.deepWork', keys: (k) => [[k.mod, k.shift, 'D']] },
     ],
   },
   {
@@ -63,6 +66,7 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
       { label: 'shortcuts.move', keys: () => [['↑'], ['↓']] },
       { label: 'shortcuts.thread', keys: () => [['T']] },
       { label: 'shortcuts.reply', keys: () => [['R']] },
+      { label: 'shortcuts.edit', keys: () => [['E']] },
       { label: 'shortcuts.resolve', keys: (k) => [[k.mod, k.shift, 'R']] },
     ],
   },

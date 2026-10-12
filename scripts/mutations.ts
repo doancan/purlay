@@ -1234,4 +1234,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '      suppressed_by_deep_work: false && (\n',
     tests: ['apps/api/src/modules/workspaces/deep-work.integration.test.ts'],
   },
+  {
+    id: 'deep-work-badges-still-drawn',
+    why: 'in Deep Work the sidebar still lights up with mention badges, which is the interruption it was meant to hold back',
+    file: 'apps/web/src/features/sidebar/channel-row.tsx',
+    find: '      {mentions > 0 && quiet === null ? (\n',
+    replace: '      {mentions > 0 ? (\n',
+    tests: ['apps/web/src/features/shell/deep-work.test.tsx'],
+  },
+  {
+    id: 'deep-work-client-never-ends',
+    why: 'the bar says Deep Work long after it ended on the server, and the badges stay hidden',
+    file: 'apps/web/src/features/shell/deep-work.tsx',
+    find: '        setOver(until);\n',
+    replace: '',
+    tests: ['apps/web/src/features/shell/deep-work.test.tsx'],
+  },
+  {
+    id: 'deep-work-refusal-not-put-back',
+    why: 'a refused start leaves the bar saying Deep Work is on when the server never began it',
+    file: 'apps/web/src/features/shell/deep-work.tsx',
+    find: '      paint(until);\n',
+    replace: '',
+    tests: ['apps/web/src/features/shell/deep-work.test.tsx'],
+  },
 ];

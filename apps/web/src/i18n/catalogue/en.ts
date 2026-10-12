@@ -305,6 +305,12 @@ export const en = {
   'state.search.error.title': "Couldn't search",
   'state.search.error.body': 'The server did not answer. Your words are kept; try again.',
 
+  // ── Deep Work (D-108) ──────────────────────────────────────────────────
+  'deepWork.on': 'Deep Work until {until}: nothing interrupts you.',
+  'deepWork.end': 'End',
+  'deepWork.failed': 'Deep Work was not changed.',
+  'shortcuts.deepWork': 'Start or end Deep Work',
+
   // ── Notification level (D-107) ─────────────────────────────────────────
   'level.label': 'Notify me about',
   'level.button': 'Notifications: {level}',
@@ -413,6 +419,7 @@ export const en = {
   'shortcuts.move': 'Move between messages',
   'shortcuts.thread': 'Expand or collapse the focused thread',
   'shortcuts.reply': 'Reply to the focused message',
+  'shortcuts.edit': 'Edit your own message',
   'shortcuts.resolve': 'Resolve or reopen the focused thread',
   'shortcuts.channels': 'Previous or next unread channel',
   'shortcuts.send': 'Send the message',
