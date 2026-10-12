@@ -571,7 +571,7 @@ export interface ChannelContext {
 ```
 
 Channel-scoped repositories take a `ChannelContext` and apply the filter internally, so an
-unscoped query does not compile. **Workspace-wide reads — search and the open-questions view —
+unscoped query does not compile. **Workspace-wide reads — search, the open-questions view and the inbox —
 take the set of channel ids this user can see from the guard and narrow the query by it**
 (`channel_id IN (…)`), never filtering the rows afterwards. The workspace filter is what confines
 the trigram scan to one tenant (`idx_messages_search`); the channel set is applied to what it finds.
@@ -705,7 +705,7 @@ layering rule. (D-46)
 | Unit | Service rules and the invariants in `SCHEMA.md` §11 | `*.test.ts` |
 | Integration | Real PostgreSQL, real migrations, one per endpoint | `*.integration.test.ts` |
 | **Tenant isolation** | **Every workspace-scoped endpoint returns 404 across tenants — mandatory, no exceptions** | `testing/cross-tenant*`, from `API.md` (D-63) |
-| **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search and open questions (D-34)** | `ingress/http/channel-visibility*` (D-64) |
+| **Channel visibility** | **A workspace member who is not in the channel returns 404 — every channel-scoped endpoint, plus search, open questions and the inbox (D-34)** | `ingress/http/channel-visibility*` (D-64) |
 | Message id | Non-v7, skewed and colliding ids are rejected; a same-sender retry is idempotent (D-33) | `message-id.test.ts`, `messages.integration.test.ts` |
 | **Content safety** | **Every construct the product does not render is the characters that were typed; a link goes only where D-101 §2 allows; the engine never recognises what it is configured not to; no body reaches an engine failure, and one past the bounds is shown as typed (D-101)** | `packages/markdown/src/*.test.ts`; the rendering half with #43 |
 | Permission | Every role-gated action, per role | With the first role-gated action (#51, #74) |

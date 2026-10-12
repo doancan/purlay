@@ -7,8 +7,8 @@
  *
  * **Reading here moves the badge too.** A channel's `unread_mention_count` is bounded by the
  * notifications still waiting in it (D-99 §4), so marking one read counts that channel's badge
- * again from the rows — the same expression the read position uses — and answers each channel it
- * changed, for the caller's other devices to be told. The read position itself does not move: the
+ * again from the rows — the same expression the read position uses — and answers each channel where
+ * one was newly read, for the caller's other devices to be told. The read position itself does not move: the
  * messages are still unread, they no longer need the person.
  */
 import { sql, type Executor, type RawBuilder, type Transaction } from '@purlay/db';
@@ -25,7 +25,7 @@ import { waitingNotifications } from '../channels/read-state';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
 import { limitOf } from '../messages/threads';
 
-/** A channel whose badge moved, as its row now is: what the caller's devices are told. */
+/** A channel with a notification newly read, as its row now is: what the caller's devices are told. */
 export interface Told {
   readonly channelId: string;
   readonly state: ChannelState;
@@ -111,20 +111,20 @@ export const inboxOf = async (
   const page = rows.slice(0, limit);
   const messages = await buildMessages(executor, page);
   return {
-    data: page.flatMap((row, index) => {
+    data: page.map((row, index) => {
       const message = messages[index];
-      return message === undefined
-        ? []
-        : [
-            {
-              id: row.notification_id,
-              type: row.notification_type,
-              channelId: row.channel_id,
-              message,
-              createdAt: at(row.notified_at),
-              readAt: row.notification_read_at === null ? null : at(row.notification_read_at),
-            },
-          ];
+      // One message per row, in order (D-99 §8): a row without one would be dropped from the page
+      // and skipped by the cursor, which looks exactly like a short page.
+      if (message?.id !== row.id)
+        throw new Error(`notification ${row.notification_id} lost its message`);
+      return {
+        id: row.notification_id,
+        type: row.notification_type,
+        channelId: row.channel_id,
+        message,
+        createdAt: at(row.notified_at),
+        readAt: row.notification_read_at === null ? null : at(row.notification_read_at),
+      };
     }),
     nextCursor: rows.length > limit ? (page.at(-1)?.notification_id ?? null) : null,
   };
@@ -132,7 +132,7 @@ export const inboxOf = async (
 
 /**
  * Marks the caller's notifications read — these ids, or a workspace's up to and including `before`
- * — and counts the badge of every channel that changed again. Ids that are not the caller's are
+ * — and counts the badge again in every channel where one was newly read. Ids that are not the caller's are
  * not read and not reported: the answer is the same whether they exist or not.
  */
 export const readNotifications = async (
@@ -160,7 +160,7 @@ export const readNotifications = async (
 
   const targets = await unread.select(['notifications.id', 'notifications.channel_id']).execute();
   if (targets.length === 0) return [];
-  const channelIds = [...new Set(targets.map((row) => row.channel_id))].sort();
+  const touched = [...new Set(targets.map((row) => row.channel_id))].sort();
 
   // The memberships first, in one order, as the read position takes them: a read here and a read
   // of the channel at once take turns instead of each holding what the other waits for.
@@ -168,11 +168,13 @@ export const readNotifications = async (
     .selectFrom('channel_members')
     .select('channel_id')
     .where('user_id', '=', userId)
-    .where('channel_id', 'in', channelIds)
+    .where('channel_id', 'in', touched)
     .orderBy('channel_id')
     .forUpdate()
     .execute();
-  await transaction
+  // Only what this request read is told: a second device reading the same ids at once waited on
+  // the lock above, finds them read, and has nothing to say.
+  const newlyRead = await transaction
     .updateTable('notifications')
     .set({ read_at: clock.now() })
     .where(
@@ -181,7 +183,10 @@ export const readNotifications = async (
       targets.map((row) => row.id),
     )
     .where('read_at', 'is', null)
+    .returning('channel_id')
     .execute();
+  const channelIds = [...new Set(newlyRead.map((row) => row.channel_id))];
+  if (channelIds.length === 0) return [];
 
   const rows = await transaction
     .updateTable('channel_members')
