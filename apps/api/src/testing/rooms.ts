@@ -40,6 +40,9 @@ export interface RoomOptions {
 }
 
 /** The first name is the sender in most tests; everyone is in the channel unless listed as an outsider. */
+/** When every member of a test room joined it: earlier than any test's fixed clock. */
+const ROOM_JOINED_AT = new Date('2026-01-01T00:00:00.000Z');
+
 export const aRoom = async (
   db: Executor,
   names: readonly string[],
@@ -90,6 +93,10 @@ export const aRoom = async (
       [...new Set(people.map((person) => person.userId))].map((userId) => ({
         channel_id: channel.id,
         user_id: userId,
+        // Before any test's clock, not the database's: whether somebody was in the channel when
+        // a message was written is a comparison with this, and a wall-clock value would make it
+        // depend on the day the test runs.
+        joined_at: ROOM_JOINED_AT,
       })),
     )
     .execute();
