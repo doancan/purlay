@@ -29,6 +29,19 @@ const C2 = '00000000-0000-4000-8000-0000000000c2';
 const aMessage = (channelId: string, id: string): ServerFrame =>
   ({ event: 'MESSAGE_CREATED', data: { id, channelId }, ts: 1 }) as ServerFrame;
 
+/**
+ * One frame of every kind that is about a channel, for it (#412). Each names the channel in its
+ * data, so a filter that knows only `MESSAGE_CREATED` lets the rest through.
+ */
+const everyChannelFrame = (channelId: string): ServerFrame[] =>
+  [
+    aMessage(channelId, 'created'),
+    { event: 'THREAD_UPDATED', data: { channelId, messageId: 'm' }, version: 1, ts: 1 },
+    { event: 'REACTIONS_UPDATED', data: { channelId, messageId: 'm' }, version: 1, ts: 1 },
+    { event: 'MESSAGE_REVISED', data: { channelId, messageId: 'm', content: 'secret' }, ts: 1 },
+    { event: 'CHANNEL_STATE', data: { channelId }, version: 1, ts: 1 },
+  ] as ServerFrame[];
+
 interface Node {
   readonly hub: SocketHub;
   readonly bus: InspectableEventBus;
@@ -179,11 +192,39 @@ describe('a membership that ends, on two nodes', () => {
     expect(b.seen.get('alice')).toEqual(['MESSAGE_CREATED', 'ACCESS_REVOKED']);
   });
 
+  test('a revocation behind a replay forgets every kind of frame kept for the channel (#412)', async () => {
+    const { b, publisher } = await setup();
+    b.seen.get('alice')?.splice(0);
+    b.hub.hold('alice');
+    for (const frame of everyChannelFrame(C1)) await publisher.bus.publish(channelTopic(C1), frame);
+    await publisher.bus.publish(channelTopic(C2), aMessage(C2, 'kept'));
+
+    await publishAccessRevoked(publisher.bus, clock, 'alice', [C1]);
+    b.hub.reply('alice', []);
+
+    expect(b.seen.get('alice')).toEqual(['MESSAGE_CREATED', 'ACCESS_REVOKED']);
+  });
+
   test('frames kept for channels a refused subscription named are dropped, not released with the error', async () => {
     const { b, publisher } = await setup();
     b.seen.get('alice')?.splice(0);
     b.hub.hold('alice');
     await publisher.bus.publish(channelTopic(C1), aMessage(C1, 'not hers'));
+    await publisher.bus.publish(channelTopic(C2), aMessage(C2, 'hers'));
+    b.hub.drop('alice', [C1]);
+    b.hub.reply('alice', []);
+    expect(b.seen.get('alice')).toEqual(['MESSAGE_CREATED']);
+  });
+
+  /**
+   * #412: an edit's words, a thread's summary, a reaction set — anything published for the channel
+   * while it was being refused. Released with the error, it tells an outsider what the 404 hid.
+   */
+  test('every kind of frame kept for a refused channel is dropped, not only new messages', async () => {
+    const { b, publisher } = await setup();
+    b.seen.get('alice')?.splice(0);
+    b.hub.hold('alice');
+    for (const frame of everyChannelFrame(C1)) await publisher.bus.publish(channelTopic(C1), frame);
     await publisher.bus.publish(channelTopic(C2), aMessage(C2, 'hers'));
     b.hub.drop('alice', [C1]);
     b.hub.reply('alice', []);
