@@ -23,7 +23,7 @@ const lefts = async (page: Page, selector: string): Promise<number[]> =>
   );
 
 test.describe('the columns of a channel', () => {
-  test('the avatar is one column and the text is one column: rows, the day chip, threads, the composer card', async ({
+  test('the avatar is one column and the text is one column: rows, the day, threads, the composer card', async ({
     page,
     signIn,
     world,
@@ -41,23 +41,18 @@ test.describe('the columns of a channel', () => {
     const [gutter] = gutters;
     const [body] = bodies;
     if (gutter === undefined || body === undefined) throw new Error('no message rows on screen');
-    expect(body - gutter).toBe(40); // the 28px avatar + a 12px gap
+    expect(body - gutter).toBe(48); // the 36px avatar + a 12px gap (D-109)
 
     // The composer is a card whose edge is the rows' edge, so the column reads as one.
     const cards = await lefts(page, '[data-composer-card]');
     const rows = await lefts(page, 'article');
     expect(cards).toHaveLength(1);
     expect(rows).toContain(cards[0]);
-    // The day is a chip in the middle of the column, not a rule hung from its edge.
-    const chip = page.getByText('Yesterday', { exact: true }).first();
-    if ((await chip.count()) > 0) {
-      const box = await chip.boundingBox();
-      const column = await page.locator('[role="feed"]').boundingBox();
-      expect(
-        Math.abs(
-          (box?.x ?? 0) + (box?.width ?? 0) / 2 - ((column?.x ?? 0) + (column?.width ?? 0) / 2),
-        ),
-      ).toBeLessThanOrEqual(2);
+    // The day is a label at the column's left, the rows' edge, with a rule after it (D-109).
+    const day = page.getByText('Yesterday', { exact: true }).first();
+    if ((await day.count()) > 0) {
+      const box = await day.boundingBox();
+      expect(Math.abs((box?.x ?? -1) - Math.min(...rows))).toBeLessThanOrEqual(8);
     }
     const status = page.getByRole('button', { name: /^(Open ·|Resolved by)/ }).first();
     if ((await status.count()) > 0) {

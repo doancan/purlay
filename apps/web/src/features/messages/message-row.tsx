@@ -108,7 +108,7 @@ const MessageRowView = ({
     <time
       dateTime={message.createdAt}
       title={absolute}
-      className={cn('font-mono text-caption text-ink-muted', grouped && !on && 'opacity-0')}
+      className={cn('font-mono text-caption text-ink-subtle', grouped && !on && 'opacity-0')}
     >
       {format.time(message.createdAt, new Date(nowMinute))}
     </time>
@@ -137,15 +137,16 @@ const MessageRowView = ({
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: message.sender.username, when: absolute })}
       className={cn(
-        'relative flex gap-3 rounded-md px-2 py-1',
-        mentionsMe ? 'bg-accent-subtle' : on && 'bg-surface-200',
+        'relative flex gap-3 rounded-lg px-2 transition-colors duration-hover ease-standard',
+        grouped ? 'py-1' : 'pt-2 pb-1',
+        mentionsMe ? 'bg-accent-subtle' : on && 'bg-surface-050',
         failed && 'border-l-marker border-danger',
       )}
     >
       <div
         className={cn(
           'flex h-auto shrink-0 items-start justify-center gap-1',
-          compact ? 'size-avatar-sm' : 'size-avatar',
+          compact ? 'size-avatar' : 'size-avatar-lg',
         )}
       >
         {grouped ? (
@@ -157,7 +158,7 @@ const MessageRowView = ({
           <Avatar
             name={message.sender.displayName}
             username={message.sender.username}
-            size={compact ? 'sm' : 'md'}
+            size={compact ? 'md' : 'lg'}
           />
         )}
       </div>
@@ -165,7 +166,7 @@ const MessageRowView = ({
       <div className="min-w-0 flex-1">
         {!grouped && (
           <div className="flex items-baseline gap-2">
-            <span className="text-heading text-ink">{message.sender.username}</span>
+            <span className="text-body font-semibold text-ink">{message.sender.username}</span>
             {time}
             {sending}
           </div>
@@ -180,7 +181,10 @@ const MessageRowView = ({
             renderContent(message.content, { mentioned })
           )}
           {!deleted && message.editedAt !== null && (
-            <span className="text-caption text-ink-muted" title={format.absolute(message.editedAt)}>
+            <span
+              className="text-caption text-ink-subtle"
+              title={format.absolute(message.editedAt)}
+            >
               {t('message.edited')}
             </span>
           )}
@@ -221,7 +225,7 @@ const MessageRowView = ({
       {delivery === 'sent' && !deleted && (
         <div
           className={cn(
-            'absolute right-4 top-1 flex gap-1 rounded-md border-hairline border-border-strong bg-surface-100',
+            'absolute right-2 -top-3 flex gap-1 rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-float transition-opacity duration-hover ease-standard',
             !on && 'opacity-0',
           )}
         >

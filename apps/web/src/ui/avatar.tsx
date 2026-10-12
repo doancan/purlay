@@ -17,10 +17,11 @@ const TINTS = [
   'bg-avatar-6',
 ] as const;
 
+/** Three sizes, each a rounded square whose corner shrinks with it (D-109). */
 const SIZES = {
-  sm: 'size-avatar-sm text-caption',
-  md: 'size-avatar text-label',
-  lg: 'size-avatar-lg text-heading',
+  sm: 'size-avatar-sm rounded-md text-caption',
+  md: 'size-avatar rounded-lg text-caption',
+  lg: 'size-avatar-lg rounded-lg text-label',
 } as const;
 
 /** A string's tint, stable across sessions and machines: a small, well-spread integer hash. */
@@ -62,8 +63,9 @@ export const Avatar = ({
 }: AvatarProps): React.JSX.Element => (
   <span
     aria-hidden="true"
+    data-avatar=""
     className={cn(
-      'inline-flex shrink-0 select-none items-center justify-center rounded-pill text-ink',
+      'inline-flex shrink-0 select-none items-center justify-center font-semibold text-ink',
       TINTS[tintOf(username)],
       SIZES[size],
       className,
