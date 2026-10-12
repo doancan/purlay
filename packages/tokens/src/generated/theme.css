@@ -18,6 +18,12 @@
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-ink-subtle: var(--ink-subtle);
+  --color-nav-rail: var(--nav-rail);
+  --color-nav-surface: var(--nav-surface);
+  --color-nav-hover: var(--nav-hover);
+  --color-nav-border: var(--nav-border);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-ink-muted: var(--nav-ink-muted);
   --background-color-accent: var(--accent);
   --border-color-accent: var(--accent);
   --background-color-accent-hover: var(--accent-hover);
@@ -201,6 +207,10 @@
 
 @utility shadow-card {
   box-shadow: var(--shadow-card);
+}
+
+@utility shadow-raised {
+  box-shadow: var(--shadow-raised);
 }
 
 @utility shadow-float {

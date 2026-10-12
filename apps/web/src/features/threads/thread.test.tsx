@@ -176,8 +176,8 @@ describe('opening it, in place', () => {
     await showThread(view);
     const first = rowOf(view, messageIdAt(3));
     const second = rowOf(view, messageIdAt(4));
-    expect(within(first).getByText('bob')).toBeDefined();
-    expect(within(second).queryByText('bob')).toBeNull();
+    expect(within(first).getByText('Bob')).toBeDefined();
+    expect(within(second).queryByText('Bob')).toBeNull();
     expect(within(first).queryByRole('button', { name: /Show thread/ })).toBeNull();
     expect(within(first).queryByRole('button', { name: 'Reply' })).toBeNull();
     view.unmountAll();

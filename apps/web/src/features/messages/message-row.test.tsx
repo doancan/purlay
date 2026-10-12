@@ -61,7 +61,8 @@ describe('the avatar column', () => {
     const avatar = view.container.querySelector('[aria-hidden="true"][data-avatar]');
     expect(avatar?.textContent).toBe('AL');
     expect(avatar?.className).toContain('size-avatar-lg');
-    const header = view.getByText('alice').parentElement;
+    // The name is the person's display name, as the draft draws it (D-118).
+    const header = view.getByText('Alice').parentElement;
     expect(header?.querySelector('time')).not.toBeNull();
   });
 
@@ -81,32 +82,59 @@ describe('the avatar column', () => {
     );
   });
 
-  test('the row under the pointer is tinted and a mention keeps its own tint', async () => {
+  test('the row under the pointer is not tinted: the bubble is the shape, and it does not change', async () => {
     const view = await mount(props());
     const row = view.getByRole('article');
-    expect(row.className).not.toContain('bg-surface-050');
+    const before = row.className;
     act(() => {
       fireEvent.pointerOver(row);
     });
-    expect(row.className).toContain('bg-surface-050');
-    const mention = await mount(
-      props({ message: aMessage(2, { mentions: [ME.id], content: 'hi @dogancan' }) }),
-    );
-    const tinted = mention.container.querySelector('article');
-    if (tinted === null) throw new Error('the row did not render');
+    expect(row.className).toBe(before);
+    expect(row.querySelector('[data-bubble]')?.className).toContain('bg-surface-200');
+  });
+});
+
+describe('the two edges (D-119)', () => {
+  test("somebody else's message is on the left, in a surface bubble, with an avatar and a name", async () => {
+    const view = await mount(props({ message: aMessage(1, { sender: ALICE }) }));
+    const row = view.getByRole('article');
+    expect(row.className.split(' ')).not.toContain('flex-row-reverse');
+    expect(row.dataset['outgoing']).toBeUndefined();
+    expect(row.querySelector('[data-avatar]')).not.toBeNull();
+    expect(view.getByText('Alice')).toBeDefined();
+    expect(row.querySelector('[data-bubble]')?.className).toContain('bg-surface-200');
+  });
+
+  test('your own message is on the right, in an accent bubble, with no avatar and no name', async () => {
+    const view = await mount(props({ message: aMessage(1, { sender: ME }) }));
+    const row = view.getByRole('article');
+    expect(row.className.split(' ')).toContain('flex-row-reverse');
+    expect(row.dataset['outgoing']).toBe('');
+    expect(row.querySelector('[data-avatar]')).toBeNull();
+    expect(view.queryByText(ME.displayName)).toBeNull();
+    expect(row.querySelector('time')).not.toBeNull();
+    const bubble = row.querySelector('[data-bubble]');
+    expect(bubble?.className).toContain('bg-accent-subtle');
+    expect(bubble?.className).not.toContain('bg-surface-200');
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('your own grouped message keeps its time beside the bubble, hidden until the pointer comes', async () => {
+    const view = await mount(props({ grouped: true, message: aMessage(1, { sender: ME }) }));
+    const row = view.getByRole('article');
+    const time = row.querySelector('time');
+    expect(time?.className).toContain('opacity-0');
     act(() => {
-      fireEvent.pointerOver(tinted);
+      fireEvent.pointerOver(row);
     });
-    expect(tinted.className).toContain('bg-accent-subtle');
-    expect(tinted.className).not.toContain('bg-surface-050');
-    expect(tinted.className).toContain('rounded-lg');
+    expect(time?.className ?? '').not.toContain('opacity-0');
   });
 });
 
 describe('what a row shows', () => {
   test('the name, the time as a real element with the full time on hover, and the body', async () => {
     const view = await mount(props());
-    expect(view.getByText('alice')).toBeDefined();
+    expect(view.getByText('Alice')).toBeDefined();
     expect(view.getByText('message 1')).toBeDefined();
     const time = view.container.querySelector('time');
     expect(time?.textContent).toBe('5m ago');
@@ -162,8 +190,11 @@ describe('what a row shows', () => {
     );
     const [root] = view.getAllByRole('article');
     if (root === undefined) throw new Error('the row did not render');
-    const actions = (): HTMLElement | null => root.querySelector(':scope > div.absolute');
+    const actions = (): HTMLElement | null =>
+      root.querySelector(':scope > div > div > [data-bubble] > div.absolute');
     expect(actions()?.className).toContain('opacity-0');
+    // Hidden, the actions overlap the row above and must not take its clicks.
+    expect(actions()?.className).toContain('pointer-events-none');
     act(() => {
       fireEvent.pointerOver(view.getByTestId('reply'));
     });
@@ -172,6 +203,7 @@ describe('what a row shows', () => {
       fireEvent.pointerOver(root);
     });
     expect(actions()?.className ?? '').not.toContain('opacity-0');
+    expect(actions()?.className ?? '').not.toContain('pointer-events-none');
   });
 
   test('is the one the keyboard reaches by Tab only when it is told it is', async () => {
@@ -181,20 +213,23 @@ describe('what a row shows', () => {
     expect(other.getAllByRole('article').at(-1)?.tabIndex).toBe(-1);
   });
 
-  test('a mention of the person has the tint and says so in words', async () => {
+  test('a mention of the person marks the bubble and says so in words', async () => {
     const view = await mount(
       props({ message: aMessage(1, { mentions: [ME.id], content: 'hi @dogancan' }) }),
     );
-    expect(view.getByRole('article').className).toContain('bg-accent-subtle');
+    const bubble = view.getByRole('article').querySelector('[data-bubble]');
+    expect(bubble?.className).toContain('border-l-marker');
+    expect(bubble?.className).toContain('border-accent-text');
     expect(view.getByRole('article').textContent).toContain('You were mentioned');
     expect(view.getByText('@dogancan').className).toContain('text-accent-text');
   });
 
-  test("somebody else's mention is highlighted in the text and does not tint the row", async () => {
+  test("somebody else's mention is highlighted in the text and does not mark the bubble", async () => {
     const view = await mount(
       props({ message: aMessage(1, { mentions: [BOB.id], content: 'ask @bob' }) }),
     );
-    expect(view.getByRole('article').className).not.toContain('bg-accent-subtle');
+    const bubble = view.getByRole('article').querySelector('[data-bubble]');
+    expect(bubble?.className).not.toContain('border-accent-text');
     expect(view.getByText('@bob').className).toContain('text-accent-text');
   });
 
@@ -303,8 +338,9 @@ describe('delivery', () => {
         },
       }),
     );
-    expect(view.getByRole('article').className).toContain('border-danger');
-    expect(view.getByRole('article').className).toContain('border-l-marker');
+    const bubble = view.getByRole('article').querySelector('[data-bubble]');
+    expect(bubble?.className).toContain('border-danger');
+    expect(bubble?.className).toContain('border-l-marker');
     expect(view.getByText('Failed to send')).toBeDefined();
     expect(view.getByText('That was refused. Check what you entered and try again.')).toBeDefined();
     const user = person();

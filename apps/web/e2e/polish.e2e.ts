@@ -23,7 +23,7 @@ const lefts = async (page: Page, selector: string): Promise<number[]> =>
   );
 
 test.describe('the columns of a channel', () => {
-  test('the avatar is one column and the text is one column: rows, the day, threads, the composer card', async ({
+  test('two edges, each one line: the avatars, the bubbles on the left, the bubbles on the right, the composer under them', async ({
     page,
     signIn,
     world,
@@ -33,30 +33,43 @@ test.describe('the columns of a channel', () => {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.locator('article').first()).toBeVisible();
 
-    // Rows: the avatar column, then the body — each at one x, however many messages there are.
-    const gutters = await lefts(page, 'article > div:first-child');
-    const bodies = await lefts(page, 'article > div:nth-child(2)');
+    // Everyone else's rows: the avatar column, then the bubble — each at one x (D-119).
+    const gutters = await lefts(page, 'article:not([data-outgoing]) > div:first-child');
+    const bubbles = await lefts(
+      page,
+      'article:not([data-outgoing]) > div:nth-child(2) [data-bubble]',
+    );
     expect(gutters).toHaveLength(1);
-    expect(bodies).toHaveLength(1);
+    expect(bubbles).toHaveLength(1);
     const [gutter] = gutters;
-    const [body] = bodies;
-    if (gutter === undefined || body === undefined) throw new Error('no message rows on screen');
-    expect(body - gutter).toBe(48); // the 36px avatar + a 12px gap (D-110)
+    const [bubble] = bubbles;
+    if (gutter === undefined || bubble === undefined) throw new Error('no message rows on screen');
+    expect(bubble - gutter).toBe(48); // the 36px avatar + a 12px gap
 
-    // The composer is a card whose edge is the rows' edge, so the column reads as one.
+    // The person's own bubbles end on one right edge, the rows' right edge less their padding.
+    const rights = await page.evaluate(() => [
+      ...new Set(
+        [...document.querySelectorAll('article[data-outgoing] > div > div > [data-bubble]')]
+          .filter((node) => node.closest('article')?.parentElement?.getAttribute('role') === 'feed')
+          .map((node) => Math.round(node.getBoundingClientRect().right)),
+      ),
+    ]);
+    expect(rights.length).toBeLessThanOrEqual(1);
+
+    // The composer card is under the rows: the feed and the composer are one centred column.
     const cards = await lefts(page, '[data-composer-card]');
-    const rows = await lefts(page, 'article');
+    const rows = await lefts(page, '[role="feed"] > article');
     expect(cards).toHaveLength(1);
     expect(rows).toContain(cards[0]);
-    // The day is a label at the column's left, the rows' edge, with a rule after it (D-110).
-    const day = page.getByText('Yesterday', { exact: true }).first();
-    if ((await day.count()) > 0) {
-      const box = await day.boundingBox();
-      expect(Math.abs((box?.x ?? -1) - Math.min(...rows))).toBeLessThanOrEqual(8);
-    }
-    const status = page.getByRole('button', { name: /^(Open ·|Resolved by)/ }).first();
+    // A thread's status line under somebody else's message starts where their bubble does.
+    const status = page
+      .locator('article:not([data-outgoing])')
+      .getByRole('button', { name: /^(Open ·|Resolved by)/ })
+      .first();
     if ((await status.count()) > 0) {
-      expect(Math.round((await status.boundingBox())?.x ?? -1), 'a thread status line').toBe(body);
+      expect(Math.round((await status.boundingBox())?.x ?? -1), 'a thread status line').toBe(
+        bubble,
+      );
     }
   });
 });

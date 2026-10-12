@@ -9,13 +9,20 @@
 import { cn } from './cn';
 
 const kbdClasses =
-  'inline-flex items-center rounded-sm border-hairline border-border-subtle bg-surface-050 px-1 font-mono text-caption text-ink-subtle';
+  'inline-flex items-center rounded-sm border-hairline px-1 font-mono text-caption';
+
+/** On the conversation's ground, or on the navigation's tone (D-118). */
+const toneClasses = {
+  page: 'border-border-subtle bg-surface-050 text-ink-subtle',
+  nav: 'border-nav-border bg-nav-hover text-nav-ink-muted',
+} as const;
 
 interface KbdProps {
   readonly className?: string;
+  readonly tone?: keyof typeof toneClasses;
   readonly children: React.ReactNode;
 }
 
-export const Kbd = ({ className, children }: KbdProps): React.JSX.Element => (
-  <kbd className={cn(kbdClasses, className)}>{children}</kbd>
+export const Kbd = ({ className, tone = 'page', children }: KbdProps): React.JSX.Element => (
+  <kbd className={cn(kbdClasses, toneClasses[tone], className)}>{children}</kbd>
 );

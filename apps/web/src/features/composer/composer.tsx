@@ -349,15 +349,26 @@ const Inner = ({
       onClick={send}
       aria-disabled={empty}
       aria-label={t('composer.send')}
-      className="inline-flex size-control shrink-0 items-center justify-center rounded-lg bg-accent text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:size-touch"
+      className={cn(
+        'inline-flex h-control shrink-0 items-center justify-center gap-2 rounded-md bg-accent text-label font-medium text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:h-touch',
+        compact ? 'aspect-square' : 'px-3',
+      )}
     >
-      <Icon name="send" />
+      <Icon name="send" size="sm" />
+      {!compact && (
+        <>
+          <span aria-hidden="true" className="h-4 border-l-hairline border-current" />
+          <span aria-hidden="true" className="font-mono text-caption">
+            ↵
+          </span>
+        </>
+      )}
     </button>
   );
 
   return (
     <div className="shrink-0 pb-4 pt-2">
-      <div className="flex w-full max-w-feed flex-col gap-2 px-5">
+      <div className="mx-auto flex w-full max-w-feed flex-col gap-2 px-4">
         <div
           data-composer-card=""
           onDragOver={(event) => {
@@ -375,11 +386,12 @@ const Inner = ({
             if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
           }}
           className={cn(
-            'flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-card transition-colors duration-hover ease-standard focus-within:border-border-strong',
-            focused && 'outline-focus outline-focus-ring outline-offset-focus',
+            'flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
+            // Drawn inward, over the card's own edge: outside it, the gap reads as a second border.
+            focused && 'outline-focus outline-focus-ring -outline-offset-focus',
           )}
         >
-          <div className={cn('flex gap-2 px-4', compact ? 'items-center py-2' : 'pt-3')}>
+          <div className={cn('flex gap-2 px-3', compact ? 'items-center py-2' : 'pt-3')}>
             <textarea
               data-composer=""
               ref={field}

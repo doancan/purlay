@@ -18,10 +18,16 @@ import { Skeleton } from '../ui/skeleton';
 
 export const AppSkeleton = (): React.JSX.Element => (
   <div aria-hidden="true" className="flex h-screen bg-surface-100">
-    <div className="flex w-rail shrink-0 flex-col items-center gap-2 bg-surface-000 pt-8 max-narrow:hidden">
-      <span className="size-avatar-lg rounded-lg bg-surface-200" />
+    <div
+      data-theme="dark"
+      className="flex w-rail shrink-0 flex-col items-center gap-2 border-r-hairline border-nav-border bg-nav-rail pt-8 max-narrow:hidden"
+    >
+      <span className="size-avatar-lg rounded-xl bg-accent" />
     </div>
-    <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-border-subtle bg-surface-000 px-2 pt-8 pb-3">
+    <div
+      data-theme="dark"
+      className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-nav-border bg-nav-surface px-2 pt-8 pb-3"
+    >
       <Skeleton className="mx-3 w-members" />
       <div className="flex flex-col gap-2 px-3">
         <Skeleton />

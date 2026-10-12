@@ -64,7 +64,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const [adding, setAdding] = useState(false);
 
   return (
-    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
+    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
       <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (
@@ -76,7 +76,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             />
           </HeaderTile>
         )}
-        <h1 className="shrink-0 truncate text-heading text-ink">{title}</h1>
+        <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
         {!direct && (
           <>
             <span

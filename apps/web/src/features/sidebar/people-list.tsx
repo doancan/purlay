@@ -56,8 +56,8 @@ export const PeopleList = (): React.JSX.Element => {
   const entries = people(members.data ?? [], channels.data ?? []);
 
   return (
-    <section aria-labelledby="sidebar-people" className="flex flex-col gap-1">
-      <h2 id="sidebar-people" className="pl-2 text-label text-ink-muted">
+    <section aria-labelledby="sidebar-people" className="flex flex-col">
+      <h2 id="sidebar-people" className="px-2 py-1 text-label text-nav-ink-muted">
         {t('sidebar.people')}
       </h2>
       {waiting && !failed ? (
@@ -73,13 +73,13 @@ export const PeopleList = (): React.JSX.Element => {
           }}
         />
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col">
           {entries.map(({ user, direct }) => {
             const label = (
               <>
                 {user.displayName}
                 {user.id === me.id ? (
-                  <span className="font-normal text-ink-muted"> {t('sidebar.you')}</span>
+                  <span className="font-normal"> {t('sidebar.you')}</span>
                 ) : null}
               </>
             );

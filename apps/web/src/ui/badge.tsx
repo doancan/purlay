@@ -10,7 +10,7 @@
  * "2 unread mentions", built by the caller in the right language and plural.
  */
 const badgeClasses =
-  'inline-flex h-badge min-w-badge items-center justify-center rounded-pill bg-accent px-1 text-label text-on-accent';
+  'inline-flex h-badge min-w-badge items-center justify-center rounded-pill bg-accent px-1 font-mono text-caption text-on-accent';
 
 interface BadgeProps {
   readonly count: number;

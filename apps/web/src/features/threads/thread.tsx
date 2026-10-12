@@ -217,7 +217,7 @@ const ThreadView = ({
           onClick={() => {
             threads.toggle(root.id);
           }}
-          className="mt-1 flex h-control w-full items-center gap-2 rounded-lg px-1 text-label text-ink-subtle transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
+          className="mt-2 flex h-control w-full items-center gap-2 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle"
         >
           {resolved ? (
             <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text">

@@ -194,7 +194,7 @@ const FeedList = ({
     <div
       ref={content}
       role="feed"
-      className="max-w-feed px-5"
+      className="mx-auto w-full max-w-feed px-4"
       aria-label={ariaLabel}
       aria-busy={busy}
       onKeyDown={onKeyDown}
@@ -206,9 +206,10 @@ const FeedList = ({
             <div
               key={item.key}
               aria-hidden="true"
-              className="flex items-center gap-3 pt-4 pb-2 pl-2 text-caption font-medium text-ink-subtle"
+              className="flex items-center py-6 text-caption font-medium uppercase text-ink-muted"
             >
-              <span className="shrink-0">{item.label}</span>
+              <span className="flex-1 border-t-hairline border-border-subtle" />
+              <span className="shrink-0 px-3">{item.label}</span>
               <span className="flex-1 border-t-hairline border-border-subtle" />
             </div>
           );
@@ -218,12 +219,10 @@ const FeedList = ({
             <div
               key={item.key}
               data-feed-marker=""
-              className="flex items-center gap-3 px-2 pb-1 pt-3 text-caption font-medium"
+              className="flex items-center gap-3 py-3 text-caption font-semibold text-danger-text"
             >
-              <span className="shrink-0 rounded-pill bg-accent px-2 text-on-accent">
-                {t('message.newMarker')}
-              </span>
-              <span className="flex-1 border-t-hairline border-accent-text" />
+              <span className="flex-1 border-t-hairline border-danger" />
+              <span className="shrink-0">{t('message.newMarker')}</span>
             </div>
           );
         }
@@ -449,7 +448,7 @@ export const MessageFeed = ({
     return (
       <LoadingStatus
         label={t('state.feed.loading')}
-        className="flex w-full max-w-feed flex-1 flex-col gap-4 overflow-hidden px-6 py-4"
+        className="mx-auto flex w-full max-w-feed flex-1 flex-col gap-4 overflow-hidden px-6 py-4"
       >
         {[0, 1, 2, 3].map((row) => (
           <div key={row} className="flex gap-3">
@@ -510,7 +509,7 @@ export const MessageFeed = ({
         {/* The top row is one height whatever it says, so loading above never pushes what is below. */}
         <div
           ref={top}
-          className="flex h-control max-w-feed items-center px-6 text-caption text-ink-muted"
+          className="mx-auto flex h-control w-full max-w-feed items-center justify-center px-6 text-caption text-ink-muted"
         >
           {feed.isFetchNextPageError ? (
             <span className="flex items-center gap-2 text-danger-text">

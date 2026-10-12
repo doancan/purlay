@@ -15,8 +15,8 @@ export const railItemClasses = (current: boolean): string =>
   cn(
     'relative inline-flex size-rail-item shrink-0 items-center justify-center rounded-lg transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:w-touch',
     current
-      ? 'bg-accent-subtle text-accent-text'
-      : 'text-ink-subtle hover:bg-surface-200 hover:text-ink',
+      ? 'bg-nav-hover text-nav-ink'
+      : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
   );
 
 interface RailItemContentProps {
@@ -41,7 +41,7 @@ export const RailItemContent = ({
     <Icon name={glyph} size="lg" />
     <VisuallyHidden>{label}</VisuallyHidden>
     {signal?.kind === 'count' ? (
-      <span className="absolute top-0 right-0 inline-flex h-badge min-w-badge items-center justify-center rounded-pill border-marker border-surface-000 bg-surface-200 px-1 font-mono text-caption text-ink-muted">
+      <span className="absolute top-0 right-0 inline-flex h-badge min-w-badge items-center justify-center rounded-pill border-marker border-nav-rail bg-nav-hover px-1 font-mono text-caption text-nav-ink">
         {signal.text}
       </span>
     ) : null}
@@ -49,7 +49,7 @@ export const RailItemContent = ({
       <>
         <span
           aria-hidden="true"
-          className="absolute top-2 right-2 size-dot rounded-pill border-marker border-surface-000 bg-accent-text"
+          className="absolute top-2 right-2 size-dot rounded-pill border-hairline border-nav-rail bg-accent"
         />
         <VisuallyHidden> {signal.words}</VisuallyHidden>
       </>

@@ -31,13 +31,14 @@ export const ChannelList = (): React.JSX.Element => {
   const mine = joinedChannels(channels.data ?? []);
 
   return (
-    <nav aria-label={t('sidebar.channels')} className="flex flex-col gap-1">
-      <div className="flex items-center justify-between pl-2">
-        <h2 className="text-label text-ink-muted">{t('sidebar.channels')}</h2>
-        <div className="flex">
+    <nav aria-label={t('sidebar.channels')} className="flex flex-col">
+      <div className="group flex items-center justify-between px-2 py-1">
+        <h2 className="text-label text-nav-ink-muted">{t('sidebar.channels')}</h2>
+        <div className="flex opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:opacity-100">
           <IconButton
             label={t('sidebar.browse')}
             glyph="search"
+            size="nav"
             onClick={() => {
               setBrowsing(true);
             }}
@@ -45,6 +46,7 @@ export const ChannelList = (): React.JSX.Element => {
           <IconButton
             label={t('sidebar.newChannel')}
             glyph="add"
+            size="nav"
             onClick={() => {
               setCreating(true);
             }}
@@ -77,7 +79,7 @@ export const ChannelList = (): React.JSX.Element => {
           }
         />
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col">
           {mine.map((channel) => (
             <li key={channel.id}>
               <ChannelRow

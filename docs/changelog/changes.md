@@ -6,6 +6,22 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Design — 2026-10-12: a conversation with two edges (D-119)
+
+- Messages sit in bubbles: everyone else's on the left on `surface-200` with their avatar, your own on
+  the right on `accent-subtle` with neither avatar nor name. A mention of you marks the bubble's edge
+  instead of tinting the row, and the row no longer tints under the pointer.
+- The avatar and the name stay on a group's first message, so nothing above the reader moves when a
+  group grows. The channel's feed and composer are centred.
+
+### Design — 2026-10-12: the Superdesign v10 palette (D-118)
+
+- Navigation takes its own dark navy tone in both themes (`nav-*`), the accent is blue, the focus ring
+  is seen on both grounds, and the composer gets `shadow-raised`. Every new pair is computed in both
+  themes.
+- The rail and the sidebar are drawn on navy in both themes; the channel's rows, day, unread marker,
+  code block, reactions and composer follow the draft; the composer's focus ring sits on its edge.
+
 ### Quality — 2026-10-13: the browser suite runs green on Safari's or Firefox's engine, by choice
 
 - `PURLAY_E2E_ENGINES=webkit` or `firefox` adds that engine to a run (not to CI): WebKit 124 passed,

@@ -15,7 +15,7 @@ import { cn } from './cn';
 import { Tooltip } from './tooltip';
 
 const iconButtonClasses =
-  'inline-flex shrink-0 items-center justify-center transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-muted';
+  'inline-flex shrink-0 items-center justify-center transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:text-ink-muted';
 
 /**
  * Two sizes. A control sits in a row with other controls and is as tall as they are; a rail
@@ -23,8 +23,11 @@ const iconButtonClasses =
  * inward (D-110).
  */
 const sizeClasses = {
-  control: 'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted',
-  rail: 'size-rail-item rounded-lg text-ink-subtle max-narrow:h-touch max-narrow:w-touch',
+  control:
+    'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink',
+  rail: 'size-rail-item rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink max-narrow:h-touch max-narrow:w-touch',
+  /** A control in the sidebar, on the navigation's tone (D-118). */
+  nav: 'h-control max-narrow:h-touch aspect-square rounded-md text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
 } as const;
 
 export interface IconButtonProps extends Omit<

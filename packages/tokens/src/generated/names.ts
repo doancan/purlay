@@ -20,6 +20,12 @@ export const colorTokens = [
   'ink',
   'ink-muted',
   'ink-subtle',
+  'nav-rail',
+  'nav-surface',
+  'nav-hover',
+  'nav-border',
+  'nav-ink',
+  'nav-ink-muted',
   'accent',
   'accent-hover',
   'accent-text',
@@ -74,6 +80,7 @@ export const radiusTokens = [
 
 export const shadowTokens = [
   'shadow-card',
+  'shadow-raised',
   'shadow-float',
 ] as const;
 
