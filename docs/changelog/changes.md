@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-13: drawing a channel no longer spends what a person sends with (D-81)
+
+- GitHub cards and external pictures were charged to the per-person write budget, and a channel
+  asks for one per link it shows: a page of links went over the burst, cards were refused `429`, and
+  so would the next message have been. They now have a budget of their own (`COSTLY_READ_BUDGET`,
+  provisional under O-4).
+
 ### Fix — 2026-10-13: a message sent while the API was down sends when it is back
 
 - Found by crashing the API under two connected browsers on the production stack: the HTTP door

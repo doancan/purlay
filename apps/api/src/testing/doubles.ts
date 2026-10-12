@@ -130,7 +130,7 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   // Tests seed rows over HTTP by the hundred and share a clock that never moves,
   // so the production budget would refuse them. The tests of the limits say so
   // explicitly, and `rate-limit.test.ts` pins that the default is the real one.
-  rateBudgets: { auth: ROOMY, writes: ROOMY },
+  rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
   storage: aStoreThatMustNotBeTouched(),
   ...overrides,
 });

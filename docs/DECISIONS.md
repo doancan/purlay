@@ -2872,6 +2872,16 @@ performs it does not exist yet. For a cloud this joins the data map D-28 promise
 
 **Reversibility:** free. Nothing is stored but the address, which can be nulled.
 
+**Amended 2026-10-13 — reads that cost the server have a bucket of their own.** A card (`POST
+/api/integrations/github/unfurl`) and an external image (`GET /api/images`) cost the server a call on
+the reader's behalf, so they are charged per user. They were charged to the *writes* bucket, the one a
+person sends with, and drawing a channel asks for one per link it shows. In the browser suite, a page
+of GitHub links went over the burst: the unfurl was answered `429`, and the person's next message
+would have been too. They are now charged to `COSTLY_READ_BUDGET`, per user, sixty at once and then
+ten a second. **Provisional (O-4)**, like every number here. **Rejected — not charging them:** one
+person could then spend the node's outbound calls. **Rejected — a bigger write burst:** it would let
+a person send sixty messages at once to make room for drawing.
+
 ---
 
 ### D-82. The client notices a dead socket, stops retrying a refusal, ignores what it does not know, and does not trust a cursor past an unfinished replay
