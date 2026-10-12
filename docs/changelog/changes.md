@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the browser suite run on Safari's engine (`docs/spikes/cross-browser.md`)
+
+- WebKit passes 124 of 132 browser tests; the 8 failures are the engine's, not the product's. Firefox
+  would not start in this environment and is still to be run.
+
 ### Security — 2026-10-13: three ways one member could spend what everyone shares
 
 - Found by an independent review of the budget changes. `/api/images/`, with a trailing slash, reached
