@@ -51,6 +51,41 @@ const project = (definition: (typeof projects)[number], index: number): Project 
   },
 });
 
+/**
+ * Engines beyond Chromium, opt in: `PURLAY_E2E_ENGINES=webkit,firefox bun run test:e2e`. Not in CI,
+ * and so not a second browser tool (CONTRIBUTING §1.12): a way for anyone to see the suite on Safari's
+ * or Firefox's engine. Light, wide, and with no screenshots — a baseline is one engine's. What each
+ * engine cannot do as the suite asks is skipped by name in the test, with why
+ * (`docs/spikes/cross-browser.md`). A name that is not one of these refuses to run, rather than
+ * running Chromium alone and looking like it ran the rest.
+ */
+const ENGINES = { webkit: 'Desktop Safari', firefox: 'Desktop Firefox' } as const;
+const isEngine = (name: string): name is keyof typeof ENGINES => name in ENGINES;
+const engines = (process.env['PURLAY_E2E_ENGINES'] ?? '')
+  .split(',')
+  .map((name) => name.trim())
+  .filter((name) => name !== '')
+  .map((name) => {
+    if (!isEngine(name)) {
+      throw new Error(
+        `PURLAY_E2E_ENGINES names ${name}; it takes ${Object.keys(ENGINES).join(', ')}`,
+      );
+    }
+    return name;
+  });
+const servers = [...projects.map((definition) => definition.name), ...engines];
+
+const engineProject = (engine: keyof typeof ENGINES, index: number): Project => ({
+  name: engine,
+  ignoreSnapshots: true,
+  use: {
+    ...devices[ENGINES[engine]],
+    colorScheme: 'light',
+    viewport: { width: 1440, height: 900 },
+    baseURL: `http://localhost:${String(portOf(index))}`,
+  },
+});
+
 export default defineConfig({
   testDir: './e2e',
   // Not `.spec.ts`: `bun test` discovers that name and would try to run Playwright's tests.
@@ -81,10 +116,13 @@ export default defineConfig({
     timeout: 10_000,
     toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: 'disabled' },
   },
-  projects: projects.map(project),
+  projects: [
+    ...projects.map(project),
+    ...engines.map((engine, index) => engineProject(engine, projects.length + index)),
+  ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
-  webServer: projects.map((definition, index) => ({
-    command: `bun run scripts/demo.ts ${index === 0 ? '' : '--no-build '}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${definition.name}.json`,
+  webServer: servers.map((name, index) => ({
+    command: `bun run scripts/demo.ts ${index === 0 ? '' : '--no-build '}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
     url: `http://localhost:${String(portOf(index))}/health`,

@@ -77,3 +77,10 @@ export default defineConfig({
   })),
 });
 ```
+
+## Since: one command (2026-10-13)
+
+`PURLAY_E2E_ENGINES=webkit bun run test:e2e -- --project webkit` (or `firefox`) runs the suite on that
+engine, light and wide, with screenshots ignored; each limit in the tables above is a `test.skip` that
+names it. Run so: **WebKit 124 passed, 8 skipped; Firefox (in the Linux container) 126 passed, 6
+skipped — green on both.** Chromium's projects skip nothing.

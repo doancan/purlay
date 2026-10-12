@@ -176,6 +176,10 @@ test.describe('focus', () => {
     signIn,
     room,
   }) => {
+    test.skip(
+      ['webkit'].includes(test.info().project.name),
+      "macOS WebKit's Tab moves between form controls only unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
+    );
     const made = await room({ members: ['dogancan', 'alice'] });
     await signIn();
     await page.goto(made.path);
@@ -198,6 +202,10 @@ test.describe('focus', () => {
     signIn,
     room,
   }) => {
+    test.skip(
+      ['webkit', 'firefox'].includes(test.info().project.name),
+      "past the last element Firefox under Playwright keeps focus on it rather than going round, and macOS WebKit's Tab skips links (docs/spikes/cross-browser.md)",
+    );
     const made = await room({
       members: ['dogancan', 'alice'],
       messages: [{ by: 'carol', text: 'something to land on' }],

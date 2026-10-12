@@ -251,6 +251,10 @@ test.describe('long scrolls and memory (measured and reported)', () => {
     context,
   }, info) => {
     test.skip(
+      ['webkit', 'firefox'].includes(test.info().project.name),
+      'the heap is read through a CDP session, which only Chromium has',
+    );
+    test.skip(
       isNarrow(page),
       "switches by the sidebar's links, which at this width are in an overlay behind a toggle: the switch there is the overlay's, measured by narrow.e2e",
     );
