@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: private channels, and any member brings people in (D-104)
+
+- A channel can be created `private`: seen by its members only. `POST /api/channels/:channelId/members`
+  lets a member bring in somebody from the workspace, who is told with `CHANNEL_ADDED` and sees the
+  channel at once. Not in the channel, or a direct message, is `403`; somebody not in the workspace is
+  `404`; somebody already in it is `204` again and told nothing.
+- A direct message and a channel member are checked as a person of the workspace by one function.
+
 ### Feature — 2026-10-12: a message can be deleted, and its thread stays (D-103 §7, D-9)
 
 - `DELETE /api/messages/:messageId`: the author, or a workspace owner or admin. The content becomes an

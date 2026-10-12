@@ -93,8 +93,17 @@ export type WorkspaceMember = Static<typeof WorkspaceMember>;
 export const CreateChannelRequest = FromClient({
   name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
   topic: Type.Optional(Type.String({ format: 'plain-text' })),
+  /** Public unless asked: a private channel is seen only by its members (D-104). */
+  type: Type.Optional(Type.Union([Type.Literal('public'), Type.Literal('private')])),
 });
 export type CreateChannelRequest = Static<typeof CreateChannelRequest>;
+
+/**
+ * `POST /api/channels/:channelId/members` — a member of the channel brings in somebody from the
+ * workspace (D-104). Adding somebody already in it is the same answer.
+ */
+export const AddChannelMemberRequest = FromClient({ userId: Uuid });
+export type AddChannelMemberRequest = Static<typeof AddChannelMemberRequest>;
 
 // ── Messages ────────────────────────────────────────────────────────────────
 

@@ -17,6 +17,8 @@ import {
   Page,
   ReactionsResponse,
   ReadChannelRequest,
+  AddChannelMemberRequest,
+  CreateChannelRequest,
   EditMessageRequest,
   SendMessageRequest,
   ThreadPage,
@@ -152,6 +154,19 @@ describe('http shapes', () => {
     expect(Value.Check(SendMessageRequest, { id, content: 'hi' })).toBe(true);
     expect(Value.Check(SendMessageRequest, { content: 'hi' })).toBe(false);
     expect(Value.Check(SendMessageRequest, { id: 'not-a-uuid', content: 'hi' })).toBe(false);
+  });
+
+  test('a channel is public unless asked to be private, and never a direct message', () => {
+    expect(Value.Check(CreateChannelRequest, { name: 'general' })).toBe(true);
+    expect(Value.Check(CreateChannelRequest, { name: 'leads', type: 'private' })).toBe(true);
+    expect(Value.Check(CreateChannelRequest, { name: 'x', type: 'public' })).toBe(true);
+    expect(Value.Check(CreateChannelRequest, { name: 'x', type: 'direct_message' })).toBe(false);
+  });
+
+  test('adding to a channel names one person and nothing else', () => {
+    expect(Value.Check(AddChannelMemberRequest, { userId: id })).toBe(true);
+    expect(Value.Check(AddChannelMemberRequest, { userId: 'bob' })).toBe(false);
+    expect(Value.Check(AddChannelMemberRequest, { userId: id, role: 'admin' })).toBe(false);
   });
 
   test('an edit is new content and nothing else: not the id, not a parent', () => {

@@ -143,10 +143,12 @@ export const channelFor = async (
 export interface NewChannel {
   readonly name: string;
   readonly topic?: string | undefined;
+  /** Public unless asked: a private channel is seen by its members only (D-104). */
+  readonly type?: 'public' | 'private' | undefined;
 }
 
 /**
- * Creates a public channel and puts its creator in it.
+ * Creates a channel — public, or private when asked — and puts its creator in it.
  *
  * The name is checked before the insert so a duplicate is a `409` a person can
  * act on rather than a unique-violation surfacing as a `500`. The index is still
@@ -180,7 +182,7 @@ export const createChannel = async (
       workspace_id: context.workspaceId,
       name: input.name,
       ...(input.topic === undefined ? {} : { topic: input.topic }),
-      type: 'public',
+      type: input.type ?? 'public',
       created_by: context.userId,
     })
     .returning('id')

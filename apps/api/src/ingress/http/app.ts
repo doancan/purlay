@@ -58,6 +58,7 @@ import {
   openDirectMessageWith,
   readChannel,
   readUpTo,
+  addChannelMember,
 } from './channels';
 import {
   postMessage,
@@ -312,6 +313,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
+    .post('/api/channels/:channelId/members', async ({ request, params, body, set }) => {
+      await addChannelMember(
+        { ...dependencies, bus: sockets.bus },
+        request,
+        params.channelId,
+        body,
+      );
+      set.status = 204;
+      return null;
+    })
     .post(
       '/api/channels/:channelId/join',
       async ({ request, params }) =>

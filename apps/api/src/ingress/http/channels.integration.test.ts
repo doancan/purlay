@@ -12,6 +12,9 @@ import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import type { ServerFrame } from '@purlay/types';
+import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
+import { addChannelMember } from './channels';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -200,6 +203,102 @@ describe('integration: channels', () => {
         const response = await call(db, method, path, { ...(body === undefined ? {} : { body }) });
         expect(response.status).toBe(401);
       }
+    });
+  });
+});
+
+describe('integration: private channels over HTTP', () => {
+  /** Alice's workspace with Bob in it, and a private channel of Alice's. */
+  const aPrivateChannel = async (
+    db: Executor,
+  ): Promise<{ alice: SignedInUser; bob: SignedInUser; channelId: string }> => {
+    const alice = await signedIn(db, 'prv-alice');
+    const bob = await signedIn(db, 'prv-bob');
+    const workspaceId = await aWorkspace(db, alice.cookie, 'prv-acme');
+    await db
+      .insertInto('workspace_members')
+      .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member' })
+      .execute();
+    const created = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, {
+      cookie: alice.cookie,
+      body: { name: 'leads', type: 'private' },
+    });
+    expect(created.status).toBe(201);
+    const channel = (await created.json()) as { id: string; type: string };
+    expect(channel.type).toBe('private');
+    return { alice, bob, channelId: channel.id };
+  };
+
+  test('nobody outside it sees it, until a member brings them in', async () => {
+    await withRollback(async (db) => {
+      const { alice, bob, channelId } = await aPrivateChannel(db);
+      expect(
+        (await call(db, 'GET', `/api/channels/${channelId}`, { cookie: bob.cookie })).status,
+      ).toBe(404);
+      const added = await call(db, 'POST', `/api/channels/${channelId}/members`, {
+        cookie: alice.cookie,
+        body: { userId: bob.userId },
+      });
+      expect(added.status).toBe(204);
+      expect(
+        (await call(db, 'GET', `/api/channels/${channelId}`, { cookie: bob.cookie })).status,
+      ).toBe(200);
+    });
+  });
+
+  test('a type that is not public or private is refused', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'prv-carol');
+      const workspaceId = await aWorkspace(db, alice.cookie, 'prv-other');
+      const response = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, {
+        cookie: alice.cookie,
+        body: { name: 'x', type: 'direct_message' },
+      });
+      expect(response.status).toBe(400);
+    });
+  });
+
+  test('a person not in the workspace is 404 USER_NOT_FOUND; a body naming nobody is 400', async () => {
+    await withRollback(async (db) => {
+      const { alice, channelId } = await aPrivateChannel(db);
+      const stranger = await signedIn(db, 'prv-stranger');
+      const unknown = await call(db, 'POST', `/api/channels/${channelId}/members`, {
+        cookie: alice.cookie,
+        body: { userId: stranger.userId },
+      });
+      expect(unknown.status).toBe(404);
+      expect(await unknown.json()).toMatchObject({ error: { code: 'USER_NOT_FOUND' } });
+      const malformed = await call(db, 'POST', `/api/channels/${channelId}/members`, {
+        cookie: alice.cookie,
+        body: { userId: 'bob' },
+      });
+      expect(malformed.status).toBe(400);
+    });
+  });
+
+  test('the person brought in is told on their own topic, once', async () => {
+    await withRollback(async (db) => {
+      const { alice, bob, channelId } = await aPrivateChannel(db);
+      const topics: string[] = [];
+      const frames: ServerFrame[] = [];
+      const bus: EventBus = {
+        publish: (topic, frame): Promise<void> => {
+          topics.push(topic);
+          frames.push(frame);
+          return Promise.resolve();
+        },
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      };
+      const request = (): Request =>
+        new Request(`${ORIGIN}/`, { headers: { cookie: alice.cookie } });
+      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      await addChannelMember(dependencies, request(), channelId, { userId: bob.userId });
+      await addChannelMember(dependencies, request(), channelId, { userId: bob.userId });
+      expect(topics).toEqual([userTopic(bob.userId)]);
+      const [frame] = frames;
+      expect(frame?.event === 'CHANNEL_ADDED' ? frame.data.id : null).toBe(channelId);
     });
   });
 });
