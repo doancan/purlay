@@ -32,6 +32,8 @@ const aNode = (
   readonly heard: (socketId: string) => ServerFrame[];
   readonly listen: (channelId: string, socketId: string) => void;
   readonly clock: ReturnType<typeof aMovableClock>;
+  /** How many typing windows the registry holds. */
+  readonly held: () => number;
   readonly route: (
     identity: { userId: string; sessionId?: string },
     raw: unknown,
@@ -52,6 +54,7 @@ const aNode = (
       bus.subscribe(channelTopic(channelId), socketId);
     },
     clock,
+    held: presence.held,
     route: async (identity, raw) =>
       await routeFrame(
         {
@@ -144,6 +147,25 @@ describe('integration: typing', () => {
         },
       ]);
       expect(node.heard('ben-socket')).toEqual([]);
+      // Refused before the registry heard of it: an id nobody may see takes no place in memory.
+      expect(node.held()).toBe(0);
+    });
+  });
+
+  test('a channel in another workspace is refused the same way, public or not', async () => {
+    await withRollback(async (db) => {
+      const theirs = await aRoom(db, ['ty-dan5']);
+      const ours = await aRoom(db, ['ty-eve5']);
+      const eve = ours.members['ty-eve5'];
+      if (eve === undefined) throw new Error('no eve');
+      const node = aNode(db);
+      node.listen(theirs.channelId, 'dan-socket');
+
+      expect(await node.route(eve, typing(theirs.channelId))).toMatchObject([
+        { event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } },
+      ]);
+      expect(node.heard('dan-socket')).toEqual([]);
+      expect(node.held()).toBe(0);
     });
   });
 

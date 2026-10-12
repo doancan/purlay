@@ -1944,4 +1944,13 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/realtime/engine.test.ts'],
   },
+  {
+    id: 'typing-remembered-before-it-is-allowed',
+    why: 'any channel id, seen or not, takes a place in the typing registry before it is refused',
+    file: 'apps/api/src/realtime/router.ts',
+    find: "      case 'TYPING': {\n",
+    replace:
+      "      case 'TYPING': {\n        dependencies.presence.startTyping(parsed.payload.channelId, identity.userId, TYPING_TTL_MS);\n",
+    tests: ['apps/api/src/realtime/typing.integration.test.ts'],
+  },
 ];
