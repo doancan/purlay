@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the connection-bar test closes the sockets before going offline (#347)
+
+- Its own diagnostic (#460) named the cause on its first firing: `ws://…/ws 2`, a socket left
+  CLOSING because it was closed after the browser went offline, so its closing handshake never
+  finished and the page never heard it close. The test now closes, waits for those sockets to be
+  CLOSED, and only then goes offline. The attachment test waits for its picture to be decoded rather
+  than only laid out.
+
 ### Fix — 2026-10-13: drawing a channel no longer spends what a person sends with (D-81)
 
 - GitHub cards and external pictures were charged to the per-person write budget, and a channel

@@ -50,8 +50,10 @@ test.describe('an attachment', () => {
     await expect(image).toBeVisible();
     // Drawn from the API's own re-encoding, never a public address.
     expect(await image.getAttribute('src')).toMatch(/^\/api\/attachments\/[0-9a-f-]+\/thumbnail$/);
-    expect(
-      await image.evaluate((element: HTMLImageElement) => element.naturalWidth),
-    ).toBeGreaterThan(0);
+    // Decoded, not only laid out: visible is true of an image whose bytes are still on their way,
+    // and read at once its width was sometimes still 0 under the full suite's load (#347).
+    await expect
+      .poll(async () => await image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+      .toBeGreaterThan(0);
   });
 });
