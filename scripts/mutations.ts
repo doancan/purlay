@@ -2164,4 +2164,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '      if (query.queryKey.length > 0) continue;\n',
     tests: ['apps/web/src/realtime/engine.test.ts'],
   },
+  {
+    id: 'moderation-off-the-trail',
+    why: "an admin deleting somebody else's message leaves no trace of who did it",
+    file: 'apps/api/src/modules/messages/delete.ts',
+    find: '  if (row.sender_id !== userId) {\n    await recordAudit(',
+    replace: '  if (row.sender_id === "nobody") {\n    await recordAudit(',
+    tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
+  },
+  {
+    id: 'own-delete-on-the-trail',
+    why: 'every person taking back their own words fills the administrative trail',
+    file: 'apps/api/src/modules/messages/delete.ts',
+    find: '  if (row.sender_id !== userId) {\n    await recordAudit(',
+    replace: '  if (row.sender_id !== "nobody") {\n    await recordAudit(',
+    tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
+  },
 ];

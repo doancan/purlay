@@ -621,6 +621,14 @@ Recorded: sign-in and sign-out, session revocation, role change, member added or
 workspace settings change, channel creation and deletion, integration credential set or removed,
 retention purge, export, and account erasure.
 
+**Amended 2026-10-12 (#69).** Also recorded: an invitation link made or revoked, a person joining by
+one (D-115), and **a message deleted by somebody other than its author** — moderation, with the
+message's id and its author's, never what it said. An author taking back their own words is not an
+administrative act and is not recorded. Every role-gated write in the permission table
+(`testing/permissions.ts`) is held to exactly one row by a test that reads the same table, so an
+administrative endpoint added there cannot ship off the trail. Sign-in, sign-out and session
+revocation, which have no workspace, are #397.
+
 **Not recorded: message content, message sends, reads, or anything already recoverable from the
 domain tables.** An audit log that duplicates the message table is a second copy of the most
 sensitive data in the product, and `ARCHITECTURE.md` §10 already forbids logging content. The

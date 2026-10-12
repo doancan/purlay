@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: every administrative write is on the trail, and a test holds it (D-26, #69)
+
+- An owner or an admin deleting somebody else's message is recorded — who, which message and whose,
+  never its words. A test walks the permission table and requires exactly one trail row for every
+  role-gated write and none for a read.
+
 ### Fix — 2026-10-12: a feed being read when its channel was subscribed is read again (#347)
 
 - The subscription's answer marked a channel's feed and the open threads to be read again only if

@@ -119,8 +119,24 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/integrations/github`, as, {
       token: 'ghp_permission',
     }),
-  'remove the GitHub token': async (world, as) =>
-    await call(world, 'DELETE', `/api/workspaces/${world.workspaceId}/integrations/github`, as),
+  'remove the GitHub token': async (world, as) => {
+    // Set by the owner first, so there is one to remove whoever tries.
+    await call(
+      world,
+      'PUT',
+      `/api/workspaces/${world.workspaceId}/integrations/github`,
+      world.people.owner,
+      {
+        token: 'ghp_permission',
+      },
+    );
+    return await call(
+      world,
+      'DELETE',
+      `/api/workspaces/${world.workspaceId}/integrations/github`,
+      as,
+    );
+  },
   'make an invitation link': async (world, as) =>
     await call(world, 'POST', `/api/workspaces/${world.workspaceId}/invitations`, as),
   'list the invitation links': async (world, as) =>
@@ -171,5 +187,44 @@ describe('integration: every role-gated action, as every role', () => {
         });
       });
     }
+  }
+});
+
+/**
+ * D-26, I-9 as a mechanism (#69): every role-gated action that changes something writes exactly one
+ * row of the workspace's trail — taken from the same table, so an administrative endpoint added
+ * there is held to it without anybody remembering. A read writes none.
+ */
+describe('integration: every administrative write is on the trail, once', () => {
+  const rows = async (db: Executor, workspaceId: string): Promise<number> =>
+    (
+      await db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('workspace_id', '=', workspaceId)
+        .execute()
+    ).length;
+
+  /** Rows the set-up of a case writes before its action (a link made, a token set), not its own. */
+  const SET_UP_ROWS: Readonly<Record<string, number>> = {
+    'revoke an invitation link': 1,
+    'remove the GitHub token': 1,
+  };
+
+  for (const [name, entry] of Object.entries(PERMISSIONS)) {
+    const reads = entry.endpoint.startsWith('GET ');
+    test(`${name}: ${reads ? 'no row' : 'one row'}`, async () => {
+      await withRollback(async (db) => {
+        const world = await aWorld(db);
+        const act = ACTIONS[name];
+        if (act === undefined) throw new Error(`no request for ${name}`);
+        const before = await rows(db, world.workspaceId);
+        const response = await act(world, world.people.owner);
+        expect(response.ok).toBe(true);
+        // What an action does on the way (making a link to revoke it) is counted by the action's own case.
+        const setUp = SET_UP_ROWS[name] ?? 0;
+        expect((await rows(db, world.workspaceId)) - before - setUp).toBe(reads ? 0 : 1);
+      });
+    });
   }
 });
