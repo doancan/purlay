@@ -231,6 +231,35 @@ into a **new** database and a **new** bucket (`purlay_restore`, `<S3_BUCKET>-res
 nothing live; prove it with `scripts/compare-databases.sh` (D-95). To recover over the live
 database, stop the API and run `scripts/restore.sh <dir> --database purlay --replace --bucket live`. `--no-bucket` restores the database alone, which is what rolling back an upgrade needs (attachments are only ever added).
 
+**Backups run from the host's cron**, not from the stack: `backup.sh` drives `docker compose` from
+outside, which no container of the stack can do (D-30's scheduler runs application jobs). These two
+lines, with the deployment in `/srv/purlay` and backups kept for fourteen days, were run as written
+under cron's bare environment (`env -i`, `PATH=/usr/bin:/bin`) against the production stack:
+
+```
+# crontab -e, as the user who owns /srv/purlay and may run docker
+PATH=/usr/bin:/bin
+30 2 * * * cd /srv/purlay && scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1
+45 2 * * * find /srv/purlay-backups -mindepth 1 -maxdepth 1 -type d -name 'purlay-*' -mtime +14 -exec rm -rf {} +
+```
+
+`backup.sh` exits non-zero and leaves nothing that looks like a backup when it fails, so the log is
+where a failed night shows; copying the directory off the host, and encrypting it there, is the
+operator's (`docs/spikes/backup-restore.md`). A backup nobody restored is a belief (D-44). Before the
+team moves in, restore the newest whole — `scripts/restore.sh <dir>`, database and bucket — and judge
+it with `scripts/compare-databases.sh purlay purlay_restore`. Then monthly, the database alone, which
+repeats cleanly (rehearsed twice in a row):
+
+```
+scripts/restore.sh /srv/purlay-backups/<newest> --no-bucket
+scripts/compare-databases.sh purlay purlay_restore      # must say "identical"
+docker compose -f docker-compose.production.yml --env-file production.env \
+  exec -T postgres dropdb -U purlay purlay_restore
+```
+
+Without the last line the next rehearsal refuses: `purlay_restore` already has tables, and a restore
+never overwrites what it did not make unless told `--replace`.
+
 **Upgrading, rolling back and keeping `ENCRYPTION_KEY`:** `ARCHITECTURE.md` §11, "Upgrading and rolling back".
 
 **Who can read a backup:** only the user who ran `backup.sh` (directory `0700`, files `0600`,

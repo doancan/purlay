@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Operations — 2026-10-13: the nightly backup is two cron lines, run as written
+
+- `CONFIG.md` gives the host's crontab for a nightly `backup.sh` and a fourteen-day retention, both run
+  under cron's bare environment against the production stack, and the monthly restore that proves
+  them. The spike had said a cron line was the documentation; none had been written.
+
 ### Quality — 2026-10-13: the connection-bar test closes the sockets before going offline (#347)
 
 - Its own diagnostic (#460) named the cause on its first firing: `ws://…/ws 2`, a socket left
