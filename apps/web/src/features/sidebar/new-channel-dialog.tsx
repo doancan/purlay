@@ -16,6 +16,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
+import { Icon } from '../../components/icon';
 import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useWorkspace } from '../shell/workspace';
@@ -42,6 +43,8 @@ export const NewChannelDialog = ({
   const formId = useId();
   const [name, setName] = useState('');
   const [topic, setTopic] = useState('');
+  const [secret, setSecret] = useState(false);
+  const privateHint = useId();
   const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -49,6 +52,7 @@ export const NewChannelDialog = ({
     if (!next) {
       setName('');
       setTopic('');
+      setSecret(false);
       setProblem(null);
       setBusy(false);
     }
@@ -68,6 +72,7 @@ export const NewChannelDialog = ({
       const channel = await createChannel(workspace.id, {
         name: wanted,
         ...(topic.trim() === '' ? {} : { topic: topic.trim() }),
+        ...(secret ? { type: 'private' as const } : {}),
       });
       change(false);
       navigate(href('channel', { slug: workspace.slug, channelId: channel.id }));
@@ -134,6 +139,26 @@ export const NewChannelDialog = ({
             setTopic(event.target.value);
           }}
         />
+        <label className="flex items-start gap-2 text-body text-ink">
+          <input
+            type="checkbox"
+            checked={secret}
+            aria-describedby={privateHint}
+            onChange={(event) => {
+              setSecret(event.target.checked);
+            }}
+            className="mt-1 size-icon-sm"
+          />
+          <span className="flex flex-col">
+            <span className="flex items-center gap-1">
+              <Icon name="private-channel" size="sm" />
+              {t('newChannel.private')}
+            </span>
+            <span id={privateHint} className="text-caption text-ink-muted">
+              {t('newChannel.privateHint')}
+            </span>
+          </span>
+        </label>
         {problem?.field === 'form' && (
           <p role="alert" className="text-label text-danger-text">
             {problem.message}

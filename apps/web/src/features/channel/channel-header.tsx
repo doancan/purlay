@@ -8,6 +8,7 @@
  * the same number the sidebar shows and comes from the same cache entry
  * (`use-open-count.ts`), so the two cannot differ.
  */
+import { useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -18,6 +19,8 @@ import { useOpenCount } from '../questions/use-open-count';
 import { NavToggle } from '../shell/nav';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { IconButton } from '../../ui/icon-button';
+import { AddPeopleDialog } from './add-people';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -59,6 +62,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const title = useChannelTitle(channel);
   const open = useOpenCount(workspace.id);
   const direct = channel.type === 'direct_message';
+  // A member brings people in (D-104); a direct message is between its two people.
+  const canAdd = !direct && channel.state !== null;
+  const [adding, setAdding] = useState(false);
 
   return (
     <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
@@ -68,7 +74,10 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           <Avatar name={channel.peer.displayName} username={channel.peer.username} size="lg" />
         ) : (
           <HeaderTile>
-            <Icon name={direct ? 'person' : 'channel'} size="lg" />
+            <Icon
+              name={direct ? 'person' : channel.type === 'private' ? 'private-channel' : 'channel'}
+              size="lg"
+            />
           </HeaderTile>
         )}
         <div className="flex min-w-0 flex-col">
@@ -103,6 +112,18 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           )}
         </Link>
       </nav>
+      {canAdd && (
+        <>
+          <IconButton
+            label={t('people.add')}
+            glyph="add"
+            onClick={() => {
+              setAdding(true);
+            }}
+          />
+          <AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
+        </>
+      )}
     </header>
   );
 };

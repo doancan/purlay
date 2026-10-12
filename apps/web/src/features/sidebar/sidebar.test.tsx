@@ -511,6 +511,18 @@ describe('a new channel', () => {
     expect(calls).toEqual([{ name: 'platform' }]);
   });
 
+  test('made private when asked, and said so in words beside the box', async () => {
+    const { calls, api } = asked();
+    const view = await open(api);
+    await fill(view, 'leads');
+    const box = view.getByRole('checkbox', { name: /Private/ });
+    expect(box.getAttribute('aria-describedby')).not.toBeNull();
+    await person().click(box);
+    await person().click(view.getByRole('button', { name: 'Create channel' }));
+    await settle();
+    expect(calls).toEqual([{ name: 'leads', type: 'private' }]);
+  });
+
   test('a name that breaks the rule is refused before the server hears, in the field', async () => {
     const { calls, api } = asked();
     const view = await open(api);

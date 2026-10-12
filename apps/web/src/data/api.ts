@@ -46,6 +46,8 @@ export interface Api {
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
+  /** Brings somebody from the workspace into the channel (D-104); they are told by the server. */
+  readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
 
@@ -112,6 +114,8 @@ export const createApi = (http: Http): Api => {
         Channel,
         options({ body: input }),
       ),
+    addChannelMember: (channelId, userId) =>
+      http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
     joinChannel: (channelId) =>
       http.request('POST', `/api/channels/${at(channelId)}/join`, Channel, options()),
     openDirectMessage: (workspaceId, userId) =>

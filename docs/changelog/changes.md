@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: private channels in the client, and bringing people in (D-104)
+
+- The new-channel dialog offers Private, said in words beside the box; a private channel's header
+  carries the lock.
+- A channel's header offers Add people to its members: the workspace's people, narrowed as you type,
+  each with Add. Loading, failure (with Retry), nobody else and nobody by that name are each said in
+  words. The person added sees the channel in their sidebar at once.
+
 ### Feature — 2026-10-12: delete your own message, after being asked (D-103 §7)
 
 - Your own message's menu has Delete, which asks first. The message is its tombstone at once — or gone,

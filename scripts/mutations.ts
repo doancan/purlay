@@ -835,4 +835,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '            confirm();',
     tests: ['apps/web/src/features/messages/editing.test.tsx'],
   },
+  {
+    id: 'add-people-offered-in-a-direct-message',
+    why: 'a third person is offered a place in a conversation between two',
+    file: 'apps/web/src/features/channel/channel-header.tsx',
+    find: 'const canAdd = !direct && channel.state !== null;',
+    replace: 'const canAdd = channel.state !== null;',
+    tests: ['apps/web/src/features/channel/add-people.test.tsx'],
+  },
+  {
+    id: 'add-people-lists-the-person-themselves',
+    why: 'the person is offered to add themselves to a channel they are already in',
+    file: 'apps/web/src/features/channel/add-people.tsx',
+    find: '    .filter((person) => person.id !== user.id)\n',
+    replace: '',
+    tests: ['apps/web/src/features/channel/add-people.test.tsx'],
+  },
+  {
+    id: 'private-option-ignored',
+    why: 'a channel asked to be private is created public, and the whole workspace reads it',
+    file: 'apps/web/src/features/sidebar/new-channel-dialog.tsx',
+    find: "        ...(secret ? { type: 'private' as const } : {}),\n",
+    replace: '',
+    tests: ['apps/web/src/features/sidebar/sidebar.test.tsx'],
+  },
 ];
