@@ -33,6 +33,8 @@ const github: GitHubApi = {
       author: { login: 'octo', avatarUrl: 'https://avatars.githubusercontent.com/u/1' },
     });
   },
+  // No checks for these cards: what the endpoint does with them is the module's test (#423).
+  checks: () => Promise.resolve({}),
 };
 
 const call = async (

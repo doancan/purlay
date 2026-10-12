@@ -129,4 +129,34 @@ describe('GitHub cards', () => {
     const view = await show(`bkz. ${PR}`, () => Promise.resolve(card({ state: 'closed' })), 'tr');
     expect(cards(view)[0]?.textContent).toContain('Kapalı');
   });
+
+  test('a pull request’s checks and reviews are said in words, each only when GitHub said it (#423)', async () => {
+    const view = await show(`see ${PR}`, () =>
+      Promise.resolve(
+        card({ state: 'open', ciStatus: 'failure', reviewDecision: 'changes_requested' }),
+      ),
+    );
+    const text = cards(view)[0]?.textContent ?? '';
+    expect(text).toContain('Checks failed');
+    expect(text).toContain('Changes requested');
+    const plain = await show(`see ${PR}`, () => Promise.resolve(card()));
+    expect(cards(plain)[0]?.textContent).not.toMatch(/Checks|Approved|Review/);
+  });
+
+  test.each([
+    ['success', 'approved', 'Kontroller geçti', 'Onaylandı'],
+    ['pending', 'review_required', 'Kontroller sürüyor', 'İnceleme bekliyor'],
+  ] as const)(
+    'checks %s and review %s, in Turkish',
+    async (ciStatus, reviewDecision, ci, review) => {
+      const view = await show(
+        `bkz. ${PR}`,
+        () => Promise.resolve(card({ ciStatus, reviewDecision })),
+        'tr',
+      );
+      const text = cards(view)[0]?.textContent ?? '';
+      expect(text).toContain(ci);
+      expect(text).toContain(review);
+    },
+  );
 });

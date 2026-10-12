@@ -95,6 +95,12 @@ export const tr = {
   'github.state.merged': 'Birleştirildi',
   'github.openedPr': '{login} tarafından açılan pull request',
   'github.openedIssue': '{login} tarafından açılan issue',
+  'github.ci.success': 'Kontroller geçti',
+  'github.ci.failure': 'Kontroller başarısız',
+  'github.ci.pending': 'Kontroller sürüyor',
+  'github.review.approved': 'Onaylandı',
+  'github.review.changes_requested': 'Değişiklik istendi',
+  'github.review.review_required': 'İnceleme bekliyor',
   'invite.admin.entry': 'İnsanları davet et…',
   'invite.admin.title': '{workspace} çalışma alanına davet et',
   'invite.admin.description':

@@ -2140,4 +2140,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/content/github-cards.test.tsx'],
   },
+  {
+    id: 'card-checks-failure-kept-for-five-minutes',
+    why: 'a card whose checks GitHub did not answer goes without them for five minutes, not one',
+    file: 'apps/api/src/modules/integrations/unfurl.ts',
+    find: '      ttl = UNAVAILABLE_TTL_MS;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+  },
+  {
+    id: 'issue-asked-for-checks',
+    why: 'every issue card costs a second GitHub request for checks an issue cannot have',
+    file: 'apps/api/src/modules/integrations/unfurl.ts',
+    find: "    if (item.type === 'issue') {\n",
+    replace: "    if (item.type === 'never') {\n",
+    tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+  },
 ];

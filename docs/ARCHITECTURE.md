@@ -670,8 +670,13 @@ export interface GitHubCardMetadata {
 }
 ```
 
-`ciStatus` and `reviewDecision` are the shape this is going towards: the contract and the unfurl do
-not carry them yet (#423), so a card shows the kind, the state, the title and the author. The client
+A pull request's `ciStatus` and `reviewDecision` (lower-case in the contract) are a second question,
+asked of GitHub's GraphQL API with the same token — the parts as variables, never in the query
+text — and folded into the card: the rollup of its last commit's checks (`ERROR` is a failure,
+`EXPECTED` pending) and its review decision, each absent when GitHub says none. An issue is never
+asked. If the second question fails the card is drawn without them, the failure is logged, and the
+card is kept a minute instead of five, so they are asked for again soon; one pull request card is at
+most two requests per five minutes per workspace (#423). The client
 reads the links from the words with the server's engine (`metadataOf`) and draws no avatar, which is
 an image on GitHub's host (#110).
 
