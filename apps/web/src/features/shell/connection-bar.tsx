@@ -13,21 +13,21 @@
  * person would otherwise read a quiet channel as a quiet channel. That one asks for
  * something — Retry — so it is a button in the bar, and the bar is still a status.
  */
-import { useEffect, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
-import { useConnectionStatus, useDegraded, useEngine } from '../../realtime/realtime-provider';
+import {
+  useConnectedOnce,
+  useConnectionStatus,
+  useDegraded,
+  useEngine,
+} from '../../realtime/realtime-provider';
 
 export const ConnectionBar = (): React.JSX.Element | null => {
   const { t } = useI18n();
   const status = useConnectionStatus();
   const degraded = Object.keys(useDegraded()).length;
   const engine = useEngine();
-  const [wasOpen, setWasOpen] = useState(false);
-
-  useEffect(() => {
-    if (status === 'open') setWasOpen(true);
-  }, [status]);
+  const wasOpen = useConnectedOnce();
 
   const down = wasOpen && status !== 'open' && status !== 'ended' && status !== 'idle';
   if (!down && degraded === 0) return null;

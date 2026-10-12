@@ -117,6 +117,10 @@ export const useEngine = (): Engine => {
 export const useConnectionStatus = (): ConnectionStatus =>
   useStore(useEngine().store, (state) => state.status);
 
+/** Whether the connection has been open at least once on this page. */
+export const useConnectedOnce = (): boolean =>
+  useStore(useEngine().store, (state) => state.connectedOnce);
+
 /** Channels whose live updates are not trustworthy right now, and why. */
 export const useDegraded = (): Readonly<Record<string, DegradedReason>> =>
   useStore(useEngine().store, (state) => state.degraded);

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a connection lost before it was drawn as open is still said (#347)
+
+- "Reconnecting…" appeared only if the page had rendered the connection as open; one that opened and
+  dropped between two renders — which load makes possible — was never announced. Whether the
+  connection has been open is now kept where the status changes, not inferred from what was drawn.
+
 ### Security — 2026-10-12: the audit trail names the session that acted (D-116, #397)
 
 - Each row records the session the request was made with; through it the sign-in's address and
