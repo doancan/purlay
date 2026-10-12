@@ -11,9 +11,21 @@
  * that belong to no project are lint parse errors, and the check added in #158
  * fails on exactly that.
  */
+import packageJson from './package.json' with { type: 'json' };
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+
+/** `browserslist`'s `name >= version` entries, as esbuild names its targets (`safari17.2`). */
+const buildTarget = (queries: readonly string[]): string[] =>
+  queries.map((query) => {
+    const match = /^(chrome|edge|firefox|safari|ios_saf) >= ([0-9.]+)$/.exec(query);
+    if (match === null) throw new Error(`browserslist entry the build cannot read: ${query}`);
+    const [, name = '', version = ''] = match;
+    return `${name === 'ios_saf' ? 'ios' : name}${version}`;
+  });
+
+const { browserslist } = packageJson;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -41,6 +53,9 @@ export default defineConfig({
     ),
   },
   build: {
+    // The supported browsers (D-113), derived from `browserslist` rather than kept twice: syntax
+    // they lack is lowered for them, or the build fails.
+    target: buildTarget(browserslist),
     // The bundle budget is measured in `PRD.md` §5 terms. Reporting compressed
     // size keeps the number in the build output rather than in somebody's head.
     reportCompressedSize: true,

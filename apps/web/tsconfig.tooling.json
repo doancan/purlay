@@ -7,6 +7,6 @@
     "types": ["bun", "vite/client"],
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
-  "files": ["vite.config.ts", "playwright.config.ts"],
+  "files": ["vite.config.ts", "playwright.config.ts", "package.json"],
   "include": ["e2e/**/*.ts"]
 }

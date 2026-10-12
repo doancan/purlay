@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the supported browsers are named, and held (D-113, #331)
+
+- Chrome and Edge 120, Firefox 121, Safari and iOS Safari 17.2, as `browserslist` in
+  `apps/web/package.json`. A web API one of them lacks is a lint error (`eslint-plugin-compat`),
+  an ES2024 built-in a compile error, and the build targets the same list; what none of the three
+  sees is written down.
+
 ### Fix — 2026-10-12: a GitHub token that no longer opens is tested (#66)
 
 - The branch that says a token did not open — `ENCRYPTION_KEY` changed — and draws no card, and the

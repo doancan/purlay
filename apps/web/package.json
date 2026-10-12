@@ -4,6 +4,13 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
+  "browserslist": [
+    "chrome >= 120",
+    "edge >= 120",
+    "firefox >= 121",
+    "safari >= 17.2",
+    "ios_saf >= 17.2"
+  ],
   "dependencies": {
     "@purlay/markdown": "workspace:*",
     "@purlay/tokens": "workspace:*",

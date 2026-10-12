@@ -1,5 +1,6 @@
 // Enforcement, not advice. Every rule here corresponds to a rule the documents
 // state in prose; a rule the build does not check is not a rule. (D-47)
+import compat from 'eslint-plugin-compat';
 import { includeIgnoreFile } from '@eslint/compat';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import { fileURLToPath } from 'node:url';
@@ -587,6 +588,16 @@ export default defineConfig([
     files: ['apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx'],
     ignores: ['apps/web/src/components/icon.tsx'],
     rules: { 'purlay/icons-through-icon': 'error' },
+  },
+
+  // The browsers the client supports are `apps/web/package.json`'s `browserslist` (D-113). A web
+  // API they do not all have is a lint error. The rule knows constructors and globals, not static
+  // methods; `lib` and the build target hold the rest (D-113 names what none of them sees).
+  {
+    files: ['apps/web/src/**/*.ts', 'apps/web/src/**/*.tsx'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx', 'apps/web/src/testing/**'],
+    plugins: { compat },
+    rules: { 'compat/compat': 'error' },
   },
 
   // Command-line entry points. Their output *is* their interface, so the ban on
