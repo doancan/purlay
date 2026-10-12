@@ -4459,6 +4459,15 @@ send — it is then not on that page, or read without being shown. The window is
 message is still in its channel, unread; ordering by a commit-ordered key is the fix if dogfooding
 shows it (#58).
 
+**Amended 2026-10-12 (#350) — one lock order for messages, memberships and notifications.** A delete
+updated the notifications before the memberships, the reverse of a read, and took the message row
+`FOR UPDATE`, which a read position's foreign key check waits on: a person reading a channel while
+its author deleted a message naming them deadlocked with the delete, and one failed as a `500`. Now
+every writer takes, in order, the message row `FOR NO KEY UPDATE` — what its own `UPDATE` takes
+anyway; edits, deletes and resolutions of one row still take turns, and a row that only points at it
+is not made to wait — then the channel's memberships ordered by `user_id` (one person's, ordered by
+`channel_id`), then the notifications.
+
 ---
 
 ## Part D — Open, deliberately

@@ -181,7 +181,9 @@ export const setResolved = async (
         'resolved_by',
       ])
       .where('id', '=', messageId)
-      .forUpdate()
+      // NO KEY UPDATE, as an edit and a delete take it (`edit.ts`): resolvers take turns, and a
+      // reply or a read position pointing here is not made to wait.
+      .forNoKeyUpdate()
       .executeTakeFirstOrThrow();
 
     if (resolved && root.thread_reply_count === 0) {

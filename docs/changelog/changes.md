@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: deleting a message no longer deadlocks with somebody reading (D-106, amended)
+
+- A person reading a channel, or their inbox, at the moment its author deleted a message naming them
+  could make one of the two fail. The writers now take their locks in one order.
+
 ### Feature — 2026-10-12: the notification inbox, on the server (D-106)
 
 - `GET /api/notifications?workspaceId=` lists what the caller was told — named, sent directly, answered

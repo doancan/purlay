@@ -61,7 +61,10 @@ export const removeMessage = async (
     .selectFrom('messages')
     .select(['sender_id', 'deleted_at', 'created_at'])
     .where('id', '=', messageId)
-    .forUpdate()
+    // NO KEY UPDATE: what the UPDATE below takes anyway. Edits, deletes and resolutions of this row
+    // take turns on it, and a row that only points here (a reply, a reaction, a read position) is
+    // not made to wait — FOR UPDATE would, and a reader holding its membership deadlocks on it.
+    .forNoKeyUpdate()
     .executeTakeFirstOrThrow();
 
   if (row.sender_id !== userId) {
@@ -99,6 +102,17 @@ export const removeMessage = async (
     .executeTakeFirstOrThrow();
   // Nobody is named by a message that says nothing.
   await executor.deleteFrom('mentions').where('message_id', '=', messageId).execute();
+
+  // The memberships before the notifications, in one order: reading a channel or the inbox takes
+  // them in that order too, and a delete taking them the other way round deadlocks with a person
+  // reading at that moment (D-106 §3).
+  await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', context.channelId)
+    .orderBy('user_id')
+    .forUpdate()
+    .execute();
 
   // What needed the person no longer does: kept for the inbox, read, and its count given back.
   const waiting = await executor

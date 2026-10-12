@@ -66,7 +66,10 @@ export const reviseMessage = async (
     .selectFrom('messages')
     .select(['sender_id', 'content', 'deleted_at', 'created_at', 'state_version'])
     .where('id', '=', messageId)
-    .forUpdate()
+    // NO KEY UPDATE: what the UPDATE below takes anyway. Edits, deletes and resolutions of this row
+    // take turns on it, and a row that only points here (a reply, a reaction, a read position) is
+    // not made to wait — FOR UPDATE would, and a reader holding its membership deadlocks on it.
+    .forNoKeyUpdate()
     .executeTakeFirst();
   // Deleted between the guard and the lock: the guard's answer, given late.
   if (row?.deleted_at !== null) throw messageNotFound();

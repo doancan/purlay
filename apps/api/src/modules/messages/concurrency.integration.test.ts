@@ -354,3 +354,52 @@ describe('integration: two deletes at once', () => {
     expect(member).toEqual({ unread_count: 1, unread_mention_count: 0 });
   });
 });
+
+describe('integration: a delete while the person it named reads the channel', () => {
+  test('they take turns, in one lock order, and both commit', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice', 'bob']);
+    const alice = room.members['alice'];
+    const bob = room.members['bob'];
+    if (alice === undefined || bob === undefined) throw new Error('room');
+    const id = (
+      await sendMessage(db, clock, alice.context, { id: nextId(), content: `@${bob.username} hi` })
+    ).message.id;
+
+    // Bob's read has taken his membership row, as `markRead` does first, and pauses there.
+    let locked: () => void = () => undefined;
+    let proceed: () => void = () => undefined;
+    const hasLock = new Promise<void>((open) => {
+      locked = open;
+    });
+    const mayProceed = new Promise<void>((open) => {
+      proceed = open;
+    });
+    const reading = atomicallyOn(db)(async (transaction) => {
+      await transaction
+        .selectFrom('channel_members')
+        .select('user_id')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', bob.userId)
+        .forUpdate()
+        .execute();
+      locked();
+      await mayProceed;
+      return await markRead(transaction, clock, bob.context, id);
+    });
+    await hasLock;
+    // Alice deletes it meanwhile. Taking the memberships before the notifications, it waits here
+    // holding nothing Bob's read will need; the other way round, each waits for the other.
+    const deleting = atomicallyOn(db)(
+      async (transaction) => await removeMessage(transaction, clock, alice.userId, id),
+    );
+    expect(await settlesWithin(deleting, BLOCKED_FOR_MS)).toBe(false);
+    proceed();
+    const outcomes = await Promise.allSettled([reading, deleting]);
+    expect(
+      outcomes.map((outcome) =>
+        outcome.status === 'fulfilled' ? 'committed' : String(outcome.reason),
+      ),
+    ).toEqual(['committed', 'committed']);
+  });
+});
