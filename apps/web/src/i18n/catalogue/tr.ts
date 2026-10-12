@@ -363,6 +363,8 @@ export const tr = {
   'message.link.opens': '{host} adresini açar',
 
   // ── Tema ve dil ─────────────────────────────────────────────────────────
+  'rail.label': 'Yerler',
+  'settings.label': 'Ayarlar',
   'theme.label': 'Tema',
   'theme.system': 'Sistem',
   'theme.light': 'Açık',

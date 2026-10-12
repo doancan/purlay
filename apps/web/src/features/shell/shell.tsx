@@ -1,9 +1,9 @@
 /**
- * The signed-in frame: who, which workspace, the realtime connection, and the two
- * cards every screen sits in — the sidebar and the main column (`UX.md` §2, D-100).
+ * The signed-in frame: who, which workspace, the realtime connection, and the three regions
+ * every screen sits beside — the rail, the sidebar and the main column (`UX.md` §2, D-110).
  *
- * The window is the canvas and the two cards float on it. The main column's card is what every
- * screen renders into, and it clips them to its corners.
+ * Flat: the rail and the sidebar share the navigation tone, the main column is the window's
+ * ground, and one hairline divides them. The main column is what every screen renders into.
  *
  * The order is the dependency order: a person (or the sign-in screen) before a
  * workspace, a workspace before the connection (which watches *its* channels), the
@@ -38,9 +38,9 @@ export const Shell = ({
           <DeepWorkProvider>
             <GlobalKeys />
             <NavProvider>
-              <div className="flex h-screen gap-2 bg-canvas p-2 text-ink max-narrow:p-1">
+              <div className="flex h-screen bg-surface-100 text-ink">
                 <SidebarSlot />
-                <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-100 shadow-card">
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                   <ConnectionBar />
                   <UpdateBar />
                   <DeepWorkBar />

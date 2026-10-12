@@ -1,7 +1,7 @@
 /**
- * The header of the sidebar: which workspace this is, a way to another, and who is signed
- * in — one menu, in place of the rail of avatars other chat products put beside the sidebar
- * (`UX.md` §2: the product is used inside one workspace at a time).
+ * The workspace tile at the top of the rail: which workspace this is, a way to another, and who
+ * is signed in — one menu (D-110). The rail holds the tile because a person is in one workspace at
+ * a time (`UX.md` §2): one tile, not a column of them.
  *
  * Switching is navigation to `/w/:slug`; the workspace the address names is the source of
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
@@ -15,7 +15,6 @@ import { useDescribeFailure } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
-import { Icon } from '../../components/icon';
 import { initialsOf } from '../../ui/avatar';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
@@ -33,20 +32,14 @@ export const WorkspaceMenu = (): React.JSX.Element => {
 
   return (
     <Menu
+      side="right"
       trigger={
         <button
           type="button"
           aria-label={t('sidebar.switch')}
-          className="flex w-full items-center gap-2 rounded-md p-1 text-heading text-ink hover:bg-surface-200 max-narrow:min-h-touch"
+          className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-accent text-label font-semibold text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover max-narrow:h-touch max-narrow:w-touch"
         >
-          <span
-            aria-hidden="true"
-            className="inline-flex size-avatar shrink-0 items-center justify-center rounded-md bg-accent-subtle text-label text-accent-text"
-          >
-            {initialsOf(workspace.name)}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-left">{workspace.name}</span>
-          <Icon name="switch" size="sm" />
+          {initialsOf(workspace.name)}
         </button>
       }
     >

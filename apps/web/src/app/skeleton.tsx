@@ -1,14 +1,14 @@
 /**
  * The application frame before there is anything to put in it.
  *
- * Sidebar, header, a few message rows and the composer, drawn as shapes. It is
+ * Rail, sidebar, header, a few message rows and the composer, drawn as shapes. It is
  * what `AppProviders` shows while the first catalogue loads, and it is the markup
  * the build will prerender into `index.html` (D-50, #141): the first paint is real
  * layout, and the JavaScript fills it rather than creating it. So it must hold no
  * hooks and no words — it cannot call `useI18n`, because the words are what it is
  * waiting for — and its widths are the same tokens the real frame uses, so nothing
- * moves when the real one replaces it. Below the breakpoint the real sidebar is an overlay,
- * not a column, so the skeleton's is not drawn there either (`max-narrow:hidden`).
+ * moves when the real one replaces it. Below the breakpoint the real rail and sidebar are an
+ * overlay, not columns, so the skeleton's are not drawn there either (`max-narrow:hidden`).
  *
  * It is hidden from assistive technology on purpose: a screen reader meets the
  * real page when it arrives, and a page of "block, block, block" in between is
@@ -18,7 +18,10 @@ import { Skeleton } from '../ui/skeleton';
 
 export const AppSkeleton = (): React.JSX.Element => (
   <div aria-hidden="true" className="flex h-screen bg-surface-100">
-    <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-border-subtle bg-surface-000 px-2 py-3">
+    <div className="flex w-rail shrink-0 flex-col items-center gap-2 bg-surface-000 pt-8 max-narrow:hidden">
+      <span className="size-avatar-lg rounded-lg bg-surface-200" />
+    </div>
+    <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-border-subtle bg-surface-000 px-2 pt-8 pb-3">
       <Skeleton className="mx-3 w-members" />
       <div className="flex flex-col gap-2 px-3">
         <Skeleton className="w-gutter" />

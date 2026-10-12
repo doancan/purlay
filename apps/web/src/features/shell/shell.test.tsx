@@ -84,19 +84,22 @@ describe('the workspace in the address', () => {
 });
 
 describe('the frame', () => {
-  test('is two cards on the canvas: the sidebar, and the main column that holds the screen', async () => {
+  test('is flat: the rail, the sidebar and the main column side by side, told apart by tone (D-110)', async () => {
     const view = await visit(`/w/acme/c/${IDS.api}`, aSignedInApi());
+    const rail = view.getByRole('navigation', { name: 'Places' });
     const side = view.getByRole('complementary', { name: 'Workspace' });
     const main = view.getByRole('main');
     const frame = side.parentElement;
-    expect(frame?.className).toContain('bg-canvas');
-    for (const card of [side, main.parentElement]) {
-      expect(card?.className).toContain('rounded-lg');
-      expect(card?.className).toContain('shadow-card');
-      expect(card?.className).toContain('bg-surface-100');
-    }
-    // Both cards are the frame's children, side by side, and `<main>` is still the one landmark.
+    expect(rail.parentElement).toBe(frame);
     expect(main.parentElement?.parentElement).toBe(frame);
+    expect(frame?.className).toContain('bg-surface-100');
+    for (const region of [rail, side, frame]) {
+      expect(region?.className).not.toContain('shadow-card');
+      expect(region?.className).not.toContain('bg-canvas');
+    }
+    // Navigation is one tone; one hairline divides it from the conversation.
+    for (const region of [rail, side]) expect(region.className).toContain('bg-surface-000');
+    expect(side.className).toContain('border-r-hairline');
     expect(view.getAllByRole('main')).toHaveLength(1);
   });
 });
@@ -295,10 +298,10 @@ describe('the sign-in screen', () => {
     expect(view.getByRole('status').textContent).toContain(words);
   });
 
-  test('is a card on the canvas, with the product mark above the title and the button the width of the card', async () => {
+  test('is a card on the navigation tone, with the product mark above the title and the button the width of the card', async () => {
     const view = await visit('/sign-in', out());
     const main = view.getByRole('main');
-    expect(main.className).toContain('bg-canvas');
+    expect(main.className).toContain('bg-surface-000');
     const card = view
       .getByRole('heading', { level: 1, name: 'Sign in to Purlay' })
       .closest('section');

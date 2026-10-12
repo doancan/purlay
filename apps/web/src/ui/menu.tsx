@@ -33,6 +33,8 @@ interface MenuProps {
   /** The element that opens it: a button, which Radix gives the menu's ARIA to. */
   readonly trigger: React.ReactElement;
   readonly align?: 'start' | 'center' | 'end';
+  /** Where it opens; from the rail, to the right. */
+  readonly side?: 'top' | 'right' | 'bottom' | 'left';
   readonly children: React.ReactNode;
   /** Whether focus returns to the trigger on close: not when the item chosen put it elsewhere. */
   readonly returnFocus?: () => boolean;
@@ -41,6 +43,7 @@ interface MenuProps {
 export const Menu = ({
   trigger,
   align = 'start',
+  side = 'bottom',
   children,
   returnFocus,
 }: MenuProps): React.JSX.Element => (
@@ -50,6 +53,7 @@ export const Menu = ({
       <RadixMenu.Content
         className={contentClasses}
         align={align}
+        side={side}
         sideOffset={4}
         collisionPadding={8}
         onCloseAutoFocus={(event) => {

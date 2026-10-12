@@ -5,7 +5,7 @@
  * wide is moved by hand through the port; no browser is resized.
  */
 import { describe, expect, spyOn, test } from 'bun:test';
-import { act } from '@testing-library/react';
+import { act, within } from '@testing-library/react';
 import { Outlet } from '../../app/outlet';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
@@ -96,6 +96,7 @@ describe('a narrow window', () => {
   test('has no sidebar on the page until the toggle opens it as a dialog that holds focus', async () => {
     const { view } = await open(channel, true);
     expect(view.queryByRole('complementary')).toBeNull();
+    expect(view.queryByRole('navigation', { name: 'Places' })).toBeNull();
     const toggle = view.getByRole('button', { name: 'Open navigation' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
 
@@ -106,6 +107,8 @@ describe('a narrow window', () => {
     expect(toggle.getAttribute('aria-controls')).toBe(panel.id);
     expect(panel.contains(document.activeElement)).toBe(true);
     expect(panel.querySelector('aside')).not.toBeNull();
+    // The rail goes with the sidebar: on a narrow window neither is in the layout.
+    expect(within(panel).getByRole('navigation', { name: 'Places' })).toBeDefined();
     // The panel itself: Radix marks the rest of the page aria-hidden while it is open, which axe
     // reports against the page's own focusable elements though they cannot be reached.
     await expectNoAxeViolations(panel);

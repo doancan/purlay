@@ -21,8 +21,7 @@
 import { colorTokens, cssVar } from '@purlay/tokens';
 import { useState } from 'react';
 import { Icon, glyphNames } from '../components/icon';
-import { LanguageMenu } from '../i18n/language-menu';
-import { ThemeMenu } from '../theme/theme-menu';
+import { SettingsMenu } from '../features/shell/settings-menu';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog } from '../ui/dialog';
@@ -216,8 +215,7 @@ const Overlays = (): React.JSX.Element => {
         >
           Show toast
         </Button>
-        <ThemeMenu />
-        <LanguageMenu />
+        <SettingsMenu />
       </Row>
       <Dialog
         open={open}

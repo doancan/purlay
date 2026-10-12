@@ -12,7 +12,6 @@ export const themes = [
 export const colorTokens = [
   'surface-000',
   'surface-050',
-  'canvas',
   'surface-100',
   'surface-200',
   'code-bg',

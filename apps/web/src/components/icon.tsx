@@ -37,12 +37,14 @@ import {
   GitMerge,
   GitPullRequest,
   Hash,
+  Inbox,
   Info,
   Keyboard,
   Languages,
   Lock,
   LogOut,
   Menu,
+  MessagesSquare,
   Monitor,
   Moon,
   Pencil,
@@ -64,6 +66,8 @@ import {
 /** Meaning → glyph. The vocabulary of the interface's icons, in one place. */
 const glyphs = {
   channel: Hash,
+  channels: MessagesSquare,
+  inbox: Inbox,
   'private-channel': Lock,
   search: Search,
   reply: Reply,

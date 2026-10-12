@@ -4,12 +4,10 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, waitFor, within } from '@testing-library/react';
-import type { Message } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { OverlayProvider } from '../shell/overlay';
 import { JumpField } from './jump-field';
 import { ApiError } from '../../data/errors';
-import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
 import {
@@ -19,7 +17,6 @@ import {
   ME,
   WORKSPACE,
   aChannel,
-  aMessage,
   aSession,
   aSignedInApi,
   someChannels,
@@ -155,71 +152,6 @@ describe('the channels section', () => {
     expect(buttons).toHaveLength(2);
     await person().click(some(buttons.at(-1)));
     expect(view.getByRole('dialog', { name: 'New channel' })).toBeDefined();
-  });
-});
-
-describe('the open questions', () => {
-  const root = (n: number): Message =>
-    aMessage(n, {
-      thread: { replyCount: 1, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
-    });
-
-  test('are the first thing in the list, and say how many there are', async () => {
-    const view = await open(
-      aSignedInApi({
-        unresolved: () => Promise.resolve({ data: [root(1), root(2), root(3)], nextCursor: null }),
-      }),
-    );
-    const first = view.getAllByRole('link')[0];
-    expect(first?.textContent).toContain('Open questions');
-    expect(first?.textContent).toContain('3');
-    expect(first?.getAttribute('href')).toBe('/w/acme/questions');
-  });
-
-  test('keep their height however long the list of channels below them is: a flex item that may shrink is squashed to a line', async () => {
-    const view = await open(aSignedInApi());
-    expect(view.getAllByRole('link')[0]?.className).toContain('shrink-0');
-  });
-
-  test('say nothing while they load or when there are none — never a wrong zero', async () => {
-    const quiet = await open(aSignedInApi());
-    expect(quiet.getAllByRole('link')[0]?.textContent.trim()).toBe('Open questions');
-    quiet.unmount();
-    const waiting = await open(aSignedInApi({ unresolved: () => new Promise(() => undefined) }));
-    expect(waiting.getAllByRole('link')[0]?.textContent.trim()).toBe('Open questions');
-  });
-
-  test('say "99+" when there are more pages than that is willing to count', async () => {
-    const view = await open(
-      aSignedInApi({
-        unresolved: () => Promise.resolve({ data: [root(1)], nextCursor: aMessage(1).id }),
-      }),
-    );
-    expect(view.getAllByRole('link')[0]?.textContent).toContain('99+');
-  });
-
-  test('is the current page on its own screen', async () => {
-    const view = await open(aSignedInApi(), '/w/acme/questions');
-    expect(view.getAllByRole('link')[0]?.getAttribute('aria-current')).toBe('page');
-  });
-
-  test('change the moment a thread is resolved: the count follows the cache', async () => {
-    const view = await open(
-      aSignedInApi({
-        unresolved: () => Promise.resolve({ data: [root(1), root(2)], nextCursor: null }),
-      }),
-    );
-    expect(view.getAllByRole('link')[0]?.textContent).toContain('2');
-    await act(async () => {
-      view.world.client.setQueryData(keys.unresolved(IDS.workspace), {
-        pageParams: [undefined],
-        pages: [{ data: [root(1)], nextCursor: null }],
-      });
-      await Promise.resolve();
-    });
-    await settle();
-    expect(view.getAllByRole('link')[0]?.textContent).toContain('1');
-    expect(view.getAllByRole('link')[0]?.textContent).not.toContain('2');
   });
 });
 
@@ -462,15 +394,15 @@ describe('the jump field', () => {
 });
 
 describe('the footer', () => {
-  test('says who you are, and the key that jumps', async () => {
+  test('says who you are, and nothing else: settings live on the rail', async () => {
     const view = await open();
     const footer = view.getByRole('contentinfo');
     expect(footer.textContent).toContain('Dogancan');
-    expect(footer.querySelector('[aria-hidden="true"].size-avatar-sm')?.textContent).toBe('DO');
+    expect(footer.querySelector('[aria-hidden="true"].size-avatar')?.textContent).toBe('DO');
     // The hint moved to the jump field above; the footer no longer carries it.
     expect(footer.querySelector('kbd')).toBeNull();
-    expect(view.getByRole('button', { name: 'Theme' })).toBeDefined();
-    expect(view.getByRole('button', { name: 'Language' })).toBeDefined();
+    expect(footer.querySelector('button')).toBeNull();
+    expect(footer.textContent).toContain('@dogancan');
   });
 });
 
@@ -669,20 +601,12 @@ describe('browsing channels', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab reaches the workspace, the jump field, the questions, the inbox, search, the channels and their buttons, in that order', async () => {
+  test('Tab reaches the jump field, the channels and their buttons, in that order — the places are on the rail', async () => {
     const view = await open();
     act(() => {
-      view.getByRole('button', { name: 'Switch workspace' }).focus();
+      view.getByRole('button', { name: /^Jump to…/ }).focus();
     });
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Switch workspace');
-    await person().tab();
     expect(document.activeElement?.textContent).toMatch(/^Jump to…(⌘|Ctrl)K$/);
-    await person().tab();
-    expect(document.activeElement?.textContent.trim().replace(/\d+$/, '')).toBe('Open questions');
-    await person().tab();
-    expect(document.activeElement?.textContent.trim()).toBe('Inbox');
-    await person().tab();
-    expect(document.activeElement?.textContent.trim()).toBe('Search');
     await person().tab();
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Browse channels');
     await person().tab();

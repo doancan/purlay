@@ -10,7 +10,6 @@
   /* Colour: bg-, text-, border-, outline-, fill- … with the token name */
   --color-surface-000: var(--surface-000);
   --color-surface-050: var(--surface-050);
-  --color-canvas: var(--canvas);
   --color-surface-100: var(--surface-100);
   --color-surface-200: var(--surface-200);
   --color-code-bg: var(--code-bg);

@@ -59,11 +59,15 @@ test.describe('at a phone width', () => {
       expectNoAxe,
     }) => {
       await expect(page.locator('aside')).toHaveCount(0);
+      // The rail goes with the sidebar: 56px of a phone's width is not given to it (D-110).
+      await expect(page.getByRole('navigation', { name: 'Places' })).toHaveCount(0);
       const toggle = page.getByRole('button', { name: 'Open navigation' });
       await expect(toggle).toHaveAttribute('aria-expanded', 'false');
       await toggle.click();
       const panel = page.getByRole('dialog', { name: 'Workspace' });
       await expect(panel).toBeVisible();
+      await expect(panel.getByRole('navigation', { name: 'Places' })).toBeVisible();
+      await expect(panel.locator('aside')).toBeVisible();
       // Radix hides the page behind the panel from the accessibility tree, the toggle included, so
       // it is found by its attribute and not by its role.
       await expect(page.locator('button[aria-haspopup="dialog"]')).toHaveAttribute(
@@ -96,7 +100,7 @@ test.describe('at a phone width', () => {
       const toggle = page.getByRole('button', { name: 'Open navigation' });
       await toggle.click();
       await expect(page.getByRole('dialog', { name: 'Workspace' })).toBeVisible();
-      // The panel is 240px wide; the scrim is everything to its right. Radix starts listening for a
+      // The panel is the rail and the sidebar, 296px wide; the scrim is everything to its right. Radix starts listening for a
       // press outside a moment after the panel mounts, so a click in that first moment is a click
       // on nothing: the click is repeated until the panel answers, which is what a person does.
       await expect(async () => {
@@ -163,7 +167,7 @@ test.describe('crossing the line', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
-  test('desktop density is what it was: a list row is the control height, not a finger', async ({
+  test('desktop density is what it was: a list row is the row height, not a finger', async ({
     page,
     signIn,
     world,
@@ -173,6 +177,6 @@ test.describe('crossing the line', () => {
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     const row = page.locator('aside nav a').first();
     await expect(row).toBeVisible();
-    expect((await row.boundingBox())?.height).toBe(28);
+    expect((await row.boundingBox())?.height).toBe(32); // `size-row` (D-110)
   });
 });

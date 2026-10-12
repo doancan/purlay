@@ -7,7 +7,7 @@
  * words carry the room's name so a row from another project's run is never the one found.
  */
 import { expect, test } from './fixtures';
-import { navLink, shellReady } from './support';
+import { railLink, shellReady } from './support';
 
 test.describe('the inbox', () => {
   test('a mention is in it; opening it goes to the channel and reads it', async ({
@@ -25,7 +25,7 @@ test.describe('the inbox', () => {
     await signIn();
     await page.goto(`/w/${tenant.slug}/c/${made.id}`);
     await shellReady(page);
-    await (await navLink(page, 'Inbox')).click();
+    await (await railLink(page, 'Inbox')).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
 
     const row = page.getByRole('button', { name: new RegExp(made.name) });
