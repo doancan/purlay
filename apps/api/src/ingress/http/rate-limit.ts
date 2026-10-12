@@ -38,6 +38,20 @@ export const AUTH_BUDGET: RateBudget = { perSecond: 0.5, burst: 30 };
  */
 export const WRITE_BUDGET: RateBudget = SOCKET_FRAME_BUDGET;
 
+/**
+ * Reads that cost the server on the reader's behalf — a card's GitHub call, an image's fetch and
+ * decode — per signed-in user: sixty at once, then ten a second. Drawing a channel asks for one per
+ * link it shows, so they have a bucket of their own: charged to the writes, a page of GitHub links
+ * spent what the person sends with. Provisional (O-4).
+ */
+export const COSTLY_READ_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
+
+/** The routes charged to `COSTLY_READ_BUDGET`: what a screen asks for to draw, whatever the method. */
+const COSTLY_READS: ReadonlySet<string> = new Set([
+  '/api/images',
+  '/api/integrations/github/unfurl',
+]);
+
 const STATE_CHANGING: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Seconds until one more request would be admitted, for `Retry-After`. At least one. */
@@ -48,6 +62,7 @@ export const retryAfterSeconds = (budget: RateBudget): number =>
 export interface HttpBudgets {
   readonly auth: RateBudget;
   readonly writes: RateBudget;
+  readonly costlyReads: RateBudget;
 }
 
 export interface HttpLimitDependencies {
@@ -74,9 +89,14 @@ export type AdmitHttp = (request: Request, peer: string | undefined) => Promise<
 
 export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
   const { database, clock, trustProxy } = dependencies;
-  const budgets = dependencies.budgets ?? { auth: AUTH_BUDGET, writes: WRITE_BUDGET };
+  const budgets = dependencies.budgets ?? {
+    auth: AUTH_BUDGET,
+    writes: WRITE_BUDGET,
+    costlyReads: COSTLY_READ_BUDGET,
+  };
   const auth = inProcessRateLimiter(clock, budgets.auth);
   const writes = dependencies.writes ?? inProcessRateLimiter(clock, budgets.writes);
+  const costlyReads = inProcessRateLimiter(clock, budgets.costlyReads);
 
   return async (request, peer) => {
     const { pathname } = new URL(request.url);
@@ -88,16 +108,19 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
         : retryAfterSeconds(budgets.auth);
     }
 
-    // An external image is a read that costs the server a fetch and a decode on the reader's behalf
-    // (#110): charged as a write is, so one person cannot spend the node on it.
-    const costly = pathname === '/api/images';
+    // A card or an external image costs the server a call on the reader's behalf (#110): charged, so
+    // one person cannot spend the node on it — to its own bucket, so drawing never spends sending.
+    const costly = COSTLY_READS.has(pathname);
     if (pathname.startsWith('/api/') && (STATE_CHANGING.has(request.method) || costly)) {
       // Whoever the session names. No valid session means the handler will say 401;
       // there is no user to charge, and no bucket is created for an unknown caller.
       const token = sessionTokenFrom(request.headers.get('cookie'));
       const owner = token === undefined ? undefined : await resolveSession(database, clock, token);
       if (owner === undefined) return undefined;
-      return (await writes.consume(owner.userId)) ? undefined : retryAfterSeconds(budgets.writes);
+      const [bucket, budget] = costly
+        ? [costlyReads, budgets.costlyReads]
+        : [writes, budgets.writes];
+      return (await bucket.consume(owner.userId)) ? undefined : retryAfterSeconds(budget);
     }
 
     return undefined;

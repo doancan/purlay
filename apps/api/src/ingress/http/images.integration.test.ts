@@ -104,7 +104,7 @@ describe('integration: an external image through the API', () => {
     });
   });
 
-  test('it is charged to the reader’s budget, as a write is: one person cannot spend the node on it', async () => {
+  test('it is charged to the reader’s budget for costly reads: one person cannot spend the node on it', async () => {
     await withRollback(async (db) => {
       const { cookie } = await aSignedInUser(db, clock, 'img-budget');
       const app = createApp(
@@ -114,7 +114,8 @@ describe('integration: an external image through the API', () => {
           externalFetch: serving(twoColourPng(8, 8)),
           rateBudgets: {
             auth: { perSecond: 1, burst: 1 },
-            writes: { perSecond: 0.001, burst: 1 },
+            writes: { perSecond: 1, burst: 1 },
+            costlyReads: { perSecond: 0.001, burst: 1 },
           },
         }),
       );

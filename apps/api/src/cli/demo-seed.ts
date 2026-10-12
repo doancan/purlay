@@ -140,7 +140,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     github: neverSignsIn,
     // The seed writes no attachments; the store is the one the configuration names.
     storage: storeFor(config),
-    rateBudgets: { auth: ROOMY, writes: ROOMY },
+    rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
   });
 
   // ── People ────────────────────────────────────────────────────────────────

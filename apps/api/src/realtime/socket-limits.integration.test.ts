@@ -13,7 +13,7 @@ import { createApp, type HttpApplication } from '../ingress/http/app';
 import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { testConfig, testDependencies } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
-import { AUTH_BUDGET, WRITE_BUDGET } from '../ingress/http/rate-limit';
+import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from '../ingress/http/rate-limit';
 import { aUniqueSlug } from '../testing/users';
 
 const origin = 'https://purlay.test';
@@ -34,7 +34,7 @@ beforeAll(async () => {
       clock,
       config: testConfig({ APP_URL: origin }),
       // The provisional budgets, which the test doubles loosen by default.
-      rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET },
+      rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
       connectionLimits: { perUser: PER_USER, total: TOTAL },
     }),
   );

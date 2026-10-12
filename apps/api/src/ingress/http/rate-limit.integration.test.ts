@@ -8,7 +8,7 @@ import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import { NOW, testConfig, testDependencies } from '../../testing/doubles';
 import { aSignedInUser } from '../../testing/signed-in';
-import { AUTH_BUDGET, WRITE_BUDGET } from './rate-limit';
+import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from './rate-limit';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
 import { STATE_COOKIE } from '../../platform/cookies';
@@ -41,7 +41,7 @@ describe('integration: the per-user write limit', () => {
         testDependencies({
           database: db,
           clock,
-          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET },
+          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
         }),
       );
       const busy = await aSignedInUser(db, clock, 'rl-busy');
@@ -72,7 +72,7 @@ describe('integration: the per-user write limit', () => {
         testDependencies({
           database: db,
           clock,
-          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET },
+          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
         }),
       );
       const user = await aSignedInUser(db, clock, 'rl-send');
@@ -108,13 +108,59 @@ describe('integration: the per-user write limit', () => {
     });
   });
 
+  /**
+   * Drawing a channel asks for its cards and pictures — a request per link. They were charged to the
+   * bucket a person sends with, so a page with twenty-odd GitHub links spent it, and the person's next
+   * message was refused (found in the browser suite as a 429 on the unfurl).
+   */
+  test('cards and pictures have a budget of their own: drawing a channel cannot spend what sending needs', async () => {
+    await withRollback(async (db) => {
+      const app = createApp(
+        testDependencies({
+          database: db,
+          clock,
+          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
+        }),
+      );
+      const user = await aSignedInUser(db, clock, 'rl-read');
+      const slug = aUniqueSlug('rl-read');
+      const workspace = (await (
+        await post(app, user.cookie, '/api/workspaces', { name: slug, slug })
+      ).json()) as { id: string };
+      const channel = (await (
+        await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
+          name: 'general',
+        })
+      ).json()) as { id: string };
+
+      const unfurl = async (n: number): Promise<number> =>
+        (
+          await post(app, user.cookie, '/api/integrations/github/unfurl', {
+            workspaceId: workspace.id,
+            url: `https://github.com/acme/api/pull/${String(n + 1)}`,
+          })
+        ).status;
+      const statuses: number[] = [];
+      for (let n = 0; n < COSTLY_READ_BUDGET.burst; n += 1) statuses.push(await unfurl(n));
+      expect(statuses.every((status) => status === 200)).toBe(true);
+      expect(await unfurl(COSTLY_READ_BUDGET.burst)).toBe(429);
+
+      // Every card asked for, and the writing budget is whole: a message still goes.
+      const sent = await post(app, user.cookie, `/api/channels/${channel.id}/messages`, {
+        id: messageId(NOW),
+        content: 'still able to say something',
+      });
+      expect(sent.status).toBe(201);
+    });
+  });
+
   test('a caller with no session is not given a bucket, and is answered 401 as before', async () => {
     await withRollback(async (db) => {
       const app = createApp(
         testDependencies({
           database: db,
           clock,
-          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET },
+          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
         }),
       );
       for (let i = 0; i < WRITE_BUDGET.burst + 5; i += 1) {
