@@ -122,6 +122,32 @@ describe('invite people', () => {
     expect(view.getByText('No links are open.')).toBeDefined();
   });
 
+  test('each Revoke says which link it ends: the row it stands in is its description, whole', async () => {
+    const first = '01a0860a-0a00-75f1-9438-ca8bd4a21ae5';
+    const second = '01a0860a-0a00-75f1-9438-ca8bd4a21ae6';
+    const view = await openDialog({
+      invitations: () =>
+        Promise.resolve(
+          page(anInvitation(first), {
+            ...anInvitation(second),
+            createdBy: null,
+          }),
+        ),
+    });
+    await person().click(view.getByRole('menuitem', { name: 'Invite people…' }));
+    await settle();
+    const buttons = view.getAllByRole('button', { name: 'Revoke' });
+    expect(buttons).toHaveLength(2);
+    const described = buttons.map((button) =>
+      (button.getAttribute('aria-describedby') ?? '')
+        .split(' ')
+        .map((id) => button.ownerDocument.getElementById(id)?.textContent ?? '')
+        .join(' '),
+    );
+    expect(described[0]).toMatch(/^Made by .+, open until .+/);
+    expect(described[1]).toMatch(/^Made by someone, open until .+/);
+  });
+
   test('a member is not offered it', async () => {
     const view = await openDialog({}, 'member');
     expect(view.queryByRole('menuitem', { name: 'Invite people…' })).toBeNull();

@@ -61,6 +61,15 @@ test.describe('an invitation', () => {
     const field = dialog.getByRole('textbox', { name: 'Invitation link' });
     await expect(field).toHaveValue(/\/invite#[0-9a-f]{64}$/);
     const link = await field.inputValue();
+    // Each open link is said whole, at either width: its end is the time, and a cut "11:22 …" hides
+    // whether it is morning or night.
+    const rows = dialog.locator('li [id^="invitation-"]');
+    await expect(rows.first()).toBeVisible();
+    for (const row of await rows.all()) {
+      expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+    }
 
     // Alice is in the workspace already: the link offers to open it, and joins nothing.
     const alice = await asPerson('alice');

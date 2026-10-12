@@ -41,6 +41,27 @@ test.describe('at a phone width', () => {
     }
   });
 
+  test('the composer, focused, keeps its hints inside it', async ({ page, signIn, world }) => {
+    // The hints appear only on focus, and an overflow inside the composer's own box is not the
+    // document's: found by hand at 400 px, `Shift+Enter` running off the composer's right edge.
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    const box = page.getByRole('textbox', { name: /^Message/ });
+    await box.focus();
+    const hints = page.locator('kbd').first();
+    await expect(hints).toBeVisible();
+    const composer = await page
+      .locator('[data-composer-card]')
+      .first()
+      .evaluate((card) => card.getBoundingClientRect().right);
+    for (const key of await page.locator('kbd').all()) {
+      const right = await key.evaluate((element) => element.getBoundingClientRect().right);
+      expect(right, `${(await key.textContent()) ?? ''} runs off the composer`).toBeLessThanOrEqual(
+        composer,
+      );
+    }
+  });
+
   test('the sign-in screen fits too', async ({ page }) => {
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
