@@ -24,7 +24,7 @@ export { purgeDeadSessions } from './sessions';
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).
  */
 export { sql } from 'kysely';
-export type { SelectQueryBuilder } from 'kysely';
+export type { RawBuilder, SelectQueryBuilder } from 'kysely';
 export {
   migrateToLatest,
   type MigrateOptions,

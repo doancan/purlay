@@ -15,6 +15,9 @@ const MESSAGES_TESTS = ['apps/api/src/modules/messages/messages.integration.test
 const SEARCH = 'apps/api/src/modules/search/search.ts';
 const SEARCH_TESTS = ['apps/api/src/modules/search/search.integration.test.ts'];
 
+const INBOX = 'apps/api/src/modules/notifications/notifications.ts';
+const INBOX_TESTS = ['apps/api/src/modules/notifications/notifications.integration.test.ts'];
+
 const SOCKET = 'apps/api/src/ingress/ws/socket.ts';
 const SOCKET_TESTS = ['apps/api/src/realtime/sockets.integration.test.ts'];
 
@@ -917,5 +920,77 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "maxLength: SEARCH_QUERY_MAX,\n    format: 'plain-text',\n",
     replace: 'maxLength: SEARCH_QUERY_MAX,\n',
     tests: ['apps/api/src/ingress/http/search.integration.test.ts'],
+  },
+  {
+    id: 'inbox-not-narrowed-to-visible-channels',
+    why: 'a person removed from a private channel, or never in it, reads what was said there through the notification',
+    file: INBOX,
+    find: "    .where('notifications.channel_id', 'in', visible)\n",
+    replace: '',
+    tests: [...INBOX_TESTS, 'apps/api/src/ingress/http/channel-visibility.integration.test.ts'],
+  },
+  {
+    id: 'inbox-shows-deleted-messages',
+    why: 'a deleted message is read again in the inbox of everybody it named',
+    file: INBOX,
+    find: "    .where('messages.deleted_at', 'is', null)\n",
+    replace: '',
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'inbox-is-not-the-callers-own',
+    why: 'the inbox lists every notification in the workspace, everybody else’s too',
+    file: INBOX,
+    find: "    .where('notifications.user_id', '=', context.userId)\n",
+    replace: '',
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'inbox-unread-only-ignored',
+    why: 'asking for what is unread answers everything, so a read notification never leaves the list',
+    file: INBOX,
+    find: "  if (query.unreadOnly === true) statement = statement.where('notifications.read_at', 'is', null);\n",
+    replace: '',
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'inbox-cursor-not-the-callers',
+    why: 'somebody else’s notification id is accepted as a cursor, and the page says where it sits in their inbox',
+    file: INBOX,
+    find: "    .where('id', '=', id)\n    .where('user_id', '=', userId)\n",
+    replace: "    .where('id', '=', id)\n",
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'reading-notifications-not-the-callers',
+    why: 'anybody who has a notification id marks it read for the person it was for, and their badge goes down',
+    file: INBOX,
+    find: "    .where('notifications.user_id', '=', userId)\n    .where('notifications.read_at', 'is', null);\n",
+    replace: "    .where('notifications.read_at', 'is', null);\n",
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'reading-a-workspace-ignores-before',
+    why: 'Mark all read also reads what arrived after the person looked, and they never see it',
+    file: INBOX,
+    find: '    if (input.before !== undefined) {\n',
+    replace: '    if (input.before !== undefined && input.before === "") {\n',
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'reading-notifications-leaves-the-badge',
+    why: 'the inbox is read and the channel still shows the mention badge, until the channel itself is read',
+    file: INBOX,
+    find: "      unread_mention_count: sql<number>`least(unread_count, ${waitingNotifications(userId, sql.ref('channel_members.channel_id'))})`,\n",
+    replace: '',
+    tests: INBOX_TESTS,
+  },
+  {
+    id: 'reading-notifications-tells-nobody',
+    why: 'the badge moves on the device that read and stays on every other one',
+    file: 'apps/api/src/ingress/http/notifications.ts',
+    find: '    told.map((channel) =>\n',
+    replace: '    told.slice(0, 0).map((channel) =>\n',
+    tests: ['apps/api/src/ingress/http/notifications.integration.test.ts'],
   },
 ];

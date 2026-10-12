@@ -12,7 +12,7 @@
  * second device that is further behind is simply stale — and changes nothing, so
  * it also publishes nothing.
  */
-import { sql, type Transaction } from '@purlay/db';
+import { sql, type RawBuilder, type Transaction } from '@purlay/db';
 import type { ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -24,6 +24,22 @@ import type { ChannelContext } from '../../platform/channels';
  * the two numbers in disagreement the first time they are recomputed.
  */
 const NEEDS_YOU = ['mention', 'direct_message', 'thread_reply'] as const;
+
+/**
+ * The notifications still waiting for a person in one channel, of the kinds that need them: what
+ * `unread_mention_count` is bounded by. One expression, for the read position and the inbox alike,
+ * so the badge cannot be counted two ways (D-99 §4, D-106).
+ */
+export const waitingNotifications = (
+  userId: string,
+  /** A channel's id, or a reference to the row's own column when counting for many at once. */
+  channelId: string | RawBuilder<unknown>,
+): RawBuilder<number> => sql<number>`(
+  select count(*)::int from notifications n
+  join messages m on m.id = n.message_id and m.deleted_at is null
+  where n.user_id = ${userId} and n.channel_id = ${channelId}
+    and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
+)`;
 
 export interface ReadOutcome {
   readonly state: ChannelState;
@@ -114,12 +130,7 @@ export const markRead = async (
           where channel_id = ${context.channelId} and id > ${messageId}
             and sender_id <> ${context.userId} and deleted_at is null
         ),
-        (
-          select count(*)::int from notifications n
-          join messages m on m.id = n.message_id and m.deleted_at is null
-          where n.user_id = ${context.userId} and n.channel_id = ${context.channelId}
-            and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
-        )
+        ${waitingNotifications(context.userId, context.channelId)}
       )`,
     })
     .where('channel_id', '=', context.channelId)

@@ -111,13 +111,14 @@ describe('integration: cross-tenant isolation', () => {
         await aTenant(db, stranger, 'xt-own');
         const body = crossing.body?.(NOW, {
           userId: ownerUser.userId,
+          workspaceId: theirs.workspaceId,
           messageId: theirs.messageId,
         });
 
         const across = await call(
           db,
           method,
-          `${pathFor(path, theirs)}${queryFor(crossing)}`,
+          pathFor(`${path}${queryFor(crossing)}`, theirs),
           stranger,
           body,
         );
@@ -129,7 +130,7 @@ describe('integration: cross-tenant isolation', () => {
           const elsewhere = await call(
             db,
             method,
-            `${pathFor(path, ids)}${queryFor(crossing)}`,
+            pathFor(`${path}${queryFor(crossing)}`, ids),
             stranger,
             body,
           );
@@ -142,7 +143,7 @@ describe('integration: cross-tenant isolation', () => {
         const own = await call(
           db,
           method,
-          `${pathFor(path, theirs)}${queryFor(crossing)}`,
+          pathFor(`${path}${queryFor(crossing)}`, theirs),
           owner,
           body,
         );

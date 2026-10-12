@@ -4412,6 +4412,41 @@ query language, and D-10's argument against stemming applies: a person pasting a
 that identifier. **Rejected: `channelId` outside the visible set answered as an empty page.** It is
 the 403-that-confirms-existence in another form.
 
+### D-106. The inbox, and what reading it does to the badge
+
+`API.md` listed the two endpoints and `SCHEMA.md` §7.4 the table; nothing said what the inbox shows or
+what marking it read moves. Served by #58.
+
+**1 · One workspace, the caller's own, newest first by when they were told.** A resolution of an old
+question is told today, and belongs at the top though its message is old. At the same instant the
+message orders them (UUIDv7), then the notification's id, so the order is total and the cursor exact.
+`notifications.id` is not time-ordered, so the cursor is a notification of the caller's, compared as
+`(created_at, message_id, id)` in the database: its timestamps are finer than a JavaScript date, and a
+cursor that went through one sorts after its own row. A cursor that is not one of the caller's
+notifications in that workspace is `400`, not an empty page that looks like the end.
+
+**2 · Only from channels the caller can see now (D-34), never about a deleted message.** The rows are
+kept (D-15, D-103); the inbox does not show what the person can no longer read. A notification of the
+kinds that do not need anybody (`thread_resolved`) is listed like the rest: the inbox is what happened
+to you, the badge is what needs you.
+
+**3 · Reading here moves the badge, not the read position.** `unread_mention_count` is bounded by the
+notifications still waiting in the channel (D-99 §4), so marking them read counts each channel's badge
+again from the rows — one expression, shared with the read position — and tells the caller's devices
+`CHANNEL_STATE`. The messages are still unread; they no longer need the person. A channel whose
+notifications were already read is not told again. The membership rows are locked first, in one order,
+as the read position locks its own, so a read here and a read of the channel at once take turns.
+
+**4 · `{ workspaceId, before }` reads up to and including `before`.** "Mark all read" sends the newest
+notification the person saw, so one that arrived after they looked is still waiting for them.
+
+**Rejected: reading a notification moves the channel's read position to its message.** It would mark
+everything before it read, which the person has not seen. **Rejected: deleting a notification once
+read.** It is the history the inbox exists to keep (D-15). **Accepted:** the full list (not
+`unreadOnly`) has no index of its own and is found through the `(user_id, message_id, type)` unique
+index, sorted per request; a person's notifications are few enough that this is measured before it is
+indexed (D-49).
+
 ---
 
 ## Part D — Open, deliberately

@@ -106,13 +106,15 @@ type Visibility =
 /**
  * What a body may need from the owner's side of a crossing and cannot derive: the
  * owner themself (a direct message with a person who is certainly in the
- * workspace) and a message of the owner's channel (a read position names one). The
+ * workspace), a message of the owner's channel (a read position names one) and the
+ * workspace, for a body that names it (marking an inbox read). The
  * stranger's request carries the same body, which is how a refusal that came before
  * the body was read is told from one that came after.
  */
 export interface OwnerIds {
   readonly userId: string;
   readonly messageId: string;
+  readonly workspaceId: string;
 }
 
 export interface CrossTenantCase {
@@ -134,9 +136,10 @@ const MESSAGE: Visibility = { kind: 'message' };
 const MESSAGE_BY_AUTHOR: Visibility = { kind: 'message', author: true };
 
 /**
- * The query string a case needs to be a request the endpoint can answer at all — search needs `q`.
- * Without it the owner's own request would be a `400`, and every crossing would be refused for the
- * wrong reason.
+ * The query string a case needs to be a request the endpoint can answer at all — search needs `q`,
+ * the inbox its `workspaceId`. Without it the owner's own request would be a `400`, and every
+ * crossing would be refused for the wrong reason. Its `:workspaceId` is filled in by `pathFor`, with
+ * the rest of the path.
  */
 export const queryFor = (crossing: CrossTenantCase): string =>
   crossing.visibility.kind === 'workspace-wide' && crossing.visibility.query !== undefined
@@ -214,6 +217,19 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId/search': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'q=question' },
+  },
+  'GET /api/notifications': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },
+  },
+  'PUT /api/notifications/read': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: (_now, owner) => ({ workspaceId: owner.workspaceId }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'marks the caller’s own notifications; it answers nothing, and tells only their devices',
+    },
   },
 };
 

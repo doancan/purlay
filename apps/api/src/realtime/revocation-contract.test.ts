@@ -104,6 +104,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
   },
+  // Reading the inbox recounts the mention badge of the channels it touched. It changes no
+  // membership, so nobody's access moves (D-106, #58).
+  'apps/api/src/modules/notifications/notifications.ts#readNotifications': {
+    none: 'recounts the mention counters of existing memberships and changes no access (#58)',
+  },
   // A new message raises the unread counters of the channel's existing memberships. It
   // adds, removes and changes no membership, so nobody's access moves (D-99, #58).
   'apps/api/src/modules/messages/delivery.ts#recordDelivery': {

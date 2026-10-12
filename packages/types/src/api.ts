@@ -27,6 +27,7 @@ import {
   Message,
   MessageContent,
   Reaction,
+  Timestamp,
   User,
   UserRole,
   Uuid,
@@ -202,3 +203,52 @@ export type CreateDirectMessageRequest = Static<typeof CreateDirectMessageReques
 /** `GET /api/workspaces/:workspaceId/members` — who can be messaged, mentioned and counted. */
 export const WorkspaceMemberList = Type.Array(WorkspaceMember);
 export type WorkspaceMemberList = Static<typeof WorkspaceMemberList>;
+
+/**
+ * Why a person is told about a message (D-99 §1, D-29): named in it, sent it directly, answered in a
+ * thread they are part of, or their question was resolved. The database's `notification_type`.
+ */
+export const NotificationType = Type.Union([
+  Type.Literal('mention'),
+  Type.Literal('direct_message'),
+  Type.Literal('thread_reply'),
+  Type.Literal('thread_resolved'),
+]);
+export type NotificationType = Static<typeof NotificationType>;
+
+/** One thing waiting for the caller in the inbox, with the message it is about (D-106). */
+export const Notification = Type.Object({
+  id: Uuid,
+  type: NotificationType,
+  channelId: Uuid,
+  message: Message,
+  createdAt: Timestamp,
+  readAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type Notification = Static<typeof Notification>;
+
+/**
+ * `GET /api/notifications` — one workspace's inbox, newest first (D-106). `before` is the id of the
+ * last notification of the previous page; there is no `after`, because new ones arrive at the top.
+ */
+export const NotificationQuery = FromClient({
+  workspaceId: Uuid,
+  unreadOnly: Type.Optional(Type.Boolean()),
+  before: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type NotificationQuery = Static<typeof NotificationQuery>;
+export const NotificationPage = Page(Notification);
+export type NotificationPage = Static<typeof NotificationPage>;
+
+/**
+ * `PUT /api/notifications/read` — these, by id; or everything in a workspace, up to and including
+ * `before` when given, so what arrived after the person looked is not read for them (D-106).
+ */
+export const ReadNotificationsRequest = Type.Union([
+  FromClient({ ids: Type.Array(Uuid, { minItems: 1, maxItems: PAGE_LIMIT.max }) }),
+  FromClient({ workspaceId: Uuid, before: Type.Optional(Uuid) }),
+]);
+export type ReadNotificationsRequest = Static<typeof ReadNotificationsRequest>;
