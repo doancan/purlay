@@ -350,7 +350,10 @@ export const messageHistory = async (
     .select(MESSAGE_COLUMNS)
     .where('messages.channel_id', '=', context.channelId)
     .where('messages.parent_id', 'is', null)
-    .where('messages.deleted_at', 'is', null)
+    // A deleted root keeps its place while it has replies, as their tombstone (D-103 §7).
+    .where((eb) =>
+      eb.or([eb('messages.deleted_at', 'is', null), eb('messages.thread_reply_count', '>', 0)]),
+    )
     // Ascending when catching up, so a reconnect reads what it missed in the
     // order it happened and a client can append rather than sort (§5.4).
     .orderBy('messages.id', forwards ? 'asc' : 'desc')

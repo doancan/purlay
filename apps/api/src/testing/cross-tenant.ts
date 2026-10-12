@@ -180,6 +180,10 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
   },
+  'DELETE /api/messages/:messageId': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE_BY_AUTHOR,
+  },
   'PATCH /api/messages/:messageId': {
     refusal: 'MESSAGE_NOT_FOUND',
     body: () => ({ content: 'crossing' }),

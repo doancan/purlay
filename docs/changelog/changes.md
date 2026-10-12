@@ -6,6 +6,19 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a message can be deleted, and its thread stays (D-103 §7, D-9)
+
+- `DELETE /api/messages/:messageId`: the author, or a workspace owner or admin. The content becomes an
+  empty tombstone and nothing is erased — not the row, its thread, its reactions or what people were
+  told. Deleted already is `204` again; another member is `403`.
+- A deleted root with replies stays in the feed as its tombstone, with its thread, which can still be
+  opened; a root nobody answered leaves the feed; a deleted reply stays in its thread, and the thread
+  keeps its count. A deleted message cannot be answered, reacted to or edited.
+- What it added to unread and mention counts is taken back, for exactly the people it was counted
+  for, never below zero. Its waiting notifications are marked read and kept.
+- Migration `0016` redefines the feed and thread indexes to hold tombstones; the replay still reads
+  live messages only. The unapplied migrations planned after it moved up by one.
+
 ### Feature — 2026-10-12: the author can edit a message (D-103, closes O-1)
 
 - `PATCH /api/messages/:messageId` replaces the content of the caller's own message, with no window;

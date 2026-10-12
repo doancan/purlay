@@ -20,6 +20,7 @@ import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { visibleChannelIds } from '../../platform/channels';
 import { messageHistory, send, type SendDependencies } from '../../modules/messages/messages';
 import { edit } from '../../modules/messages/edit';
+import { deleteMessage } from '../../modules/messages/delete';
 import {
   setResolved,
   threadReplies,
@@ -93,7 +94,8 @@ export const readThread = async (
 ): Promise<MessagePage> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
-  const root = await requireMessageById(database, userId, messageId);
+  // A deleted root with replies keeps its place in the feed, and its thread with it (D-103 §7).
+  const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
   const query = validated(PageQuery, asPageQuery(new URL(request.url)));
   return await threadReplies(database, root, query);
 };
@@ -121,6 +123,17 @@ export const editMessage = async (
   const caller = await requireSession(database, clock, request);
   const input = validated(EditMessageRequest, body);
   return await edit(dependencies, caller, messageId, input.content);
+};
+
+/** `DELETE /api/messages/:messageId` — the author, or a workspace admin (D-103 §7). */
+export const removeMessage = async (
+  dependencies: HistoryDependencies & SendDependencies,
+  request: Request,
+  messageId: string,
+): Promise<void> => {
+  const { database, clock } = dependencies;
+  const caller = await requireSession(database, clock, request);
+  await deleteMessage(dependencies, caller, messageId);
 };
 
 /**

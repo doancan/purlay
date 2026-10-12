@@ -27,6 +27,7 @@ import { REACTION_KINDS_MAX, setReaction } from '../reactions/reactions';
 import { sendMessage } from './messages';
 import { setResolved } from './threads';
 import { reviseMessage } from './edit';
+import { removeMessage } from './delete';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -317,5 +318,39 @@ describe('integration: an edit waiting on another', () => {
       .where('id', '=', id)
       .executeTakeFirstOrThrow();
     expect(row.content).toBe('v0');
+  });
+});
+
+describe('integration: two deletes at once', () => {
+  test('the second finds it deleted: the counters come down once', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice', 'bob']);
+    const alice = room.members['alice'];
+    const bob = room.members['bob'];
+    if (alice === undefined || bob === undefined) throw new Error('room');
+    await sendMessage(db, clock, alice.context, { id: nextId(), content: 'kept' });
+    const id = (
+      await sendMessage(db, clock, alice.context, { id: nextId(), content: `@${bob.username}` })
+    ).message.id;
+
+    const first = holdOpen(atomicallyOn(db));
+    const one = first.atomically(
+      async (transaction) => await removeMessage(transaction, clock, alice.userId, id),
+    );
+    await first.holding;
+    const two = atomicallyOn(db)(
+      async (transaction) => await removeMessage(transaction, clock, alice.userId, id),
+    );
+    expect(await settlesWithin(two, BLOCKED_FOR_MS)).toBe(false);
+    first.release();
+    const [byFirst, bySecond] = await Promise.all([one, two]);
+    expect([byFirst.removed, bySecond.removed]).toEqual([true, false]);
+    const member = await db
+      .selectFrom('channel_members')
+      .select(['unread_count', 'unread_mention_count'])
+      .where('channel_id', '=', room.channelId)
+      .where('user_id', '=', bob.userId)
+      .executeTakeFirstOrThrow();
+    expect(member).toEqual({ unread_count: 1, unread_mention_count: 0 });
   });
 });

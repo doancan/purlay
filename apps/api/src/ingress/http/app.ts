@@ -66,6 +66,7 @@ import {
   readUnresolved,
   setThreadResolution,
   editMessage,
+  removeMessage,
 } from './messages';
 import { changeReaction } from './reactions';
 import { readiness } from '../../platform/readiness';
@@ -324,6 +325,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
       set.status = 201;
       return await postMessage(sending, request, params.channelId, body);
+    })
+    .delete('/api/messages/:messageId', async ({ request, params, set }) => {
+      await removeMessage(sending, request, params.messageId);
+      set.status = 204;
+      return null;
     })
     .patch(
       '/api/messages/:messageId',

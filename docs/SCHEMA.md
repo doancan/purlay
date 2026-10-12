@@ -447,14 +447,15 @@ CREATE TABLE messages (
 -- Primary feed. Keyset pagination on `id` alone: UUIDv7 is byte-wise time-ordered,
 -- and PostgreSQL compares the uuid type byte-wise, so this index IS chronological.
 -- Root messages only, because thread replies render inline under their parent. (D-8)
+-- A deleted root with replies keeps its place, as its tombstone (D-103 §7). Redefined by 0016.
 CREATE INDEX idx_messages_channel_feed
     ON messages (channel_id, id DESC)
-    WHERE parent_id IS NULL AND deleted_at IS NULL;
+    WHERE parent_id IS NULL AND (deleted_at IS NULL OR thread_reply_count > 0);
 
--- Expanding one thread.
+-- Expanding one thread: every reply, a deleted one as its tombstone (D-103 §7). Redefined by 0016.
 CREATE INDEX idx_messages_thread
     ON messages (parent_id, id)
-    WHERE parent_id IS NOT NULL AND deleted_at IS NULL;
+    WHERE parent_id IS NOT NULL;
 
 -- Scoped substring / identifier search. btree_gin lets workspace_id sit inside the
 -- GIN index, so the trigram scan is confined to one tenant instead of the whole table. (D-10)
@@ -953,16 +954,17 @@ file that leaves its transaction runs statement by statement and must be safe to
 0013_read_state.sql          unread_mention_within_unread: I-6 as a CHECK  (D-99)
 0014_open_questions_index.sql   idx_messages_unresolved holds only roots that have a reply  (D-99, amended)
 0015_state_versions.sql      channel_members.state_version, messages.state_version  (D-99, amended)
-0016_integrations.sql        github_integrations, link_previews
+0016_tombstones_keep_their_place.sql  idx_messages_channel_feed and idx_messages_thread keep tombstones  (D-103)
 ```
 
 ```
-0017_administration.sql      audit_log, job_runs  (Phase 1)
+0017_integrations.sql        github_integrations, link_previews
+0018_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0018_github_feeds.sql`; Phase 2's magic links add `0019_email_auth.sql`.
+Phase 2 adds `0019_github_feeds.sql`; Phase 2's magic links add `0020_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
-again when `0007_message_content_limit.sql` shipped in Phase 0, and again with each hardening migration
-(`0008` to `0011`). That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
+(`0008` to `0011`), and again when `0016_tombstones_keep_their_place.sql` shipped with deletion. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)
