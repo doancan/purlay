@@ -17,6 +17,7 @@ import { cn } from '../../ui/cn';
 import { useSession } from '../session/session';
 import { ChannelList } from '../sidebar/channel-list';
 import { JumpField } from '../sidebar/jump-field';
+import { InboxLink } from '../inbox/inbox-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { PeopleList } from '../sidebar/people-list';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
@@ -40,7 +41,10 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
       <WorkspaceMenu />
       <JumpField />
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        <OpenQuestionsLink />
+        <div className="flex flex-col gap-1">
+          <OpenQuestionsLink />
+          <InboxLink />
+        </div>
         <ChannelList />
         <PeopleList />
       </div>

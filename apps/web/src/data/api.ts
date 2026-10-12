@@ -15,6 +15,7 @@ import {
   Membership,
   Message,
   MessagePage,
+  NotificationPage,
   ReactionsResponse,
   ReadChannelResponse,
   ThreadPage,
@@ -69,6 +70,12 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<UnresolvedPage>;
+  /** The caller's inbox in one workspace, newest first (D-106). */
+  readonly notifications: (
+    workspaceId: string,
+    page?: { readonly before?: string | undefined },
+    signal?: AbortSignal,
+  ) => Promise<NotificationPage>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   readonly unreact: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   /** The author's new words (D-103); the answer is the message as it now is. */
@@ -164,6 +171,13 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/unresolved`,
         UnresolvedPage,
         options({ query: { ...page } }, signal),
+      ),
+    notifications: (workspaceId, page = {}, signal) =>
+      http.request(
+        'GET',
+        '/api/notifications',
+        NotificationPage,
+        options({ query: { workspaceId, ...page } }, signal),
       ),
     react: (messageId, emoji) =>
       http.request(

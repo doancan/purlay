@@ -26,6 +26,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   resolve: unexpected('resolve'),
   reopen: unexpected('reopen'),
   unresolved: unexpected('unresolved'),
+  notifications: unexpected('notifications'),
   react: unexpected('react'),
   unreact: unexpected('unreact'),
   editMessage: unexpected('editMessage'),

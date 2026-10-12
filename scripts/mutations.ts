@@ -1033,4 +1033,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    .forUpdate()\n',
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
+  {
+    id: 'inbox-not-told-of-a-new-mention',
+    why: 'an open inbox does not show a mention that arrived while it was open',
+    file: 'apps/web/src/data/cache.ts',
+    find: '  if (before !== undefined && state.unreadMentionCount > (before.state?.unreadMentionCount ?? 0)) {\n',
+    replace: '  if (before !== undefined && state.unreadMentionCount < 0) {\n',
+    tests: ['apps/web/src/data/cache.test.ts'],
+  },
 ];

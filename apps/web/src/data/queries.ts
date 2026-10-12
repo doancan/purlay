@@ -15,7 +15,14 @@ import {
   type UseInfiniteQueryResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import type { Channel, MeResponse, Message, MessagePage, WorkspaceMember } from '@purlay/types';
+import type {
+  Channel,
+  MeResponse,
+  Message,
+  MessagePage,
+  NotificationPage,
+  WorkspaceMember,
+} from '@purlay/types';
 import { useApi } from './api-provider';
 import { keys } from './keys';
 
@@ -88,6 +95,20 @@ export const useUnresolved = (workspaceId: string): UseInfiniteQueryResult<Pages
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     ...KEEP_MESSAGES,
+  });
+};
+
+/** The caller's inbox in one workspace, newest first, a page at a time (D-106). */
+export const useNotifications = (
+  workspaceId: string,
+): UseInfiniteQueryResult<InfiniteData<NotificationPage>> => {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: keys.notifications(workspaceId),
+    queryFn: ({ pageParam, signal }) =>
+      api.notifications(workspaceId, { before: pageParam }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 };
 

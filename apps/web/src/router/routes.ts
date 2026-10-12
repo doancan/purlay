@@ -18,6 +18,7 @@ const ROUTES = {
   workspace: '/w/:slug',
   channel: '/w/:slug/c/:channelId',
   questions: '/w/:slug/questions',
+  inbox: '/w/:slug/inbox',
   gallery: '/__gallery',
 } as const;
 

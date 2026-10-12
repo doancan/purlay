@@ -228,6 +228,27 @@ describe('the channel list', () => {
     expect(client.getQueryData<Channel[]>(keys.channels(WS))).toHaveLength(1);
   });
 
+  test('more mentions waiting mark the inbox stale; fewer, or the same, do not (D-106)', () => {
+    const client = seeded();
+    client.setQueryData(keys.notifications(WS), { pages: [], pageParams: [] });
+    const stale = (): boolean =>
+      client.getQueryState(keys.notifications(WS))?.isInvalidated ?? false;
+    const at = (mentions: number): void => {
+      channelStateChanged(client, CH, {
+        lastReadMessageId: null,
+        unreadCount: 5,
+        unreadMentionCount: mentions,
+      });
+    };
+    at(0);
+    expect(stale()).toBe(false);
+    at(2);
+    expect(stale()).toBe(true);
+    client.setQueryData(keys.notifications(WS), { pages: [], pageParams: [] });
+    at(1);
+    expect(stale()).toBe(false);
+  });
+
   test('a channel is added once; with no list cached the list is asked for instead', () => {
     const client = seeded();
     const dm = channel({ id: id(50), name: null, type: 'direct_message', peer: user });

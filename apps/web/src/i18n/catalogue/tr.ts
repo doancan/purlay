@@ -277,6 +277,21 @@ export const tr = {
   'state.channels.empty.title': 'Henüz kanal yok',
   'state.channels.empty.body': 'İlkini oluştur; yalnızca bir ad yeter.',
 
+  // ── Inbox (D-106) ──────────────────────────────────────────────────────
+  'inbox.title': 'Gelen kutusu',
+  'inbox.lede': 'Sana söylenenler, en yenisi önce',
+  'inbox.why.mention': '{name} senden bahsetti',
+  'inbox.why.direct': '{name} sana yazdı',
+  'inbox.why.reply': '{name} thread’ine yanıt verdi',
+  'inbox.why.resolved': 'Sorun çözüldü',
+  'inbox.more': 'Daha fazla yükle',
+  'state.inbox.loading': 'Gelen kutun yükleniyor',
+  'state.inbox.error.title': 'Gelen kutun yüklenemedi',
+  'state.inbox.error.body': 'Sunucu yanıt vermedi. Yeniden dene.',
+  'state.inbox.empty.title': 'Seni bekleyen bir şey yok',
+  'state.inbox.empty.body':
+    'Biri senden bahsettiğinde, sana yazdığında ya da thread’ine yanıt verdiğinde burada görünür.',
+
   // ── Açık sorular (UX §4.4) ──────────────────────────────────────────────
   'questions.title': 'Açık sorular',
   'questions.lede': 'Yanıt almış çözülmemiş thread’ler, en yenisi önce',
