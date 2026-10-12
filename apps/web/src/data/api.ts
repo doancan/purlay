@@ -9,6 +9,7 @@
  */
 import { Type } from '@sinclair/typebox';
 import {
+  Attachment,
   ChannelList,
   Channel,
   MeResponse,
@@ -70,6 +71,11 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<MessagePage>;
   readonly send: (channelId: string, input: SendMessageRequest) => Promise<Message>;
+  /** A file's bytes under the attachment id the client chose (D-109 §3). */
+  readonly upload: (
+    workspaceId: string,
+    upload: { readonly id: string; readonly name: string; readonly file: Blob },
+  ) => Promise<Attachment>;
   readonly thread: (
     messageId: string,
     page?: PageQuery,
@@ -101,6 +107,8 @@ export interface Api {
   /** The author's new words (D-103); the answer is the message as it now is. */
   readonly editMessage: (messageId: string, content: string) => Promise<Message>;
   readonly deleteMessage: (messageId: string) => Promise<void>;
+  /** Throws away one's own upload that was never sent (D-109 §5). */
+  readonly discardAttachment: (attachmentId: string) => Promise<void>;
 
   readonly signOut: () => Promise<void>;
 }
@@ -180,6 +188,13 @@ export const createApi = (http: Http): Api => {
         MessagePage,
         options({ query: { ...page } }, signal),
       ),
+    upload: (workspaceId, { id, name, file }) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/uploads`,
+        Attachment,
+        options({ query: { id, name }, bytes: file }),
+      ),
     send: (channelId, input) =>
       http.request(
         'POST',
@@ -244,6 +259,8 @@ export const createApi = (http: Http): Api => {
         options({ body: { content } }),
       ),
     deleteMessage: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}`, options()),
+    discardAttachment: (attachmentId) =>
+      http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
     signOut: () => http.send('POST', '/auth/logout', options()),
   };
 };

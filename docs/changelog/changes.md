@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: attaching files from the composer (D-109, #370)
+
+- Paste an image, drop a file or pick one with **Attach a file**: each uploads at once and shows as
+  a chip with its state, Retry when it failed and Remove (which throws it away on the server too). A
+  file over 25 MB is refused before it is sent. A message may be its files alone; sent while a file
+  is still uploading, it waits and says so, then goes. Files sent and not yet acknowledged come back
+  with the message after a reload.
+
 ### Feature — 2026-10-12: attachments drawn in the feed (D-109 §6)
 
 - A message's images show as thumbnails under its words, in space kept for them before they load,

@@ -6,7 +6,13 @@
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
 import { useState } from 'react';
-import { MESSAGE_CONTENT_MAX } from '@purlay/types';
+import {
+  ATTACHMENT_BYTES_MAX,
+  ATTACHMENTS_PER_MESSAGE_MAX,
+  MESSAGE_CONTENT_MAX,
+  type Attachment,
+} from '@purlay/types';
+import { ApiError } from '../../data/errors';
 import { SessionGate } from '../session/session';
 import { WorkspaceScopeProvider } from '../shell/workspace';
 import { RealtimeProvider } from '../../realtime/realtime-provider';
@@ -59,7 +65,12 @@ interface Mounted {
   readonly timers: ReturnType<typeof fakeSchedule>;
   readonly storage: DraftStorage | null;
   readonly box: () => HTMLTextAreaElement;
-  readonly sent: () => { channelId: unknown; content: unknown; parentId?: unknown }[];
+  readonly sent: () => {
+    channelId: unknown;
+    content: unknown;
+    parentId?: unknown;
+    attachmentIds?: unknown;
+  }[];
   readonly user: ReturnType<typeof person>;
   readonly rerender: (
     next: Partial<ComposerProps>,
@@ -101,10 +112,21 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
     });
   }
   const box = (): HTMLTextAreaElement => view.getByRole('textbox') as HTMLTextAreaElement;
-  const sent = (): { channelId: unknown; content: unknown; parentId?: unknown }[] =>
-    view.world.sockets
-      .sent('MESSAGE_SEND')
-      .map((f) => f.payload as { channelId: unknown; content: unknown; parentId?: unknown });
+  const sent = (): {
+    channelId: unknown;
+    content: unknown;
+    parentId?: unknown;
+    attachmentIds?: unknown;
+  }[] =>
+    view.world.sockets.sent('MESSAGE_SEND').map(
+      (f) =>
+        f.payload as {
+          channelId: unknown;
+          content: unknown;
+          parentId?: unknown;
+          attachmentIds?: unknown;
+        },
+    );
   return {
     view,
     timers,
@@ -503,15 +525,9 @@ describe('pasting', () => {
     expect(view.queryByText('Pasted text became a code block')).toBeNull();
   });
 
-  test('a paste with no clipboard data, or only an image, is left to the browser', async () => {
+  test('a paste with no clipboard data is left to the browser; a pasted file is uploaded (#370)', async () => {
     const { box } = await mount();
     expect(fireEvent.paste(box())).toBe(true);
-    const image = {
-      getData: (): string => '',
-      files: [{ type: 'image/png' }],
-      items: [{ kind: 'file', type: 'image/png' }],
-    };
-    expect(fireEvent.paste(box(), { clipboardData: image })).toBe(true);
     expect(box().value).toBe('');
   });
 });
@@ -674,5 +690,199 @@ describe('the three buttons under the box (D-110)', () => {
     await user.click(view.getByRole('button', { name: 'Bold' }));
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['**ship**']);
+  });
+});
+
+describe('attaching files (D-109, #370)', () => {
+  const asAttachment = (id: string, name: string, size: number): Attachment => ({
+    id,
+    fileName: name,
+    mimeType: 'application/octet-stream',
+    sizeBytes: size,
+    kind: 'file',
+    width: null,
+    height: null,
+  });
+
+  /** An upload the test answers when it wants, so a send can be seen waiting for it. */
+  const held = (): {
+    readonly api: Partial<Api>;
+    readonly calls: { workspaceId: string; id: string; name: string }[];
+    readonly finish: (index: number) => void;
+    readonly refuse: (index: number, error: Error) => void;
+  } => {
+    const calls: { workspaceId: string; id: string; name: string }[] = [];
+    const answers: { resolve: (a: Attachment) => void; reject: (e: Error) => void }[] = [];
+    return {
+      calls,
+      api: {
+        upload: (workspaceId, { id, name, file }): Promise<Attachment> => {
+          calls.push({ workspaceId, id, name });
+          return new Promise<Attachment>((resolve, reject) => {
+            answers.push({
+              resolve: () => {
+                resolve(asAttachment(id, name, file.size));
+              },
+              reject,
+            });
+          });
+        },
+      },
+      finish: (index): void => {
+        answers[index]?.resolve(asAttachment('', '', 0));
+      },
+      refuse: (index, error): void => {
+        answers[index]?.reject(error);
+      },
+    };
+  };
+
+  const paste = (box: HTMLTextAreaElement, files: File[]): void => {
+    act(() => {
+      fireEvent.paste(box, { clipboardData: { files, getData: () => '' } });
+    });
+  };
+
+  test('a pasted file uploads at once under its own id, and a send with no words carries it', async () => {
+    const uploads = held();
+    const { view, box, sent } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1, 2, 3])], 'notes.txt')]);
+    expect(uploads.calls).toEqual([
+      { workspaceId: IDS.workspace, id: expect.any(String) as string, name: 'notes.txt' },
+    ]);
+    expect(view.getByText('Uploading…')).toBeDefined();
+    uploads.finish(0);
+    await settle();
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Send' }));
+    });
+    expect(sent()).toEqual([
+      { channelId: IDS.api, content: '', attachmentIds: [uploads.calls[0]?.id] },
+    ]);
+    // The chip goes with what was sent.
+    expect(view.queryByText('notes.txt')).toBeNull();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('a send while a file is still uploading waits for it, says so, and goes when it lands', async () => {
+    const uploads = held();
+    const { view, box, sent, user } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    await user.type(box(), 'look{Enter}');
+    expect(sent()).toEqual([]);
+    expect(view.getByText('Sends when the files finish uploading.')).toBeDefined();
+    uploads.finish(0);
+    await settle();
+    expect(sent()).toEqual([
+      { channelId: IDS.api, content: 'look', attachmentIds: [uploads.calls[0]?.id] },
+    ]);
+  });
+
+  test('a failed upload says why, holds the send back, and Retry uploads it again', async () => {
+    const uploads = held();
+    const { view, box, sent, user } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    uploads.refuse(0, new ApiError(413, 'STORAGE_QUOTA_EXCEEDED', 'full'));
+    await settle();
+    expect(view.getByText('Didn’t upload')).toBeDefined();
+    await user.type(box(), 'look{Enter}');
+    expect(sent()).toEqual([]);
+    expect(view.getByRole('alert').textContent).toContain('A file did not upload');
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Retry a.txt' }));
+    });
+    expect(uploads.calls).toHaveLength(2);
+    // The same file, under the same id: a retry of an upload that did land is the same upload.
+    expect(uploads.calls[1]?.id).toBe(uploads.calls[0]?.id);
+  });
+
+  test('a file over the limit is refused before anything is sent, in words', async () => {
+    const uploads = held();
+    const { view, box } = await mount({ api: aSignedInApi(uploads.api) });
+    const huge = new File([new Uint8Array(1)], 'huge.mov');
+    Object.defineProperty(huge, 'size', { value: ATTACHMENT_BYTES_MAX + 1 });
+    paste(box(), [huge]);
+    expect(uploads.calls).toEqual([]);
+    expect(view.getByText('Larger than 25 MB')).toBeDefined();
+  });
+
+  test('a chip can be removed, and its upload is thrown away on the server too', async () => {
+    const uploads = held();
+    const discarded: string[] = [];
+    const { view, box } = await mount({
+      api: aSignedInApi({
+        ...uploads.api,
+        discardAttachment: (id) => {
+          discarded.push(id);
+          return Promise.resolve();
+        },
+      }),
+    });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    uploads.finish(0);
+    await settle();
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Remove a.txt' }));
+    });
+    await settle();
+    expect(view.queryByText('a.txt')).toBeNull();
+    expect(discarded).toEqual(uploads.calls.map((call) => call.id));
+  });
+
+  test('a dropped file and a picked one upload like a pasted one', async () => {
+    const uploads = held();
+    const { view, box } = await mount({ api: aSignedInApi(uploads.api) });
+    const card = box().closest('[data-composer-card]');
+    if (card === null) throw new Error('no card');
+    const dropped = new File([new Uint8Array([1])], 'dropped.txt');
+    act(() => {
+      fireEvent.dragOver(card, { dataTransfer: { types: ['Files'], files: [dropped] } });
+      fireEvent.drop(card, { dataTransfer: { types: ['Files'], files: [dropped] } });
+    });
+    const picker = view.container.querySelector('input[type="file"]');
+    if (!(picker instanceof HTMLInputElement)) throw new Error('no picker');
+    const picked = new File([new Uint8Array([2])], 'picked.txt');
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Attach a file' }));
+      fireEvent.change(picker, { target: { files: [picked] } });
+    });
+    expect(uploads.calls.map((call) => call.name)).toEqual(['dropped.txt', 'picked.txt']);
+  });
+
+  test('past the most a message carries, the rest are not taken, and the person is told', async () => {
+    const uploads = held();
+    const { view, box } = await mount({ api: aSignedInApi(uploads.api) });
+    const files = Array.from(
+      { length: ATTACHMENTS_PER_MESSAGE_MAX + 2 },
+      (_, n) => new File([new Uint8Array([n])], `f${String(n)}.txt`),
+    );
+    paste(box(), files);
+    expect(uploads.calls).toHaveLength(ATTACHMENTS_PER_MESSAGE_MAX);
+    expect(
+      view.getByText(`At most ${String(ATTACHMENTS_PER_MESSAGE_MAX)} files in one message.`),
+    ).toBeDefined();
+  });
+
+  test('a removal the server refuses is said, not swallowed', async () => {
+    const uploads = held();
+    const { view, box } = await mount({
+      api: aSignedInApi({
+        ...uploads.api,
+        discardAttachment: () => Promise.reject(new ApiError(0, 'NETWORK', 'down')),
+      }),
+    });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    uploads.finish(0);
+    await settle();
+    act(() => {
+      fireEvent.click(view.getByRole('button', { name: 'Remove a.txt' }));
+    });
+    await settle();
+    expect(view.getByText(/a\.txt was removed here, but not from the server\./)).toBeDefined();
+  });
+
+  test('the attach button picks files with the keyboard, and is named in both languages', async () => {
+    const { view } = await mount({ locale: 'tr' });
+    expect(view.getByRole('button', { name: 'Dosya ekle' })).toBeDefined();
   });
 });

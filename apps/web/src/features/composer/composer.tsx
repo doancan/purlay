@@ -50,6 +50,7 @@ import {
 } from './composer-text';
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
 import { draftKey, readDraft, writeDraft } from './drafts';
+import { UploadList, useUploads } from './uploads';
 
 export interface ComposerProps {
   readonly channelId: string;
@@ -86,6 +87,10 @@ const Inner = ({
   const [error, setError] = useState<string | null>(null);
   // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
   const [focused, setFocused] = useState(false);
+  const uploads = useUploads();
+  // A send asked for while files were still uploading.
+  const [waiting, setWaiting] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const hintsId = useId();
   // Where the caret goes after a change that is made by script (a paste, an undo).
   const caret = useRef<number | null>(null);
@@ -173,13 +178,19 @@ const Inner = ({
 
   const send = (): void => {
     const content = trimEnd(text);
-    if (content === '') return;
+    if (content === '' && uploads.items.length === 0) return;
+    // A file that did not upload is the person's to retry or remove: nothing goes without it.
+    if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large')) {
+      setWaiting(false);
+      setError(t('composer.uploadFailed'));
+      return;
+    }
     const over = unitsOver(content);
     if (over > 0) {
       setError(t('composer.tooLong', { count: over }));
       return;
     }
-    if (!Value.Check(MessageContent, content)) {
+    if (content !== '' && !Value.Check(MessageContent, content)) {
       setError(t('composer.invalid'));
       return;
     }
@@ -188,7 +199,22 @@ const Inner = ({
       setError(t('composer.broadcast', { mention }));
       return;
     }
-    const id = engine.send({ channelId, content, ...(parentId === undefined ? {} : { parentId }) });
+    // Still uploading: it goes when they land, and says so meanwhile (`UX.md` §5).
+    if (uploads.items.some((item) => item.status === 'uploading')) {
+      setWaiting(true);
+      setError(null);
+      return;
+    }
+    const id = engine.send({
+      channelId,
+      content,
+      ...(parentId === undefined ? {} : { parentId }),
+      attachments: uploads.items.flatMap((item) =>
+        item.status === 'ready' ? [item.attachment] : [],
+      ),
+    });
+    uploads.clear();
+    setWaiting(false);
     setText('');
     setError(null);
     // Gone from storage now, not a debounce from now: a reload right after sending must
@@ -238,7 +264,21 @@ const Inner = ({
     send();
   };
 
+  // A send that was waiting goes once nothing is uploading; if something failed meanwhile, it says so.
+  const uploading = uploads.items.some((item) => item.status === 'uploading');
+  useEffect(() => {
+    // `send` reads this render's words and files; it is called when what it waits on changes.
+    if (waiting && !uploading) send();
+  }, [waiting, uploading]);
+
   const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+    // A pasted image or file is uploaded, not written into the box.
+    const files = Array.from((event.clipboardData as DataTransfer | undefined)?.files ?? []);
+    if (files.length > 0) {
+      event.preventDefault();
+      uploads.add(files);
+      return;
+    }
     // A paste with no clipboard data (some automation, some old engines) is just a paste.
     const pasted = (event.clipboardData as DataTransfer | undefined)?.getData('text/plain') ?? '';
     if (!isLongPaste(pasted)) return;
@@ -313,6 +353,14 @@ const Inner = ({
       <div className="flex w-full max-w-feed flex-col gap-2 px-5">
         <div
           data-composer-card=""
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            if (event.dataTransfer.files.length === 0) return;
+            event.preventDefault();
+            uploads.add(Array.from(event.dataTransfer.files));
+          }}
           onFocus={() => {
             setFocused(true);
           }}
@@ -343,6 +391,19 @@ const Inner = ({
             />
             {compact && sendButton}
           </div>
+          <UploadList uploads={uploads} />
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            hidden
+            tabIndex={-1}
+            aria-label={t('composer.attach')}
+            onChange={(event) => {
+              uploads.add(Array.from(event.target.files ?? []));
+              event.target.value = '';
+            }}
+          />
           {compact && !focused && left === null ? (
             hintsBlock
           ) : (
@@ -375,6 +436,13 @@ const Inner = ({
                       insert('mention');
                     }}
                   />
+                  <IconButton
+                    label={t('composer.attach')}
+                    glyph="attach"
+                    onClick={() => {
+                      picker.current?.click();
+                    }}
+                  />
                   <span
                     aria-hidden="true"
                     className="mx-1 h-4 border-l-hairline border-border-subtle"
@@ -387,6 +455,12 @@ const Inner = ({
             </div>
           )}
         </div>
+        {waiting && (
+          <p role="status" className="flex items-center gap-2 px-1 text-label text-ink-muted">
+            <Icon name="sending" size="sm" />
+            {t('composer.waiting')}
+          </p>
+        )}
         {error !== null && (
           <p role="alert" className="flex items-center gap-2 px-1 text-label text-danger-text">
             <Icon name="failed" size="sm" />

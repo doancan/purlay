@@ -19,7 +19,8 @@
  * full or refuse — and a failure to remember is a message that is not remembered, never a
  * send that does not work.
  */
-import { isMessageIdShape } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
+import { Attachment, isMessageIdShape } from '@purlay/types';
 import { noteStorageFailure, type ClientStorage } from '../data/browser-storage';
 
 export interface StoredMessage {
@@ -28,6 +29,8 @@ export interface StoredMessage {
   readonly parentId: string | null;
   readonly content: string;
   readonly createdAt: string;
+  /** What it carries; absent in what an older page kept, which carried nothing. */
+  readonly attachments?: readonly Attachment[];
 }
 
 export const MAX_STORED = 50;
@@ -45,7 +48,12 @@ const isStored = (value: unknown): value is StoredMessage =>
   typeof value.channelId === 'string' &&
   'content' in value &&
   typeof value.content === 'string' &&
-  value.content !== '' &&
+  // No words is a message only beside an attachment (D-109 §7).
+  (value.content !== '' ||
+    ('attachments' in value && Array.isArray(value.attachments) && value.attachments.length > 0)) &&
+  (!('attachments' in value) ||
+    (Array.isArray(value.attachments) &&
+      value.attachments.every((a: unknown) => Value.Check(Attachment, a)))) &&
   'createdAt' in value &&
   typeof value.createdAt === 'string' &&
   'parentId' in value &&

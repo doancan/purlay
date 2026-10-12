@@ -4,6 +4,7 @@
  * is exercised too: an endpoint wired to the wrong schema fails here.
  */
 import { describe, expect, test } from 'bun:test';
+import type { Attachment } from '@purlay/types';
 import { createApi, type Api } from './api';
 import { createHttp } from './http';
 
@@ -214,6 +215,37 @@ describe('the endpoints', () => {
       url: `/api/channels/${ID}/members`,
       body: { userId: ID },
     });
+  });
+
+  test('an upload is the file’s bytes to its workspace, with the id and the name in the query, read as an attachment', async () => {
+    const attachment: Attachment = {
+      id: ID,
+      fileName: 'a b.png',
+      mimeType: 'image/webp',
+      sizeBytes: 3,
+      kind: 'image',
+      width: 1,
+      height: 1,
+    };
+    const uploaded = harness(attachment);
+    const answer = await uploaded.api.upload(ID, {
+      id: ID,
+      name: 'a b.png',
+      file: new Blob([new Uint8Array([1, 2, 3])]),
+    });
+    expect(answer).toEqual(attachment);
+    expect(uploaded.calls[0]).toMatchObject({
+      method: 'POST',
+      url: `/api/workspaces/${ID}/uploads?id=${ID}&name=a+b.png`,
+    });
+    // An answer that is not an attachment is not believed.
+    let thrown: unknown = null;
+    await harness({ id: ID })
+      .api.upload(ID, { id: ID, name: 'x', file: new Blob([]) })
+      .catch((error: unknown) => {
+        thrown = error;
+      });
+    expect(thrown).toMatchObject({ code: 'MALFORMED' });
   });
 
   test('an edit sends the new words; a delete asks and reads no answer', async () => {

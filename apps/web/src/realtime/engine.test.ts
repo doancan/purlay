@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 import {
   CLOSE_CODES,
+  type Attachment,
   type Channel,
   type Message,
   type MessagePage,
@@ -222,6 +223,7 @@ describe('a send over an open socket', () => {
         createdAt: '2026-10-09T12:00:00.000Z',
         delivery: 'sending',
         reason: null,
+        attachments: [],
       },
     ]);
     expect(w.sentOps('MESSAGE_SEND')).toEqual([
@@ -322,6 +324,90 @@ describe('a send over an open socket', () => {
     w.timers.advance(ACK_DEADLINE_MS);
     w.engine.discard(id);
     expect(w.pending()).toEqual([]);
+  });
+});
+
+describe('a send carrying attachments (D-109 §7)', () => {
+  const SHOT: Attachment = {
+    id: '01995f7b-0000-7000-8000-0000000000a1',
+    fileName: 'shot.png',
+    mimeType: 'image/webp',
+    sizeBytes: 900,
+    kind: 'image',
+    width: 40,
+    height: 20,
+  };
+
+  test('names them in its frame, and its row carries them before the server answers', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: '', attachments: [SHOT] });
+    expect(w.sentOps('MESSAGE_SEND')).toEqual([
+      { id, op: 'MESSAGE_SEND', payload: { channelId: CH, content: '', attachmentIds: [SHOT.id] } },
+    ]);
+    expect(w.pending()[0]?.attachments).toEqual([SHOT]);
+  });
+
+  test('over HTTP, the same ids', async () => {
+    const sent: unknown[] = [];
+    const w = world({
+      send: (channelId, input) => {
+        sent.push({ channelId, ...input });
+        return Promise.resolve(echo(input.id));
+      },
+    });
+    const id = w.engine.send({ channelId: CH, content: 'look', attachments: [SHOT] });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent).toEqual([{ channelId: CH, id, content: 'look', attachmentIds: [SHOT.id] }]);
+  });
+
+  test('a reload keeps them, so Retry sends the same message with the same files', () => {
+    const storage = memoryStorage();
+    const first = world({}, { storage });
+    first.engine.start();
+    first.open();
+    const id = first.engine.send({ channelId: CH, content: '', attachments: [SHOT] });
+    const second = world({}, { storage });
+    expect(second.pending()[0]).toMatchObject({ id, content: '', attachments: [SHOT] });
+    second.engine.start();
+    second.open();
+    second.engine.retry(id);
+    expect(second.sentOps('MESSAGE_SEND')[0]?.payload).toEqual({
+      channelId: CH,
+      content: '',
+      attachmentIds: [SHOT.id],
+    });
+  });
+
+  test('what an older page kept, with no attachments, comes back with none', () => {
+    const storage = memoryStorage();
+    storage.data[pendingKey(ME.id)] = JSON.stringify([
+      {
+        id: '01995f7b-0000-7000-8000-0000000000b1',
+        channelId: CH,
+        parentId: null,
+        content: 'from before',
+        createdAt: '2026-10-09T11:59:00.000Z',
+      },
+    ]);
+    expect(world({}, { storage }).pending()[0]?.attachments).toEqual([]);
+  });
+
+  test('kept words-free without anything attached are not trusted, and not brought back', () => {
+    const storage = memoryStorage();
+    storage.data[pendingKey(ME.id)] = JSON.stringify([
+      {
+        id: '01995f7b-0000-7000-8000-0000000000b2',
+        channelId: CH,
+        parentId: null,
+        content: '',
+        createdAt: '2026-10-09T11:59:00.000Z',
+        attachments: [],
+      },
+    ]);
+    expect(world({}, { storage }).pending()).toEqual([]);
   });
 });
 
@@ -940,6 +1026,7 @@ describe('what was in flight when the page went', () => {
         parentId: 'root-9',
         content: 'hello',
         createdAt: '2026-10-09T12:00:00.000Z',
+        attachments: [],
       },
     ]);
     w.deliver(ack(id));
@@ -963,6 +1050,7 @@ describe('what was in flight when the page went', () => {
         createdAt: '2026-10-09T12:00:00.000Z',
         delivery: 'failed',
         reason: null,
+        attachments: [],
       },
     ]);
     second.engine.start();

@@ -22,6 +22,8 @@ export interface RequestOptions {
   /** Appended as a query string; `undefined` values are left out. */
   readonly query?: Readonly<Record<string, string | number | undefined>>;
   readonly body?: unknown;
+  /** A file's bytes, sent as they are — an upload's body (D-109 §3), never JSON. */
+  readonly bytes?: Blob;
   /** Aborts the request — what TanStack Query hands a query function. */
   readonly signal?: AbortSignal;
 }
@@ -82,6 +84,12 @@ export type FetchPort = (input: string, init: RequestInit) => Promise<Response>;
 export const createHttp = (fetchFn: FetchPort): Http => {
   const call = async (method: Method, path: string, options: RequestOptions): Promise<Response> => {
     const hasBody = options.body !== undefined;
+    const sent: { type: string; body: BodyInit } | null =
+      options.bytes !== undefined
+        ? { type: 'application/octet-stream', body: options.bytes }
+        : hasBody
+          ? { type: 'application/json', body: JSON.stringify(options.body) }
+          : null;
     let response: Response;
     try {
       response = await fetchFn(withQuery(path, options.query), {
@@ -89,9 +97,9 @@ export const createHttp = (fetchFn: FetchPort): Http => {
         credentials: 'same-origin',
         headers: {
           accept: 'application/json',
-          ...(hasBody ? { 'content-type': 'application/json' } : {}),
+          ...(sent === null ? {} : { 'content-type': sent.type }),
         },
-        ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+        ...(sent === null ? {} : { body: sent.body }),
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
     } catch (cause) {
