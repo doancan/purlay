@@ -4197,6 +4197,15 @@ own for code and missed a `~~~` fence, so a name quoted in what renders as code 
 The body it reads now has every fenced block the engine reads blanked, so what is drawn as code and
 what notifies cannot disagree.
 
+> **Amended 2026-10-12 (#330).** Blanking fences was not enough: the server still stripped inline code
+> with rules of its own, so a link labelled `@bob` and `https://medium.com/@bob` notified bob, and a backtick pair
+> across a blank line was code to the server and prose to the engine. A mention is now a name **in the
+> prose of the tree the client draws** (`proseNames`, `@purlay/markdown`): not in code, not in a link —
+> its label or its address — and not glued to the end of either. The server resolves those names, the
+> composer refuses a broadcast among them, and the client highlights exactly those occurrences; a test
+> renders bodies at every edge and requires the highlight to be the server's names. A body the engine
+> does not format (shown as typed, §8) is still read as typed, and is drawn with no highlight.
+
 **8 · The engine failing inside the bounds is a defect, not a refusal.** It is caught around the two
 engine calls only — a defect in this package's own code throws — and returned with its cause. The
 message is stored and shown as typed, and the server logs an error with the cause and never the

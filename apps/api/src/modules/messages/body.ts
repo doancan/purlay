@@ -7,13 +7,14 @@ import { Value } from '@sinclair/typebox/value';
 import { TextMetadata } from '@purlay/types';
 import {
   metadataOf,
+  proseNames,
   readMarkdown,
   withoutFencedCode,
   type Engine,
   type Reading,
 } from '@purlay/markdown';
 import { AppError } from '../../platform/errors';
-import { parseMentions } from './mentions';
+import { namesOf, parseMentions } from './mentions';
 
 export interface Body {
   /** The usernames it names with `@`, unresolved. */
@@ -26,11 +27,17 @@ export interface Body {
  * Reads a body, or refuses one that broadcasts.
  *
  * `@here` and its kin are not a thing this product has (D-12), looked for only where the reader
- * sees prose: fenced code is blanked by the engine that renders it (D-101). Never a refusal for
+ * sees prose — the tree's, not code and not a link (#330, D-101 §7) — so what is refused, what
+ * notifies and what the client highlights are one reading. Never a refusal for
  * complexity: a body too complex to format is still a message, shown as typed.
  */
 export const readBody = (content: string, engine?: Engine): Body => {
-  const mentions = parseMentions(withoutFencedCode(content, engine));
+  const reading = readMarkdown(content, engine);
+  // The names in the prose the client draws (#330); a body it shows as typed is read as typed.
+  const mentions =
+    reading.tree === null
+      ? parseMentions(withoutFencedCode(content, engine))
+      : namesOf(proseNames(reading.tree));
   if (mentions.broadcast.length > 0) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
@@ -38,7 +45,6 @@ export const readBody = (content: string, engine?: Engine): Body => {
       details: { fields: { content: 'broadcast mentions are not available' } },
     });
   }
-  const reading = readMarkdown(content, engine);
   const metadata = metadataOf(reading.tree);
   if (!Value.Check(TextMetadata, metadata)) {
     // The parser's own output outside the contract is a defect in this code, not in the message:

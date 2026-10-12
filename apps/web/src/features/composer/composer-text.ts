@@ -10,6 +10,7 @@
  * anybody; nothing here backtracks, so no input makes the composer hang (D-33's
  * reasoning about untrusted input holds on the client too).
  */
+import { BROADCAST_NAMES, parseMarkdown, proseNames } from '@purlay/markdown';
 import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 
 /** A line that opens or closes a fenced block: three or more backticks first on the line. */
@@ -37,29 +38,19 @@ export const insideFence = (textBeforeCaret: string): boolean => {
   return fences % 2 === 1;
 };
 
-/** The text with code made blank, so what is left is what a person *said* and not what they quoted. */
-const withoutCode = (text: string): string => {
-  const lines: string[] = [];
-  let fenced = false;
-  for (const line of text.split('\n')) {
-    if (FENCE_LINE.test(line)) {
-      fenced = !fenced;
-      lines.push('');
-    } else if (fenced) {
-      lines.push('');
-    } else {
-      lines.push(line.replace(/`[^`\n]*`/g, ''));
-    }
-  }
-  return lines.join('\n');
+/**
+ * The broadcast mention the text contains, as typed, or null — read the way the server reads it:
+ * in the prose of the tree, not in code or a link (#330). A body the engine does not format is left
+ * to the server, which is the authority either way.
+ */
+export const broadcastMention = (text: string): string | null => {
+  const tree = parseMarkdown(text);
+  const name =
+    tree === null
+      ? undefined
+      : proseNames(tree).find((found) => BROADCAST_NAMES.has(found.toLowerCase()));
+  return name === undefined ? null : `@${name}`;
 };
-
-/** `@here` as the server's parser reads it: not in code, not after a word character, `@` or a backtick. */
-const BROADCAST = /(?<![\w@`])@(here|channel|everyone)(?![A-Za-z0-9_-])/i;
-
-/** The broadcast mention the text contains, as typed, or null. */
-export const broadcastMention = (text: string): string | null =>
-  BROADCAST.exec(withoutCode(text))?.[0] ?? null;
 
 /** How many UTF-16 code units the text is over the limit; zero or less means it fits. */
 export const unitsOver = (text: string): number => text.length - MESSAGE_CONTENT_MAX;

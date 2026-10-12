@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a mention is what you see as one (D-101 §7, amended)
+
+- A name in a link — a link labelled `@bob`, or `https://medium.com/@bob` — or glued to the end of code or a link no
+  longer notifies anybody, and is not highlighted. What notifies, what the composer refuses as a
+  broadcast, and what is drawn as a mention are now one reading of the message.
+
 ### Fix — 2026-10-12: a tab left open across a deployment offers a reload (D-102)
 
 - When a part of the interface the server no longer has is asked for, a bar says Purlay was updated

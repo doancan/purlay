@@ -34,3 +34,9 @@ export const mentionsIn = (text: string): MentionSpan[] =>
     // The pattern's one group is the name, which is everything after the `@`.
     return { start: match.index, end: match.index + raw.length, name: raw.slice(1) };
   });
+
+/**
+ * The names that would address everybody, which this product does not have (D-12): refused by the
+ * server and, first and in words, by the composer. Lower case: matching is case-insensitive.
+ */
+export const BROADCAST_NAMES: ReadonlySet<string> = new Set(['here', 'channel', 'everyone']);

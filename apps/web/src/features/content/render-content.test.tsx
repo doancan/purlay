@@ -10,6 +10,8 @@ import {
   MARKDOWN_DELIMITERS_MAX,
   MARKDOWN_NESTING_MAX,
   MARKDOWN_RUN_MAX,
+  parseMarkdown,
+  proseNames,
   readMarkdown,
   type Engine,
   type MessageTree,
@@ -715,5 +717,32 @@ describe('a link label cannot lie about where it goes', () => {
   test('in Turkish too', async () => {
     const view = await mount('[docs](https://good.example/path)', { locale: 'tr' });
     expect(view.getByRole('link').getAttribute('title')).toBe('good.example adresini açar');
+  });
+});
+
+describe('what is highlighted is what notifies (#330)', () => {
+  // Every body here names bob somewhere the old rules disagreed about; the server's names are the
+  // shared reading's (`proseNames`), and the highlight must be exactly those, as many times.
+  test.each([
+    'hey @bob',
+    '[@bob](https://example.com)',
+    'https://medium.com/@bob',
+    '`x`@bob',
+    '`x`@bob and @bob',
+    '[x](https://example.com)@bob',
+    '`one\n\n@bob two`',
+    '**@bob** and `@bob`',
+    '> @bob\n\n- @bob',
+  ])('%j', async (content) => {
+    const tree = parseMarkdown(content);
+    if (tree === null) throw new Error('not read');
+    const notified = proseNames(tree).map((name) => name.toLowerCase());
+    // The client is told who was really mentioned: here, everyone the text could name.
+    const view = await mount(content, { mentioned: ['bob'] });
+    const drawn = [...view.container.querySelectorAll('[data-message-body] [data-mention]')].map(
+      (node) => node.textContent.slice(1).toLowerCase(),
+    );
+    expect(drawn).toEqual(notified);
+    view.unmount();
   });
 });

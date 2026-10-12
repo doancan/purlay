@@ -43,6 +43,8 @@ describe('addressing everybody', () => {
     'ok @here.',
     '(@here)',
     'a\n@here',
+    // Not code to the engine, so prose to the server, which refuses it (#330).
+    '`one\n\n@here two`',
   ])('%j is refused, and named as typed', (text) => {
     expect(broadcastMention(text)?.toLowerCase()).toMatch(/^@(here|channel|everyone)$/);
   });
@@ -63,6 +65,10 @@ describe('addressing everybody', () => {
     '@alice and @bob',
     '@hеre', // a Cyrillic е: not the word
     '@ here',
+    // A link is not prose: the server reads the tree, and so does this (#330).
+    '[@here](https://example.com)',
+    'https://example.com/@here',
+    '`x`@here',
   ])('%j is allowed', (text) => {
     expect(broadcastMention(text)).toBeNull();
   });

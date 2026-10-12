@@ -1121,4 +1121,37 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/shell/update-bar.test.tsx'],
   },
+  {
+    id: 'server-mentions-from-the-raw-body',
+    why: 'a name in a link notifies the person, while the client draws it as part of the link: notified with no visible cue',
+    file: 'apps/api/src/modules/messages/body.ts',
+    find: '      : namesOf(proseNames(reading.tree));\n',
+    replace: '      : parseMentions(content);\n',
+    tests: ['apps/api/src/modules/messages/body.test.ts'],
+  },
+  {
+    id: 'prose-reads-link-labels',
+    why: 'the label of a link is read as prose, and `[@bob](…)` notifies bob',
+    file: 'packages/markdown/src/prose.ts',
+    find: "        case 'inlineCode':\n        case 'link':\n          return OPAQUE;\n",
+    replace:
+      "        case 'inlineCode':\n          return OPAQUE;\n        case 'link':\n          return spell(node.children);\n",
+    tests: ['packages/markdown/src/prose.test.ts'],
+  },
+  {
+    id: 'mention-highlighted-in-a-link-label',
+    why: 'a name in a link label is drawn as a mention of someone who was never told',
+    file: 'apps/web/src/features/content/render-content.tsx',
+    find: '  for (const span of scope.inLabel ? [] : mentionsIn(text)) {\n',
+    replace: '  for (const span of mentionsIn(text)) {\n',
+    tests: ['apps/web/src/features/content/render-content.test.tsx'],
+  },
+  {
+    id: 'mention-highlighted-when-glued-to-code',
+    why: 'a name glued to a code span is drawn as a mention the server does not count',
+    file: 'apps/web/src/features/content/render-content.tsx',
+    find: '    if (scope.glued && span.start === 0) continue;\n',
+    replace: '',
+    tests: ['apps/web/src/features/content/render-content.test.tsx'],
+  },
 ];
