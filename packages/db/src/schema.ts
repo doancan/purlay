@@ -29,7 +29,7 @@ export type MessageType = "system_event" | "text";
 
 export type NotificationLevel = "all" | "mentions" | "none";
 
-export type NotificationType = "direct_message" | "mention" | "thread_reply" | "thread_resolved";
+export type NotificationType = "channel_message" | "direct_message" | "mention" | "thread_reply" | "thread_resolved";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 

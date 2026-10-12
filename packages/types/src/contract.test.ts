@@ -17,6 +17,7 @@ import {
   NotificationQuery,
   PAGE_LIMIT,
   ReadNotificationsRequest,
+  SetNotificationLevelRequest,
   Page,
   ReactionsResponse,
   ReadChannelRequest,
@@ -61,10 +62,14 @@ describe('models', () => {
       type: 'direct_message',
       lastMessageAt: null,
       state: null,
+      notificationLevel: null,
       peer: user,
     };
     expect(Value.Check(Channel, dm)).toBe(true);
     expect(Value.Check(Channel, { ...dm, type: 'nonsense' })).toBe(false);
+    // The caller's level is one of the three, or null when they are not a member (D-107).
+    expect(Value.Check(Channel, { ...dm, notificationLevel: 'all' })).toBe(true);
+    expect(Value.Check(Channel, { ...dm, notificationLevel: 'loud' })).toBe(false);
   });
 
   test('a message carries its sender, not a sender id to resolve later', () => {
@@ -202,6 +207,14 @@ describe('http shapes', () => {
     expect(Value.Check(ReadNotificationsRequest, { workspaceId: id, before: id })).toBe(true);
     expect(Value.Check(ReadNotificationsRequest, { ids: [id], workspaceId: id })).toBe(false);
     expect(Value.Check(ReadNotificationsRequest, { ids: ['nope'] })).toBe(false);
+  });
+
+  test('a notification level is one of three words, for the caller alone', () => {
+    for (const level of ['all', 'mentions', 'none']) {
+      expect(Value.Check(SetNotificationLevelRequest, { level })).toBe(true);
+    }
+    expect(Value.Check(SetNotificationLevelRequest, { level: 'loud' })).toBe(false);
+    expect(Value.Check(SetNotificationLevelRequest, { level: 'none', userId: id })).toBe(false);
   });
 
   test('adding to a channel names one person and nothing else', () => {
@@ -418,6 +431,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
           type: 'direct_message',
           lastMessageAt: null,
           state,
+          notificationLevel: 'mentions',
           peer: user,
         },
         ts: 1,

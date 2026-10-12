@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a notification level per channel, on the server (D-107)
+
+- `PUT /api/channels/:channelId/notification-level` sets what you are told about in a channel: `all`
+  (every message by somebody else, on your badge), `mentions` (the default) or `none` (nothing, not
+  even answers in your threads). A channel says your level as `notificationLevel`.
+
 ### Fix — 2026-10-12: a mention is what you see as one (D-101 §7, amended)
 
 - A name in a link — a link labelled `@bob`, or `https://medium.com/@bob` — or glued to the end of code or a link no

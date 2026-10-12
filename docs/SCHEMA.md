@@ -70,7 +70,8 @@ CREATE TYPE channel_type        AS ENUM ('public', 'private', 'direct_message');
 CREATE TYPE message_type        AS ENUM ('text', 'system_event');
 CREATE TYPE attachment_kind     AS ENUM ('image', 'video', 'audio', 'file');
 CREATE TYPE notification_level  AS ENUM ('all', 'mentions', 'none');
-CREATE TYPE notification_type   AS ENUM ('mention', 'direct_message', 'thread_reply', 'thread_resolved');
+CREATE TYPE notification_type   AS ENUM ('mention', 'direct_message', 'thread_reply', 'thread_resolved',
+                                         'channel_message');  -- added by 0017 (D-107)
 ```
 
 ---
@@ -955,14 +956,15 @@ file that leaves its transaction runs statement by statement and must be safe to
 0014_open_questions_index.sql   idx_messages_unresolved holds only roots that have a reply  (D-99, amended)
 0015_state_versions.sql      channel_members.state_version, messages.state_version  (D-99, amended)
 0016_tombstones_keep_their_place.sql  idx_messages_channel_feed and idx_messages_thread keep tombstones  (D-103)
+0017_channel_message_notifications.sql  notification_type gains channel_message  (D-107)
 ```
 
 ```
-0017_integrations.sql        github_integrations, link_previews
-0018_administration.sql      audit_log, job_runs  (Phase 1)
+0018_integrations.sql        github_integrations, link_previews
+0019_administration.sql      audit_log, job_runs  (Phase 1)
 ```
 
-Phase 2 adds `0019_github_feeds.sql`; Phase 2's magic links add `0020_email_auth.sql`.
+Phase 2 adds `0020_github_feeds.sql`; Phase 2's magic links add `0021_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration

@@ -49,6 +49,7 @@ const channel: Channel = {
   type: 'public',
   lastMessageAt: null,
   state,
+  notificationLevel: 'mentions',
   peer: null,
 };
 

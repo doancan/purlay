@@ -10,6 +10,7 @@ import { sql, type Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import { requireMessageById, type ChannelContext } from '../../platform/channels';
 import type { Clock } from '../../platform/clock';
+import { NEEDS_YOU } from './delivery';
 import {
   NO_LOG,
   publication,
@@ -23,9 +24,6 @@ import type { Logger } from '../../platform/logging';
 import type { Atomically } from '../../platform/transactions';
 import { requireLiveSession } from '../auth/sessions';
 import type { ChannelStateUpdate } from './delivery';
-
-/** The notifications that made the message count as one needing the person (D-99 §1). */
-const NEEDS_YOU = ['mention', 'direct_message', 'thread_reply'] as const;
 
 /** Who may delete somebody else's message: the people who run the workspace (D-103 §7). */
 const MODERATORS: readonly string[] = ['owner', 'admin'];

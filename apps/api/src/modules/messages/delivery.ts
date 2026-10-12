@@ -23,13 +23,21 @@ import { sql, type Executor } from '@purlay/db';
 import type { ChannelState } from '@purlay/types';
 import type { ChannelContext } from '../../platform/channels';
 
+/**
+ * The notifications that make a message one that needs the person (D-99 §1, D-107): every reason a
+ * new message gives, strongest first. A resolution is told and not counted — it is not a message.
+ * One list, read by the send that counts, the read that recounts and the delete that takes back.
+ */
+export const NEEDS_YOU = ['mention', 'direct_message', 'thread_reply', 'channel_message'] as const;
+
 /** Strongest first — the order a person's one notification for a message is chosen in. */
-type Reason = 'mention' | 'direct_message' | 'thread_reply';
+type Reason = (typeof NEEDS_YOU)[number];
 
 const STRENGTH: Readonly<Record<Reason, number>> = {
-  mention: 3,
-  direct_message: 2,
-  thread_reply: 1,
+  mention: 4,
+  direct_message: 3,
+  thread_reply: 2,
+  channel_message: 1,
 };
 
 /** True when the position is at or past the message: the person has read beyond it. */
@@ -235,6 +243,16 @@ export const recordDelivery = async (
       .execute();
     for (const row of others) consider(row.user_id, 'direct_message');
   }
+
+  // A member who asked for every message (D-107) is told of this one, for the weakest reason.
+  const following = await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', context.channelId)
+    .where('notification_level', '=', 'all')
+    .where('user_id', '<>', sender)
+    .execute();
+  for (const row of following) consider(row.user_id, 'channel_message');
 
   if (thread !== null) {
     // The most recent repliers over `idx_messages_thread`, one row per person, newest first and

@@ -88,6 +88,7 @@ describe('the list', () => {
             told(4, 'mention'),
             told(3, 'direct_message', { readAt: '2026-09-09T09:00:00.000Z' }),
             told(2, 'thread_resolved'),
+            told(1, 'channel_message'),
           ]),
         ),
     });
@@ -98,6 +99,7 @@ describe('the list', () => {
     expect(rows[1]).toContain('bob wrote to you');
     expect(rows[1]).not.toContain('unread');
     expect(rows[2]).toContain('Your question was resolved');
+    expect(rows[3]).toContain('bob wrote');
     await expectNoAxeViolations(view.container);
     view.unmount();
   });

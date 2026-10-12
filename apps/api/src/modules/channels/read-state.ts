@@ -17,13 +17,7 @@ import type { ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
-
-/**
- * The notifications that make a message one that needs the person (D-99 §1). A
- * resolution is told and not counted: it is not a message, so counting it would put
- * the two numbers in disagreement the first time they are recomputed.
- */
-const NEEDS_YOU = ['mention', 'direct_message', 'thread_reply'] as const;
+import { NEEDS_YOU } from '../messages/delivery';
 
 /**
  * The notifications still waiting for a person in one channel, of the kinds that need them: what

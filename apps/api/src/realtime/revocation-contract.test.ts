@@ -104,6 +104,10 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/read-state.ts#markRead': {
     none: 'moves a read position and its counters; nobody gains or loses sight of a channel (#25)',
   },
+  // Setting a notification level changes what a member is told, not what they may see (D-107, #52).
+  'apps/api/src/modules/channels/notification-level.ts#setNotificationLevel': {
+    none: 'sets what an existing member is told about; nobody gains or loses sight of a channel (#52)',
+  },
   // Reading the inbox recounts the mention badge of the channels it touched. It changes no
   // membership, so nobody's access moves (D-106, #58).
   'apps/api/src/modules/notifications/notifications.ts#readNotifications': {

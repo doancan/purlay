@@ -1154,4 +1154,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/content/render-content.test.tsx'],
   },
+  {
+    id: 'level-all-told-nothing',
+    why: 'a member who asked for every message in a channel is told of none of them',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "  for (const row of following) consider(row.user_id, 'channel_message');\n",
+    replace: '',
+    tests: ['apps/api/src/modules/channels/notification-level.integration.test.ts'],
+  },
+  {
+    id: 'level-set-for-the-whole-channel',
+    why: 'muting a channel mutes it for everybody in it',
+    file: 'apps/api/src/modules/channels/notification-level.ts',
+    find: "    .where('user_id', '=', context.userId)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/channels/notification-level.integration.test.ts'],
+  },
+  {
+    id: 'level-recount-forgets-channel-messages',
+    why: 'a read recounts the badge without what `all` was told, and a badge the send raised comes down at the first read',
+    file: 'apps/api/src/modules/channels/read-state.ts',
+    find: '    and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})\n',
+    replace: '    and n.read_at is null and n.type in (${sql.join(NEEDS_YOU.slice(0, 3))})\n',
+    tests: ['apps/api/src/modules/channels/notification-level.integration.test.ts'],
+  },
 ];
