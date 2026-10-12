@@ -4619,8 +4619,8 @@ instruction to decide and proceed, and open to their reversal:
 - **An edit still needs words.** A message sent with no words can be given some; a message's words
   cannot be emptied by an edit, whatever it carries. Removing an attachment is not an edit.
 - **The count.** Linking moves the bytes onto `storage_used_bytes` in the send's transaction
-  (`SCHEMA.md` I-7). Deleting the message does not lower it: the bytes are still stored, and it is the
-  sweep that removes them (#71) that gives them back.
+  (`SCHEMA.md` I-7). Deleting the message does not lower it: the bytes are still stored, as its words
+  are (D-9), and the orphan sweep (#71) takes only uploads nobody ever sent.
 **Accepted, stated:** the S3 adapter is exercised against Garage locally and in the deployment's smoke
 test, not by CI, which runs PostgreSQL alone (`CONTRIBUTING.md` §2); the store is a port, and every
 test of the rules runs against a double.

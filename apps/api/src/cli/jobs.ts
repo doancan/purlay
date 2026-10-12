@@ -1,0 +1,71 @@
+/**
+ * `bun run job <name>` — the scheduled jobs, run by an external scheduler (D-30), never by the API.
+ *
+ *   sweep:orphans      unsent uploads older than a day, and their objects (D-109 §5)
+ *   sweep:sessions     sessions that expired or were revoked
+ *   reconcile:storage  each workspace's storage count put back to the bytes it holds (I-7)
+ *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
+ *
+ * It reads the deployment's own configuration, as the API does, so it runs in the same image with
+ * the same environment. A job's failure is recorded, logged and exits non-zero.
+ */
+import { createDatabase, purgeDeadSessions } from '@purlay/db';
+import { reconcileStorage, runJob, sweepOrphans } from '../modules/jobs/jobs';
+import { jobReport } from '../modules/jobs/report';
+import { systemClock } from '../platform/clock';
+import { loadConfig } from '../platform/config';
+import { databaseConnection } from '../platform/database';
+import { createLogger } from '../platform/logging';
+import { storeFor } from '../platform/storage';
+
+/** Sessions one statement of the sweep removes. */
+const SESSION_BATCH = 1_000;
+
+const config = loadConfig(process.env);
+const log = createLogger({ level: config.LOG_LEVEL });
+const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
+const clock = systemClock;
+
+const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number>>>>> = {
+  'sweep:orphans': async () =>
+    await sweepOrphans({ database, clock, log, storage: storeFor(config) }),
+  'sweep:sessions': async () => {
+    let removed = 0;
+    for (let batch = SESSION_BATCH; batch === SESSION_BATCH; removed += batch) {
+      batch = await purgeDeadSessions(database, clock.now(), SESSION_BATCH);
+    }
+    return { removed };
+  },
+  'reconcile:storage': async () => await reconcileStorage({ database, log }),
+};
+
+const name = process.argv[2] ?? '';
+try {
+  if (name === 'jobs:status') {
+    const records = await database
+      .selectFrom('job_runs')
+      .select(['job_name', 'last_success_at', 'consecutive_failures', 'last_error'])
+      .execute();
+    const report = jobReport(Object.keys(jobs), records, clock.now());
+    process.stdout.write(`${report.lines.join('\n')}\n`);
+    process.exitCode = report.healthy ? 0 : 1;
+  } else {
+    const work = jobs[name];
+    if (work === undefined) {
+      process.stderr.write(
+        `No job named "${name}". Jobs: ${[...Object.keys(jobs), 'jobs:status'].join(', ')}\n`,
+      );
+      process.exitCode = 2;
+    } else {
+      await runJob({ database, clock, log }, name, work).then(
+        () => undefined,
+        // Recorded and logged by the runner; the scheduler is told by the exit code.
+        () => {
+          process.exitCode = 1;
+        },
+      );
+    }
+  }
+} finally {
+  await database.destroy();
+}

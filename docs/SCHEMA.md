@@ -916,7 +916,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | the database: `messages_channel_workspace_fkey` |
 | I-5 | `dm_key` is the workspace's two member UUIDs, sorted ascending and joined with `:`. The database enforces the form and the order; that the two are members of the workspace is the service's. | `channels.service`, in part `dm_key_form` |
 | I-6 | `unread_count` ≥ `unread_mention_count` for every membership row. | the database: `unread_mention_within_unread` (D-99) |
-| I-7 | `workspaces.storage_used_bytes` equals the sum of live attachment sizes. Reconciled nightly. | `storage.service` |
+| I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit.service` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry. | `retention.service` |

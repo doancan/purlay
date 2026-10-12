@@ -34,6 +34,7 @@
     "dev:web": "bun run --cwd apps/web dev",
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
+    "job": "bun run apps/api/src/cli/jobs.ts",
     "knip": "knip",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

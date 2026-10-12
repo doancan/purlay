@@ -253,17 +253,23 @@ export const discardUpload = async (
   );
 };
 
-/** Deletes objects no row points at; one that cannot be deleted is reported, never dropped. */
-const removeLeftovers = async (
+/**
+ * Deletes objects no row points at; one that cannot be deleted is reported, never dropped. Answers
+ * how many were left behind.
+ */
+export const removeLeftovers = async (
   storage: ObjectStore,
   log: Logger,
   keys: readonly string[],
-): Promise<void> => {
+): Promise<number> => {
+  let left = 0;
   for (const key of keys) {
     try {
       await storage.delete(key);
     } catch (error) {
+      left += 1;
       log.error('an upload’s object was left behind', { key, error });
     }
   }
+  return left;
 };

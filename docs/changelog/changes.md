@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the scheduled jobs (D-30)
+
+- `bun run job sweep:orphans` takes unsent uploads older than a day, with their objects;
+  `sweep:sessions` removes expired and revoked sessions; `reconcile:storage` puts each workspace's
+  storage count back to the bytes its messages carry, and says which had drifted (I-7). Every run is
+  recorded, and `jobs:status` says when each last succeeded, exiting non-zero when one is overdue or
+  has never run — the scheduler nobody installed.
+
 ### Schema — 2026-10-12: the audit trail and the record of scheduled work (D-26, D-30)
 
 - Migration `0019`: `audit_log`, append-only, keyed by the application's UUIDv7 and kept when its
