@@ -69,6 +69,17 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
 
+**Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
+chat the team already uses.
+- **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link
+  opens, and **Join**. A person already in it is offered **Open** instead. A person not signed in
+  signs in first and comes back to the same card. The token leaves the address bar as the page loads,
+  so it is not left in the history or a screenshot. A link that does not open says so in one
+  sentence — expired, revoked, or never real look the same — and offers the way home.
+- **Making one** is an owner's or an admin's: **Invite people…** in the workspace menu opens a dialog
+  with **Make a link**, the link once made with **Copy**, and the links still open — who made each and
+  until when — each with **Revoke**. A member does not see the entry.
+
 ---
 
 ## 3. The message row
@@ -260,6 +271,8 @@ missing specified behaviour and does not merge.
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
 | Thread | n/a — never rendered empty | Inline spinner under the root | Retry inline, root intact |
+| Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
+| Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 
 **Connection loss** shows a single non-blocking bar: `Reconnecting…`. The composer stays
 enabled — messages queue and send on reconnect (`ARCHITECTURE.md` §5.4). Disabling input on a

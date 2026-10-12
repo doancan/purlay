@@ -16,6 +16,7 @@ export const keys = {
   unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
   notifications: (workspaceId: string) => ['notifications', workspaceId] as const,
   search: (workspaceId: string, words: string) => ['search', workspaceId, words] as const,
+  invitation: (token: string) => ['invitation', token] as const,
 } as const;
 
 /** The families, for the code that addresses one of them whole. */

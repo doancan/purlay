@@ -18,6 +18,7 @@ import { Main } from '../../ui/main';
 import { LogoMark } from './notice';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
+import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
 
 const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -122,12 +123,17 @@ export const Home = (): React.JSX.Element | null => {
   const { memberships } = useSession();
   const { navigate } = useRoute();
   const first = memberships[0]?.workspace.slug;
+  // Back from signing in with an invitation in hand: that is where the person was going (D-115).
+  const [invited] = useState(
+    () => pendingInvitation(browserInvitationPorts(), window.location) !== null,
+  );
 
   useEffect(() => {
-    if (first !== undefined) navigate(href('workspace', { slug: first }), { replace: true });
-  }, [first, navigate]);
+    if (invited) navigate(href('invite'), { replace: true });
+    else if (first !== undefined) navigate(href('workspace', { slug: first }), { replace: true });
+  }, [invited, first, navigate]);
 
-  if (first !== undefined) return null;
+  if (invited || first !== undefined) return null;
   return (
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">

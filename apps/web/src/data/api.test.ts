@@ -173,6 +173,20 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('an invitation’s token goes in the body, never the path, and each answer is read (D-115)', async () => {
+    const token = 'd'.repeat(64);
+    const preview = { workspace, expiresAt: WHEN, member: false };
+    const previewed = harness(preview);
+    expect(await previewed.api.previewInvitation(token)).toEqual(preview);
+    const membership = { workspace, role: 'member' as const, joinedAt: WHEN, deepWorkUntil: null };
+    const accepted = harness(membership);
+    expect(await accepted.api.acceptInvitation(token)).toEqual(membership);
+    expect([...previewed.calls, ...accepted.calls]).toEqual([
+      { method: 'POST', url: '/api/invitations/preview', body: { token } },
+      { method: 'POST', url: '/api/invitations/accept', body: { token } },
+    ]);
+  });
+
   test('the notification level goes in the body, to the channel it is for', async () => {
     const set = harness(null);
     await set.api.setNotificationLevel(ID, 'none');

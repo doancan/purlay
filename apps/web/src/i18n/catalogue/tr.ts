@@ -79,6 +79,17 @@ export const tr = {
   'browse.error.body': 'Sunucu yanıt vermedi. Yeniden dene.',
 
   'workspace.none.title': 'Henüz bir çalışma alanında değilsin',
+  'invite.title': '{workspace} çalışma alanına katıl',
+  'invite.body': 'Davet edildin. Davet {until} tarihine kadar açık.',
+  'invite.member': '{workspace} çalışma alanında zaten varsın.',
+  'invite.join': 'Katıl',
+  'invite.open': 'Aç',
+  'invite.joinFailed': 'Katılınamadı.',
+  'invite.loading': 'Davet okunuyor',
+  'invite.gone.title': 'Bu davet açılmıyor',
+  'invite.gone.body': 'Süresi dolmuş ya da iptal edilmiş olabilir. Yenisini iste.',
+  'invite.failed.title': 'Davet okunamadı',
+  'invite.home': 'Ana sayfaya dön',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
   'workspace.create.title': 'Çalışma alanı oluştur',

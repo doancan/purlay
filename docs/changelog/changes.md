@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: an invitation opens in the browser (D-115, #50)
+
+- `/invite#…` takes the token out of the address as the page loads and keeps it in the tab through
+  sign-in; the card names the workspace and until when, and **Join** goes there — or **Open**, for
+  somebody already in it. A link that does not open says so with the way home; anything else offers
+  Retry. In English and Turkish.
+
 ### Feature — 2026-10-12: a workspace invites by link (D-115, closes O-2, #50)
 
 - An owner or an admin makes a link that opens for seven days to anyone signed in, lists the open

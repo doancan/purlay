@@ -17,6 +17,7 @@ import type {
   Channel,
   CreateChannelRequest,
   CreateWorkspaceRequest,
+  Membership,
   Message,
   Workspace,
 } from '@purlay/types';
@@ -48,6 +49,8 @@ export interface Actions {
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
+  /** In by an invitation's token (D-115); answers the membership, already listed by `/api/me`. */
+  readonly joinWorkspace: (token: string) => Promise<Membership>;
   readonly signOut: () => Promise<void>;
 }
 
@@ -150,6 +153,12 @@ export const createActions = (
       // A new membership: the identity answer lists it, so ask again.
       await client.invalidateQueries({ queryKey: keys.me });
       return workspace;
+    },
+    joinWorkspace: async (token): Promise<Membership> => {
+      const membership = await api.acceptInvitation(token);
+      // A new membership: the identity answer lists it, so ask again before going there.
+      await client.invalidateQueries({ queryKey: keys.me });
+      return membership;
     },
     signOut: async (): Promise<void> => {
       await api.signOut();

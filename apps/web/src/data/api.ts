@@ -17,6 +17,7 @@ import {
   Message,
   MessagePage,
   DeepWorkResponse,
+  InvitationPreview,
   NotificationPage,
   ReactionsResponse,
   SearchPage,
@@ -48,6 +49,9 @@ export interface Api {
   readonly me: (signal?: AbortSignal) => Promise<MeResponse>;
   readonly workspaces: (signal?: AbortSignal) => Promise<Membership[]>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
+  /** What an invitation's token opens (D-115); the token goes in the body, never the path. */
+  readonly previewInvitation: (token: string, signal?: AbortSignal) => Promise<InvitationPreview>;
+  readonly acceptInvitation: (token: string) => Promise<Membership>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
 
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
@@ -127,6 +131,15 @@ export const createApi = (http: Http): Api => {
       http.request('GET', '/api/workspaces', Memberships, options({}, signal)),
     createWorkspace: (input) =>
       http.request('POST', '/api/workspaces', Workspace, options({ body: input })),
+    previewInvitation: (token, signal) =>
+      http.request(
+        'POST',
+        '/api/invitations/preview',
+        InvitationPreview,
+        options({ body: { token } }, signal),
+      ),
+    acceptInvitation: (token) =>
+      http.request('POST', '/api/invitations/accept', Membership, options({ body: { token } })),
     members: (workspaceId, signal) =>
       http.request(
         'GET',

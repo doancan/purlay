@@ -2075,4 +2075,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/modules/workspaces/invitations.integration.test.ts'],
   },
+  {
+    id: 'invitation-lost-after-sign-in',
+    why: 'a newcomer who signs in to accept an invitation lands in an empty app, the invitation forgotten',
+    file: 'apps/web/src/features/shell/home.tsx',
+    find: "    if (invited) navigate(href('invite'), { replace: true });\n",
+    replace: "    if (invited && first === 'never') navigate(href('invite'), { replace: true });\n",
+    tests: ['apps/web/src/features/invitations/invite-screen.test.tsx'],
+  },
+  {
+    id: 'invitation-kept-after-it-closed',
+    why: 'a link that no longer opens is kept by the tab and offered again after every sign-in',
+    file: 'apps/web/src/features/invitations/invite-screen.tsx',
+    find: '  if (goneFor) {\n    forgetInvitation(ports);\n',
+    replace: '  if (goneFor) {\n',
+    tests: ['apps/web/src/features/invitations/invite-screen.test.tsx'],
+  },
+  {
+    id: 'invitation-token-left-in-the-address',
+    why: "the invitation's secret stays in the address bar and the history",
+    file: 'apps/web/src/features/invitations/pending.ts',
+    find: "  ports.replace('/invite');\n",
+    replace: '',
+    tests: ['apps/web/src/features/invitations/pending.test.ts'],
+  },
 ];
