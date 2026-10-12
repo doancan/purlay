@@ -24,6 +24,7 @@ import {
   WorkspaceMemberList,
   type CreateChannelRequest,
   type CreateWorkspaceRequest,
+  type ReadNotificationsRequest,
   type SendMessageRequest,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
@@ -76,6 +77,8 @@ export interface Api {
     page?: { readonly before?: string | undefined },
     signal?: AbortSignal,
   ) => Promise<NotificationPage>;
+  /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
+  readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   readonly unreact: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   /** The author's new words (D-103); the answer is the message as it now is. */
@@ -179,6 +182,8 @@ export const createApi = (http: Http): Api => {
         NotificationPage,
         options({ query: { workspaceId, ...page } }, signal),
       ),
+    readNotifications: (input) =>
+      http.send('PUT', '/api/notifications/read', options({ body: input })),
     react: (messageId, emoji) =>
       http.request(
         'PUT',

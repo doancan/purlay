@@ -130,7 +130,7 @@ describe('the endpoints', () => {
     });
   });
 
-  test('the inbox: the workspace in the query, and the answer read against the contract', async () => {
+  test('the inbox: the workspace in the query, reading in the body, and the answer read against the contract', async () => {
     const notification = {
       id: ID,
       type: 'mention',
@@ -146,6 +146,12 @@ describe('the endpoints', () => {
     expect(inbox.calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       `GET /api/notifications?workspaceId=${ID}&before=b`,
       `GET /api/notifications?workspaceId=${ID}`,
+    ]);
+    await inbox.api.readNotifications({ ids: [ID] });
+    await inbox.api.readNotifications({ workspaceId: ID, before: ID });
+    expect(inbox.calls.slice(2)).toEqual([
+      { method: 'PUT', url: '/api/notifications/read', body: { ids: [ID] } },
+      { method: 'PUT', url: '/api/notifications/read', body: { workspaceId: ID, before: ID } },
     ]);
     // A row the contract does not describe is refused, not shown.
     const wrong = harness({ data: [{ ...notification, type: 'everyone' }], nextCursor: null });

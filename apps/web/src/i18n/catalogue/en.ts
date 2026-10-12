@@ -293,6 +293,8 @@ export const en = {
   'inbox.why.direct': '{name} wrote to you',
   'inbox.why.reply': '{name} replied in your thread',
   'inbox.why.resolved': 'Your question was resolved',
+  'inbox.readAll': 'Mark all read',
+  'inbox.readFailed': 'Not marked read.',
   'inbox.more': 'Load more',
   'state.inbox.loading': 'Loading your inbox',
   'state.inbox.error.title': "Couldn't load your inbox",
