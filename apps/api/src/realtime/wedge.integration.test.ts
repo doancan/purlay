@@ -202,6 +202,14 @@ describe('integration: a reply on real sockets', () => {
     });
     // Nobody else's numbers: Alice sent it, and hears none.
     expect(events(alice)).not.toContain('CHANNEL_STATE');
+    // Everything her own send brings her has arrived before the mark: her ACK and her echo. Taken
+    // without this, a loaded machine delivered the ACK after it, and the order below began with it.
+    await alice.until(
+      (frames) =>
+        frames.some((f) => f.event === 'ACK' && f.refId === root) &&
+        frames.some((f) => f.event === 'MESSAGE_CREATED' && f.data.id === root),
+      'Alice’s own send acknowledged and echoed',
+    );
 
     const before = alice.frames.length;
     const reply = sendFrame(bob, room.channelId, 'upstream rate-limits at 15/min', root);
