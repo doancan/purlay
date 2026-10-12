@@ -638,12 +638,13 @@ stored representation. (D-36)
 ```
 Client detects a GitHub URL
       └─▶ POST /api/integrations/github/unfurl { url }
-              ├─ hash the normalized URL
+              ├─ hash the workspace and the URL (D-112)
               ├─ SELECT FROM link_previews WHERE url_hash = $1 AND expires_at > NOW()
               │     └─ hit  → return
               └─ miss → GitHub API with the WORKSPACE token (D-23)
                         ├─ 200 → upsert, TTL 5 min → return
-                        └─ 404 → cache the negative, TTL 1 h → return null
+                        ├─ 404 → cache the negative, TTL 1 h → return null
+                        └─ anything else → log, hold off 1 min → return null
 ```
 
 Negative caching matters: without it, one broken link pasted in a busy channel re-hits the API

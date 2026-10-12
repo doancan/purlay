@@ -11,7 +11,8 @@
 import type { Executor } from '@purlay/db';
 import type { GitHubIntegration } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import type { CredentialCipher } from '../../platform/crypto';
+import { SealBroken, type CredentialCipher } from '../../platform/crypto';
+import type { Logger } from '../../platform/logging';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { recordAudit } from '../audit/audit';
@@ -105,4 +106,32 @@ export const removeGitHubToken = async (
     targetType: 'integration',
     targetId: removed.id,
   });
+};
+
+/**
+ * The workspace's token in the clear, for the one request it is for (#66); null when none is set.
+ * One that does not open — `ENCRYPTION_KEY` was changed, or the row was altered — is said, loudly,
+ * and is no token: the card is not drawn, and the operator is told why.
+ */
+export const githubTokenOf = async (
+  executor: Executor,
+  cipher: CredentialCipher,
+  log: Logger,
+  context: WorkspaceContext,
+): Promise<string | null> => {
+  const row = await executor
+    .selectFrom('github_integrations')
+    .select(['id', 'access_token_encrypted'])
+    .where('workspace_id', '=', context.workspaceId)
+    .executeTakeFirst();
+  if (row?.access_token_encrypted == null) return null;
+  try {
+    return await cipher.open(Buffer.from(row.access_token_encrypted, 'base64'), row.id);
+  } catch (error) {
+    if (!(error instanceof SealBroken)) throw error;
+    log.error('the workspace’s GitHub token does not open: was ENCRYPTION_KEY changed?', {
+      workspaceId: context.workspaceId,
+    });
+    return null;
+  }
 };

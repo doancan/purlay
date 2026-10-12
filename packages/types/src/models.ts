@@ -189,6 +189,15 @@ export const SendContent = Type.String({
 export const GITHUB_LINKS_PER_MESSAGE_MAX = 5;
 
 /**
+ * A GitHub pull request or issue, as the message's metadata records it and the unfurl endpoint
+ * takes it: github.com, an owner, a repository, the kind and the number — nothing else, so what is
+ * fetched is built from these parts and never from an address a person wrote (D-101).
+ */
+export const GitHubLink = Type.String({
+  pattern: '^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/(pull|issues)/[0-9]+$',
+});
+
+/**
  * What the parser records about a text message when it is written: hints for the
  * renderer, derived once (`SCHEMA.md` §6.4, `ARCHITECTURE.md` §8.1). Not on the wire
  * yet: nothing reads it until the code block badge (#44) and unfurling (#66) do.
@@ -199,12 +208,7 @@ export const TextMetadata = Type.Object(
     codeLanguages: Type.Optional(Type.Array(Type.String())),
     /** GitHub pull request and issue addresses, unique, in the order they appear. */
     githubLinks: Type.Optional(
-      Type.Array(
-        Type.String({
-          pattern: '^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/(pull|issues)/[0-9]+$',
-        }),
-        { maxItems: GITHUB_LINKS_PER_MESSAGE_MAX, uniqueItems: true },
-      ),
+      Type.Array(GitHubLink, { maxItems: GITHUB_LINKS_PER_MESSAGE_MAX, uniqueItems: true }),
     ),
     /** Present, and true, when the body is a single fenced block, which renders full-bleed; absent otherwise. */
     isCodeOnly: Type.Optional(Type.Literal(true)),

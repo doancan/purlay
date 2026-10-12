@@ -753,9 +753,9 @@ CREATE TABLE link_previews (
 CREATE INDEX idx_link_previews_expiry ON link_previews (expires_at);
 ```
 
-> Deliberately **not** workspace-scoped: it caches public metadata about a public URL, keyed by
-> the URL itself. Private-repository cards are only ever *served* to members of the workspace
-> whose token fetched them — that check lives in the unfurl endpoint, not in this table.
+> No `workspace_id` column, but scoped by its key: `url_hash` is the hash of the workspace and the
+> URL, so a card fetched with one workspace's token — a private repository's included — is that
+> workspace's alone (D-112).
 
 ### 8.3. `github_repo_feeds` — Phase 2
 

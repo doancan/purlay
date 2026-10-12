@@ -89,6 +89,8 @@ import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
+import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
+import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
@@ -101,6 +103,8 @@ export interface Dependencies {
   readonly github: GitHubClient;
   /** Where attachment bytes live (D-109); the unconfigured store refuses every use, loudly. */
   readonly storage: ObjectStore;
+  /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
+  readonly githubApi?: GitHubApi;
   readonly log: Logger;
   /** Absent in production, where the limits are the provisional ones (`rate-limit.ts`). */
   readonly rateBudgets?: HttpBudgets;
@@ -313,6 +317,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
+    )
+    .post(
+      '/api/integrations/github/unfurl',
+      async ({ request, body }) =>
+        await unfurlLink(
+          { ...dependencies, cipher, githubApi: dependencies.githubApi ?? githubApi() },
+          request,
+          body,
+        ),
     )
     .get(
       '/api/workspaces/:workspaceId/integrations/github',

@@ -23,6 +23,7 @@ import {
   ChannelState,
   CurrentUser,
   FromClient,
+  GitHubLink,
   Membership,
   AttachmentIds,
   Message,
@@ -276,6 +277,24 @@ export const GitHubIntegration = Type.Object({
   updatedAt: Type.Union([Timestamp, Type.Null()]),
 });
 export type GitHubIntegration = Static<typeof GitHubIntegration>;
+
+/** `POST /api/integrations/github/unfurl` — a link, unfurled with the workspace's token (D-23). */
+export const UnfurlRequest = FromClient({ workspaceId: Uuid, url: GitHubLink });
+export type UnfurlRequest = Static<typeof UnfurlRequest>;
+
+/** A pull request's or an issue's card (`ARCHITECTURE.md` §8.3). */
+export const GitHubCardMetadata = Type.Object({
+  type: Type.Union([Type.Literal('pr'), Type.Literal('issue')]),
+  repo: Type.String({ minLength: 1, maxLength: 200 }),
+  number: Type.Integer({ minimum: 1 }),
+  title: Type.String({ maxLength: 1024 }),
+  state: Type.Union([Type.Literal('open'), Type.Literal('closed'), Type.Literal('merged')]),
+  author: Type.Object({ login: Type.String({ maxLength: 100 }), avatarUrl: Type.String() }),
+});
+export type GitHubCardMetadata = Static<typeof GitHubCardMetadata>;
+/** The endpoint's answer: the card, or none — no token, nothing there, or GitHub did not answer. */
+export const UnfurlResponse = Type.Union([GitHubCardMetadata, Type.Null()]);
+export type UnfurlResponse = Static<typeof UnfurlResponse>;
 
 /** `GET /api/workspaces/:workspaceId/audit` — newest first, keyset by `before` (D-26, #70). */
 export const AuditQuery = FromClient({
