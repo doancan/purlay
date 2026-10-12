@@ -210,9 +210,16 @@ test.describe('the connection', () => {
       const sockets: WebSocket[] = [];
       (window as unknown as { __sockets: WebSocket[] }).__sockets = sockets;
       (window as unknown as { __heard: number }).__heard = 0;
+      (window as unknown as { __refuse: boolean }).__refuse = false;
       window.WebSocket = class extends Native {
         constructor(url: string | URL, protocols?: string | string[]) {
-          super(url, protocols);
+          // While the test says the network is gone, every new socket goes nowhere: whether the
+          // browser's offline mode stops a socket to localhost is not this test's question, and under
+          // load a reconnect that slipped through hid the bar before it was looked for (#347).
+          super(
+            (window as unknown as { __refuse: boolean }).__refuse ? 'ws://127.0.0.1:9/' : url,
+            protocols,
+          );
           sockets.push(this);
           this.addEventListener('message', () => {
             (window as unknown as { __heard: number }).__heard += 1;
@@ -235,6 +242,7 @@ test.describe('the connection', () => {
 
     await context.setOffline(true);
     await page.evaluate(() => {
+      (window as unknown as { __refuse: boolean }).__refuse = true;
       for (const socket of (window as unknown as { __sockets: WebSocket[] }).__sockets)
         socket.close();
     });
@@ -249,6 +257,9 @@ test.describe('the connection', () => {
     await expect(bar).toHaveScreenshot('connection-lost.png');
 
     await context.setOffline(false);
+    await page.evaluate(() => {
+      (window as unknown as { __refuse: boolean }).__refuse = false;
+    });
     await expect(bar).toBeHidden({ timeout: 30_000 });
   });
 });
