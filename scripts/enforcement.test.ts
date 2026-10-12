@@ -434,9 +434,14 @@ describe('development starts with one command', () => {
   };
 
   test('`dev` exists and names both applications', () => {
+    // `dev` runs `scripts/dev.ts`, which delegates to both workspaces, or to the demo when GitHub
+    // sign-in is not configured: the two applications are named there, not restated here.
     const dev = root.scripts['dev'] ?? '';
-    expect(dev).toContain('@purlay/api');
-    expect(dev).toContain('@purlay/web');
+    expect(dev).toBe('bun run scripts/dev.ts');
+    const runner = readFileSync('scripts/dev.ts', 'utf8');
+    expect(runner).toContain("'--filter', '@purlay/api'");
+    expect(runner).toContain("'--filter', '@purlay/web'");
+    expect(runner).toContain("'dev'");
   });
 
   for (const app of ['apps/api', 'apps/web'] as const) {
