@@ -14,7 +14,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { sendMessage } from '../messages/messages';
-import { ORPHAN_AGE_MS, reconcileStorage, runJob, sweepOrphans } from './jobs';
+import { ORPHAN_AGE_MS, reconcileStorage, runJob, sweepLinkPreviews, sweepOrphans } from './jobs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -201,6 +201,37 @@ describe('integration: reconciling the storage count (I-7)', () => {
       const moved = lines.find((l) => l['workspaceId'] === room.workspaceId);
       expect(moved).toMatchObject({ level: 'warn', before: '999', after: '7' });
       expect(lines.some((l) => l['workspaceId'] === steady.workspaceId)).toBe(false);
+    });
+  });
+});
+
+describe('integration: the link-preview sweep (D-23)', () => {
+  test('takes the previews past their expiry, at it included; the fresh stay', async () => {
+    await withRollback(async (db) => {
+      const preview = (
+        hash: string,
+        expires: Date,
+      ): { url_hash: string; url: string; payload: string; expires_at: Date } => ({
+        url_hash: hash,
+        url: `https://github.com/acme/${hash}`,
+        payload: JSON.stringify({ kind: 'missing' }),
+        expires_at: expires,
+      });
+      await db
+        .insertInto('link_previews')
+        .values([
+          preview('sweep-past', new Date(NOW.getTime() - 1)),
+          preview('sweep-at', NOW),
+          preview('sweep-fresh', new Date(NOW.getTime() + 1)),
+        ])
+        .execute();
+      expect(await sweepLinkPreviews({ database: db, clock })).toEqual({ removed: 2 });
+      const left = await db
+        .selectFrom('link_previews')
+        .select('url_hash')
+        .where('url_hash', 'like', 'sweep-%')
+        .execute();
+      expect(left.map((row) => row.url_hash)).toEqual(['sweep-fresh']);
     });
   });
 });

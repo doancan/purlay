@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Operations — 2026-10-12: expired link previews are swept (D-23)
+
+- `bun run job sweep:link-previews` removes the unfurl cache past its expiry, and the scheduler runs
+  it nightly. The expiry is also the reader's, so a sweep that did not run serves nothing stale.
+
 ### Feature — 2026-10-12: the workspace's GitHub token (D-11, D-23, #65)
 
 - An owner or admin sets, replaces or removes the one GitHub token a workspace's cards will be
