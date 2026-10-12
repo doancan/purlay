@@ -118,6 +118,43 @@ describe('editing', () => {
   });
 });
 
+describe('deleting', () => {
+  test('a message with replies is its tombstone at once, and stays one', async () => {
+    const { client } = world();
+    const actions = createActions(anApi({ deleteMessage: () => Promise.resolve() }), client);
+    const deleting = actions.remove(root);
+    expect(rootInCache(client)?.deletedAt).not.toBeNull();
+    expect(rootInCache(client)?.content).toBe('');
+    await deleting;
+    expect(rootInCache(client)?.deletedAt).not.toBeNull();
+  });
+
+  test('a message nobody answered leaves at once', async () => {
+    const { client } = world();
+    const lone = { ...root, thread: { ...summary, replyCount: 0 } };
+    client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [lone], nextCursor: null }],
+    });
+    await createActions(anApi({ deleteMessage: () => Promise.resolve() }), client).remove(lone);
+    expect(rootInCache(client)).toBeUndefined();
+  });
+
+  test('refused, the channel is read again from the server, and the caller hears why', async () => {
+    const { client } = world();
+    const actions = createActions(
+      anApi({ deleteMessage: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'no')) }),
+      client,
+    );
+    let heard: unknown;
+    await actions.remove(root).catch((error: unknown) => {
+      heard = error;
+    });
+    expect(heard).toBeInstanceOf(ApiError);
+    expect(client.getQueryState(keys.messages(CH))?.isInvalidated).toBe(true);
+  });
+});
+
 describe('resolution', () => {
   test('resolving writes the resolved root everywhere it is shown, and reopening undoes it', async () => {
     const { client } = world();

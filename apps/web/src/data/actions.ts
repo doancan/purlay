@@ -27,6 +27,7 @@ import {
   patchMessage,
   reactionsUpdated,
   threadUpdated,
+  messageRevised,
 } from './cache';
 import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
@@ -38,6 +39,8 @@ export interface Actions {
   readonly unreact: (message: Message, emoji: string) => Promise<void>;
   /** The caller's own message, new words: on screen at once, put back if refused (D-103). */
   readonly edit: (message: Message, content: string) => Promise<void>;
+  /** A tombstone at once, or gone if nobody answered it; read again if refused (D-103 §7). */
+  readonly remove: (message: Message) => Promise<void>;
   readonly resolve: (message: Message) => Promise<void>;
   readonly reopen: (message: Message) => Promise<void>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
@@ -93,6 +96,28 @@ export const createActions = (
         }));
       } catch (error) {
         patchMessage(client, message.id, (m) => ({ ...m, ...before }));
+        throw error;
+      }
+    },
+    remove: async (message): Promise<void> => {
+      // The same revision the server will tell the room, applied by the same rule.
+      messageRevised(client, {
+        channelId: message.channelId,
+        messageId: message.id,
+        parentId: message.parentId,
+        content: '',
+        editedAt: message.editedAt,
+        deletedAt: clock.now().toISOString(),
+        mentions: [],
+      });
+      try {
+        await api.deleteMessage(message.id);
+      } catch (error) {
+        // A message taken off the screen cannot be put back from here: read the truth again.
+        void client.invalidateQueries({ queryKey: keys.messages(message.channelId) });
+        if (message.parentId !== null) {
+          void client.invalidateQueries({ queryKey: keys.thread(message.parentId) });
+        }
         throw error;
       }
     },

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: delete your own message, after being asked (D-103 §7)
+
+- Your own message's menu has Delete, which asks first. The message is its tombstone at once — or gone,
+  if nobody answered it — before the server answers; refused, the toast says why and the channel is
+  read again. Everybody else sees it go at the same moment (`MESSAGE_REVISED`).
+
 ### Feature — 2026-10-12: edit your own message (D-103, `UX.md` §5, §7)
 
 - Your own message has a menu, and Edit opens the words in the row — Enter saves, Shift+Enter is a new

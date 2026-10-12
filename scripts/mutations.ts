@@ -807,8 +807,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'menu-takes-focus-back-from-the-editor',
     why: 'choosing Edit leaves focus on the menu button, and what the person types goes nowhere',
     file: 'apps/web/src/features/messages/editing.tsx',
-    find: '        if (!toEditor.current) return true;',
-    replace: '        return true;',
+    find: '          if (!toEditor.current) return true;',
+    replace: '          return true;',
     tests: ['apps/web/src/features/messages/editing.test.tsx'],
   },
   {
@@ -826,5 +826,13 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '        patchMessage(client, message.id, (m) => ({ ...m, ...before }));',
     replace: '',
     tests: ['apps/web/src/data/actions.test.ts'],
+  },
+  {
+    id: 'delete-without-asking',
+    why: 'choosing Delete deletes at once, and a slip of the pointer loses a message',
+    file: 'apps/web/src/features/messages/editing.tsx',
+    find: '            setAsking(true);',
+    replace: '            confirm();',
+    tests: ['apps/web/src/features/messages/editing.test.tsx'],
   },
 ];

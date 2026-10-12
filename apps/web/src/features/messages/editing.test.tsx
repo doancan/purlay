@@ -1,6 +1,6 @@
 /**
- * Editing one's own message in the channel screen (D-103, `UX.md` §5 and §7): the menu, the editor
- * in the row, `E` and `↑`, and what a failure leaves.
+ * Editing and deleting one's own message in the channel screen (D-103, `UX.md` §5 and §7): the menu,
+ * the editor in the row, `E` and `↑`, the question before a delete, and what a failure leaves.
  */
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
@@ -41,6 +41,7 @@ describe('the menu', () => {
     expect(within(rowOf(view, theirs)).queryByRole('button', { name: 'More' })).toBeNull();
     await openMenu(view, mine);
     expect(view.getByRole('menuitem', { name: /Edit/ })).toBeDefined();
+    expect(view.getByRole('menuitem', { name: /Delete/ })).toBeDefined();
     view.unmountAll();
   });
 });
@@ -143,6 +144,68 @@ describe('editing', () => {
     fireEvent.keyDown(composer, { key: 'ArrowUp' });
     const box = view.getByRole('textbox', { name: 'Edit your message' });
     expect((box as HTMLTextAreaElement).value).toBe('the newest of mine');
+    view.unmountAll();
+  });
+});
+
+describe('deleting', () => {
+  test('is asked first; Cancel keeps it, Delete takes it away', async () => {
+    const asked: string[] = [];
+    const view = await mountChannel({
+      messages: page([mine, theirs]),
+      api: {
+        deleteMessage: (id) => {
+          asked.push(id);
+          return Promise.resolve();
+        },
+      },
+    });
+    open(view);
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: /Delete/ }));
+    const dialog = view.getByRole('dialog', { name: 'Delete this message?' });
+    await expectNoAxeViolations(dialog);
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(asked).toEqual([]);
+    expect(within(rowOf(view, mine)).getByText('teh deploy is at noon')).toBeDefined();
+
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: /Delete/ }));
+    await person().click(
+      within(view.getByRole('dialog', { name: 'Delete this message?' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
+    await settle();
+    expect(asked).toEqual([mine.id]);
+    expect(view.container.querySelector(`[data-message-id="${mine.id}"]`)).toBeNull();
+    expect(view.getByText('from bob')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('refused, the toast says so', async () => {
+    const view = await mountChannel({
+      messages: page([mine]),
+      api: { deleteMessage: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')) },
+    });
+    open(view);
+    await openMenu(view, mine);
+    await person().click(view.getByRole('menuitem', { name: /Delete/ }));
+    await person().click(
+      within(view.getByRole('dialog', { name: 'Delete this message?' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    );
+    expect(await view.findByText(/The message was not deleted\./)).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('is asked in Turkish when the interface is', async () => {
+    const view = await mountChannel({ messages: page([mine]), locale: 'tr' });
+    open(view);
+    await person().click(within(rowOf(view, mine)).getByRole('button', { name: 'Daha fazla' }));
+    await person().click(view.getByRole('menuitem', { name: /Sil/ }));
+    expect(view.getByRole('dialog', { name: 'Bu mesaj silinsin mi?' })).toBeDefined();
     view.unmountAll();
   });
 });

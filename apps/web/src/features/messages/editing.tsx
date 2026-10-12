@@ -1,6 +1,6 @@
 /**
- * Editing one's own message (D-103, `UX.md` §5 and §7): the editor drawn in the row in place of
- * the words, and the menu that offers it.
+ * Editing and deleting one's own message (D-103, `UX.md` §5 and §7): the editor drawn in the row in
+ * place of the words, the menu that offers it, and the question asked before a delete.
  *
  * Which message is being edited is one fact for the channel screen, so the menu, `E` and `↑` open
  * the same editor; a row drawn outside a channel screen edits nothing.
@@ -14,6 +14,7 @@ import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
+import { Dialog } from '../../ui/dialog';
 import { Menu, MenuItem } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 
@@ -134,45 +135,91 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
   );
 };
 
-/** What the author can do with their own message: edit it. */
+/** What the author can do with their own message: edit it, or delete it after being asked. */
 export const OwnActions = ({ message }: { readonly message: Message }): React.JSX.Element => {
   const { t } = useI18n();
+  const { remove } = useActions();
+  const { show } = useToast();
+  const describe = useDescribeFailure();
   const { start } = useEditing();
+  const [asking, setAsking] = useState(false);
   // Edit puts focus in the editor it opens; the menu must not take it back to its button.
   const toEditor = useRef(false);
 
+  const confirm = (): void => {
+    setAsking(false);
+    remove(message).catch((failure: unknown) => {
+      show({ message: `${t('message.deleteFailed')} ${describe(failure)}` });
+    });
+  };
+
   return (
-    <Menu
-      align="end"
-      returnFocus={() => {
-        if (!toEditor.current) return true;
-        toEditor.current = false;
-        // The open menu trapped focus from the editor that mounted under it: given it as it closes.
-        document
-          .querySelector<HTMLTextAreaElement>(`[data-message-id="${message.id}"] textarea`)
-          ?.focus();
-        return false;
-      }}
-      trigger={
-        <button
-          type="button"
-          aria-label={t('message.more')}
-          className="inline-flex h-control aspect-square items-center justify-center rounded-sm text-ink-muted hover:bg-surface-100 hover:text-ink"
-        >
-          <Icon name="more" />
-        </button>
-      }
-    >
-      <MenuItem
-        glyph="edit"
-        shortcut="E"
-        onSelect={() => {
-          toEditor.current = true;
-          start(message.id);
+    <>
+      <Menu
+        align="end"
+        returnFocus={() => {
+          if (!toEditor.current) return true;
+          toEditor.current = false;
+          // The open menu trapped focus from the editor that mounted under it: given it as it closes.
+          document
+            .querySelector<HTMLTextAreaElement>(`[data-message-id="${message.id}"] textarea`)
+            ?.focus();
+          return false;
         }}
+        trigger={
+          <button
+            type="button"
+            aria-label={t('message.more')}
+            className="inline-flex h-control aspect-square items-center justify-center rounded-sm text-ink-muted hover:bg-surface-100 hover:text-ink"
+          >
+            <Icon name="more" />
+          </button>
+        }
       >
-        {t('message.edit')}
-      </MenuItem>
-    </Menu>
+        <MenuItem
+          glyph="edit"
+          shortcut="E"
+          onSelect={() => {
+            toEditor.current = true;
+            start(message.id);
+          }}
+        >
+          {t('message.edit')}
+        </MenuItem>
+        <MenuItem
+          glyph="delete"
+          tone="danger"
+          onSelect={() => {
+            setAsking(true);
+          }}
+        >
+          {t('message.delete')}
+        </MenuItem>
+      </Menu>
+      <Dialog
+        open={asking}
+        onOpenChange={setAsking}
+        title={t('message.deleteTitle')}
+        description={t('message.deleteBody')}
+        closeLabel={t('common.close')}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAsking(false);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" glyph="delete" onClick={confirm}>
+              {t('message.delete')}
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Dialog>
+    </>
   );
 };

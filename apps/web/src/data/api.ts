@@ -71,6 +71,7 @@ export interface Api {
   readonly unreact: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   /** The author's new words (D-103); the answer is the message as it now is. */
   readonly editMessage: (messageId: string, content: string) => Promise<Message>;
+  readonly deleteMessage: (messageId: string) => Promise<void>;
 
   readonly signOut: () => Promise<void>;
 }
@@ -182,6 +183,7 @@ export const createApi = (http: Http): Api => {
         Message,
         options({ body: { content } }),
       ),
+    deleteMessage: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}`, options()),
     signOut: () => http.send('POST', '/auth/logout', options()),
   };
 };
