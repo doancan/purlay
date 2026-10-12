@@ -24,13 +24,15 @@ import { IconButton } from '../../ui/icon-button';
 import { useToast } from '../../ui/toast';
 import { useWorkspace } from '../shell/workspace';
 
-type Upload = { readonly id: string; readonly name: string; readonly file: Blob } & (
-  | { readonly status: 'uploading' }
-  | { readonly status: 'ready'; readonly attachment: Attachment }
-  | { readonly status: 'failed'; readonly reason: FailureCode }
-  /** Over the limit: refused here, so there is nothing to retry. */
-  | { readonly status: 'too-large' }
-);
+type Upload = { readonly id: string; readonly name: string; readonly file: Blob } &
+  /** How much has been sent, as a whole percent; null until the browser has measured any (#388). */
+  (
+    | { readonly status: 'uploading'; readonly percent: number | null }
+    | { readonly status: 'ready'; readonly attachment: Attachment }
+    | { readonly status: 'failed'; readonly reason: FailureCode }
+    /** Over the limit: refused here, so there is nothing to retry. */
+    | { readonly status: 'too-large' }
+  );
 
 export interface Uploads {
   readonly items: readonly Upload[];
@@ -56,7 +58,20 @@ export const useUploads = (): Uploads => {
 
   const start = useCallback(
     (item: { readonly id: string; readonly name: string; readonly file: Blob }): void => {
-      api.upload(workspace.id, item).then(
+      // Told on every chunk; kept only when the whole percent moves, so a fast link is not a re-render a chunk.
+      const progress = (fraction: number): void => {
+        const percent = Math.floor(fraction * 100);
+        setItems((all) =>
+          all.map((candidate) =>
+            candidate.id === item.id &&
+            candidate.status === 'uploading' &&
+            candidate.percent !== percent
+              ? { ...candidate, percent }
+              : candidate,
+          ),
+        );
+      };
+      api.upload(workspace.id, item, progress).then(
         (attachment) => {
           settle(item.id, { ...item, status: 'ready', attachment });
         },
@@ -77,7 +92,7 @@ export const useUploads = (): Uploads => {
       const base = { id: messageId(clock.now()), name: file.name, file };
       return file.size > ATTACHMENT_BYTES_MAX
         ? { ...base, status: 'too-large' }
-        : { ...base, status: 'uploading' };
+        : { ...base, status: 'uploading', percent: null };
     });
     setItems((all) => [...all, ...added]);
     for (const item of added) if (item.status === 'uploading') start(item);
@@ -87,7 +102,7 @@ export const useUploads = (): Uploads => {
     const item = items.find((candidate) => candidate.id === id);
     if (item?.status !== 'failed') return;
     const again = { id: item.id, name: item.name, file: item.file };
-    settle(id, { ...again, status: 'uploading' });
+    settle(id, { ...again, status: 'uploading', percent: null });
     start(again);
   };
 
@@ -136,9 +151,20 @@ export const UploadList = ({
                 ? 'text-caption text-danger-text'
                 : 'text-caption text-ink-muted'
             }
+            {...(item.status === 'uploading' && item.percent !== null
+              ? {
+                  role: 'progressbar',
+                  'aria-label': t('upload.progressOf', { name: item.name }),
+                  'aria-valuemin': 0,
+                  'aria-valuemax': 100,
+                  'aria-valuenow': item.percent,
+                }
+              : {})}
           >
             {item.status === 'uploading'
-              ? t('upload.uploading')
+              ? item.percent === null
+                ? t('upload.uploading')
+                : t('upload.uploadingPercent', { percent: item.percent })
               : item.status === 'failed'
                 ? t('upload.failed')
                 : item.status === 'too-large'

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: an upload says how far it has got (D-109, #388)
+
+- The chip reads *Uploading… 42%*, a progress bar a screen reader can read, in both languages. An
+  upload goes over the browser's one transport that reports a request body's progress; its answers
+  and failures are read exactly as every other request's.
+
 ### Feature — 2026-10-12: a link to a picture shows the picture (#110)
 
 - A message's `https` links to a `.png`, `.jpg`, `.gif` or `.webp` — up to three — are drawn under it

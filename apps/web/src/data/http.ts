@@ -38,6 +38,35 @@ export interface Http {
   ) => Promise<Static<S>>;
   /** For an endpoint whose answer is not read (a sign-out). */
   readonly send: (method: Method, path: string, options?: RequestOptions) => Promise<void>;
+  /**
+   * A file's bytes, posted, with its progress told as it goes (#388) — `fetch` reports nothing of a
+   * request body until the answer, so an upload takes the transport that does. Its answer and its
+   * failures are read as a request's are.
+   */
+  readonly upload: <S extends TSchema>(
+    path: string,
+    schema: S,
+    bytes: Blob,
+    options: UploadOptions,
+  ) => Promise<Static<S>>;
+}
+
+interface UploadOptions {
+  readonly query?: RequestOptions['query'];
+  /** Bytes sent of the total, whenever the browser can measure them. */
+  readonly onProgress?: (sent: number, total: number) => void;
+}
+
+/** The part of `XMLHttpRequest` an upload uses; the browser's satisfies it, and so does a test's. */
+export interface UploadRequest {
+  readonly upload: { onprogress: ((event: ProgressEvent) => void) | null };
+  onload: ((event: ProgressEvent) => void) | null;
+  onerror: ((event: ProgressEvent) => void) | null;
+  readonly status: number;
+  readonly responseText: string;
+  open: (method: string, url: string) => void;
+  setRequestHeader: (name: string, value: string) => void;
+  send: (body: Blob) => void;
 }
 
 const withQuery = (path: string, query: RequestOptions['query']): string => {
@@ -50,38 +79,50 @@ const withQuery = (path: string, query: RequestOptions['query']): string => {
   return text === '' ? path : `${path}?${text}`;
 };
 
-const failure = async (response: Response): Promise<ApiError> => {
+const unreadable = (status: number, what = 'something unreadable'): ApiError =>
+  new ApiError(status, 'MALFORMED', `The server answered with ${what}.`);
+
+/** An error answer, read the same whichever transport carried it. */
+const failureOf = (status: number, text: string): ApiError => {
   let parsed: unknown;
   try {
-    parsed = await response.json();
+    parsed = JSON.parse(text);
   } catch {
-    return new ApiError(
-      response.status,
-      'MALFORMED',
-      'The server answered with something unreadable.',
-    );
+    return unreadable(status);
   }
   const body: unknown =
     typeof parsed === 'object' && parsed !== null && 'error' in parsed ? parsed.error : undefined;
-  if (!Value.Check(AppErrorBody, body)) {
-    return new ApiError(
-      response.status,
-      'MALFORMED',
-      'The server answered with something unreadable.',
-    );
-  }
+  if (!Value.Check(AppErrorBody, body)) return unreadable(status);
   return new ApiError(
-    response.status,
+    status,
     body.code,
     body.message,
     body.code === 'VALIDATION_FAILED' ? body.details.fields : {},
   );
 };
 
+/** A successful answer, believed only once it satisfies the contract's schema. */
+const answerOf = <S extends TSchema>(status: number, text: string, schema: S): Static<S> => {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw unreadable(status);
+  }
+  if (!Value.Check(schema, value)) {
+    throw unreadable(status, 'something the client does not understand');
+  }
+  return value;
+};
+
 /** The part of `fetch` this client uses; the browser's satisfies it, and so does a test's. */
 export type FetchPort = (input: string, init: RequestInit) => Promise<Response>;
 
-export const createHttp = (fetchFn: FetchPort): Http => {
+export const createHttp = (
+  fetchFn: FetchPort,
+  // Looked up when an upload is made, not when the client is: the build prerenders with no window.
+  newUpload: () => UploadRequest = () => new XMLHttpRequest(),
+): Http => {
   const call = async (method: Method, path: string, options: RequestOptions): Promise<Response> => {
     const hasBody = options.body !== undefined;
     const sent: { type: string; body: BodyInit } | null =
@@ -105,7 +146,7 @@ export const createHttp = (fetchFn: FetchPort): Http => {
     } catch (cause) {
       throw new ApiError(0, 'NETWORK', 'The request did not reach the server.', {}, cause);
     }
-    if (!response.ok) throw await failure(response);
+    if (!response.ok) throw failureOf(response.status, await response.text());
     return response;
   };
 
@@ -117,27 +158,39 @@ export const createHttp = (fetchFn: FetchPort): Http => {
       options: RequestOptions = {},
     ): Promise<Static<S>> => {
       const response = await call(method, path, options);
-      let value: unknown;
-      try {
-        value = await response.json();
-      } catch {
-        throw new ApiError(
-          response.status,
-          'MALFORMED',
-          'The server answered with something unreadable.',
-        );
-      }
-      if (!Value.Check(schema, value)) {
-        throw new ApiError(
-          response.status,
-          'MALFORMED',
-          'The server answered with something the client does not understand.',
-        );
-      }
-      return value;
+      return answerOf(response.status, await response.text(), schema);
     },
     send: async (method: Method, path: string, options: RequestOptions = {}): Promise<void> => {
       await call(method, path, options);
     },
+    upload: async <S extends TSchema>(
+      path: string,
+      schema: S,
+      bytes: Blob,
+      { query, onProgress }: UploadOptions,
+    ): Promise<Static<S>> =>
+      await new Promise<Static<S>>((resolve, reject) => {
+        const request = newUpload();
+        request.open('POST', withQuery(path, query));
+        request.setRequestHeader('accept', 'application/json');
+        request.setRequestHeader('content-type', 'application/octet-stream');
+        request.upload.onprogress = (event): void => {
+          if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+        };
+        request.onload = (): void => {
+          try {
+            if (request.status < 200 || request.status > 299) {
+              throw failureOf(request.status, request.responseText);
+            }
+            resolve(answerOf(request.status, request.responseText, schema));
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        };
+        request.onerror = (): void => {
+          reject(new ApiError(0, 'NETWORK', 'The request did not reach the server.'));
+        };
+        request.send(bytes);
+      }),
   };
 };

@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Attachment } from '@purlay/types';
 import { createApi, type Api } from './api';
-import { createHttp } from './http';
+import { createHttp, type UploadRequest } from './http';
 
 const ID = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
 const WHEN = '2026-09-09T08:00:00.000Z';
@@ -257,7 +257,7 @@ describe('the endpoints', () => {
     });
   });
 
-  test('an upload is the file’s bytes to its workspace, with the id and the name in the query, read as an attachment', async () => {
+  test('an upload is the file’s bytes to its workspace, with the id and the name in the query, its progress told as a fraction, read as an attachment', async () => {
     const attachment: Attachment = {
       id: ID,
       fileName: 'a b.png',
@@ -267,24 +267,58 @@ describe('the endpoints', () => {
       width: 1,
       height: 1,
     };
-    const uploaded = harness(attachment);
-    const answer = await uploaded.api.upload(ID, {
-      id: ID,
-      name: 'a b.png',
-      file: new Blob([new Uint8Array([1, 2, 3])]),
-    });
+    /** Answers as soon as it is sent, after telling half and then all of the body. */
+    const answering =
+      (body: unknown, opened: string[]): (() => UploadRequest) =>
+      () => {
+        const request: UploadRequest = {
+          upload: { onprogress: null },
+          onload: null,
+          onerror: null,
+          status: 201,
+          responseText: JSON.stringify(body),
+          open: (_method, url) => {
+            opened.push(url);
+          },
+          setRequestHeader: () => undefined,
+          send: () => {
+            request.upload.onprogress?.({
+              lengthComputable: true,
+              loaded: 3,
+              total: 6,
+            } as ProgressEvent);
+            request.upload.onprogress?.({
+              lengthComputable: true,
+              loaded: 6,
+              total: 6,
+            } as ProgressEvent);
+            request.onload?.({ type: 'load' } as ProgressEvent);
+          },
+        };
+        return request;
+      };
+    const opened: string[] = [];
+    const told: number[] = [];
+    const api = createApi(
+      createHttp(() => Promise.reject(new Error('no fetch')), answering(attachment, opened)),
+    );
+    const answer = await api.upload(
+      ID,
+      { id: ID, name: 'a b.png', file: new Blob([new Uint8Array([1, 2, 3])]) },
+      (fraction) => {
+        told.push(fraction);
+      },
+    );
     expect(answer).toEqual(attachment);
-    expect(uploaded.calls[0]).toMatchObject({
-      method: 'POST',
-      url: `/api/workspaces/${ID}/uploads?id=${ID}&name=a+b.png`,
-    });
-    // An answer that is not an attachment is not believed.
-    let thrown: unknown = null;
-    await harness({ id: ID })
-      .api.upload(ID, { id: ID, name: 'x', file: new Blob([]) })
-      .catch((error: unknown) => {
-        thrown = error;
-      });
+    expect(opened).toEqual([`/api/workspaces/${ID}/uploads?id=${ID}&name=a+b.png`]);
+    expect(told).toEqual([0.5, 1]);
+    // An answer that is not an attachment is not believed; no listener, nothing told.
+    const odd = createApi(
+      createHttp(() => Promise.reject(new Error('no fetch')), answering({ id: ID }, [])),
+    );
+    const thrown = await odd
+      .upload(ID, { id: ID, name: 'x', file: new Blob([]) })
+      .catch((e: unknown) => e);
     expect(thrown).toMatchObject({ code: 'MALFORMED' });
   });
 

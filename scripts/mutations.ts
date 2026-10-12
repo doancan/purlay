@@ -2268,4 +2268,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    return PICTURE.test(url.pathname);\n',
     tests: ['apps/web/src/features/content/image-links.test.tsx'],
   },
+  {
+    id: 'upload-progress-never-told',
+    why: 'a 25 MiB upload on a slow link says Uploading… for minutes and nothing more',
+    file: 'apps/web/src/data/api.ts',
+    find: '                onProgress(total === 0 ? 1 : sent / total);\n',
+    replace: '',
+    tests: ['apps/web/src/data/api.test.ts'],
+  },
+  {
+    id: 'upload-progress-unreadable',
+    why: 'the percent is drawn but a screen reader is not told it is a progress, or how far',
+    file: 'apps/web/src/features/composer/uploads.tsx',
+    find: "                  role: 'progressbar',\n",
+    replace: '',
+    tests: ['apps/web/src/features/composer/composer.test.tsx'],
+  },
 ];

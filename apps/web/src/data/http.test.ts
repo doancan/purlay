@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
 import { ApiError, isApiError, isTransient } from './errors';
-import { createHttp, type Http } from './http';
+import { createHttp, type Http, type UploadRequest } from './http';
 
 const answer = (status: number, body: unknown): Response =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -168,5 +168,135 @@ describe('send', () => {
     const bad = http(() => answer(401, { error: { code: 'UNAUTHENTICATED', message: 'no' } }));
     const error = await bad.client.send('POST', '/auth/logout').catch((e: unknown) => e);
     expect(error).toMatchObject({ code: 'UNAUTHENTICATED' });
+  });
+});
+
+/**
+ * An upload goes over the one transport that reports a request body's progress (#388): `fetch` says
+ * nothing until the answer. Its answer and its failures are read exactly as a request's are.
+ */
+describe('an upload', () => {
+  /** A request the test drives: what was opened and sent, and the server's side of it. */
+  class FakeUpload implements UploadRequest {
+    public static last: FakeUpload | null = null;
+    public opened: [string, string] | null = null;
+    public readonly headers: Record<string, string> = {};
+    public sent: Blob | null = null;
+    public status = 0;
+    public responseText = '';
+    public readonly upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
+      onprogress: null,
+    };
+    public onload: ((event: ProgressEvent) => void) | null = null;
+    public onerror: ((event: ProgressEvent) => void) | null = null;
+    public constructor() {
+      FakeUpload.last = this;
+    }
+    public open(method: string, url: string): void {
+      this.opened = [method, url];
+    }
+    public setRequestHeader(name: string, value: string): void {
+      this.headers[name] = value;
+    }
+    public send(body: Blob): void {
+      this.sent = body;
+    }
+    public progress(loaded: number, total: number): void {
+      this.upload.onprogress?.({ lengthComputable: true, loaded, total } as ProgressEvent);
+    }
+    public answer(status: number, body: unknown): void {
+      this.status = status;
+      this.responseText = typeof body === 'string' ? body : JSON.stringify(body);
+      this.onload?.({ type: 'load' } as ProgressEvent);
+    }
+  }
+
+  const client = createHttp(
+    () => Promise.reject(new Error('fetch is not the upload transport')),
+    () => new FakeUpload(),
+  );
+  const current = (): FakeUpload => {
+    if (FakeUpload.last === null) throw new Error('nothing was opened');
+    return FakeUpload.last;
+  };
+  const file = new Blob(['12345678']);
+
+  test('sends the bytes with the query, tells its progress, and believes the answer only by the schema', async () => {
+    const told: [number, number][] = [];
+    const done = client.upload('/api/w/uploads', Thing, file, {
+      query: { id: 'a', name: 'b c' },
+      onProgress: (sent, total) => {
+        told.push([sent, total]);
+      },
+    });
+    const request = current();
+    expect(request.opened).toEqual(['POST', '/api/w/uploads?id=a&name=b+c']);
+    expect(request.headers).toEqual({
+      accept: 'application/json',
+      'content-type': 'application/octet-stream',
+    });
+    expect(request.sent).toBe(file);
+    request.progress(4, 8);
+    request.progress(8, 8);
+    request.answer(201, { id: 'x' });
+    expect(await done).toEqual({ id: 'x' });
+    expect(told).toEqual([
+      [4, 8],
+      [8, 8],
+    ]);
+  });
+
+  test('a refusal is the error the server named, as a request’s is', async () => {
+    const done = client.upload('/u', Thing, file, {}).catch((e: unknown) => e);
+    current().answer(413, { error: { code: 'STORAGE_QUOTA_EXCEEDED', message: 'full' } });
+    expect(await done).toMatchObject({ status: 413, code: 'STORAGE_QUOTA_EXCEEDED' });
+  });
+
+  test('an answer outside the contract is MALFORMED; a dropped connection is NETWORK', async () => {
+    const odd = client.upload('/u', Thing, file, {}).catch((e: unknown) => e);
+    current().answer(201, { nope: true });
+    expect(await odd).toMatchObject({ code: 'MALFORMED' });
+    const garbled = client.upload('/u', Thing, file, {}).catch((e: unknown) => e);
+    current().answer(201, 'not json');
+    expect(await garbled).toMatchObject({ code: 'MALFORMED' });
+    const dropped = client.upload('/u', Thing, file, {}).catch((e: unknown) => e);
+    current().onerror?.({ type: 'error' } as ProgressEvent);
+    const error = await dropped;
+    expect(isApiError(error) && isTransient(error)).toBe(true);
+    expect(error).toMatchObject({ status: 0, code: 'NETWORK' });
+  });
+
+  test('a progress the browser cannot measure is not told', async () => {
+    const told: number[] = [];
+    const done = client.upload('/u', Thing, file, {
+      onProgress: (sent) => {
+        told.push(sent);
+      },
+    });
+    current().upload.onprogress?.({
+      lengthComputable: false,
+      loaded: 3,
+      total: 0,
+    } as ProgressEvent);
+    current().answer(201, { id: 'y' });
+    await done;
+    expect(told).toEqual([]);
+  });
+
+  test('by default it is the browser’s XMLHttpRequest, looked up when the upload is made', async () => {
+    const original = globalThis.XMLHttpRequest;
+    Object.defineProperty(globalThis, 'XMLHttpRequest', { value: FakeUpload, configurable: true });
+    try {
+      const done = createHttp(() => Promise.reject(new Error('no fetch'))).upload(
+        '/d',
+        Thing,
+        file,
+        {},
+      );
+      current().answer(201, { id: 'z' });
+      expect(await done).toEqual({ id: 'z' });
+    } finally {
+      Object.defineProperty(globalThis, 'XMLHttpRequest', { value: original, configurable: true });
+    }
   });
 });
