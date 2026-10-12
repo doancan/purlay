@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the audit trail records administrative actions (D-26)
+
+- A role change (with from and to), a member removed, somebody joining by the open door and a channel
+  created each write one row of `audit_log`, in the transaction that does it: a refused action leaves
+  none. Never anything a person wrote. Nothing updates or deletes the trail, and a test holds that.
+
 ### Operations — 2026-10-12: the frame budget is measured (O-4)
 
 - Each socket's closing log line says how many frames it sent, the most in any one second, and how

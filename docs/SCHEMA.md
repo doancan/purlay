@@ -918,7 +918,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-6 | `unread_count` ≥ `unread_mention_count` for every membership row. | the database: `unread_mention_within_unread` (D-99) |
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
-| I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit.service` |
+| I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry. | `retention.service` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
 
