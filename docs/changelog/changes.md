@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Testing — 2026-10-11: the demo and every browser test reach the client through the API
+
+- The demo's front server no longer serves files: it keeps its login and sends everything else to the
+  API, which serves the build as the image does. The browser suite therefore runs the production path,
+  under the document's real policy (D-102), and every test fails on any refusal the policy reports.
+
 ### Fix — 2026-10-11: a reader who has just scrolled up is not carried down by a message landing first
 
 - Whether the feed follows what arrives is measured from where the reader is at that moment, not

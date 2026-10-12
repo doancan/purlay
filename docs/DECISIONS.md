@@ -4245,7 +4245,9 @@ response keeps `default-src 'none'; frame-ancestors 'none'` — it is data, and 
 HTML document gets `DOCUMENT_SECURITY_POLICY`: `default-src 'self'`, `script-src 'self'` (no inline
 script and no `eval`; `theme-init.js` is a file so it needs no hash), `connect-src 'self'` (a same-origin
 `wss:` under CSP Level 3), `font-src 'self'`, `object-src 'none'`, `base-uri 'none'`,
-`form-action 'self'`, `frame-ancestors 'none'`.
+`form-action 'self'`, `frame-ancestors 'none'`. The browser suite runs every test under it, on the
+production path — the demo's front server sends everything but its login to the API — and fails a
+test on any refusal the page reports.
 
 **Two exceptions, each observed rather than argued:**
 

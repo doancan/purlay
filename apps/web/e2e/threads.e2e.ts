@@ -164,6 +164,7 @@ test.describe('resolving', () => {
     room,
     api,
     world,
+    securityPolicy,
   }, info) => {
     const made = await aQuestion(room, api);
     const measure = async (reducedMotion: 'reduce' | 'no-preference'): Promise<number[]> => {
@@ -174,6 +175,7 @@ test.describe('resolving', () => {
         ...(colorScheme === undefined ? {} : { colorScheme }),
         ...(viewport === undefined ? {} : { viewport }),
       });
+      await securityPolicy.watch(context);
       await context.addCookies([
         {
           name: '__Host-purlay_session',
@@ -213,6 +215,7 @@ test.describe('resolving', () => {
         });
         return samples;
       }, made.rootId);
+      await securityPolicy.settle(context);
       await context.close();
       return heights;
     };

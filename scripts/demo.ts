@@ -1,6 +1,6 @@
 /**
- * The demo: a scratch database, a seeded workspace, the real API, and the built client
- * on one origin — started with one command, thrown away with Ctrl-C.
+ * The demo: a scratch database, a seeded workspace, and the real API serving the built
+ * client on one origin — started with one command, thrown away with Ctrl-C.
  *
  *   bun run demo                       build, seed, serve on http://localhost:4173
  *   bun run demo -- --no-build         serve the build that is already in apps/web/dist
@@ -119,6 +119,8 @@ const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
     GITHUB_CLIENT_SECRET: 'demo',
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
     WORKSPACE_OPEN_JOIN_SLUG: 'acme-eng',
+    // The API serves the build itself, as the image does (D-61).
+    CLIENT_DIST: join(root, 'apps/web/dist'),
   },
   stdout: 'inherit',
   stderr: 'inherit',
@@ -143,7 +145,6 @@ if (!(await ready())) {
 
 // ── 5. One origin ────────────────────────────────────────────────────────────
 const front = startFront({
-  dist: join(root, 'apps/web/dist'),
   api: `http://localhost:${String(apiPort)}`,
   sessions,
   port,

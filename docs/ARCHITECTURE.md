@@ -747,8 +747,8 @@ would have created for them.
 
 **One public origin.** `APP_URL` is the origin the browser uses. In development Vite proxies
 `/auth`, `/api` and `/ws` to the API process so the two look identical to a browser — that is
-built. In a deployment the API serves the built client from the same origin (`API.md` §8, D-102).
-There is therefore no CORS to configure, the socket's `Origin`
+built. In a deployment the API serves the built client from the same origin (`API.md` §8, D-102); the
+demo and the browser tests reach it the same way, through the API. There is therefore no CORS to configure, the socket's `Origin`
 check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
 
 **Still to come in the deployment.** The development `docker compose` runs the database and object

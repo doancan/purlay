@@ -1,75 +1,34 @@
 /**
- * The one origin a browser sees in the demo: the built client, and the API behind it.
+ * The one origin a browser sees in the demo: the API, which serves the built client itself
+ * (D-61), behind a proxy that adds one route.
  *
- * This is the production shape (D-61) with the smallest possible moving parts — static
- * files with a fallback to `index.html` for client-side routes, and a proxy for
- * `/auth`, `/api`, `/health` and the `/ws` upgrade — so the demo exercises what a
- * deployment does and not what the Vite dev server forgives: the cookie is on one
- * origin, the socket's `Origin` is the page's, and a path the proxy forgot answers with
- * the wrong thing exactly as it would in front of a real server.
+ * Everything but that route goes to the API as it came — files, the shell, `/auth`, `/api`,
+ * `/health` and the `/ws` upgrade — so the demo and every browser test exercise the
+ * production path, under the document's real security policy (D-102), and not a copy of it.
+ * The cookie is on one origin, and the socket's `Origin` is the page's.
  *
  * **`/__demo/login?as=<name>` exists here and nowhere else.** GitHub cannot be reached
  * from a laptop, so the harness hands a browser the genuine session cookie the seed
  * issued. It is a route of this process, which only the demo harness starts; the API has
  * no development sign-in and never will (`ARCHITECTURE.md` §7.1).
  */
-import { existsSync, statSync } from 'node:fs';
-import { join, normalize, sep } from 'node:path';
 
 export interface FrontOptions {
-  /** The built client: `apps/web/dist`. */
-  readonly dist: string;
-  /** The API's origin, `http://localhost:3001`. */
+  /** The API's origin, `http://localhost:3001`, started with `CLIENT_DIST`. */
   readonly api: string;
   /** Session tokens by persona name, for `/__demo/login`. */
   readonly sessions: Readonly<Record<string, string>>;
   readonly port: number;
 }
 
-/** The paths the API owns. Anything else is the client's. */
-const API_PREFIXES = ['/auth', '/api', '/health'] as const;
-
 const COOKIE = '__Host-purlay_session';
 
-export type Route = 'socket' | 'login' | 'api' | 'static';
+export type Route = 'socket' | 'login' | 'api';
 
 export const routeOf = (pathname: string): Route => {
   if (pathname === '/ws') return 'socket';
   if (pathname === '/__demo/login') return 'login';
-  if (API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
-    return 'api';
-  }
-  return 'static';
-};
-
-/** The file a path means inside `dist`, or null when it would climb out. */
-export const fileFor = (dist: string, pathname: string): string | null => {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    return null;
-  }
-  const candidate = normalize(join(dist, decoded));
-  return candidate === dist || candidate.startsWith(dist + sep) ? candidate : null;
-};
-
-/** A file with a hash in its name never changes; everything else is asked about every time. */
-const cacheFor = (pathname: string): string =>
-  pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
-
-const serveStatic = (dist: string, pathname: string): Response => {
-  const path = fileFor(dist, pathname);
-  if (path === null) return new Response('Not found', { status: 404 });
-  if (existsSync(path) && statSync(path).isFile()) {
-    return new Response(Bun.file(path), { headers: { 'cache-control': cacheFor(pathname) } });
-  }
-  // A path with an extension is a file that is not there; a path without one is a
-  // client route, and the client decides what it means.
-  if (/\.[A-Za-z0-9]+$/.test(pathname)) return new Response('Not found', { status: 404 });
-  return new Response(Bun.file(join(dist, 'index.html')), {
-    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
-  });
+  return 'api';
 };
 
 const login = (url: URL, sessions: FrontOptions['sessions']): Response => {
@@ -98,16 +57,23 @@ const proxy = async (request: Request, url: URL, api: string): Promise<Response>
   for (const name of HOP_BY_HOP) headers.delete(name);
   // Asked for plain bytes so the answer can be passed on as it came, headers and all.
   headers.set('accept-encoding', 'identity');
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  // Read before the call, so a client that went away is not blamed on the API.
+  const body =
+    request.method !== 'GET' && request.method !== 'HEAD' ? await request.arrayBuffer() : null;
   let upstream: Response;
   try {
     upstream = await fetch(`${api}${url.pathname}${url.search}`, {
       method: request.method,
       headers,
       redirect: 'manual',
-      ...(hasBody ? { body: await request.arrayBuffer() } : {}),
+      ...(body === null ? {} : { body }),
     });
-  } catch {
+  } catch (error) {
+    // Every page and file comes through here: a 502 with no cause would leave a browser test
+    // failing on a missing chunk with nothing to say why.
+    process.stderr.write(
+      `demo proxy: ${request.method} ${url.pathname} failed: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
     return new Response('The API is not answering.', { status: 502 });
   }
   const answer = new Headers(upstream.headers);
@@ -157,8 +123,6 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
           return login(url, options.sessions);
         case 'api':
           return await proxy(request, url, options.api);
-        case 'static':
-          return serveStatic(options.dist, url.pathname);
       }
     },
     websocket: {

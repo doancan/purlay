@@ -1,18 +1,10 @@
 /**
- * The demo's front server: routing, static files with a client-route fallback, the demo
- * login, and the proxy to an API — a fake one, so nothing here needs a database.
+ * The demo's front server: routing, the demo login, and the proxy to an API — a fake one,
+ * so nothing here needs a database. Serving the client is the API's, and is tested there
+ * (`apps/api/src/ingress/http/client.test.ts`).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileFor, forwardableCode, routeOf, startFront, type Route } from './demo-server';
-
-const dist = mkdtempSync(join(tmpdir(), 'demo-dist-'));
-mkdirSync(join(dist, 'assets'));
-writeFileSync(join(dist, 'index.html'), '<!doctype html><title>shell</title>');
-writeFileSync(join(dist, 'assets', 'app-abc123.js'), 'console.log(1)');
-writeFileSync(join(dist, 'robots.txt'), 'User-agent: *');
+import { forwardableCode, routeOf, startFront, type Route } from './demo-server';
 
 let seen: { url: string; cookie: string | null; method: string; body: string }[] = [];
 const sockets: { cookie: string | null; origin: string | null; got: string[] }[] = [];
@@ -51,7 +43,6 @@ const fakeApi = Bun.serve<{ cookie: string | null; origin: string | null }>({
 });
 
 const front = startFront({
-  dist,
   api: `http://localhost:${String(fakeApi.port)}`,
   sessions: { dogancan: 'tok-1' },
   port: 0,
@@ -61,7 +52,6 @@ const base = `http://localhost:${String(front.port)}`;
 afterAll(async () => {
   await front.stop(true);
   await fakeApi.stop(true);
-  rmSync(dist, { recursive: true, force: true });
 });
 
 beforeAll(() => {
@@ -79,41 +69,19 @@ describe('which paths are whose', () => {
     ['/ws', 'socket'],
     ['/__demo/login', 'login'],
     ['/api/me', 'api'],
-    ['/api', 'api'],
     ['/auth/github', 'api'],
-    ['/health/ready', 'api'],
-    ['/', 'static'],
-    ['/w/acme/c/1', 'static'],
-    ['/apiary', 'static'],
-    ['/assets/app.js', 'static'],
+    ['/', 'api'],
+    ['/w/acme/c/1', 'api'],
+    ['/assets/app.js', 'api'],
   ])('%s is %s', (path, route) => {
     expect(routeOf(path)).toBe(route);
   });
-});
 
-describe('static files', () => {
-  test('a file is served, and a hashed asset is cached for good', async () => {
-    const response = await fetch(`${base}/assets/app-abc123.js`);
+  test("a client path is the API's to answer too: the demo serves no file of its own", async () => {
+    seen = [];
+    const response = await fetch(`${base}/w/acme/c/1`);
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toContain('immutable');
-    expect(await response.text()).toBe('console.log(1)');
-    expect((await fetch(`${base}/robots.txt`)).headers.get('cache-control')).toBe('no-cache');
-  });
-
-  test('a client route gets the shell; a file that is not there is a 404, not the shell', async () => {
-    const route = await fetch(`${base}/w/acme/c/xyz`);
-    expect(route.status).toBe(200);
-    expect(await route.text()).toContain('shell');
-    expect(route.headers.get('content-type')).toContain('text/html');
-    expect((await fetch(`${base}/assets/gone.js`)).status).toBe(404);
-  });
-
-  test('a path cannot climb out of the build', () => {
-    expect(fileFor(dist, '/../etc/passwd')).toBeNull();
-    expect(fileFor(dist, '/%2e%2e/%2e%2e/etc/passwd')).toBeNull();
-    expect(fileFor(dist, '/%E0%A4%A')).toBeNull();
-    expect(fileFor(dist, '/')?.startsWith(dist)).toBe(true);
-    expect(fileFor(dist, '/assets/x.js')).toBe(join(dist, 'assets', 'x.js'));
+    expect(seen.at(-1)?.url).toBe('/w/acme/c/1');
   });
 });
 
@@ -164,7 +132,7 @@ describe('the API proxy', () => {
   });
 
   test('an API that is not there is a 502, said plainly', async () => {
-    const lonely = startFront({ dist, api: 'http://localhost:1', sessions: {}, port: 0 });
+    const lonely = startFront({ api: 'http://localhost:1', sessions: {}, port: 0 });
     const response = await fetch(`http://localhost:${String(lonely.port)}/api/me`);
     expect(response.status).toBe(502);
     expect(await response.text()).toContain('not answering');
