@@ -14,6 +14,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { NOW, aRecordingLogger, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
+import { claimingPng, twoColourPng } from '../../testing/png';
 import { aMemoryStore } from '../../testing/storage';
 import { aUniqueSlug } from '../../testing/users';
 
@@ -85,6 +86,28 @@ describe('integration: the upload door', () => {
       const again = await send(db, path, { cookie });
       expect(again.status).toBe(200);
       expect(await again.json()).toEqual(body);
+    });
+  });
+
+  test('an image is answered as one, measured; a broken one is 400 IMAGE_UNREADABLE, a bomb 413', async () => {
+    await withRollback(async (db) => {
+      const { cookie, workspaceId } = await aWorkspace(db);
+      const path = (): string => `/api/workspaces/${workspaceId}/uploads?id=${anId()}&name=a.png`;
+      const image = await send(db, path(), { cookie, body: twoColourPng(300, 150) });
+      expect(image.status).toBe(201);
+      expect(await image.json()).toMatchObject({
+        kind: 'image',
+        mimeType: 'image/webp',
+        width: 300,
+        height: 150,
+      });
+      const broken = await send(db, path(), {
+        cookie,
+        body: twoColourPng(300, 150).subarray(0, 60),
+      });
+      expect([broken.status, await code(broken)]).toEqual([400, 'IMAGE_UNREADABLE']);
+      const bomb = await send(db, path(), { cookie, body: claimingPng(20_000, 20_000) });
+      expect([bomb.status, await code(bomb)]).toEqual([413, 'IMAGE_TOO_LARGE']);
     });
   });
 

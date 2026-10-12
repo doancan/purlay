@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: an uploaded image is stored re-encoded (D-109 §1, §2)
+
+- A PNG, JPEG, GIF or WebP — known by its bytes — is stored upright as WebP, at most 2560 pixels on
+  its longer side and never enlarged, with a 512-pixel thumbnail beside it; its camera data goes with
+  the original. A file claiming more than 40 million pixels is refused before it is decoded, and a node
+  decodes at most two at once. Anything else, SVG included, is a file.
+
 ### Feature — 2026-10-12: uploading a file (D-109 §3, §5)
 
 - `POST /api/workspaces/:workspaceId/uploads?id=&name=` takes a file's bytes and answers the

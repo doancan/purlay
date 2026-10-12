@@ -21,6 +21,9 @@ const INBOX_TESTS = ['apps/api/src/modules/notifications/notifications.integrati
 const SOCKET = 'apps/api/src/ingress/ws/socket.ts';
 const SOCKET_TESTS = ['apps/api/src/realtime/sockets.integration.test.ts'];
 
+const IMAGES = 'apps/api/src/modules/attachments/images.ts';
+const IMAGES_TESTS = ['apps/api/src/modules/attachments/images.test.ts'];
+
 const CLIENT = 'apps/api/src/ingress/http/client.ts';
 const APP = 'apps/api/src/ingress/http/app.ts';
 const CLIENT_TESTS = [
@@ -1326,8 +1329,57 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'upload-leftover-dropped-quietly',
     why: 'an object no row points at is left in the bucket with nothing said, and the storage is never found',
     file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: "    log.error('an upload’s object was left behind', { key, error });\n",
+    find: "      log.error('an upload’s object was left behind', { key, error });\n",
     replace: '',
+    tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
+  },
+  {
+    id: 'image-pixel-bound-lifted',
+    why: 'a small file claiming a huge canvas is decoded, and its pixel buffer takes the node’s memory',
+    file: IMAGES,
+    find: 'open(bytes, { maxPixels: ATTACHMENT_PIXELS_MAX })',
+    replace: 'open(bytes, { maxPixels: ATTACHMENT_PIXELS_MAX * 1000 })',
+    tests: IMAGES_TESTS,
+  },
+  {
+    id: 'image-side-bound-removed',
+    why: 'a thirty-thousand-pixel strip is decoded and stored, past what a browser will draw',
+    file: IMAGES,
+    find: '    if (header.width > ATTACHMENT_SIDE_MAX || header.height > ATTACHMENT_SIDE_MAX) throw tooLarge();\n',
+    replace: '',
+    tests: IMAGES_TESTS,
+  },
+  {
+    id: 'image-enlarged',
+    why: 'a small screenshot is blown up to the stored size: blurred, and many times the bytes',
+    file: IMAGES,
+    find: "{ fit: 'inside', withoutEnlargement: true }",
+    replace: "{ fit: 'inside', withoutEnlargement: false }",
+    tests: IMAGES_TESTS,
+  },
+  {
+    id: 'image-signature-not-checked',
+    why: 'every file is handed to the decoder, and a text file is refused as a broken image',
+    file: IMAGES,
+    find: '  if (!isOurImage(bytes)) return null;\n',
+    replace: '',
+    tests: IMAGES_TESTS,
+  },
+  {
+    id: 'image-decode-slot-given-back',
+    why: 'a freed slot is given back instead of handed over, and a newcomer makes one decode more than the node was measured for',
+    file: IMAGES,
+    find: '    } else {\n      running += 1;\n    }\n    try {\n      return await work();\n    } finally {\n      const next = waiting.shift();\n      if (next === undefined) running -= 1;\n      else next();\n',
+    replace:
+      '    }\n    running += 1;\n    try {\n      return await work();\n    } finally {\n      running -= 1;\n      waiting.shift()?.();\n',
+    tests: IMAGES_TESTS,
+  },
+  {
+    id: 'image-thumbnail-left-behind',
+    why: 'a refused image’s thumbnail stays in the bucket with no row pointing at it',
+    file: 'apps/api/src/modules/attachments/uploads.ts',
+    find: '    await removeLeftovers(storage, log, keys);\n    throw error;\n',
+    replace: '    await removeLeftovers(storage, log, [key]);\n    throw error;\n',
     tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
   },
   {

@@ -4558,6 +4558,10 @@ never drawn — "never served as SVG" (D-39 §3) by the same rule as every other
 million pixels, read from the header before decoding (`Bun.Image`'s own default is a backstop, not the
 bound); at most two decodes at once per node. A 25 MiB PNG can decompress to gigabytes; the size limit
 bounds the wire, these bound the process. The numbers are bound to the database's CHECKs by a test.
+*Measured 2026-10-12 (Bun 1.4.2, macOS arm64), one 40-million-pixel PNG re-encoded at a time and
+several at once: +118 MiB RSS for one decode, +258 MiB for two, +450 MiB for four, 136–158 ms each.*
+Two keeps a node's peak near a quarter of a gigabyte above its idle; a freed slot is handed to the next
+waiter, never given back, so a newcomer cannot make it three.
 
 **3 · `POST /api/workspaces/:workspaceId/uploads?id=&name=`, raw bytes, `application/octet-stream`.**
 The workspace is the quota's axis; there is no channel until the message. `id` is a UUIDv7 the client
