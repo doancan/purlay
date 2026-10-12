@@ -5,7 +5,7 @@
  * Carol joins, in a workspace made for the test, so nobody else's screens gain a workspace.
  */
 import { expect, test } from './fixtures';
-import { apiAs } from './support';
+import { apiAs, openNav } from './support';
 
 test.describe('an invitation', () => {
   test('opened signed out, survives signing in, and joins the workspace it names', async ({
@@ -40,5 +40,29 @@ test.describe('an invitation', () => {
       '/api/workspaces',
     );
     expect(memberships.map((m) => m.workspace.id)).toContain(workspace.id);
+  });
+
+  test('made by an owner from the workspace menu, and opened by the person it was sent to', async ({
+    page,
+    signIn,
+    tenant,
+    asPerson,
+  }) => {
+    await signIn();
+    await page.goto(`/w/${tenant.slug}`);
+    // Behind the navigation's toggle at a narrow width, in place at a wide one.
+    await openNav(page);
+    await page.getByRole('button', { name: 'Switch workspace' }).click();
+    await page.getByRole('menuitem', { name: 'Invite people…' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Make a link' }).click();
+    const field = dialog.getByRole('textbox', { name: 'Invitation link' });
+    await expect(field).toHaveValue(/\/invite#[0-9a-f]{64}$/);
+    const link = await field.inputValue();
+
+    // Carol is in the workspace already: the link offers to open it, and joins nothing.
+    const carol = await asPerson('carol');
+    await carol.goto(new URL(link).pathname + new URL(link).hash);
+    await expect(carol.getByRole('button', { name: 'Open' })).toBeVisible();
   });
 });

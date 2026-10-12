@@ -16,7 +16,9 @@ import {
   Membership,
   Message,
   MessagePage,
+  CreatedInvitation,
   DeepWorkResponse,
+  InvitationPage,
   InvitationPreview,
   NotificationPage,
   ReactionsResponse,
@@ -52,6 +54,14 @@ export interface Api {
   /** What an invitation's token opens (D-115); the token goes in the body, never the path. */
   readonly previewInvitation: (token: string, signal?: AbortSignal) => Promise<InvitationPreview>;
   readonly acceptInvitation: (token: string) => Promise<Membership>;
+  /** An owner's or an admin's: a new link, its token in this answer only. */
+  readonly createInvitation: (workspaceId: string) => Promise<CreatedInvitation>;
+  readonly invitations: (
+    workspaceId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<InvitationPage>;
+  readonly revokeInvitation: (workspaceId: string, invitationId: string) => Promise<void>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
 
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
@@ -140,6 +150,26 @@ export const createApi = (http: Http): Api => {
       ),
     acceptInvitation: (token) =>
       http.request('POST', '/api/invitations/accept', Membership, options({ body: { token } })),
+    createInvitation: (workspaceId) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/invitations`,
+        CreatedInvitation,
+        options({ body: {} }),
+      ),
+    invitations: (workspaceId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/invitations`,
+        InvitationPage,
+        options(before === undefined ? {} : { query: { before } }, signal),
+      ),
+    revokeInvitation: (workspaceId, invitationId) =>
+      http.send(
+        'DELETE',
+        `/api/workspaces/${at(workspaceId)}/invitations/${at(invitationId)}`,
+        options(),
+      ),
     members: (workspaceId, signal) =>
       http.request(
         'GET',

@@ -2099,4 +2099,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/invitations/pending.test.ts'],
   },
+  {
+    id: 'invite-offered-to-a-member',
+    why: 'a member is offered invitation links, and every attempt is refused',
+    file: 'apps/web/src/features/sidebar/workspace-menu.tsx',
+    find: "  const mayInvite = role === 'owner' || role === 'admin';\n",
+    replace: '  const mayInvite = role !== undefined;\n',
+    tests: ['apps/web/src/features/sidebar/invite-dialog.test.tsx'],
+  },
+  {
+    id: 'invite-link-kept-after-closing',
+    why: "a link's secret stays on screen for whoever opens the dialog next",
+    file: 'apps/web/src/features/sidebar/invite-dialog.tsx',
+    find: '    if (!next) {\n      setLink(null);\n',
+    replace: '    if (!next) {\n',
+    tests: ['apps/web/src/features/sidebar/invite-dialog.test.tsx'],
+  },
 ];

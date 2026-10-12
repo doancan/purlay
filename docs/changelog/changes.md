@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: owners and admins invite from the workspace menu (D-115, #50)
+
+- **Invite people…** opens a dialog that makes a link, shows it once to copy, and lists the links
+  still open — who made each and until when — each with **Revoke**. A member is not offered it.
+
 ### Feature — 2026-10-12: an invitation opens in the browser (D-115, #50)
 
 - `/invite#…` takes the token out of the address as the page loads and keeps it in the tab through

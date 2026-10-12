@@ -289,7 +289,8 @@ describe('the workspace menu', () => {
     const view = await open(aSignedInApi({ me: () => Promise.resolve(two()) }));
     await person().click(view.getByRole('button', { name: 'Switch workspace' }));
     const items = view.getAllByRole('menuitem').map((i) => i.textContent);
-    expect(items).toEqual(['acme-eng', 'side-project', 'Sign out']);
+    // The owner of acme-eng is also offered invitation links (D-115).
+    expect(items).toEqual(['acme-eng', 'side-project', 'Invite people…', 'Sign out']);
     expect(view.getByText('Signed in as Dogancan')).toBeDefined();
   });
 
