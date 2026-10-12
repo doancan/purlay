@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the notification inbox, on the server (D-106)
+
+- `GET /api/notifications?workspaceId=` lists what the caller was told — named, sent directly, answered
+  in a thread, their question resolved — newest first, from channels they can still see, never about a
+  deleted message; `unreadOnly` narrows it.
+- `PUT /api/notifications/read` marks some or all read. The mention badge of each channel touched is
+  counted again from the rows, and the caller's other devices are told at once.
+
 ### Feature — 2026-10-12: search a workspace (D-105)
 
 - `GET /api/workspaces/:workspaceId/search?q=` finds the words as typed, ignoring case, in roots and

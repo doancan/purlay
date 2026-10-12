@@ -14,6 +14,9 @@ import {
   CreateDirectMessageRequest,
   MeResponse,
   MessagePage,
+  NotificationQuery,
+  PAGE_LIMIT,
+  ReadNotificationsRequest,
   Page,
   ReactionsResponse,
   ReadChannelRequest,
@@ -175,6 +178,30 @@ describe('http shapes', () => {
     expect(Value.Check(SearchQuery, { q: 'abc', after: id })).toBe(false);
     expect(Value.Check(SearchQuery, { q: 'abc\u0000' })).toBe(false);
     expect(Value.Check(SearchQuery, { q: 'abc', channelId: id, before: id, limit: 5 })).toBe(true);
+  });
+
+  test('the inbox is one workspace, a page at a time, newest first', () => {
+    expect(Value.Check(NotificationQuery, { workspaceId: id })).toBe(true);
+    expect(Value.Check(NotificationQuery, { workspaceId: id, unreadOnly: true, before: id })).toBe(
+      true,
+    );
+    expect(Value.Check(NotificationQuery, {})).toBe(false);
+    expect(Value.Check(NotificationQuery, { workspaceId: id, after: id })).toBe(false);
+    expect(Value.Check(NotificationQuery, { workspaceId: id, limit: PAGE_LIMIT.max + 1 })).toBe(
+      false,
+    );
+  });
+
+  test('reading notifications names them, or a workspace up to one of them, never both', () => {
+    const many = (n: number): string[] => Array.from({ length: n }, () => id);
+    expect(Value.Check(ReadNotificationsRequest, { ids: [id] })).toBe(true);
+    expect(Value.Check(ReadNotificationsRequest, { ids: many(PAGE_LIMIT.max) })).toBe(true);
+    expect(Value.Check(ReadNotificationsRequest, { ids: many(PAGE_LIMIT.max + 1) })).toBe(false);
+    expect(Value.Check(ReadNotificationsRequest, { ids: [] })).toBe(false);
+    expect(Value.Check(ReadNotificationsRequest, { workspaceId: id })).toBe(true);
+    expect(Value.Check(ReadNotificationsRequest, { workspaceId: id, before: id })).toBe(true);
+    expect(Value.Check(ReadNotificationsRequest, { ids: [id], workspaceId: id })).toBe(false);
+    expect(Value.Check(ReadNotificationsRequest, { ids: ['nope'] })).toBe(false);
   });
 
   test('adding to a channel names one person and nothing else', () => {

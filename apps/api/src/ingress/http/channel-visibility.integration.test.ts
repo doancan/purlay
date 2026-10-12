@@ -141,7 +141,7 @@ const aWorld = async (db: Executor): Promise<World> => {
   } as const;
 
   // A question with one answer in every channel, written by the owner: what the
-  // message endpoints name, and what the open-questions view lists.
+  // message endpoints name, what the open-questions view lists, and what the inbox tells.
   const thread = async (channelId: string, author = owner.id): Promise<string> => {
     const root = Bun.randomUUIDv7();
     const base = { workspace_id: workspaceId, channel_id: channelId, sender_id: owner.id };
@@ -159,6 +159,20 @@ const aWorld = async (db: Executor): Promise<World> => {
     await db
       .insertInto('messages')
       .values({ ...base, id: Bun.randomUUIDv7(), content: 'an answer', parent_id: root })
+      .execute();
+    // Both are told of every question, wherever it is: what the inbox must still not show the
+    // outsider from a channel they cannot see, and does show the owner, who can.
+    await db
+      .insertInto('notifications')
+      .values(
+        [owner.id, outsider.id].map((user) => ({
+          user_id: user,
+          workspace_id: workspaceId,
+          channel_id: channelId,
+          message_id: root,
+          type: 'mention' as const,
+        })),
+      )
       .execute();
     return root;
   };
@@ -184,7 +198,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     outsider: outsider.cookie,
     // What a body may need: the outsider, who is certainly in the workspace, and a message
     // of the visible channel (a read position names one).
-    ids: { userId: outsider.id, messageId: threads.visible },
+    ids: { userId: outsider.id, messageId: threads.visible, workspaceId },
     workspaceId,
     visible,
     hidden,
@@ -302,7 +316,11 @@ describe('integration: channel visibility', () => {
             const response = await call(
               db,
               method,
-              `${pathFor(path, { workspaceId: world.workspaceId, channelId: NEVER_EXISTED, messageId: NEVER_EXISTED })}${query}`,
+              pathFor(`${path}${query}`, {
+                workspaceId: world.workspaceId,
+                channelId: NEVER_EXISTED,
+                messageId: NEVER_EXISTED,
+              }),
               cookie,
             );
             expect(response.status).toBe(200);

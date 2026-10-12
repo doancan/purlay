@@ -60,6 +60,7 @@ import {
   readUpTo,
   addChannelMember,
 } from './channels';
+import { markNotificationsRead, readInbox } from './notifications';
 import {
   postMessage,
   readHistory,
@@ -367,6 +368,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await readUnresolved(dependencies, request, params.workspaceId),
     )
+    .get('/api/notifications', async ({ request }) => await readInbox(dependencies, request))
+    .put('/api/notifications/read', async ({ request, body, set }) => {
+      await markNotificationsRead({ ...dependencies, bus: sockets.bus }, request, body);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),
