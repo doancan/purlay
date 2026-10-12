@@ -2196,4 +2196,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/ingress/http/permissions.integration.test.ts'],
   },
+  {
+    id: 'reconnect-unsaid-when-lost-before-drawn',
+    why: 'a connection lost before the page drew it as open is never said to be reconnecting',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: "    store.setState(status === 'open' ? { status, connectedOnce: true } : { status });\n",
+    replace: '    store.setState({ status });\n',
+    tests: ['apps/web/src/features/shell/connection-bar.test.tsx'],
+  },
 ];

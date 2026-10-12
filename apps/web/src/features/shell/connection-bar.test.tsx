@@ -65,6 +65,19 @@ describe('the connection bar', () => {
     expect(bar(view)).toBeUndefined();
   });
 
+  /**
+   * #347: open and lost before the page had drawn it as open — under load, the first frame can arrive
+   * before React renders the open state — is still a connection that was open and is now lost.
+   */
+  test('appears even when the connection was lost before it was ever drawn as open', async () => {
+    const view = await frame();
+    act(() => {
+      view.world.sockets.open();
+      view.world.sockets.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    });
+    expect(bar(view)?.textContent).toContain('Reconnecting');
+  });
+
   test('is a status and not an alert, and leaves the composer enabled', async () => {
     const view = await frame();
     act(() => {

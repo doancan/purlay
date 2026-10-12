@@ -102,6 +102,12 @@ export interface PendingMessage {
 
 export interface RealtimeState {
   readonly status: ConnectionStatus;
+  /**
+   * The connection has been open at least once on this page. Kept here, where the status changes,
+   * and not inferred by a screen from the statuses it happened to draw: open and lost between two
+   * renders is still a connection that was open and is lost (#347).
+   */
+  readonly connectedOnce: boolean;
   readonly pending: readonly PendingMessage[];
   /** Channels whose live updates are not trustworthy right now, by what went wrong. */
   readonly degraded: Readonly<Record<string, DegradedReason>>;
@@ -185,6 +191,7 @@ export const createEngine = (options: EngineOptions): Engine => {
   }));
   const store = createStore<RealtimeState>(() => ({
     status: 'idle',
+    connectedOnce: false,
     pending: restored,
     degraded: {},
     typing: {},
@@ -552,7 +559,7 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
 
   const onStatus = (status: ConnectionStatus): void => {
-    store.setState({ status });
+    store.setState(status === 'open' ? { status, connectedOnce: true } : { status });
     if (status !== 'open') return;
     // The first open is the page loading; every later one is a return from a gap.
     if (opened || resumeOnOpen) resync();
