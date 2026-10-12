@@ -1097,4 +1097,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/content/reading-cache.test.ts'],
   },
+  {
+    id: 'locale-remembered-before-it-arrives',
+    why: 'a language whose words never came is the one the next visit starts in, and the page is left on its skeleton',
+    file: 'apps/web/src/i18n/i18n-provider.tsx',
+    find: '        if (chosen.current === wanted) rememberLocale(resolved.storage, wanted);\n',
+    replace: '        rememberLocale(resolved.storage, wanted);\n',
+    tests: ['apps/web/src/i18n/i18n-provider.test.tsx'],
+  },
+  {
+    id: 'catalogue-failure-falls-back-to-nothing',
+    why: 'a remembered language that does not arrive leaves the page on its skeleton for good',
+    file: 'apps/web/src/i18n/i18n-provider.tsx',
+    find: "        const instead = showing.current ?? (wanted === 'en' ? null : 'en');\n",
+    replace: '        const instead = showing.current;\n',
+    tests: ['apps/web/src/i18n/i18n-provider.test.tsx'],
+  },
+  {
+    id: 'update-bar-never-shown',
+    why: 'a tab left open across a deployment fails in pieces, and nothing tells the person a reload would mend it',
+    file: 'apps/web/src/features/shell/update-bar.tsx',
+    find: '    target.addEventListener(STALE_BUILD_EVENT, seen);\n',
+    replace: '',
+    tests: ['apps/web/src/features/shell/update-bar.test.tsx'],
+  },
 ];
