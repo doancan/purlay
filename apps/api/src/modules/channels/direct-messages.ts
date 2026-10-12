@@ -12,10 +12,10 @@
  */
 import type { Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
-import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { channelFor } from './channels';
+import { requireWorkspacePerson } from './members';
 
 export interface OpenedDirectMessage {
   /** As the caller sees it. */
@@ -40,19 +40,7 @@ export const openDirectMessage = async (
   context: WorkspaceContext,
   peerId: string,
 ): Promise<OpenedDirectMessage> => {
-  // A person who is in this workspace and has not been deleted. Anything else —
-  // another workspace's member, a stranger, an erased account — is the same answer.
-  const peer = await executor
-    .selectFrom('workspace_members')
-    .innerJoin('users', 'users.id', 'workspace_members.user_id')
-    .select('users.id')
-    .where('workspace_members.workspace_id', '=', context.workspaceId)
-    .where('workspace_members.user_id', '=', peerId)
-    .where('users.deleted_at', 'is', null)
-    .executeTakeFirst();
-  if (peer === undefined) {
-    throw new AppError({ code: 'USER_NOT_FOUND', message: 'No such person in this workspace.' });
-  }
+  await requireWorkspacePerson(executor, context, peerId);
 
   const dmKey = directMessageKey(context.userId, peerId);
   const inserted = await executor

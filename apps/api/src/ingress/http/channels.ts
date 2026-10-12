@@ -9,6 +9,7 @@
  */
 import type { Executor } from '@purlay/db';
 import {
+  AddChannelMemberRequest,
   CreateChannelRequest,
   CreateDirectMessageRequest,
   ReadChannelRequest,
@@ -35,6 +36,7 @@ import {
   joinChannel,
 } from '../../modules/channels/channels';
 import { openDirectMessage } from '../../modules/channels/direct-messages';
+import { addMember } from '../../modules/channels/members';
 import { markRead } from '../../modules/channels/read-state';
 import { requireSession } from './session';
 import { validated } from './validate';
@@ -158,4 +160,34 @@ export const openDirectMessageWith = async (
     ]);
   }
   return { channel: opened.channel, created: opened.created };
+};
+
+/**
+ * `POST /api/channels/:channelId/members` — a member brings somebody from the workspace in
+ * (D-104). They are told only when this call is what added them, and their client subscribes on
+ * hearing it.
+ */
+export const addChannelMember = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(AddChannelMemberRequest, body);
+  const added = await atomicallyOn(database)(
+    async (transaction) => await addMember(transaction, clock, context, input.userId),
+  );
+  const forMember = added.forMember;
+  if (forMember !== null) {
+    await publishAfterCommit(log, [
+      [
+        publication('CHANNEL_ADDED', () =>
+          publishChannelAdded(bus, clock, input.userId, forMember),
+        ),
+      ],
+    ]);
+  }
 };

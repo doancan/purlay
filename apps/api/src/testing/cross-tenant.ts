@@ -153,6 +153,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'GET /api/channels/:channelId': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'POST /api/channels/:channelId/members': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (_now, owner) => ({ userId: owner.userId }),
+    visibility: CHANNEL,
+  },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/workspaces/:workspaceId/dms': {
     refusal: 'WORKSPACE_NOT_FOUND',

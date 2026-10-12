@@ -120,12 +120,13 @@ Demoting or removing the last `owner` returns `409` (invariant I-2).
 | | Method | Path | Role |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see |
-| ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member |
+| ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member — `{ name, topic?, type? }`; `type` is `public` (the default) or `private`, seen by its members only (D-104) |
 | ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
 | ① | `PATCH` | `/api/channels/:channelId` | member — name, topic |
 | ① | `DELETE` | `/api/channels/:channelId` | admin — soft delete |
 | ○ | `POST` | `/api/channels/:channelId/join` | member — public only |
+| ○ | `POST` | `/api/channels/:channelId/members` | a member **of the channel** — `{ userId }`, somebody from the workspace, `204`; they are told with `CHANNEL_ADDED`. Somebody already in it is `204` again, told nothing. Not in the channel, or a direct message: `403 FORBIDDEN`; a person not in the workspace: `404 USER_NOT_FOUND` (D-104) |
 | ① | `POST` | `/api/channels/:channelId/leave` | member |
 | ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
 | ① | `PUT` | `/api/channels/:channelId/notification-level` | member — `all` \| `mentions` \| `none` |
