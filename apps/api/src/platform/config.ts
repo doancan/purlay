@@ -81,6 +81,15 @@ export const Environment = Type.Object({
    *  without an `index.html`, by the composition root (`ingress/http/client.ts`). */
   CLIENT_DIST: Type.Optional(Type.String({ minLength: 1 })),
 
+  /** The attachment bucket, S3-compatible — Garage in the deployment (D-16, D-109). All of
+   *  them or none: none is a server that refuses every upload, loudly (`storage.ts`), which
+   *  production does not start as. */
+  S3_ENDPOINT: Type.Optional(Type.String({ format: 'uri' })),
+  S3_REGION: Type.String({ minLength: 1, default: 'us-east-1' }),
+  S3_BUCKET: Type.Optional(Type.String({ minLength: 1 })),
+  S3_ACCESS_KEY_ID: Type.Optional(Type.String({ minLength: 1 })),
+  S3_SECRET_ACCESS_KEY: Type.Optional(Type.String({ minLength: 1 })),
+
   /** Phase 0 has no invitations, so without this a second person cannot join a
    *  workspace and the phase cannot reach its own exit criterion (D-37). */
   WORKSPACE_OPEN_JOIN_SLUG: Type.Optional(Type.String({ minLength: 1 })),
@@ -93,6 +102,7 @@ const SECRETS: ReadonlySet<string> = new Set([
   'GITHUB_CLIENT_SECRET',
   'DATABASE_URL',
   'ENCRYPTION_KEY',
+  'S3_SECRET_ACCESS_KEY',
 ]);
 
 /** The variables this application reads. `.env.example` is generated from it. */
@@ -188,6 +198,20 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
       'DATABASE_SSL: production refuses a database connection without TLS; set it to true, ' +
         'or set DATABASE_ALLOW_PLAINTEXT=true to say the link is private',
     );
+  }
+
+  const storage = [
+    config.S3_ENDPOINT,
+    config.S3_BUCKET,
+    config.S3_ACCESS_KEY_ID,
+    config.S3_SECRET_ACCESS_KEY,
+  ].filter((value) => value !== undefined).length;
+  if (storage !== 0 && storage !== 4) {
+    problems.push(
+      'S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY: set all four, or none',
+    );
+  } else if (production && storage === 0) {
+    problems.push('S3_ENDPOINT: production refuses to start without the attachment bucket');
   }
 
   if (problems.length > 0) throw new ConfigurationError(problems);

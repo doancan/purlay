@@ -79,6 +79,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run test:all` | a database, to be complete | Unit and integration tests together, held to the coverage floor in `bunfig.toml`. In CI a missing database is a failure, never a skip (#202) |
 | `bun run test` | nothing | The unit tests alone — the fast loop |
 | `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
+| `bun run test:storage` | `bun run db:up` | The attachment store's S3 adapter against Garage, as the deployment runs it. Not in CI, which runs PostgreSQL alone; it refuses without `S3_ENDPOINT` (D-109) |
 | `bun run test:integration` | a database | The tests that exercise real SQL, each inside a transaction that is rolled back (D-46). **They refuse rather than skip** when there is no database — a suite that quietly runs nothing looks exactly like one where everything passed |
 
 **The rest of the commands**, so they are discoverable rather than folklore:

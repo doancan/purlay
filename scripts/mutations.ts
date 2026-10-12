@@ -1282,4 +1282,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: 'export const ATTACHMENT_BYTES_MAX = 52_428_800;\n',
     tests: ['apps/api/src/modules/attachments/bounds.integration.test.ts'],
   },
+  {
+    id: 'production-starts-without-a-bucket',
+    why: 'a production server with no attachment bucket starts, and every upload fails in front of the person instead of at deployment',
+    file: 'apps/api/src/platform/config.ts',
+    find: '  } else if (production && storage === 0) {\n',
+    replace: '  } else if (false && production && storage === 0) {\n',
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
+  {
+    id: 'bucket-settings-half-given',
+    why: 'three of four bucket settings start a server that talks to a store with no key, and the failure is a confusing one at the first upload',
+    file: 'apps/api/src/platform/config.ts',
+    find: '  if (storage !== 0 && storage !== 4) {\n',
+    replace: '  if (storage === -1) {\n',
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
 ];

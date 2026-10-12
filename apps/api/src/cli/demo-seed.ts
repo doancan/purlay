@@ -41,6 +41,7 @@ import {
   type PersonaKey,
   type Step,
 } from './demo-script';
+import { storeFor } from '../platform/storage';
 
 interface Persona {
   readonly userId: string;
@@ -137,6 +138,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     clock,
     log: createLogger({ level: 'silent' }),
     github: neverSignsIn,
+    // The seed writes no attachments; the store is the one the configuration names.
+    storage: storeFor(config),
     rateBudgets: { auth: ROOMY, writes: ROOMY },
   });
 
