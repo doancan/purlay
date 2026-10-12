@@ -17,7 +17,7 @@
    A drawer turns a discussion into a footnote — which is precisely how knowledge gets lost.
 2. **Density over comfort.** This is a tool for people who read a lot of text quickly. The
    density is in what is shown — one column, no chrome, nothing decorative — not in how tightly it
-   is set: prose gets a readable line, and the screen gets nothing else. (D-109)
+   is set: prose gets a readable line, and the screen gets nothing else. (D-110)
 3. **Keyboard first, mouse optional.** Every action reachable by mouse has a key. The command
    palette is the primary navigation surface, not a power-user extra.
 4. **Never move content under the reader.** Late-arriving content, expanding threads and
@@ -31,7 +31,7 @@
 
 One fixed shell, flat: a rail and a sidebar in one tone, the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
-for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-109).
+for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-110).
 
 ```
  ┌────┬──────────────────┬────────────────────────────────────────────────┬─────────┐
@@ -95,7 +95,7 @@ window.
 - **A message that mentions you** sits in a rounded tint, and says so to a screen reader.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
-- **The day** is a label at the column's left edge with a rule after it. (D-109)
+- **The day** is a label at the column's left edge with a rule after it. (D-110)
 
 ### 3.1. Delivery state
 
@@ -176,7 +176,7 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 ## 5. Composer
 
 Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1). Three buttons sit under it — bold, a code
-block, a mention — and each only *inserts markdown* that the keys below also produce (D-109).
+block, a mention — and each only *inserts markdown* that the keys below also produce (D-110).
 
 | Key | Action |
 |---|---|
@@ -278,11 +278,11 @@ Decided here so Phase 0 does not invent one at random.
 
 - **Type:** Inter for prose and JetBrains Mono for what is machine text — code, a time, a count, a
   key, a hash — served from this origin in Latin and Latin Extended (the Turkish letters are in the
-  second) with a system stack behind them while they load (D-109). Base 14px, code 13px, line-height
+  second) with a system stack behind them while they load (D-110). Base 14px, code 13px, line-height
   1.6 prose / 1.54 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
   choice kept per device. Both are designed together: neutral greys and one deep navy accent, with
-  dark derived in the same terms (D-109). Every colour pair is computed in both. Never colour alone
+  dark derived in the same terms (D-110). Every colour pair is computed in both. Never colour alone
   to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.

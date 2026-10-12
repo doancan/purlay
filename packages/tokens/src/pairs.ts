@@ -69,7 +69,7 @@ export const PAIRS: readonly Pair[] = [
   ),
   ...cross(['ink'], AVATARS, TEXT, 'the initials in an avatar'),
   // `accent` is a fill; its words are `accent-text`, on whatever the message sits on,
-  // including a mention's tint and the active row (D-109).
+  // including a mention's tint and the active row (D-110).
   ...cross(
     ['accent-text'],
     [...SURFACES, 'accent-subtle'],

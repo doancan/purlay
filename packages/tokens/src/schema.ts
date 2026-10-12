@@ -42,7 +42,7 @@ const ThemedToken = Type.Object(
 /**
  * A colour, which may say it is a **fill**: drawn behind something and never as words or a
  * line of its own. A fill builds `bg-` and `border-` and nothing else, so the text colour
- * that would be illegible in some theme is not a class anyone can write (D-109).
+ * that would be illegible in some theme is not a class anyone can write (D-110).
  */
 const ColorToken = Type.Object(
   { name: Name, value: Themed, usage: Usage, role: Type.Optional(Type.Literal('fill')) },

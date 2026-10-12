@@ -54,7 +54,7 @@ describe('the application’s classes', () => {
 
 describe('the accent', () => {
   // `accent` is a fill: dark navy in both themes, so the words a dark page needs
-  // are `accent-text` (D-109). A bare `text-accent` would draw navy on near-black,
+  // are `accent-text` (D-110). A bare `text-accent` would draw navy on near-black,
   // and the way to make that impossible is for the class not to exist.
   test('is a fill, never a text colour', async () => {
     const problems = await checkVocabulary({

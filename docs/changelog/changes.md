@@ -6,7 +6,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
-### Feature — 2026-10-12: a flat, quiet interface — tokens and type (D-109)
+### Feature — 2026-10-12: a flat, quiet interface — tokens and type (D-110)
 
 - Inter for prose and JetBrains Mono for machine text, served from this origin (`@fontsource/inter`
   5.3.0 and `@fontsource/jetbrains-mono` 5.3.0, Latin and Latin Extended, 244 KB for the ten files;

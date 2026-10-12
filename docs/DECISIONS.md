@@ -3825,7 +3825,7 @@ prototype found five lengths with no token — the height of a control (28px), o
 namespace Tailwind reads for `h-` and `--container-*` the one for widths, measured and not assumed. A
 badge is bound twice, as a height and as a minimum width: one digit is a circle and two are not. The
 prototype also drops the 56px workspace rail for a switcher in the sidebar header, which `UX.md` §2
-still draws; `size-rail` stays until that section is rewritten with the screens. D-109 brings the rail back,
+still draws; `size-rail` stays until that section is rewritten with the screens. D-110 brings the rail back,
 holding only destinations that already exist.
 
 **8 · Amended 2026-10-10: a name shared by a theme key and a token is a utility, not a key.** The
@@ -4086,7 +4086,7 @@ runs when a person reads, bounded by what they had not).
 
 ### D-100. The interface has an identity: floating cards, avatars, and one typeface served from here
 
-**Amended 2026-10-12 by D-109**, which replaced the typeface and the cards with a flat interface set in
+**Amended 2026-10-12 by D-110**, which replaced the typeface and the cards with a flat interface set in
 Inter and JetBrains Mono. The avatars, the absence of bubbles and the reasons below stand.
 
 The first client (D-98) was built to the approved prototype and passed every test, and the owner
@@ -4627,7 +4627,7 @@ test of the rules runs against a double.
 
 ---
 
-### D-109. The interface is flat and quiet: one tone for getting around, one for the conversation
+### D-110. The interface is flat and quiet: one tone for getting around, one for the conversation
 
 D-100 gave the interface an identity, and the owner replaced it on 2026-10-12 with one of their own: a
 written brief and a reference screen, applied to Purlay as a preview they approved. They chose its
