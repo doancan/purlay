@@ -1081,4 +1081,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  return <SearchView asked={asked} />;\n',
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
+  {
+    id: 'reading-cache-unbounded',
+    why: 'every body a session ever showed stays in memory, and a day of reading channels grows the tab without limit',
+    file: 'apps/web/src/features/content/reading-cache.ts',
+    find: '      if (oldest.done !== true) readings.delete(oldest.value);\n',
+    replace: '',
+    tests: ['apps/web/src/features/content/reading-cache.test.ts'],
+  },
+  {
+    id: 'reading-cache-forgets-recent-use',
+    why: 'a body read a moment ago is the first thrown out, so the feed in front of the person is the one read again',
+    file: 'apps/web/src/features/content/reading-cache.ts',
+    find: '      readings.delete(text);\n      readings.set(text, known);\n',
+    replace: '',
+    tests: ['apps/web/src/features/content/reading-cache.test.ts'],
+  },
 ];
