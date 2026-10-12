@@ -82,6 +82,11 @@ export const ErrorCode = Type.Union([
    * broken. The request changed nothing and may be retried. (D-87)
    */
   Type.Literal('DATABASE_UNAVAILABLE'),
+  /**
+   * The file store could not be reached, or none is configured: nothing was stored, and the request
+   * may be retried. Never told as absence (D-109).
+   */
+  Type.Literal('STORAGE_UNAVAILABLE'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -122,6 +127,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   RATE_LIMITED: 429,
 
   INTERNAL: 500,
+  STORAGE_UNAVAILABLE: 503,
   DATABASE_UNAVAILABLE: 503,
 };
 

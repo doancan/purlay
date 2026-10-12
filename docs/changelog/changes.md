@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the attachment store (D-109)
+
+- The API reads its attachment bucket — `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+  `S3_SECRET_ACCESS_KEY`, all or none — and production refuses to start without it. With none, any use
+  is a loud `503 STORAGE_UNAVAILABLE`. The store's adapter is Bun's own S3 client, nothing installed;
+  `bun run test:storage` runs it against Garage.
+
 ### Security — 2026-10-12: the edge ready for attachments (D-109 §4)
 
 - The server's own body limit rises to what an upload needs; every other request is still held to

@@ -12,6 +12,7 @@ import type { GitHubClient, GitHubEmail, GitHubProfile } from '../modules/auth/g
 import type { Dependencies } from '../ingress/http/app';
 import type { RateBudget } from '../realtime/rate-limiter';
 import { createLogger, type Logger } from '../platform/logging';
+import type { ObjectStore } from '../platform/storage';
 
 /** A logger whose lines a test can read back, parsed. */
 export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown>[] } => {
@@ -57,6 +58,14 @@ export const aDatabaseThatMustNotBeTouched = (failure?: Error): Executor =>
 export const aTransactionThatMustNotBeTouched = (): Transaction =>
   aDatabaseThatMustNotBeTouched() as Transaction;
 
+/** A store any use of throws: a test that reaches storage it was not given fails, naming the call. */
+const aStoreThatMustNotBeTouched = (): ObjectStore => {
+  const touched = (what: string) => (): never => {
+    throw new Error(`the file store was reached (\`${what}\`) by something that must not touch it`);
+  };
+  return { put: touched('put'), get: touched('get'), delete: touched('delete') };
+};
+
 export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   NODE_ENV: 'test',
   PORT: 3001,
@@ -71,6 +80,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   GITHUB_CLIENT_SECRET: 'client-secret',
   ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
   SESSION_TTL_DAYS: 30,
+  S3_REGION: 'us-east-1',
   ...overrides,
 });
 
@@ -110,5 +120,6 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   // so the production budget would refuse them. The tests of the limits say so
   // explicitly, and `rate-limit.test.ts` pins that the default is the real one.
   rateBudgets: { auth: ROOMY, writes: ROOMY },
+  storage: aStoreThatMustNotBeTouched(),
   ...overrides,
 });

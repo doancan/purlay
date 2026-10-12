@@ -75,13 +75,16 @@ membership is never changed by signing in: the owner stays the owner.
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `STORAGE_DRIVER` | — | `s3` | `s3` \| `filesystem` |
-| `STORAGE_LOCAL_PATH` | driver=filesystem | — | Absolute path; must survive container restarts |
-| `S3_ENDPOINT` | driver=s3 | — | Garage locally, any S3-compatible endpoint in production |
-| `S3_REGION` | driver=s3 | `us-east-1` | |
-| `S3_BUCKET` | driver=s3 | — | |
-| `S3_ACCESS_KEY_ID` | driver=s3 | — | **Secret** |
-| `S3_SECRET_ACCESS_KEY` | driver=s3 | — | **Secret** |
+| `S3_ENDPOINT` | production | — | Garage locally (`http://localhost:9000` after `bun run db:up`), any S3-compatible endpoint in production |
+| `S3_REGION` | — | `us-east-1` | |
+| `S3_BUCKET` | production | — | |
+| `S3_ACCESS_KEY_ID` | production | — | Garage's format: `GK` and 24 hex digits |
+| `S3_SECRET_ACCESS_KEY` | production | — | **Secret** |
+
+The four without a default are **all set or none** (D-109). None, outside production, is a server that
+refuses every upload with `503 STORAGE_UNAVAILABLE` rather than pretending; production does not start
+without them. A filesystem store for the simplest self-host (D-16) is not built yet, so
+`STORAGE_DRIVER` and `STORAGE_LOCAL_PATH` are not read.
 
 Storage keys are opaque and never served as public URLs — downloads are brokered by the API so
 workspace membership is actually checked (`ARCHITECTURE.md` §9).

@@ -67,6 +67,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'ACCOUNT_EMAIL_CONFLICT':
       return 'failure.refused';
     case 'DATABASE_UNAVAILABLE':
+    case 'STORAGE_UNAVAILABLE':
     case 'INTERNAL':
     case 'MALFORMED':
     case 'UNKNOWN':

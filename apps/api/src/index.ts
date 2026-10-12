@@ -19,6 +19,7 @@ import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openJoinNotice } from './modules/workspaces/open-join';
 import { openClient } from './ingress/http/client';
+import { storeFor } from './platform/storage';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -72,6 +73,7 @@ const app = createApp({
   log,
   clock: systemClock,
   database,
+  storage: storeFor(config),
   ...(client === undefined ? {} : { client }),
   github: githubClient({
     clientId: config.GITHUB_CLIENT_ID,

@@ -80,6 +80,7 @@ import { readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
+import type { ObjectStore } from '../../platform/storage';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 
 export interface Dependencies {
@@ -88,6 +89,8 @@ export interface Dependencies {
   readonly database: Executor;
   readonly clock: Clock;
   readonly github: GitHubClient;
+  /** Where attachment bytes live (D-109); the unconfigured store refuses every use, loudly. */
+  readonly storage: ObjectStore;
   readonly log: Logger;
   /** Absent in production, where the limits are the provisional ones (`rate-limit.ts`). */
   readonly rateBudgets?: HttpBudgets;

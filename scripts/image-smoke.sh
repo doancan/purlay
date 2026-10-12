@@ -65,6 +65,9 @@ docker run -d --name "$NAME" --network "$NETWORK" \
   -e DATABASE_ALLOW_PLAINTEXT=true \
   -e ENCRYPTION_KEY="$ENCRYPTION_KEY" \
   -e MIGRATE_ON_START=true \
+  -e S3_ENDPOINT=http://storage.invalid:3900 -e S3_BUCKET=smoke \
+  -e S3_ACCESS_KEY_ID=GK000000000000000000000001 \
+  -e S3_SECRET_ACCESS_KEY=0000000000000000000000000000000000000000000000000000000000000002 \
   "$IMAGE" >/dev/null
 
 # Wait for a positive condition — a 200 — not for the absence of an error: a

@@ -59,8 +59,7 @@ services:
       # Off unless set; nothing is reported by default (D-44, D-96).
       ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       WORKSPACE_OPEN_JOIN_SLUG: ${WORKSPACE_OPEN_JOIN_SLUG:-}
-      # Object storage. Not read by the application yet (CONFIG.md); present so the
-      # deployment already has the shape attachments will need (#53).
+      # The attachment bucket (CONFIG.md, D-109); production refuses to start without it.
       STORAGE_DRIVER: s3
       S3_ENDPOINT: http://garage:3900
       S3_REGION: ${S3_REGION:-us-east-1}

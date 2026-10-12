@@ -31,6 +31,11 @@ const production = {
   APP_URL: 'https://purlay.app',
   ENCRYPTION_KEY: REAL_KEY,
   DATABASE_SSL: 'true',
+  // The attachment bucket, which production does not start without (D-109).
+  S3_ENDPOINT: 'http://garage:3900',
+  S3_BUCKET: 'purlay-attachments',
+  S3_ACCESS_KEY_ID: 'GK000000000000000000000001',
+  S3_SECRET_ACCESS_KEY: 's'.repeat(64),
 };
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -150,6 +155,34 @@ describe('loading configuration', () => {
   test('production insists on https, because the session cookie is Secure', () => {
     expect(() => loadConfig({ ...valid, NODE_ENV: 'production' })).toThrow(/https/);
     expect(loadConfig({ ...production, APP_URL: 'https://purlay.app' })).toBeDefined();
+  });
+
+  test('the attachment bucket: all four settings or none, and production needs them', () => {
+    const { S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY } = production;
+    const bucket = { S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY };
+    // None, in development: a server that refuses uploads, loudly, when one is tried.
+    expect(loadConfig(valid).S3_ENDPOINT).toBeUndefined();
+    expect(loadConfig({ ...valid, ...bucket }).S3_BUCKET).toBe('purlay-attachments');
+    expect(() => loadConfig({ ...valid, S3_ENDPOINT })).toThrow(/set all four, or none/);
+    const without = Object.fromEntries(
+      Object.entries(production).filter(([key]) => !key.startsWith('S3_')),
+    );
+    expect(() => loadConfig(without)).toThrow(
+      /production refuses to start without the attachment bucket/,
+    );
+  });
+
+  test('the bucket’s secret is never quoted back', () => {
+    try {
+      loadConfig({
+        ...valid,
+        S3_ENDPOINT: 'http://garage:3900',
+        S3_SECRET_ACCESS_KEY: 'secret-value-x',
+      });
+      throw new Error('should have refused');
+    } catch (error) {
+      expect((error as ConfigurationError).message).not.toContain('secret-value-x');
+    }
   });
 
   /** Regression for #200: the socket compares `Origin` to this, exactly. */
