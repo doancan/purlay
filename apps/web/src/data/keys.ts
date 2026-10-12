@@ -20,6 +20,7 @@ export const keys = {
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
+  audit: (workspaceId: string) => ['audit', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
 } as const;
 

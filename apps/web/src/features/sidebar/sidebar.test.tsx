@@ -296,6 +296,7 @@ describe('the workspace menu', () => {
       'Invite people…',
       'Members…',
       'GitHub connection…',
+      'Audit log…',
       'Sign out',
     ]);
     expect(view.getByText('Signed in as Dogancan')).toBeDefined();

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: the audit trail is read in the app (D-26, `PRD.md` §4.7)
+
+- **Audit log…** in the workspace menu, for owners and admins: who did which administrative thing to
+  whom, in words, newest first, with older pages on demand. The recorded actions are now one list in
+  `@purlay/types` (`AUDIT_ACTIONS`), which the API records from and the client names exhaustively.
+
 ### Feature — 2026-10-13: search narrowed to one channel (`PRD.md` §4.6, D-105)
 
 - The search screen has **Where**: every channel, or one of them. The choice is in the address

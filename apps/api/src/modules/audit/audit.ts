@@ -9,23 +9,17 @@
  * which `append-only.test.ts` holds.
  */
 import type { Executor } from '@purlay/db';
-import { PAGE_LIMIT, messageId, type AuditPage, type OlderPageQuery } from '@purlay/types';
+import {
+  PAGE_LIMIT,
+  messageId,
+  type AuditAction,
+  type AuditPage,
+  type OlderPageQuery,
+} from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
 import { currentRequest } from '../../platform/logging';
-
-/** The verbs recorded so far; each is a stable machine-readable name, never built from input. */
-type AuditAction =
-  | 'member.role_changed'
-  | 'member.removed'
-  | 'member.joined'
-  | 'channel.created'
-  | 'integration.token_set'
-  | 'integration.token_removed'
-  | 'invitation.created'
-  | 'invitation.revoked'
-  | 'message.removed_by_moderator';
 
 export interface AuditEntry {
   readonly workspaceId: string;

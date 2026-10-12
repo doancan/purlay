@@ -21,6 +21,7 @@ import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { AuditDialog } from './audit-dialog';
 import { GitHubDialog } from './github-dialog';
 import { InviteDialog } from './invite-dialog';
 import { MembersDialog } from './members-dialog';
@@ -36,6 +37,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   const [inviting, setInviting] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [auditing, setAuditing] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Making links and the GitHub token are an owner's and an admin's (D-115, D-23); a member is not
   // offered what would be refused.
@@ -97,6 +99,16 @@ export const WorkspaceMenu = (): React.JSX.Element => {
             {t('github.entry')}
           </MenuItem>
         )}
+        {mayInvite && (
+          <MenuItem
+            glyph="shortcuts"
+            onSelect={() => {
+              setAuditing(true);
+            }}
+          >
+            {t('audit.entry')}
+          </MenuItem>
+        )}
         <MenuSeparator />
         <MenuLabel>{t('sidebar.signedInAs', { name: user.displayName })}</MenuLabel>
         <MenuItem
@@ -120,6 +132,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
       <InviteDialog open={inviting} onOpenChange={setInviting} />
       <GitHubDialog open={connecting} onOpenChange={setConnecting} />
       <MembersDialog open={managing} onOpenChange={setManaging} />
+      <AuditDialog open={auditing} onOpenChange={setAuditing} />
     </>
   );
 };

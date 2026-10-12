@@ -204,6 +204,25 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('the audit trail is read newest first, older pages by the cursor (D-26)', async () => {
+    const entry = {
+      id: ID,
+      actor: user,
+      action: 'channel.created',
+      targetType: 'channel',
+      targetId: ID,
+      metadata: {},
+      createdAt: WHEN,
+    };
+    const read = harness({ data: [entry], nextCursor: null });
+    expect(await read.api.audit(ID)).toEqual({ data: [entry], nextCursor: null });
+    await read.api.audit(ID, ID);
+    expect(read.calls).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/audit`, body: undefined },
+      { method: 'GET', url: `/api/workspaces/${ID}/audit?before=${ID}`, body: undefined },
+    ]);
+  });
+
   test('a member’s role is sent in the body and the member read back; removing is by id (§7.4)', async () => {
     const member = { user, role: 'admin' as const, joinedAt: WHEN };
     const changed = harness(member);
