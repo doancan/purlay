@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the busy-pool test waits for what it needs instead of a guess (#347)
+
+- `client.integration.test.ts` waited a fixed 100 ms for two queries to hold the pool's connections;
+  under the full suite's load connecting alone took longer and the test failed at 7–10 s. It now waits
+  until `pg_stat_activity` shows both, and cancels them when done: 0.4 s, and red when the pool's
+  wait is raised.
+
 ### Quality — 2026-10-12: the latency budgets block on a regression against main (D-49, #73)
 
 - CI's database job restores the ACK and fan-out p95 that main last recorded, fails a run that
