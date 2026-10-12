@@ -29,6 +29,7 @@ import {
   type RateLimiter,
 } from '../../realtime/rate-limiter';
 import { metered } from '../../realtime/frame-meter';
+import { inMemoryPresenceRegistry } from '../../realtime/presence';
 import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
@@ -128,6 +129,8 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
   const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
   // Measured, so the closing line says what the budget met (O-4).
   const limiter = metered(inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET), clock);
+  // This node's view of who is typing where; ephemeral, as D-7 allows.
+  const presence = inMemoryPresenceRegistry(clock);
   // The transaction boundary both doors share: a new transaction per write, or
   // the caller's when there is one (a test's). D-35, `platform/transactions.ts`.
   const atomically = atomicallyOn(database);
@@ -235,6 +238,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   bus,
                   limiter,
                   userWrites: dependencies.userWrites,
+                  presence,
                   log,
                   // The real boundary. D-35: one transaction, published after it returns.
                   atomically,

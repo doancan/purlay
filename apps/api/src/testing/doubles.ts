@@ -6,7 +6,7 @@
  * supplies things that *object* if a route reaches for what it should not.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import { fixedClock } from '../platform/clock';
+import { fixedClock, type Clock } from '../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../platform/config';
 import type { GitHubClient, GitHubEmail, GitHubProfile } from '../modules/auth/github';
 import type { Dependencies } from '../ingress/http/app';
@@ -104,6 +104,17 @@ export const aGitHubAccount = (
 });
 
 export const NOW = new Date('2026-09-09T12:00:00.000Z');
+
+/** A clock the test moves by hand: time passes when the test says so, and only then. */
+export const aMovableClock = (start: Date = NOW): Clock & { advance: (ms: number) => void } => {
+  let now = start.getTime();
+  return {
+    now: (): Date => new Date(now),
+    advance: (ms: number): void => {
+      now += ms;
+    },
+  };
+};
 
 const ROOMY: RateBudget = { perSecond: 1000, burst: 100_000 };
 

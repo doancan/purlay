@@ -21,6 +21,8 @@ import {
   MessageSendFrame,
   PingFrame,
   SubscribeFrame,
+  TYPING_TTL_MS,
+  TypingFrame,
   UnsubscribeFrame,
   type ClientOp,
   Uuid,
@@ -36,6 +38,7 @@ import { replaySince } from '../modules/messages/replay';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { Logger } from '../platform/logging';
+import type { PresenceRegistry } from './presence';
 import type { RateLimiter } from './rate-limiter';
 
 export interface RouterDependencies {
@@ -52,6 +55,8 @@ export interface RouterDependencies {
    * (D-84, amended).
    */
   readonly userWrites: RateLimiter;
+  /** Who is typing where, on this node (§6.1). */
+  readonly presence: PresenceRegistry;
   readonly log: Logger;
   /** What the router needs of the connection it is answering; the hub supplies it. */
   readonly socket: SocketGate;
@@ -137,6 +142,7 @@ const FRAME_BY_OP = {
   SUBSCRIBE: SubscribeFrame,
   UNSUBSCRIBE: UnsubscribeFrame,
   PING: PingFrame,
+  TYPING: TypingFrame,
 } as const satisfies Record<ClientOp, unknown>;
 
 const isClientOp = (value: unknown): value is ClientOp =>
@@ -328,7 +334,37 @@ export const routeFrame = async (
           // The identity was cached at the upgrade; the write re-proves it (D-85).
           identity.sessionId,
         );
+        // What they were typing has arrived; the next keystroke is news again.
+        dependencies.presence.stopTyping(context.channelId, identity.userId);
         return [frame({ event: 'ACK', data: { id: message.id } }, clock, parsed.id)];
+      }
+
+      case 'TYPING': {
+        // Authorised before the registry hears of it: a channel id the sender may not see must
+        // neither reach a room nor take a place in memory.
+        const context = await requireChannelById(
+          database,
+          identity.userId,
+          parsed.payload.channelId,
+        );
+        if (dependencies.presence.startTyping(context.channelId, identity.userId, TYPING_TTL_MS)) {
+          await bus.publish(
+            channelTopic(context.channelId),
+            frame(
+              {
+                event: 'TYPING',
+                data: {
+                  channelId: context.channelId,
+                  userId: identity.userId,
+                  ttlMs: TYPING_TTL_MS,
+                },
+              },
+              clock,
+            ),
+          );
+        }
+        // Nothing to answer: an announcement is not a request, and the room has heard it.
+        return [];
       }
     }
   } catch (error) {

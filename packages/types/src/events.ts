@@ -106,11 +106,27 @@ export const PingFrame = FromClient({
   payload: FromClient({}),
 });
 
+/**
+ * How long one announcement that somebody is typing holds (D-7: ephemeral, in memory). A client
+ * announces again while the person keeps typing, no more often than every half of this, and a
+ * listener forgets the person when it runs out — so a closed tab or a lost connection clears
+ * itself without a frame that says so.
+ */
+export const TYPING_TTL_MS = 6_000;
+
+/** The sender is typing in this channel. Answered with nothing, unless it is refused. */
+export const TypingFrame = FromClient({
+  id: Uuid,
+  op: Type.Literal('TYPING'),
+  payload: FromClient({ channelId: Uuid }),
+});
+
 export const ClientFrame = Type.Union([
   MessageSendFrame,
   SubscribeFrame,
   UnsubscribeFrame,
   PingFrame,
+  TypingFrame,
 ]);
 export type ClientFrame = Static<typeof ClientFrame>;
 export type ClientOp = ClientFrame['op'];
@@ -301,6 +317,17 @@ export const AccessRevokedFrame = Type.Object({
   ...envelope,
 });
 
+/**
+ * Somebody is typing in a channel, for `ttlMs` from when this arrives — unless their message
+ * arrives first, which ends it. On the channel's topic; the typist's own sockets hear it too, and
+ * a client shows nobody themselves.
+ */
+export const TypingServerFrame = Type.Object({
+  event: Type.Literal('TYPING'),
+  data: Type.Object({ channelId: Uuid, userId: Uuid, ttlMs: Type.Integer({ minimum: 1 }) }),
+  ...envelope,
+});
+
 export const PongFrame = Type.Object({
   event: Type.Literal('PONG'),
   data: Type.Object({}),
@@ -320,6 +347,7 @@ export const ServerFrame = Type.Union([
   ChannelAddedFrame,
   SessionEndedFrame,
   AccessRevokedFrame,
+  TypingServerFrame,
   PongFrame,
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;

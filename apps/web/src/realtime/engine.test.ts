@@ -1139,3 +1139,93 @@ describe('what happened between a list being read and the channel being subscrib
     expect(w.client.getQueryState(keys.messages(OTHER_CH))?.isInvalidated).toBe(false);
   });
 });
+
+/**
+ * Who is typing (#411): ephemeral, so the client forgets on its own — when the announcement runs
+ * out, or when the person's message arrives — and never shows a person themselves.
+ */
+describe('typing', () => {
+  const ANA = '00000000-0000-4000-8000-0000000000f1';
+  const BEN = '00000000-0000-4000-8000-0000000000f2';
+  const typing = (userId: string, channelId = CH, ttlMs = 6_000): ServerFrame => ({
+    event: 'TYPING',
+    data: { channelId, userId, ttlMs },
+    ts: T0,
+  });
+  const typists = (w: World, channelId = CH): readonly string[] | undefined =>
+    w.engine.store.getState().typing[channelId];
+  const started = (): World => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    return w;
+  };
+
+  test('names who is typing in which channel, in the order they began', () => {
+    const w = started();
+    w.deliver(typing(BEN));
+    w.deliver(typing(ANA));
+    w.deliver(typing(ANA, CH2));
+    expect(typists(w)).toEqual([BEN, ANA]);
+    expect(typists(w, CH2)).toEqual([ANA]);
+  });
+
+  test('forgets a person whose announcement ran out, and keeps one who announced again', () => {
+    const w = started();
+    w.deliver(typing(ANA, CH, 6_000));
+    w.deliver(typing(BEN, CH, 6_000));
+    w.timers.advance(3_000);
+    w.deliver(typing(BEN, CH, 6_000));
+    w.timers.advance(2_999);
+    expect(typists(w)).toEqual([ANA, BEN]);
+    w.timers.advance(1);
+    expect(typists(w)).toEqual([BEN]);
+    w.timers.advance(3_000);
+    // Nobody left: the channel is not kept as an empty list.
+    expect(typists(w)).toBeUndefined();
+  });
+
+  test("a person's message ends their typing at once, in that channel only", () => {
+    const w = started();
+    w.deliver(typing(ANA));
+    w.deliver(typing(ANA, CH2));
+    w.deliver(
+      frame({
+        event: 'MESSAGE_CREATED',
+        data: echo('0199155c-6200-7b7f-8c11-0000000000a9', {
+          sender: { ...ME, id: ANA, username: 'ana' },
+        }),
+        ts: T0,
+      }),
+    );
+    expect(typists(w)).toBeUndefined();
+    expect(typists(w, CH2)).toEqual([ANA]);
+    // The timer that would have ended it is gone too, so nothing fires into a later announcement.
+    w.deliver(typing(ANA));
+    w.timers.advance(5_999);
+    expect(typists(w)).toEqual([ANA]);
+  });
+
+  test('never shows the person themselves, typing in another tab', () => {
+    const w = started();
+    w.deliver(typing(ME.id));
+    expect(typists(w)).toBeUndefined();
+  });
+
+  test('a channel taken away takes its typists with it', () => {
+    const w = started();
+    w.deliver(typing(ANA));
+    w.deliver(typing(BEN, CH2));
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH] }, ts: T0 }));
+    expect(typists(w)).toBeUndefined();
+    expect(typists(w, CH2)).toEqual([BEN]);
+  });
+
+  test('a stopped engine shows nobody typing and leaves no timer behind', () => {
+    const w = started();
+    w.deliver(typing(ANA));
+    w.engine.stop();
+    expect(w.engine.store.getState().typing).toEqual({});
+    expect(w.timers.pending()).toBe(0);
+  });
+});

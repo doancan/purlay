@@ -104,6 +104,12 @@ export interface RealtimeState {
   readonly pending: readonly PendingMessage[];
   /** Channels whose live updates are not trustworthy right now, by what went wrong. */
   readonly degraded: Readonly<Record<string, DegradedReason>>;
+  /**
+   * Who is typing, by channel, in the order they began; a channel nobody is typing in is absent.
+   * Never the person themselves. Forgotten when the announcement runs out or their message
+   * arrives (#411).
+   */
+  readonly typing: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface Outgoing {
@@ -174,6 +180,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     status: 'idle',
     pending: restored,
     degraded: {},
+    typing: {},
   }));
   const serverClock = createServerClock(options.clock);
   const timers = new Map<string, () => void>();
@@ -233,6 +240,36 @@ export const createEngine = (options: EngineOptions): Engine => {
         Object.entries(state.degraded).filter(([id]) => id !== channelId),
       ),
     }));
+  };
+  // Each typist's end, by channel and person, so a renewed announcement replaces the old end.
+  const typingEnds = new Map<string, () => void>();
+  const typingKey = (channelId: string, userId: string): string => `${channelId}:${userId}`;
+  const stopTyping = (channelId: string, userId: string): void => {
+    const key = typingKey(channelId, userId);
+    typingEnds.get(key)?.();
+    typingEnds.delete(key);
+    const now = store.getState().typing[channelId];
+    if (now?.includes(userId) !== true) return;
+    const rest = now.filter((id) => id !== userId);
+    store.setState((state) => ({
+      typing: Object.fromEntries(
+        Object.entries({ ...state.typing, [channelId]: rest }).filter(([, ids]) => ids.length > 0),
+      ),
+    }));
+  };
+  const startTyping = (channelId: string, userId: string, ttlMs: number): void => {
+    if (userId === options.userId) return;
+    const key = typingKey(channelId, userId);
+    typingEnds.get(key)?.();
+    typingEnds.set(
+      key,
+      schedule(() => {
+        stopTyping(channelId, userId);
+      }, ttlMs),
+    );
+    const now = store.getState().typing[channelId] ?? [];
+    if (now.includes(userId)) return;
+    store.setState((state) => ({ typing: { ...state.typing, [channelId]: [...now, userId] } }));
   };
   const update = (id: string, patch: Partial<PendingMessage>): void => {
     change((all) => all.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -427,6 +464,8 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'MESSAGE_CREATED': {
         messageCreated(client, frame.data);
         forget(frame.data.id);
+        // What they were typing has arrived.
+        stopTyping(frame.data.channelId, frame.data.sender.id);
         return;
       }
       case 'THREAD_UPDATED':
@@ -461,11 +500,15 @@ export const createEngine = (options: EngineOptions): Engine => {
         for (const id of frame.data.channelIds) {
           watched.delete(id);
           connection?.unwatch(id);
+          for (const userId of store.getState().typing[id] ?? []) stopTyping(id, userId);
         }
         return;
       }
       case 'SESSION_ENDED':
         options.onSessionEnded();
+        return;
+      case 'TYPING':
+        startTyping(frame.data.channelId, frame.data.userId, frame.data.ttlMs);
         return;
       case 'PONG':
         return;
@@ -520,6 +563,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       connection?.stop();
       for (const cancel of timers.values()) cancel();
       timers.clear();
+      // Who was typing is not known while nothing is heard; the next announcement says again.
+      for (const cancel of typingEnds.values()) cancel();
+      typingEnds.clear();
+      store.setState({ typing: {} });
       // Continuations asleep between attempts wake and end; the epoch tells a running one it is stale.
       epoch += 1;
       for (const wake of [...wakers]) wake();
