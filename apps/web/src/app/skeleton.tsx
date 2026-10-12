@@ -24,7 +24,7 @@ export const AppSkeleton = (): React.JSX.Element => (
     <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-border-subtle bg-surface-000 px-2 pt-8 pb-3">
       <Skeleton className="mx-3 w-members" />
       <div className="flex flex-col gap-2 px-3">
-        <Skeleton className="w-gutter" />
+        <Skeleton />
         <Skeleton />
         <Skeleton />
         <Skeleton />
@@ -35,23 +35,23 @@ export const AppSkeleton = (): React.JSX.Element => (
         <Skeleton className="w-sidebar" />
       </div>
       <div className="flex flex-1 flex-col gap-4 px-4 py-4">
-        {/* Message rows: the timestamp gutter, then a name and a line of text. */}
+        {/* Message rows: the avatar's column, as wide as the row's, then a name and a line of text. */}
         <div className="flex gap-3">
-          <span className="w-gutter shrink-0" />
+          <span className="size-avatar-lg shrink-0" />
           <div className="flex flex-col gap-2">
             <Skeleton className="w-members" />
             <Skeleton className="w-feed" />
           </div>
         </div>
         <div className="flex gap-3">
-          <span className="w-gutter shrink-0" />
+          <span className="size-avatar-lg shrink-0" />
           <div className="flex flex-col gap-2">
-            <Skeleton className="w-gutter" />
+            <Skeleton />
             <Skeleton className="w-feed" />
           </div>
         </div>
         <div className="flex gap-3">
-          <span className="w-gutter shrink-0" />
+          <span className="size-avatar-lg shrink-0" />
           <div className="flex flex-col gap-2">
             <Skeleton className="w-members" />
             <Skeleton className="w-sidebar" />

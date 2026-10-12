@@ -58,10 +58,26 @@ const isClassHelperCall = (node: ts.Node): node is ts.CallExpression =>
 const stringsIn = (node: ts.Node, found: ts.LiteralLikeNode[], dynamic: ts.Node[]): void => {
   if (ts.isStringLiteralLike(node)) found.push(node);
   else if (ts.isTemplateExpression(node)) dynamic.push(node);
+  // A condition chooses classes and is not one: \`status === 'failed' ? 'a' : 'b'\` writes a or b.
+  else if (ts.isConditionalExpression(node)) {
+    stringsIn(node.whenTrue, found, dynamic);
+    stringsIn(node.whenFalse, found, dynamic);
+    return;
+  } else if (ts.isBinaryExpression(node) && COMPARISONS.has(node.operatorToken.kind)) return;
+  // A function that is not a class helper is handed a name (\`buttonStyle('primary')\`), not
+  // classes; its classes are judged where it writes them (a \`…Classes\` table).
+  else if (ts.isCallExpression(node) && !isClassHelperCall(node)) return;
   node.forEachChild((child) => {
     stringsIn(child, found, dynamic);
   });
 };
+
+const COMPARISONS = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.EqualsEqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsEqualsToken,
+  ts.SyntaxKind.EqualsEqualsToken,
+  ts.SyntaxKind.ExclamationEqualsToken,
+]);
 
 /** The classes a source file writes down, with where. Tests and type-only files have none worth judging. */
 export const classesIn = (file: string, source: string): readonly ClassUse[] => {
@@ -84,7 +100,9 @@ export const classesIn = (file: string, source: string): readonly ClassUse[] => 
   };
   const visit = (node: ts.Node): void => {
     if (ts.isJsxAttribute(node) && ts.isIdentifier(node.name) && node.name.text === 'className') {
+      // Taken whole: visiting inside it too would find a helper's classes a second time.
       if (node.initializer !== undefined) take(node.initializer);
+      return;
     } else if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
@@ -175,21 +193,33 @@ export interface VocabularyInput {
 }
 
 export const checkVocabulary = async (input: VocabularyInput): Promise<readonly string[]> => {
-  const compiler = await compile(readFileSync(input.entry, 'utf8'), {
-    base: input.entry.slice(0, input.entry.lastIndexOf('/')),
-    loadStylesheet: (id) => {
-      const path = input.resolve(id);
-      return Promise.resolve({
-        path,
-        base: path.slice(0, path.lastIndexOf('/')),
-        content: readFileSync(path, 'utf8'),
-      });
-    },
-  });
+  // The stylesheets are read once; each candidate gets a compiler of its own. Tailwind's `build` is
+  // incremental — it answers with every utility built so far — so on one shared compiler a single raw
+  // class was reported again against every class judged after it (#385).
+  const sheets = new Map<string, string>();
+  const read = (path: string): string => {
+    const known = sheets.get(path);
+    if (known !== undefined) return known;
+    const content = readFileSync(path, 'utf8');
+    sheets.set(path, content);
+    return content;
+  };
+  const freshCompiler = async (): ReturnType<typeof compile> =>
+    await compile(read(input.entry), {
+      base: input.entry.slice(0, input.entry.lastIndexOf('/')),
+      loadStylesheet: (id) => {
+        const path = input.resolve(id);
+        return Promise.resolve({
+          path,
+          base: path.slice(0, path.lastIndexOf('/')),
+          content: read(path),
+        });
+      },
+    });
   const problems: string[] = [];
   const judged = new Map<string, string | undefined>();
-  const judge = (candidate: string): string | undefined => {
-    const css = compiler.build([candidate]);
+  const judge = async (candidate: string): Promise<string | undefined> => {
+    const css = (await freshCompiler()).build([candidate]);
     const declarations = utilityDeclarations(css);
     if (declarations.length === 0)
       return 'builds to nothing: not in the token vocabulary, or a typo';
@@ -207,7 +237,7 @@ export const checkVocabulary = async (input: VocabularyInput): Promise<readonly 
       continue;
     }
     if (MARKERS.test(use.candidate)) continue;
-    if (!judged.has(use.candidate)) judged.set(use.candidate, judge(use.candidate));
+    if (!judged.has(use.candidate)) judged.set(use.candidate, await judge(use.candidate));
     const verdict = judged.get(use.candidate);
     if (verdict !== undefined)
       problems.push(`${use.file}:${String(use.line)}  ${use.candidate}  ${verdict}`);

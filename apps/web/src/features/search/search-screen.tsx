@@ -115,7 +115,7 @@ const SearchView = ({ asked }: { readonly asked: string }): React.JSX.Element =>
     );
   } else if (query.isSuccess && found.length === 0) {
     body = (
-      <section className="flex flex-col items-center gap-3 px-4 py-16 text-center">
+      <section className="flex flex-col items-center gap-3 px-4 text-center">
         <h2 className="text-title text-ink">{t('state.search.empty.title', { words: asked })}</h2>
         <p className="text-body text-ink-muted">{t('state.search.empty.body')}</p>
       </section>

@@ -113,6 +113,24 @@ describe('classes around the vocabulary', () => {
   });
 });
 
+describe('judging many classes at once (#385)', () => {
+  test('one raw class is reported once, against itself; the clean classes after it are not', async () => {
+    const found = await checkVocabulary({
+      entry,
+      resolve: resolveStylesheet,
+      classes: [
+        { file: 'a.tsx', line: 1, candidate: 'border' },
+        { file: 'b.tsx', line: 2, candidate: 'flex' },
+        { file: 'c.tsx', line: 3, candidate: 'items-center' },
+        { file: 'd.tsx', line: 4, candidate: 'text-ink' },
+      ],
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('a.tsx:1');
+    expect(found[0]).toContain('border');
+  });
+});
+
 describe('finding the classes', () => {
   test('reads className and the class helpers, with the line', () => {
     const uses = classesIn(
@@ -147,6 +165,21 @@ const message = 'a shadow of a doubt';
 const label = <span title="border">text</span>;`,
     );
     expect(uses).toEqual([]);
+  });
+
+  test('a comparison, and the variant handed to a style function, are not classes; the branches are', () => {
+    const uses = classesIn(
+      'a.tsx',
+      `const a = <span className={status === 'failed' || status !== 'too-large' ? 'text-danger-text' : 'text-ink'} />;
+const b = <a className={cn(buttonStyle('primary'), 'w-full')} />;
+const c = <b className={cn(kind === 'note' && 'italic')} />;`,
+    );
+    expect(uses.map((use) => use.candidate)).toEqual([
+      'text-danger-text',
+      'text-ink',
+      'w-full',
+      'italic',
+    ]);
   });
 
   test('flags a class list assembled at runtime, which nothing can judge', async () => {

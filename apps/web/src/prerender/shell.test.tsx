@@ -15,7 +15,8 @@ describe('the shell as markup', () => {
     expect(markup).not.toContain('bg-canvas');
     expect(markup).not.toContain('shadow-card');
     expect(markup).toContain('h-header');
-    expect(markup).toContain('w-gutter');
+    // Each message row keeps the avatar's column, the width the real row gives it.
+    expect(markup.split('<span class="size-avatar-lg shrink-0"></span>')).toHaveLength(4);
     expect(markup).not.toContain('<script');
     // Hidden from assistive technology: a screen reader meets the real page.
     expect(markup).toContain('aria-hidden="true"');

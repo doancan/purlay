@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: the class vocabulary check judges each class alone (#385)
+
+- Each class is now built by a compiler of its own. On one shared, incremental compiler a raw class
+  was blamed again on every class after it, and a class that built nothing passed behind one that did:
+  `size-control`, `size-touch`, `w-gutter` and `py-16` had shipped doing nothing. The composer's send
+  buttons are now the square the control token says; the skeleton's rows keep the avatar's column; the
+  two that never had a token are gone, which changes nothing drawn. A status compared inside a
+  `className`, and a variant handed to a style function, are no longer taken for classes.
+
 ### Quality — 2026-10-12: the permission matrix is a test (#74)
 
 - Every role-gated action is tried as an owner, an admin and a member, each in a workspace of its own,
