@@ -322,6 +322,25 @@ export const OlderPageQuery = FromClient({
 export type OlderPageQuery = Static<typeof OlderPageQuery>;
 
 /**
+ * The administrative actions recorded today (D-26), each a stable machine-readable name. The API
+ * records only these; a client names each in words. On the wire `action` stays a string: the API and
+ * the client are deployed apart, and a client older than an action says it by its name instead of
+ * failing the whole trail.
+ */
+export const AUDIT_ACTIONS = [
+  'member.role_changed',
+  'member.removed',
+  'member.joined',
+  'channel.created',
+  'integration.token_set',
+  'integration.token_removed',
+  'invitation.created',
+  'invitation.revoked',
+  'message.removed_by_moderator',
+] as const;
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/**
  * One administrative action: who, what, to whom, and for a change from what to what. Never anything
  * a person wrote. The actor is null once they were erased (D-27).
  */
