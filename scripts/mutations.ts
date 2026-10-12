@@ -1330,4 +1330,37 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
   },
+  {
+    id: 'upload-exemption-widened',
+    why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
+    file: 'apps/api/src/ingress/http/edge.ts',
+    find: 'const UPLOAD_PATH = /^\\/api\\/workspaces\\/[^/]+\\/uploads$/;\n',
+    replace: 'const UPLOAD_PATH = /uploads/;\n',
+    tests: ['apps/api/src/ingress/http/uploads.integration.test.ts'],
+  },
+  {
+    id: 'upload-takes-a-form',
+    why: 'an upload accepts multipart/form-data, which a cross-site form can send: the CSRF defence is gone for this route',
+    file: 'apps/api/src/ingress/http/edge.ts',
+    find: "  if (type !== 'application/octet-stream') {\n",
+    replace: "  if (type === 'application/json') {\n",
+    tests: ['apps/api/src/ingress/http/uploads.integration.test.ts'],
+  },
+  {
+    id: 'upload-read-before-the-session',
+    why: '25 MiB is read from anybody, signed in or not, before they are refused',
+    file: 'apps/api/src/ingress/http/uploads.ts',
+    find: '  const { userId } = await requireSession(database, clock, request);\n',
+    replace:
+      '  await request.arrayBuffer();\n  const { userId } = await requireSession(database, clock, request);\n',
+    tests: ['apps/api/src/ingress/http/uploads.integration.test.ts'],
+  },
+  {
+    id: 'upload-gate-open',
+    why: 'any number of 25 MiB uploads are held in memory at once on one node',
+    file: 'apps/api/src/ingress/http/uploads.ts',
+    find: '  if (inFlight.count >= UPLOADS_AT_ONCE) {\n',
+    replace: '  if (inFlight.count < 0) {\n',
+    tests: ['apps/api/src/ingress/http/uploads.integration.test.ts'],
+  },
 ];

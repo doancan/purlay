@@ -69,6 +69,36 @@ export const hasUnsupportedMediaType = (request: Request): boolean => {
 };
 
 /**
+ * The one route whose body is not JSON (D-109 §3): `POST /api/workspaces/:workspaceId/uploads`,
+ * matched on the raw path exactly as the router matches it — one segment for the id, whatever it
+ * holds, so a malformed id is the guard's `404` like everywhere else. A trailing slash or a second
+ * segment is not this route and keeps every JSON rule: the exemption is never wider than the route.
+ */
+const UPLOAD_PATH = /^\/api\/workspaces\/[^/]+\/uploads$/;
+
+export const isUploadRequest = (request: Request): boolean =>
+  request.method === 'POST' && UPLOAD_PATH.test(new URL(request.url).pathname);
+
+/**
+ * An upload's body: exactly `application/octet-stream` — a type a cross-site form cannot send, so
+ * D-39's defence stands — with a `Content-Length` (required here: an upload is never small enough
+ * not to say), at most `limit`.
+ */
+export const uploadRefusal = (request: Request, limit: number): AppError | null => {
+  const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
+  if (type !== 'application/octet-stream') {
+    return new AppError({
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      message: 'An upload is the file’s bytes, as application/octet-stream.',
+    });
+  }
+  if (request.headers.get('content-length') === null) {
+    return new AppError({ code: 'LENGTH_REQUIRED', message: 'An upload needs a Content-Length.' });
+  }
+  return bodyRefusal(request, limit);
+};
+
+/**
  * Whether a request's body may be read at all, judged by its `Content-Length` before a byte of it
  * is (D-80, D-109 §4) — any method's: no route reads the body of an `OPTIONS` or a `GET` today, and
  * the bound must not depend on that staying true.

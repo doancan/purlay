@@ -128,6 +128,8 @@ export interface CrossTenantCase {
    * be refused for its body, and the `404` would never have been reached.
    */
   readonly body?: (now: Date, owner: OwnerIds) => unknown;
+  /** The query string the request needs to be one the endpoint can answer (an upload's id and name). */
+  readonly query?: string;
   readonly visibility: Visibility;
 }
 
@@ -141,10 +143,12 @@ const MESSAGE_BY_AUTHOR: Visibility = { kind: 'message', author: true };
  * crossing would be refused for the wrong reason. Its `:workspaceId` is filled in by `pathFor`, with
  * the rest of the path.
  */
-export const queryFor = (crossing: CrossTenantCase): string =>
-  crossing.visibility.kind === 'workspace-wide' && crossing.visibility.query !== undefined
-    ? `?${crossing.visibility.query}`
-    : '';
+export const queryFor = (crossing: CrossTenantCase): string => {
+  const query =
+    crossing.query ??
+    (crossing.visibility.kind === 'workspace-wide' ? crossing.visibility.query : undefined);
+  return query === undefined ? '' : `?${query}`;
+};
 
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId': {
@@ -231,6 +235,15 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'the caller’s own membership of the workspace; no channel is named',
     },
   },
+  'POST /api/workspaces/:workspaceId/uploads': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    query: 'id=0199155c-6200-7b7f-8c11-2a4d3f9e1b70&name=crossing.bin',
+    body: () => new Uint8Array([1, 2, 3]),
+    visibility: {
+      kind: 'none',
+      reason: 'an upload names no channel; it is the uploader’s alone until a message carries it',
+    },
+  },
   'GET /api/notifications': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },
@@ -260,4 +273,27 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'GET /api/workspaces': 'lists the caller’s own memberships and names no workspace',
   'POST /api/workspaces': 'creates a workspace; there is nothing yet to be outside of',
+};
+
+/**
+ * The method, headers and body of a crossing's request. A body that is bytes is an upload's
+ * (`application/octet-stream`, with its length, D-109 §3); anything else is JSON.
+ */
+export const requestInit = (method: string, cookie: string, body: unknown): RequestInit => {
+  if (body instanceof Uint8Array) {
+    return {
+      method,
+      headers: {
+        cookie,
+        'content-type': 'application/octet-stream',
+        'content-length': String(body.length),
+      },
+      body,
+    };
+  }
+  return {
+    method,
+    headers: { cookie, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  };
 };
