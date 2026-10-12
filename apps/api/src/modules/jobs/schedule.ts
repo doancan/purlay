@@ -7,7 +7,7 @@
  * Times are UTC and fixed, not every-N-hours from whenever the container started: a restart neither
  * skips a night nor runs a job twice in a row.
  */
-import type { Clock } from '../../platform/clock';
+import { DAY_MS, HOUR_MS, type Clock } from '../../platform/clock';
 
 export type Slot = { readonly job: string; readonly minute: number } & (
   { readonly every: 'hour' } | { readonly every: 'day'; readonly hour: number }
@@ -20,9 +20,6 @@ export const PLAN: readonly Slot[] = [
   { job: 'reconcile:storage', every: 'day', hour: 3, minute: 30 },
   { job: 'sweep:link-previews', every: 'day', hour: 4, minute: 0 },
 ];
-
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 
 /** The first instant after `after` at which the slot is due. */
 export const nextRun = (slot: Slot, after: Date): Date => {
