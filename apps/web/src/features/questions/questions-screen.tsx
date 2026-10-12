@@ -248,7 +248,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
     );
   } else if (groups.length === 0) {
     body = (
-      <section className="flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
+      <section className="flex max-w-feed flex-col items-center gap-3 px-4 text-center">
         <span
           aria-hidden="true"
           className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-success-subtle text-success-text"

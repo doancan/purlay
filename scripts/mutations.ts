@@ -1731,6 +1731,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/testing/permissions.test.ts'],
   },
   {
+    id: 'vocabulary-judged-on-one-compiler',
+    why: 'one raw class is reported against every class after it, and a class that builds nothing passes behind one that did',
+    file: 'packages/tokens/src/vocabulary.ts',
+    find: '  const judged = new Map<string, string | undefined>();\n  const judge = async (candidate: string): Promise<string | undefined> => {\n    const css = (await freshCompiler()).build([candidate]);\n',
+    replace:
+      '  const judged = new Map<string, string | undefined>();\n  const shared = await freshCompiler();\n  const judge = async (candidate: string): Promise<string | undefined> => {\n    const css = shared.build([candidate]);\n',
+    tests: ['packages/tokens/src/vocabulary.test.ts'],
+  },
+  {
+    id: 'vocabulary-takes-a-comparison-for-a-class',
+    why: 'a status compared in a className is reported as a class that builds nothing',
+    file: 'packages/tokens/src/vocabulary.ts',
+    find: '  } else if (ts.isBinaryExpression(node) && COMPARISONS.has(node.operatorToken.kind)) return;\n',
+    replace: '  }\n',
+    tests: ['packages/tokens/src/vocabulary.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',

@@ -206,6 +206,16 @@
   box-shadow: var(--shadow-float);
 }
 
+@utility size-control {
+  width: var(--size-control);
+  height: var(--size-control);
+}
+
+@utility size-touch {
+  width: var(--size-touch);
+  height: var(--size-touch);
+}
+
 @utility size-dot {
   width: var(--size-dot);
   height: var(--size-dot);

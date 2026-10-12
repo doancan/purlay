@@ -30,10 +30,11 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',
   'size-attachment': '--container-attachment',
-  'size-control': '--height-control',
+  // A control is a height, and a square for an icon-only one (the send button).
+  'size-control': ['--height-control', '--size-control'],
   'size-header': '--height-header',
   // A touch target is a height and a minimum width: a row is as wide as its container, an icon button is a square.
-  'size-touch': ['--height-touch', '--container-touch'],
+  'size-touch': ['--height-touch', '--container-touch', '--size-touch'],
   // A badge is a height and a minimum width: one digit is a circle, two are not.
   'size-badge': ['--height-badge', '--container-badge'],
   'size-code-clamp': '--height-code',
