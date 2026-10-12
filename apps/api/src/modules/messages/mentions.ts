@@ -15,10 +15,7 @@
  * below backtracks over its input more than a bounded number of steps.
  */
 
-import { mentionsIn } from '@purlay/markdown';
-
-/** The names the parser refuses outright. Lower case: matching is case-insensitive. */
-const BROADCAST: ReadonlySet<string> = new Set(['here', 'channel', 'everyone']);
+import { BROADCAST_NAMES, mentionsIn } from '@purlay/markdown';
 
 /** More than this many distinct names in one message are ignored: a bound on what one write may fan out to. */
 export const MENTIONS_PER_MESSAGE_MAX = 50;
@@ -86,14 +83,21 @@ export interface ParsedMentions {
   readonly broadcast: readonly string[];
 }
 
-/** Every mention-shaped name in a body, outside code, and which of them are refused. */
-export const parseMentions = (content: string): ParsedMentions => {
+/**
+ * Every mention-shaped name in a body as typed, outside code, and which of them are refused: for a
+ * body the engine does not format (`body.ts`), which the client shows as typed too.
+ */
+export const parseMentions = (content: string): ParsedMentions =>
+  namesOf(mentionsIn(withoutCode(content)).map((span) => span.name));
+
+/** The names found, distinct and bounded, and the refused broadcasts among them. */
+export const namesOf = (found: readonly string[]): ParsedMentions => {
   const names: string[] = [];
   const broadcast: string[] = [];
   const known = new Set<string>();
-  for (const { name } of mentionsIn(withoutCode(content))) {
+  for (const name of found) {
     const key = name.toLowerCase();
-    if (BROADCAST.has(key)) {
+    if (BROADCAST_NAMES.has(key)) {
       if (!broadcast.includes(key)) broadcast.push(key);
     } else if (!known.has(key) && known.size < MENTIONS_PER_MESSAGE_MAX) {
       known.add(key);

@@ -52,13 +52,18 @@ const hostOf = (href: SafeHref): string => new URL(href.href).host;
 interface InlineScope {
   readonly mentioned: ReadonlySet<string>;
   readonly inLabel: boolean;
+  /** The first piece here directly follows code or a link, so a name it starts with is glued to it. */
+  readonly glued: boolean;
 }
 
 /** In a link's label, the characters the label is drawn with, bidirectional controls removed. */
 const labelText = (value: string, scope: InlineScope): string =>
   scope.inLabel ? value.replace(BIDI_CONTROLS, '') : value;
 
-/** A run of text, with the names the server resolved highlighted where the shared pattern finds them. */
+/**
+ * A run of text, with the names the server resolved highlighted where the server finds them: in the
+ * prose (`proseNames`, #330) — never in a link's label, never glued to the code or link before it.
+ */
 const Prose = ({
   value,
   scope,
@@ -69,11 +74,12 @@ const Prose = ({
   const text = labelText(value, scope);
   const out: React.ReactNode[] = [];
   let from = 0;
-  for (const span of mentionsIn(text)) {
+  for (const span of scope.inLabel ? [] : mentionsIn(text)) {
     if (!scope.mentioned.has(span.name.toLowerCase())) continue;
+    if (scope.glued && span.start === 0) continue;
     out.push(
       text.slice(from, span.start),
-      <span key={span.start} className="font-medium text-accent">
+      <span key={span.start} data-mention="" className="font-medium text-accent">
         {text.slice(span.start, span.end)}
       </span>,
     );
@@ -115,7 +121,12 @@ const Inlines = ({
   readonly scope: InlineScope;
 }): React.ReactNode =>
   // A body is read whole and never reordered, so a position is its identity.
-  nodes.map((node, index) => <InlineNode key={index} node={node} scope={scope} />);
+  nodes.map((node, index) => {
+    const before = nodes[index - 1];
+    const glued =
+      before === undefined ? scope.glued : before.type === 'inlineCode' || before.type === 'link';
+    return <InlineNode key={index} node={node} scope={{ ...scope, glued }} />;
+  });
 
 const InlineNode = ({
   node,
@@ -336,7 +347,7 @@ const Body = ({ content, mentioned, engine }: BodyProps): React.JSX.Element => {
     () => (engine === undefined ? readBody(content) : readMarkdown(content, engine)),
     [content, engine],
   );
-  const scope = useMemo(() => ({ mentioned, inLabel: false }), [mentioned]);
+  const scope = useMemo(() => ({ mentioned, inLabel: false, glued: false }), [mentioned]);
   // The engine failing inside the bounds is a gap in them (D-101 §8): thrown to the boundary, which
   // shows the body as typed and has React report the cause, never silently drawn as text.
   if (reading.tree === null && reading.reason === 'engine') throw reading.error;

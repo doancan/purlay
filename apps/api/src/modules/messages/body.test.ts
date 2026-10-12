@@ -14,6 +14,18 @@ describe('reading a body', () => {
     expect(body.metadata).toMatchObject({ codeLanguages: ['ts'] });
   });
 
+  test('names only the prose the client draws: not a link, an address, or a name glued to code (#330)', () => {
+    expect(readBody('[@bob](https://example.com) and https://medium.com/@carol').names).toEqual([]);
+    expect(readBody('`x`@bob').names).toEqual([]);
+    // Not code to the engine, so not to the server: a backtick pair across a blank line.
+    expect(readBody('`one\n\n@bob two`').names).toEqual(['bob']);
+    expect(readBody('**@bob**, see `@carol` and @dave').names).toEqual(['bob', 'dave']);
+  });
+
+  test('a broadcast in code is somebody quoting it, not one', () => {
+    expect(readBody('use `@here` sparingly').names).toEqual([]);
+  });
+
   test('refuses a broadcast, naming the field', () => {
     let refused: unknown;
     try {
