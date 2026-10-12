@@ -210,3 +210,9 @@ repomix-output.*
 ._*
 Thumbs.db
 Desktop.ini
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Scratch files at the repository root (mockups, exports, screenshots)
+# ─────────────────────────────────────────────────────────────────────────────
+/*.png
+/*.html
