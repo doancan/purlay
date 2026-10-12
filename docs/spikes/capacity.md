@@ -60,9 +60,25 @@ every socket: frames received = messages × sockets, plus the subscriptions' ans
   VPS has a fraction of that. The margin (a sixth of the budget) is the claim, not the numbers.
 - **Several channels, threads, reactions, mentions.** One channel and plain roots: the fan-out is the
   worst case for one message, not a realistic mix.
-- **Reconnect storms.** All sockets were opened once; a node restart that brings 300 back at once is
-  drained (D-72) and rejoins with jitter (D-82), and is not measured here.
+- **Reconnect storms** — measured since, below.
 - **The proxy.** Caddy was not in the path.
+
+## Reconnect storms (added the same day)
+
+300 subscribed sockets, the API sent `SIGTERM` (it drains, D-72) and a new process started on the same
+port; each client reconnecting with the client's own `reconnectDelay` (`apps/web/src/realtime/backoff.ts`,
+D-76) and subscribing again, then one message sent through the new process.
+
+| Outage | Old process gone | New one ready | All 300 back and subscribed | Attempts (refused before open) | The message after |
+|---|---|---|---|---|---|
+| none (restart) | 8 ms | 122 ms later | **1.0 s** after `SIGTERM` | 300 (0); every close `1012` | 300/300 |
+| 10 s (an image pulled, say) | 9 ms | 10.2 s later | **25.5 s** after `SIGTERM` | 1,262 (962) | 300/300 |
+
+A restart is invisible to a room; a ten-second outage costs the last of them about fifteen seconds
+more than the server needed, which is the backoff's doubling (1, 2, 4, 8, 16 s steps) doing what it is
+for. Surprise: opening 300 sockets in the same instant had 0–35 refused at the TCP level on this
+machine (`1006`; macOS's listen backlog is 128); clients that arrive with jitter did not meet it, and a
+Linux host's default backlog is larger — not claimed either way.
 
 ## What had to be loosened
 
@@ -170,6 +186,90 @@ try {
   console.log(`rss under load: max ${Math.max(...peak).toFixed(1)} MiB; after: ${rss().toFixed(1)} MiB`);
 } finally {
   for (const s of sockets) s.close();
+  api.kill('SIGTERM'); await api.exited; await clone.drop();
+}
+```
+
+## The storm script (throwaway)
+
+Saved as `apps/api/src/cli/.spike/storm.ts`; run as the capacity script is, with `GAP_MS=10000` for
+the outage.
+
+```ts
+/** Reconnect-storm spike (throwaway): 300 sockets, the API restarted under them, the client's own backoff. */
+import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
+import { cloneIntegrationDatabase } from '@purlay/db';
+import { messageId } from '@purlay/types';
+import { systemClock } from '../../platform/clock';
+import { SESSION_COOKIE } from '../../platform/cookies';
+import { issueSession } from '../../modules/auth/sessions';
+import { reconnectDelay } from '../../../../web/src/realtime/backoff';
+
+const SOCKETS = Number(process.env['SOCKETS'] ?? 300);
+const freePort = async (): Promise<number> => { const s = createServer(); await new Promise<void>((r) => s.listen(0, '127.0.0.1', r)); const a = s.address(); s.close(); if (a === null || typeof a === 'string') throw new Error('port'); return a.port; };
+const clone = await cloneIntegrationDatabase();
+const port = await freePort();
+const origin = `http://localhost:${String(port)}`;
+const env = { ...process.env, NODE_ENV: 'development', PORT: String(port), APP_URL: origin, DATABASE_URL: clone.connectionString, GITHUB_CLIENT_ID: 'x', GITHUB_CLIENT_SECRET: 'y', ENCRYPTION_KEY: randomBytes(32).toString('base64'), LOG_LEVEL: 'warn', MIGRATE_ON_START: 'true' };
+const start = () => Bun.spawn(['bun', 'apps/api/src/index.ts'], { env, stdout: 'inherit', stderr: 'inherit' });
+const ready = async (): Promise<void> => { for (let i = 0; i < 600; i++) { if (await fetch(`${origin}/health/ready`).then((r) => r.ok, () => false)) return; await Bun.sleep(50); } throw new Error('never ready'); };
+let api = start();
+const members: string[] = [];
+const clients: { close: () => void }[] = [];
+try {
+  await ready();
+  const people: string[] = [];
+  for (let i = 0; i < SOCKETS; i++) {
+    const { id } = await clone.db.insertInto('users').values({ email: `s${i}@spike.test`, username: `s${i}`, display_name: `s${i}` }).returning('id').executeTakeFirstOrThrow();
+    people.push(`${SESSION_COOKIE}=${(await issueSession(clone.db, systemClock, id, 1)).token}`);
+    if (i > 0) members.push(id);
+  }
+  const ownerCookie = people[0]!;
+  const post = async (cookie: string, path: string, body: unknown): Promise<any> => { const r = await fetch(`${origin}${path}`, { method: 'POST', headers: { cookie, origin, 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (!r.ok) throw new Error(`${path} ${r.status}`); return await r.json(); };
+  const ws = await post(ownerCookie, '/api/workspaces', { name: 'storm', slug: `storm-${randomBytes(3).toString('hex')}` });
+  await clone.db.insertInto('workspace_members').values(members.map((user_id) => ({ workspace_id: ws.id, user_id, role: 'member' as const }))).execute();
+  const ch = await post(ownerCookie, `/api/workspaces/${ws.id}/channels`, { name: 'all' });
+  for (const cookie of people.slice(1)) await post(cookie, `/api/channels/${ch.id}/join`, {});
+
+  let subscribed = 0; let attempts = 0; let refused = 0; const closeCodes = new Map<number, number>();
+  const received = new Set<number>(); let marker = '';
+  const client = (i: number) => {
+    let failures = 0; let stopped = false; let socket: WebSocket | null = null;
+    const connect = () => {
+      if (stopped) return;
+      attempts++;
+      const s = new WebSocket(`ws://localhost:${String(port)}/ws`, { headers: { cookie: people[i]!, origin } } as unknown as string[]);
+      socket = s;
+      let opened = false;
+      s.addEventListener('open', () => { opened = true; s.send(JSON.stringify({ id: messageId(new Date()), op: 'SUBSCRIBE', payload: { channels: [{ channelId: ch.id, afterMessageId: null }] } })); });
+      s.addEventListener('message', (e) => { const f = JSON.parse(String(e.data)) as { event: string; data?: { content?: string } }; if (f.event === 'ACK') { failures = 0; subscribed++; } if (f.event === 'MESSAGE_CREATED' && f.data?.content === marker) received.add(i); });
+      s.addEventListener('close', (e) => { if (!opened) refused++; else subscribed--; closeCodes.set(e.code, (closeCodes.get(e.code) ?? 0) + 1); if (stopped) return; setTimeout(connect, reconnectDelay(failures, Math.random)); failures++; });
+    };
+    connect();
+    return { close: () => { stopped = true; socket?.close(); } };
+  };
+  for (let i = 0; i < SOCKETS; i++) clients.push(client(i));
+  for (let t = 0; t < 400 && subscribed < SOCKETS; t++) await Bun.sleep(50);
+  console.log(`before: ${String(subscribed)}/${String(SOCKETS)} subscribed after ${String(attempts)} attempts; refused ${String(refused)}; codes ${JSON.stringify([...closeCodes])}`);
+  attempts = 0; refused = 0; closeCodes.clear();
+  const t0 = performance.now();
+  api.kill('SIGTERM'); await api.exited;
+  const down = performance.now();
+  await Bun.sleep(Number(process.env['GAP_MS'] ?? 0));
+  api = start(); await ready();
+  const up = performance.now();
+  let all = -1;
+  for (let t = 0; t < 1200; t++) { if (subscribed >= SOCKETS) { all = performance.now(); break; } await Bun.sleep(50); }
+  console.log(`old process drained and exited in ${(down - t0).toFixed(0)} ms; new one ready ${(up - down).toFixed(0)} ms later`);
+  console.log(`all back and subscribed ${all < 0 ? 'NEVER (60 s)' : `${((all - t0) / 1000).toFixed(1)} s after the restart began`} — ${String(subscribed)}/${String(SOCKETS)}`);
+  console.log(`reconnect attempts ${String(attempts)}, refused before opening ${String(refused)}, close codes ${JSON.stringify([...closeCodes])}`);
+  marker = `after the storm ${randomBytes(2).toString('hex')}`;
+  await post(ownerCookie, `/api/channels/${ch.id}/messages`, { id: messageId(new Date()), content: marker });
+  await Bun.sleep(2000);
+  console.log(`one message after: received on ${String(received.size)}/${String(SOCKETS)} sockets`);
+} finally {
+  for (const c of clients) c.close();
   api.kill('SIGTERM'); await api.exited; await clone.drop();
 }
 ```

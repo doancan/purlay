@@ -78,15 +78,70 @@ const aWorkspaceWithToken = async (
   return context;
 };
 
-const dependencies = (db: Executor, at: Date = NOW): UnfurlDependencies => ({
+const dependencies = (
+  db: Executor,
+  at: Date = NOW,
+  mayCallGitHub: UnfurlDependencies['mayCallGitHub'] = () => Promise.resolve(true),
+): UnfurlDependencies => ({
   database: db,
   clock: fixedClock(at),
   cipher,
   github: githubApi(`http://localhost:${String(server.port)}`),
   log: aRecordingLogger().log,
+  mayCallGitHub,
 });
 
 describe('integration: unfurling a GitHub link', () => {
+  /**
+   * Found by review: the cache is keyed by workspace and link, and any link is accepted, so one member
+   * asking for links nobody wrote made a GitHub call each and could spend the workspace's token in
+   * minutes. A call is now asked for first; refused, the card is a plain link, and nothing is cached,
+   * so it is drawn when there is room again.
+   */
+  test('with no GitHub calls to spare, GitHub is not asked and nothing is kept; with room again, the card comes', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (path): Response =>
+        path === '/repos/acme/api/pulls/42'
+          ? Response.json(pull)
+          : path === '/graphql'
+            ? Response.json(checks('SUCCESS', 'APPROVED'))
+            : new Response('{}', { status: 404 });
+      const context = await aWorkspaceWithToken(db, 'ghp_budget');
+      const charged: string[] = [];
+      let room = 0;
+      const spare = (workspaceId: string): Promise<boolean> => {
+        charged.push(workspaceId);
+        return Promise.resolve(room-- > 0);
+      };
+      expect(await unfurl(dependencies(db, NOW, spare), context, PR)).toBeNull();
+      expect(asked).toEqual([]);
+      expect(charged).toEqual([context.workspaceId]);
+      room = 2;
+      expect(await unfurl(dependencies(db, NOW, spare), context, PR)).toMatchObject({
+        title: pull.title,
+        ciStatus: 'success',
+      });
+      // The item and its checks: each call to GitHub is charged.
+      expect(charged).toHaveLength(3);
+      // Room for the item alone: the card comes without its checks, and GitHub's GraphQL is not asked.
+      asked.length = 0;
+      room = 1;
+      answer = (path): Response =>
+        path === '/repos/acme/api/pulls/43'
+          ? Response.json(pull)
+          : Response.json(checks('SUCCESS', null));
+      const plain = await unfurl(
+        dependencies(db, NOW, spare),
+        context,
+        'https://github.com/acme/api/pull/43',
+      );
+      expect(plain).toMatchObject({ title: pull.title });
+      expect(plain).not.toHaveProperty('ciStatus', 'success');
+      expect(asked.map((a) => a.path)).toEqual(['/repos/acme/api/pulls/43']);
+    });
+  });
+
   test('a merged pull request is its card, fetched once with the workspace’s token, then cached', async () => {
     await withRollback(async (db) => {
       asked.length = 0;

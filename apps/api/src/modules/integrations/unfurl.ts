@@ -160,6 +160,12 @@ export interface UnfurlDependencies {
   readonly cipher: CredentialCipher;
   readonly github: GitHubApi;
   readonly log: Logger;
+  /**
+   * Whether this workspace may make one more call to GitHub now. Every call spends the workspace's own
+   * token, whose hourly quota is GitHub's; a member asking for links nobody wrote must not spend it for
+   * everyone. False is a plain link today, asked for again when there is room.
+   */
+  readonly mayCallGitHub: (workspaceId: string) => Promise<boolean>;
 }
 
 const remember = async (
@@ -195,7 +201,7 @@ export const unfurl = async (
   context: WorkspaceContext,
   url: string,
 ): Promise<GitHubCardMetadata | null> => {
-  const { database, clock, cipher, github, log } = dependencies;
+  const { database, clock, cipher, github, log, mayCallGitHub } = dependencies;
   const parts = LINK.exec(url);
   if (parts === null) return null;
   const [, owner = '', repo = '', kind = '', number = ''] = parts;
@@ -215,6 +221,10 @@ export const unfurl = async (
 
   const token = await githubTokenOf(database, cipher, log, context);
   if (token === null) return null;
+  if (!(await mayCallGitHub(context.workspaceId))) {
+    log.info('a card waits for GitHub calls to spare', { workspaceId: context.workspaceId });
+    return null;
+  }
   try {
     const part: Part = {
       owner,
@@ -235,6 +245,11 @@ export const unfurl = async (
     let card: GitHubCardMetadata = item;
     let ttl = CARD_TTL_MS;
     try {
+      if (!(await mayCallGitHub(context.workspaceId))) {
+        // The card without its checks for now, kept a minute so they are asked about again soon.
+        await remember(database, key, url, { kind: 'card', card }, now, UNAVAILABLE_TTL_MS);
+        return card;
+      }
       card = { ...item, ...(await github.checks(part, token)) };
     } catch (error) {
       // The card without them, said, and kept a minute so they are asked about again soon.

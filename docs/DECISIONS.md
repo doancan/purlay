@@ -2882,6 +2882,15 @@ ten a second. **Provisional (O-4)**, like every number here. **Rejected — not 
 person could then spend the node's outbound calls. **Rejected — a bigger write burst:** it would let
 a person send sixty messages at once to make room for drawing.
 
+**Amended 2026-10-13 again, after a security review.** The limiter compares the path the router
+matches (`routeOf`: repeated slashes one, a trailing one dropped). The router is not strict, so
+`/api/images/` reached the image handler while the limiter, comparing the raw path, charged it nothing.
+And calls to GitHub are charged **per workspace** too (`GITHUB_CALL_BUDGET`, a hundred at once, then one
+a second, under the hourly quota of the workspace's one token). The unfurl cache is keyed by workspace
+and link, and any link is accepted, so one member asking for links nobody wrote spent a call each, and
+could spend the token for everyone in minutes. A card refused a call is a plain link and is not cached,
+so it is drawn when there is room again. **Provisional (O-4).**
+
 ---
 
 ### D-82. The client notices a dead socket, stops retrying a refusal, ignores what it does not know, and does not trust a cursor past an unfinished replay

@@ -10,6 +10,7 @@ import type { CredentialCipher } from '../../platform/crypto';
 import type { Logger } from '../../platform/logging';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { unfurl, type GitHubApi } from '../../modules/integrations/unfurl';
+import type { RateLimiter } from '../../realtime/rate-limiter';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -20,11 +21,13 @@ export const unfurlLink = async (
     readonly cipher: CredentialCipher;
     readonly githubApi: GitHubApi;
     readonly log: Logger;
+    /** One bucket per workspace for calls to GitHub (`GITHUB_CALL_BUDGET`). */
+    readonly githubCalls: RateLimiter;
   },
   request: Request,
   body: unknown,
 ): Promise<UnfurlResponse> => {
-  const { database, clock, cipher, githubApi, log } = dependencies;
+  const { database, clock, cipher, githubApi, log, githubCalls } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const workspaceId =
     typeof body === 'object' &&
@@ -35,5 +38,16 @@ export const unfurlLink = async (
       : validated(UnfurlRequest, body).workspaceId;
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const { url } = validated(UnfurlRequest, body);
-  return await unfurl({ database, clock, cipher, github: githubApi, log }, context, url);
+  return await unfurl(
+    {
+      database,
+      clock,
+      cipher,
+      github: githubApi,
+      log,
+      mayCallGitHub: async (id) => await githubCalls.consume(id),
+    },
+    context,
+    url,
+  );
 };
