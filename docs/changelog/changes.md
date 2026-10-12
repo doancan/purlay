@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: two things a walk through the product found
+
+- The invitation dialog cut each open link's line short, ending at the time — "11:22 …" said
+  neither morning nor night — and its Revoke buttons were three of the same name. The line is now
+  whole, and is each Revoke's description.
+- At a phone's width the composer's hints ran off its right edge when focused; they wrap now. Both
+  are measured in a browser.
+
 ### Fix — 2026-10-12: what review found in the scheduler, the latency baseline and the pool test (#445)
 
 - A job whose database fails before it starts is now said in the log; a failure is logged before it

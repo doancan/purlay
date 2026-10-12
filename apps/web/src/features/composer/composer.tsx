@@ -310,19 +310,23 @@ const Inner = ({
   const empty = trimEnd(text) === '';
   const hints = (
     <>
-      <span>
+      <span className="whitespace-nowrap">
         <Kbd>Enter</Kbd> {t('composer.hint.send')}
       </span>
-      <span>
+      <span className="whitespace-nowrap">
         <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
       </span>
-      <span>
+      <span className="whitespace-nowrap">
         <Kbd>```</Kbd> {t('composer.hint.code')}
       </span>
     </>
   );
   const hintsBlock = focused ? (
-    <span id={hintsId} className="flex gap-3 text-caption text-ink-muted">
+    // Each hint whole, and the three wrapping onto lines of their own when the window is narrow.
+    <span
+      id={hintsId}
+      className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted"
+    >
       {hints}
     </span>
   ) : (

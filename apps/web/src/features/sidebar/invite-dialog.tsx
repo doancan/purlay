@@ -160,13 +160,19 @@ export const InviteDialog = ({
           <ul className="flex flex-col gap-1">
             {list.data.data.map((invitation) => (
               <li key={invitation.id} className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 truncate text-body text-ink">
+                {/* Whole, never cut: the end of it is the time, and "11:22 …" hides AM from PM. It
+                    is also what tells the Revoke beside it from the others. */}
+                <span
+                  id={`invitation-${invitation.id}`}
+                  className="min-w-0 flex-1 text-body text-ink"
+                >
                   {t('invite.admin.row', {
                     name: invitation.createdBy?.displayName ?? t('invite.admin.someone'),
                     until: format.absolute(invitation.expiresAt),
                   })}
                 </span>
                 <Button
+                  aria-describedby={`invitation-${invitation.id}`}
                   onClick={() => {
                     void revoke(invitation.id);
                   }}
