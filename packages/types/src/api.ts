@@ -261,6 +261,22 @@ export type NotificationQuery = Static<typeof NotificationQuery>;
 export const NotificationPage = Page(Notification);
 export type NotificationPage = Static<typeof NotificationPage>;
 
+/**
+ * `PUT /api/workspaces/:workspaceId/integrations/github` — the workspace's one GitHub token (D-11,
+ * D-23): printable characters, no spaces. Sealed at rest, never logged, never returned.
+ */
+export const SetGitHubTokenRequest = FromClient({
+  token: Type.String({ minLength: 1, maxLength: 255, pattern: '^[\\x21-\\x7e]+$' }),
+});
+export type SetGitHubTokenRequest = Static<typeof SetGitHubTokenRequest>;
+
+/** `GET …/integrations/github` — whether a token is set, and since when. Never the token. */
+export const GitHubIntegration = Type.Object({
+  configured: Type.Boolean(),
+  updatedAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type GitHubIntegration = Static<typeof GitHubIntegration>;
+
 /** `GET /api/workspaces/:workspaceId/audit` — newest first, keyset by `before` (D-26, #70). */
 export const AuditQuery = FromClient({
   before: Type.Optional(Uuid),

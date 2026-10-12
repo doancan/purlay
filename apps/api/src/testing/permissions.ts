@@ -32,6 +32,18 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },
   },
+  'see whether the GitHub token is set': {
+    endpoint: 'GET /api/workspaces/:workspaceId/integrations/github',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'set the GitHub token': {
+    endpoint: 'PUT /api/workspaces/:workspaceId/integrations/github',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'remove the GitHub token': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/integrations/github',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'delete somebody else’s message': {
     endpoint: 'DELETE /api/messages/:messageId',
     allowed: { owner: true, admin: true, member: false },

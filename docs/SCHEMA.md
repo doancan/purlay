@@ -712,7 +712,8 @@ visibility through whether a card renders. (D-23)
 
 ```sql
 CREATE TABLE github_integrations (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- The application's, given before the token is sealed: the seal binds it (D-39 §6).
+    id              UUID PRIMARY KEY,
     workspace_id    UUID NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,
 
     installation_id BIGINT,
@@ -724,6 +725,10 @@ CREATE TABLE github_integrations (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Every foreign-key column is indexed (D-89); `workspace_id` is, by its UNIQUE constraint.
+CREATE INDEX idx_github_integrations_created_by ON github_integrations (created_by)
+    WHERE created_by IS NOT NULL;
 ```
 
 ### 8.2. `link_previews`
@@ -972,10 +977,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0017_channel_message_notifications.sql  notification_type gains channel_message  (D-107)
 0018_attachments.sql         attachments; messages (id, workspace_id) unique  (D-16, D-109)
 0019_administration.sql      audit_log, job_runs  (D-26, D-30)
-```
-
-```
-0020_integrations.sql        github_integrations, link_previews
+0020_integrations.sql        github_integrations, link_previews  (D-11, D-23, D-39 §6)
 ```
 
 Phase 2 adds `0021_github_feeds.sql`; Phase 2's magic links add `0022_email_auth.sql`.

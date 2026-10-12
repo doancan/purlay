@@ -92,6 +92,16 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface GithubIntegrations {
+  access_token_encrypted: string | null;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  id: string;
+  installation_id: Int8 | null;
+  updated_at: Generated<Timestamp>;
+  workspace_id: string;
+}
+
 export interface JobRuns {
   consecutive_failures: Generated<number>;
   job_name: string;
@@ -99,6 +109,14 @@ export interface JobRuns {
   last_error: string | null;
   last_started_at: Timestamp | null;
   last_success_at: Timestamp | null;
+}
+
+export interface LinkPreviews {
+  expires_at: Timestamp;
+  fetched_at: Generated<Timestamp>;
+  payload: Json;
+  url: string;
+  url_hash: string;
 }
 
 export interface Mentions {
@@ -204,7 +222,9 @@ export interface DB {
   audit_log: AuditLog;
   channel_members: ChannelMembers;
   channels: Channels;
+  github_integrations: GithubIntegrations;
   job_runs: JobRuns;
+  link_previews: LinkPreviews;
   mentions: Mentions;
   messages: Messages;
   notifications: Notifications;

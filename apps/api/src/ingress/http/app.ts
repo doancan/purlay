@@ -52,7 +52,9 @@ import {
   createMyWorkspace,
   listMyWorkspaces,
   setMyDeepWork,
+  changeGitHubToken,
   listWorkspaceMembers,
+  readGitHubIntegration,
   readAuditTrail,
   removeWorkspaceMember,
   updateMemberRole,
@@ -86,6 +88,7 @@ import { currentRequest, enterRequest, type Logger } from '../../platform/loggin
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
+import { credentialCipher } from '../../platform/crypto';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
@@ -177,6 +180,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     dependencies.rateBudgets?.writes ?? WRITE_BUDGET,
   );
   const sockets = createSocketLifecycle({ ...dependencies, userWrites });
+  // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
+  const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
   // Uploads being read on this node, against `UPLOADS_AT_ONCE`.
   const uploading = { count: 0 };
@@ -308,6 +313,32 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/integrations/github',
+      async ({ request, params }) =>
+        await readGitHubIntegration(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/integrations/github',
+      async ({ request, params, body, set }) => {
+        await changeGitHubToken({ ...dependencies, cipher }, request, params.workspaceId, body);
+        set.status = 204;
+        return null;
+      },
+    )
+    .delete(
+      '/api/workspaces/:workspaceId/integrations/github',
+      async ({ request, params, set }) => {
+        await changeGitHubToken(
+          { ...dependencies, cipher },
+          request,
+          params.workspaceId,
+          undefined,
+        );
+        set.status = 204;
+        return null;
+      },
     )
     .get(
       '/api/workspaces/:workspaceId/audit',

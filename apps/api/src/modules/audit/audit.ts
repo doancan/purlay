@@ -15,14 +15,20 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
 
 /** The verbs recorded so far; each is a stable machine-readable name, never built from input. */
-type AuditAction = 'member.role_changed' | 'member.removed' | 'member.joined' | 'channel.created';
+type AuditAction =
+  | 'member.role_changed'
+  | 'member.removed'
+  | 'member.joined'
+  | 'channel.created'
+  | 'integration.token_set'
+  | 'integration.token_removed';
 
 export interface AuditEntry {
   readonly workspaceId: string;
   /** Who did it; null only when nobody did (a job). */
   readonly actorUserId: string | null;
   readonly action: AuditAction;
-  readonly targetType: 'user' | 'channel';
+  readonly targetType: 'user' | 'channel' | 'integration';
   readonly targetId: string;
   /** What changed, by name: never content, never a token, never an email address. */
   readonly metadata?: Readonly<Record<string, string>>;
