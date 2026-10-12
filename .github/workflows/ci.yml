@@ -196,6 +196,10 @@ jobs:
       - name: every test, with coverage
         run: bun run test:all
 
+      # PRD.md §5's other blocking budget (D-49): a real API, started and settled, under 120 MiB.
+      - name: the API's idle memory is inside its budget
+        run: bun run budget:api
+
   documents:
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -13,30 +13,9 @@
  *
  * The coverage floor lives in `bunfig.toml`, where `bun test --coverage` reads it.
  */
-import { createConnection } from 'node:net';
+import { reachable } from './database-reachable';
 
 const ROOTS = ['apps', 'packages', 'scripts'];
-
-/** Whether something accepts connections at the database's address — within a second. */
-const reachable = async (url: string): Promise<boolean> => {
-  const { hostname, port } = new URL(url);
-  return await new Promise<boolean>((resolve) => {
-    const socket = createConnection({ host: hostname, port: Number(port || 5432) });
-    const done = (answer: boolean): void => {
-      socket.destroy();
-      resolve(answer);
-    };
-    socket.setTimeout(1_000, () => {
-      done(false);
-    });
-    socket.once('connect', () => {
-      done(true);
-    });
-    socket.once('error', () => {
-      done(false);
-    });
-  });
-};
 
 const run = (args: readonly string[]): number =>
   Bun.spawnSync(['bun', 'test', ...args], { stdout: 'inherit', stderr: 'inherit' }).exitCode;

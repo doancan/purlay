@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the API's idle memory is a budget the build holds (D-49, #73)
+
+- `bun run budget:api` starts the API against the database, waits for it to be ready and settled, and
+  fails at 120 MiB or more; `verify` and CI's database job run it. First measurement: 80.6 MiB.
+
 ### Quality — 2026-10-12: the supported browsers are named, and held (D-113, #331)
 
 - Chrome and Edge 120, Firefox 121, Safari and iOS Safari 17.2, as `browserslist` in

@@ -1669,7 +1669,7 @@ gate loses credibility.
 | Budget | Why it can block |
 |---|---|
 | Initial JS bundle, gzipped < 250 KB | A single deterministic number from a build. It does not vary between runs. |
-| API idle RSS < 120 MB | Measured by starting the process and reading it. Stable enough to threshold. |
+| API idle RSS < 120 MB | Measured by starting the process and reading it. Stable enough to threshold. *Since 2026-10-12, `bun run budget:api` (#73): 80.6 MiB on its first run.* |
 
 **Blocking on regression, not on an absolute threshold:** ACK round-trip p95, fan-out p95, cold
 load, channel switch, keystroke→paint. Each is recorded per commit and compared with the previous
