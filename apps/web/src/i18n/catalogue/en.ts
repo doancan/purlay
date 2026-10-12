@@ -286,6 +286,21 @@ export const en = {
   'state.channels.empty.title': 'No channels yet',
   'state.channels.empty.body': 'Create the first one; it takes a name and nothing else.',
 
+  // ── Search (D-105) ─────────────────────────────────────────────────────
+  'search.title': 'Search',
+  'search.label': 'Search messages',
+  'search.hint': 'Press Enter to search every channel you can see.',
+  'search.searching': 'Searching…',
+  'search.tooShort': 'Type at least {min} characters.',
+  'search.prompt':
+    'The words as typed, ignoring case, in every channel you can see — replies and resolved threads too.',
+  'search.more': 'Load more',
+  'state.search.empty.title': 'No matches for “{words}”',
+  'state.search.empty.body':
+    'Searched every channel you can see. A deleted message is never found.',
+  'state.search.error.title': "Couldn't search",
+  'state.search.error.body': 'The server did not answer. Your words are kept; try again.',
+
   // ── Inbox (D-106) ──────────────────────────────────────────────────────
   'inbox.title': 'Inbox',
   'inbox.lede': 'What you were told, newest first',

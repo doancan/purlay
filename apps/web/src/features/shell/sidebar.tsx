@@ -18,6 +18,7 @@ import { useSession } from '../session/session';
 import { ChannelList } from '../sidebar/channel-list';
 import { JumpField } from '../sidebar/jump-field';
 import { InboxLink } from '../inbox/inbox-link';
+import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { PeopleList } from '../sidebar/people-list';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
@@ -44,6 +45,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
         <div className="flex flex-col gap-1">
           <OpenQuestionsLink />
           <InboxLink />
+          <SearchLink />
         </div>
         <ChannelList />
         <PeopleList />

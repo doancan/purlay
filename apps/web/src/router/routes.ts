@@ -19,6 +19,7 @@ const ROUTES = {
   channel: '/w/:slug/c/:channelId',
   questions: '/w/:slug/questions',
   inbox: '/w/:slug/inbox',
+  search: '/w/:slug/search',
   gallery: '/__gallery',
 } as const;
 
@@ -113,3 +114,18 @@ export const threadInSearch = (search: string): string | null => {
   const value = new URLSearchParams(search).get(THREAD_PARAM);
   return value !== null && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
 };
+
+/**
+ * `?q=` on the search screen's address: the words searched for, so Back, a reload and a shared
+ * link all come back to the same results.
+ */
+const WORDS_PARAM = 'q';
+
+export const searchHref = (slug: string, words: string): string =>
+  words === ''
+    ? href('search', { slug })
+    : `${href('search', { slug })}?${WORDS_PARAM}=${encodeURIComponent(words)}`;
+
+/** The words an address searches for, trimmed; empty when it asks for none. */
+export const wordsInSearch = (search: string): string =>
+  (new URLSearchParams(search).get(WORDS_PARAM) ?? '').trim();

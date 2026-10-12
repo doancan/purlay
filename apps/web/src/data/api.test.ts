@@ -162,6 +162,16 @@ describe('the endpoints', () => {
     expect(refused).toBe(true);
   });
 
+  test('search: the words and the cursor in the query', async () => {
+    const found = harness({ data: [message], nextCursor: null });
+    await found.api.search(ID, { q: 'a b&c' });
+    await found.api.search(ID, { q: 'deploy', before: 'b' });
+    expect(found.calls.map((c) => c.url)).toEqual([
+      `/api/workspaces/${ID}/search?q=a+b%26c`,
+      `/api/workspaces/${ID}/search?q=deploy&before=b`,
+    ]);
+  });
+
   test('resolution and reactions, the emoji percent-encoded into the path', async () => {
     const msg = harness(message);
     await msg.api.resolve(ID);

@@ -668,7 +668,7 @@ describe('browsing channels', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab reaches the workspace, the jump field, the questions, the inbox, the channels and their buttons, in that order', async () => {
+  test('Tab reaches the workspace, the jump field, the questions, the inbox, search, the channels and their buttons, in that order', async () => {
     const view = await open();
     act(() => {
       view.getByRole('button', { name: 'Switch workspace' }).focus();
@@ -680,6 +680,8 @@ describe('the keyboard', () => {
     expect(document.activeElement?.textContent.trim().replace(/\d+$/, '')).toBe('Open questions');
     await person().tab();
     expect(document.activeElement?.textContent.trim()).toBe('Inbox');
+    await person().tab();
+    expect(document.activeElement?.textContent.trim()).toBe('Search');
     await person().tab();
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Browse channels');
     await person().tab();

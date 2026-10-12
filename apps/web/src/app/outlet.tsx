@@ -19,6 +19,7 @@ import { lazy, Suspense, type ComponentType } from 'react';
 import { ChannelScreen } from '../features/channel/channel-screen';
 import { InboxScreen } from '../features/inbox/inbox-screen';
 import { QuestionsScreen } from '../features/questions/questions-screen';
+import { SearchScreen } from '../features/search/search-screen';
 import { SessionGate } from '../features/session/session';
 import { Home } from '../features/shell/home';
 import { NotFound } from '../features/shell/not-found';
@@ -101,6 +102,12 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <InboxScreen />
+        </Shell>
+      );
+    case 'search':
+      return (
+        <Shell slug={match.params.slug}>
+          <SearchScreen />
         </Shell>
       );
     case 'gallery': {
