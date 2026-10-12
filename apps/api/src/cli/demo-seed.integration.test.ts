@@ -18,79 +18,99 @@ afterAll(async () => {
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 
+/**
+ * A whole demo workspace sent through the API: about 1.3 s alone (measured 2026-10-12), past bun's
+ * default 5 s under the full suite's load (#347). Bounded still, so a seed that hangs fails.
+ */
+const SEEDING_MS = 30_000;
+
 describe('integration: the demo seed', () => {
-  test('sends every message through the API, and leaves the counters the send path keeps', async () => {
-    await withRollback(async (db) => {
-      const config = testConfig({ DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test' });
-      const manifest = await seedDemo({ database: db, config, now: NOW });
-      expect(manifest.counts.messages).toBe(plannedMessages());
+  test(
+    'sends every message through the API, and leaves the counters the send path keeps',
+    async () => {
+      await withRollback(async (db) => {
+        const config = testConfig({
+          DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test',
+        });
+        const manifest = await seedDemo({ database: db, config, now: NOW });
+        expect(manifest.counts.messages).toBe(plannedMessages());
 
-      // Read it back as the viewer, the way a browser does.
-      const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
-      const get = async (path: string): Promise<unknown> => {
-        const response = await app.handle(
-          new Request(`${config.APP_URL}${path}`, {
-            headers: { cookie: manifest.personas.dogancan.cookie },
-          }),
+        // Read it back as the viewer, the way a browser does.
+        const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
+        const get = async (path: string): Promise<unknown> => {
+          const response = await app.handle(
+            new Request(`${config.APP_URL}${path}`, {
+              headers: { cookie: manifest.personas.dogancan.cookie },
+            }),
+          );
+          expect(response.status).toBe(200);
+          return await response.json();
+        };
+
+        const channels = (await get(
+          `/api/workspaces/${manifest.workspace.id}/channels`,
+        )) as Channel[];
+        for (const channel of channels) expect(Value.Check(Channel, channel)).toBe(true);
+        const byName = Object.fromEntries(
+          channels.map((c) => [c.name ?? c.peer?.username ?? '?', c]),
         );
-        expect(response.status).toBe(200);
-        return await response.json();
-      };
 
-      const channels = (await get(
-        `/api/workspaces/${manifest.workspace.id}/channels`,
-      )) as Channel[];
-      for (const channel of channels) expect(Value.Check(Channel, channel)).toBe(true);
-      const byName = Object.fromEntries(
-        channels.map((c) => [c.name ?? c.peer?.username ?? '?', c]),
-      );
+        // The private channel is not the viewer's; the empty one is theirs and empty.
+        expect(channels.some((c) => c.id === manifest.channels.security)).toBe(false);
+        expect(byName['design']?.lastMessageAt).toBeNull();
 
-      // The private channel is not the viewer's; the empty one is theirs and empty.
-      expect(channels.some((c) => c.id === manifest.channels.security)).toBe(false);
-      expect(byName['design']?.lastMessageAt).toBeNull();
+        // Read mid-channel: part of #deploys and part of #api are unread, and the mentions waited.
+        expect(byName['deploys']?.state?.unreadCount).toBe(80);
+        expect(byName['api']?.state?.unreadCount).toBeGreaterThan(5);
+        expect(byName['api']?.state?.unreadMentionCount).toBeGreaterThanOrEqual(3);
+        expect(byName['incidents']?.state?.unreadMentionCount).toBeGreaterThanOrEqual(1);
+        expect(byName['alice']?.type).toBe('direct_message');
+        expect(byName['alice']?.state?.unreadCount).toBe(2);
 
-      // Read mid-channel: part of #deploys and part of #api are unread, and the mentions waited.
-      expect(byName['deploys']?.state?.unreadCount).toBe(80);
-      expect(byName['api']?.state?.unreadCount).toBeGreaterThan(5);
-      expect(byName['api']?.state?.unreadMentionCount).toBeGreaterThanOrEqual(3);
-      expect(byName['incidents']?.state?.unreadMentionCount).toBeGreaterThanOrEqual(1);
-      expect(byName['alice']?.type).toBe('direct_message');
-      expect(byName['alice']?.state?.unreadCount).toBe(2);
+        // Keyset pagination has something to page through.
+        const page = (await get(
+          `/api/channels/${manifest.channels.deploys}/messages?limit=100`,
+        )) as {
+          data: unknown[];
+          nextCursor: string | null;
+        };
+        expect(page.data).toHaveLength(100);
+        expect(page.nextCursor).not.toBeNull();
 
-      // Keyset pagination has something to page through.
-      const page = (await get(`/api/channels/${manifest.channels.deploys}/messages?limit=100`)) as {
-        data: unknown[];
-        nextCursor: string | null;
-      };
-      expect(page.data).toHaveLength(100);
-      expect(page.nextCursor).not.toBeNull();
-
-      // Threads: one open with four replies, one resolved.
-      const open = manifest.messages['backoff-question'];
-      const resolved = manifest.messages['legacy-route'];
-      const feed = (await get(`/api/channels/${manifest.channels.api}/messages?limit=100`)) as {
-        data: Message[];
-      };
-      const rootOpen = feed.data.find((m) => m.id === open);
-      const rootResolved = feed.data.find((m) => m.id === resolved);
-      expect(rootOpen?.thread?.replyCount).toBe(4);
-      expect(rootOpen?.thread?.resolvedAt).toBeNull();
-      expect(rootResolved?.thread?.resolvedBy?.username).toBe('alice');
-      expect(rootOpen?.reactions.length).toBeGreaterThan(0);
-    });
-  });
-
-  test('refuses a database that already has the people, rather than duplicating them', async () => {
-    await withRollback(async (db) => {
-      const config = testConfig({ DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test' });
-      await seedDemo({ database: db, config, now: NOW });
-      let message = '';
-      await seedDemo({ database: db, config, now: NOW }).catch((error: unknown) => {
-        message = error instanceof Error ? error.message : '';
+        // Threads: one open with four replies, one resolved.
+        const open = manifest.messages['backoff-question'];
+        const resolved = manifest.messages['legacy-route'];
+        const feed = (await get(`/api/channels/${manifest.channels.api}/messages?limit=100`)) as {
+          data: Message[];
+        };
+        const rootOpen = feed.data.find((m) => m.id === open);
+        const rootResolved = feed.data.find((m) => m.id === resolved);
+        expect(rootOpen?.thread?.replyCount).toBe(4);
+        expect(rootOpen?.thread?.resolvedAt).toBeNull();
+        expect(rootResolved?.thread?.resolvedBy?.username).toBe('alice');
+        expect(rootOpen?.reactions.length).toBeGreaterThan(0);
       });
-      expect(message).toContain('already exist');
-    });
-  });
+    },
+    SEEDING_MS,
+  );
+
+  test(
+    'refuses a database that already has the people, rather than duplicating them',
+    async () => {
+      await withRollback(async (db) => {
+        const config = testConfig({
+          DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test',
+        });
+        await seedDemo({ database: db, config, now: NOW });
+        let message = '';
+        await seedDemo({ database: db, config, now: NOW }).catch((error: unknown) => {
+          message = error instanceof Error ? error.message : '';
+        });
+        expect(message).toContain('already exist');
+      });
+    },
+    SEEDING_MS,
+  );
 
   test('never asks GitHub for anything: its sessions are its own', async () => {
     for (const call of [
