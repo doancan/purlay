@@ -674,7 +674,8 @@ The rules are D-109's; this is the path through the code.
    `storage_used_bytes` in the same transaction.
 3. Every page of messages carries each message's attachments, read in one query for the page
    (`messages/sets.ts`); a tombstone carries none.
-4. Orphans older than 24 h are swept (#71).
+4. Unsent uploads older than a day are swept by `bun run job sweep:orphans` (D-30), and the count is
+   reconciled by `reconcile:storage`.
 
 Downloads are always brokered by the API so membership is actually checked; storage keys are
 never public URLs.
