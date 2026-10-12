@@ -10,6 +10,10 @@ test.describe('the keyboard', () => {
   test('the first Tab finds the skip link, and following it moves focus to main', async ({
     page,
   }) => {
+    test.skip(
+      ['webkit'].includes(test.info().project.name),
+      "macOS WebKit's Tab moves between form controls only unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
+    );
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.keyboard.press('Tab');
@@ -21,6 +25,10 @@ test.describe('the keyboard', () => {
   test('every control on the sign-in screen is reachable by Tab, in a handful of presses', async ({
     page,
   }) => {
+    test.skip(
+      ['webkit'].includes(test.info().project.name),
+      "macOS WebKit's Tab moves between form controls only unless the person turns on 'Press Tab to highlight each item' (docs/spikes/cross-browser.md)",
+    );
     await page.goto('/sign-in');
     const presses = await tabTo(page, page.getByRole('link', { name: 'Continue with GitHub' }));
     expect(presses).toBeLessThanOrEqual(3);
@@ -70,6 +78,10 @@ test.describe('the theme', () => {
   test("is the operating system's until chosen, and is set before the first paint — no flash", async ({
     page,
   }, info) => {
+    test.skip(
+      ['webkit', 'firefox'].includes(test.info().project.name),
+      'only Chromium reports a first-paint performance entry (docs/spikes/cross-browser.md)',
+    );
     await page.addInitScript(() => {
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {

@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the browser suite runs green on Safari's or Firefox's engine, by choice
+
+- `PURLAY_E2E_ENGINES=webkit` or `firefox` adds that engine to a run (not to CI): WebKit 124 passed,
+  Firefox 126; the engine's measured limits are skipped by name and Chromium's projects skip nothing.
+
 ### Quality — 2026-10-13: the error-tracking bound test waits by the clock
 
 - `error-tracking.bounded.test.ts` gave up after a hundred tries of 20 ms; under the full suite's load

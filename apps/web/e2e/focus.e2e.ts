@@ -38,6 +38,10 @@ test.describe('focus', () => {
     room,
     api,
   }) => {
+    test.skip(
+      ['webkit', 'firefox'].includes(test.info().project.name),
+      "past the last element Firefox under Playwright keeps focus on it rather than going round, and macOS WebKit's Tab skips links (docs/spikes/cross-browser.md)",
+    );
     const made = await room({ members: ['dogancan', 'carol'] });
     const root = await api('carol').say(made.id, 'a question with an answer?');
     await api('carol').say(made.id, 'the answer', { parentId: root.id });

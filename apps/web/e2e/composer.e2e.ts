@@ -147,6 +147,10 @@ test.describe('a paste', () => {
     signIn,
     room,
   }) => {
+    test.skip(
+      ['firefox'].includes(test.info().project.name),
+      "Firefox gives a synthetic ClipboardEvent no data, so the test's paste reaches the composer empty (docs/spikes/cross-browser.md)",
+    );
     const made = await room({ members: ['dogancan', 'alice'] });
     await signIn();
     await page.goto(made.path);
@@ -408,6 +412,10 @@ test.describe('without a connection', () => {
     room,
     api,
   }) => {
+    test.skip(
+      ['webkit', 'firefox'].includes(test.info().project.name),
+      "only Chromium's offline emulation cuts an open WebSocket; elsewhere the send is delivered (docs/spikes/cross-browser.md)",
+    );
     const made = await room({ members: ['dogancan', 'alice'] });
     await signIn();
     await page.goto(made.path);
