@@ -68,6 +68,14 @@ import { createServerClock } from './server-clock';
 export const ACK_DEADLINE_MS = 3_000;
 
 /**
+ * Why a send can fail without the server ever having it: no answer at all from the HTTP door — the
+ * network, or a proxy's 502/503/504 while the API is down. Such a send is still pending in truth, and
+ * a reconnect sends it again (`ARCHITECTURE.md` §5.3). A timeout, or anything the server said, stays
+ * failed for the person: §5.3's "Retry" is theirs.
+ */
+const UNREACHED: ReadonlySet<FailureCode> = new Set<FailureCode>(['NETWORK']);
+
+/**
  * How long a replay continuation waits before it asks again, and so how many times it tries:
  * one more attempt after each wait. Capped — a feed with a hole in it is better refetched
  * whole than chased forever — and short, because the person is looking at the channel.
@@ -352,10 +360,19 @@ export const createEngine = (options: EngineOptions): Engine => {
     );
   };
 
-  /** What a reconnect owes: the sends that never got an answer, and a fresh look at what was missed. */
+  /**
+   * What a reconnect owes: the sends that never got an answer — those still on their way, and those
+   * the server never had, which the bar promised would send when it was back — and a fresh look at
+   * what was missed. A timeout or a refusal stays failed, for the person.
+   */
   const resync = (): void => {
     for (const pending of store.getState().pending) {
-      if (pending.delivery === 'sending') transmit(pending);
+      if (pending.delivery === 'sending') {
+        transmit(pending);
+      } else if (pending.reason !== null && UNREACHED.has(pending.reason)) {
+        update(pending.id, { delivery: 'sending', reason: null });
+        transmit({ ...pending, delivery: 'sending', reason: null });
+      }
     }
     // A reply missed during the gap is not a root and has no place in the feed's
     // cursor; the counters and the open questions moved without a frame to say so.
