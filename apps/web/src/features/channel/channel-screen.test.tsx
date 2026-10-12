@@ -85,7 +85,7 @@ describe('the header', () => {
     const view = await mountChannel({ messages: page([aMessage(1)]) });
     const title = view.getByRole('heading', { level: 1 });
     expect(title.textContent).toBe('api');
-    // A place you go is named in the sans; the mono is for what is machine text (D-109).
+    // A place you go is named in the sans; the mono is for what is machine text (D-110).
     expect(title.className).not.toContain('font-mono');
     expect(title.className).toContain('text-heading');
     expect(view.getByText('Backend deploys and incident follow-ups')).toBeDefined();
@@ -276,7 +276,7 @@ describe('the feed, populated', () => {
     view.unmountAll();
   });
 
-  test('the day is a label at the left with a rule after it (D-109)', async () => {
+  test('the day is a label at the left with a rule after it (D-110)', async () => {
     const view = await mountChannel({ messages: page(rich) });
     const label = Array.from(view.container.querySelectorAll('span')).find(
       (node) => node.textContent === 'Today',

@@ -6,6 +6,7 @@ import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 import {
   asCodeBlock,
   broadcastMention,
+  insertMarkdown,
   insideFence,
   isLongPaste,
   rowsFor,
@@ -154,5 +155,67 @@ describe('how tall it is', () => {
     expect(rowsFor('a\nb\nc')).toBe(3);
     expect(rowsFor('\n'.repeat(40))).toBe(12);
     expect(rowsFor('a', 1, 3)).toBe(1);
+  });
+});
+
+describe('the three buttons under the box (D-110): markdown, inserted where the caret is', () => {
+  test('bold wraps the selection, and keeps it selected', () => {
+    expect(insertMarkdown('fix it', { start: 4, end: 6 }, 'bold')).toEqual({
+      text: 'fix **it**',
+      selection: { start: 6, end: 8 },
+    });
+  });
+
+  test('bold with no selection leaves the caret between the markers', () => {
+    expect(insertMarkdown('', { start: 0, end: 0 }, 'bold')).toEqual({
+      text: '****',
+      selection: { start: 2, end: 2 },
+    });
+  });
+
+  test('code opens a fence on a line of its own, with the caret inside it', () => {
+    expect(insertMarkdown('see', { start: 3, end: 3 }, 'code')).toEqual({
+      text: 'see\n```\n\n```',
+      selection: { start: 8, end: 8 },
+    });
+  });
+
+  test('code at the start of an empty box needs no line before it', () => {
+    expect(insertMarkdown('', { start: 0, end: 0 }, 'code')).toEqual({
+      text: '```\n\n```',
+      selection: { start: 4, end: 4 },
+    });
+  });
+
+  test('code around a selection fences the selection', () => {
+    expect(insertMarkdown('a\nb', { start: 0, end: 3 }, 'code')).toEqual({
+      text: '```\na\nb\n```',
+      selection: { start: 4, end: 7 },
+    });
+  });
+
+  test('a mention starts a name after a space, so the @ is not glued to a word', () => {
+    expect(insertMarkdown('hi', { start: 2, end: 2 }, 'mention')).toEqual({
+      text: 'hi @',
+      selection: { start: 4, end: 4 },
+    });
+  });
+
+  test('a mention needs no space at the start or after one', () => {
+    expect(insertMarkdown('', { start: 0, end: 0 }, 'mention')).toEqual({
+      text: '@',
+      selection: { start: 1, end: 1 },
+    });
+    expect(insertMarkdown('hi ', { start: 3, end: 3 }, 'mention')).toEqual({
+      text: 'hi @',
+      selection: { start: 4, end: 4 },
+    });
+  });
+
+  test('text after the caret is kept, after what was inserted', () => {
+    expect(insertMarkdown('ab', { start: 1, end: 1 }, 'bold')).toEqual({
+      text: 'a****b',
+      selection: { start: 3, end: 3 },
+    });
   });
 });

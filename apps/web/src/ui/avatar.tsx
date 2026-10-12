@@ -17,7 +17,7 @@ const TINTS = [
   'bg-avatar-6',
 ] as const;
 
-/** Three sizes, each a rounded square whose corner shrinks with it (D-109). */
+/** Three sizes, each a rounded square whose corner shrinks with it (D-110). */
 const SIZES = {
   sm: 'size-avatar-sm rounded-md text-caption',
   md: 'size-avatar rounded-lg text-caption',

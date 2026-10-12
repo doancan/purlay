@@ -26,13 +26,13 @@ import { NotificationLevelMenu } from './notification-level-menu';
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
   'inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
-/** The segment the person is on: raised out of the track by a one-pixel card shadow (D-109). */
+/** The segment the person is on: raised out of the track by a one-pixel card shadow (D-110). */
 export const activeSegmentClasses = 'bg-surface-100 text-ink shadow-card max-narrow:hidden';
 /** The track the two segments sit in, at the header's right. */
 export const segmentTrackClasses =
   'ml-auto flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
 
-/** The glyph at the head of a header: what this screen is, quiet beside its name (D-109). */
+/** The glyph at the head of a header: what this screen is, quiet beside its name (D-110). */
 export const HeaderTile = ({
   children,
 }: {

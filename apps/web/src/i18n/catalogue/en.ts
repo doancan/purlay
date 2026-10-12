@@ -242,6 +242,9 @@ export const en = {
   'thread.actionFailed': 'The thread was not changed.',
 
   // ── Composer (UX §5) ────────────────────────────────────────────────────
+  'composer.bold': 'Bold',
+  'composer.codeBlock': 'Code block',
+  'composer.mention': 'Mention someone',
   'composer.label': 'Message {channel}',
   'composer.placeholder': 'Write to {channel}. Enter sends, Shift+Enter adds a line.',
   'composer.send': 'Send',

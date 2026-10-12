@@ -6,6 +6,18 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the channel in the flat style (D-110)
+
+- The header names the channel in the sans beside a quiet glyph, with its topic after a rule; the two
+  views are a segmented control at the right. The feed is 760px and hangs from the left edge.
+- A message row has a 36px rounded-square avatar, the name in 14px semibold, the time in mono, and a
+  hover tint; its hover controls float above it. The day is a label with a rule after it.
+- A code block is a card: the language as a pill, the line count, Copy, and "Show N more lines".
+- An open thread's state is a pill — amber while open, green once resolved.
+- The composer is a card with three buttons under the box — Bold, Code block and Mention — that each
+  insert the markdown the keys would type.
+
+### Feature — 2026-10-12: a flat frame, with the rail back (D-109)
 ### Feature — 2026-10-12: a flat frame, with the rail back (D-110)
 
 - The rail, down the left edge: the workspace tile (the switcher), then channels, the inbox, the open

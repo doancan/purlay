@@ -217,20 +217,18 @@ const ThreadView = ({
           onClick={() => {
             threads.toggle(root.id);
           }}
-          className="mt-1 flex h-control w-full items-center gap-2 rounded-md px-2 text-label text-ink-muted hover:bg-surface-200 hover:text-ink"
+          className="mt-1 flex h-control w-full items-center gap-2 rounded-lg px-1 text-label text-ink-subtle transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
         >
           {resolved ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="inline-flex text-success-text">
-                <Icon name="resolved" size="sm" />
-              </span>
+            <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text">
+              <Icon name="resolved" size="sm" />
               {t('thread.resolved', {
                 name: summary.resolvedBy?.username ?? '',
                 replies: counted,
               })}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-2 text-warning-text">
+            <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
               <Icon name="open-question" size="sm" />
               {t('thread.open', { replies: counted, when: whenLast })}
             </span>
@@ -255,7 +253,7 @@ const ThreadView = ({
       })}
       className="mt-2"
     >
-      <div ref={body} className="flex flex-col gap-2 border-l-marker border-border-subtle pl-3">
+      <div ref={body} className="flex flex-col gap-1 border-l-marker border-border-subtle pl-4">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
@@ -263,7 +261,7 @@ const ThreadView = ({
             onClick={() => {
               threads.toggle(root.id);
             }}
-            className="inline-flex h-control items-center gap-2 text-label text-ink-muted hover:text-ink"
+            className="inline-flex h-control items-center gap-2 rounded-md px-1 text-label font-medium text-ink-muted transition-colors duration-hover ease-standard hover:text-ink"
           >
             <Icon name="collapse" size="sm" />
             {replyCount === 0 ? t('thread.none') : counted}

@@ -41,14 +41,14 @@ test.describe('the columns of a channel', () => {
     const [gutter] = gutters;
     const [body] = bodies;
     if (gutter === undefined || body === undefined) throw new Error('no message rows on screen');
-    expect(body - gutter).toBe(48); // the 36px avatar + a 12px gap (D-109)
+    expect(body - gutter).toBe(48); // the 36px avatar + a 12px gap (D-110)
 
     // The composer is a card whose edge is the rows' edge, so the column reads as one.
     const cards = await lefts(page, '[data-composer-card]');
     const rows = await lefts(page, 'article');
     expect(cards).toHaveLength(1);
     expect(rows).toContain(cards[0]);
-    // The day is a label at the column's left, the rows' edge, with a rule after it (D-109).
+    // The day is a label at the column's left, the rows' edge, with a rule after it (D-110).
     const day = page.getByText('Yesterday', { exact: true }).first();
     if ((await day.count()) > 0) {
       const box = await day.boundingBox();

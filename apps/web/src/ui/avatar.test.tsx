@@ -53,7 +53,7 @@ describe('the avatar', () => {
     expect(node.className).toContain('size-avatar-lg');
   });
 
-  test('is a rounded square, not a circle: a person, in a tool (D-109)', () => {
+  test('is a rounded square, not a circle: a person, in a tool (D-110)', () => {
     for (const [size, corner] of [
       ['sm', 'rounded-md'],
       ['md', 'rounded-lg'],

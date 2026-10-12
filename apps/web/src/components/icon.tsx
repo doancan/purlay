@@ -21,12 +21,15 @@
  * the icon's colour, and meaning is never carried by colour alone (`UX.md` §9).
  */
 import {
+  AtSign,
   Bell,
+  Bold,
   BellOff,
   Check,
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
+  Code,
   CircleAlert,
   CircleCheck,
   CircleHelp,
@@ -91,6 +94,9 @@ const glyphs = {
   merged: GitMerge,
   'open-question': CircleHelp,
   copy: Copy,
+  bold: Bold,
+  code: Code,
+  mention: AtSign,
   edit: Pencil,
   delete: Trash2,
   'task-done': SquareCheck,
