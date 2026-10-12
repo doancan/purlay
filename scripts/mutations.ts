@@ -2229,11 +2229,27 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/images/fetch-external.integration.test.ts'],
   },
   {
+    id: 'image-proxy-takes-literals',
+    why: "an address literal skips the resolver's check and reaches whatever it names",
+    file: 'apps/api/src/modules/images/proxy.ts',
+    find: '    !literal &&\n',
+    replace: '',
+    tests: ['apps/api/src/modules/images/proxy.test.ts'],
+  },
+  {
     id: 'link-local-is-public',
     why: "the cloud's metadata service at 169.254.169.254 is a public address",
     file: 'apps/api/src/modules/images/addresses.ts',
     find: "  ['169.254.0.0', 16],\n",
     replace: '',
     tests: ['apps/api/src/modules/images/addresses.test.ts'],
+  },
+  {
+    id: 'image-proxy-unthrottled',
+    why: 'any signed-in person can make the node fetch and decode external images without limit',
+    file: 'apps/api/src/ingress/http/rate-limit.ts',
+    find: "    const costly = pathname === '/api/images';\n",
+    replace: '    const costly = false;\n',
+    tests: ['apps/api/src/ingress/http/images.integration.test.ts'],
   },
 ];

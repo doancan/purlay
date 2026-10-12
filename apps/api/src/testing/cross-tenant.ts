@@ -376,6 +376,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'GET /api/workspaces': 'lists the caller’s own memberships and names no workspace',
   'POST /api/workspaces': 'creates a workspace; there is nothing yet to be outside of',
+  'GET /api/images':
+    'names no workspace: an image on another server, fetched for anybody signed in; nothing of a tenant is read',
   'POST /api/invitations/preview':
     'names no workspace: the token is the capability, and opens only its own (`invitations.integration.test.ts`)',
   'POST /api/invitations/accept':

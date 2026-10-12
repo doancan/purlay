@@ -628,8 +628,17 @@ stored representation. (D-36)
 4. Detect GitHub PR/Issue URLs → `metadata.githubLinks`.
 5. Sanitise by narrowing: the engine never recognises raw HTML, and the tree a renderer is given
    holds only the kinds the product draws, and links only to the addresses D-101 §2 allows. The same
-   function runs where the browser renders. External images are links until the proxy exists
-   (#110), which is when they become images.
+   function runs where the browser renders. External images are links until the client draws them
+   through the proxy, `GET /api/images` (#110, `docs/spikes/image-proxy.md`): the API fetches over
+   `node:https` with a `lookup` that refuses the name unless every address is public unicast and
+   connects only to what it checked, on a fresh connection, following no redirect, within a byte cap
+   and five seconds, and serves its own WebP re-encoding — so no reader's address reaches the image's
+   host and no address inside the network is reachable through it. It is charged to the reader's
+   write budget, and only the fetch holds one of the node's four slots. **Accepted, stated:** a name
+   refused by policy fails in the time DNS takes and a reachable host in the time it answers, so an
+   attacker can tell which names resolve privately; and a public service that trusts this server's
+   address can be sent a GET — to a name with a publicly trusted certificate, returning nothing but an
+   image.
 
 ### 8.2. Rendering
 
