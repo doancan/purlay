@@ -7,16 +7,26 @@
  * safety: **absence is `null` and only absence is.** A store that refuses us — a wrong key, a
  * bucket that is gone, a network that is down — throws, so an outage is never told to a person as
  * "that file does not exist" (D-109's review, pre-mortem 7).
+ *
+ * **What is got is bytes, never the store's own handle.** Bun answers `new Response(s3File)` with a
+ * redirect to a presigned URL — a public address for the bytes D-109 §6 brokers — and refuses one
+ * that carries headers. So the adapter hands out a stream and its size, which serve as themselves.
  */
 import { S3Client } from 'bun';
 import type { Config } from './config';
 import { AppError } from './errors';
 
+/** An object's bytes, to be read once, and how many there are. */
+export interface StoredObject {
+  readonly body: ReadableStream<Uint8Array>;
+  readonly size: number;
+}
+
 export interface ObjectStore {
   /** Writes the bytes under the key, replacing what was there. */
   readonly put: (key: string, bytes: Uint8Array, type: string) => Promise<void>;
   /** The object, or null when there is none. Any other failure throws. */
-  readonly get: (key: string) => Promise<Blob | null>;
+  readonly get: (key: string) => Promise<StoredObject | null>;
   /** Removes the object; removing one that is not there is not an error. */
   readonly delete: (key: string) => Promise<void>;
 }
@@ -36,7 +46,9 @@ const isAbsent = (error: unknown): boolean =>
 /** The part of Bun's `S3Client` the adapter uses: what a unit test stands in for. */
 export interface S3Like {
   readonly write: (key: string, data: Uint8Array, options: { type: string }) => Promise<number>;
-  readonly file: (key: string) => Blob & { readonly stat: () => Promise<unknown> };
+  readonly file: (
+    key: string,
+  ) => Blob & { readonly stat: () => Promise<{ readonly size: number }> };
   readonly delete: (key: string) => Promise<void>;
 }
 
@@ -48,15 +60,16 @@ export const s3Store = (
     put: async (key, bytes, type): Promise<void> => {
       await client.write(key, bytes, { type });
     },
-    get: async (key): Promise<Blob | null> => {
+    get: async (key): Promise<StoredObject | null> => {
       const file = client.file(key);
+      let size: number;
       try {
-        await file.stat();
+        ({ size } = await file.stat());
       } catch (error) {
         if (isAbsent(error)) return null;
         throw error;
       }
-      return file;
+      return { body: file.stream(), size };
     },
     delete: async (key): Promise<void> => {
       await client.delete(key);

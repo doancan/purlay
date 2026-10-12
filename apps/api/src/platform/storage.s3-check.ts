@@ -32,9 +32,27 @@ describe('the S3 store, against Garage', () => {
     await store.put(at, bytes, 'application/octet-stream');
     const got = await store.get(at);
     if (got === null) throw new Error('what was put was not there');
-    expect(new Uint8Array(await got.arrayBuffer())).toEqual(bytes);
+    expect(got.size).toBe(bytes.length);
+    expect(new Uint8Array(await new Response(got.body).arrayBuffer())).toEqual(bytes);
     await store.delete(at);
     expect(await store.get(at)).toBeNull();
+  });
+
+  test('what is got can be served as a response of its own, with headers: bytes, never a redirect', async () => {
+    // Bun answers \`new Response(s3File)\` with a redirect to a presigned URL, and refuses one with
+    // headers: an S3 file handed out of the adapter is either a public URL or a 500 (D-109 §6).
+    const store = s3Store(settings);
+    const at = key();
+    const bytes = new TextEncoder().encode('served, not redirected');
+    await store.put(at, bytes, 'application/octet-stream');
+    const got = await store.get(at);
+    if (got === null) throw new Error('what was put was not there');
+    const response = new Response(got.body, {
+      headers: { 'content-type': 'application/octet-stream' },
+    });
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+    await store.delete(at);
   });
 
   test('a key that was never written is null; deleting it is not an error', async () => {

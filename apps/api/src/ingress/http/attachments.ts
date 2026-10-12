@@ -60,19 +60,25 @@ export const downloadAttachment = async (
   request: Request,
   attachmentId: string,
   variant: Variant,
-): Promise<{ readonly body: Blob; readonly headers: Record<string, string> }> => {
+): Promise<{
+  readonly body: ReadableStream<Uint8Array>;
+  readonly headers: Record<string, string>;
+}> => {
   const { database, clock, storage } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const attachment = await requireAttachmentById(database, userId, attachmentId);
   const key = variant === 'original' ? attachment.storageKey : attachment.thumbnailKey;
   // A file has no thumbnail: there is nothing at that address, for anyone.
   if (key === null) throw attachmentNotFound();
-  const body = await storage.get(key);
-  if (body === null) {
+  const stored = await storage.get(key);
+  if (stored === null) {
     // A row whose object is gone is our failure, not the reader's: loud, never "not found".
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
-  return { body, headers: downloadHeaders(attachment) };
+  return {
+    body: stored.body,
+    headers: { ...downloadHeaders(attachment), 'content-length': String(stored.size) },
+  };
 };
 
 export const discardAttachment = async (

@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: an attachment downloads from the real store (D-109 §6)
+
+- Downloading any attachment from the S3 store was a `500`. Bun turns its S3 file into a redirect
+  to a presigned URL when a response is made of it, and refuses one with headers. The store now
+  hands out a stream and its size, so the API serves the bytes itself, brokered, with
+  `Content-Length`. `bun run test:storage` serves one from Garage to prove it. The in-memory double
+  that every other test uses could not show this.
+
 ### Feature — 2026-10-12: attaching files from the composer (D-109, #370)
 
 - Paste an image, drop a file or pick one with **Attach a file**: each uploads at once and shows as
