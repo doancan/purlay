@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a GitHub token that no longer opens is tested (#66)
+
+- The branch that says a token did not open — `ENCRYPTION_KEY` changed — and draws no card, and the
+  one that throws any other failure on, had shipped untested, below the coverage floor.
+
 ### Feature — 2026-10-12: GitHub links unfurl (D-23, D-112, #66)
 
 - `POST /api/integrations/github/unfurl` answers a pull request's or an issue's card, fetched with
