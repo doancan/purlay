@@ -194,7 +194,11 @@ export const GITHUB_LINKS_PER_MESSAGE_MAX = 5;
  * fetched is built from these parts and never from an address a person wrote (D-101).
  */
 export const GitHubLink = Type.String({
-  pattern: '^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/(pull|issues)/[0-9]+$',
+  // GitHub's own shapes, as the message parser reads them (`@purlay/markdown`): an owner of 1–39,
+  // a repository of 1–100 that is not `.` or `..` — which would step out of it once a URL is resolved
+  // — and a number of at most ten digits.
+  pattern:
+    '^https://github\\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/(?!\\.\\.?/)([A-Za-z0-9._-]{1,100})/(pull|issues)/([0-9]{1,10})$',
 });
 
 /**

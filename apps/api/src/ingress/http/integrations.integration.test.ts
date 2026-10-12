@@ -99,6 +99,9 @@ describe('integration: unfurling over HTTP', () => {
         'https://github.com.evil.test/acme/api/pull/1',
         'https://github.com/acme/api/pull/1/../../../user',
         'https://gist.github.com/acme/1',
+        // A repository named `.` or `..` would be resolved out of `/repos/{owner}/{repo}` (#66).
+        'https://github.com/acme/../pull/1',
+        'https://github.com/acme/./pull/1',
       ]) {
         const refused = await call(db, 'POST', '/api/integrations/github/unfurl', owner, {
           workspaceId,
