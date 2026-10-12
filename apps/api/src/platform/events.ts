@@ -147,6 +147,32 @@ export const publishReactionsUpdated = async (
   });
 };
 
+/** What an edit or a delete changed in a message (D-103): the revision, never the whole message. */
+export interface Revision {
+  readonly channelId: string;
+  readonly messageId: string;
+  readonly parentId: string | null;
+  readonly content: string;
+  readonly editedAt: string | null;
+  readonly deletedAt: string | null;
+  readonly mentions: readonly string[];
+}
+
+/** A message was edited or deleted. On the channel's topic, versioned like the frames above. */
+export const publishMessageRevised = async (
+  bus: EventBus,
+  clock: Clock,
+  data: Revision,
+  version: number,
+): Promise<void> => {
+  await bus.publish(channelTopic(data.channelId), {
+    event: 'MESSAGE_REVISED',
+    data: { ...data, mentions: [...data.mentions] },
+    version,
+    ts: clock.now().getTime(),
+  });
+};
+
 /** One person's read position and counters in one channel, for every socket they hold. */
 export const publishChannelState = async (
   bus: EventBus,

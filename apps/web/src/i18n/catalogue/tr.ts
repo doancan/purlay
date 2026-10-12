@@ -122,6 +122,7 @@ export const tr = {
   'message.reacted': 'Tepki verildi',
   'message.reply': 'Yanıtla',
   'message.edited': 'düzenlendi',
+  'message.deleted': 'Bu mesaj silindi.',
   'message.more': 'Daha fazla',
   'message.mention': 'Senden bahsedildi',
   'message.newMarker': 'Yeni',

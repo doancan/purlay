@@ -296,3 +296,61 @@ test.describe('a reaction', () => {
     await expect(chip).toHaveCount(0);
   });
 });
+
+test.describe('a message somebody else revises', () => {
+  test('edited, it shows the new words and says it was edited, without a reload', async ({
+    page,
+    signIn,
+    room,
+    api,
+    expectNoAxe,
+  }) => {
+    const made = await room({ messages: [{ by: 'alice', text: 'teh deploy is at noon' }] });
+    await signIn();
+    await page.goto(made.path);
+    await expect(rowWith(page, 'teh deploy is at noon')).toBeVisible();
+    const said = rowWith(page, 'teh deploy is at noon');
+    const id = await said.getAttribute('data-message-id');
+    if (id === null) throw new Error('the row names no message');
+
+    await api('alice').edit(id, 'the deploy is at noon');
+
+    const row = page.locator(`[data-message-id="${id}"]`);
+    await expect(row).toContainText('the deploy is at noon');
+    await expect(row).toContainText('edited');
+    await expect(row).not.toContainText('teh deploy');
+    await expectNoAxe(row);
+  });
+
+  test('deleted with an answer, it stays as its tombstone and keeps the thread; without one, it goes', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({
+      messages: [
+        { by: 'alice', text: 'a question about the cache' },
+        { by: 'alice', text: 'never mind this one' },
+      ],
+    });
+    await signIn();
+    await page.goto(made.path);
+    const question = rowWith(page, 'a question about the cache');
+    const aside = rowWith(page, 'never mind this one');
+    await expect(aside).toBeVisible();
+    const questionId = await question.getAttribute('data-message-id');
+    const asideId = await aside.getAttribute('data-message-id');
+    if (questionId === null || asideId === null) throw new Error('the rows name no message');
+    await api('bob').say(made.id, 'it is documented', { parentId: questionId });
+    await expect(page.locator(`[data-message-id="${questionId}"]`)).toContainText('1 reply');
+
+    await api('alice').remove(questionId);
+    await api('alice').remove(asideId);
+
+    const tombstone = page.locator(`[data-message-id="${questionId}"]`);
+    await expect(tombstone).toContainText('This message was deleted.');
+    await expect(tombstone).toContainText('1 reply');
+    await expect(page.locator(`[data-message-id="${asideId}"]`)).toHaveCount(0);
+  });
+});

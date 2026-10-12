@@ -67,6 +67,10 @@ export interface ApiClient {
     options?: { readonly parentId?: string; readonly id?: string },
   ) => Promise<Message>;
   readonly react: (messageId: string, emoji: string) => Promise<void>;
+  /** Replaces the content of one of this person's own messages (D-103). */
+  readonly edit: (messageId: string, content: string) => Promise<Message>;
+  /** Deletes a message this person may delete: their own, or as a workspace admin (D-103 §7). */
+  readonly remove: (messageId: string) => Promise<void>;
   readonly resolve: (messageId: string) => Promise<void>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
   readonly join: (channelId: string) => Promise<void>;
@@ -117,6 +121,10 @@ export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
         content,
         ...(options.parentId === undefined ? {} : { parentId: options.parentId }),
       }),
+    edit: (id, content) => call<Message>('PATCH', `/api/messages/${id}`, { content }),
+    remove: async (id) => {
+      await call<null>('DELETE', `/api/messages/${id}`);
+    },
     react: async (id, emoji) => {
       await call('PUT', `/api/messages/${id}/reactions/${encodeURIComponent(emoji)}`);
     },

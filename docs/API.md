@@ -169,13 +169,13 @@ request answers what it did. Re-sending the same message id re-tells everything 
 they are now — the room hears `MESSAGE_CREATED` again, the thread its summary, each recipient their
 numbers — and counts nothing twice, so a retry repairs a lost announcement (D-88, D-99 amended).
 
-**Whole-state frames carry a `version`.** `THREAD_UPDATED`, `REACTIONS_UPDATED` and `CHANNEL_STATE` say
+**Whole-state frames carry a `version`.** `THREAD_UPDATED`, `REACTIONS_UPDATED`, `MESSAGE_REVISED` and `CHANNEL_STATE` say
 "this is the state, replace what you hold", and two of them published from different requests can
 arrive in the opposite order to the one their writes committed in. `version` is a positive integer, the
 row's own count of its changes taken in the statement that made them (`state_version`, migration
 `0015`): a client keeps the newest it has applied for each *thing* (a message's summary, a message's
-reactions, a channel's state) and drops a frame with a smaller one. Equal is applied again — it is
-the same state told twice. `THREAD_UPDATED` and `REACTIONS_UPDATED` share a message's counter and are
+reactions, a message's words, a channel's state) and drops a frame with a smaller one. Equal is applied again — it is
+the same state told twice. `THREAD_UPDATED`, `REACTIONS_UPDATED` and `MESSAGE_REVISED` share a message's counter and are
 compared only with frames of their own kind.
 Every mutation here publishes to the `EventBus`, so an action taken over HTTP reaches other
 clients over their sockets identically. HTTP and WebSocket are two doors into one service.

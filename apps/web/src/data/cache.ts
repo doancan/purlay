@@ -23,6 +23,7 @@ import type {
   MessagePage,
   Reaction,
   ThreadSummary,
+  MessageRevision,
 } from '@purlay/types';
 import { families, keys } from './keys';
 
@@ -171,6 +172,45 @@ export const reactionsUpdated = (
   reactions: readonly Reaction[],
 ): void => {
   patchMessage(client, messageId, (m) => ({ ...m, reactions: [...reactions] }));
+};
+
+/**
+ * A message was edited or deleted (D-103): its words, its times and who it names, replaced.
+ * A deleted root nobody answered leaves every list, as it leaves the feed the server reads; one
+ * with replies stays as its tombstone, with its thread. The open questions are asked again: the
+ * server lists no deleted root there.
+ */
+export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
+  const id = revision.messageId;
+  const deletedRoot = revision.deletedAt !== null && revision.parentId === null;
+  for (const [key, data] of messageLists(client)) {
+    const held = data.pages.flatMap((page) => page.data).find((m) => m.id === id);
+    if (held === undefined) continue;
+    const leaves = deletedRoot && (held.thread?.replyCount ?? 0) === 0;
+    client.setQueryData<Pages>(
+      key,
+      leaves
+        ? {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              data: page.data.filter((m) => m.id !== id),
+            })),
+          }
+        : mapMessages(data, (m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  content: revision.content,
+                  editedAt: revision.editedAt,
+                  deletedAt: revision.deletedAt,
+                  mentions: [...revision.mentions],
+                }
+              : m,
+          ),
+    );
+  }
+  if (deletedRoot) void client.invalidateQueries({ queryKey: families.unresolved });
 };
 
 /** The caller's own position and counters in one channel — the server's numbers, copied. */

@@ -88,6 +88,8 @@ const MessageRowView = ({
   );
   const absolute = format.absolute(message.createdAt);
   const failed = delivery === 'failed';
+  // A tombstone (D-103 §7): its words are gone, and so is anything to do with them.
+  const deleted = message.deletedAt !== null;
   // Whether the pointer or focus is on THIS row and not on a row nested inside it. A thread's
   // replies are rows inside the root's row, so CSS `group-hover` would show every reply's actions
   // whenever the root is hovered; the nearest row is the one that answers.
@@ -164,10 +166,15 @@ const MessageRowView = ({
           </div>
         )}
         {mentionsMe && <VisuallyHidden>{`${t('message.mention')}. `}</VisuallyHidden>}
-        <div className={dimmed ? 'text-ink-muted' : undefined}>
-          {renderContent(message.content, { mentioned })}
+        <div className={dimmed || deleted ? 'text-ink-muted' : undefined}>
+          {deleted ? <p>{t('message.deleted')}</p> : renderContent(message.content, { mentioned })}
+          {!deleted && message.editedAt !== null && (
+            <span className="text-caption text-ink-muted" title={format.absolute(message.editedAt)}>
+              {t('message.edited')}
+            </span>
+          )}
         </div>
-        <ReactionBar message={message} meId={meId} />
+        {!deleted && <ReactionBar message={message} meId={meId} />}
         {failed && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-label text-danger-text">
             <Icon name="failed" size="sm" />
@@ -200,7 +207,7 @@ const MessageRowView = ({
         {children}
       </div>
 
-      {delivery === 'sent' && (
+      {delivery === 'sent' && !deleted && (
         <div
           className={cn(
             'absolute right-4 top-1 flex gap-1 rounded-md border-hairline border-border-strong bg-surface-100',

@@ -26,6 +26,7 @@ import {
   ME,
   aChannel,
   aMessage,
+  WHEN,
   messageIdAt,
   someChannels,
 } from '../../testing/fixtures';
@@ -362,6 +363,96 @@ describe('what arrives while the reader is somewhere', () => {
     });
     expect(view.metrics.assigned).toEqual([]);
     expect(view.metrics.top).toBe(100);
+    view.unmountAll();
+  });
+});
+
+describe('a message somebody revised', () => {
+  const revise = async (
+    view: ChannelView,
+    message: Message,
+    change: { content?: string; editedAt?: string | null; deletedAt?: string | null },
+    version: number,
+  ): Promise<void> => {
+    act(() => {
+      view.world.sockets.deliver({
+        event: 'MESSAGE_REVISED',
+        data: {
+          channelId: message.channelId,
+          messageId: message.id,
+          parentId: message.parentId,
+          content: change.content ?? message.content,
+          editedAt: change.editedAt ?? null,
+          deletedAt: change.deletedAt ?? null,
+          mentions: [],
+        },
+        version,
+        ts: 1,
+      });
+    });
+    // The cache tells its readers on the next task, not in this one.
+    await settle();
+  };
+  const EDITED = '2026-09-09T09:00:00.000Z';
+
+  test('shows the new words, and that they were edited, live', async () => {
+    const original = aMessage(1, { sender: BOB });
+    const view = await mountChannel({ messages: page([original]) });
+    open(view);
+    await revise(view, original, { content: 'better words', editedAt: EDITED }, 2);
+    expect(view.getByText('better words')).toBeDefined();
+    expect(view.queryByText('message 1')).toBeNull();
+    expect(view.getByText('edited')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('an older revision arriving late is dropped: the newer words stay', async () => {
+    const original = aMessage(1, { sender: BOB });
+    const view = await mountChannel({ messages: page([original]) });
+    open(view);
+    await revise(view, original, { content: 'newest', editedAt: EDITED }, 3);
+    await revise(view, original, { content: 'older', editedAt: EDITED }, 2);
+    expect(view.getByText('newest')).toBeDefined();
+    expect(view.queryByText('older')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a deleted message nobody answered leaves the feed', async () => {
+    const original = aMessage(1, { sender: BOB });
+    const kept = aMessage(2, { sender: BOB });
+    const view = await mountChannel({ messages: page([original, kept]) });
+    open(view);
+    await revise(view, original, { content: '', deletedAt: EDITED }, 2);
+    expect(view.queryByText('message 1')).toBeNull();
+    expect(view.getByText('message 2')).toBeDefined();
+    expect(view.queryByText('This message was deleted.')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a deleted message with replies stays as its tombstone, with its thread, and no reactions', async () => {
+    const original = aMessage(1, {
+      sender: BOB,
+      thread: { replyCount: 2, lastReplyAt: WHEN, resolvedAt: null, resolvedBy: null },
+      reactions: [{ emoji: '👍', userIds: [ALICE.id] }],
+    });
+    const view = await mountChannel({ messages: page([original]) });
+    open(view);
+    await revise(view, original, { content: '', deletedAt: EDITED }, 2);
+    expect(view.getByText('This message was deleted.')).toBeDefined();
+    expect(view.getByRole('button', { name: /2 replies/ })).toBeDefined();
+    expect(view.queryByRole('button', { name: /👍/ })).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a tombstone is said in Turkish when the interface is', async () => {
+    const original = aMessage(1, {
+      sender: BOB,
+      thread: { replyCount: 1, lastReplyAt: WHEN, resolvedAt: null, resolvedBy: null },
+    });
+    const view = await mountChannel({ messages: page([original]), locale: 'tr' });
+    open(view);
+    await revise(view, original, { content: '', deletedAt: EDITED }, 2);
+    expect(view.getByText('Bu mesaj silindi.')).toBeDefined();
     view.unmountAll();
   });
 });

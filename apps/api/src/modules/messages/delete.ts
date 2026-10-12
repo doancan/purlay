@@ -15,7 +15,9 @@ import {
   publication,
   publishAfterCommit,
   publishChannelState,
+  publishMessageRevised,
   type EventBus,
+  type Revision,
 } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
 import type { Atomically } from '../../platform/transactions';
@@ -32,6 +34,8 @@ export interface Removed {
   /** False when it was deleted already: nothing was written, and that is the same answer. */
   readonly removed: boolean;
   readonly channelId: string;
+  /** What the room is told when it was removed now: the tombstone, at its version. */
+  readonly revision: { readonly revision: Revision; readonly version: number } | null;
   /** The members whose counters came down. */
   readonly recipients: readonly ChannelStateUpdate[];
 }
@@ -76,11 +80,11 @@ export const removeMessage = async (
   }
 
   if (row.deleted_at !== null) {
-    return { removed: false, channelId: context.channelId, recipients: [] };
+    return { removed: false, channelId: context.channelId, revision: null, recipients: [] };
   }
 
   const now = clock.now();
-  await executor
+  const tombstone = await executor
     .updateTable('messages')
     .set({
       deleted_at: now,
@@ -91,7 +95,8 @@ export const removeMessage = async (
       state_version: sql<number>`state_version + 1`,
     })
     .where('id', '=', messageId)
-    .execute();
+    .returning(['state_version', 'parent_id', 'edited_at'])
+    .executeTakeFirstOrThrow();
   // Nobody is named by a message that says nothing.
   await executor.deleteFrom('mentions').where('message_id', '=', messageId).execute();
 
@@ -113,7 +118,23 @@ export const removeMessage = async (
     new Date(row.created_at),
     waiting.map((notification) => notification.user_id),
   );
-  return { removed: true, channelId: context.channelId, recipients };
+  return {
+    removed: true,
+    channelId: context.channelId,
+    revision: {
+      revision: {
+        channelId: context.channelId,
+        messageId,
+        parentId: tombstone.parent_id,
+        content: '',
+        editedAt: tombstone.edited_at === null ? null : new Date(tombstone.edited_at).toISOString(),
+        deletedAt: now.toISOString(),
+        mentions: [],
+      },
+      version: tombstone.state_version,
+    },
+    recipients,
+  };
 };
 
 /**
@@ -177,8 +198,8 @@ export interface DeleteDependencies {
 }
 
 /**
- * Deletes a message: the one way in. Commits, then tells each person whose numbers came down
- * (D-35). The room hears the tombstone with #333; until then a client sees it on its next read.
+ * Deletes a message: the one way in. Commits, then tells the room it is a tombstone and each
+ * person whose numbers came down (D-35).
  */
 export const deleteMessage = async (
   dependencies: DeleteDependencies,
@@ -191,7 +212,16 @@ export const deleteMessage = async (
     await requireLiveSession(transaction, clock, caller.sessionId);
     return await removeMessage(transaction, clock, caller.userId, messageId);
   });
+  const { revision } = outcome;
+  // The room first — the message is a tombstone now — then each person's own numbers (D-99 §2).
   await publishAfterCommit(log, [
+    revision === null
+      ? []
+      : [
+          publication('MESSAGE_REVISED', () =>
+            publishMessageRevised(bus, clock, revision.revision, revision.version),
+          ),
+        ],
     outcome.recipients.map((recipient) =>
       publication('CHANNEL_STATE', () =>
         publishChannelState(

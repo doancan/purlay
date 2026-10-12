@@ -16,6 +16,7 @@ import {
   publication,
   publishAfterCommit,
   publishChannelState,
+  publishMessageRevised,
   type EventBus,
 } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
@@ -27,6 +28,8 @@ import { readBuilt } from './reader';
 
 export interface Revised {
   readonly message: Message;
+  /** False when the same words came again: nothing was written, and nothing is told. */
+  readonly changed: boolean;
   /** The row's own count of its changes after this one (`0015_state_versions`). */
   readonly version: number;
   /** The members whose counters moved: the newly named, where the message is still unread. */
@@ -81,6 +84,7 @@ export const reviseMessage = async (
   if (row.content === content) {
     return {
       message: await built(),
+      changed: false,
       version: row.state_version,
       recipients: [],
       unformatted: null,
@@ -171,6 +175,7 @@ export const reviseMessage = async (
 
   return {
     message: await built(),
+    changed: true,
     version: updated.state_version,
     recipients,
     unformatted: reading.tree === null ? reading.reason : null,
@@ -232,8 +237,8 @@ export interface EditDependencies {
 }
 
 /**
- * Edits a message: the one way in. Commits, then tells each person whose numbers moved (D-35).
- * The room hears the revision with #333; until then a client sees it on its next read.
+ * Edits a message: the one way in. Commits, then tells the room what changed and each person
+ * whose numbers moved (D-35).
  */
 export const edit = async (
   dependencies: EditDependencies,
@@ -254,7 +259,30 @@ export const edit = async (
       err: revised.engineFailure,
     });
   }
+  const { message } = revised;
+  // The room first — the words changed — then each newly named person's own numbers (D-99 §2).
+  // Nothing at all when the same words came again: nothing changed.
   await publishAfterCommit(log, [
+    revised.changed
+      ? [
+          publication('MESSAGE_REVISED', () =>
+            publishMessageRevised(
+              bus,
+              clock,
+              {
+                channelId: message.channelId,
+                messageId: message.id,
+                parentId: message.parentId,
+                content: message.content,
+                editedAt: message.editedAt,
+                deletedAt: message.deletedAt,
+                mentions: message.mentions,
+              },
+              revised.version,
+            ),
+          ),
+        ]
+      : [],
     revised.recipients.map((recipient) =>
       publication('CHANNEL_STATE', () =>
         publishChannelState(
