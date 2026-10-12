@@ -29,3 +29,34 @@ export const validated = <T extends TSchema>(schema: T, body: unknown): Static<T
     details: { fields },
   });
 };
+
+/**
+ * A query string as the schema reads it. Every parameter goes to the schema, so one it does not know
+ * is refused by name rather than ignored; one given twice is refused, because the guard and the
+ * schema would each read a different copy. Query strings are text: the parameters named in
+ * `numbers` and `booleans` are converted, and anything but the words they expect is left as it came,
+ * for the schema to refuse.
+ */
+export const queryOf = (
+  url: URL,
+  convert: { readonly numbers?: readonly string[]; readonly booleans?: readonly string[] } = {},
+): Record<string, unknown> => {
+  const repeated = [...url.searchParams.keys()].find((key, at, keys) => keys.indexOf(key) !== at);
+  if (repeated !== undefined) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'Each parameter is given once.',
+      details: { fields: { [repeated]: 'given more than once' } },
+    });
+  }
+  const query: Record<string, unknown> = Object.fromEntries(url.searchParams);
+  for (const key of convert.numbers ?? []) {
+    const value = url.searchParams.get(key);
+    if (value !== null) query[key] = Number(value);
+  }
+  for (const key of convert.booleans ?? []) {
+    const value = url.searchParams.get(key);
+    if (value === 'true' || value === 'false') query[key] = value === 'true';
+  }
+  return query;
+};

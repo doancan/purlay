@@ -53,6 +53,7 @@ import {
   listMyWorkspaces,
   setMyDeepWork,
   listWorkspaceMembers,
+  readAuditTrail,
   removeWorkspaceMember,
   updateMemberRole,
   readMe,
@@ -307,6 +308,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/audit',
+      async ({ request, params }) =>
+        await readAuditTrail(dependencies, request, params.workspaceId),
     )
     .patch(
       '/api/workspaces/:workspaceId/members/:userId',

@@ -108,7 +108,7 @@ an instance-administrator role this product does not have.
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin — `204`: out of the workspace and its channels; their sockets are sent `ACCESS_REVOKED` for every channel they could see. An owner is an owner's to remove; the last one `409 LAST_OWNER` (I-2) |
 | ○ | `PUT` | `/api/workspaces/:workspaceId/deep-work` | The caller's own — `{ active: true, until }` (ahead, at most `DEEP_WORK_MAX_HOURS`) or `{ active: false }` (`SetDeepWorkRequest`); answers `DeepWorkResponse`. Ends by itself at `until`; each membership in `/api/me` carries `deepWorkUntil`. While it lasts notifications are written `suppressed_by_deep_work` and still counted (D-15, D-108) |
 | ① | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — **shape pending O-2** |
-| ① | `GET` | `/api/workspaces/:workspaceId/audit` | admin — keyset over `audit_log`, newest first (D-26) |
+| ○ | `GET` | `/api/workspaces/:workspaceId/audit` | admin — `?before=&limit=` (`AuditQuery`); an `AuditPage` of `AuditEntry`, newest first, keyset on the id (D-26). Who did what to whom, never anything written; a member is `403 FORBIDDEN` |
 | ② | `PUT` | `/api/workspaces/:workspaceId/retention` | owner — `{ retentionDays: number \| null }`, min 30 (D-27) |
 | ② | `POST` | `/api/workspaces/:workspaceId/export` | owner — NDJSON + blobs (D-27) |
 

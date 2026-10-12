@@ -7,7 +7,6 @@
  */
 import { NotificationQuery, ReadNotificationsRequest, type NotificationPage } from '@purlay/types';
 import { visibleChannelIds } from '../../platform/channels';
-import { AppError } from '../../platform/errors';
 import {
   NO_LOG,
   publication,
@@ -19,7 +18,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { inboxOf, readNotifications } from '../../modules/notifications/notifications';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
-import { validated } from './validate';
+import { queryOf, validated } from './validate';
 
 /** `GET /api/notifications?workspaceId=` — the caller's inbox in one workspace, newest first. */
 export const readInbox = async (
@@ -29,23 +28,7 @@ export const readInbox = async (
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const url = new URL(request.url);
-  // Every parameter goes to the schema, so one it does not know is refused by name rather than
-  // ignored. Query strings are text: the two that are not are converted, and anything but the words
-  // they expect is left as it came, for the schema to refuse.
-  const query: Record<string, unknown> = Object.fromEntries(url.searchParams);
-  const repeated = [...url.searchParams.keys()].find((key, at, keys) => keys.indexOf(key) !== at);
-  if (repeated !== undefined) {
-    // The guard and the schema would each read a different one of the two.
-    throw new AppError({
-      code: 'VALIDATION_FAILED',
-      message: 'Each parameter is given once.',
-      details: { fields: { [repeated]: 'given more than once' } },
-    });
-  }
-  const unreadOnly = url.searchParams.get('unreadOnly');
-  if (unreadOnly === 'true' || unreadOnly === 'false') query['unreadOnly'] = unreadOnly === 'true';
-  const limit = url.searchParams.get('limit');
-  if (limit !== null) query['limit'] = Number(limit);
+  const query = queryOf(url, { numbers: ['limit'], booleans: ['unreadOnly'] });
   // The workspace is asked of the guard before the rest is read, so a stranger is told 404 whatever
   // else the query says (D-34); with none at all, the schema says what is missing.
   const context = await requireWorkspaceMembership(

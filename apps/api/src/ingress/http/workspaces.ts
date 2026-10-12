@@ -12,7 +12,9 @@
 import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
+  AuditQuery,
   SetDeepWorkRequest,
+  type AuditPage,
   UpdateMemberRoleRequest,
   type DeepWorkResponse,
   type MeResponse,
@@ -32,6 +34,7 @@ import {
 } from '../../modules/workspaces/workspaces';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
 import { changeRole, removeMember } from '../../modules/workspaces/members';
+import { auditTrail } from '../../modules/audit/audit';
 import {
   NO_LOG,
   publication,
@@ -41,7 +44,7 @@ import {
 } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
 import { requireSession } from './session';
-import { validated } from './validate';
+import { queryOf, validated } from './validate';
 
 export interface WorkspaceDependencies {
   readonly database: Executor;
@@ -166,4 +169,17 @@ export const removeWorkspaceMember = async (
   await publishAfterCommit(log, [
     [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],
   ]);
+};
+
+/** `GET /api/workspaces/:workspaceId/audit` — the trail, newest first (D-26, #70). */
+export const readAuditTrail = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<AuditPage> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const query = validated(AuditQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  return await auditTrail(database, context, query);
 };

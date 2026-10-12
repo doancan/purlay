@@ -1698,6 +1698,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/audit/append-only.test.ts'],
   },
   {
+    id: 'audit-trail-read-by-a-member',
+    why: 'any member reads who removed whom and who was made an admin',
+    file: 'apps/api/src/modules/audit/audit.ts',
+    find: "  if (context.role === 'member') {\n",
+    replace: "  if (context.role === 'nobody') {\n",
+    tests: ['apps/api/src/modules/audit/audit.integration.test.ts'],
+  },
+  {
+    id: 'audit-trail-cursor-ignored',
+    why: 'the next page of the trail is the first one again, and anything older can never be read',
+    file: 'apps/api/src/modules/audit/audit.ts',
+    find: "  if (query.before !== undefined) statement = statement.where('audit_log.id', '<', query.before);\n",
+    replace: '',
+    tests: ['apps/api/src/modules/audit/audit.integration.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',
