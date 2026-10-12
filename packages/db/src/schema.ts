@@ -53,6 +53,19 @@ export interface Attachments {
   workspace_id: string;
 }
 
+export interface AuditLog {
+  action: string;
+  actor_user_id: string | null;
+  created_at: Generated<Timestamp>;
+  id: string;
+  ip_address: string | null;
+  metadata: Generated<Json>;
+  target_id: string | null;
+  target_type: string;
+  user_agent: string | null;
+  workspace_id: string;
+}
+
 export interface ChannelMembers {
   channel_id: string;
   id: Generated<string>;
@@ -77,6 +90,15 @@ export interface Channels {
   type: Generated<ChannelType>;
   updated_at: Generated<Timestamp>;
   workspace_id: string;
+}
+
+export interface JobRuns {
+  consecutive_failures: Generated<number>;
+  job_name: string;
+  last_duration_ms: number | null;
+  last_error: string | null;
+  last_started_at: Timestamp | null;
+  last_success_at: Timestamp | null;
 }
 
 export interface Mentions {
@@ -179,8 +201,10 @@ export interface Workspaces {
 
 export interface DB {
   attachments: Attachments;
+  audit_log: AuditLog;
   channel_members: ChannelMembers;
   channels: Channels;
+  job_runs: JobRuns;
   mentions: Mentions;
   messages: Messages;
   notifications: Notifications;

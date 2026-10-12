@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Schema — 2026-10-12: the audit trail and the record of scheduled work (D-26, D-30)
+
+- Migration `0019`: `audit_log`, append-only, keyed by the application's UUIDv7 and kept when its
+  actor is erased, and `job_runs`, one row per scheduled job, so a scheduler nobody installed shows
+  up as a job that never succeeded. The planned integrations migration moves to `0020`.
+
 ### Fix — 2026-10-12: an attachment downloads from the real store (D-109 §6)
 
 - Downloading any attachment from the S3 store was a `500`. Bun turns its S3 file into a redirect
