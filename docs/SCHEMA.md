@@ -834,8 +834,9 @@ CREATE TABLE audit_log (
     target_type   VARCHAR(32) NOT NULL,
     target_id     UUID,
 
-    ip_address    INET,
-    user_agent    TEXT,
+    -- The session the act was made with: through it the sign-in's address and agent, for as long
+    -- as the session is kept; NULL once it is swept, and for what no request did (D-116).
+    session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
 
     -- Changed fields, before and after. Never message content, never a token,
     -- never an email address. (`ARCHITECTURE.md` §10)
@@ -853,6 +854,8 @@ CREATE INDEX idx_audit_log_workspace ON audit_log (workspace_id, id DESC);
 -- "What did this account do", needed to answer an erasure request before honouring it.
 CREATE INDEX idx_audit_log_actor ON audit_log (actor_user_id, id DESC)
     WHERE actor_user_id IS NOT NULL;
+
+CREATE INDEX idx_audit_log_session ON audit_log (session_id) WHERE session_id IS NOT NULL;
 ```
 
 No `updated_at` and no `deleted_at`: a row that can be amended is not an audit record.
@@ -1007,12 +1010,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0019_administration.sql      audit_log, job_runs  (D-26, D-30)
 0020_integrations.sql        github_integrations, link_previews  (D-11, D-23, D-39 §6)
 0021_invitations.sql         workspace_invitations  (D-115)
+0022_audit_session.sql       audit_log.session_id; ip_address and user_agent dropped  (D-116)
 ```
 
-Phase 2 adds `0022_github_feeds.sql`; Phase 2's magic links add `0023_email_auth.sql`.
+Phase 2 adds `0023_github_feeds.sql`; Phase 2's magic links add `0024_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations did. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

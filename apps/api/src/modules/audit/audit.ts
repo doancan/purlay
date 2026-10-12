@@ -13,6 +13,7 @@ import { PAGE_LIMIT, messageId, type AuditPage, type OlderPageQuery } from '@pur
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
+import { currentRequest } from '../../platform/logging';
 
 /** The verbs recorded so far; each is a stable machine-readable name, never built from input. */
 type AuditAction =
@@ -54,6 +55,8 @@ export const recordAudit = async (
       target_type: entry.targetType,
       target_id: entry.targetId,
       metadata: JSON.stringify(entry.metadata ?? {}),
+      // The session the request was made with; none for what no request did (D-116).
+      session_id: currentRequest()?.sessionId ?? null,
       created_at: now,
     })
     .execute();

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: the audit trail names the session that acted (D-116, #397)
+
+- Each row records the session the request was made with; through it the sign-in's address and
+  agent are known while the session lives, and the link goes when the session is swept. The empty
+  `ip_address` and `user_agent` columns are dropped (migration `0022`).
+
 ### Quality — 2026-10-12: the ACK round-trip and the fan-out are measured (D-49, #73)
 
 - `bun run budget:latency` starts the API against a clone of the database, signs two people in on two

@@ -12,6 +12,7 @@
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { requireSessionFromCookie } from '../../modules/auth/sessions';
+import { noteSession } from '../../platform/logging';
 
 export const requireSession = async (
   database: Executor,
@@ -23,5 +24,7 @@ export const requireSession = async (
     clock,
     request.headers.get('cookie'),
   );
+  // What the trail names as who acted, for whatever this request goes on to do (D-116).
+  noteSession(sessionId);
   return { userId, sessionId };
 };

@@ -227,7 +227,12 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
         }
         // Each frame is a request of its own: its own id on every line it writes.
         await withinRequest(
-          { requestId: crypto.randomUUID(), startedAt: performance.now() },
+          // The frame acts as the session the socket was opened with (D-116).
+          {
+            requestId: crypto.randomUUID(),
+            startedAt: performance.now(),
+            sessionId: identity.sessionId,
+          },
           async () => {
             let replies: readonly ServerFrame[] = [];
             try {

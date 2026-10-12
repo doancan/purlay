@@ -12,7 +12,9 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { createChannel } from '../channels/channels';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { changeRole, removeMember } from '../workspaces/members';
-import { auditTrail } from './audit';
+import { auditTrail, recordAudit } from './audit';
+import { issueSession } from '../auth/sessions';
+import { withinRequest } from '../../platform/logging';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -151,6 +153,55 @@ describe('integration: reading the trail', () => {
         if (error instanceof AppError) refused = error.body.code;
       });
       expect(refused).toBe('FORBIDDEN');
+    });
+  });
+});
+
+describe('integration: a row with no request behind it', () => {
+  test('names no session: a job, or a script, acted as nobody signed in (D-116)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['solo']);
+      await recordAudit(db, fixedClock(NOW), {
+        workspaceId: room.workspaceId,
+        actorUserId: null,
+        action: 'member.removed',
+        targetType: 'user',
+        targetId: idOf(room, 'solo'),
+      });
+      const [row] = await db
+        .selectFrom('audit_log')
+        .select('session_id')
+        .where('workspace_id', '=', room.workspaceId)
+        .execute();
+      expect(row?.session_id).toBeNull();
+    });
+  });
+
+  test('a row a request wrote names its session, and loses it when the session is swept', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['acted']);
+      const { sessionId } = await issueSession(db, fixedClock(NOW), idOf(room, 'acted'), 1);
+      await withinRequest({ requestId: 'r', startedAt: 0, sessionId }, async () => {
+        await recordAudit(db, fixedClock(NOW), {
+          workspaceId: room.workspaceId,
+          actorUserId: idOf(room, 'acted'),
+          action: 'member.removed',
+          targetType: 'user',
+          targetId: idOf(room, 'acted'),
+        });
+      });
+      const sessionOf = async (): Promise<string | null | undefined> =>
+        (
+          await db
+            .selectFrom('audit_log')
+            .select('session_id')
+            .where('workspace_id', '=', room.workspaceId)
+            .executeTakeFirst()
+        )?.session_id;
+      expect(await sessionOf()).toBe(sessionId);
+      // The sweep deletes a dead session (D-87); the trail keeps the row and lets the link go.
+      await db.deleteFrom('sessions').where('id', '=', sessionId).execute();
+      expect(await sessionOf()).toBeNull();
     });
   });
 });
