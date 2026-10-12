@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: managing members and roles (D-111)
+
+- An owner or admin changes a member's role (`PATCH …/members/:userId`) or removes them (`DELETE`).
+  Making somebody an owner, or changing an owner, is an owner's; the last owner stays (`409
+  LAST_OWNER`), even when two step down at once. A removed member leaves the workspace's channels, and
+  their open sockets stop receiving them at once.
+
 ### Operations — 2026-10-12: the scheduler ships with the deployment (D-30)
 
 - `docker-compose.production.yml` runs a `scheduler` service from the API's image, with the API's

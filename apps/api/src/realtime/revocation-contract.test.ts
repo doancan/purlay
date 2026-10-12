@@ -133,8 +133,18 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/messages/delete.ts#uncount': {
     none: 'lowers the unread counters of existing memberships and changes no access (#47)',
   },
-  // Nothing calls it yet. It deletes rows that are already revoked (announced when
-  // they were revoked) or past their expiry (the hub's own timer ends the socket).
+  // The \`sweep:sessions\` job calls it (D-30). It deletes rows that are already revoked
+  // (announced when they were revoked) or past their expiry (the hub's own timer ends the socket).
+  // A new role changes what a member may manage, not what they may see: every role sees the
+  // same channels (§7.4, #51).
+  'apps/api/src/modules/workspaces/members.ts#changeRole': {
+    none: 'changes what a member may manage, not which channels they see (#51)',
+  },
+  // Out of the workspace: their sockets stop receiving every channel they could see in it.
+  'apps/api/src/modules/workspaces/members.ts#removeMember': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
+  },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',
   },

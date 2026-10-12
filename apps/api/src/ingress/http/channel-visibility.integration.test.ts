@@ -232,6 +232,7 @@ describe('integration: channel visibility', () => {
               messageId: NEVER_EXISTED,
               attachmentId: NEVER_EXISTED,
               unsentAttachmentId: NEVER_EXISTED,
+              memberId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -269,6 +270,7 @@ describe('integration: channel visibility', () => {
               messageId,
               attachmentId: NEVER_EXISTED,
               unsentAttachmentId: NEVER_EXISTED,
+              memberId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -326,6 +328,7 @@ describe('integration: channel visibility', () => {
                 messageId: NEVER_EXISTED,
                 attachmentId: NEVER_EXISTED,
                 unsentAttachmentId: NEVER_EXISTED,
+                memberId: NEVER_EXISTED,
               }),
               cookie,
             );

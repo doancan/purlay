@@ -86,6 +86,7 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('ATTACHMENT_ID_CONFLICT'),
   Type.Literal('ATTACHMENT_NOT_FOUND'),
+  Type.Literal('LAST_OWNER'),
   /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
@@ -144,6 +145,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   TOO_MANY_PENDING_UPLOADS: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
+  LAST_OWNER: 409,
   RATE_LIMITED: 429,
 
   INTERNAL: 500,

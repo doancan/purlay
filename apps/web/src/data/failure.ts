@@ -64,6 +64,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.refused';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
+    case 'LAST_OWNER':
       return 'failure.refused';
     case 'VALIDATION_FAILED':
     case 'INVALID_MESSAGE_ID':

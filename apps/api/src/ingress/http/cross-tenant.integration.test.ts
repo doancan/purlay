@@ -99,7 +99,20 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       parentId: root,
     }),
   );
-  return { workspaceId, channelId, messageId: root, attachmentId, unsentAttachmentId };
+  // Somebody the owner can make an admin, or remove.
+  const member = await aSignedInUser(db, clock, `${slug}-member`);
+  await db
+    .insertInto('workspace_members')
+    .values({ workspace_id: workspaceId, user_id: member.userId, role: 'member', joined_at: NOW })
+    .execute();
+  return {
+    workspaceId,
+    channelId,
+    messageId: root,
+    attachmentId,
+    unsentAttachmentId,
+    memberId: member.userId,
+  };
 };
 
 const NEVER_EXISTED: Ids = {
@@ -108,6 +121,7 @@ const NEVER_EXISTED: Ids = {
   messageId: '00000000-0000-4000-8000-000000000000',
   attachmentId: '00000000-0000-4000-8000-000000000000',
   unsentAttachmentId: '00000000-0000-4000-8000-000000000000',
+  memberId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
@@ -116,6 +130,7 @@ const NOT_A_UUID: Ids = {
   messageId: 'not-a-uuid',
   attachmentId: 'not-a-uuid',
   unsentAttachmentId: 'not-a-uuid',
+  memberId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {

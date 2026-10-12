@@ -13,6 +13,7 @@ import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
   SetDeepWorkRequest,
+  UpdateMemberRoleRequest,
   type DeepWorkResponse,
   type MeResponse,
   type Membership,
@@ -30,6 +31,15 @@ import {
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
+import { changeRole, removeMember } from '../../modules/workspaces/members';
+import {
+  NO_LOG,
+  publication,
+  publishAccessRevoked,
+  publishAfterCommit,
+  type EventBus,
+} from '../../platform/events';
+import type { Logger } from '../../platform/logging';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -113,4 +123,47 @@ export const setMyDeepWork = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(SetDeepWorkRequest, body);
   return await setDeepWork(database, clock, context, input);
+};
+
+export interface MemberWriteDependencies extends WorkspaceDependencies {
+  readonly bus: EventBus;
+  readonly log?: Logger;
+}
+
+/** `PATCH /api/workspaces/:workspaceId/members/:userId` — a member's new role (§7.4, I-2). */
+export const updateMemberRole = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+  userId: string,
+  body: unknown,
+): Promise<WorkspaceMember> => {
+  const { database, clock } = dependencies;
+  const caller = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
+  const { role } = validated(UpdateMemberRoleRequest, body);
+  return await atomicallyOn(database)(
+    async (transaction) => await changeRole(transaction, context, userId, role),
+  );
+};
+
+/**
+ * `DELETE /api/workspaces/:workspaceId/members/:userId` — out of the workspace and its channels;
+ * their sockets are told after the commit, and stop receiving every channel they could see (D-85).
+ */
+export const removeWorkspaceMember = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  userId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const caller = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
+  const { channelIds } = await atomicallyOn(database)(
+    async (transaction) => await removeMember(transaction, context, userId),
+  );
+  await publishAfterCommit(log, [
+    [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],
+  ]);
 };

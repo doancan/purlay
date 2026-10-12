@@ -548,7 +548,9 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 | Edit / delete own message | ✅ | ✅ | ✅ |
 | Resolve a thread | ✅ | ✅ | ✅ |
 
-The last owner cannot be demoted or removed (invariant I-2).
+The last owner cannot be demoted or removed (invariant I-2). Making somebody an owner is transferring
+ownership, and an owner's row is an owner's to change; a removed member loses the workspace's channels
+and their sockets are told (D-111).
 
 ### 7.5. Channel visibility — the second axis
 

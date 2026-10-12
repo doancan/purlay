@@ -280,6 +280,35 @@ describe('integration: a membership that ends', () => {
     await bob.close();
   });
 
+  test('removed through the endpoint on one node, the member’s socket on another is told and stops (#51)', async () => {
+    const room = await aRoom();
+    const bob = await connect(room.bob.cookie);
+    await subscribe(bob, room.channelId);
+    const before = await post(room.alice.cookie, room.channelId, 1);
+    await bob.until((frames) => created(frames).includes(before), 'the message before');
+
+    const removed = await http(
+      'DELETE',
+      `/api/workspaces/${room.workspaceId}/members/${room.bob.userId}`,
+      room.alice.cookie,
+    );
+    expect(removed.status).toBe(204);
+    await bob.until(
+      (frames) => frames.some((f) => f.event === 'ACCESS_REVOKED'),
+      'the notice of the removal',
+    );
+    expect(bob.frames.find((f) => f.event === 'ACCESS_REVOKED')?.data).toEqual({
+      channelIds: [room.channelId],
+    });
+    await post(room.alice.cookie, room.channelId, 2);
+    await settle(bob);
+    expect(created(bob.frames)).toEqual([before]);
+    expect((await http('GET', `/api/workspaces/${room.workspaceId}`, room.bob.cookie)).status).toBe(
+      404,
+    );
+    await bob.close();
+  });
+
   test('leaving one channel stops that channel and keeps the others on the same socket', async () => {
     const room = await aRoom();
     const second = (await (
