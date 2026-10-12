@@ -216,7 +216,8 @@ describe('its states (UX §8)', () => {
     const heading = screen.getByRole('heading', { level: 2, name: 'Every thread is resolved' });
     const tile = heading.previousElementSibling;
     expect(tile?.getAttribute('aria-hidden')).toBe('true');
-    expect(tile?.className).toContain('rounded-md');
+    expect(tile?.className).toContain('rounded-lg');
+    expect(tile?.className).toContain('bg-success-subtle');
     expect(heading.parentElement?.className).toContain('text-center');
     await expectNoAxeViolations(screen.container);
   });

@@ -8,8 +8,8 @@ import { Notice } from './notice';
 export const NotFound = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
-    <Main className="flex min-h-screen flex-col bg-surface-000 p-2 text-ink">
-      <div className="flex flex-1 flex-col rounded-lg bg-surface-100 shadow-card">
+    <Main className="flex min-h-screen flex-col bg-surface-100 text-ink">
+      <div className="flex flex-1 flex-col">
         <Notice
           as="h1"
           glyph="info"

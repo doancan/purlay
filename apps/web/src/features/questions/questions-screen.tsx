@@ -75,14 +75,14 @@ const Header = (): React.JSX.Element => {
   const back = joined.find((c) => c.id === remembered) ?? joined[0];
 
   return (
-    <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
+    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
       <div className="flex min-w-0 items-center gap-2">
         <NavToggle />
         <HeaderTile>
           <Icon name="open-question" size="lg" />
         </HeaderTile>
         <div className="flex min-w-0 flex-col">
-          <h1 className="whitespace-nowrap text-title text-ink">{t('questions.title')}</h1>
+          <h1 className="whitespace-nowrap text-heading text-ink">{t('questions.title')}</h1>
           <span className="truncate text-caption text-ink-muted max-narrow:hidden">
             {t('questions.lede')}
           </span>
@@ -114,7 +114,7 @@ const Header = (): React.JSX.Element => {
         >
           {t('header.questions')}
           {open !== null && open.count > 0 && (
-            <span className="font-mono text-warning-text">
+            <span className="font-mono text-caption text-warning-text">
               {format.number(open.count)}
               {open.more && '+'}
             </span>
@@ -160,7 +160,7 @@ const KnownGroupTitle = ({
   return (
     <h2 id={id} className="flex items-center gap-1 px-3 pb-2 text-label text-ink-muted">
       <Icon name={channel.type === 'direct_message' ? 'person' : 'channel'} size="sm" />
-      <span className="font-mono">{title}</span>
+      <span>{title}</span>
       <span aria-hidden="true">·</span>
       <span>{t('questions.count', { count })}</span>
     </h2>
@@ -186,13 +186,13 @@ const QuestionRow = ({
         onClick={() => {
           navigate(threadHref(workspace.slug, question.channelId, question.id));
         }}
-        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left hover:bg-surface-200"
+        className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
         <Avatar name={question.sender.displayName} username={question.sender.username} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="text-heading text-ink">{question.sender.username}</span>
-            <time dateTime={question.createdAt} className="font-mono text-caption text-ink-muted">
+            <span className="text-body font-semibold text-ink">{question.sender.username}</span>
+            <time dateTime={question.createdAt} className="font-mono text-caption text-ink-subtle">
               {format.time(question.createdAt, now)}
             </time>
           </span>
@@ -200,7 +200,7 @@ const QuestionRow = ({
             {question.content}
           </span>
         </span>
-        <span className="inline-flex h-badge shrink-0 items-center gap-1 whitespace-nowrap rounded-pill border-hairline border-border-subtle px-2 text-label text-warning-text">
+        <span className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
           <Icon name="reply" size="sm" />
           {t('questions.replies', { replies, when: format.time(last, now) })}
         </span>
@@ -225,7 +225,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
     body = (
       <LoadingStatus
         label={t('state.questions.loading')}
-        className="mx-auto flex w-full max-w-feed flex-col gap-4 px-4 py-4"
+        className="flex w-full max-w-feed flex-col gap-4 px-4 py-4"
       >
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
@@ -248,10 +248,10 @@ export const QuestionsScreen = (): React.JSX.Element => {
     );
   } else if (groups.length === 0) {
     body = (
-      <section className="mx-auto flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
+      <section className="flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
         <span
           aria-hidden="true"
-          className="inline-flex size-avatar-lg items-center justify-center rounded-md bg-surface-200 text-success-text"
+          className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-success-subtle text-success-text"
         >
           <Icon name="resolved" size="lg" />
         </span>
@@ -261,7 +261,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
     );
   } else {
     body = (
-      <div className="mx-auto flex w-full max-w-feed flex-col gap-6 px-1 py-4">
+      <div className="flex w-full max-w-feed flex-col gap-6 px-3 py-4">
         {groups.map((group) => {
           const id = `questions-${group.channelId}`;
           return (

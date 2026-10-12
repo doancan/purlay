@@ -35,7 +35,7 @@ export const placeOf = (slug: string, message: Message): string => {
 };
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
-  <span className="font-mono">{useChannelTitle(channel)}</span>
+  <span>{useChannelTitle(channel)}</span>
 );
 
 const Found = ({
@@ -57,12 +57,12 @@ const Found = ({
         onClick={() => {
           navigate(placeOf(workspace.slug, message));
         }}
-        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left hover:bg-surface-200"
+        className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
         <Avatar name={message.sender.displayName} username={message.sender.username} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 text-label text-ink-muted">
-            <span className="text-heading text-ink">{message.sender.username}</span>
+            <span className="text-body font-semibold text-ink">{message.sender.username}</span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             {message.parentId !== null && <Icon name="reply" size="sm" />}
@@ -152,15 +152,15 @@ const SearchView = ({ asked }: { readonly asked: string }): React.JSX.Element =>
 
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-2 border-b-hairline border-border-subtle px-4">
+      <header className="flex h-header shrink-0 items-center gap-2 border-b-hairline border-border-subtle pr-4 pl-5">
         <NavToggle />
         <HeaderTile>
           <Icon name="search" size="lg" />
         </HeaderTile>
-        <h1 className="whitespace-nowrap text-title text-ink">{t('search.title')}</h1>
+        <h1 className="whitespace-nowrap text-heading text-ink">{t('search.title')}</h1>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-feed flex-col gap-4 px-1 py-4">
+        <div className="flex w-full max-w-feed flex-col gap-4 px-3 py-4">
           <form
             role="search"
             className="px-3"

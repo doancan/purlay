@@ -130,7 +130,7 @@ export const Home = (): React.JSX.Element | null => {
   if (first !== undefined) return null;
   return (
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
-      <div className="flex w-full max-w-dialog flex-col gap-6 rounded-lg bg-surface-100 p-8 shadow-card">
+      <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
         <LogoMark />
         <section className="flex flex-col gap-2">
           <h1 className="text-display">{t('workspace.none.title')}</h1>
