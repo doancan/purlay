@@ -23,6 +23,7 @@ import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { GitHubDialog } from './github-dialog';
 import { InviteDialog } from './invite-dialog';
+import { MembersDialog } from './members-dialog';
 
 export const WorkspaceMenu = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -34,6 +35,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   const describe = useDescribeFailure();
   const [inviting, setInviting] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [managing, setManaging] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Making links and the GitHub token are an owner's and an admin's (D-115, D-23); a member is not
   // offered what would be refused.
@@ -77,6 +79,16 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         )}
         {mayInvite && (
           <MenuItem
+            glyph="settings"
+            onSelect={() => {
+              setManaging(true);
+            }}
+          >
+            {t('members.entry')}
+          </MenuItem>
+        )}
+        {mayInvite && (
+          <MenuItem
             glyph="merged"
             onSelect={() => {
               setConnecting(true);
@@ -107,6 +119,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
       </Menu>
       <InviteDialog open={inviting} onOpenChange={setInviting} />
       <GitHubDialog open={connecting} onOpenChange={setConnecting} />
+      <MembersDialog open={managing} onOpenChange={setManaging} />
     </>
   );
 };

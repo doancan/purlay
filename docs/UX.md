@@ -80,6 +80,11 @@ chat the team already uses.
   with **Make a link**, the link once made with **Copy**, and the links still open — who made each and
   until when — each with **Revoke**. A member does not see the entry.
 
+**Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
+with a role each: a labelled select where the person may change it, the role in words where they may
+not — an admin does not touch an owner or make one, and nobody changes their own row. **Remove** asks
+in the row first, because it costs the person every channel. The last owner is said as such.
+
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
 too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*
 with **Disconnect**. The token is never shown again — the field empties once it is saved — and without

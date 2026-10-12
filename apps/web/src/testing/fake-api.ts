@@ -20,6 +20,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   invitations: unexpected('invitations'),
   revokeInvitation: unexpected('revokeInvitation'),
   githubIntegration: unexpected('githubIntegration'),
+  updateMemberRole: unexpected('updateMemberRole'),
+  removeMember: unexpected('removeMember'),
   setGitHubToken: unexpected('setGitHubToken'),
   removeGitHubToken: unexpected('removeGitHubToken'),
   unfurl: unexpected('unfurl'),

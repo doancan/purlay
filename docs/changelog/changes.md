@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: owners and admins manage members and roles in the app (`PRD.md` §4.3)
+
+- **Members…** in the workspace menu: everyone's role, changed from a select where the server would
+  allow it, and Remove after asking in the row. The roles API existed (D-111); nothing in the app
+  called it, so making somebody an admin took `curl`.
+
 ### Feature — 2026-10-12: an owner gives the workspace its GitHub token from the app (D-23, `PRD.md` §4.8)
 
 - **GitHub connection…** in the workspace menu, for owners and admins: whether a token is set and
