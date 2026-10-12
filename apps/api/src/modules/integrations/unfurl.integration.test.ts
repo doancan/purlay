@@ -152,4 +152,41 @@ describe('integration: unfurling a GitHub link', () => {
       expect(JSON.stringify(recorded.lines)).not.toContain('ghp_workspace_a');
     });
   });
+
+  test('a token that no longer opens — the key was changed — is said at error, and no card is drawn', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (): Response => Response.json(pull);
+      const context = await aWorkspaceWithToken(db, 'ghp_sealed_under_the_old_key');
+      const recorded = aRecordingLogger();
+      const rotated = {
+        ...dependencies(db),
+        cipher: credentialCipher(Buffer.alloc(32, 8).toString('base64')),
+        log: recorded.log,
+      };
+      expect(await unfurl(rotated, context, PR)).toBeNull();
+      expect(
+        recorded.lines.find((line) => String(line['msg']).includes('does not open')),
+      ).toMatchObject({ level: 'error', workspaceId: context.workspaceId });
+      expect(asked).toEqual([]);
+    });
+  });
+
+  test('anything else that fails while opening it is not taken for a changed key: it is thrown', async () => {
+    await withRollback(async (db) => {
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const failing = {
+        ...dependencies(db),
+        cipher: {
+          seal: cipher.seal,
+          open: (): Promise<string> => Promise.reject(new TypeError('the cipher broke')),
+        },
+      };
+      const thrown = await unfurl(failing, context, PR).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(thrown).toBeInstanceOf(TypeError);
+    });
+  });
 });

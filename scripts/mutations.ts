@@ -1847,6 +1847,14 @@ export const MUTATIONS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'github-token-any-failure-taken-for-a-rotated-key',
+    why: 'a broken cipher is logged as a changed key and the card quietly vanishes, so the real fault is never seen',
+    file: 'apps/api/src/modules/integrations/github.ts',
+    find: '    if (!(error instanceof SealBroken)) throw error;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',
