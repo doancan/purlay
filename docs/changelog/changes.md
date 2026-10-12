@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a message that lands while its feed is being read again stays on the screen (#347)
+
+- A list already on the screen and being read again — the subscription's answer re-reads every
+  feed — answered with a page read before the live change, and replaced it: a send could be drawn,
+  acknowledged, and then vanish from the sender's own screen; a reaction could be undone. Every live
+  write now sets such a read aside and asks again, which keeps what was written. The browser test
+  that failed now and then under load (`live.e2e.ts`) was this.
+
 ### Fix — 2026-10-12: a new deployment's jobs run on its first minute (D-30, #440)
 
 - The scheduler starts with `jobs:first`, which runs once each job that has never succeeded. A new
