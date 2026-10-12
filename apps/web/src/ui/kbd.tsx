@@ -9,7 +9,7 @@
 import { cn } from './cn';
 
 const kbdClasses =
-  'inline-flex items-center rounded-sm border-hairline border-border-strong px-1 text-code text-ink-muted';
+  'inline-flex items-center rounded-sm border-hairline border-border-subtle bg-surface-050 px-1 font-mono text-caption text-ink-subtle';
 
 interface KbdProps {
   readonly className?: string;

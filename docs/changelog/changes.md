@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the other screens and the overlays in the flat style (D-110)
+
+- The open questions, the inbox and search have the channel's header and its rows; the inbox and the
+  questions say they are empty with a green tile. Sign-in and the first workspace are one card on the
+  navigation tone; an address that leads nowhere sits on the window's ground.
+- Menus, dialogs, toasts and the palette are 12px overlays with a soft shadow. The palette opens in
+  150ms from 0.98 with a fade — and at once for a person whose system asks for less motion.
+- Primary buttons darken on hover; secondary buttons are white with a one-pixel shadow. Keys are mono
+  on a pale ground. A link in highlighted code is `accent-text`, so it stays legible in the dark.
+
 ### Feature — 2026-10-12: the channel in the flat style (D-110)
 
 - The header names the channel in the sans beside a quiet glyph, with its topic after a rule; the two

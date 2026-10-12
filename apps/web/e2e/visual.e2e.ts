@@ -21,7 +21,9 @@ const RICH = [
 
 const masks = (page: Page): Locator[] => [
   page.locator('time'),
-  page.getByRole('heading', { level: 1 }),
+  // The title and the topic beside it: a test's room has a name of its own length, and the group
+  // takes the header's room whatever it is, so the mask is one size every run.
+  page.locator('[data-header-title]'),
   page.getByRole('textbox'),
   page.locator('[data-feed-marker]'),
   // The workspace-wide count of open questions moves with every other test.
@@ -98,11 +100,7 @@ test.describe('a conversation', () => {
     await expect(page.getByText(/is not available/).first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await expect(page.locator('main')).toHaveScreenshot('failed-and-refused.png', {
-      mask: [
-        page.locator('time'),
-        page.getByRole('heading', { level: 1 }),
-        page.getByRole('textbox'),
-      ],
+      mask: [page.locator('time'), page.locator('[data-header-title]'), page.getByRole('textbox')],
     });
   });
 });

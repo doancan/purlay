@@ -47,6 +47,22 @@
     --shiki-token-function: var(--syntax-function);
     --shiki-token-string-expression: var(--syntax-string);
     --shiki-token-punctuation: var(--syntax-operator);
-    --shiki-token-link: var(--accent);
+    --shiki-token-link: var(--accent-text);
   }
+}
+
+/*
+ * The one overlay that animates as it opens: the command palette, from 0.98 with a fade (D-110).
+ * Its length is a token, which is 0ms under reduced motion — so a person who asked for less motion
+ * gets the palette at once, with nothing here having to remember them.
+ */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@utility animate-overlay-in {
+  animation: overlay-in var(--duration-overlay) var(--easing-standard);
 }

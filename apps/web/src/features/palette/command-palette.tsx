@@ -164,7 +164,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   return (
     <>
       <div className="p-3 pb-2">
-        <div className="flex h-control max-narrow:h-touch items-center gap-2 rounded-pill bg-surface-200 px-3 focus-within:outline-focus focus-within:outline-focus-ring focus-within:outline-offset-focus">
+        <div className="flex h-control max-narrow:h-touch items-center gap-2 rounded-lg border-hairline border-border-subtle bg-surface-050 px-3 text-ink-subtle focus-within:outline-focus focus-within:outline-focus-ring focus-within:outline-offset-focus">
           <Icon name="search" />
           <input
             type="text"
@@ -306,7 +306,7 @@ export const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps): Rea
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 z-palette bg-scrim" />
         <RadixDialog.Content
-          className="fixed inset-x-4 top-1/6 z-palette mx-auto flex max-w-palette flex-col overflow-hidden rounded-lg border-hairline border-border-subtle bg-surface-100 text-ink shadow-float"
+          className="fixed inset-x-4 top-1/6 z-palette mx-auto flex max-w-palette animate-overlay-in flex-col overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 text-ink shadow-float"
           onOpenAutoFocus={() => {
             // Before Radix moves focus in, the active element is still the opener.
             returnTo.current =

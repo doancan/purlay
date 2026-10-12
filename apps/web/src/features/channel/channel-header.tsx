@@ -28,9 +28,9 @@ export const segmentClasses =
   'inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
 /** The segment the person is on: raised out of the track by a one-pixel card shadow (D-110). */
 export const activeSegmentClasses = 'bg-surface-100 text-ink shadow-card max-narrow:hidden';
-/** The track the two segments sit in, at the header's right. */
+/** The track the two segments sit in; the title before it takes the room, so it sits at the right. */
 export const segmentTrackClasses =
-  'ml-auto flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
+  'flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
 
 /** The glyph at the head of a header: what this screen is, quiet beside its name (D-110). */
 export const HeaderTile = ({
@@ -65,7 +65,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
-      <div className="flex min-w-0 items-center gap-2">
+      <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (
           <Avatar name={channel.peer.displayName} username={channel.peer.username} size="sm" />

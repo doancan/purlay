@@ -22,6 +22,7 @@ import { colorTokens, cssVar } from '@purlay/tokens';
 import { useState } from 'react';
 import { Icon, glyphNames } from '../components/icon';
 import { SettingsMenu } from '../features/shell/settings-menu';
+import { Avatar } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Dialog } from '../ui/dialog';
@@ -134,6 +135,29 @@ const Specimen = (): React.JSX.Element => (
         <Kbd>Shift+Enter</Kbd>
         <Badge count={2} label="2 unread mentions" />
         <Badge count={12} label="12 unread mentions" />
+        <IconButton label="Inbox, on the rail" glyph="inbox" size="rail" />
+      </Row>
+    </Section>
+
+    <Section title="Avatars and status pills">
+      <Row>
+        <Avatar name="Alice Chen" username="alice" size="sm" />
+        <Avatar name="Alice Chen" username="alice" size="md" />
+        <Avatar name="Alice Chen" username="alice" size="lg" />
+        <Avatar name="Bob Okafor" username="bob" size="lg" />
+        <Avatar name="Carol Reyes" username="carol" size="lg" />
+        <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
+          <Icon name="open-question" size="sm" />
+          Open
+        </span>
+        <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text">
+          <Icon name="resolved" size="sm" />
+          Resolved
+        </span>
+        <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-danger-subtle px-2 text-caption font-medium text-danger-text">
+          <Icon name="failed" size="sm" />
+          Failed
+        </span>
       </Row>
     </Section>
 

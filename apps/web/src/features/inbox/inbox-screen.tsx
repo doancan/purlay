@@ -262,7 +262,7 @@ export const InboxScreen = (): React.JSX.Element => {
   return (
     <>
       <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
-        <div className="flex min-w-0 items-center gap-2">
+        <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
             <Icon name="notifications" size="lg" />

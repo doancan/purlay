@@ -188,8 +188,8 @@ describe('a row has a tile', () => {
     const channel = rows.find((row) => spoken(row)?.startsWith('api') === true);
     expect(channel?.querySelector('[data-avatar]')).toBeNull();
     expect(channel?.querySelector('svg')).not.toBeNull();
-    // The search field is the pill at the top.
-    expect(view.getByRole('combobox').parentElement?.className).toContain('rounded-pill');
+    // The search field is the field at the top, a control's shape (D-110).
+    expect(view.getByRole('combobox').parentElement?.className).toContain('rounded-lg');
   });
 });
 
