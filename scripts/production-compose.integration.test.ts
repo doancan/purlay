@@ -46,6 +46,7 @@ interface Resolved {
       depends_on?: Record<string, { condition: string }>;
       command?: string[];
       healthcheck?: { disable?: boolean };
+      logging?: { driver?: string; options?: Record<string, string> };
     }
   >;
 }
@@ -101,6 +102,15 @@ describe('integration: the production compose file', () => {
       'proxy',
       'scheduler',
     ]);
+  });
+
+  test('every service keeps a bounded log: a server is not filled by its own logs', () => {
+    // Docker's json-file driver keeps everything unless told otherwise.
+    for (const [name, service] of Object.entries(model.services)) {
+      expect({ name, driver: service.logging?.driver }).toEqual({ name, driver: 'json-file' });
+      expect(service.logging?.options?.['max-size']).toMatch(/^\d+m$/);
+      expect(Number(service.logging?.options?.['max-file'])).toBeGreaterThan(0);
+    }
   });
 
   test('every image but the API is pinned by digest, and the API image is a variable', () => {

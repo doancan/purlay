@@ -21,11 +21,22 @@
 # developer's.
 name: purlay-production
 
+# Every container's log, bounded: Docker's json-file driver keeps everything unless told, and a
+# server whose disk its own logs filled stops writing the database next. Five files of 50 MB each per
+# service: for the API that is weeks of a team's requests, enough for the stretch `bun run
+# report:frames` reads (O-4); export it with `docker compose logs api` before it rolls over.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: '5'
+
 # What the API and the scheduler share: one image, the same settings and the same
 # hardening, so a job reads exactly the configuration the API does (D-30).
 x-application: &application
   image: ${PURLAY_IMAGE:?set PURLAY_IMAGE to the API image, ideally by digest (docs/CONFIG.md)}
   restart: unless-stopped
+  logging: *logging
   # Read-only root filesystem, no capabilities, no privilege escalation: the
   # image is built to run this way and `scripts/image-smoke.sh` runs it so.
   read_only: true
@@ -102,6 +113,7 @@ services:
   postgres:
     image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: purlay
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
@@ -126,6 +138,7 @@ services:
   garage:
     image: dxflrs/garage:v2.1.0@sha256:4c9b34c113e61358466e83fd6e7d66e6d18657ede14b776eb78a93ee8da7cf6a
     restart: unless-stopped
+    logging: *logging
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?set GARAGE_RPC_SECRET (64 hex characters)}
     volumes:
@@ -144,6 +157,7 @@ services:
   proxy:
     image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     restart: unless-stopped
+    logging: *logging
     ports:
       # Movable for a host that already uses 80 or 443, with the caveat in CONFIG.md: the
       # HTTPS port is the same inside and out because Caddy listens on the port in the site

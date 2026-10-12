@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Operations — 2026-10-13: the production containers' logs are bounded
+
+- Every service of `docker-compose.production.yml` keeps at most five 50 MB log files. Docker's
+  default keeps everything, and a disk filled by logs stops the database next.
+
 ### Operations — 2026-10-13: the nightly backup is two cron lines, run as written
 
 - `CONFIG.md` gives the host's crontab for a nightly `backup.sh` and a fourteen-day retention, both run
