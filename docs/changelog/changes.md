@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: every channel switch is measured in the page, for O-5
+
+- The router marks each change of address and the feed measures to the frame that draws the new
+  channel's rows: a `purlay:channel-switch` entry in the browser's performance timeline, at most 500
+  kept, nothing sent anywhere (D-44). It is what dogfooding reads to decide virtualization (#75).
+
 ### Quality — 2026-10-13: the browser suite run on Firefox too, in a Linux container
 
 - 126 of 132 pass; the six failures are Firefox's or the test harness's (focus past the last element, no

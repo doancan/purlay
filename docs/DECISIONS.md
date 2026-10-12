@@ -5053,4 +5053,8 @@ Recorded so they are not silently assumed. None block Phase 0.
   which is the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
   ship **unvirtualized** with a 50-message window — and the scroll-anchoring rules that hold
   either way. What remains open is whether to adopt virtualization at all, decided against the
-  `< 100ms` channel-switch budget. *Measure first.*
+  `< 100ms` channel-switch budget. *Measure first.* **How it is measured in use:** every switch is a
+  `purlay:channel-switch` entry in the browser's own performance timeline, from the change of address to
+  the frame that draws the new channel's rows (`apps/web/src/app/switch-timing.ts`); nothing leaves the
+  device (D-44). After a week of the team's use, each person reads theirs in the console with
+  `performance.getEntriesByName('purlay:channel-switch')` before closing the tab.

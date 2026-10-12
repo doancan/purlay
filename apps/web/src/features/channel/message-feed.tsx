@@ -17,6 +17,7 @@
  * hides.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { measureSwitch } from '../../app/switch-timing';
 import type { User } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useMembers, useMessages, readingOrder } from '../../data/queries';
@@ -356,6 +357,17 @@ export const MessageFeed = ({
     }
     return null;
   }, [items]);
+  // A switch ends when the new channel's rows are drawn: measured on the frame that shows them (O-5).
+  const drawn = lastRowId !== null;
+  useEffect(() => {
+    if (!drawn) return undefined;
+    const frame = requestAnimationFrame(() => {
+      measureSwitch(channelId);
+    });
+    return (): void => {
+      cancelAnimationFrame(frame);
+    };
+  }, [channelId, drawn]);
   const tabbable = useMemo(
     () =>
       focusedId !== null && items.some((i) => i.kind === 'message' && i.key === focusedId)

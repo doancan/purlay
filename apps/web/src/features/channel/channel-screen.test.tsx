@@ -3,6 +3,7 @@
  * channel the person has not joined, and the feed in the languages it speaks.
  */
 import { describe, expect, test } from 'bun:test';
+import { SWITCH_MEASURE, markRoute } from '../../app/switch-timing';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { page, mountChannel, settle } from '../../testing/channel-harness';
@@ -175,6 +176,22 @@ describe('the header', () => {
     });
     expect(odd.getByRole('heading', { level: 1 }).textContent).toBe('legacy');
     odd.unmountAll();
+  });
+});
+
+describe('the channel switch, measured (O-5)', () => {
+  test('a navigation into a channel is measured once its rows are drawn, naming the channel', async () => {
+    performance.clearMeasures(SWITCH_MEASURE);
+    markRoute();
+    const view = await mountChannel({ messages: page([aMessage(1)]) });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const measures = performance.getEntriesByName(SWITCH_MEASURE, 'measure');
+    const named: unknown[] = measures.map((m): unknown =>
+      m instanceof PerformanceMeasure ? (m.detail as unknown) : null,
+    );
+    expect(named).toEqual([{ channelId: IDS.api }]);
+    view.unmountAll();
+    performance.clearMeasures(SWITCH_MEASURE);
   });
 });
 
