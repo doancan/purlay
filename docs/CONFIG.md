@@ -212,6 +212,17 @@ inside and outside the container, because Caddy listens on the port in its site 
 issued only if 80 and 443 can be reached from the internet, so moving them is for a host that already
 uses them, a deployment behind another proxy, or one with certificates of its own.
 
+**The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
+(D-30): sessions hourly, the orphan sweep and the storage reconciliation nightly, in UTC. Every run is
+recorded; to see when each last succeeded, and whether one is overdue or has never run:
+
+```
+docker compose -f docker-compose.production.yml --env-file production.env \
+  exec scheduler bun apps/api/src/cli/jobs.ts jobs:status
+```
+
+It exits non-zero when a job is overdue, so a monitor can run it.
+
 **The proxy's access log** records the path and never the query string: an OAuth callback carries a
 one-time `code` and the signed `state` there, and a search carries what was searched for.
 

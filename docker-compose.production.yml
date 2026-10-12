@@ -21,57 +21,84 @@
 # developer's.
 name: purlay-production
 
+# What the API and the scheduler share: one image, the same settings and the same
+# hardening, so a job reads exactly the configuration the API does (D-30).
+x-application: &application
+  image: ${PURLAY_IMAGE:?set PURLAY_IMAGE to the API image, ideally by digest (docs/CONFIG.md)}
+  restart: unless-stopped
+  # Read-only root filesystem, no capabilities, no privilege escalation: the
+  # image is built to run this way and `scripts/image-smoke.sh` runs it so.
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+
+x-environment: &environment
+  NODE_ENV: production
+  APP_URL: ${APP_URL:?set APP_URL to the one public https origin}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  # Inside the stack's network; managed PostgreSQL is a different deployment.
+  # Production refuses an unencrypted database link unless told the network is
+  # private (D-79), and here it is: a compose network no other host can join.
+  DATABASE_SSL: 'false'
+  DATABASE_ALLOW_PLAINTEXT: 'true'
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?set GITHUB_CLIENT_ID}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
+  SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  # Off unless set; nothing is reported by default (D-44, D-96).
+  ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
+  WORKSPACE_OPEN_JOIN_SLUG: ${WORKSPACE_OPEN_JOIN_SLUG:-}
+  # The attachment bucket (CONFIG.md, D-109); production refuses to start without it.
+  STORAGE_DRIVER: s3
+  S3_ENDPOINT: http://garage:3900
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_BUCKET: ${S3_BUCKET:-purlay-attachments}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+
 services:
   api:
-    image: ${PURLAY_IMAGE:?set PURLAY_IMAGE to the API image, ideally by digest (docs/CONFIG.md)}
-    restart: unless-stopped
+    <<: *application
     # The process drains for up to ten seconds (D-72); give it a margin to exit
     # before the runtime kills it.
     stop_grace_period: 15s
-    # Read-only root filesystem, no capabilities, no privilege escalation: the
-    # image is built to run this way and `scripts/image-smoke.sh` runs it so.
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
     environment:
-      NODE_ENV: production
+      <<: *environment
       PORT: '3001'
-      APP_URL: ${APP_URL:?set APP_URL to the one public https origin}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
       # The proxy is the only thing in front of it.
       TRUST_PROXY: 'true'
-      DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay
-      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
-      # Inside the stack's network; managed PostgreSQL is a different deployment.
-      # Production refuses an unencrypted database link unless told the network is
-      # private (D-79), and here it is: a compose network no other host can join.
-      DATABASE_SSL: 'false'
-      DATABASE_ALLOW_PLAINTEXT: 'true'
       # One node, or several: one takes the lock and migrates, the rest wait (D-93).
       MIGRATE_ON_START: 'true'
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?set GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
-      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
-      # Off unless set; nothing is reported by default (D-44, D-96).
-      ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
-      WORKSPACE_OPEN_JOIN_SLUG: ${WORKSPACE_OPEN_JOIN_SLUG:-}
-      # The attachment bucket (CONFIG.md, D-109); production refuses to start without it.
-      STORAGE_DRIVER: s3
-      S3_ENDPOINT: http://garage:3900
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_BUCKET: ${S3_BUCKET:-purlay-attachments}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
     depends_on:
       postgres:
         condition: service_healthy
       garage:
         condition: service_healthy
     # The image's own HEALTHCHECK (readiness) applies; compose adds nothing.
+
+  # The scheduled jobs (D-30): one container however many API nodes there are, so a
+  # job runs once, and shipped here so it is installed by `up`, not remembered. Each
+  # run is recorded; `bun apps/api/src/cli/jobs.ts jobs:status` in it says when each
+  # last succeeded.
+  scheduler:
+    <<: *application
+    command: ['apps/api/src/cli/schedule.ts']
+    # A job already running is let finish.
+    stop_grace_period: 60s
+    environment:
+      <<: *environment
+    # After the API is ready, so its migrations are applied before a job runs.
+    depends_on:
+      api:
+        condition: service_healthy
+    # The image's own check asks the API's port, which this container does not open.
+    healthcheck:
+      disable: true
 
   postgres:
     image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873

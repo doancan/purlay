@@ -40,6 +40,7 @@
     "lint:fix": "eslint . --fix",
     "mutate": "bun run scripts/run-mutations.ts",
     "queue": "bun run scripts/queue.ts",
+    "schedule": "bun run apps/api/src/cli/schedule.ts",
     "test": "bun test apps packages scripts --path-ignore-patterns '**/*.integration.test.ts'",
     "test:all": "bun run scripts/test-all.ts",
     "test:e2e": "bun run --cwd apps/web e2e",
