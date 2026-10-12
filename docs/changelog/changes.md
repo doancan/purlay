@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a direct message begins a conversation, not a channel
+
+- The top of a direct message said "This is the beginning of the channel"; it says "This is the
+  beginning of the conversation" now, in both languages.
+
 ### Fix — 2026-10-12: two things a walk through the product found
 
 - The invitation dialog cut each open link's line short, ending at the time — "11:22 …" said

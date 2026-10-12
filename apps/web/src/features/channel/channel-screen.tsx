@@ -88,6 +88,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
       <MessageFeed
         channelId={channel.id}
         channelName={title}
+        conversation={channel.type === 'direct_message'}
         markerAfter={member && opened.unread ? opened.after : undefined}
         readAtOpen={opened.after}
         member={member}
