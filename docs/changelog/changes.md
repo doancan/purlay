@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Infrastructure — 2026-10-11: the image can be published from a machine while the pipeline cannot
+
+- `scripts/release-image.sh` releases a commit that is on `origin/main`, from a clean tree: `verify` with
+  the database, one build of the commit's own tree for `linux/amd64` (or `PLATFORM`), `image-smoke.sh`
+  against that build, the push as `sha-<commit>`, and the digest the registry holds — refused unless it
+  is the image that was tested — to put in `PURLAY_IMAGE`. Its tests run it, against stubs. It refuses a dirty tree, an
+  unmerged commit, a remote that names no GitHub repository, and a run without a database.
+
 ### Testing — 2026-10-11: the demo and every browser test reach the client through the API
 
 - The demo's front server no longer serves files: it keeps its login and sends everything else to the
