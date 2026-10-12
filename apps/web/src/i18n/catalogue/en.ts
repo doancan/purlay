@@ -115,6 +115,21 @@ export const en = {
   'invite.admin.someone': 'someone',
   'invite.admin.revoke': 'Revoke',
   'invite.admin.revokeFailed': 'Could not revoke the link.',
+  'github.entry': 'GitHub connection…',
+  'github.title': 'GitHub for {workspace}',
+  'github.description':
+    'With a token, a link to a pull request or an issue shows as a card: its state, CI and review. The token is kept encrypted and never shown again.',
+  'github.connected': 'Connected since {when}.',
+  'github.notConnected': 'Not connected: links to GitHub stay plain links.',
+  'github.token': 'Token',
+  'github.tokenHint':
+    'A fine-grained personal access token with read access to the repositories your team links to.',
+  'github.invalid': 'A token is one word of letters, digits and symbols, with no spaces.',
+  'github.save': 'Save token',
+  'github.saved': 'The token was saved.',
+  'github.saveFailed': 'The token was not saved.',
+  'github.disconnect': 'Disconnect',
+  'github.disconnectFailed': 'GitHub was not disconnected.',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.create.title': 'Create a workspace',

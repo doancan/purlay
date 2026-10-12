@@ -21,6 +21,7 @@ import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { GitHubDialog } from './github-dialog';
 import { InviteDialog } from './invite-dialog';
 
 export const WorkspaceMenu = (): React.JSX.Element => {
@@ -32,8 +33,10 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   const { show } = useToast();
   const describe = useDescribeFailure();
   const [inviting, setInviting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
-  // Making links is an owner's and an admin's (D-115); a member is not offered what would be refused.
+  // Making links and the GitHub token are an owner's and an admin's (D-115, D-23); a member is not
+  // offered what would be refused.
   const mayInvite = role === 'owner' || role === 'admin';
 
   return (
@@ -72,6 +75,16 @@ export const WorkspaceMenu = (): React.JSX.Element => {
             {t('invite.admin.entry')}
           </MenuItem>
         )}
+        {mayInvite && (
+          <MenuItem
+            glyph="merged"
+            onSelect={() => {
+              setConnecting(true);
+            }}
+          >
+            {t('github.entry')}
+          </MenuItem>
+        )}
         <MenuSeparator />
         <MenuLabel>{t('sidebar.signedInAs', { name: user.displayName })}</MenuLabel>
         <MenuItem
@@ -93,6 +106,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         </MenuItem>
       </Menu>
       <InviteDialog open={inviting} onOpenChange={setInviting} />
+      <GitHubDialog open={connecting} onOpenChange={setConnecting} />
     </>
   );
 };

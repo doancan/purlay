@@ -204,6 +204,25 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('the GitHub token: its status read, the token sent in the body, and taken away (D-23)', async () => {
+    const status = { configured: true, updatedAt: WHEN };
+    const read = harness(status);
+    expect(await read.api.githubIntegration(ID)).toEqual(status);
+    const saved = harness(null);
+    await saved.api.setGitHubToken(ID, 'github_pat_x');
+    const removed = harness(null);
+    await removed.api.removeGitHubToken(ID);
+    expect([...read.calls, ...saved.calls, ...removed.calls]).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/integrations/github`, body: undefined },
+      {
+        method: 'PUT',
+        url: `/api/workspaces/${ID}/integrations/github`,
+        body: { token: 'github_pat_x' },
+      },
+      { method: 'DELETE', url: `/api/workspaces/${ID}/integrations/github`, body: undefined },
+    ]);
+  });
+
   test('an unfurl names the workspace and the link in the body, and reads a card or none (D-112)', async () => {
     const url = 'https://github.com/purlay/purlay/pull/1';
     const none = harness(null);
