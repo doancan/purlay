@@ -105,7 +105,7 @@ an instance-administrator role this product does not have.
 | ○ | `GET` | `/api/workspaces/:workspaceId/members` | member |
 | ① | `PATCH` | `/api/workspaces/:workspaceId/members/:userId` | admin — change role |
 | ① | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin |
-| ① | `PUT` | `/api/workspaces/:workspaceId/deep-work` | member — `{ active, until? }` (D-15) |
+| ○ | `PUT` | `/api/workspaces/:workspaceId/deep-work` | The caller's own — `{ active: true, until }` (ahead, at most `DEEP_WORK_MAX_HOURS`) or `{ active: false }` (`SetDeepWorkRequest`); answers `DeepWorkResponse`. Ends by itself at `until`; each membership in `/api/me` carries `deepWorkUntil`. While it lasts notifications are written `suppressed_by_deep_work` and still counted (D-15, D-108) |
 | ① | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — **shape pending O-2** |
 | ① | `GET` | `/api/workspaces/:workspaceId/audit` | admin — keyset over `audit_log`, newest first (D-26) |
 | ② | `PUT` | `/api/workspaces/:workspaceId/retention` | owner — `{ retentionDays: number \| null }`, min 30 (D-27) |

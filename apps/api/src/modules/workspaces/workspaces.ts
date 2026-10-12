@@ -103,8 +103,10 @@ export const createWorkspace = async (
  */
 export const membershipsOf = async (
   executor: Executor,
+  clock: Clock,
   userId: string,
 ): Promise<readonly Membership[]> => {
+  const now = clock.now();
   const rows = await executor
     .selectFrom('workspace_members')
     .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
@@ -115,6 +117,8 @@ export const membershipsOf = async (
       'workspaces.avatar_url',
       'workspace_members.role',
       'workspace_members.joined_at',
+      'workspace_members.is_deep_work_active',
+      'workspace_members.deep_work_until',
     ])
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
@@ -125,6 +129,11 @@ export const membershipsOf = async (
     workspace: asWorkspace(row),
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
+    // Over when its instant has passed: ended by the clock, with no job to end it (D-108).
+    deepWorkUntil:
+      row.is_deep_work_active && row.deep_work_until !== null && new Date(row.deep_work_until) > now
+        ? new Date(row.deep_work_until).toISOString()
+        : null,
   }));
 };
 
@@ -132,7 +141,11 @@ export const membershipsOf = async (
  * Who this user is, and what they belong to: the only shape that carries an
  * email address, and only ever to its owner (`models.ts`).
  */
-export const meOf = async (executor: Executor, userId: string): Promise<MeResponse> => {
+export const meOf = async (
+  executor: Executor,
+  clock: Clock,
+  userId: string,
+): Promise<MeResponse> => {
   const user = await executor
     .selectFrom('users')
     .select(['id', 'username', 'display_name', 'avatar_url', 'email'])
@@ -148,7 +161,7 @@ export const meOf = async (executor: Executor, userId: string): Promise<MeRespon
       avatarUrl: user.avatar_url,
       email: user.email,
     },
-    memberships: [...(await membershipsOf(executor, userId))],
+    memberships: [...(await membershipsOf(executor, clock, userId))],
   };
 };
 

@@ -348,6 +348,7 @@ describe('the workspace menu', () => {
         },
         role: 'member',
         joinedAt: '2026-09-09T08:00:00.000Z',
+        deepWorkUntil: null,
       },
     ],
   });

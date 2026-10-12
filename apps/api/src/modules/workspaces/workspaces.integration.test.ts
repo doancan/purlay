@@ -71,17 +71,19 @@ describe('integration: tombstones are not listed', () => {
       const kept = await aWorkspaceOf(db, user.userId, 'Kept');
       const gone = await aWorkspaceOf(db, user.userId, 'Gone');
 
-      expect((await membershipsOf(db, user.userId)).map((m) => m.workspace.id).sort()).toEqual(
-        [kept.id, gone.id].sort(),
-      );
+      expect(
+        (await membershipsOf(db, clock, user.userId)).map((m) => m.workspace.id).sort(),
+      ).toEqual([kept.id, gone.id].sort());
 
       await db
         .updateTable('workspaces')
         .set({ deleted_at: DELETED })
         .where('id', '=', gone.id)
         .execute();
-      expect((await membershipsOf(db, user.userId)).map((m) => m.workspace.id)).toEqual([kept.id]);
-      expect((await meOf(db, user.userId)).memberships.map((m) => m.workspace.id)).toEqual([
+      expect((await membershipsOf(db, clock, user.userId)).map((m) => m.workspace.id)).toEqual([
+        kept.id,
+      ]);
+      expect((await meOf(db, clock, user.userId)).memberships.map((m) => m.workspace.id)).toEqual([
         kept.id,
       ]);
     });
@@ -90,13 +92,13 @@ describe('integration: tombstones are not listed', () => {
   test('a deleted user has no /me', async () => {
     await withRollback(async (db) => {
       const user = await aUserRow(db, 'leaving');
-      expect((await meOf(db, user.userId)).user.id).toBe(user.userId);
+      expect((await meOf(db, clock, user.userId)).user.id).toBe(user.userId);
       await db
         .updateTable('users')
         .set({ deleted_at: DELETED })
         .where('id', '=', user.userId)
         .execute();
-      expect(await fails(meOf(db, user.userId))).toBe(true);
+      expect(await fails(meOf(db, clock, user.userId))).toBe(true);
     });
   });
 

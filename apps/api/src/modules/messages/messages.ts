@@ -274,6 +274,7 @@ export const sendMessage = async (
       input.parentId === undefined || root === undefined
         ? null
         : { rootId: input.parentId, rootAuthorId: root.authorId },
+    now: clock.now(),
   });
 
   const written = await readBuilt(executor, input.id);

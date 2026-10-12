@@ -104,6 +104,11 @@ export const Membership = Type.Object({
   workspace: Workspace,
   role: UserRole,
   joinedAt: Timestamp,
+  /**
+   * Until when the caller is in Deep Work here (D-15, D-108), or null when they are not. It ends by
+   * itself at this instant: the server stops counting it then, and so does the client.
+   */
+  deepWorkUntil: Type.Union([Timestamp, Type.Null()]),
 });
 export type Membership = Static<typeof Membership>;
 
