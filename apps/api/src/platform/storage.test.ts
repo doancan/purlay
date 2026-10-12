@@ -56,7 +56,12 @@ describe('the S3 adapter’s rules (a stand-in client; `test:storage` runs the r
       return Promise.resolve(data.length);
     },
     file: (key) =>
-      Object.assign(new Blob(['x']), { stat: () => (calls.push(`stat ${key}`), stat()) }),
+      Object.assign(new Blob(['x']), {
+        stat: (): Promise<{ size: number }> => {
+          calls.push(`stat ${key}`);
+          return stat().then(() => ({ size: 1 }));
+        },
+      }),
     delete: (key): Promise<void> => {
       calls.push(`delete ${key}`);
       return Promise.resolve();
@@ -70,7 +75,10 @@ describe('the S3 adapter’s rules (a stand-in client; `test:storage` runs the r
       client(() => Promise.resolve({}), calls),
     );
     await store.put('k', new Uint8Array([1, 2]), 'application/octet-stream');
-    expect(await store.get('k')).not.toBeNull();
+    const got = await store.get('k');
+    expect(got?.size).toBe(1);
+    // Bytes of its own, not the client's handle: what a response is made of without a redirect.
+    expect(new TextDecoder().decode(await new Response(got?.body).arrayBuffer())).toBe('x');
     await store.delete('k');
     expect(calls).toEqual(['write k 2 application/octet-stream', 'stat k', 'delete k']);
   });

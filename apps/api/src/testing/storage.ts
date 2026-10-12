@@ -3,7 +3,7 @@
  * told to fail, so a test can show what an upload does when the store refuses it — and what is
  * left behind, which is what `keys()` is for.
  */
-import type { ObjectStore } from '../platform/storage';
+import type { ObjectStore, StoredObject } from '../platform/storage';
 
 export interface MemoryStore extends ObjectStore {
   /** Every key held now, sorted. */
@@ -27,7 +27,10 @@ export const aMemoryStore = (): MemoryStore => {
       objects.set(key, new Blob([bytes], { type }));
       return Promise.resolve();
     },
-    get: (key): Promise<Blob | null> => Promise.resolve(objects.get(key) ?? null),
+    get: (key): Promise<StoredObject | null> => {
+      const blob = objects.get(key);
+      return Promise.resolve(blob === undefined ? null : { body: blob.stream(), size: blob.size });
+    },
     delete: (key): Promise<void> => {
       failIf('delete');
       objects.delete(key);
