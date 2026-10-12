@@ -92,6 +92,13 @@ export const WorkspaceMember = Type.Object({
 });
 export type WorkspaceMember = Static<typeof WorkspaceMember>;
 
+/**
+ * `PATCH /api/workspaces/:workspaceId/members/:userId` — a member's new role (`ARCHITECTURE.md`
+ * §7.4). Making somebody an owner is transferring ownership, and is an owner's alone.
+ */
+export const UpdateMemberRoleRequest = FromClient({ role: UserRole });
+export type UpdateMemberRoleRequest = Static<typeof UpdateMemberRoleRequest>;
+
 // ── Channels ────────────────────────────────────────────────────────────────
 
 export const CreateChannelRequest = FromClient({

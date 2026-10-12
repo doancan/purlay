@@ -53,6 +53,8 @@ import {
   listMyWorkspaces,
   setMyDeepWork,
   listWorkspaceMembers,
+  removeWorkspaceMember,
+  updateMemberRole,
   readMe,
   readWorkspace,
 } from './workspaces';
@@ -306,6 +308,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
     )
+    .patch(
+      '/api/workspaces/:workspaceId/members/:userId',
+      async ({ request, params, body }) =>
+        await updateMemberRole(dependencies, request, params.workspaceId, params.userId, body),
+    )
+    .delete('/api/workspaces/:workspaceId/members/:userId', async ({ request, params, set }) => {
+      await removeWorkspaceMember(sending, request, params.workspaceId, params.userId);
+      set.status = 204;
+      return null;
+    })
     .put(
       '/api/workspaces/:workspaceId/deep-work',
       async ({ request, params, body }) =>

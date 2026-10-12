@@ -63,6 +63,8 @@ export interface Ids {
   readonly attachmentId: string;
   /** An upload not sent yet: what a discard acts on. */
   readonly unsentAttachmentId: string;
+  /** A member of the workspace who is not its owner: what managing a member acts on. */
+  readonly memberId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -81,6 +83,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'channelId') return ids.channelId;
     if (name === 'messageId') return ids.messageId;
     if (name === 'attachmentId') return ids.attachmentId;
+    if (name === 'userId') return ids.memberId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -249,6 +252,23 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: {
       kind: 'none',
       reason: 'an upload names no channel; it is the uploader’s alone until a message carries it',
+    },
+  },
+  'PATCH /api/workspaces/:workspaceId/members/:userId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ role: 'admin' }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'names a person in the workspace and no channel; a role changes what they manage, not what they see',
+    },
+  },
+  'DELETE /api/workspaces/:workspaceId/members/:userId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'names a person and no channel; what they lose is every channel, told to their sockets (`revocation.integration.test.ts`)',
     },
   },
   'GET /api/attachments/:attachmentId': {

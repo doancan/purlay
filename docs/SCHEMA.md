@@ -911,7 +911,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | # | Invariant | Enforced in |
 |---|---|---|
 | I-1 | Threads are at most two levels deep: a reply's `parent_id` must point at a message whose own `parent_id` is `NULL`. The database enforces that a reply is in its parent's channel (and so workspace); depth is the service's. | `messages.service`, in part `messages_parent_channel_fkey` |
-| I-2 | Every workspace has at least one `owner`. The last owner cannot be demoted or removed. | `members.service` |
+| I-2 | Every workspace has at least one `owner`. The last owner cannot be demoted or removed. | `workspaces/members.ts`, under the workspace row's lock (D-111) |
 | I-3 | `channel_members.last_read_message_id` must belong to that channel. | the database: `channel_members_last_read_channel_fkey` |
 | I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | the database: `messages_channel_workspace_fkey` |
 | I-5 | `dm_key` is the workspace's two member UUIDs, sorted ascending and joined with `:`. The database enforces the form and the order; that the two are members of the workspace is the service's. | `channels.service`, in part `dm_key_form` |

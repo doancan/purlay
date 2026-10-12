@@ -104,8 +104,8 @@ an instance-administrator role this product does not have.
 | ① | `PATCH` | `/api/workspaces/:workspaceId` | admin |
 | ① | `DELETE` | `/api/workspaces/:workspaceId` | owner |
 | ○ | `GET` | `/api/workspaces/:workspaceId/members` | member |
-| ① | `PATCH` | `/api/workspaces/:workspaceId/members/:userId` | admin — change role |
-| ① | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/members/:userId` | admin — `{ role }` (`UpdateMemberRoleRequest`); answers the `WorkspaceMember`. An admin manages members and admins; making somebody an owner, or changing an owner, is an owner's (§7.4). A member is `403 FORBIDDEN`; somebody not in the workspace `404 USER_NOT_FOUND`; leaving no owner `409 LAST_OWNER` (I-2) |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin — `204`: out of the workspace and its channels; their sockets are sent `ACCESS_REVOKED` for every channel they could see. An owner is an owner's to remove; the last one `409 LAST_OWNER` (I-2) |
 | ○ | `PUT` | `/api/workspaces/:workspaceId/deep-work` | The caller's own — `{ active: true, until }` (ahead, at most `DEEP_WORK_MAX_HOURS`) or `{ active: false }` (`SetDeepWorkRequest`); answers `DeepWorkResponse`. Ends by itself at `until`; each membership in `/api/me` carries `deepWorkUntil`. While it lasts notifications are written `suppressed_by_deep_work` and still counted (D-15, D-108) |
 | ① | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — **shape pending O-2** |
 | ① | `GET` | `/api/workspaces/:workspaceId/audit` | admin — keyset over `audit_log`, newest first (D-26) |
