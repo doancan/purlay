@@ -808,7 +808,10 @@ CREATE TABLE audit_log (
     -- never an email address. (`ARCHITECTURE.md` §10)
     metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT audit_log_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 );
 
 -- The admin view: one workspace's trail, newest first.
@@ -968,16 +971,17 @@ file that leaves its transaction runs statement by statement and must be safe to
 0016_tombstones_keep_their_place.sql  idx_messages_channel_feed and idx_messages_thread keep tombstones  (D-103)
 0017_channel_message_notifications.sql  notification_type gains channel_message  (D-107)
 0018_attachments.sql         attachments; messages (id, workspace_id) unique  (D-16, D-109)
+0019_administration.sql      audit_log, job_runs  (D-26, D-30)
 ```
 
 ```
-0019_integrations.sql        github_integrations, link_previews
-0020_administration.sql      audit_log, job_runs  (Phase 1)
+0020_integrations.sql        github_integrations, link_previews
 ```
 
 Phase 2 adds `0021_github_feeds.sql`; Phase 2's magic links add `0022_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
-(`0008` to `0011`), and again when `0016_tombstones_keep_their_place.sql` shipped with deletion. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+(`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
+again when the administration tables shipped before the integrations. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)
