@@ -107,6 +107,31 @@ const setRole = async (
 };
 
 describe('integration: who may delete', () => {
+  test('a moderator’s delete is on the trail, with whose message and nothing it said; an author’s is not', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      await setRole(db, room, 'bob', 'admin');
+      const own = await post(db, room, 'alice', 'mine to take back');
+      const moderated = await post(db, room, 'alice', 'something to moderate');
+      await remove(db, room, 'alice', own.message.id);
+      await remove(db, room, 'bob', moderated.message.id);
+      const trail = await db
+        .selectFrom('audit_log')
+        .select(['action', 'actor_user_id', 'target_id', 'metadata'])
+        .where('workspace_id', '=', room.workspaceId)
+        .where('action', '=', 'message.removed_by_moderator')
+        .execute();
+      expect(trail).toEqual([
+        {
+          action: 'message.removed_by_moderator',
+          actor_user_id: member(room, 'bob').userId,
+          target_id: moderated.message.id,
+          metadata: { authorId: member(room, 'alice').userId },
+        },
+      ]);
+    });
+  });
+
   test('the author: the content becomes the tombstone and its mentions go', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

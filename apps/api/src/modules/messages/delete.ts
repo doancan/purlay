@@ -24,6 +24,7 @@ import type { Logger } from '../../platform/logging';
 import type { Atomically } from '../../platform/transactions';
 import { requireLiveSession } from '../auth/sessions';
 import type { ChannelStateUpdate } from './delivery';
+import { recordAudit } from '../audit/audit';
 
 /** Who may delete somebody else's message: the people who run the workspace (D-103 §7). */
 const MODERATORS: readonly string[] = ['owner', 'admin'];
@@ -100,6 +101,18 @@ export const removeMessage = async (
     .executeTakeFirstOrThrow();
   // Nobody is named by a message that says nothing.
   await executor.deleteFrom('mentions').where('message_id', '=', messageId).execute();
+  // Somebody else's message removed is moderation, and on the trail: who, which message and whose —
+  // never what it said, which is gone from the row as well (D-26).
+  if (row.sender_id !== userId) {
+    await recordAudit(executor, clock, {
+      workspaceId: context.workspaceId,
+      actorUserId: userId,
+      action: 'message.removed_by_moderator',
+      targetType: 'message',
+      targetId: messageId,
+      metadata: { authorId: row.sender_id },
+    });
+  }
 
   // The memberships before the notifications, in one order: reading a channel or the inbox takes
   // them in that order too, and a delete taking them the other way round deadlocks with a person
