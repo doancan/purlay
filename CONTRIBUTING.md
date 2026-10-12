@@ -92,6 +92,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
 | `bun run budget:latency` | The ACK round-trip and fan-out p95 on two real sockets in one channel (`PRD.md` §5, D-49); reported beside their budgets. `-- --record <file>` keeps the result, `-- --baseline <file>` fails on a jump past it. Runs in `verify` and in CI's database job |
+| `bun run report:frames <log>…` | The measurement that closes O-4: over a stretch of the API's log (files, or standard input), each socket's peak frames in a second as the p99 and the maximum, beside the budget, and every refusal — frames, sends, HTTP `429` — which for legitimate use must be none (#61) |
 | `bun run audit:gate` | The dependency audit, blocking at high severity; a finding with no fix is allowed only by an expiring entry in `scripts/audit-allowlist.json` (#247) |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
 | `bun run job <name>` | A scheduled job (D-30): `sweep:orphans`, `sweep:sessions`, `sweep:link-previews`, `reconcile:storage`; `jobs:status` says what each last did and exits non-zero when one is overdue or never ran. Reads the same configuration as the API |
