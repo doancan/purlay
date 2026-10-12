@@ -96,6 +96,8 @@ export interface Api {
   readonly upload: (
     workspaceId: string,
     upload: { readonly id: string; readonly name: string; readonly file: Blob },
+    /** Told the share of the file sent so far, from 0 to 1, as it goes (#388). */
+    onProgress?: (fraction: number) => void,
   ) => Promise<Attachment>;
   readonly thread: (
     messageId: string,
@@ -245,13 +247,17 @@ export const createApi = (http: Http): Api => {
         MessagePage,
         options({ query: { ...page } }, signal),
       ),
-    upload: (workspaceId, { id, name, file }) =>
-      http.request(
-        'POST',
-        `/api/workspaces/${at(workspaceId)}/uploads`,
-        Attachment,
-        options({ query: { id, name }, bytes: file }),
-      ),
+    upload: (workspaceId, { id, name, file }, onProgress) =>
+      http.upload(`/api/workspaces/${at(workspaceId)}/uploads`, Attachment, file, {
+        query: { id, name },
+        ...(onProgress === undefined
+          ? {}
+          : {
+              onProgress: (sent: number, total: number): void => {
+                onProgress(total === 0 ? 1 : sent / total);
+              },
+            }),
+      }),
     send: (channelId, input) =>
       http.request(
         'POST',

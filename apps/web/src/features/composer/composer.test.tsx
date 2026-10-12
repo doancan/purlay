@@ -711,14 +711,18 @@ describe('attaching files (D-109, #370)', () => {
     readonly calls: { workspaceId: string; id: string; name: string }[];
     readonly finish: (index: number) => void;
     readonly refuse: (index: number, error: Error) => void;
+    /** Tells the upload how much of it has been sent, as the transport would. */
+    readonly progress: (index: number, fraction: number) => void;
   } => {
     const calls: { workspaceId: string; id: string; name: string }[] = [];
     const answers: { resolve: (a: Attachment) => void; reject: (e: Error) => void }[] = [];
+    const listeners: ((fraction: number) => void)[] = [];
     return {
       calls,
       api: {
-        upload: (workspaceId, { id, name, file }): Promise<Attachment> => {
+        upload: (workspaceId, { id, name, file }, onProgress): Promise<Attachment> => {
           calls.push({ workspaceId, id, name });
+          listeners.push(onProgress ?? ((): void => undefined));
           return new Promise<Attachment>((resolve, reject) => {
             answers.push({
               resolve: () => {
@@ -734,6 +738,9 @@ describe('attaching files (D-109, #370)', () => {
       },
       refuse: (index, error): void => {
         answers[index]?.reject(error);
+      },
+      progress: (index, fraction): void => {
+        listeners[index]?.(fraction);
       },
     };
   };
@@ -763,6 +770,41 @@ describe('attaching files (D-109, #370)', () => {
     // The chip goes with what was sent.
     expect(view.queryByText('notes.txt')).toBeNull();
     await expectNoAxeViolations(view.container);
+  });
+
+  test('an upload says how much of it is sent, as a progress bar a screen reader can read (#388)', async () => {
+    const uploads = held();
+    const { view, box } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1, 2, 3])], 'big.zip')]);
+    // Nothing measured yet: said in words, with no number to read.
+    expect(view.getByText('Uploading…')).toBeDefined();
+    expect(view.queryByRole('progressbar')).toBeNull();
+    act(() => {
+      uploads.progress(0, 0.425);
+    });
+    const bar = view.getByRole('progressbar', { name: 'Uploading big.zip' });
+    expect(bar.textContent).toBe('Uploading… 42%');
+    expect(bar.getAttribute('aria-valuenow')).toBe('42');
+    act(() => {
+      uploads.progress(0, 1);
+    });
+    expect(view.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100');
+    uploads.finish(0);
+    await settle();
+    expect(view.queryByRole('progressbar')).toBeNull();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('progress is said in Turkish when the interface is', async () => {
+    const uploads = held();
+    const { view, box } = await mount({ api: aSignedInApi(uploads.api), locale: 'tr' });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    act(() => {
+      uploads.progress(0, 0.5);
+    });
+    expect(view.getByRole('progressbar', { name: 'a.txt yükleniyor' }).textContent).toBe(
+      'Yükleniyor… %50',
+    );
   });
 
   test('a send while a file is still uploading waits for it, says so, and goes when it lands', async () => {

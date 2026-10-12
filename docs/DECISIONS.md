@@ -4644,6 +4644,14 @@ instruction to decide and proceed, and open to their reversal:
 test, not by CI, which runs PostgreSQL alone (`CONTRIBUTING.md` §2); the store is a port, and every
 test of the rules runs against a double.
 
+
+**Amended 2026-10-12 (#388): an upload says how far it has got.** `fetch` reports nothing of a request
+body until the answer, and a streamed body would be chunked, which the edge refuses (`411`). So an
+upload alone goes over `XMLHttpRequest` (`http.upload`), whose `upload.onprogress` reports the bytes
+sent; its answer and its failures are read by the same two functions a request's are (`answerOf`,
+`failureOf`), so the second transport cannot believe what the first would refuse. The chip says
+*Uploading… 42%* as a `progressbar`. Not measured on a link, and not needed to be: at 2 Mbit/s up,
+`ATTACHMENT_BYTES_MAX` is about a hundred seconds, which a word that never changes cannot fill.
 ---
 
 ### D-110. The interface is flat and quiet: one tone for getting around, one for the conversation

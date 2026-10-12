@@ -290,6 +290,8 @@ export const tr = {
   'upload.uploading': 'Yükleniyor…',
   'upload.failed': 'Yüklenmedi',
   'upload.tooLarge': '{size} sınırından büyük',
+  'upload.uploadingPercent': 'Yükleniyor… %{percent}',
+  'upload.progressOf': '{name} yükleniyor',
   'upload.retry': '{name}: yeniden dene',
   'upload.remove': '{name}: kaldır',
   'upload.discardFailed': '{name} burada kaldırıldı, ama sunucudan kaldırılamadı.',

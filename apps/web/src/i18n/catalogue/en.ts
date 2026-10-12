@@ -296,6 +296,8 @@ export const en = {
   'upload.uploading': 'Uploading…',
   'upload.failed': 'Didn’t upload',
   'upload.tooLarge': 'Larger than {size}',
+  'upload.uploadingPercent': 'Uploading… {percent}%',
+  'upload.progressOf': 'Uploading {name}',
   'upload.retry': 'Retry {name}',
   'upload.remove': 'Remove {name}',
   'upload.discardFailed': '{name} was removed here, but not from the server.',
