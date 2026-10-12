@@ -26,6 +26,7 @@ import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { twoColourPng } from '../../testing/png';
 import { aMemoryStore } from '../../testing/storage';
 
 afterAll(async () => {
@@ -34,6 +35,9 @@ afterAll(async () => {
 
 const clock = fixedClock(NOW);
 
+/** One store for the file, so what an owner uploads is there when they read it back. */
+const STORE = aMemoryStore();
+
 const call = async (
   db: Executor,
   method: string,
@@ -41,7 +45,7 @@ const call = async (
   cookie: string,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock, storage: aMemoryStore() })).handle(
+  await createApp(testDependencies({ database: db, clock, storage: STORE })).handle(
     new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)),
   );
 
@@ -63,11 +67,29 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   );
   // A root with one reply, so every message endpoint the owner crosses has something to
   // succeed on: a thread to read, one that can be resolved, one that can be reopened.
+  // An image the root carries, and an upload not sent yet: every attachment endpoint has one to
+  // succeed on.
+  const uploadOne = async (): Promise<string> => {
+    const id = messageId(new Date(NOW.getTime() - 1_000));
+    await created(
+      await call(
+        db,
+        'POST',
+        `/api/workspaces/${workspaceId}/uploads?id=${id}&name=crossing.png`,
+        cookie,
+        twoColourPng(32, 32),
+      ),
+    );
+    return id;
+  };
+  const attachmentId = await uploadOne();
+  const unsentAttachmentId = await uploadOne();
   const root = messageId(NOW);
   await created(
     await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
       id: root,
       content: 'a question',
+      attachmentIds: [attachmentId],
     }),
   );
   await created(
@@ -77,24 +99,32 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       parentId: root,
     }),
   );
-  return { workspaceId, channelId, messageId: root };
+  return { workspaceId, channelId, messageId: root, attachmentId, unsentAttachmentId };
 };
 
 const NEVER_EXISTED: Ids = {
   workspaceId: '00000000-0000-4000-8000-000000000000',
   channelId: '00000000-0000-4000-8000-000000000000',
   messageId: '00000000-0000-4000-8000-000000000000',
+  attachmentId: '00000000-0000-4000-8000-000000000000',
+  unsentAttachmentId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
   workspaceId: 'not-a-uuid',
   channelId: 'not-a-uuid',
   messageId: 'not-a-uuid',
+  attachmentId: 'not-a-uuid',
+  unsentAttachmentId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {
   for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
     const [method = '', path = ''] = key.split(' ');
+
+    // A discard names an upload nobody has sent; everything else, the one the root carries.
+    const aimed = (ids: Ids): Ids =>
+      crossing.unsent === true ? { ...ids, attachmentId: ids.unsentAttachmentId } : ids;
 
     test(`${key} answers 404 across a tenant boundary, as if it did not exist`, async () => {
       await withRollback(async (db) => {
@@ -112,7 +142,7 @@ describe('integration: cross-tenant isolation', () => {
         const across = await call(
           db,
           method,
-          pathFor(`${path}${queryFor(crossing)}`, theirs),
+          pathFor(`${path}${queryFor(crossing)}`, aimed(theirs)),
           stranger,
           body,
         );
@@ -124,7 +154,7 @@ describe('integration: cross-tenant isolation', () => {
           const elsewhere = await call(
             db,
             method,
-            pathFor(`${path}${queryFor(crossing)}`, ids),
+            pathFor(`${path}${queryFor(crossing)}`, aimed(ids)),
             stranger,
             body,
           );
@@ -137,7 +167,7 @@ describe('integration: cross-tenant isolation', () => {
         const own = await call(
           db,
           method,
-          pathFor(`${path}${queryFor(crossing)}`, theirs),
+          pathFor(`${path}${queryFor(crossing)}`, aimed(theirs)),
           owner,
           body,
         );

@@ -17,8 +17,8 @@
  * they were not in.
  */
 import { Value } from '@sinclair/typebox/value';
-import { Uuid, type ChannelType } from '@purlay/types';
-import type { Database, Executor, SelectQueryBuilder } from '@purlay/db';
+import { Uuid, type AttachmentKind, type ChannelType } from '@purlay/types';
+import { sql, type Database, type Executor, type SelectQueryBuilder } from '@purlay/db';
 import { AppError } from './errors';
 import type { WorkspaceContext } from './tenancy';
 
@@ -249,4 +249,74 @@ export const requireMessageById = async (
     messageId,
     parentId: row.parentId,
   };
+};
+
+/** An attachment the caller may read, with where its bytes are. */
+export interface ReadableAttachment {
+  readonly id: string;
+  readonly storageKey: string;
+  /** An image's thumbnail; null for a file. */
+  readonly thumbnailKey: string | null;
+  readonly fileName: string;
+  readonly kind: AttachmentKind;
+}
+
+/** The one refusal for an attachment that is not there for the caller. */
+export const attachmentNotFound = (): AppError =>
+  new AppError({ code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found.' });
+
+/**
+ * For a route that names an attachment (`/api/attachments/:attachmentId`, D-109 §6): **one query**,
+ * so an id that never existed, somebody else's unsent upload, one in a channel the caller cannot
+ * see and one whose message was deleted are the same refusal at the same cost (as
+ * `requireMessageById`, #200).
+ *
+ * Unattached, it is its uploader's while they are in its workspace. Attached, it is whoever can see
+ * its message's channel — by `visibleChannels`, the rule every entry point uses — and nobody's once
+ * the message is deleted: the tombstone hides what was shown with the words.
+ */
+export const requireAttachmentById = async (
+  executor: Executor,
+  userId: string,
+  attachmentId: string,
+): Promise<ReadableAttachment> => {
+  if (!Value.Check(Uuid, attachmentId)) throw attachmentNotFound();
+  const row = await executor
+    .selectFrom('attachments')
+    .select([
+      'attachments.id as id',
+      'attachments.storage_key as storageKey',
+      'attachments.thumbnail_key as thumbnailKey',
+      'attachments.file_name as fileName',
+      'attachments.kind as kind',
+    ])
+    .where('attachments.id', '=', attachmentId)
+    .where((eb) =>
+      eb.or([
+        eb.and([
+          eb('attachments.message_id', 'is', null),
+          eb('attachments.uploader_id', '=', userId),
+          eb.exists(
+            eb
+              .selectFrom('workspace_members')
+              .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
+              .select('workspace_members.user_id')
+              .whereRef('workspace_members.workspace_id', '=', 'attachments.workspace_id')
+              .where('workspace_members.user_id', '=', userId)
+              .where('workspaces.deleted_at', 'is', null),
+          ),
+        ]),
+        // Correlated, so it looks at this attachment's one message, not every visible one.
+        eb.exists(
+          visibleChannels(executor, userId)
+            .innerJoin('messages', 'messages.channel_id', 'channels.id')
+            .select('messages.id')
+            .where('messages.id', '=', sql.ref<string>('attachments.message_id'))
+            .where('messages.deleted_at', 'is', null),
+        ),
+      ]),
+    )
+    .executeTakeFirst();
+  if (row === undefined) throw attachmentNotFound();
+  return row;
 };

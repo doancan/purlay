@@ -85,6 +85,7 @@ import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
+import { discardAttachment, downloadAttachment } from './attachments';
 
 export interface Dependencies {
   readonly config: Config;
@@ -418,6 +419,35 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       // The body is the file, read by the handler after the session and the membership (D-109 §3).
       { parse: 'none' },
     )
+    .get('/api/attachments/:attachmentId', async ({ request, params, set }) => {
+      const { body, headers } = await downloadAttachment(
+        dependencies,
+        request,
+        params.attachmentId,
+        'original',
+      );
+      Object.assign(set.headers, headers);
+      return body;
+    })
+    .get('/api/attachments/:attachmentId/thumbnail', async ({ request, params, set }) => {
+      const { body, headers } = await downloadAttachment(
+        dependencies,
+        request,
+        params.attachmentId,
+        'thumbnail',
+      );
+      Object.assign(set.headers, headers);
+      return body;
+    })
+    .delete('/api/attachments/:attachmentId', async ({ request, params, set }) => {
+      await discardAttachment(
+        { ...sending, storage: dependencies.storage, log: dependencies.log },
+        request,
+        params.attachmentId,
+      );
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),

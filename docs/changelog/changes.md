@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: attachments are read through the API, and nothing in them runs (D-109 §6)
+
+- `GET /api/attachments/:id` and `/thumbnail` serve the bytes behind an id to whoever may read them —
+  the uploader while unsent, then whoever sees the message's channel, never a deleted message's — and
+  `404 ATTACHMENT_NOT_FOUND` to everyone else alike. An image is drawn as the WebP it was stored as;
+  anything else, SVG and HTML included, is a download: `attachment`, `application/octet-stream`,
+  `nosniff` and a sandboxing policy, so an uploaded script cannot run on this origin.
+- `DELETE /api/attachments/:id` throws away one's own unsent upload, its objects with it.
+
 ### Feature — 2026-10-12: sending a message with attachments (D-109 §7)
 
 - A send — over the socket or HTTP — names the uploads it carries, up to ten; they become the
