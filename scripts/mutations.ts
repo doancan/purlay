@@ -2156,4 +2156,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "    if (item.type === 'never') {\n",
     tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
   },
+  {
+    id: 'feed-read-in-flight-never-read-again',
+    why: 'a feed being read when the subscription was answered keeps what it read, and a reply that landed in that gap is never shown',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '      if (settled(query)) continue;\n',
+    replace: '      if (query.queryKey.length > 0) continue;\n',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
 ];
