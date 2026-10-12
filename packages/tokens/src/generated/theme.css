@@ -71,6 +71,7 @@
   --container-members: var(--size-members);
   --container-feed: var(--size-feed-max);
   --container-attachment: var(--size-attachment);
+  --height-attachment: var(--size-attachment);
   --height-control: var(--size-control);
   --height-touch: var(--size-touch);
   --container-touch: var(--size-touch);

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a link to a picture shows the picture (#110)
+
+- A message's `https` links to a `.png`, `.jpg`, `.gif` or `.webp` — up to three — are drawn under it
+  through the API's image proxy, each a link to the original; the picture's host never sees the
+  reader. One that cannot be shown draws nothing.
+
 ### Security — 2026-10-12: an image proxy that cannot be pointed inside (#110)
 
 - `GET /api/images?url=` fetches an image on another server for whoever is signed in, and serves the

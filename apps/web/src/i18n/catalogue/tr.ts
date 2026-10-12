@@ -90,6 +90,7 @@ export const tr = {
   'invite.gone.body': 'Süresi dolmuş ya da iptal edilmiş olabilir. Yenisini iste.',
   'invite.failed.title': 'Davet okunamadı',
   'invite.home': 'Ana sayfaya dön',
+  'message.imageFrom': '{host} adresinden bir görsel',
   'github.state.open': 'Açık',
   'github.state.closed': 'Kapalı',
   'github.state.merged': 'Birleştirildi',

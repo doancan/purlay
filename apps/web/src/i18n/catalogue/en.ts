@@ -90,6 +90,7 @@ export const en = {
   'invite.gone.body': 'It may have expired or been revoked. Ask for a new one.',
   'invite.failed.title': 'Could not read the invitation',
   'invite.home': 'Go home',
+  'message.imageFrom': 'An image from {host}',
   'github.state.open': 'Open',
   'github.state.closed': 'Closed',
   'github.state.merged': 'Merged',

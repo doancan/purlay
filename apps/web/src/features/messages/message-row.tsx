@@ -30,6 +30,7 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { renderContent } from '../content/render-content';
 import { GitHubCards } from '../content/github-cards';
+import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
@@ -193,6 +194,7 @@ const MessageRowView = ({
         </div>
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
         {!deleted && <GitHubCards content={message.content} />}
+        {!deleted && <ImageLinks content={message.content} />}
         {!deleted && <Attachments attachments={message.attachments} />}
         {!deleted && <ReactionBar message={message} meId={meId} />}
         {failed && (

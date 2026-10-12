@@ -371,8 +371,13 @@ test.describe('typing', () => {
     await expect(rowWith(alice, 'a room to type in')).toBeVisible();
     const line = page.getByText(/is typing…$/);
 
+    // A keystroke made before her socket is open says nothing — it is not worth an HTTP request
+    // (D-114) — and the next one does: so she goes on typing until the other page hears it.
     await composer(alice, made.name).pressSequentially('almost');
-    await expect(line).toBeVisible();
+    await expect(async () => {
+      await composer(alice, made.name).press('.');
+      await expect(line).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     // Never told about themselves.
     await expect(alice.getByText(/is typing…$/)).toHaveCount(0);
 

@@ -628,8 +628,10 @@ stored representation. (D-36)
 4. Detect GitHub PR/Issue URLs → `metadata.githubLinks`.
 5. Sanitise by narrowing: the engine never recognises raw HTML, and the tree a renderer is given
    holds only the kinds the product draws, and links only to the addresses D-101 §2 allows. The same
-   function runs where the browser renders. External images are links until the client draws them
-   through the proxy, `GET /api/images` (#110, `docs/spikes/image-proxy.md`): the API fetches over
+   function runs where the browser renders. Markdown's image syntax stays unrecognised; a **link to a
+   picture** (an `https` address whose path ends in `.png`, `.jpg`, `.gif` or `.webp`, up to three a
+   message) is drawn under the words through the proxy, `GET /api/images` (#110,
+   `docs/spikes/image-proxy.md`), never from its own host: the API fetches over
    `node:https` with a `lookup` that refuses the name unless every address is public unicast and
    connects only to what it checked, on a fresh connection, following no redirect, within a byte cap
    and five seconds, and serves its own WebP re-encoding — so no reader's address reaches the image's
