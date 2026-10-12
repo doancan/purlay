@@ -29,7 +29,7 @@ import type { GitHubClient } from '../../modules/auth/github';
 import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
 import { clearedStateCookie } from '../../platform/cookies';
 import { clientAddress, peerOf } from './client-address';
-import { httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
+import { GITHUB_CALL_BUDGET, httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
 import { inProcessRateLimiter } from '../../realtime/rate-limiter';
 import { AppError } from '../../platform/errors';
 import {
@@ -195,6 +195,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     dependencies.rateBudgets?.writes ?? WRITE_BUDGET,
   );
   const sockets = createSocketLifecycle({ ...dependencies, userWrites });
+  // One bucket per workspace for calls to GitHub, so one member cannot spend the workspace's token.
+  const githubCalls = inProcessRateLimiter(dependencies.clock, GITHUB_CALL_BUDGET);
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
@@ -333,7 +335,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/integrations/github/unfurl',
       async ({ request, body }) =>
         await unfurlLink(
-          { ...dependencies, cipher, githubApi: dependencies.githubApi ?? githubApi() },
+          {
+            ...dependencies,
+            cipher,
+            githubApi: dependencies.githubApi ?? githubApi(),
+            githubCalls,
+          },
           request,
           body,
         ),

@@ -46,6 +46,13 @@ export const WRITE_BUDGET: RateBudget = SOCKET_FRAME_BUDGET;
  */
 export const COSTLY_READ_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
 
+/**
+ * Calls to GitHub per workspace: a hundred at once, then one a second — under the hourly quota of the
+ * workspace's one token (5,000 at the time of writing), whoever is asking. Without it one member could
+ * ask for links nobody wrote and spend the token for everyone (found by review). Provisional (O-4).
+ */
+export const GITHUB_CALL_BUDGET: RateBudget = { perSecond: 1, burst: 100 };
+
 /** The routes charged to `COSTLY_READ_BUDGET`: what a screen asks for to draw, whatever the method. */
 const COSTLY_READS: ReadonlySet<string> = new Set([
   '/api/images',
@@ -53,6 +60,16 @@ const COSTLY_READS: ReadonlySet<string> = new Set([
 ]);
 
 const STATE_CHANGING: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * A path as the router matches it: the router is not strict, so `/api/images/` reaches the same
+ * handler as `/api/images`, and a limiter comparing the raw path let that spelling through uncharged
+ * (found by review). Repeated slashes are one, and a trailing one is dropped.
+ */
+const routeOf = (pathname: string): string => {
+  const collapsed = pathname.replace(/\/{2,}/g, '/');
+  return collapsed.length > 1 ? collapsed.replace(/\/+$/, '') : collapsed;
+};
 
 /** Seconds until one more request would be admitted, for `Retry-After`. At least one. */
 export const retryAfterSeconds = (budget: RateBudget): number =>
@@ -99,7 +116,7 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
   const costlyReads = inProcessRateLimiter(clock, budgets.costlyReads);
 
   return async (request, peer) => {
-    const { pathname } = new URL(request.url);
+    const pathname = routeOf(new URL(request.url).pathname);
 
     if (pathname.startsWith('/auth/')) {
       const address = clientAddress(peer, request.headers, trustProxy);

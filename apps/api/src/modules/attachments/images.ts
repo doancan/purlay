@@ -49,16 +49,29 @@ const tooLarge = (): AppError =>
 const codeOf = (error: unknown): unknown =>
   typeof error === 'object' && error !== null ? Reflect.get(error, 'code') : undefined;
 
+/** Every slot is taken and the line for them is as long as it may be: nothing was run. */
+export class SlotsFull extends Error {
+  public constructor() {
+    super('every slot is taken and the queue for them is full');
+  }
+}
+
 /**
- * At most `limit` jobs at once; the rest wait their turn, in order. A freed slot is handed to the
- * next waiter rather than given back: given back, a newcomer arriving before the waiter wakes takes
- * it too, and one more runs than the limit.
+ * At most `limit` jobs at once; the rest wait their turn, in order, at most `maxWaiting` of them — a
+ * job past that is refused at once with `SlotsFull`, so a line that only grows cannot hold every
+ * caller's connection (found by review, for the image proxy). A freed slot is handed to the next
+ * waiter rather than given back: given back, a newcomer arriving before the waiter wakes takes it
+ * too, and one more runs than the limit.
  */
-export const slots = (limit: number): (<T>(work: () => Promise<T>) => Promise<T>) => {
+export const slots = (
+  limit: number,
+  maxWaiting = Number.POSITIVE_INFINITY,
+): (<T>(work: () => Promise<T>) => Promise<T>) => {
   let running = 0;
   const waiting: (() => void)[] = [];
   return async <T>(work: () => Promise<T>): Promise<T> => {
     if (running >= limit) {
+      if (waiting.length >= maxWaiting) throw new SlotsFull();
       await new Promise<void>((resolve) => {
         waiting.push(resolve);
       });

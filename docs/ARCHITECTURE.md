@@ -640,7 +640,8 @@ stored representation. (D-36)
    and five seconds, and serves its own WebP re-encoding — so no reader's address reaches the image's
    host and no address inside the network is reachable through it. It is charged to the reader's
    budget for costly reads — not the one they send with (D-81) — and only the fetch holds one of the
-   node's four slots. **Accepted, stated:** a name
+   node's four slots, with at most sixteen waiting for one: past that line a picture is not available
+   now, the same 404 as any failure, rather than another connection held. **Accepted, stated:** a name
    refused by policy fails in the time DNS takes and a reachable host in the time it answers, so an
    attacker can tell which names resolve privately; and a public service that trusts this server's
    address can be sent a GET — to a name with a publicly trusted certificate, returning nothing but an

@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-13: three ways one member could spend what everyone shares
+
+- Found by an independent review of the budget changes. `/api/images/`, with a trailing slash, reached
+  the image proxy uncharged; the limiter now compares the path the router matches. Asking for GitHub
+  links nobody wrote spent a call of the workspace's one token each; calls to GitHub now have a budget
+  per workspace, under the token's hourly quota. And the line for the node's four image-fetch slots
+  only grew; past sixteen waiting a picture is refused at once (D-81).
+
 ### Quality — 2026-10-13: the latency budgets measured at the build target (`docs/spikes/capacity.md`)
 
 - One API process with 300 sockets in a channel and 20 messages a second: ACK p95 19–21 ms, fan-out

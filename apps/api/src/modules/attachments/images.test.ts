@@ -7,7 +7,14 @@ import { describe, expect, test } from 'bun:test';
 import { ATTACHMENT_PIXELS_MAX } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import { claimingPng, twoColourPng } from '../../testing/png';
-import { IMAGE_LONGEST_SIDE, THUMBNAIL_SIDE, readImage, slots, type OpenImage } from './images';
+import {
+  IMAGE_LONGEST_SIDE,
+  SlotsFull,
+  THUMBNAIL_SIDE,
+  readImage,
+  slots,
+  type OpenImage,
+} from './images';
 
 /** A JPEG with an EXIF block carrying only an orientation, placed right after its start marker. */
 const withOrientation = (jpeg: Uint8Array, orientation: number): Uint8Array => {
@@ -148,6 +155,32 @@ describe('the decode slots', () => {
       await Promise.all(all);
       expect({ depth, most }).toEqual({ depth, most: 2 });
     }
+  });
+
+  test('with a bound on waiting, a job past it is refused at once and runs nothing; a freed place is taken again', async () => {
+    const run = slots(1, 1);
+    const releases: (() => void)[] = [];
+    let ran = 0;
+    const held = (): Promise<void> =>
+      run(async () => {
+        ran += 1;
+        await new Promise<void>((resolve) => releases.push(resolve));
+      });
+    const first = held();
+    const second = held();
+    await aTurn();
+    let third: unknown = null;
+    await run(() => Promise.resolve('never')).catch((error: unknown) => {
+      third = error;
+    });
+    expect(third).toBeInstanceOf(SlotsFull);
+    expect(ran).toBe(1);
+    releases.shift()?.();
+    await aTurn();
+    releases.shift()?.();
+    await Promise.all([first, second]);
+    expect(ran).toBe(2);
+    expect(await run(() => Promise.resolve('room again'))).toBe('room again');
   });
 
   test('a job that throws gives its slot back', async () => {

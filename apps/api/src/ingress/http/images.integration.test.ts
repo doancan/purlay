@@ -11,6 +11,7 @@ import { NOW, testDependencies } from '../../testing/doubles';
 import { twoColourPng } from '../../testing/png';
 import { aSignedInUser } from '../../testing/signed-in';
 import type { ExternalFetch } from '../../modules/images/proxy';
+import { FETCHES_WAITING } from './images';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -131,4 +132,73 @@ describe('integration: an external image through the API', () => {
       expect(await ask()).toBe(429);
     });
   });
+
+  /** Found by review: a line for the node's few fetch slots that only grew held every caller waiting. */
+  test('past the line for fetch slots a picture is not available now, at once; the line itself is served', async () => {
+    await withRollback(async (db) => {
+      const { cookie } = await aSignedInUser(db, clock, 'img-queue');
+      const releases: (() => void)[] = [];
+      const slow: ExternalFetch = async () => {
+        await new Promise<void>((resolve) => releases.push(resolve));
+        return { kind: 'bytes', bytes: twoColourPng(8, 8) };
+      };
+      const app = createApp(testDependencies({ database: db, clock, externalFetch: slow }));
+      const ask = (n: number): Promise<number> =>
+        app
+          .handle(
+            new Request(`${ORIGIN}/api/images?url=${encodeURIComponent(`${IMAGE}?${String(n)}`)}`, {
+              headers: { cookie },
+            }),
+          )
+          .then((response) => response.status);
+      const held = Array.from({ length: 4 + FETCHES_WAITING }, (_, n) => ask(n));
+      for (let turn = 0; turn < 20 && releases.length < 4; turn += 1) await Bun.sleep(5);
+      expect(releases).toHaveLength(4);
+      expect(await ask(999)).toBe(404);
+      // Each held fetch let go, and each waiter after it, until every one has answered.
+      const done = Promise.all(held);
+      const state = { settled: false };
+      void done.then(() => {
+        state.settled = true;
+      });
+      while (!state.settled) {
+        releases.shift()?.();
+        await Bun.sleep(1);
+      }
+      expect(await done).toEqual(Array.from({ length: 4 + FETCHES_WAITING }, () => 200));
+    });
+  });
+
+  /** Found by review: the router takes these spellings to the same handler; the limiter did not. */
+  test.each(['/api/images/', '//api/images', '/api//images'])(
+    '%s is the same route and is charged the same',
+    async (path) => {
+      await withRollback(async (db) => {
+        const { cookie } = await aSignedInUser(db, clock, 'img-spelling');
+        const app = createApp(
+          testDependencies({
+            database: db,
+            clock,
+            externalFetch: serving(twoColourPng(8, 8)),
+            rateBudgets: {
+              auth: { perSecond: 1, burst: 1 },
+              writes: { perSecond: 1, burst: 1 },
+              costlyReads: { perSecond: 0.001, burst: 1 },
+            },
+          }),
+        );
+        const ask = async (at: string): Promise<number> =>
+          (
+            await app.handle(
+              new Request(`${ORIGIN}${at}?url=${encodeURIComponent(IMAGE)}`, {
+                headers: { cookie },
+              }),
+            )
+          ).status;
+        // Whatever the spelling reaches, it is charged: the plain one after it is refused.
+        expect([200, 404]).toContain(await ask(path));
+        expect(await ask('/api/images')).toBe(429);
+      });
+    },
+  );
 });
