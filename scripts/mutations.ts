@@ -1714,6 +1714,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/audit/audit.integration.test.ts'],
   },
   {
+    id: 'permission-table-wrong-about-ownership',
+    why: 'the table says an admin may transfer ownership; the suite must find the server disagreeing',
+    file: 'apps/api/src/testing/permissions.ts',
+    find: "    endpoint: 'PATCH /api/workspaces/:workspaceId/members/:userId',\n    allowed: { owner: true, admin: false, member: false },\n",
+    replace:
+      "    endpoint: 'PATCH /api/workspaces/:workspaceId/members/:userId',\n    allowed: { owner: true, admin: true, member: false },\n",
+    tests: ['apps/api/src/ingress/http/permissions.integration.test.ts'],
+  },
+  {
+    id: 'permission-table-misses-an-endpoint',
+    why: 'a role-gated endpoint ships with nobody having tried it as each role',
+    file: 'apps/api/src/testing/permissions.ts',
+    find: "    endpoint: 'GET /api/workspaces/:workspaceId/audit',\n",
+    replace: "    endpoint: 'DELETE /api/messages/:messageId',\n",
+    tests: ['apps/api/src/testing/permissions.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',
