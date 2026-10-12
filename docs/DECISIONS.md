@@ -4389,7 +4389,7 @@ D-10 fixed the index and the scope; nothing fixed what a search *means*. Served 
 `idx_messages_search`. `%`, `_` and `\` are what the person typed, escaped before they reach the
 pattern: a search for `100%` is not a search for `100`. Nothing is stemmed, split or ranked (D-10).
 
-**2 · Three characters at least, two hundred at most, after trimming** (`SEARCH_QUERY_MIN`,
+**2 · A trigram at least, and a bounded length, after trimming** (`SEARCH_QUERY_MIN`,
 `SEARCH_QUERY_MAX` in `@purlay/types`). Below a trigram the index cannot narrow anything, so a
 two-letter search is a scan of the workspace; the maximum bounds the pattern a request may hand to
 the database. A query outside them is `400 VALIDATION_FAILED`, never an empty page.

@@ -153,7 +153,11 @@ export const SEARCH_QUERY_MAX = 200;
  * `before`. `%`, `_` and `\` are themselves, not patterns.
  */
 export const SearchQuery = FromClient({
-  q: Type.String({ minLength: SEARCH_QUERY_MIN, maxLength: SEARCH_QUERY_MAX }),
+  q: Type.String({
+    minLength: SEARCH_QUERY_MIN,
+    maxLength: SEARCH_QUERY_MAX,
+    format: 'plain-text',
+  }),
   channelId: Type.Optional(Uuid),
   before: Type.Optional(Uuid),
   limit: Type.Optional(

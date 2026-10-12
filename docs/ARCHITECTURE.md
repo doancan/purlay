@@ -572,9 +572,9 @@ export interface ChannelContext {
 
 Channel-scoped repositories take a `ChannelContext` and apply the filter internally, so an
 unscoped query does not compile. **Workspace-wide reads — search and the open-questions view —
-take the set of channel ids this user can see from the guard and narrow with
-`channel_id = ANY($1)`**, which is also what confines the trigram scan to a few channels instead
-of the whole tenant.
+take the set of channel ids this user can see from the guard and narrow the query by it**
+(`channel_id IN (…)`), never filtering the rows afterwards. The workspace filter is what confines
+the trigram scan to one tenant (`idx_messages_search`); the channel set is applied to what it finds.
 
 Like §7.3, the answer across a boundary is **404**. Every channel-scoped endpoint carries an
 intra-workspace visibility test asserting it — and the guard raises **one value** for all four ways
