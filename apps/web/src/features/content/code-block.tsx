@@ -10,8 +10,9 @@
  * font, so nothing shifts; a language it does not know, or a grammar that did not load,
  * simply stays as it was. The highlighter is the page's port (`content-ports.tsx`).
  *
- * The clamp is `max-h-code` (a token) with `overflow-hidden`: a block over twelve lines is
- * never taller than the feed can use, and the person opens it when they want all of it.
+ * The clamp is `max-h-code` (a token) with `overflow-hidden`, under a fade into the block's own
+ * background (`ARCHITECTURE.md` §8.2): a block over twelve lines is never taller than the feed can
+ * use, it shows that there is more, and the person opens it when they want all of it.
  */
 import { useEffect, useState } from 'react';
 import { Icon } from '../../components/icon';
@@ -105,18 +106,28 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
           <span>{t('message.code.copy')}</span>
         </button>
       </figcaption>
-      <pre
-        // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it.
-        // The clamp hides rather than scrolls, so it takes none.
-        tabIndex={clamped ? undefined : 0}
-        aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
-        className={cn(
-          'overflow-x-auto px-3 py-2 text-code text-ink',
-          clamped && 'max-h-code overflow-y-hidden',
+      <div className="relative">
+        <pre
+          // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it.
+          // The clamp hides rather than scrolls, so it takes none.
+          tabIndex={clamped ? undefined : 0}
+          aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
+          className={cn(
+            'overflow-x-auto px-3 py-2 text-code text-ink',
+            clamped && 'max-h-code overflow-y-hidden',
+          )}
+        >
+          <code>{lines === null ? code : <Tokens lines={lines} />}</code>
+        </pre>
+        {clamped && (
+          // The fade into the block's own background says there is more below the clamp.
+          <span
+            aria-hidden="true"
+            data-code-fade
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-control bg-linear-to-b from-transparent to-code-bg"
+          />
         )}
-      >
-        <code>{lines === null ? code : <Tokens lines={lines} />}</code>
-      </pre>
+      </div>
       {count > CLAMP_ABOVE_LINES && (
         <button
           type="button"

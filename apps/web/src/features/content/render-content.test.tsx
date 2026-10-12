@@ -491,20 +491,26 @@ describe('a code block', () => {
   });
 
   test('twelve lines are shown whole; thirteen and over are clamped and open on request', async () => {
+    // The fade says there is more below a clamp (`ARCHITECTURE.md` §8.2); it is drawing, not text.
+    const fade = (view: { container: HTMLElement }): Element | null =>
+      view.container.querySelector('[data-code-fade]');
     const whole = await mount(`\`\`\`\n${twelve}\n\`\`\``);
     expect(whole.queryByRole('button', { name: /Show all/ })).toBeNull();
     expect(whole.container.querySelector('pre')?.className).not.toContain('max-h-code');
+    expect(fade(whole)).toBeNull();
     whole.unmount();
 
     const view = await mount(`\`\`\`\n${fourteen}\n\`\`\``);
     const pre = view.container.querySelector('pre');
     expect(pre?.className).toContain('max-h-code');
+    expect(fade(view)?.getAttribute('aria-hidden')).toBe('true');
     expect(pre?.getAttribute('tabindex')).toBeNull();
     const open = view.getByRole('button', { name: 'Show all 14 lines' });
     expect(open.getAttribute('aria-expanded')).toBe('false');
     await person().click(open);
     expect(view.container.querySelector('pre')?.className).not.toContain('max-h-code');
     expect(view.container.querySelector('pre')?.getAttribute('tabindex')).toBe('0');
+    expect(fade(view)).toBeNull();
     const close = view.getByRole('button', { name: 'Show fewer lines' });
     expect(close.getAttribute('aria-expanded')).toBe('true');
     await person().click(close);

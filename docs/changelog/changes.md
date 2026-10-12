@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a clamped code block shows that there is more (`ARCHITECTURE.md` §8.2)
+
+- A block over twelve lines now fades into its background at the clamp, instead of ending on a cut
+  line that looks like the end of the code.
+
 ### Feature — 2026-10-12: search, in the client (D-105)
 
 - Search, under Inbox in the sidebar: type, press Enter, and the words are found as typed, ignoring
