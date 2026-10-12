@@ -27,8 +27,7 @@ const ringOfFocused = async (page: Page): Promise<{ what: string; ring: number }
       element.parentElement === null ? 0 : width(element.parentElement),
       element.parentElement?.parentElement == null ? 0 : width(element.parentElement.parentElement),
     );
-    const name =
-      element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 40) ?? '';
+    const name = element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 40);
     return { what: `${element.tagName.toLowerCase()} "${name}"`, ring };
   });
 
