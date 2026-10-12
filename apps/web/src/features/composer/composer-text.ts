@@ -86,3 +86,51 @@ export const asCodeBlock = (pasted: string): string => {
 /** Rows to show: as many as the lines, within the bounds that keep the composer a line and not a page. */
 export const rowsFor = (text: string, min = 2, max = 12): number =>
   Math.min(max, Math.max(min, text.split('\n').length));
+
+/** What the caret covers: a point when `start` and `end` are equal. */
+export interface Selection {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** The three buttons under the box (D-110). Each only inserts markdown the keys also type. */
+export type MarkdownKind = 'bold' | 'code' | 'mention';
+
+/**
+ * The text and the caret after a button is pressed, as one pure answer so a key can share it.
+ *
+ * Bold wraps what is selected and keeps it selected; with nothing selected the caret waits
+ * between the markers. A code block opens and closes on lines of its own — a fence glued to a
+ * sentence is not a fence — around the selection or around an empty line for the caret. A mention
+ * is an `@` after a space, so it never glues itself to the word before; the person types the name
+ * (there is no member autocomplete yet, `UX.md` §5).
+ */
+export const insertMarkdown = (
+  text: string,
+  selection: Selection,
+  kind: MarkdownKind,
+): { readonly text: string; readonly selection: Selection } => {
+  const before = text.slice(0, selection.start);
+  const chosen = text.slice(selection.start, selection.end);
+  const after = text.slice(selection.end);
+  const at = before.length;
+  if (kind === 'bold') {
+    return {
+      text: `${before}**${chosen}**${after}`,
+      selection: { start: at + 2, end: at + 2 + chosen.length },
+    };
+  }
+  if (kind === 'code') {
+    const lead = before === '' || before.endsWith('\n') ? '' : '\n';
+    // A closing fence with words after it is not one, and would swallow the rest of the message.
+    const trail = after === '' || after.startsWith('\n') ? '' : '\n';
+    const open = `${lead}\`\`\`\n`;
+    return {
+      text: `${before}${open}${chosen}\n\`\`\`${trail}${after}`,
+      selection: { start: at + open.length, end: at + open.length + chosen.length },
+    };
+  }
+  const lead = before === '' || /\s$/.test(before) ? '' : ' ';
+  const caret = at + lead.length + 1;
+  return { text: `${before}${lead}@${chosen}${after}`, selection: { start: caret, end: caret } };
+};

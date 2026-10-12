@@ -164,11 +164,11 @@ describe('TextField', () => {
 });
 
 describe('a skeleton row', () => {
-  test('is the outline of a message row: an avatar circle and two lines, hidden from assistive technology', async () => {
+  test('is the outline of a message row: an avatar square and two lines, hidden from assistive technology', async () => {
     const { container } = await renderApp(<SkeletonRow />);
     const row = container.firstElementChild as HTMLElement;
     expect(row.getAttribute('aria-hidden')).toBe('true');
-    expect(row.querySelector('.size-avatar.rounded-pill')).not.toBeNull();
+    expect(row.querySelector('.size-avatar-lg.rounded-lg')).not.toBeNull();
     expect(row.querySelectorAll('.h-3')).toHaveLength(2);
   });
 });

@@ -66,8 +66,8 @@ const Chip = ({
       onClick={onToggle}
       className={
         mine
-          ? 'inline-flex h-badge items-center gap-1 rounded-pill border-hairline border-accent-text bg-accent-subtle px-2 text-label text-ink'
-          : 'inline-flex h-badge items-center gap-1 rounded-pill border-hairline border-border-strong px-2 text-label text-ink-muted hover:bg-surface-200 hover:text-ink'
+          ? 'inline-flex h-6 items-center gap-1 rounded-pill border-hairline border-accent-text bg-accent-subtle px-2 text-caption text-accent-text'
+          : 'inline-flex h-6 items-center gap-1 rounded-pill border-hairline border-border-subtle bg-surface-100 px-2 text-caption text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-050 hover:text-ink'
       }
     >
       <span aria-hidden="true">{reaction.emoji}</span>
@@ -89,7 +89,7 @@ export const ReactionBar = ({
   const toggle = useToggle(message, meId);
   if (message.reactions.length === 0) return null;
   return (
-    <div className="mt-1 flex flex-wrap gap-2">
+    <div className="mt-2 flex flex-wrap gap-2">
       {message.reactions.map((reaction) => (
         <Chip
           key={reaction.emoji}
@@ -121,7 +121,7 @@ export const ReactMenu = ({
         <button
           type="button"
           aria-label={t('message.addReaction')}
-          className="inline-flex h-control aspect-square items-center justify-center rounded-sm text-ink-muted hover:bg-surface-100 hover:text-ink"
+          className="inline-flex h-control aspect-square items-center justify-center rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink"
         >
           <Icon name="react" />
         </button>

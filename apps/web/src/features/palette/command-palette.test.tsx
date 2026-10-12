@@ -180,13 +180,13 @@ describe('a row has a tile', () => {
     const people = rows.filter((row) => row.textContent.includes('Bob'));
     expect(people.length).toBeGreaterThan(0);
     for (const row of people) {
-      const avatar = row.querySelector('.rounded-pill');
+      const avatar = row.querySelector('[data-avatar]');
       expect(avatar?.getAttribute('aria-hidden')).toBe('true');
       expect(avatar?.className).toContain('size-avatar-sm');
       expect(avatar?.textContent).toBe('BO');
     }
     const channel = rows.find((row) => spoken(row)?.startsWith('api') === true);
-    expect(channel?.querySelector('.rounded-pill')).toBeNull();
+    expect(channel?.querySelector('[data-avatar]')).toBeNull();
     expect(channel?.querySelector('svg')).not.toBeNull();
     // The search field is the pill at the top.
     expect(view.getByRole('combobox').parentElement?.className).toContain('rounded-pill');

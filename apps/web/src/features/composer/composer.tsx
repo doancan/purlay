@@ -23,7 +23,7 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent } from '@purlay/types';
-import { useContext, useEffect, useId, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useEngine } from '../../realtime/realtime-provider';
@@ -31,11 +31,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
 import { cn } from '../../ui/cn';
+import { IconButton } from '../../ui/icon-button';
 import { Kbd } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import {
   broadcastMention,
+  insertMarkdown,
   insideFence,
   isLongPaste,
   asCodeBlock,
@@ -43,6 +45,8 @@ import {
   trimEnd,
   unitsLeft,
   unitsOver,
+  type MarkdownKind,
+  type Selection,
 } from './composer-text';
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
 import { draftKey, readDraft, writeDraft } from './drafts';
@@ -144,6 +148,27 @@ const Inner = ({
     setText(next);
     // What was wrong with the old text is not known to be wrong with the new.
     setError(null);
+  };
+
+  /** Where the caret goes once the text a button inserted is in the box. */
+  const inserted = useRef<Selection | null>(null);
+  useLayoutEffect(() => {
+    const box = field.current;
+    const wanted = inserted.current;
+    if (box === null || wanted === null) return;
+    inserted.current = null;
+    box.focus();
+    box.setSelectionRange(wanted.start, wanted.end);
+  }, [text]);
+
+  /** One of the three buttons: markdown inserted at the caret, as a key would type it (D-110). */
+  const insert = (kind: MarkdownKind): void => {
+    const box = field.current;
+    const at = box === null ? text.length : box.selectionStart;
+    const to = box === null ? text.length : box.selectionEnd;
+    const next = insertMarkdown(text, { start: at, end: to }, kind);
+    inserted.current = next.selection;
+    change(next.text);
   };
 
   const send = (): void => {
@@ -277,7 +302,7 @@ const Inner = ({
       onClick={send}
       aria-disabled={empty}
       aria-label={t('composer.send')}
-      className="inline-flex size-control shrink-0 items-center justify-center rounded-pill bg-accent text-on-accent aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:size-touch"
+      className="inline-flex size-control shrink-0 items-center justify-center rounded-lg bg-accent text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:size-touch"
     >
       <Icon name="send" />
     </button>
@@ -285,7 +310,7 @@ const Inner = ({
 
   return (
     <div className="shrink-0 pb-4 pt-2">
-      <div className="mx-auto flex w-full max-w-feed flex-col gap-2 px-4">
+      <div className="flex w-full max-w-feed flex-col gap-2 px-5">
         <div
           data-composer-card=""
           onFocus={() => {
@@ -295,7 +320,7 @@ const Inner = ({
             if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
           }}
           className={cn(
-            'flex flex-col rounded-lg border-hairline border-border-strong bg-surface-100',
+            'flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-card transition-colors duration-hover ease-standard focus-within:border-border-strong',
             focused && 'outline-focus outline-focus-ring outline-offset-focus',
           )}
         >
@@ -324,9 +349,38 @@ const Inner = ({
             <div
               className={cn(
                 'flex items-center gap-3 px-4',
-                compact ? 'pb-2' : 'pb-3 pl-4 pr-3 pt-2',
+                compact ? 'pb-2' : 'pb-2 pl-2 pr-2 pt-1',
               )}
             >
+              {!compact && (
+                <span className="flex items-center gap-1">
+                  <IconButton
+                    label={t('composer.bold')}
+                    glyph="bold"
+                    onClick={() => {
+                      insert('bold');
+                    }}
+                  />
+                  <IconButton
+                    label={t('composer.codeBlock')}
+                    glyph="code"
+                    onClick={() => {
+                      insert('code');
+                    }}
+                  />
+                  <IconButton
+                    label={t('composer.mention')}
+                    glyph="mention"
+                    onClick={() => {
+                      insert('mention');
+                    }}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="mx-1 h-4 border-l-hairline border-border-subtle"
+                  />
+                </span>
+              )}
               {hintsBlock}
               {counter}
               {!compact && sendButton}

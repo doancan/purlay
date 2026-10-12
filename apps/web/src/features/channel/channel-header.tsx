@@ -25,24 +25,20 @@ import { NotificationLevelMenu } from './notification-level-menu';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
-  'inline-flex h-control items-center gap-2 whitespace-nowrap rounded-pill px-3 text-label hover:text-ink max-narrow:h-touch';
-/** The segment the person is on: raised out of the track, bordered rather than shadowed. */
-export const activeSegmentClasses =
-  'border-hairline border-border-subtle bg-surface-100 text-ink max-narrow:hidden';
-/** The track the two segments sit in. */
+  'inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
+/** The segment the person is on: raised out of the track by a one-pixel card shadow (D-110). */
+export const activeSegmentClasses = 'bg-surface-100 text-ink shadow-card max-narrow:hidden';
+/** The track the two segments sit in, at the header's right. */
 export const segmentTrackClasses =
-  'flex shrink-0 gap-1 rounded-pill bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
+  'ml-auto flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
 
-/** The square at the head of a header: what this screen is, in a glyph. */
+/** The glyph at the head of a header: what this screen is, quiet beside its name (D-110). */
 export const HeaderTile = ({
   children,
 }: {
   readonly children: React.ReactNode;
 }): React.JSX.Element => (
-  <span
-    aria-hidden="true"
-    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted max-narrow:hidden"
-  >
+  <span aria-hidden="true" className="inline-flex shrink-0 text-ink-subtle max-narrow:hidden">
     {children}
   </span>
 );
@@ -68,27 +64,30 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const [adding, setAdding] = useState(false);
 
   return (
-    <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
+    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
       <div className="flex min-w-0 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (
-          <Avatar name={channel.peer.displayName} username={channel.peer.username} size="lg" />
+          <Avatar name={channel.peer.displayName} username={channel.peer.username} size="sm" />
         ) : (
           <HeaderTile>
             <Icon
               name={direct ? 'person' : channel.type === 'private' ? 'private-channel' : 'channel'}
-              size="lg"
             />
           </HeaderTile>
         )}
-        <div className="flex min-w-0 flex-col">
-          <h1 className="truncate font-mono text-title text-ink">{title}</h1>
-          {!direct && (
-            <span className="truncate text-caption text-ink-muted max-narrow:hidden">
+        <h1 className="shrink-0 truncate text-heading text-ink">{title}</h1>
+        {!direct && (
+          <>
+            <span
+              aria-hidden="true"
+              className="h-4 shrink-0 border-l-hairline border-border-subtle max-narrow:hidden"
+            />
+            <span className="truncate text-label text-ink-muted max-narrow:hidden">
               {channel.topic ?? t('header.noTopic')}
             </span>
-          )}
-        </div>
+          </>
+        )}
       </div>
       <nav aria-label={t('header.views')} className={segmentTrackClasses}>
         <Link
@@ -106,7 +105,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
         >
           {t('header.questions')}
           {open !== null && open.count > 0 && (
-            <span className="font-mono text-warning-text">
+            <span className="font-mono text-caption text-warning-text">
               {format.number(open.count)}
               {open.more && '+'}
             </span>

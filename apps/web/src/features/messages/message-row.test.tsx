@@ -58,34 +58,37 @@ describe("a resolved thread's root", () => {
 describe('the avatar column', () => {
   test("a first message has the sender's avatar, hidden from a screen reader, and the time beside the name", async () => {
     const view = await mount(props({ message: aMessage(1, { sender: ALICE }) }));
-    const avatar = view.container.querySelector('[aria-hidden="true"].rounded-pill');
+    const avatar = view.container.querySelector('[aria-hidden="true"][data-avatar]');
     expect(avatar?.textContent).toBe('AL');
-    expect(avatar?.className).toContain('size-avatar');
+    expect(avatar?.className).toContain('size-avatar-lg');
     const header = view.getByText('alice').parentElement;
     expect(header?.querySelector('time')).not.toBeNull();
   });
 
   test('a grouped message has no avatar and no name; its time waits in the column for the pointer', async () => {
     const view = await mount(props({ grouped: true, message: aMessage(1, { sender: ALICE }) }));
-    expect(view.container.querySelector('.rounded-pill')).toBeNull();
+    expect(view.container.querySelector('[data-avatar]')).toBeNull();
     expect(view.queryByText('alice')).toBeNull();
     expect(view.container.querySelector('time')?.className).toContain('opacity-0');
   });
 
   test('a thread reply is the same row with a smaller avatar and a smaller column', async () => {
     const view = await mount(props({ compact: true, message: aMessage(1, { sender: ALICE }) }));
-    expect(view.container.querySelector('.rounded-pill')?.className).toContain('size-avatar-sm');
-    expect(view.getByRole('article').firstElementChild?.className).toContain('size-avatar-sm');
+    const avatar = view.container.querySelector('[data-avatar]');
+    expect(avatar?.className.split(' ')).toContain('size-avatar');
+    expect(view.getByRole('article').firstElementChild?.className.split(' ')).toContain(
+      'size-avatar',
+    );
   });
 
   test('the row under the pointer is tinted and a mention keeps its own tint', async () => {
     const view = await mount(props());
     const row = view.getByRole('article');
-    expect(row.className).not.toContain('bg-surface-200');
+    expect(row.className).not.toContain('bg-surface-050');
     act(() => {
       fireEvent.pointerOver(row);
     });
-    expect(row.className).toContain('bg-surface-200');
+    expect(row.className).toContain('bg-surface-050');
     const mention = await mount(
       props({ message: aMessage(2, { mentions: [ME.id], content: 'hi @dogancan' }) }),
     );
@@ -95,8 +98,8 @@ describe('the avatar column', () => {
       fireEvent.pointerOver(tinted);
     });
     expect(tinted.className).toContain('bg-accent-subtle');
-    expect(tinted.className).not.toContain('bg-surface-200');
-    expect(tinted.className).toContain('rounded-md');
+    expect(tinted.className).not.toContain('bg-surface-050');
+    expect(tinted.className).toContain('rounded-lg');
   });
 });
 
@@ -199,7 +202,7 @@ describe('what a row shows', () => {
     const view = await mount(
       props({ message: aMessage(1, { mentions: [ALICE.id], content: 'ask @alice' }) }),
     );
-    expect(view.container.querySelectorAll('.text-accent-text')).toHaveLength(0);
+    expect(view.container.querySelectorAll('[data-mention]')).toHaveLength(0);
   });
 
   test('the slots: below the content for a thread, and beside React for more actions', async () => {

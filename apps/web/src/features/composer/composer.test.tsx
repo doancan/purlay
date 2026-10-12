@@ -150,11 +150,13 @@ describe('what it shows', () => {
     );
     expect(view.queryByText('api ›')).toBeNull();
     const card = view.container.querySelector('[data-composer-card]');
-    expect(card?.className).toContain('rounded-lg');
+    // A card that floats a little above the conversation (D-110).
+    expect(card?.className).toContain('rounded-2xl');
+    expect(card?.className).toContain('shadow-card');
     expect(card?.contains(box())).toBe(true);
     const send = view.getByRole('button', { name: 'Send' });
     expect(card?.contains(send)).toBe(true);
-    expect(send.className).toContain('rounded-pill');
+    expect(send.className).toContain('bg-accent');
   });
 
   test('the hints are drawn only while focus is in the card, and are described to a screen reader always', async () => {
@@ -617,5 +619,60 @@ describe('focus', () => {
   test("a thread's box does not take focus when it appears", async () => {
     const { box } = await mount();
     expect(document.activeElement === box()).toBe(false);
+  });
+});
+
+describe('the three buttons under the box (D-110)', () => {
+  test('are named, reachable by Tab, and sit in the card', async () => {
+    const { view } = await mount();
+    const card = view.container.querySelector('[data-composer-card]');
+    for (const name of ['Bold', 'Code block', 'Mention someone']) {
+      const button = view.getByRole('button', { name });
+      expect(card?.contains(button)).toBe(true);
+      expect(button.getAttribute('tabindex')).not.toBe('-1');
+    }
+  });
+
+  test('Bold wraps what is selected, and keeps the box focused', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('fix it');
+    act(() => {
+      box().setSelectionRange(4, 6);
+    });
+    await user.click(view.getByRole('button', { name: 'Bold' }));
+    expect(box().value).toBe('fix **it**');
+    expect(document.activeElement).toBe(box());
+    expect([box().selectionStart, box().selectionEnd]).toEqual([6, 8]);
+  });
+
+  test('Code block opens a fence on its own line, the caret inside', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('see');
+    await user.click(view.getByRole('button', { name: 'Code block' }));
+    expect(box().value).toBe('see\n```\n\n```');
+    expect(box().selectionStart).toBe(8);
+  });
+
+  test('Mention starts a name, after a space', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('hi');
+    await user.click(view.getByRole('button', { name: 'Mention someone' }));
+    expect(box().value).toBe('hi @');
+    expect(document.activeElement).toBe(box());
+  });
+
+  test('what they insert is a draft like any other, and sends as typed', async () => {
+    const { view, box, user, sent } = await mount();
+    await user.click(box());
+    await user.keyboard('ship');
+    act(() => {
+      box().setSelectionRange(0, 4);
+    });
+    await user.click(view.getByRole('button', { name: 'Bold' }));
+    await user.click(view.getByRole('button', { name: 'Send' }));
+    expect(sent().map((frame) => frame.content)).toEqual(['**ship**']);
   });
 });

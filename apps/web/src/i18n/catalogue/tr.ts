@@ -236,6 +236,9 @@ export const tr = {
   'thread.actionFailed': 'Thread değişmedi.',
 
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
+  'composer.bold': 'Kalın',
+  'composer.codeBlock': 'Kod bloğu',
+  'composer.mention': 'Birini an',
   'composer.label': '{channel} kanalına mesaj',
   'composer.placeholder': '{channel} kanalına yaz. Enter gönderir, Shift+Enter yeni satır ekler.',
   'composer.send': 'Gönder',

@@ -93,14 +93,16 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
   };
 
   return (
-    <figure className="my-1 flex flex-col overflow-hidden rounded-md border-hairline border-border-subtle bg-code-bg">
-      <figcaption className="flex items-center gap-3 border-b-hairline border-border-subtle px-3 py-1 text-caption text-ink-muted">
-        <span className="font-mono">{language === '' ? t('message.code.plain') : language}</span>
-        <span>{t('message.code.lines', { count })}</span>
+    <figure className="my-2 flex flex-col overflow-hidden rounded-xl border-hairline border-border-subtle bg-code-bg shadow-card">
+      <figcaption className="flex h-row items-center gap-2 border-b-hairline border-border-subtle bg-surface-100 pr-1 pl-3 text-caption text-ink-muted">
+        <span className="rounded-pill bg-accent-subtle px-2 font-mono font-medium text-accent-text">
+          {language === '' ? t('message.code.plain') : language}
+        </span>
+        <span className="font-mono text-ink-subtle">{t('message.code.lines', { count })}</span>
         <button
           type="button"
           onClick={copy}
-          className="ml-auto inline-flex items-center gap-1 rounded-sm text-ink-muted hover:text-ink"
+          className="ml-auto inline-flex h-6 items-center gap-1 rounded-md px-2 text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
         >
           <Icon name="copy" size="sm" />
           <span>{t('message.code.copy')}</span>
@@ -135,7 +137,7 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
           onClick={() => {
             setOpen(!open);
           }}
-          className="flex items-center gap-1 border-t-hairline border-border-subtle px-3 py-1 text-caption text-ink-muted hover:text-ink"
+          className="flex h-control items-center justify-center gap-1 border-t-hairline border-border-subtle text-caption text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-050 hover:text-ink"
         >
           <Icon name={open ? 'collapse' : 'expand'} size="sm" />
           {open ? t('message.code.collapse') : t('message.code.expand', { count })}

@@ -51,6 +51,19 @@ describe('the avatar', () => {
     expect(node.getAttribute('aria-hidden')).toBe('true');
     expect(node.textContent).toBe('AC');
     expect(node.className).toContain('size-avatar-lg');
-    expect(node.className).toContain('rounded-pill');
+  });
+
+  test('is a rounded square, not a circle: a person, in a tool (D-110)', () => {
+    for (const [size, corner] of [
+      ['sm', 'rounded-md'],
+      ['md', 'rounded-lg'],
+      ['lg', 'rounded-lg'],
+    ] as const) {
+      const view = render(<Avatar name="Alice Chen" username="alice" size={size} />);
+      const node = view.container.firstElementChild as HTMLElement;
+      expect(node.className).toContain(corner);
+      expect(node.className).not.toContain('rounded-pill');
+      view.unmount();
+    }
   });
 });
