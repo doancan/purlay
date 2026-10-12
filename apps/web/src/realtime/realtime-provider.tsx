@@ -121,6 +121,12 @@ export const useConnectionStatus = (): ConnectionStatus =>
 export const useDegraded = (): Readonly<Record<string, DegradedReason>> =>
   useStore(useEngine().store, (state) => state.degraded);
 
+const NOBODY: readonly string[] = [];
+
+/** Who else is typing in a channel, in the order they began (D-114). */
+export const useTyping = (channelId: string): readonly string[] =>
+  useStore(useEngine().store, (state) => state.typing[channelId] ?? NOBODY);
+
 /** Every message in flight, across channels; filter with `useMemo` where a screen wants one channel's. */
 export const usePending = (): readonly PendingMessage[] =>
   useStore(useEngine().store, (state) => state.pending);

@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the composer says who else is typing (D-114, #411)
+
+- Typing in a channel's composer tells the room, rationed as the server rations it and only over an
+  open socket; the composer's footer names who else is typing there, in both interface languages.
+
 ### Feature — 2026-10-12: who is typing is heard, and rationed (D-114, #411)
 
 - A `TYPING` frame each way: a client names a channel it can see, the room hears who and for how

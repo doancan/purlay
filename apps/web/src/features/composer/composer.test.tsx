@@ -11,6 +11,7 @@ import {
   ATTACHMENTS_PER_MESSAGE_MAX,
   MESSAGE_CONTENT_MAX,
   type Attachment,
+  type ServerFrame,
 } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { SessionGate } from '../session/session';
@@ -884,5 +885,73 @@ describe('attaching files (D-109, #370)', () => {
   test('the attach button picks files with the keyboard, and is named in both languages', async () => {
     const { view } = await mount({ locale: 'tr' });
     expect(view.getByRole('button', { name: 'Dosya ekle' })).toBeDefined();
+  });
+});
+
+/** Who is typing (D-114, #411): said by the composer, shown beside its hints. */
+describe('typing', () => {
+  const typing = (userId: string): ServerFrame => ({
+    event: 'TYPING',
+    data: { channelId: IDS.api, userId, ttlMs: 6_000 },
+    ts: 0,
+  });
+  const line = (view: Mounted['view']): string =>
+    view.container.querySelector('[aria-live="polite"].truncate')?.textContent ?? '';
+
+  test('typing says so to the room once, naming the channel; spaces alone say nothing', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '   ');
+    expect(view.world.sockets.sent('TYPING')).toEqual([]);
+    await user.type(box(), 'hello');
+    expect(view.world.sockets.sent('TYPING').map((f) => f.payload)).toEqual([
+      { channelId: IDS.api },
+    ]);
+  });
+
+  test('names who is typing, two by name, more as several, and nobody once they stop', async () => {
+    const { view } = await mount();
+    expect(line(view)).toBe('');
+    act(() => {
+      view.world.sockets.deliver(typing(IDS.alice));
+    });
+    await settle();
+    expect(line(view)).toBe('Alice is typing…');
+    act(() => {
+      view.world.sockets.deliver(typing(IDS.bob));
+    });
+    await settle();
+    expect(line(view)).toBe('Alice and Bob are typing…');
+    act(() => {
+      view.world.sockets.deliver(typing('00000000-0000-4000-8000-0000000000f9'));
+    });
+    expect(line(view)).toBe('Several people are typing…');
+    act(() => {
+      view.world.timers.advance(6_000);
+    });
+    expect(line(view)).toBe('');
+  });
+
+  test('a person the workspace list does not hold is "someone", and it is said in Turkish', async () => {
+    const { view } = await mount({ locale: 'tr' });
+    act(() => {
+      view.world.sockets.deliver(typing('00000000-0000-4000-8000-0000000000f9'));
+    });
+    await settle();
+    expect(line(view)).toBe('Biri yazıyor…');
+    act(() => {
+      view.world.sockets.deliver(typing(IDS.alice));
+    });
+    await settle();
+    expect(line(view)).toBe('Biri ve Alice yazıyor…');
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('a reply composer shows no line: typing is the channel’s, and its composer shows it', async () => {
+    const { view } = await mount({ props: { parentId: aMessage(1).id } });
+    act(() => {
+      view.world.sockets.deliver(typing(IDS.alice));
+    });
+    await settle();
+    expect(view.queryByText('Alice is typing…')).toBeNull();
   });
 });

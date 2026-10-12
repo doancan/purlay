@@ -50,6 +50,7 @@ import {
 } from './composer-text';
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
 import { draftKey, readDraft, writeDraft } from './drafts';
+import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
 
 export interface ComposerProps {
@@ -151,6 +152,8 @@ const Inner = ({
 
   const change = (next: string): void => {
     setText(next);
+    // Rationed by the engine; an emptied box says nothing, and the announcement runs out (D-114).
+    if (next.trim() !== '') engine.announceTyping(channelId);
     // What was wrong with the old text is not known to be wrong with the new.
     setError(null);
   };
@@ -450,6 +453,7 @@ const Inner = ({
                 </span>
               )}
               {hintsBlock}
+              {!compact && <TypingLine channelId={channelId} />}
               {counter}
               {!compact && sendButton}
             </div>
