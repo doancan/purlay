@@ -28,7 +28,7 @@
  * Everything outside the process is an argument (the socket, the timers, the clock,
  * the dice), so a test drives a dropped connection by hand (D-46).
  */
-import type { QueryClient } from '@tanstack/react-query';
+import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   messageId,
@@ -429,6 +429,31 @@ export const createEngine = (options: EngineOptions): Engine => {
     degrade(channelIds, code);
   };
 
+  /**
+   * Marks what is cached under the key to be read again: what is settled now, and what is being read
+   * as soon as that read is done. A read on its way is not cancelled — that stalls the screen driving
+   * it — but it may have begun before the subscription and bring back what has already changed; left
+   * alone, a reply that landed in that gap was never shown (#347).
+   */
+  const readAgain = (queryKey: QueryKey): void => {
+    void client.invalidateQueries({ queryKey, predicate: settled });
+    const cache = client.getQueryCache();
+    for (const query of cache.findAll({ queryKey })) {
+      if (settled(query)) continue;
+      const unsubscribe = cache.subscribe((event) => {
+        if (event.query !== query) return;
+        // Gone from the cache first: nothing left to read again, and nothing left to listen for.
+        if (event.type === 'removed') {
+          unsubscribe();
+          return;
+        }
+        if (!settled(query)) return;
+        unsubscribe();
+        void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
+      });
+    }
+  };
+
   const onFrame = (frame: ServerFrame): void => {
     switch (frame.event) {
       case 'ACK': {
@@ -445,13 +470,10 @@ export const createEngine = (options: EngineOptions): Engine => {
             // between its read and the server beginning to send, and nothing would ever say so
             // (found in a browser: a reaction taken back in that gap stayed on the other screen).
             // Read again, what is cached for the channel is correct from this moment on.
-            void client.invalidateQueries({
-              queryKey: keys.messages(channelId),
-              predicate: settled,
-            });
+            readAgain(keys.messages(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
-          void client.invalidateQueries({ queryKey: families.thread, predicate: settled });
+          readAgain(families.thread);
         }
         return;
       }

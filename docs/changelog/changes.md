@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a feed being read when its channel was subscribed is read again (#347)
+
+- The subscription's answer marked a channel's feed and the open threads to be read again only if
+  they were not being read at that moment; one already on its way finished with what it had read,
+  and a reply or a resolution that landed in between was never shown. It is now read again once that
+  read is done. Two browser tests that failed under load are made deterministic: the thread's motion
+  is measured from before the press, and the connection test holds its outage until it ends it.
+
 ### Feature — 2026-10-12: a pull request's card says its checks and its reviews (#423)
 
 - Passed, failed or running, and approved, changes requested or review required — asked of GitHub's

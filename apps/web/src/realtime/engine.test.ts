@@ -1140,6 +1140,58 @@ describe('what happened between a list being read and the channel being subscrib
     // A channel that was not part of the answer is left as it was.
     expect(w.client.getQueryState(keys.messages(OTHER_CH))?.isInvalidated).toBe(false);
   });
+
+  /**
+   * #347: a read already on its way when the answer came is left to finish — cancelling it stalls
+   * the screen driving it — but what it brings back may predate the subscription, so it is read
+   * again once it has finished. Without this, a reply that landed in that gap was never shown.
+   */
+  test('a feed being read when the subscription is answered is read again once that read is done', async () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    let finish = (): void => undefined;
+    const reading = w.client.query({
+      queryKey: keys.messages(CH),
+      queryFn: () =>
+        new Promise<Pages>((resolve) => {
+          finish = (): void => {
+            resolve({ pages: [], pageParams: [] });
+          };
+        }),
+    });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.messages(CH))?.fetchStatus).toBe('fetching');
+    finish();
+    await reading;
+    await Promise.resolve();
+    expect(w.client.getQueryState(keys.messages(CH))?.isInvalidated).toBe(true);
+  });
+
+  test('a read that is thrown away before it finishes leaves nothing waiting on it', async () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const reading = w.client
+      .query({
+        queryKey: keys.messages(CH),
+        queryFn: () => new Promise<Pages>(() => undefined),
+      })
+      .then(
+        () => 'read',
+        () => 'thrown away',
+      );
+    answerAll(w);
+    w.client.removeQueries({ queryKey: keys.messages(CH) });
+    await Promise.resolve();
+    expect(w.client.getQueryState(keys.messages(CH))).toBeUndefined();
+    // Read afresh, the channel is not marked by the answer that came before it existed.
+    w.client.setQueryData(keys.messages(CH), { pages: [], pageParams: [] });
+    expect(w.client.getQueryState(keys.messages(CH))?.isInvalidated).toBe(false);
+    expect(await reading).toBe('thrown away');
+  });
 });
 
 /**
