@@ -97,6 +97,11 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 export interface RequestScope {
   readonly requestId: string;
   readonly startedAt: number;
+  /**
+   * The session the request was made with, once something has proved it — `requireSession` for HTTP,
+   * the upgrade for a socket. What the audit trail names as who acted (D-116); never logged.
+   */
+  sessionId?: string;
 }
 
 const scope = new AsyncLocalStorage<RequestScope>();
@@ -119,6 +124,12 @@ export const enterRequest = (request: RequestScope): void => {
 };
 
 export const currentRequest = (): RequestScope | undefined => scope.getStore();
+
+/** Notes the session this request was proved to be made with; outside a request there is none to note. */
+export const noteSession = (sessionId: string): void => {
+  const request = scope.getStore();
+  if (request !== undefined) request.sessionId = sessionId;
+};
 
 const wrap = (instance: pino.Logger): Logger => {
   const write =

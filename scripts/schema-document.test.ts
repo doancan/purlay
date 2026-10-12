@@ -122,13 +122,16 @@ for (const change of constraintChanges(migrationsSql)) {
   else if (constraints.delete(change.rename)) constraints.add(change.to);
   else throw new Error(`a migration renames ${change.rename}, which does not exist`);
 }
-// A column a later migration adds (0015) is part of the table from then on; the re-runnable
-// `IF NOT EXISTS` form adds it once.
+// A column a later migration adds (0015) is part of the table from then on, and one it drops (0022)
+// is not; the re-runnable forms (`IF NOT EXISTS`, `IF EXISTS`) are read the same, and in the order
+// they are written, because a re-runnable migration drops what it adds before adding it.
 for (const match of withoutComments(migrationsSql).matchAll(
-  /ALTER TABLE (\w+)\s+ADD COLUMN (?:IF NOT EXISTS )?(\w+)/g,
+  /ALTER TABLE (\w+)\s+(ADD|DROP) COLUMN (?:IF (?:NOT )?EXISTS )?(\w+)/g,
 )) {
-  const [, table = '', column = ''] = match;
-  (applied.get(table)?.columns as Set<string> | undefined)?.add(column);
+  const [, table = '', change = '', column = ''] = match;
+  const columns = applied.get(table)?.columns as Set<string> | undefined;
+  if (change === 'ADD') columns?.add(column);
+  else columns?.delete(column);
 }
 const documented = tablesIn(documentSql);
 const appliedIndexes = indexesIn(migrationsSql);

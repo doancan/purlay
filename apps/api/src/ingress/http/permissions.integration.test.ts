@@ -228,3 +228,28 @@ describe('integration: every administrative write is on the trail, once', () => 
     });
   }
 });
+
+/**
+ * Who did it, and from which session (D-116, #397): a row written by a request names the session that
+ * made it, through which the sign-in's address and agent are known for as long as the session lives.
+ */
+describe('integration: the trail names the session that acted', () => {
+  test('an administrative write over HTTP records the caller’s session', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const act = ACTIONS['make an invitation link'];
+      if (act === undefined) throw new Error('no request');
+      expect((await act(world, world.people.admin)).ok).toBe(true);
+      const [row] = await db
+        .selectFrom('audit_log')
+        .select(['action', 'session_id'])
+        .where('workspace_id', '=', world.workspaceId)
+        .where('action', '=', 'invitation.created')
+        .execute();
+      expect(row).toEqual({
+        action: 'invitation.created',
+        session_id: world.people.admin.sessionId,
+      });
+    });
+  });
+});

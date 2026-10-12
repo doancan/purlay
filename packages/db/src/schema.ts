@@ -58,11 +58,10 @@ export interface AuditLog {
   actor_user_id: string | null;
   created_at: Generated<Timestamp>;
   id: string;
-  ip_address: string | null;
   metadata: Generated<Json>;
+  session_id: string | null;
   target_id: string | null;
   target_type: string;
-  user_agent: string | null;
   workspace_id: string;
 }
 

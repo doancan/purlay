@@ -2188,4 +2188,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '      before !== undefined && value > Number.POSITIVE_INFINITY;\n',
     tests: ['apps/api/src/cli/budget-latency.test.ts'],
   },
+  {
+    id: 'trail-forgets-the-session',
+    why: 'an administrative act is on the trail with nothing saying which signed-in session did it',
+    file: 'apps/api/src/ingress/http/session.ts',
+    find: '  noteSession(sessionId);\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/permissions.integration.test.ts'],
+  },
 ];
