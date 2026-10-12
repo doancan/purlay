@@ -74,6 +74,7 @@ describe('publishing the wedge', () => {
       type: 'direct_message',
       lastMessageAt: null,
       state,
+      notificationLevel: 'mentions',
       peer: user,
     };
     await publishChannelState(bus, clock, OTHER, ID, state, 5);

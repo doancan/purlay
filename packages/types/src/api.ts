@@ -26,6 +26,7 @@ import {
   Membership,
   Message,
   MessageContent,
+  NotificationLevel,
   Reaction,
   Timestamp,
   User,
@@ -213,8 +214,14 @@ export const NotificationType = Type.Union([
   Type.Literal('direct_message'),
   Type.Literal('thread_reply'),
   Type.Literal('thread_resolved'),
+  /** A member at `notification_level = 'all'` is told of every message by somebody else (D-107). */
+  Type.Literal('channel_message'),
 ]);
 export type NotificationType = Static<typeof NotificationType>;
+
+/** `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107). */
+export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
+export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;
 
 /** One thing waiting for the caller in the inbox, with the message it is about (D-106). */
 export const Notification = Type.Object({

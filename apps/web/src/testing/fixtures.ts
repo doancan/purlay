@@ -62,6 +62,7 @@ export const aChannel = (
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
   peer: null,
+  notificationLevel: 'mentions',
   ...over,
 });
 

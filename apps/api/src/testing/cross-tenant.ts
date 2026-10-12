@@ -218,6 +218,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'q=question' },
   },
+  'PUT /api/channels/:channelId/notification-level': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ level: 'none' }),
+    visibility: CHANNEL,
+  },
   'GET /api/notifications': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'workspaceId=:workspaceId' },

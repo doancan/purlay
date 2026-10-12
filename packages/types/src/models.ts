@@ -60,6 +60,17 @@ export const ChannelType = Type.Union([
 export type ChannelType = Static<typeof ChannelType>;
 
 /**
+ * What a member is told about in a channel (D-107): every message by somebody else, only what is
+ * addressed to them (the default — quiet is the product), or nothing at all.
+ */
+export const NotificationLevel = Type.Union([
+  Type.Literal('all'),
+  Type.Literal('mentions'),
+  Type.Literal('none'),
+]);
+export type NotificationLevel = Static<typeof NotificationLevel>;
+
+/**
  * Another member, as anyone in the workspace may see them.
  *
  * No email address: it is the identity anchor (D-11) and broadcasting it to
@@ -127,6 +138,8 @@ export const Channel = Type.Object({
    * the channel but has not joined it (a public channel they could join).
    */
   state: Type.Union([ChannelState, Type.Null()]),
+  /** The caller's level here (D-107); null when they are not a member, and so are told nothing. */
+  notificationLevel: Type.Union([NotificationLevel, Type.Null()]),
   /**
    * The other person in a direct message (the caller themselves, for a note to
    * self). Null for every other kind, which has a name instead (D-6).

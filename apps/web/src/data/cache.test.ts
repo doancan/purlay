@@ -53,6 +53,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   type: 'public',
   lastMessageAt: null,
   state,
+  notificationLevel: 'mentions',
   peer: null,
   ...over,
 });

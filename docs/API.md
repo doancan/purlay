@@ -129,7 +129,7 @@ Demoting or removing the last `owner` returns `409` (invariant I-2).
 | ○ | `POST` | `/api/channels/:channelId/members` | a member **of the channel** — `{ userId }`, somebody from the workspace, `204`; they are told with `CHANNEL_ADDED`. Somebody already in it is `204` again, told nothing. Not in the channel, or a direct message: `403 FORBIDDEN`; a person not in the workspace: `404 USER_NOT_FOUND` (D-104) |
 | ① | `POST` | `/api/channels/:channelId/leave` | member |
 | ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
-| ① | `PUT` | `/api/channels/:channelId/notification-level` | member — `all` \| `mentions` \| `none` |
+| ○ | `PUT` | `/api/channels/:channelId/notification-level` | Member only — `{ level }`, `all` \| `mentions` \| `none` (`SetNotificationLevelRequest`); `204`. The caller's own row; a channel they are not in, public or not, is `404 CHANNEL_NOT_FOUND`. From the next message on; the level is on the channel as `notificationLevel`, null for a non-member (D-107) |
 
 Creating a DM is idempotent: the same pair returns the same channel, never a second one — and so it is
 never a `409`. The call that made the channel answers `201` and tells the other person (`CHANNEL_ADDED`);

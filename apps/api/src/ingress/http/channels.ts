@@ -13,6 +13,7 @@ import {
   CreateChannelRequest,
   CreateDirectMessageRequest,
   ReadChannelRequest,
+  SetNotificationLevelRequest,
   type Channel,
   type ReadChannelResponse,
 } from '@purlay/types';
@@ -38,6 +39,7 @@ import {
 import { openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
 import { markRead } from '../../modules/channels/read-state';
+import { setNotificationLevel } from '../../modules/channels/notification-level';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -190,4 +192,21 @@ export const addChannelMember = async (
       ],
     ]);
   }
+};
+
+/**
+ * `PUT /api/channels/:channelId/notification-level` — what the caller is told about here (D-107).
+ * Their own membership only; a channel they are not in is the stranger's `404`.
+ */
+export const setLevel = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<void> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(SetNotificationLevelRequest, body);
+  await setNotificationLevel(database, context, input.level);
 };

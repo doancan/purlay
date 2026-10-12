@@ -45,6 +45,8 @@ const glyphOf = (type: Notification['type']): GlyphName => {
       return 'reply';
     case 'thread_resolved':
       return 'resolved';
+    case 'channel_message':
+      return 'channel';
   }
 };
 
@@ -62,6 +64,8 @@ const useWhy = (): ((notification: Notification) => string) => {
         return t('inbox.why.reply', { name });
       case 'thread_resolved':
         return t('inbox.why.resolved');
+      case 'channel_message':
+        return t('inbox.why.channel', { name });
     }
   };
 };
