@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: search, in the client (D-105)
+
+- Search, under Inbox in the sidebar: type, press Enter, and the words are found as typed, ignoring
+  case, in every channel you can see — replies and resolved threads too — newest first, each taking you
+  to its channel or thread. The words stay in the address, so Back and a reload keep them. Too few
+  characters are said in the field and never sent; searching is shown in the field, nothing found says
+  where it looked, and a failure keeps your words with a Retry.
+
 ### Feature — 2026-10-12: reading the inbox (D-106)
 
 - Opening a notification marks it read; Mark all read reads up to the newest on screen, so what arrives

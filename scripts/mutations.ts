@@ -1057,4 +1057,28 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    if (notification.readAt === null || notification.readAt !== null) {\n',
     tests: ['apps/web/src/features/inbox/inbox-screen.test.tsx'],
   },
+  {
+    id: 'search-asked-below-the-minimum',
+    why: 'an address with two letters asks the server, which refuses it, and the screen shows a failure for what it should have explained',
+    file: 'apps/web/src/data/queries.ts',
+    find: '    enabled: words.length >= SEARCH_QUERY_MIN,\n',
+    replace: '',
+    tests: ['apps/web/src/features/search/search-screen.test.tsx'],
+  },
+  {
+    id: 'search-words-sent-untrimmed',
+    why: 'spaces around the words go into the address, and a search for " deploy" is a different search from "deploy"',
+    file: 'apps/web/src/features/search/search-screen.tsx',
+    find: '              const words = draft.trim();\n',
+    replace: '              const words = draft;\n',
+    tests: ['apps/web/src/features/search/search-screen.test.tsx'],
+  },
+  {
+    id: 'search-field-not-reset-by-the-address',
+    why: 'Back to an earlier search shows its results under the later words still in the field',
+    file: 'apps/web/src/features/search/search-screen.tsx',
+    find: '  return <SearchView key={asked} asked={asked} />;\n',
+    replace: '  return <SearchView asked={asked} />;\n',
+    tests: ['apps/web/src/features/search/search-screen.test.tsx'],
+  },
 ];

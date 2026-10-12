@@ -23,6 +23,7 @@ import type {
   NotificationPage,
   WorkspaceMember,
 } from '@purlay/types';
+import { SEARCH_QUERY_MIN } from '@purlay/types';
 import { useApi } from './api-provider';
 import { keys } from './keys';
 
@@ -109,6 +110,22 @@ export const useNotifications = (
       api.notifications(workspaceId, { before: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+};
+
+/**
+ * One search, newest first, a page at a time (D-105). Asked only for words the server would take:
+ * below the minimum the screen says so instead.
+ */
+export const useSearch = (workspaceId: string, words: string): UseInfiniteQueryResult<Pages> => {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: keys.search(workspaceId, words),
+    queryFn: ({ pageParam, signal }) =>
+      api.search(workspaceId, { q: words, before: pageParam }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: words.length >= SEARCH_QUERY_MIN,
   });
 };
 

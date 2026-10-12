@@ -277,6 +277,20 @@ export const tr = {
   'state.channels.empty.title': 'Henüz kanal yok',
   'state.channels.empty.body': 'İlkini oluştur; yalnızca bir ad yeter.',
 
+  // ── Search (D-105) ─────────────────────────────────────────────────────
+  'search.title': 'Ara',
+  'search.label': 'Mesajlarda ara',
+  'search.hint': 'Görebildiğin tüm kanallarda aramak için Enter’a bas.',
+  'search.searching': 'Aranıyor…',
+  'search.tooShort': 'En az {min} karakter yaz.',
+  'search.prompt':
+    'Yazdığın kelimeler, büyük küçük harf fark etmeden, görebildiğin tüm kanallarda — yanıtlar ve çözülmüş thread’ler de.',
+  'search.more': 'Daha fazla yükle',
+  'state.search.empty.title': '“{words}” için sonuç yok',
+  'state.search.empty.body': 'Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
+  'state.search.error.title': 'Aranamadı',
+  'state.search.error.body': 'Sunucu yanıt vermedi. Kelimelerin duruyor; yeniden dene.',
+
   // ── Inbox (D-106) ──────────────────────────────────────────────────────
   'inbox.title': 'Gelen kutusu',
   'inbox.lede': 'Sana söylenenler, en yenisi önce',

@@ -17,6 +17,7 @@ import {
   MessagePage,
   NotificationPage,
   ReactionsResponse,
+  SearchPage,
   ReadChannelResponse,
   ThreadPage,
   UnresolvedPage,
@@ -79,6 +80,12 @@ export interface Api {
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
+  /** The words, in the channels the caller can see, newest first (D-105). */
+  readonly search: (
+    workspaceId: string,
+    query: { readonly q: string; readonly before?: string | undefined },
+    signal?: AbortSignal,
+  ) => Promise<SearchPage>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   readonly unreact: (messageId: string, emoji: string) => Promise<ReactionsResponse>;
   /** The author's new words (D-103); the answer is the message as it now is. */
@@ -184,6 +191,13 @@ export const createApi = (http: Http): Api => {
       ),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),
+    search: (workspaceId, query, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/search`,
+        SearchPage,
+        options({ query: { ...query } }, signal),
+      ),
     react: (messageId, emoji) =>
       http.request(
         'PUT',
