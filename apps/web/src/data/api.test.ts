@@ -146,6 +146,16 @@ describe('the endpoints', () => {
     expect(reactions.calls[1]).toMatchObject({ method: 'DELETE' });
   });
 
+  test('bringing somebody into a channel names them, and reads no answer', async () => {
+    const added = harness(null);
+    await added.api.addChannelMember(ID, ID);
+    expect(added.calls[0]).toMatchObject({
+      method: 'POST',
+      url: `/api/channels/${ID}/members`,
+      body: { userId: ID },
+    });
+  });
+
   test('an edit sends the new words; a delete asks and reads no answer', async () => {
     const edited = harness(message);
     await edited.api.editMessage(ID, 'better words');
