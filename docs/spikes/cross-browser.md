@@ -30,12 +30,30 @@ search, the inbox, uploads, invitations, members, the GitHub connection, the aud
 and scroll anchoring, the phone width, the error and empty states — passed on WebKit. **No product defect
 was found.**
 
-## Firefox: not run — the browser would not start here
+## Firefox, on Linux: 126 of 132 pass; the 6 that fail are the engine's or the harness's
 
-All 132 failed at `browserType.launch`: Firefox Nightly 1555, installed by `bunx playwright install
-firefox` for this Playwright, exits with *Could not find profile folder* in this environment. That is the
-machine, not the product, and nothing was learned about Firefox. **Open:** run it where it starts (CI's
-Linux runner) before saying anything about Firefox.
+On macOS here Firefox Nightly 1555 would not start (*Could not find profile folder*, with `TMPDIR`,
+`HOME` and the browsers path each redirected). So it was run where CI would run it: a Linux container
+of the project's own Bun image (`oven/bun:1.4.2`), `bunx playwright install --with-deps firefox`, the
+same configuration, against the host's PostgreSQL.
+
+```
+docker run --rm -v <copy of the commit>:/repo -w /repo -e DATABASE_URL=postgres://purlay:purlay@host.docker.internal:5432/purlay oven/bun:1.4.2 \
+  bash -c "bun install --frozen-lockfile && cd apps/web && bunx playwright install --with-deps firefox && \
+           bunx playwright test -c .cross.config.ts --project firefox --ignore-snapshots --reporter=line"
+```
+
+| Tests | Why |
+|---|---|
+| `focus.e2e.ts:35`, `navigation.e2e.ts:196` — Tab walks the page and comes round | Past the last element (the composer's Send), Firefox under Playwright keeps focus on it rather than going round. Measured on a page of two bare buttons: Chromium went *first, last, (out), first*; Firefox *first, last, last, last*. The app's stops before it — Bold, Code block, Mention, Attach, Send — were all reached, ringed, in order. **Not a trap.** |
+| `frame.e2e.ts:70` — the theme before the first paint | Firefox reports no `first-paint` entry either. |
+| `composer.e2e.ts:145` — a long paste becomes a code block | The test pastes by dispatching `new ClipboardEvent('paste', { clipboardData })`; in Firefox that event's data reads empty (measured: `getData('text/plain')` is `''`), so the handler saw nothing. A real paste carries its data; this is the test's paste, not the product's. |
+| `composer.e2e.ts:404` — offline, a send fails with Retry | The offline emulation, as in WebKit. |
+| `performance.e2e.ts:237` — the heap | CDP, Chromium only. |
+
+**No product defect was found on Firefox either.** Worth carrying into the suite, if it ever runs a second
+engine: the Tab walks should end on leaving the page however the engine shows it, and the paste test needs a
+paste the engine honours.
 
 ## What had to be loosened
 

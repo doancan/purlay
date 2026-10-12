@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the browser suite run on Firefox too, in a Linux container
+
+- 126 of 132 pass; the six failures are Firefox's or the test harness's (focus past the last element, no
+  `first-paint`, a synthetic paste event's empty data, offline emulation, CDP), each measured. No
+  product defect on Safari's engine or Firefox's (`docs/spikes/cross-browser.md`).
+
 ### Quality — 2026-10-13: the browser suite run on Safari's engine (`docs/spikes/cross-browser.md`)
 
 - WebKit passes 124 of 132 browser tests; the 8 failures are the engine's, not the product's. Firefox
