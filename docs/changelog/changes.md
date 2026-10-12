@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the wedge's order test waits for the sender's own frames first (#347)
+
+- `wedge.integration.test.ts` marked where Alice's frames began before her own send's ACK had
+  arrived; under the full suite's load the ACK came after the mark and the order began with it. It
+  now waits until her ACK and her echo are in, then marks.
+
 ### Feature — 2026-10-13: the audit trail is read in the app (D-26, `PRD.md` §4.7)
 
 - **Audit log…** in the workspace menu, for owners and admins: who did which administrative thing to
