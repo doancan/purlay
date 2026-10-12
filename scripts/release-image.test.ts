@@ -71,6 +71,7 @@ const sandbox = (): Sandbox => {
   stub(join(origin, 'scripts/image-smoke.sh'), 'exit "${SMOKE_EXIT:-0}"');
   writeFileSync(join(origin, 'package.json'), '{ "license": "AGPL-3.0-or-later" }\n');
   writeFileSync(join(origin, '.gitignore'), 'stray.js\n');
+  writeFileSync(join(origin, '.dockerignore'), '**/*.test.ts\n');
   git(origin, 'add', '.');
   git(origin, 'commit', '--quiet', '-m', 'one');
   const clone = join(root, 'clone');
@@ -90,7 +91,7 @@ exit 97`,
   stub(
     join(bin, 'docker'),
     `case "$1 $2" in
-  "buildx build") cat > "${context}" ;;
+  "buildx build") echo "\${@: -1}" > "${context}.path"; tar -cf "${context}" -C "\${@: -1}" . ;;
   "buildx imagetools") echo "\${REGISTRY_DIGEST-${DIGEST}}" ;;
   "push "*) exit "\${PUSH_EXIT:-0}" ;;
   "inspect --format") echo "\${LOCAL_DIGEST-${IMAGE}@${DIGEST}}" ;;
@@ -185,7 +186,7 @@ describe('a release', () => {
       `docker push ${tag}`,
     ]);
     expect(outcome.calls.find((call) => call.startsWith('docker buildx build'))).toContain(
-      `--tag ${tag} -`,
+      `--tag ${tag} `,
     );
   });
 
@@ -193,9 +194,23 @@ describe('a release', () => {
     const place = sandbox();
     writeFileSync(join(place.clone, 'stray.js'), 'compiled long ago');
     expect(release(place, WITH_DATABASE).code).toBe(0);
-    const entries = Bun.spawnSync(['tar', '-tf', place.context]).stdout.toString().split('\n');
+    const entries = Bun.spawnSync(['tar', '-tf', place.context])
+      .stdout.toString()
+      .split('\n')
+      .map((entry) => entry.replace(/^\.\//, ''));
     expect(entries).toContain('scripts/release-image.sh');
     expect(entries).not.toContain('stray.js');
+  });
+
+  test('builds from a directory, never a piped archive: only then is .dockerignore applied', () => {
+    const place = sandbox();
+    expect(release(place, WITH_DATABASE).code).toBe(0);
+    const build = readFileSync(`${place.context}.path`, 'utf8').trim();
+    expect(build).not.toBe('-');
+    const entries = Bun.spawnSync(['tar', '-tf', place.context]).stdout.toString().split('\n');
+    expect(entries).toContain('./.dockerignore');
+    // Made for the build and gone after it, whatever the outcome.
+    expect(existsSync(build)).toBe(false);
   });
 
   test('names the image from an SSH remote too, in lower case', () => {

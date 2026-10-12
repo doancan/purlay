@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a release from a machine leaves the tests out of the image (#438)
+
+- `scripts/release-image.sh` built from the commit piped in as an archive, and BuildKit does not
+  apply `.dockerignore` to a context read from stdin: the image carried 177 test files and the
+  demo seeder, and the smoke test refused every release. It now extracts the commit into a fresh
+  directory and builds from that, which ships none of them.
+
 ### Quality — 2026-10-12: the week that closes O-4 is one command (#61)
 
 - `bun run report:frames <log>` reads the API's log and answers what O-4 is closed by: each
