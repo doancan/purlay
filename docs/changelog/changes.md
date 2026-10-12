@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: uploading a file (D-109 §3, §5)
+
+- `POST /api/workspaces/:workspaceId/uploads?id=&name=` takes a file's bytes and answers the
+  attachment, waiting to be sent with a message. A retry is the same upload; nobody else's id can be
+  taken. Nothing is read before the session and the membership; each node reads at most four uploads
+  at once. A person holds at most twenty unsent, and the workspace's quota counts them.
+
 ### Feature — 2026-10-12: the attachment store (D-109)
 
 - The API reads its attachment bucket — `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,

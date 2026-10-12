@@ -39,6 +39,8 @@ import {
   bodyRefusal,
   edgeRefusalResponse,
   hasUnsupportedMediaType,
+  isUploadRequest,
+  uploadRefusal,
   isCrossSiteMutation,
   unsupportedMediaTypeResponse,
   responseHeaders,
@@ -82,6 +84,7 @@ import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
+import { receiveUpload } from './uploads';
 
 export interface Dependencies {
   readonly config: Config;
@@ -171,6 +174,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   );
   const sockets = createSocketLifecycle({ ...dependencies, userWrites });
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
+  // Uploads being read on this node, against `UPLOADS_AT_ONCE`.
+  const uploading = { count: 0 };
 
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
@@ -210,9 +215,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
         return crossSiteResponse(headers);
       }
-      if (hasUnsupportedMediaType(request)) return unsupportedMediaTypeResponse(headers);
-      const tooMuch = bodyRefusal(request, JSON_BODY_MAX_BYTES);
-      if (tooMuch !== null) return edgeRefusalResponse(tooMuch, headers);
+      if (isUploadRequest(request)) {
+        const refusal = uploadRefusal(request, ATTACHMENT_BYTES_MAX);
+        if (refusal !== null) return edgeRefusalResponse(refusal, headers);
+      } else {
+        if (hasUnsupportedMediaType(request)) return unsupportedMediaTypeResponse(headers);
+        const tooMuch = bodyRefusal(request, JSON_BODY_MAX_BYTES);
+        if (tooMuch !== null) return edgeRefusalResponse(tooMuch, headers);
+      }
       return undefined;
     })
     // Before the handler, after the body is parsed: the body is already bounded by the
@@ -394,6 +404,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    .post(
+      '/api/workspaces/:workspaceId/uploads',
+      async ({ request, params, set }) => {
+        const { attachment, created } = await receiveUpload(
+          { ...sending, storage: dependencies.storage, log: dependencies.log, inFlight: uploading },
+          request,
+          params.workspaceId,
+        );
+        set.status = created ? 201 : 200;
+        return attachment;
+      },
+      // The body is the file, read by the handler after the session and the membership (D-109 §3).
+      { parse: 'none' },
+    )
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),

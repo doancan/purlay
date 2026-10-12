@@ -21,11 +21,12 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor, queryFor, type Ids } from '../../testing/cross-tenant';
+import { CROSS_TENANT, pathFor, queryFor, type Ids, requestInit } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { aMemoryStore } from '../../testing/storage';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -40,15 +41,8 @@ const call = async (
   cookie: string,
   body?: unknown,
 ): Promise<Response> =>
-  await createApp(testDependencies({ database: db, clock })).handle(
-    new Request(`https://purlay.test${path}`, {
-      method,
-      headers: {
-        cookie,
-        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    }),
+  await createApp(testDependencies({ database: db, clock, storage: aMemoryStore() })).handle(
+    new Request(`https://purlay.test${path}`, requestInit(method, cookie, body)),
   );
 
 const signedIn = async (db: Executor, name: string): Promise<string> =>
