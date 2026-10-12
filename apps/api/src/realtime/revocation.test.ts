@@ -40,6 +40,7 @@ const everyChannelFrame = (channelId: string): ServerFrame[] =>
     { event: 'REACTIONS_UPDATED', data: { channelId, messageId: 'm' }, version: 1, ts: 1 },
     { event: 'MESSAGE_REVISED', data: { channelId, messageId: 'm', content: 'secret' }, ts: 1 },
     { event: 'CHANNEL_STATE', data: { channelId }, version: 1, ts: 1 },
+    { event: 'TYPING', data: { channelId, userId: 'u', ttlMs: 1 }, ts: 1 },
   ] as ServerFrame[];
 
 interface Node {

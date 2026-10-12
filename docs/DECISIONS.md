@@ -4827,7 +4827,8 @@ instruction to decide and proceed, and open to their reversal.
 2. **Authorised on every frame**, with the guard the send uses: a channel the sender cannot see is
    `CHANNEL_NOT_FOUND`, and neither its room nor the registry hears of it. A subscription is not
    used as the proof — `SUBSCRIBE` subscribes before it authorises (D-83, D-85), so for a moment a
-   subscription exists that was never allowed.
+   subscription exists that was never allowed — and an announcement held for it in that moment is
+   dropped with the refusal, as every frame about a channel is (#412).
 3. **The server rations, whatever the client does.** `PresenceRegistry.startTyping` lets an
    announcement reach the room when the person was not typing there, or once the last one is half
    spent; anything in between reaches nobody. A listener's window is renewed before it runs out, and
