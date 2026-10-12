@@ -4765,7 +4765,8 @@ instruction to decide and proceed, and open to their reversal.
    there for B's. The table stays unscoped by column; the scoping is in the key.
 2. **What is fetched is built from parts.** The request names a `GitHubLink` — github.com, an owner,
    a repository, `pull` or `issues`, a number — and the API address is made of those, so no address a
-   person wrote is ever fetched.
+   person wrote is ever fetched. A repository named `.` or `..` is refused: resolved, it would step out
+   of `/repos/{owner}/{repo}` and send the workspace's token to another GitHub path (found in review).
 3. **GitHub failing, or answering what is not a pull request or issue, is no card for a minute**, logged
    at `warn`: a five-minute card and an hour's negative (§8.3) are for answers; an outage is held off
    so every render does not ask again, and a GitHub that recovers is asked within a minute.

@@ -8,7 +8,14 @@
 import { describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody, ErrorCode } from './errors';
-import { ATTACHMENTS_PER_MESSAGE_MAX, Channel, CurrentUser, Message, User } from './models';
+import {
+  ATTACHMENTS_PER_MESSAGE_MAX,
+  Channel,
+  CurrentUser,
+  GitHubLink,
+  Message,
+  User,
+} from './models';
 import { ClientFrame, MessageSendFrame, ServerFrame } from './events';
 import { messageId } from './message-id';
 import {
@@ -91,6 +98,28 @@ describe('models', () => {
     };
     expect(Value.Check(Message, message)).toBe(true);
     expect(Value.Check(Message, { ...message, sender: id })).toBe(false);
+  });
+});
+
+describe('a GitHub link', () => {
+  test('is an item on github.com, never a path that leaves its repository (#66)', () => {
+    const accepted = [
+      'https://github.com/acme/api/pull/42',
+      'https://github.com/acme/.github/issues/1',
+      'https://github.com/acme/a..b/pull/1',
+    ];
+    const refused = [
+      'https://github.com/acme/../pull/1',
+      'https://github.com/acme/./pull/1',
+      `https://github.com/${'a'.repeat(40)}/api/pull/1`,
+      `https://github.com/acme/${'r'.repeat(101)}/pull/1`,
+      'https://github.com/acme/api/pull/12345678901',
+      'https://github.com/-acme/api/pull/1',
+    ];
+    for (const url of accepted)
+      expect({ url, ok: Value.Check(GitHubLink, url) }).toEqual({ url, ok: true });
+    for (const url of refused)
+      expect({ url, ok: Value.Check(GitHubLink, url) }).toEqual({ url, ok: false });
   });
 });
 

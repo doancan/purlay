@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import type { Executor } from '@purlay/db';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import { GitHubCardMetadata } from '@purlay/types';
+import { GitHubCardMetadata, GitHubLink } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { CredentialCipher } from '../../platform/crypto';
 import type { Logger } from '../../platform/logging';
@@ -28,7 +28,8 @@ export const UNAVAILABLE_TTL_MS = 60 * 1000;
 /** How long GitHub has to answer before it is taken as not answering. */
 const GITHUB_TIMEOUT_MS = 5_000;
 
-const LINK = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/(pull|issues)\/([0-9]+)$/;
+/** The contract's own pattern, so what is accepted and what is parsed cannot differ. */
+const LINK = new RegExp(GitHubLink.pattern ?? '^$');
 
 /** What GitHub sends for a pull request or an issue, as far as a card needs it: checked, not trusted. */
 const GitHubItem = Type.Object({

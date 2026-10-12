@@ -1836,6 +1836,17 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
   },
   {
+    id: 'github-link-allows-a-dot-repository',
+    why: 'a repository named .. is resolved out of /repos/{owner}/{repo}, and the workspace token is sent to another GitHub path',
+    file: 'packages/types/src/models.ts',
+    find: '/(?!\\\\.\\\\.?/)([A-Za-z0-9._-]{1,100})/',
+    replace: '/([A-Za-z0-9._-]{1,100})/',
+    tests: [
+      'packages/types/src/contract.test.ts',
+      'apps/api/src/ingress/http/integrations.integration.test.ts',
+    ],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',
