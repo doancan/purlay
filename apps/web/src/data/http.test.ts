@@ -133,9 +133,28 @@ describe('a failure', () => {
     ['a null error', { error: null }],
     ['a non-object', 'null'],
   ])('with a body that is %s is MALFORMED and keeps the status', async (_why, body) => {
-    const { client } = http(() => answer(502, body));
+    const { client } = http(() => answer(500, body));
     const error = await client.request('GET', '/x', Thing).catch((e: unknown) => e);
-    expect(error).toMatchObject({ status: 502, code: 'MALFORMED' });
+    expect(error).toMatchObject({ status: 500, code: 'MALFORMED' });
+  });
+
+  test.each([502, 503, 504])(
+    'a %i that is not the API speaking is the server not reached: NETWORK, transient, status kept',
+    async (status) => {
+      // What a proxy answers while the API is down or restarting: its own page, never ours.
+      const { client } = http(() => answer(status, '<html>Bad Gateway</html>'));
+      const error = await client.request('GET', '/x', Thing).catch((e: unknown) => e);
+      expect(error).toMatchObject({ status, code: 'NETWORK' });
+      expect(isTransient(error)).toBe(true);
+    },
+  );
+
+  test('a 503 that is the API speaking keeps the API’s own code', async () => {
+    const { client } = http(() =>
+      answer(503, { error: { code: 'DATABASE_UNAVAILABLE', message: 'later' } }),
+    );
+    const error = await client.request('GET', '/x', Thing).catch((e: unknown) => e);
+    expect(error).toMatchObject({ status: 503, code: 'DATABASE_UNAVAILABLE' });
   });
 
   test('no response at all is NETWORK, with the cause kept', async () => {

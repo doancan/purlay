@@ -506,6 +506,59 @@ describe('a reconnect', () => {
   });
 });
 
+describe('a send that failed because the server could not be reached', () => {
+  /**
+   * The bar promises "messages will send when you are back" (`UX.md` §8). Found against the
+   * production stack: during an API crash the HTTP door answered the proxy's 502, the row failed,
+   * and nothing sent it when the socket came back. Failing for want of a server is the reconnect's to
+   * mend; the id is the client's, so a second attempt is the same message (D-33).
+   */
+  test('is sent again when the socket is back; a refusal is still left for the person', async () => {
+    let reason: Error = new ApiError(0, 'NETWORK', 'down');
+    const w = world({ send: () => Promise.reject(reason) });
+    w.engine.start();
+    w.open();
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    const unreachable = w.engine.send({ channelId: CH, content: 'during the outage' });
+    reason = new ApiError(400, 'VALIDATION_FAILED', 'Too long.');
+    const refused = w.engine.send({ channelId: CH, content: 'refused' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(w.pending().map((p) => [p.id, p.delivery, p.reason])).toEqual([
+      [unreachable, 'failed', 'NETWORK'],
+      [refused, 'failed', 'VALIDATION_FAILED'],
+    ]);
+
+    for (let waited = 0; w.sockets.length < 2 && waited < 60_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    w.open();
+    const sends = w.sentOps('MESSAGE_SEND').map((s) => s.id);
+    expect(sends).toEqual([unreachable]);
+    expect(w.pending().find((p) => p.id === unreachable)).toMatchObject({
+      delivery: 'sending',
+      reason: null,
+    });
+    expect(w.pending().find((p) => p.id === refused)).toMatchObject({ delivery: 'failed' });
+  });
+
+  test('a send that timed out stays failed for the person on the next connection (§5.3)', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'no answer' });
+    w.timers.advance(ACK_DEADLINE_MS);
+    expect(w.pending()[0]).toMatchObject({ delivery: 'failed', reason: 'TIMEOUT' });
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    for (let waited = 0; w.sockets.length < 2 && waited < 60_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    w.open();
+    expect(w.sentOps('MESSAGE_SEND').filter((s) => s.id === id)).toHaveLength(1);
+    expect(w.pending()[0]).toMatchObject({ delivery: 'failed', reason: 'TIMEOUT' });
+  });
+});
+
 describe('the frames', () => {
   test("a thread update, a reaction set and the caller's own counters reach the rows and the list", () => {
     const w = world();

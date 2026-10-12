@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-13: a message sent while the API was down sends when it is back
+
+- Found by crashing the API under two connected browsers on the production stack: the HTTP door
+  answered the proxy's 502, the row failed with "something went wrong on our side", and nothing sent
+  it when the socket came back — though the bar had promised it would. A proxy's 502/503/504 is now
+  the server not reached (`NETWORK`, transient), and a reconnect sends again every send that failed
+  only for want of a server; one the server refused stays failed. Rehearsed again: both messages
+  arrived once the API was back, once each.
+
 ### Quality — 2026-10-13: the connection-bar test says what the page held when it fails (#347)
 
 - `states.e2e.ts` "the connection" fails now and then under the full suite's load and never alone.

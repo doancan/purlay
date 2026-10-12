@@ -257,7 +257,10 @@ receiving client has no way to learn it should forget it. Publish and ACK both f
   row in the channel returns that row, and any other id outside the window is refused identically
   whether or not it exists. (D-33)
 - **Socket drops** → the buffer is preserved; on reconnect, pending sends are replayed and
-  missed messages are fetched by keyset cursor (§5.4).
+  missed messages are fetched by keyset cursor (§5.4). A send the server never had — the HTTP door
+  got no answer, or only a proxy's 502/503/504 while the API was down — is still pending, and is
+  replayed with them even though it is shown as failed meanwhile. A timeout or a refusal is not: its
+  Retry is the person's.
 - **Server rejects** → `ERROR` with `refId`; the optimistic row is marked failed and carries
   the reason. It is never removed without telling the user.
 

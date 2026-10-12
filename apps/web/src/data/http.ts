@@ -82,17 +82,29 @@ const withQuery = (path: string, query: RequestOptions['query']): string => {
 const unreadable = (status: number, what = 'something unreadable'): ApiError =>
   new ApiError(status, 'MALFORMED', `The server answered with ${what}.`);
 
+/**
+ * A proxy's own answer for an API it could not reach — down, restarting, too slow. The request never
+ * reached the application, so it is the network's failure and a retry may mend it; anything else
+ * unreadable is the application answering with something the client does not understand.
+ */
+const GATEWAY = new Set([502, 503, 504]);
+
+const unanswered = (status: number): ApiError =>
+  GATEWAY.has(status)
+    ? new ApiError(status, 'NETWORK', 'The server could not be reached.')
+    : unreadable(status);
+
 /** An error answer, read the same whichever transport carried it. */
 const failureOf = (status: number, text: string): ApiError => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return unreadable(status);
+    return unanswered(status);
   }
   const body: unknown =
     typeof parsed === 'object' && parsed !== null && 'error' in parsed ? parsed.error : undefined;
-  if (!Value.Check(AppErrorBody, body)) return unreadable(status);
+  if (!Value.Check(AppErrorBody, body)) return unanswered(status);
   return new ApiError(
     status,
     body.code,
