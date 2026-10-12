@@ -14,6 +14,7 @@
   "scripts": {
     "audit:gate": "bun run scripts/audit.ts --today $(date -u +%F)",
     "budget:api": "bun run scripts/budget-api.ts",
+    "budget:latency": "bun run scripts/budget-latency.ts",
     "budget:web": "bun run scripts/budget-web.ts",
     "build:web": "bun run --cwd apps/web build",
     "check:branch": "./scripts/check-branch.sh",
@@ -53,7 +54,7 @@
     "tokens:generate": "bun run packages/tokens/src/cli.ts",
     "typecheck": "tsc --build --pretty",
     "typecheck:ts6": "tsc6 --build --force --pretty",
-    "verify": "bun run check:branch && bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run knip && bun run format:check && bun run test:all && bun run build:web && bun run budget:web && bun run budget:api && bun run verify:enforcement && bun run check:docs && bun run config:example -- --check && bun run tokens:check",
+    "verify": "bun run check:branch && bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run knip && bun run format:check && bun run test:all && bun run build:web && bun run budget:web && bun run budget:api && bun run budget:latency && bun run verify:enforcement && bun run check:docs && bun run config:example -- --check && bun run tokens:check",
     "verify:enforcement": "bun run scripts/verify-enforcement.ts"
   },
   "devDependencies": {

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-12: the ACK round-trip and the fan-out are measured (D-49, #73)
+
+- `bun run budget:latency` starts the API against a clone of the database, signs two people in on two
+  sockets in one channel and times sixty messages to their ACK and to the other socket. First run:
+  p95 19.7 ms for both, against 120 and 200 ms. With a recorded baseline it fails on a jump.
+
 ### Security — 2026-10-12: every administrative write is on the trail, and a test holds it (D-26, #69)
 
 - An owner or an admin deleting somebody else's message is recorded — who, which message and whose,

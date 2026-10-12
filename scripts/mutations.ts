@@ -2180,4 +2180,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  if (row.sender_id !== "nobody") {\n    await recordAudit(',
     tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
   },
+  {
+    id: 'latency-regression-never-seen',
+    why: 'the ACK round-trip could triple and the budget would report it as fine',
+    file: 'apps/api/src/cli/budget-latency.ts',
+    find: '      before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);\n',
+    replace: '      before !== undefined && value > Number.POSITIVE_INFINITY;\n',
+    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+  },
 ];

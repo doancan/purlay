@@ -1685,7 +1685,10 @@ gate loses credibility.
 
 **Blocking on regression, not on an absolute threshold:** ACK round-trip p95, fan-out p95, cold
 load, channel switch, keystroke→paint. Each is recorded per commit and compared with the previous
-measurement; a **jump** fails, a number near the line does not.
+measurement; a **jump** fails, a number near the line does not. *Since 2026-10-12 the first two are
+`bun run budget:latency` (#73): 19.7 ms and 19.7 ms on its first run against budgets of 120 and 200; a
+jump is more than 1.5× the recorded p95 and past 20 ms. CI measures it on every run; keeping the
+baseline between runs is what is left of #73.*
 
 **Why not threshold everything.** A p95 latency measured on a shared CI runner moves by tens of
 percent between identical runs. Make that blocking and within two weeks the team is saying "flaky,

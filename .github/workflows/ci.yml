@@ -200,6 +200,11 @@ jobs:
       - name: the API's idle memory is inside its budget
         run: bun run budget:api
 
+      # The ACK round-trip and fan-out p95 (D-49): measured on two real sockets, reported. They block
+      # on a regression against a recorded baseline, which this job does not keep yet (#73).
+      - name: the latency budgets are measured
+        run: bun run budget:latency
+
   documents:
     runs-on: ubuntu-latest
     timeout-minutes: 5
