@@ -39,7 +39,7 @@ export const SignInScreen = (): React.JSX.Element => {
 
   return (
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
-      <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-lg text-center bg-surface-100 p-8 shadow-card">
+      <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle text-center bg-surface-100 p-8 shadow-card">
         <LogoMark />
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-display">{t('signIn.title')}</h1>

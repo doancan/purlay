@@ -101,7 +101,7 @@ const markLocally = (
 };
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
-  <span className="font-mono">{useChannelTitle(channel)}</span>
+  <span>{useChannelTitle(channel)}</span>
 );
 
 const Row = ({
@@ -126,7 +126,7 @@ const Row = ({
         onClick={() => {
           onOpen(notification);
         }}
-        className="flex w-full items-start gap-3 rounded-md px-3 py-2 text-left hover:bg-surface-200"
+        className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
         <Avatar name={message.sender.displayName} username={message.sender.username} />
         <span className="min-w-0 flex-1">
@@ -194,7 +194,7 @@ export const InboxScreen = (): React.JSX.Element => {
     body = (
       <LoadingStatus
         label={t('state.inbox.loading')}
-        className="mx-auto flex w-full max-w-feed flex-col gap-4 px-4 py-4"
+        className="flex w-full max-w-feed flex-col gap-4 px-4 py-4"
       >
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
@@ -217,10 +217,10 @@ export const InboxScreen = (): React.JSX.Element => {
     );
   } else if (all.length === 0) {
     body = (
-      <section className="mx-auto flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
+      <section className="flex max-w-feed flex-col items-center gap-3 px-4 py-16 text-center">
         <span
           aria-hidden="true"
-          className="inline-flex size-avatar-lg items-center justify-center rounded-md bg-surface-200 text-success-text"
+          className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-success-subtle text-success-text"
         >
           <Icon name="notifications" size="lg" />
         </span>
@@ -230,7 +230,7 @@ export const InboxScreen = (): React.JSX.Element => {
     );
   } else {
     body = (
-      <div className="mx-auto flex w-full max-w-feed flex-col gap-4 px-1 py-4">
+      <div className="flex w-full max-w-feed flex-col gap-4 px-3 py-4">
         <ul className="flex flex-col">
           {all.map((notification) => (
             <Row
@@ -261,14 +261,14 @@ export const InboxScreen = (): React.JSX.Element => {
 
   return (
     <>
-      <header className="flex h-header shrink-0 items-center justify-between gap-4 border-b-hairline border-border-subtle px-4">
-        <div className="flex min-w-0 items-center gap-2">
+      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
+        <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
             <Icon name="notifications" size="lg" />
           </HeaderTile>
           <div className="flex min-w-0 flex-col">
-            <h1 className="whitespace-nowrap text-title text-ink">{t('inbox.title')}</h1>
+            <h1 className="whitespace-nowrap text-heading text-ink">{t('inbox.title')}</h1>
             <span className="truncate text-caption text-ink-muted max-narrow:hidden">
               {t('inbox.lede')}
             </span>

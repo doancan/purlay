@@ -10,7 +10,7 @@
 import { NavToggle } from './nav';
 
 export const ScreenBar = (): React.JSX.Element => (
-  <header className="hidden h-header shrink-0 items-center border-b-hairline border-border-subtle px-4 max-narrow:flex">
+  <header className="hidden h-header shrink-0 items-center border-b-hairline border-border-subtle pr-4 pl-5 max-narrow:flex">
     <NavToggle />
   </header>
 );

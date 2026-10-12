@@ -305,7 +305,7 @@ describe('the sign-in screen', () => {
     const card = view
       .getByRole('heading', { level: 1, name: 'Sign in to Purlay' })
       .closest('section');
-    expect(card?.className).toContain('rounded-lg');
+    expect(card?.className).toContain('rounded-2xl');
     expect(card?.className).toContain('shadow-card');
     const mark = card?.querySelector('[aria-hidden="true"]');
     expect(mark?.textContent).toBe('P');

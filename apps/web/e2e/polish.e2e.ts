@@ -81,6 +81,33 @@ test.describe('the command palette', () => {
     const width = page.viewportSize()?.width ?? 0;
     expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - width / 2)).toBeLessThanOrEqual(1);
   });
+
+  // The one opening the product animates (D-110): 150ms from 0.98 with a fade — and none at all
+  // for somebody who asked their system for less motion.
+  for (const [motion, expected] of [
+    ['no-preference', '0.15s'],
+    ['reduce', '0s'],
+  ] as const) {
+    test(`opens in ${expected} when the system's motion preference is ${motion}`, async ({
+      page,
+      signIn,
+      world,
+    }) => {
+      await page.emulateMedia({ reducedMotion: motion });
+      await signIn('bob');
+      await page.goto(channelPath(world.workspace.slug, world.channels.api));
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await page.keyboard.press('ControlOrMeta+k');
+      const dialog = page.getByRole('dialog', { name: 'Command palette' });
+      await expect(dialog).toBeVisible();
+      const animation = await dialog.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return { name: style.animationName, duration: style.animationDuration };
+      });
+      expect(animation.name).not.toBe('none');
+      expect(animation.duration).toBe(expected);
+    });
+  }
 });
 
 test.describe('readable, in whichever theme this project is', () => {

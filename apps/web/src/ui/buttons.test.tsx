@@ -76,7 +76,7 @@ describe('Button', () => {
       </div>,
     );
     expect(getByRole('button', { name: 'p' }).className).toContain('bg-accent');
-    expect(getByRole('button', { name: 's' }).className).toContain('border-border-strong');
+    expect(getByRole('button', { name: 's' }).className).toContain('shadow-card');
     expect(getByRole('button', { name: 'g' }).className).toContain('border-transparent');
     expect(getByRole('button', { name: 'd' }).className).toContain('bg-danger');
     expect(getByRole('button', { name: 'd' }).className).toContain('w-sidebar');
