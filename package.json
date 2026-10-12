@@ -29,7 +29,7 @@
     "db:up": "docker compose up -d --wait postgres garage && ./scripts/storage-init.sh",
     "db:up:postgres": "docker compose up -d --wait postgres",
     "demo": "bun run scripts/demo.ts",
-    "dev": "bun --filter '@purlay/api' --filter '@purlay/web' dev",
+    "dev": "bun run scripts/dev.ts",
     "dev:api": "bun run --cwd apps/api dev",
     "dev:web": "bun run --cwd apps/web dev",
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",

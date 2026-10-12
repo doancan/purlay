@@ -350,9 +350,12 @@ run, which is why the record carries both.
 6. **Log it.** Notable changes go to `docs/changelog/changes.md`.
 
 **Running it.** `bun run dev` starts both processes; `bun run dev:api` and `bun run dev:web` start
-one. They read `.env`, which `bun run config:example` generates the template for, and the API
-**refuses to start** if a variable is missing rather than failing later on the request that needed
-it.
+one. They read the root `.env` (each passes it with `--env-file`, since each runs from its own
+directory), which `bun run config:example` generates the template for, and the API **refuses to
+start** if a variable is missing rather than failing later on the request that needed it. Without
+`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` nobody could sign in, so `bun run dev` says so and
+starts the demo on the same port instead (`scripts/dev.ts`): the real API and database, seeded, with
+people to sign in as. Set both and the same command signs in through GitHub.
 
 **When is it done?** A task is done when it is typed, tested, and its documentation is accurate
 — not when it runs. A milestone is done when its exit criterion is *demonstrated*, not when the
