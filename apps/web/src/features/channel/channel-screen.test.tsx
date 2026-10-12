@@ -264,8 +264,8 @@ describe('the feed, populated', () => {
         aMessage(1, { sender: BOB, content: 'ping @dogancan and @nobody', mentions: [ME.id] }),
       ]),
     });
-    expect(view.getByText('@dogancan').className).toContain('text-accent');
-    expect(view.container.querySelectorAll('.text-accent')).toHaveLength(1);
+    expect(view.getByText('@dogancan').className).toContain('text-accent-text');
+    expect(view.container.querySelectorAll('.text-accent-text')).toHaveLength(1);
     view.unmountAll();
   });
 

@@ -184,7 +184,7 @@ describe('what a row shows', () => {
     );
     expect(view.getByRole('article').className).toContain('bg-accent-subtle');
     expect(view.getByRole('article').textContent).toContain('You were mentioned');
-    expect(view.getByText('@dogancan').className).toContain('text-accent');
+    expect(view.getByText('@dogancan').className).toContain('text-accent-text');
   });
 
   test("somebody else's mention is highlighted in the text and does not tint the row", async () => {
@@ -192,14 +192,14 @@ describe('what a row shows', () => {
       props({ message: aMessage(1, { mentions: [BOB.id], content: 'ask @bob' }) }),
     );
     expect(view.getByRole('article').className).not.toContain('bg-accent-subtle');
-    expect(view.getByText('@bob').className).toContain('text-accent');
+    expect(view.getByText('@bob').className).toContain('text-accent-text');
   });
 
   test('a mention of a person the workspace does not list is plain text', async () => {
     const view = await mount(
       props({ message: aMessage(1, { mentions: [ALICE.id], content: 'ask @alice' }) }),
     );
-    expect(view.container.querySelectorAll('.text-accent')).toHaveLength(0);
+    expect(view.container.querySelectorAll('.text-accent-text')).toHaveLength(0);
   });
 
   test('the slots: below the content for a thread, and beside React for more actions', async () => {

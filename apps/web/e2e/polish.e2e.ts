@@ -41,7 +41,7 @@ test.describe('the columns of a channel', () => {
     const [gutter] = gutters;
     const [body] = bodies;
     if (gutter === undefined || body === undefined) throw new Error('no message rows on screen');
-    expect(body - gutter).toBe(44); // the 32px avatar + a 12px gap
+    expect(body - gutter).toBe(40); // the 28px avatar + a 12px gap
 
     // The composer is a card whose edge is the rows' edge, so the column reads as one.
     const cards = await lefts(page, '[data-composer-card]');

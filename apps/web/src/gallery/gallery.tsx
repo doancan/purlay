@@ -102,7 +102,7 @@ const Specimen = (): React.JSX.Element => (
           </div>
         ))}
       </div>
-      <p className="text-body text-accent">A link is accent</p>
+      <p className="text-body text-accent-text">A link is accent-text</p>
       <p className="text-body text-danger-text">Danger as text</p>
       <p className="text-body text-warning-text">Warning as text</p>
       <p className="text-body text-success-text">Success as text</p>

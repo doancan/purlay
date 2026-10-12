@@ -25,6 +25,7 @@ import { WEIGHTS } from './model';
  * generator.
  */
 const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
+  'size-rail': '--container-rail',
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
   'size-feed-max': '--container-feed',
@@ -47,6 +48,9 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-icon-md': '--size-icon-md',
   'size-icon-lg': '--size-icon-lg',
   'size-focus-offset': '--outline-offset-focus',
+  'size-rail-item': '--size-rail-item',
+  'size-row': '--height-row',
+  'size-drag': '--height-drag',
 };
 
 /** The one size that is not a size: a viewport width, written as a literal because a media query cannot read a variable. */
@@ -204,7 +208,15 @@ const emitThemeCss = (model: Model): string => {
   };
 
   section('Colour: bg-, text-, border-, outline-, fill- … with the token name');
-  for (const color of model.colors) map(`--color-${color.name}`, color.name);
+  for (const color of model.colors) {
+    if (color.role === 'fill') {
+      // Tailwind's own narrower namespaces: `bg-` and `border-` read them, `text-` does not.
+      map(`--background-color-${color.name}`, color.name);
+      map(`--border-color-${color.name}`, color.name);
+    } else {
+      map(`--color-${color.name}`, color.name);
+    }
+  }
   section('Spacing: p-, m-, gap-, inset- … (the 4px grid; there is no multiplier)');
   for (const token of model.spacing) map(`--spacing-${suffix(token.name, 'space-')}`, token.name);
   section('Radius');

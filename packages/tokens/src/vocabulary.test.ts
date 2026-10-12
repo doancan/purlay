@@ -89,7 +89,7 @@ describe('classes around the vocabulary', () => {
     ['bg-red-500', 'builds to nothing'],
     ['bg-surfac-100', 'builds to nothing'],
     ['p-7', 'builds to nothing'],
-    ['rounded-xl', 'builds to nothing'],
+    ['rounded-3xl', 'builds to nothing'],
     ['shadow-md', 'builds to nothing'],
     ['text-sm', 'builds to nothing'],
     ['font-bold', 'builds to nothing'],

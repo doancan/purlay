@@ -41,7 +41,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         >
           <span
             aria-hidden="true"
-            className="inline-flex size-avatar shrink-0 items-center justify-center rounded-md bg-accent-subtle text-label text-accent"
+            className="inline-flex size-avatar shrink-0 items-center justify-center rounded-md bg-accent-subtle text-label text-accent-text"
           >
             {initialsOf(workspace.name)}
           </span>

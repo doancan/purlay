@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a flat, quiet interface — tokens and type (D-109)
+
+- Inter for prose and JetBrains Mono for machine text, served from this origin (`@fontsource/inter`
+  5.3.0 and `@fontsource/jetbrains-mono` 5.3.0, Latin and Latin Extended, 244 KB for the ten files;
+  a page downloads only the subsets its characters need). IBM Plex is gone.
+- Neutral greys and one deep navy accent, in light and in dark. `accent` is now a fill only — it builds
+  `bg-` and `border-` and no `text-` — and its words are `accent-text`, so a navy word on a dark page
+  cannot be written. A colour token can say `"role": "fill"` for that.
+- Smaller, quieter shapes: 6px controls, 8px rows, 10px cards, 12px overlays; a one-pixel card shadow;
+  1.5px icon strokes. The sidebar is 240px and the feed 760px.
+- The brief that was the input (`design-system.md`) is removed: its values live in `tokens.json`.
 ### Security — 2026-10-12: attachments are read through the API, and nothing in them runs (D-109 §6)
 
 - `GET /api/attachments/:id` and `/thumbnail` serve the bytes behind an id to whoever may read them —
@@ -331,6 +342,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - **`bun run budget:web`** fails above 250 KB of initial gzipped JavaScript, names the chunks (and, with a
   source map, the sources inside the largest), and fails a highlighter grammar or a second locale in the
   initial chunks. It is in `verify` and CI.
+
 ### Feature — 2026-10-10: the interface has an identity (D-100)
 
 - **Cards on a canvas.** The window is a tinted ground and the sidebar and the channel are two rounded
@@ -844,6 +856,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   accept only a `Transaction` — the pool no longer compiles (#232, D-77).
 - The test that proves it makes the second write fail on a cloned database and finds the first gone;
   before the fix it found it still there.
+
 ### Feature — 2026-10-09: HTTP routes are rate limited, and a session records where it started
 
 - `/auth/*` is limited per client address and every mutation under `/api/*` per signed-in user, at

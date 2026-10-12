@@ -4664,6 +4664,10 @@ state `UX.md` §8 requires.
    down), its strong border on a control whose edge is its only affordance (that edge takes a grey that
    reaches 3:1), and its status greens and ambers as text (text takes the existing `*-text` shades).
    The pairs the generator checks are the arbiter; this sentence is not.
+   **A fill cannot become a word.** The accent is dark navy in both themes, so a navy word on a dark page
+   would be illegible; a colour token may say `"role": "fill"`, and the generator binds it to Tailwind's
+   `--background-color-*` and `--border-color-*` namespaces only — `bg-accent` exists, `text-accent`
+   does not, and `styles.test.ts` proves it. Its words are `accent-text`.
 5. **Scale.** Type 12/16, 13/20, 14/22, 15/22, 16/24, and a message body of 14px at 1.6. Radius 4
    for a key, 6 for a control, 8 for a row and an avatar, 10 for a card, 12 for the composer and an
    overlay. Avatars are rounded squares — initials on a tint, as D-100 decided — at 36px in the feed,

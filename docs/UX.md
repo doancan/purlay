@@ -82,7 +82,7 @@ window.
       ○ Open · 4 replies · last 12m ago                  Show thread T
 ```
 
-- **Avatars, and no bubbles.** An avatar in a fixed column names who is speaking before a word is
+- **Avatars, and no bubbles** (D-100). An avatar in a fixed column names who is speaking before a word is
   read; the text is not put in a bubble, because a bubble makes a code block a box inside a box and
   narrows every line it holds. Your own messages are on the same edge as everyone else's: a chat
   with two edges is read by following the speaker, and this one is read by following the thread.
