@@ -56,7 +56,11 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.slow';
     case 'PAYLOAD_TOO_LARGE':
     case 'LENGTH_REQUIRED':
+    case 'STORAGE_QUOTA_EXCEEDED':
       return 'failure.tooLarge';
+    case 'TOO_MANY_PENDING_UPLOADS':
+    case 'ATTACHMENT_ID_CONFLICT':
+      return 'failure.refused';
     case 'VALIDATION_FAILED':
     case 'INVALID_MESSAGE_ID':
     case 'UNSUPPORTED_MEDIA_TYPE':
