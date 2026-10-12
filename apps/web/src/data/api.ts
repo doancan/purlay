@@ -140,7 +140,11 @@ export interface Api {
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
-    query: { readonly q: string; readonly before?: string | undefined },
+    query: {
+      readonly q: string;
+      readonly channelId?: string | undefined;
+      readonly before?: string | undefined;
+    },
     signal?: AbortSignal,
   ) => Promise<SearchPage>;
   readonly react: (messageId: string, emoji: string) => Promise<ReactionsResponse>;

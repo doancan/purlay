@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: search narrowed to one channel (`PRD.md` §4.6, D-105)
+
+- The search screen has **Where**: every channel, or one of them. The choice is in the address
+  (`?q=…&in=…`), so Back, a reload and a link keep it; new words keep it too; the empty state says
+  where it looked. The API took `channelId` already; the screen never sent one.
+
 ### Feature — 2026-10-12: owners and admins manage members and roles in the app (`PRD.md` §4.3)
 
 - **Members…** in the workspace menu: everyone's role, changed from a select where the server would
