@@ -209,7 +209,8 @@ uses them, a deployment behind another proxy, or one with certificates of its ow
 
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
 (D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
-nightly, in UTC. Every run is
+nightly, in UTC. When it starts it first runs, once, each job that has never succeeded (`jobs:first`), so a
+new deployment is proven, and its status is clean, from its first minute (D-30). Every run is
 recorded; to see when each last succeeded, and whether one is overdue or has never run:
 
 ```

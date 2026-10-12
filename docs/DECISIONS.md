@@ -778,6 +778,14 @@ absent.
 none of these six jobs needs them — they are idempotent sweeps that are simply run again
 tomorrow. `CONTRIBUTING.md` §1.11 forbids the infrastructure until a measurement forces it.
 
+**Amended 2026-10-12 — a job is proven the day it is installed (#440).** The scheduler starts by
+running `jobs:first`: once, each job that has never succeeded. Without it a new deployment's
+`jobs:status` was red for up to a day, so a monitor alarmed on every install, and whether a job worked
+there at all was known only the next night. A restart of a deployment whose jobs have all succeeded
+once runs nothing more, so fixed times still mean no job runs twice in a row. *Rejected:* running
+every job at each start, which repeats the nightly work on every restart; and running them from
+`scripts/production-init.sh`, which may run before the API has migrated the database.
+
 ---
 
 ### D-31. SSO moves from permanent non-goal to Phase 3, gated on demand
