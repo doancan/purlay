@@ -90,6 +90,7 @@ export const aMessage = (n: number, over: Partial<Message> = {}): Message => ({
   thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
   reactions: [],
   mentions: [],
+  attachments: [],
   ...over,
 });
 

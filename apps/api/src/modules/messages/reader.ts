@@ -15,7 +15,7 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Message, Reaction, ThreadSummary, User } from '@purlay/types';
-import { mentionSets, reactionSets } from './sets';
+import { attachmentSets, mentionSets, reactionSets } from './sets';
 
 /** What every query that returns messages selects. Kept beside `MessageRow` so they cannot drift. */
 export const MESSAGE_COLUMNS = [
@@ -135,9 +135,10 @@ export const buildMessages = async (
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
   const resolvers = rows.flatMap((row) => (row.resolved_by === null ? [] : [row.resolved_by]));
-  const [reactions, mentions, people] = await Promise.all([
+  const [reactions, mentions, attachments, people] = await Promise.all([
     reactionSets(executor, ids),
     mentionSets(executor, ids),
+    attachmentSets(executor, ids),
     usersByIds(executor, [...new Set(resolvers)]),
   ]);
   return rows.map((row) => ({
@@ -158,6 +159,8 @@ export const buildMessages = async (
     thread: row.parent_id === null ? summaryOf(row, people) : null,
     reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
     mentions: [...(mentions.get(row.id) ?? [])],
+    // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
+    attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
   }));
 };
 

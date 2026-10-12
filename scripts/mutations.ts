@@ -1383,6 +1383,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
   },
   {
+    id: 'tombstone-shows-its-attachments',
+    why: 'a deleted message still offers what was shown with its words, which the tombstone exists to hide',
+    file: 'apps/api/src/modules/messages/reader.ts',
+    find: 'attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],',
+    replace: 'attachments: [...(attachments.get(row.id) ?? [])],',
+    tests: ['apps/api/src/modules/messages/attachments.integration.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',

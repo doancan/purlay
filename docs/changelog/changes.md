@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: a message carries its attachments (D-109 §6)
+
+- Every message the API returns or sends — history, a thread, search, the inbox, a live frame —
+  carries `attachments`, in the order they were uploaded and read in one query for the page. A
+  deleted message carries none.
+
 ### Feature — 2026-10-12: an uploaded image is stored re-encoded (D-109 §1, §2)
 
 - A PNG, JPEG, GIF or WebP — known by its bytes — is stored upright as WebP, at most 2560 pixels on
