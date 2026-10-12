@@ -37,13 +37,25 @@ interface TooltipProps {
   readonly shortcut?: string;
   /** The one element the tip describes; it must be focusable. */
   readonly children: React.ReactElement;
+  /** Where the tip opens; beside a control on the window's edge, it opens inward. */
+  readonly side?: 'top' | 'right' | 'bottom' | 'left';
 }
 
-export const Tooltip = ({ content, shortcut, children }: TooltipProps): React.JSX.Element => (
+export const Tooltip = ({
+  content,
+  shortcut,
+  children,
+  side = 'top',
+}: TooltipProps): React.JSX.Element => (
   <RadixTooltip.Root>
     <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
     <RadixTooltip.Portal>
-      <RadixTooltip.Content className={contentClasses} sideOffset={4} collisionPadding={8}>
+      <RadixTooltip.Content
+        className={contentClasses}
+        side={side}
+        sideOffset={4}
+        collisionPadding={8}
+      >
         {content}
         {shortcut === undefined ? null : <Kbd>{shortcut}</Kbd>}
       </RadixTooltip.Content>

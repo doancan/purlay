@@ -51,3 +51,17 @@ export const useOverlayDoor = (): (() => void) | null => {
     [state],
   );
 };
+
+/** A function that opens the shortcut reference, or `null` where nothing renders it. */
+export const useShortcutsDoor = (): (() => void) | null => {
+  const state = useContext(OverlayContext);
+  return useMemo(
+    () =>
+      state === null
+        ? null
+        : (): void => {
+            state.setOverlay('shortcuts');
+          },
+    [state],
+  );
+};

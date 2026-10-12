@@ -469,8 +469,7 @@ describe('the footer', () => {
     expect(footer.querySelector('[aria-hidden="true"].size-avatar-sm')?.textContent).toBe('DO');
     // The hint moved to the jump field above; the footer no longer carries it.
     expect(footer.querySelector('kbd')).toBeNull();
-    expect(view.getByRole('button', { name: 'Theme' })).toBeDefined();
-    expect(view.getByRole('button', { name: 'Language' })).toBeDefined();
+    expect(view.getByRole('button', { name: 'Settings' })).toBeDefined();
   });
 });
 

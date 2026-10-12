@@ -15,7 +15,17 @@ import { cn } from './cn';
 import { Tooltip } from './tooltip';
 
 const iconButtonClasses =
-  'inline-flex h-control max-narrow:h-touch aspect-square shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-muted';
+  'inline-flex shrink-0 items-center justify-center transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink disabled:cursor-not-allowed disabled:text-ink-muted';
+
+/**
+ * Two sizes. A control sits in a row with other controls and is as tall as they are; a rail
+ * button is a larger square on the window's edge, with a larger glyph and its tip opening
+ * inward (D-109).
+ */
+const sizeClasses = {
+  control: 'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted',
+  rail: 'size-rail-item rounded-lg text-ink-subtle',
+} as const;
 
 export interface IconButtonProps extends Omit<
   React.ComponentPropsWithRef<'button'>,
@@ -26,19 +36,30 @@ export interface IconButtonProps extends Omit<
   readonly glyph: GlyphName;
   /** The key that does the same thing, shown in the tooltip. */
   readonly shortcut?: string;
+  readonly size?: keyof typeof sizeClasses;
 }
 
 export const IconButton = ({
   label,
   glyph,
   shortcut,
+  size = 'control',
   type = 'button',
   className,
   ...rest
 }: IconButtonProps): React.JSX.Element => (
-  <Tooltip content={label} {...(shortcut === undefined ? {} : { shortcut })}>
-    <button {...rest} type={type} aria-label={label} className={cn(iconButtonClasses, className)}>
-      <Icon name={glyph} />
+  <Tooltip
+    content={label}
+    side={size === 'rail' ? 'right' : 'top'}
+    {...(shortcut === undefined ? {} : { shortcut })}
+  >
+    <button
+      {...rest}
+      type={type}
+      aria-label={label}
+      className={cn(iconButtonClasses, sizeClasses[size], className)}
+    >
+      <Icon name={glyph} size={size === 'rail' ? 'lg' : 'md'} />
     </button>
   </Tooltip>
 );

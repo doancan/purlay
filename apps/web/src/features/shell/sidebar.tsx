@@ -9,9 +9,7 @@
  * does not take the people or the header with it. Inside the narrow window's overlay it is the
  * whole panel, so it drops the card's corners and shadow: the dialog is the surface there.
  */
-import { LanguageMenu } from '../../i18n/language-menu';
 import { useI18n } from '../../i18n/i18n-provider';
-import { ThemeMenu } from '../../theme/theme-menu';
 import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
 import { useSession } from '../session/session';
@@ -22,6 +20,7 @@ import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { PeopleList } from '../sidebar/people-list';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
+import { SettingsMenu } from './settings-menu';
 
 interface SidebarProps {
   /** Inside the narrow window's overlay: as tall as the panel rather than as tall as the page's row. */
@@ -55,10 +54,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           <Avatar size="sm" name={user.displayName} username={user.username} />
           <span className="truncate">{user.displayName}</span>
         </p>
-        <div className="flex">
-          <ThemeMenu />
-          <LanguageMenu />
-        </div>
+        <SettingsMenu />
       </footer>
     </aside>
   );

@@ -93,7 +93,7 @@ test.describe('the theme', () => {
   }, info) => {
     const other = expected(info.project.name) === 'dark' ? 'light' : 'dark';
     await page.goto('/__gallery');
-    await page.getByRole('button', { name: 'Theme' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('menuitemradio', { name: other === 'dark' ? 'Dark' : 'Light' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', other);
     await page.reload();
@@ -107,7 +107,7 @@ test.describe('the language', () => {
     page,
   }) => {
     await page.goto('/__gallery');
-    await page.getByRole('button', { name: 'Language' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
     await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'tr');
     await page.reload();
