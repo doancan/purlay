@@ -146,7 +146,7 @@ describe('the endpoints', () => {
     expect(reactions.calls[1]).toMatchObject({ method: 'DELETE' });
   });
 
-  test('an edit sends the new words', async () => {
+  test('an edit sends the new words; a delete asks and reads no answer', async () => {
     const edited = harness(message);
     await edited.api.editMessage(ID, 'better words');
     expect(edited.calls[0]).toMatchObject({
@@ -154,6 +154,9 @@ describe('the endpoints', () => {
       url: `/api/messages/${ID}`,
       body: { content: 'better words' },
     });
+    const gone = harness(null);
+    await gone.api.deleteMessage(ID);
+    expect(gone.calls[0]).toMatchObject({ method: 'DELETE', url: `/api/messages/${ID}` });
   });
 
   test('signing out asks and does not read an answer', async () => {

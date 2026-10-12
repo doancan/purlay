@@ -61,4 +61,35 @@ test.describe('my own message', () => {
     await expect(editor(page)).toBeFocused();
     await expect(editor(page)).toHaveValue('mine to change');
   });
+
+  test('deleted after being asked, and gone from the other screen', async ({
+    page,
+    signIn,
+    room,
+    asPerson,
+  }) => {
+    const made = await room({
+      messages: [
+        { by: 'dogancan', text: 'a message I regret' },
+        { by: 'dogancan', text: 'and one I keep' },
+      ],
+    });
+    await signIn();
+    await page.goto(made.path);
+    const alice = await asPerson('alice');
+    await alice.goto(made.path);
+    await expect(rowWith(alice, 'a message I regret')).toBeVisible();
+
+    const row = rowWith(page, 'a message I regret');
+    await row.hover();
+    await row.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('menuitem', { name: /Delete/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete this message?' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Delete' }).click();
+
+    await expect(rowWith(page, 'a message I regret')).toHaveCount(0);
+    await expect(rowWith(alice, 'a message I regret')).toHaveCount(0);
+    await expect(rowWith(alice, 'and one I keep')).toBeVisible();
+  });
 });
