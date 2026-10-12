@@ -11,6 +11,7 @@ import {
   type Message,
   type MessagePage,
   type ServerFrame,
+  TYPING_TTL_MS,
 } from '@purlay/types';
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
@@ -101,6 +102,7 @@ interface World {
 interface Extras {
   readonly storage?: MemoryStorage | null;
   readonly userId?: string;
+  readonly clock?: Clock;
 }
 
 const world = (api: Partial<Api> = {}, extras: Extras = {}): World => {
@@ -108,7 +110,7 @@ const world = (api: Partial<Api> = {}, extras: Extras = {}): World => {
   const sockets: Socket[] = [];
   const client = new QueryClient();
   const ended = { count: 0 };
-  const clock: Clock = { now: () => new Date(T0) };
+  const clock: Clock = extras.clock ?? { now: () => new Date(T0) };
   const engine = createEngine({
     api: anApi(api),
     client,
@@ -1227,5 +1229,65 @@ describe('typing', () => {
     w.engine.stop();
     expect(w.engine.store.getState().typing).toEqual({});
     expect(w.timers.pending()).toBe(0);
+  });
+});
+
+/**
+ * Saying that the person is typing (#411): over an open socket only, rationed as the server
+ * rations it, and news again once their message is sent.
+ */
+describe('announcing typing', () => {
+  const started = (now: { at: number }): World => {
+    const w = world({}, { clock: { now: () => new Date(now.at) } });
+    w.engine.start();
+    w.open();
+    return w;
+  };
+
+  test('goes out once per half window per channel, naming the channel', () => {
+    const now = { at: T0 };
+    const w = started(now);
+    w.engine.announceTyping(CH);
+    w.engine.announceTyping(CH);
+    w.engine.announceTyping(CH2);
+    now.at += TYPING_TTL_MS / 2 - 1;
+    w.engine.announceTyping(CH);
+    expect(w.sentOps('TYPING').map((f) => f.payload)).toEqual([
+      { channelId: CH },
+      { channelId: CH2 },
+    ]);
+    now.at += 1;
+    w.engine.announceTyping(CH);
+    expect(w.sentOps('TYPING')).toHaveLength(3);
+  });
+
+  test('says nothing while the socket is not open: it is not worth an HTTP request', () => {
+    const w = world();
+    w.engine.start();
+    w.engine.announceTyping(CH);
+    expect(w.sentOps('TYPING')).toEqual([]);
+  });
+
+  test('a sent message makes the next keystroke news at once', () => {
+    const now = { at: T0 };
+    const w = started(now);
+    w.engine.announceTyping(CH);
+    w.engine.send({ channelId: CH, content: 'hello' });
+    w.engine.announceTyping(CH);
+    expect(w.sentOps('TYPING')).toHaveLength(2);
+  });
+
+  test('an announcement refused is not a broken channel', () => {
+    const w = started({ at: T0 });
+    w.engine.announceTyping(CH);
+    const [sent] = w.sentOps('TYPING');
+    if (sent === undefined) throw new Error('nothing was announced');
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'That channel does not exist.' },
+      refId: sent.id,
+      ts: T0,
+    });
+    expect(w.engine.store.getState().degraded).toEqual({});
   });
 });

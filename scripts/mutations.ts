@@ -1953,4 +1953,28 @@ export const MUTATIONS: readonly Mutation[] = [
       "      case 'TYPING': {\n        dependencies.presence.startTyping(parsed.payload.channelId, identity.userId, TYPING_TTL_MS);\n",
     tests: ['apps/api/src/realtime/typing.integration.test.ts'],
   },
+  {
+    id: 'composer-announces-spaces',
+    why: 'a box of spaces tells the room somebody is typing',
+    file: 'apps/web/src/features/composer/composer.tsx',
+    find: "    if (next.trim() !== '') engine.announceTyping(channelId);\n",
+    replace: '    engine.announceTyping(channelId);\n',
+    tests: ['apps/web/src/features/composer/composer.test.tsx'],
+  },
+  {
+    id: 'composer-shows-nobody-typing',
+    why: 'the room hears who is typing and the screen never says so',
+    file: 'apps/web/src/features/composer/composer.tsx',
+    find: '              {!compact && <TypingLine channelId={channelId} />}\n',
+    replace: '',
+    tests: ['apps/web/src/features/composer/composer.test.tsx'],
+  },
+  {
+    id: 'refused-announcement-breaks-the-channel',
+    why: 'a typing announcement the server refuses puts the whole connection bar into degraded',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '        if (refId !== undefined && isAnnouncement(refId)) {\n',
+    replace: '        if (refId === undefined && isAnnouncement(String(refId))) {\n',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
 ];

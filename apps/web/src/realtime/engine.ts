@@ -32,6 +32,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   messageId,
+  TYPING_TTL_MS,
   type Attachment,
   type Channel,
   type ClientFrame,
@@ -148,6 +149,12 @@ export interface Engine {
   readonly discard: (id: string) => void;
   /** Asks again for every channel whose live updates were refused or interrupted. */
   readonly retryDegraded: () => void;
+  /**
+   * The person is typing in this channel. Said over an open socket and nowhere else, at most once
+   * per half of `TYPING_TTL_MS` per channel — the server's own ration, so nothing is sent that it
+   * would drop (D-114).
+   */
+  readonly announceTyping: (channelId: string) => void;
 }
 
 const isSendAck = (
@@ -271,6 +278,10 @@ export const createEngine = (options: EngineOptions): Engine => {
     if (now.includes(userId)) return;
     store.setState((state) => ({ typing: { ...state.typing, [channelId]: [...now, userId] } }));
   };
+  // The last announcement this person made in each channel: its frame id, and when, by this clock.
+  const announced = new Map<string, { readonly id: string; readonly at: number }>();
+  const isAnnouncement = (refId: string): boolean =>
+    [...announced.values()].some((last) => last.id === refId);
   const update = (id: string, patch: Partial<PendingMessage>): void => {
     change((all) => all.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
@@ -446,7 +457,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       }
       case 'ERROR': {
         const { refId } = frame;
-        if (refId !== undefined && find(refId) !== undefined) {
+        if (refId !== undefined && isAnnouncement(refId)) {
+          // An announcement the server would not take — the channel went, or the budget is spent —
+          // costs the room a hint and nothing else; the channel itself is told by its own frames.
+        } else if (refId !== undefined && find(refId) !== undefined) {
           fail(refId, frame.data.code);
         } else if (refId !== undefined && reported.delete(refId)) {
           // A refused subscription the connection already told us about.
@@ -564,6 +578,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       for (const cancel of timers.values()) cancel();
       timers.clear();
       // Who was typing is not known while nothing is heard; the next announcement says again.
+      announced.clear();
       for (const cancel of typingEnds.values()) cancel();
       typingEnds.clear();
       store.setState({ typing: {} });
@@ -591,6 +606,8 @@ export const createEngine = (options: EngineOptions): Engine => {
       }
     },
     send: ({ channelId, content, parentId, attachments }): string => {
+      // What they were typing is on its way; the next keystroke is news again, as on the server.
+      announced.delete(channelId);
       const id = messageId(serverClock.now());
       const pending: PendingMessage = {
         id,
@@ -616,6 +633,17 @@ export const createEngine = (options: EngineOptions): Engine => {
     },
     discard: (id): void => {
       if (find(id)?.delivery === 'failed') forget(id);
+    },
+    announceTyping: (channelId): void => {
+      if (connection === null) return;
+      const now = options.clock.now().getTime();
+      const last = announced.get(channelId);
+      if (last !== undefined && now - last.at < TYPING_TTL_MS / 2) return;
+      const id = messageId(serverClock.now());
+      // Only over an open socket: a frame that did not leave is not kept, nor sent over HTTP.
+      if (connection.send({ id, op: 'TYPING', payload: { channelId } })) {
+        announced.set(channelId, { id, at: now });
+      }
     },
     retryDegraded: (): void => {
       const stale = Object.keys(store.getState().degraded).filter((id) => id !== UNNAMED);

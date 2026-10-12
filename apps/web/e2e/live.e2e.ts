@@ -354,3 +354,32 @@ test.describe('a message somebody else revises', () => {
     await expect(page.locator(`[data-message-id="${asideId}"]`)).toHaveCount(0);
   });
 });
+
+test.describe('typing', () => {
+  test('one person typing is named under the other’s composer, and the line goes when the message arrives', async ({
+    page,
+    signIn,
+    room,
+    asPerson,
+  }) => {
+    const made = await room({ messages: [{ by: 'alice', text: 'a room to type in' }] });
+    await signIn();
+    await page.goto(made.path);
+    const alice = await asPerson('alice');
+    await alice.goto(made.path);
+    await expect(rowWith(page, 'a room to type in')).toBeVisible();
+    await expect(rowWith(alice, 'a room to type in')).toBeVisible();
+    const line = page.getByText(/is typing…$/);
+
+    await composer(alice, made.name).pressSequentially('almost');
+    await expect(line).toBeVisible();
+    // Never told about themselves.
+    await expect(alice.getByText(/is typing…$/)).toHaveCount(0);
+
+    await composer(alice, made.name).press('Enter');
+    await expect(rowWith(page, 'almost')).toBeVisible();
+    // Gone with the message, which arrived in the same frame handling as the row — well inside the
+    // announcement's six seconds, which would clear it anyway and so prove nothing.
+    await expect(line).toHaveCount(0, { timeout: 2_000 });
+  });
+});

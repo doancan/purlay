@@ -195,6 +195,11 @@ is worse than no help at all.
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
 
+**Who else is typing** is said quietly in the channel composer's footer, beside the hints — "Alice is
+typing…", two by name, more as "Several people are typing…" — in a row that is always there, so nothing
+moves when it appears (D-114). Never yourself; gone when their message arrives or after a few quiet
+seconds. A reply composer shows none: typing belongs to the channel.
+
 ---
 
 ## 6. Scroll and unread
