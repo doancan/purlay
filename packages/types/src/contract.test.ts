@@ -17,6 +17,7 @@ import {
   Page,
   ReactionsResponse,
   ReadChannelRequest,
+  EditMessageRequest,
   SendMessageRequest,
   ThreadPage,
   UnresolvedPage,
@@ -151,6 +152,13 @@ describe('http shapes', () => {
     expect(Value.Check(SendMessageRequest, { id, content: 'hi' })).toBe(true);
     expect(Value.Check(SendMessageRequest, { content: 'hi' })).toBe(false);
     expect(Value.Check(SendMessageRequest, { id: 'not-a-uuid', content: 'hi' })).toBe(false);
+  });
+
+  test('an edit is new content and nothing else: not the id, not a parent', () => {
+    expect(Value.Check(EditMessageRequest, { content: 'fixed' })).toBe(true);
+    expect(Value.Check(EditMessageRequest, { content: '' })).toBe(false);
+    expect(Value.Check(EditMessageRequest, {})).toBe(false);
+    expect(Value.Check(EditMessageRequest, { content: 'x', parentId: id })).toBe(false);
   });
 });
 

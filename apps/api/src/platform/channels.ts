@@ -192,7 +192,8 @@ export const visibleChannelIds = async (
     (channel) => channel.id,
   );
 
-const messageNotFound = (): AppError =>
+/** The one refusal for a message that is not there for the caller; reused, never copied. */
+export const messageNotFound = (): AppError =>
   new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
 
 /** A message the caller may act on, and the channel it is in. */

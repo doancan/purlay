@@ -72,6 +72,10 @@ interface World {
   /** A root with an answer in each channel above: the thing a message endpoint names. */
   readonly threads: {
     readonly visible: string;
+    /** The outsider's own, in the visible channel: the control for an endpoint only an author uses. */
+    readonly ownVisible: string;
+    /** The outsider's own, in channels they cannot see now: hidden, though they wrote them. */
+    readonly ownHidden: Readonly<Record<'private' | 'deleted', string>>;
     readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
   };
 }
@@ -138,13 +142,14 @@ const aWorld = async (db: Executor): Promise<World> => {
 
   // A question with one answer in every channel, written by the owner: what the
   // message endpoints name, and what the open-questions view lists.
-  const thread = async (channelId: string): Promise<string> => {
+  const thread = async (channelId: string, author = owner.id): Promise<string> => {
     const root = Bun.randomUUIDv7();
     const base = { workspace_id: workspaceId, channel_id: channelId, sender_id: owner.id };
     await db
       .insertInto('messages')
       .values({
         ...base,
+        sender_id: author,
         id: root,
         content: 'a question',
         thread_reply_count: 1,
@@ -160,6 +165,13 @@ const aWorld = async (db: Executor): Promise<World> => {
 
   const threads = {
     visible: await thread(visible),
+    // The outsider's own: in the visible channel, the control for an endpoint only an author may
+    // use; in a private channel they have left and in a deleted one, hidden though theirs.
+    ownVisible: await thread(visible, outsider.id),
+    ownHidden: {
+      private: await thread(hidden.private, outsider.id),
+      deleted: await thread(hidden.deleted, outsider.id),
+    },
     hidden: {
       private: await thread(hidden.private),
       'direct message': await thread(hidden['direct message']),
@@ -246,7 +258,19 @@ describe('integration: channel visibility', () => {
           const refusal: unknown = await absent.json();
           expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
-          for (const [why, messageId] of Object.entries(world.threads.hidden)) {
+          // An endpoint only an author uses is also refused for the caller's own words in a
+          // channel they cannot see: authorship is not a way round visibility.
+          const hiddenOnes = {
+            ...world.threads.hidden,
+            ...(visibility.author === true
+              ? {
+                  'their own, in a private channel they are not in':
+                    world.threads.ownHidden.private,
+                  'their own, in a deleted channel': world.threads.ownHidden.deleted,
+                }
+              : {}),
+          };
+          for (const [why, messageId] of Object.entries(hiddenOnes)) {
             const response = await call(db, method, at(messageId), world.outsider, body);
             expect({ why, status: response.status, body: await response.json() }).toEqual({
               why,
@@ -256,8 +280,11 @@ describe('integration: channel visibility', () => {
           }
 
           // The same caller, a message in a channel they can see: the only thing that
-          // changed is which message the request names.
-          const control = await call(db, method, at(world.threads.visible), world.outsider, body);
+          // changed is which message the request names — one they wrote, for an endpoint only
+          // an author may use, and somebody else's for every other.
+          const controlled =
+            visibility.author === true ? world.threads.ownVisible : world.threads.visible;
+          const control = await call(db, method, at(controlled), world.outsider, body);
           expect({ status: control.status, ok: control.ok }).toEqual({
             status: control.status,
             ok: true,

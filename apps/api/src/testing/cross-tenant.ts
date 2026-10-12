@@ -95,7 +95,11 @@ export const pathFor = (path: string, ids: Ids): string =>
  */
 type Visibility =
   | { readonly kind: 'channel' }
-  | { readonly kind: 'message' }
+  /**
+   * `author`: only the message's author may use the endpoint, so the control is a message the
+   * caller wrote, and the hidden ones include messages they wrote in channels they cannot see.
+   */
+  | { readonly kind: 'message'; readonly author?: true }
   | { readonly kind: 'workspace-wide'; readonly query?: string }
   | { readonly kind: 'none'; readonly reason: string };
 
@@ -127,6 +131,7 @@ export interface CrossTenantCase {
 
 const CHANNEL: Visibility = { kind: 'channel' };
 const MESSAGE: Visibility = { kind: 'message' };
+const MESSAGE_BY_AUTHOR: Visibility = { kind: 'message', author: true };
 
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId': {
@@ -174,6 +179,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/messages/:messageId/reactions/:emoji': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
+  },
+  'PATCH /api/messages/:messageId': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    body: () => ({ content: 'crossing' }),
+    visibility: MESSAGE_BY_AUTHOR,
   },
   'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },

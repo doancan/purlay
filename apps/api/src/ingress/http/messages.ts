@@ -7,12 +7,19 @@
  * cannot validate differently.
  */
 import type { Executor } from '@purlay/db';
-import { PageQuery, SendMessageRequest, type Message, type MessagePage } from '@purlay/types';
+import {
+  EditMessageRequest,
+  PageQuery,
+  SendMessageRequest,
+  type Message,
+  type MessagePage,
+} from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById, requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { visibleChannelIds } from '../../platform/channels';
 import { messageHistory, send, type SendDependencies } from '../../modules/messages/messages';
+import { edit } from '../../modules/messages/edit';
 import {
   setResolved,
   threadReplies,
@@ -101,6 +108,19 @@ export const setThreadResolution = async (
   const { database, clock } = dependencies;
   const { userId, sessionId } = await requireSession(database, clock, request);
   return await setResolved(dependencies, userId, messageId, resolved, sessionId);
+};
+
+/** `PATCH /api/messages/:messageId` — the author's new content (D-103). */
+export const editMessage = async (
+  dependencies: HistoryDependencies & SendDependencies,
+  request: Request,
+  messageId: string,
+  body: unknown,
+): Promise<Message> => {
+  const { database, clock } = dependencies;
+  const caller = await requireSession(database, clock, request);
+  const input = validated(EditMessageRequest, body);
+  return await edit(dependencies, caller, messageId, input.content);
 };
 
 /**

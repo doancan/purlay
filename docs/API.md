@@ -52,7 +52,7 @@ account for it. `message` is for humans and may change. (D-47)
 |---|---|
 | `400` | Validation failed, or the body is not JSON — `details` names the fields. Never the submitted value and never the schema: a typo must not come back as a description of the server's own rules (`docs/spikes/elysia.md`) |
 | `401` | No session, or the session is expired or revoked |
-| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
+| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a member editing a message they did not write (D-103), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
 | `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
 | `413` | A JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame — refused by the server before it is read), or an upload over `attachment_size_limit` |
@@ -151,7 +151,7 @@ repaired. Nobody else hears it.
 | ○ | `GET` | `/api/channels/:channelId/messages` | Root messages, keyset, newest first (`SCHEMA.md` §6.3) |
 | ○ | `POST` | `/api/channels/:channelId/messages` | **Fallback when the socket is down.** Same service as `MESSAGE_SEND`. A body with `parentId` is a reply to that root (I-1); the same id in another channel is `404 MESSAGE_NOT_FOUND`, a reply's id is `400` on `parentId`. `@here`, `@channel` and `@everyone` are `400` on `content` (D-12). Content is `MessageContent` in `@purlay/types` — its length limit and the characters it refuses are defined there (D-67) |
 | ○ | `GET` | `/api/messages/:messageId/thread` | Replies of a root, keyset, **oldest first** with no cursor or with `after`; `before` reads older ones newest first, as every page does. A reply has no thread: `404` |
-| ① | `PATCH` | `/api/messages/:messageId` | Author only — **window pending O-1** |
+| ○ | `PATCH` | `/api/messages/:messageId` | Author only, no window (D-103) — `{ content }` (`EditMessageRequest`), answered with the message as it now is. Another member is `403 FORBIDDEN`; a message the caller cannot see, or a deleted one, `404 MESSAGE_NOT_FOUND`. The same content is not an edit: nothing written, not marked edited. A name the edit adds is told once; nobody already told about the message is told again |
 | ① | `DELETE` | `/api/messages/:messageId` | Author or admin — tombstone, never erase (D-9) |
 | ○ | `POST` | `/api/messages/:messageId/resolve` | Roots with at least one reply only, else `409 THREAD_NOT_RESOLVABLE` (I-8). Idempotent: closing a closed thread answers the message and publishes nothing. Answers the root |
 | ○ | `DELETE` | `/api/messages/:messageId/resolve` | Reopen; the same message answered, a reply is `409 THREAD_NOT_RESOLVABLE` |
