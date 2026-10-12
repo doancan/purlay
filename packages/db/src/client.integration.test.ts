@@ -60,19 +60,32 @@ describe('integration: the database client and the migrations', () => {
     }
   });
 
+  /**
+   * Under the full suite's load this took 7–10 s and failed (#347): it waited a fixed 100 ms for the
+   * two holding queries to take their connections, and connecting alone can take longer than that.
+   * Now it waits until both are seen running, holds them as long as it needs, and ends them itself.
+   */
   test('a pool with every connection busy fails promptly and says so, instead of waiting', async () => {
     const database = createDatabase({
       connectionString: url(),
       poolSize: 2,
       connectionTimeoutMs: 300,
     });
+    // Names the holding queries in pg_stat_activity, so this test finds its own and no other's.
+    const mark = `pool-busy-${crypto.randomUUID()}`;
+    const holding = sql`pg_stat_activity where query like ${`%${mark}%`} and pid <> pg_backend_pid()`;
+    const observer = integrationDatabase();
     try {
-      // Two connections held by queries that outlive the wait below.
-      const held = [
-        sql`select pg_sleep(1.5)`.execute(database),
-        sql`select pg_sleep(1.5)`.execute(database),
-      ];
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      const held = [1, 2].map((n) =>
+        sql.raw(`select pg_sleep(60) /* ${mark} ${String(n)} */`).execute(database),
+      );
+      for (let seen = 0; seen < 2;) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const row = await sql<{ count: string }>`select count(*) from ${holding}`
+          .execute(observer)
+          .then((result) => result.rows[0]);
+        seen = Number(row?.count ?? 0);
+      }
 
       const started = performance.now();
       const outcome = await sql`select 1`.execute(database).then(
@@ -83,11 +96,12 @@ describe('integration: the database client and the migrations', () => {
 
       expect(outcome).toBeInstanceOf(DatabaseUnavailableError);
       expect(waited).toBeLessThan(1500);
+      await sql`select pg_cancel_backend(pid) from ${holding}`.execute(observer);
       await Promise.allSettled(held);
     } finally {
       await database.destroy();
     }
-  });
+  }, 15_000); // Bounded: two connections seen busy, one refusal, two cancellations.
 
   /**
    * The development database does not speak TLS, so a client that insists on it —
