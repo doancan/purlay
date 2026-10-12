@@ -80,6 +80,11 @@ chat the team already uses.
   with **Make a link**, the link once made with **Copy**, and the links still open — who made each and
   until when — each with **Revoke**. A member does not see the entry.
 
+**The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
+too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*
+with **Disconnect**. The token is never shown again — the field empties once it is saved — and without
+one a link to GitHub stays a plain link, which the dialog says.
+
 ---
 
 ## 3. The message row

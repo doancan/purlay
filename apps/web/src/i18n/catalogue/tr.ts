@@ -114,6 +114,21 @@ export const tr = {
   'invite.admin.row': '{name} oluşturdu, {until} tarihine kadar açık',
   'invite.admin.someone': 'biri',
   'invite.admin.revoke': 'İptal et',
+  'github.entry': 'GitHub bağlantısı…',
+  'github.title': '{workspace} için GitHub',
+  'github.description':
+    'Bir token ile pull request ve issue bağlantıları kart olarak görünür: durumu, CI ve inceleme. Token şifreli saklanır ve bir daha gösterilmez.',
+  'github.connected': '{when} tarihinden beri bağlı.',
+  'github.notConnected': 'Bağlı değil: GitHub bağlantıları düz bağlantı olarak kalır.',
+  'github.token': 'Token',
+  'github.tokenHint':
+    'Ekibinizin bağlantı verdiği depolarda okuma yetkisi olan, ince ayarlı bir kişisel erişim tokenı.',
+  'github.invalid': 'Token boşluksuz tek bir kelimedir: harf, rakam ve simgeler.',
+  'github.save': 'Tokenı kaydet',
+  'github.saved': 'Token kaydedildi.',
+  'github.saveFailed': 'Token kaydedilmedi.',
+  'github.disconnect': 'Bağlantıyı kes',
+  'github.disconnectFailed': 'GitHub bağlantısı kesilmedi.',
   'invite.admin.revokeFailed': 'Link iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',

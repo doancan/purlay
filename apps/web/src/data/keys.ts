@@ -18,6 +18,7 @@ export const keys = {
   search: (workspaceId: string, words: string) => ['search', workspaceId, words] as const,
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
+  githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
 } as const;
 

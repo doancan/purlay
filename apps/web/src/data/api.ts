@@ -18,6 +18,7 @@ import {
   MessagePage,
   CreatedInvitation,
   DeepWorkResponse,
+  GitHubIntegration,
   InvitationPage,
   InvitationPreview,
   NotificationPage,
@@ -63,6 +64,13 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<InvitationPage>;
   readonly revokeInvitation: (workspaceId: string, invitationId: string) => Promise<void>;
+  /** An owner's or an admin's: whether the workspace has a GitHub token, never the token (D-23). */
+  readonly githubIntegration: (
+    workspaceId: string,
+    signal?: AbortSignal,
+  ) => Promise<GitHubIntegration>;
+  readonly setGitHubToken: (workspaceId: string, token: string) => Promise<void>;
+  readonly removeGitHubToken: (workspaceId: string) => Promise<void>;
   /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
   readonly unfurl: (
     workspaceId: string,
@@ -180,6 +188,21 @@ export const createApi = (http: Http): Api => {
         UnfurlResponse,
         options({ body: { workspaceId, url } }, signal),
       ),
+    githubIntegration: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/integrations/github`,
+        GitHubIntegration,
+        options({}, signal),
+      ),
+    setGitHubToken: (workspaceId, token) =>
+      http.send(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/integrations/github`,
+        options({ body: { token } }),
+      ),
+    removeGitHubToken: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/integrations/github`, options()),
     revokeInvitation: (workspaceId, invitationId) =>
       http.send(
         'DELETE',

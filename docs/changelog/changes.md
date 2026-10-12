@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: an owner gives the workspace its GitHub token from the app (D-23, `PRD.md` §4.8)
+
+- **GitHub connection…** in the workspace menu, for owners and admins: whether a token is set and
+  since when, a field to save one, and Disconnect. Until now the token could be set only by calling the
+  API by hand, so on a new deployment no GitHub link ever became a card.
+
 ### Fix — 2026-10-12: a direct message begins a conversation, not a channel
 
 - The top of a direct message said "This is the beginning of the channel"; it says "This is the
