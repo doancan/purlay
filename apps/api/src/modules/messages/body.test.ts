@@ -15,7 +15,17 @@ describe('reading a body', () => {
   });
 
   test('refuses a broadcast, naming the field', () => {
-    expect(() => readBody('hey @channel')).toThrow(AppError);
+    let refused: unknown;
+    try {
+      readBody('hey @channel');
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(AppError);
+    expect(refused instanceof AppError ? refused.body : null).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { fields: { content: 'broadcast mentions are not available' } },
+    });
   });
 
   test('a reading outside the contract is an error naming the path, not a stored message', () => {

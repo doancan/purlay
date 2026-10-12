@@ -381,9 +381,9 @@ CREATE TABLE messages (
     thread_reply_count   INTEGER NOT NULL DEFAULT 0,
     thread_last_reply_at TIMESTAMPTZ,
 
-    -- Counts changes to the thread summary and the reaction set, in the statement that makes
-    -- them, so versions are in commit order; `THREAD_UPDATED` and `REACTIONS_UPDATED` carry it.
-    -- Added by 0015. (D-99, amended)
+    -- Counts changes to the thread summary, the reaction set and the content (an edit, D-103),
+    -- in the statement that makes them, so versions are in commit order; `THREAD_UPDATED` and
+    -- `REACTIONS_UPDATED` carry it. Added by 0015. (D-99, amended)
     state_version        INTEGER NOT NULL DEFAULT 0,
 
     -- The wedge: a thread can be closed, and stays searchable. (D-2)

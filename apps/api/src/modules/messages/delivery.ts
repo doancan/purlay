@@ -141,7 +141,7 @@ type Reasons = ReadonlyMap<string, Reason>;
  * has read past the message is told for the inbox, already read; so is somebody who joined the
  * channel after it was written (`writtenAt`), for whom it was never counted unread.
  */
-const notify = async (
+export const notify = async (
   executor: Executor,
   context: ChannelContext,
   messageId: string,

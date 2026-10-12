@@ -8,7 +8,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { MESSAGE_ID_SKEW, messageId } from '@purlay/types';
+import { MESSAGE_CONTENT_MAX, MESSAGE_ID_SKEW, messageId } from '@purlay/types';
 import { createApp } from './app';
 import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
@@ -371,6 +371,89 @@ describe('integration: messages', () => {
       });
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+    });
+  });
+});
+
+describe('integration: editing over HTTP', () => {
+  /** Alice's channel, a message of hers in it, and Bob a member of the workspace who joined it. */
+  const aConversation = async (
+    db: Executor,
+  ): Promise<{ alice: SignedInUser; bob: SignedInUser; channelId: string; id: string }> => {
+    const alice = await signedIn(db, 'edit-alice');
+    const bob = await signedIn(db, 'edit-bob');
+    const channelId = await aChannel(db, alice, 'edit-acme');
+    const { workspace_id: workspaceId } = await db
+      .selectFrom('channels')
+      .select('workspace_id')
+      .where('id', '=', channelId)
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('workspace_members')
+      .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member' })
+      .execute();
+    expect(
+      (await call(db, 'POST', `/api/channels/${channelId}/join`, { cookie: bob.cookie })).status,
+    ).toBe(200);
+    const id = messageId(NOW);
+    expect((await send(db, alice.cookie, channelId, id, 'first words')).status).toBe(201);
+    return { alice, bob, channelId, id };
+  };
+
+  test('the author is answered with the message as it now is', async () => {
+    await withRollback(async (db) => {
+      const { alice, channelId, id } = await aConversation(db);
+      const response = await call(db, 'PATCH', `/api/messages/${id}`, {
+        cookie: alice.cookie,
+        body: { content: 'better words' },
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id,
+        content: 'better words',
+        editedAt: NOW.toISOString(),
+      });
+      expect(await messagesIn(db, channelId)).toEqual([{ content: 'better words' }]);
+    });
+  });
+
+  test.each([
+    ['one unit over the limit', { content: 'x'.repeat(MESSAGE_CONTENT_MAX + 1) }],
+    ['no content', {}],
+    ['content that is not text', { content: 1 }],
+    ['a field the contract does not have', { content: 'x', parentId: messageId(NOW) }],
+  ])('%s is refused before anything is written', async (_why, body) => {
+    await withRollback(async (db) => {
+      const { alice, channelId, id } = await aConversation(db);
+      const response = await call(db, 'PATCH', `/api/messages/${id}`, {
+        cookie: alice.cookie,
+        body,
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+      expect(await messagesIn(db, channelId)).toEqual([{ content: 'first words' }]);
+    });
+  });
+
+  test('another member of the channel is refused 403: they can see it, and it is not theirs', async () => {
+    await withRollback(async (db) => {
+      const { bob, channelId, id } = await aConversation(db);
+      const response = await call(db, 'PATCH', `/api/messages/${id}`, {
+        cookie: bob.cookie,
+        body: { content: 'mine now' },
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      expect(await messagesIn(db, channelId)).toEqual([{ content: 'first words' }]);
+    });
+  });
+
+  test('without a session it is 401, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const { channelId, id } = await aConversation(db);
+      const response = await call(db, 'PATCH', `/api/messages/${id}`, { body: { content: 'x' } });
+      expect(response.status).toBe(401);
+      expect(await messagesIn(db, channelId)).toEqual([{ content: 'first words' }]);
     });
   });
 });

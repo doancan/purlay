@@ -6,6 +6,20 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: the author can edit a message (D-103, closes O-1)
+
+- `PATCH /api/messages/:messageId` replaces the content of the caller's own message, with no window;
+  the message says it was edited. The body is read once again, as at write time (D-101): its metadata,
+  its mentions. Another member is refused `403`; a message the caller cannot see, or a deleted one, is
+  `404`. The same content again is not an edit.
+- A name the edit adds is told once — a notification, and the mention count where the message is still
+  unread. Nobody already told about the message is told again (it would break I-6), a name taken out
+  keeps what it was told, and somebody who joined after the message is told for the inbox only.
+- The row is locked before anything is decided: an edit that loses a race with a delete answers `404`
+  and does not bring the deleted words back. The session is held live for the write (D-85).
+- The reading of a body is one function for a send and an edit (`modules/messages/body.ts`). Other
+  people see the edit on their next read; live, with the revision frame (#333).
+
 ### Infrastructure — 2026-10-11: the image can be published from a machine while the pipeline cannot
 
 - `scripts/release-image.sh` releases a commit that is on `origin/main`, from a clean tree: `verify` with

@@ -3,7 +3,8 @@
  *
  * Three places take a lock so that two callers take turns instead of both acting on what
  * neither has committed: a person's read position (`markRead`, `FOR UPDATE` on the membership),
- * a thread's resolution (`setResolved`, `FOR UPDATE` on the root), and a message's reaction
+ * a thread's resolution (`setResolved`, `FOR UPDATE` on the root), a message being edited
+ * (`reviseMessage`, `FOR UPDATE` on the message), and a message's reaction
  * kinds (`serialiseReactionsTo`, an advisory lock). Each test makes the first caller finish and
  * *wait, uncommitted* (`testing/gates.ts`), starts the second, and releases the first — so the
  * outcome is decided by the lock alone. `scripts/mutations.ts` removes each lock and requires
@@ -25,6 +26,7 @@ import { markRead } from '../channels/read-state';
 import { REACTION_KINDS_MAX, setReaction } from '../reactions/reactions';
 import { sendMessage } from './messages';
 import { setResolved } from './threads';
+import { reviseMessage } from './edit';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -205,5 +207,115 @@ describe('integration: two people adding different new reactions at the cap', ()
       .groupBy('emoji')
       .execute();
     expect(kinds).toHaveLength(REACTION_KINDS_MAX);
+  });
+});
+
+describe('integration: an edit racing a delete', () => {
+  test('the edit that waited finds the message deleted, and does not bring its words back', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice']);
+    const alice = room.members['alice'];
+    if (alice === undefined) throw new Error('room');
+    const id = (await sendMessage(db, clock, alice.context, { id: nextId(), content: 'mine' }))
+      .message.id;
+
+    // The delete has written and waits, uncommitted, holding the row.
+    const deleting = holdOpen(atomicallyOn(db));
+    const deleted = deleting.atomically(async (transaction) => {
+      await transaction
+        .updateTable('messages')
+        .set({ deleted_at: NOW, content: '' })
+        .where('id', '=', id)
+        .execute();
+    });
+    await deleting.holding;
+    // The edit's guard reads what is committed — not deleted — and lets it through to the lock.
+    const editing = atomicallyOn(db)(
+      async (transaction) =>
+        await reviseMessage(transaction, clock, idOf(room, 'alice'), id, 'back'),
+    );
+    expect(await settlesWithin(editing, BLOCKED_FOR_MS)).toBe(false);
+    deleting.release();
+    await deleted;
+    const outcome = await editing.then(
+      () => 'edited',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(outcome).toBe('Message not found.');
+    const row = await db
+      .selectFrom('messages')
+      .select(['content', 'edited_at'])
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+    expect(row).toEqual({ content: '', edited_at: null });
+  });
+});
+
+describe('integration: two edits naming the same person at once', () => {
+  // Held by the notification's unique key as much as by the lock: an outcome, not a lock's proof.
+  test('they are told once, and counted once', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice', 'bob']);
+    const alice = room.members['alice'];
+    const bob = room.members['bob'];
+    if (alice === undefined || bob === undefined) throw new Error('room');
+    const id = (await sendMessage(db, clock, alice.context, { id: nextId(), content: 'hi' }))
+      .message.id;
+
+    const first = holdOpen(atomicallyOn(db));
+    const one = first.atomically(
+      async (transaction) =>
+        await reviseMessage(transaction, clock, alice.userId, id, `hi @${bob.username}`),
+    );
+    await first.holding;
+    const two = atomicallyOn(db)(
+      async (transaction) =>
+        await reviseMessage(transaction, clock, alice.userId, id, `hello @${bob.username}`),
+    );
+    expect(await settlesWithin(two, BLOCKED_FOR_MS)).toBe(false);
+    first.release();
+    await Promise.all([one, two]);
+
+    expect(
+      (await notificationsOf(db, bob.userId)).filter((n) => n.type === 'mention'),
+    ).toHaveLength(1);
+    const member = await db
+      .selectFrom('channel_members')
+      .select(['unread_count', 'unread_mention_count'])
+      .where('channel_id', '=', room.channelId)
+      .where('user_id', '=', bob.userId)
+      .executeTakeFirstOrThrow();
+    expect(member).toEqual({ unread_count: 1, unread_mention_count: 1 });
+  });
+});
+
+describe('integration: an edit waiting on another', () => {
+  test('is judged against what the first wrote: the old words back are an edit, not a no-op', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice']);
+    const alice = room.members['alice'];
+    if (alice === undefined) throw new Error('room');
+    const id = (await sendMessage(db, clock, alice.context, { id: nextId(), content: 'v0' }))
+      .message.id;
+
+    const first = holdOpen(atomicallyOn(db));
+    const one = first.atomically(
+      async (transaction) => await reviseMessage(transaction, clock, alice.userId, id, 'v1'),
+    );
+    await first.holding;
+    // Read without the lock this would see the committed 'v0', call it the same words, and
+    // answer without writing — and 'v1' would win though it was the earlier request.
+    const two = atomicallyOn(db)(
+      async (transaction) => await reviseMessage(transaction, clock, alice.userId, id, 'v0'),
+    );
+    expect(await settlesWithin(two, BLOCKED_FOR_MS)).toBe(false);
+    first.release();
+    await Promise.all([one, two]);
+    const row = await db
+      .selectFrom('messages')
+      .select('content')
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+    expect(row.content).toBe('v0');
   });
 });

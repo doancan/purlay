@@ -121,6 +121,13 @@ export const SendMessageRequest = FromClient({
 });
 export type SendMessageRequest = Static<typeof SendMessageRequest>;
 
+/**
+ * `PATCH /api/messages/:messageId` — the author replaces the content (D-103). The id and the
+ * thread are the message's and do not change; the answer is the message as it now is.
+ */
+export const EditMessageRequest = FromClient({ content: MessageContent });
+export type EditMessageRequest = Static<typeof EditMessageRequest>;
+
 export const MessagePage = Page(Message);
 export type MessagePage = Static<typeof MessagePage>;
 
