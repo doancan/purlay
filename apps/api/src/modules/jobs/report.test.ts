@@ -3,7 +3,7 @@
  * the cron nobody installed, and it must look like a problem, not like an empty table.
  */
 import { describe, expect, test } from 'bun:test';
-import { STALE_AFTER_MS, jobReport } from './report';
+import { STALE_AFTER_MS, jobReport, neverSucceeded } from './report';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const ago = (ms: number): Date => new Date(NOW.getTime() - ms);
@@ -84,5 +84,44 @@ describe('the job report', () => {
     );
     expect(report.healthy).toBe(false);
     expect(report.lines[0]).toContain('1 failure since: timeout');
+  });
+});
+
+describe('what a new deployment has never run', () => {
+  test('the jobs with no success yet, in the plan’s order; a failing one with no success counts', () => {
+    const never = neverSucceeded(
+      ['sweep:sessions', 'sweep:orphans', 'reconcile:storage', 'sweep:link-previews'],
+      [
+        {
+          job_name: 'sweep:orphans',
+          last_success_at: ago(STALE_AFTER_MS * 10),
+          consecutive_failures: 2,
+          last_error: 'down',
+        },
+        {
+          job_name: 'reconcile:storage',
+          last_success_at: null,
+          consecutive_failures: 1,
+          last_error: 'down',
+        },
+      ],
+    );
+    expect(never).toEqual(['sweep:sessions', 'reconcile:storage', 'sweep:link-previews']);
+  });
+
+  test('a deployment where every job has succeeded once has nothing to catch up', () => {
+    expect(
+      neverSucceeded(
+        ['sweep:orphans'],
+        [
+          {
+            job_name: 'sweep:orphans',
+            last_success_at: ago(1),
+            consecutive_failures: 0,
+            last_error: null,
+          },
+        ],
+      ),
+    ).toEqual([]);
   });
 });

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-12: a new deployment's jobs run on its first minute (D-30, #440)
+
+- The scheduler starts with `jobs:first`, which runs once each job that has never succeeded. A new
+  stack's `jobs:status` used to exit 1 for up to a day; a restart of a healthy one still runs nothing
+  extra.
+
 ### Fix — 2026-10-12: a release from a machine leaves the tests out of the image (#438)
 
 - `scripts/release-image.sh` built from the commit piped in as an archive, and BuildKit does not

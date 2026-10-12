@@ -5,7 +5,8 @@
  * crashes takes nothing else with it, and every run is recorded by the job itself (`job_runs`).
  *
  * Times are UTC and fixed, not every-N-hours from whenever the container started: a restart neither
- * skips a night nor runs a job twice in a row.
+ * skips a night nor runs a job twice in a row — except a job that has never succeeded, which runs
+ * once at start (`FIRST_RUN`).
  */
 import { DAY_MS, HOUR_MS, type Clock } from '../../platform/clock';
 
@@ -46,18 +47,29 @@ export interface SchedulePorts {
   };
 }
 
+/**
+ * Run before the first slot: each job that has never succeeded, once (`jobs:first`). A restart of a
+ * deployment whose jobs all worked once runs nothing more, so the rule above still holds for them.
+ */
+export const FIRST_RUN = 'jobs:first';
+
 export const runSchedule = async (ports: SchedulePorts): Promise<void> => {
   const { plan, clock, sleep, run, stopped, log } = ports;
+  const report = async (job: string): Promise<void> => {
+    const exitCode = await run(job);
+    if (exitCode === 0) log.info('a scheduled job ran', { job });
+    else log.error('a scheduled job exited with a failure', { job, exitCode });
+  };
   let from = clock.now();
+  if (stopped()) return;
+  await report(FIRST_RUN);
   while (!stopped()) {
     const due = plan
       .map((slot) => ({ job: slot.job, at: nextRun(slot, from) }))
       .reduce((soonest, next) => (next.at < soonest.at ? next : soonest));
     await sleep(Math.max(0, due.at.getTime() - clock.now().getTime()));
     if (stopped()) return;
-    const exitCode = await run(due.job);
-    if (exitCode === 0) log.info('a scheduled job ran', { job: due.job });
-    else log.error('a scheduled job exited with a failure', { job: due.job, exitCode });
+    await report(due.job);
     from = due.at;
   }
 };

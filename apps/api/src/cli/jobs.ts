@@ -6,13 +6,15 @@
  *   reconcile:storage  each workspace's storage count put back to the bytes it holds (I-7)
  *   sweep:link-previews  the unfurl cache past its expiry (D-23)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
+ *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
  * It reads the deployment's own configuration, as the API does, so it runs in the same image with
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import { reconcileStorage, runJob, sweepLinkPreviews, sweepOrphans } from '../modules/jobs/jobs';
-import { jobReport } from '../modules/jobs/report';
+import { jobReport, neverSucceeded } from '../modules/jobs/report';
+import { FIRST_RUN } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
@@ -41,31 +43,44 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
   'sweep:link-previews': async () => await sweepLinkPreviews({ database, clock }),
 };
 
+const records = async (): Promise<Parameters<typeof jobReport>[1]> =>
+  await database
+    .selectFrom('job_runs')
+    .select(['job_name', 'last_success_at', 'consecutive_failures', 'last_error'])
+    .execute();
+
+/** Runs one job; true when it succeeded. Its failure is recorded and logged by the runner. */
+const runOne = async (
+  job: string,
+  work: () => Promise<Readonly<Record<string, number>>>,
+): Promise<boolean> =>
+  await runJob({ database, clock, log }, job, work).then(
+    () => true,
+    () => false,
+  );
+
 const name = process.argv[2] ?? '';
 try {
   if (name === 'jobs:status') {
-    const records = await database
-      .selectFrom('job_runs')
-      .select(['job_name', 'last_success_at', 'consecutive_failures', 'last_error'])
-      .execute();
-    const report = jobReport(Object.keys(jobs), records, clock.now());
+    const report = jobReport(Object.keys(jobs), await records(), clock.now());
     process.stdout.write(`${report.lines.join('\n')}\n`);
     process.exitCode = report.healthy ? 0 : 1;
+  } else if (name === FIRST_RUN) {
+    // One after another, as the plan would: a failure is told by the exit code, and the rest still run.
+    for (const job of neverSucceeded(Object.keys(jobs), await records())) {
+      const work = jobs[job];
+      if (work !== undefined && !(await runOne(job, work))) process.exitCode = 1;
+    }
   } else {
     const work = jobs[name];
     if (work === undefined) {
       process.stderr.write(
-        `No job named "${name}". Jobs: ${[...Object.keys(jobs), 'jobs:status'].join(', ')}\n`,
+        `No job named "${name}". Jobs: ${[...Object.keys(jobs), 'jobs:status', FIRST_RUN].join(', ')}\n`,
       );
       process.exitCode = 2;
-    } else {
-      await runJob({ database, clock, log }, name, work).then(
-        () => undefined,
-        // Recorded and logged by the runner; the scheduler is told by the exit code.
-        () => {
-          process.exitCode = 1;
-        },
-      );
+    } else if (!(await runOne(name, work))) {
+      // The scheduler is told by the exit code.
+      process.exitCode = 1;
     }
   }
 } finally {

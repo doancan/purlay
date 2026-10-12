@@ -34,6 +34,42 @@ describe('the next run of a slot', () => {
 });
 
 describe('the loop', () => {
+  test('first runs what has never succeeded, at once, so a new deployment is proven on day one', async () => {
+    const ran: string[] = [];
+    const said: string[] = [];
+    let stop = false;
+    await runSchedule({
+      plan: PLAN,
+      clock: { now: () => at('2026-09-09T02:50:00.000Z') },
+      sleep: () => Promise.resolve(),
+      run: (job) => {
+        ran.push(job);
+        stop = true;
+        return Promise.resolve(1);
+      },
+      stopped: () => stop,
+      log: { info: (msg) => said.push(msg), error: (msg) => said.push(msg) },
+    });
+    expect(ran).toEqual(['jobs:first']);
+    expect(said).toEqual(['a scheduled job exited with a failure']);
+  });
+
+  test('told to stop before it began, it runs nothing', async () => {
+    const ran: string[] = [];
+    await runSchedule({
+      plan: PLAN,
+      clock: { now: () => at('2026-09-09T02:50:00.000Z') },
+      sleep: () => Promise.resolve(),
+      run: (job) => {
+        ran.push(job);
+        return Promise.resolve(0);
+      },
+      stopped: () => true,
+      log: { info: () => undefined, error: () => undefined },
+    });
+    expect(ran).toEqual([]);
+  });
+
   test('sleeps to each run in turn, runs it, says how it ended, and stops when told', async () => {
     let now = at('2026-09-09T02:50:00.000Z');
     const ran: string[] = [];
@@ -48,7 +84,7 @@ describe('the loop', () => {
       },
       run: (job) => {
         ran.push(`${now.toISOString()} ${job}`);
-        if (ran.length === 4) stop = true;
+        if (ran.length === 5) stop = true;
         return Promise.resolve(job === 'reconcile:storage' ? 1 : 0);
       },
       stopped: () => stop,
@@ -58,6 +94,7 @@ describe('the loop', () => {
       },
     });
     expect(ran).toEqual([
+      '2026-09-09T02:50:00.000Z jobs:first',
       '2026-09-09T03:00:00.000Z sweep:orphans',
       '2026-09-09T03:15:00.000Z sweep:sessions',
       '2026-09-09T03:30:00.000Z reconcile:storage',

@@ -15,6 +15,19 @@ interface JobRecord {
   readonly last_error: string | null;
 }
 
+/**
+ * The jobs a deployment has never seen succeed, in the order given: what the scheduler runs once when
+ * it starts (`jobs:first`), so a new stack proves each job on the day it is installed rather than
+ * the night after, and its status is not red for a day.
+ */
+export const neverSucceeded = (
+  known: readonly string[],
+  records: readonly JobRecord[],
+): readonly string[] =>
+  known.filter(
+    (name) => records.find((candidate) => candidate.job_name === name)?.last_success_at == null,
+  );
+
 export const jobReport = (
   known: readonly string[],
   records: readonly JobRecord[],
