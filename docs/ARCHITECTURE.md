@@ -792,8 +792,8 @@ demo and the browser tests reach it the same way, through the API. There is ther
 check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
 
 **Still to come in the deployment.** The development `docker compose` runs the database and object
-storage and nothing else; the deployable stack is below. A **scheduler** container that runs the CLI
-jobs on a cron (#72, D-30) is not there yet. It ships wired by default: the known failure mode of
+storage and nothing else; the deployable stack is below. Its **scheduler** container runs the CLI
+jobs at fixed UTC times (#72, D-30; the schedule is `docs/CONFIG.md`'s). It ships wired by default: the known failure mode of
 external scheduling is the cron nobody installed, and every run records its outcome in `job_runs`
 (`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job.
 

@@ -4,12 +4,12 @@
  * ever send; the storage count is put back to the bytes messages carry (I-7).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
-import { aRecordingLogger } from '../../testing/doubles';
+import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
@@ -47,6 +47,44 @@ const record = async (db: Executor, name: string): Promise<JobRow | undefined> =
     .executeTakeFirst();
 
 describe('integration: a job’s run is recorded', () => {
+  test('a database that fails before the job could start is still said in the log, and thrown on', async () => {
+    // What `jobs:first` meets when the scheduler starts against a database not ready yet: the
+    // only trace used to be the scheduler's bare exit code.
+    const { log, lines } = aRecordingLogger();
+    const down = new Error('the database is not ready');
+    let ran = false;
+    const outcome = await runJob(
+      { database: aDatabaseThatMustNotBeTouched(down), clock, log },
+      'sweep:test',
+      () => {
+        ran = true;
+        return Promise.resolve({});
+      },
+    ).catch((error: unknown) => error);
+    expect(outcome).toBe(down);
+    expect(ran).toBe(false);
+    expect(
+      lines.some(
+        (line) => line['msg'] === 'a scheduled job failed' && line['job'] === 'sweep:test',
+      ),
+    ).toBe(true);
+  });
+
+  test('a failure that cannot be recorded is still said, and the job’s own error is the one thrown', async () => {
+    await withRollback(async (db) => {
+      const { log, lines } = aRecordingLogger();
+      // The job breaks the transaction it shares with the record, so recording the failure fails too.
+      const outcome = await runJob({ database: db, clock, log }, 'sweep:test', async () => {
+        await sql`select 1 / 0`.execute(db);
+        return {};
+      }).catch((error: unknown) => (error instanceof Error ? error.message : String(error)));
+      expect(outcome).toContain('division by zero');
+      const said = lines.map((line) => line['msg']);
+      expect(said).toContain('a scheduled job failed');
+      expect(said).toContain('a failed job could not be recorded');
+    });
+  });
+
   test('a success: when it started and ended, how long, and no failures counted', async () => {
     await withRollback(async (db) => {
       const { log } = aRecordingLogger();

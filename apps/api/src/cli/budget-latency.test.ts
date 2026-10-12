@@ -60,4 +60,18 @@ describe('the latency budget', () => {
     expect(steady.code).toBe(0);
     expect(await Bun.file(file).json()).toEqual(run(32, 31));
   });
+
+  test('a baseline it cannot read, or an option with no file, is refused rather than compared with nothing', async () => {
+    const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
+    await Bun.write(file, '{}');
+    const measure = (): Promise<Latency> => Promise.resolve(run(30, 30));
+    const refusal = async (args: string[]): Promise<string> =>
+      await main(args, measure).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+    expect(await refusal(['--keep', file])).toContain('is not a latency measurement');
+    expect(await refusal(['--baseline', file])).toContain('is not a latency measurement');
+    expect(await refusal(['--keep'])).toBe('--keep needs a file');
+  });
 });

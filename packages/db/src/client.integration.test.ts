@@ -79,7 +79,20 @@ describe('integration: the database client and the migrations', () => {
       const held = [1, 2].map((n) =>
         sql.raw(`select pg_sleep(60) /* ${mark} ${String(n)} */`).execute(database),
       );
+      // A holding query that could not even start is the failure, said as itself.
+      const startFailed = Promise.race(held).then(
+        () => 'a holding query ended before it was cancelled',
+        (error: unknown) => `a holding query failed: ${String(error)}`,
+      );
+      const failed: { reason: string | null } = { reason: null };
+      void startFailed.then((reason) => {
+        failed.reason = reason;
+      });
+      const deadline = performance.now() + 10_000;
       for (let seen = 0; seen < 2;) {
+        if (failed.reason !== null) throw new Error(failed.reason);
+        if (performance.now() > deadline)
+          throw new Error(`only ${String(seen)} of 2 holding queries ever ran`);
         await new Promise((resolve) => setTimeout(resolve, 20));
         const row = await sql<{ count: string }>`select count(*) from ${holding}`
           .execute(observer)
@@ -96,9 +109,9 @@ describe('integration: the database client and the migrations', () => {
 
       expect(outcome).toBeInstanceOf(DatabaseUnavailableError);
       expect(waited).toBeLessThan(1500);
-      await sql`select pg_cancel_backend(pid) from ${holding}`.execute(observer);
-      await Promise.allSettled(held);
     } finally {
+      // Whatever ended the test, the holds end too: otherwise closing the pool waits on them.
+      await sql`select pg_cancel_backend(pid) from ${holding}`.execute(observer);
       await database.destroy();
     }
   }, 15_000); // Bounded: two connections seen busy, one refusal, two cancellations.

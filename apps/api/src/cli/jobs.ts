@@ -69,7 +69,8 @@ try {
     // One after another, as the plan would: a failure is told by the exit code, and the rest still run.
     for (const job of neverSucceeded(Object.keys(jobs), await records())) {
       const work = jobs[job];
-      if (work !== undefined && !(await runOne(job, work))) process.exitCode = 1;
+      if (work === undefined) throw new Error(`no job named "${job}" to run first`);
+      if (!(await runOne(job, work))) process.exitCode = 1;
     }
   } else {
     const work = jobs[name];

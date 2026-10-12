@@ -38,12 +38,14 @@ export const runJob = async (
 ): Promise<Outcome> => {
   const { database, clock, log } = dependencies;
   const started = clock.now();
-  await database
-    .insertInto('job_runs')
-    .values({ job_name: name, last_started_at: started })
-    .onConflict((conflict) => conflict.column('job_name').doUpdateSet({ last_started_at: started }))
-    .execute();
   try {
+    await database
+      .insertInto('job_runs')
+      .values({ job_name: name, last_started_at: started })
+      .onConflict((conflict) =>
+        conflict.column('job_name').doUpdateSet({ last_started_at: started }),
+      )
+      .execute();
     const outcome = await work();
     const ended = clock.now();
     const durationMs = ended.getTime() - started.getTime();
@@ -61,6 +63,8 @@ export const runJob = async (
     return outcome;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // Said first: recording it needs the database, which may be what failed.
+    log.error('a scheduled job failed', { job: name, error });
     await database
       .updateTable('job_runs')
       .set({
@@ -69,8 +73,10 @@ export const runJob = async (
         consecutive_failures: sql<number>`consecutive_failures + 1`,
       })
       .where('job_name', '=', name)
-      .execute();
-    log.error('a scheduled job failed', { job: name, error });
+      .execute()
+      .catch((recording: unknown) => {
+        log.error('a failed job could not be recorded', { job: name, error: recording });
+      });
     throw error;
   }
 };
