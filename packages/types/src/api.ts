@@ -338,6 +338,15 @@ export type AuditEntry = Static<typeof AuditEntry>;
 export const AuditPage = Page(AuditEntry);
 export type AuditPage = Static<typeof AuditPage>;
 
+/** The longest external image address the proxy reads (#110); a longer one is not a picture's. */
+export const EXTERNAL_IMAGE_URL_MAX = 2048;
+
+/** `GET /api/images?url=` — an image on another server, fetched and re-encoded by the API (#110). */
+export const ExternalImageQuery = FromClient({
+  url: Type.String({ minLength: 1, maxLength: EXTERNAL_IMAGE_URL_MAX }),
+});
+export type ExternalImageQuery = Static<typeof ExternalImageQuery>;
+
 /** How long an invitation link lets people in, from when it is made (D-115). */
 export const INVITATION_TTL_DAYS = 7;
 

@@ -53,6 +53,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
     case 'INVITATION_NOT_FOUND':
+    case 'IMAGE_NOT_AVAILABLE':
       return 'failure.gone';
     case 'RATE_LIMITED':
       return 'failure.slow';

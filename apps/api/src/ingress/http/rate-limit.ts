@@ -88,7 +88,10 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
         : retryAfterSeconds(budgets.auth);
     }
 
-    if (pathname.startsWith('/api/') && STATE_CHANGING.has(request.method)) {
+    // An external image is a read that costs the server a fetch and a decode on the reader's behalf
+    // (#110): charged as a write is, so one person cannot spend the node on it.
+    const costly = pathname === '/api/images';
+    if (pathname.startsWith('/api/') && (STATE_CHANGING.has(request.method) || costly)) {
       // Whoever the session names. No valid session means the handler will say 401;
       // there is no user to charge, and no bucket is created for an unknown caller.
       const token = sessionTokenFrom(request.headers.get('cookie'));

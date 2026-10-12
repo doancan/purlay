@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-12: an image proxy that cannot be pointed inside (#110)
+
+- `GET /api/images?url=` fetches an image on another server for whoever is signed in, and serves the
+  API's own WebP of it. Only `https` to a named host; refused unless every address the name has is
+  public; connected to the checked address on a fresh connection, no redirect, at most 10 MiB and
+  five seconds. Every failure is one `404`, its reason in the log with the host alone. The client
+  draws external images through it next.
+
 ### Spike — 2026-10-12: fetching an external image without becoming an SSRF endpoint (#110)
 
 - `docs/spikes/image-proxy.md`: Bun's `fetch` cannot be told which address to connect to;

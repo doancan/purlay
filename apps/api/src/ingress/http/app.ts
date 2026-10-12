@@ -90,6 +90,8 @@ import type { Backplane } from '../../realtime/bus';
 import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
 import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
+import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
+import { serveExternalImage } from './images';
 import {
   dropInvitation,
   joinByInvitation,
@@ -112,6 +114,8 @@ export interface Dependencies {
   readonly storage: ObjectStore;
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
   readonly githubApi?: GitHubApi;
+  /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
+  readonly externalFetch?: ExternalFetch;
   readonly log: Logger;
   /** Absent in production, where the limits are the provisional ones (`rate-limit.ts`). */
   readonly rateBudgets?: HttpBudgets;
@@ -513,6 +517,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       // The body is the file, read by the handler after the session and the membership (D-109 §3).
       { parse: 'none' },
     )
+    .get('/api/images', async ({ request, set }) => {
+      const { body, headers } = await serveExternalImage(
+        { ...dependencies, externalFetch: dependencies.externalFetch ?? externalFetch },
+        request,
+      );
+      Object.assign(set.headers, headers);
+      return body;
+    })
     .get('/api/attachments/:attachmentId', async ({ request, params, set }) => {
       const { body, headers } = await downloadAttachment(
         dependencies,
