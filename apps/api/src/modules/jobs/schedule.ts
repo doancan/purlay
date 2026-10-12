@@ -1,0 +1,65 @@
+/**
+ * The scheduler the deployment ships with (D-30, #72): one container beside the API, so a job runs
+ * once however many API nodes there are, and it is installed by `docker compose up` rather than by
+ * somebody remembering a crontab. Each run is its own process (`bun run job <name>`), so a job that
+ * crashes takes nothing else with it, and every run is recorded by the job itself (`job_runs`).
+ *
+ * Times are UTC and fixed, not every-N-hours from whenever the container started: a restart neither
+ * skips a night nor runs a job twice in a row.
+ */
+import type { Clock } from '../../platform/clock';
+
+export type Slot = { readonly job: string; readonly minute: number } & (
+  { readonly every: 'hour' } | { readonly every: 'day'; readonly hour: number }
+);
+
+/** The jobs, at quiet times and apart, so a slow one does not overlap the next. */
+export const PLAN: readonly Slot[] = [
+  { job: 'sweep:sessions', every: 'hour', minute: 15 },
+  { job: 'sweep:orphans', every: 'day', hour: 3, minute: 0 },
+  { job: 'reconcile:storage', every: 'day', hour: 3, minute: 30 },
+];
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** The first instant after `after` at which the slot is due. */
+export const nextRun = (slot: Slot, after: Date): Date => {
+  const candidate = new Date(after);
+  candidate.setUTCSeconds(0, 0);
+  candidate.setUTCMinutes(slot.minute);
+  if (slot.every === 'day') candidate.setUTCHours(slot.hour);
+  const step = slot.every === 'hour' ? HOUR_MS : DAY_MS;
+  while (candidate.getTime() <= after.getTime()) candidate.setTime(candidate.getTime() + step);
+  return candidate;
+};
+
+export interface SchedulePorts {
+  readonly plan: readonly Slot[];
+  readonly clock: Clock;
+  readonly sleep: (ms: number) => Promise<void>;
+  /** Runs the job to its end and answers its exit code. */
+  readonly run: (job: string) => Promise<number>;
+  /** True once the container is being stopped. */
+  readonly stopped: () => boolean;
+  readonly log: {
+    readonly info: (msg: string, fields?: Record<string, unknown>) => void;
+    readonly error: (msg: string, fields?: Record<string, unknown>) => void;
+  };
+}
+
+export const runSchedule = async (ports: SchedulePorts): Promise<void> => {
+  const { plan, clock, sleep, run, stopped, log } = ports;
+  let from = clock.now();
+  while (!stopped()) {
+    const due = plan
+      .map((slot) => ({ job: slot.job, at: nextRun(slot, from) }))
+      .reduce((soonest, next) => (next.at < soonest.at ? next : soonest));
+    await sleep(Math.max(0, due.at.getTime() - clock.now().getTime()));
+    if (stopped()) return;
+    const exitCode = await run(due.job);
+    if (exitCode === 0) log.info('a scheduled job ran', { job: due.job });
+    else log.error('a scheduled job exited with a failure', { job: due.job, exitCode });
+    from = due.at;
+  }
+};

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Operations — 2026-10-12: the scheduler ships with the deployment (D-30)
+
+- `docker-compose.production.yml` runs a `scheduler` service from the API's image, with the API's
+  settings, started once the API is ready: sessions are swept hourly, orphans and the storage count
+  nightly (UTC), each as its own process. It is installed by `up`, not remembered, and `jobs:status`
+  says when each job last succeeded.
+
 ### Feature — 2026-10-12: the scheduled jobs (D-30)
 
 - `bun run job sweep:orphans` takes unsent uploads older than a day, with their objects;

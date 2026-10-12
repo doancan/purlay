@@ -1610,6 +1610,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/jobs/report.test.ts'],
   },
   {
+    id: 'schedule-runs-a-slot-twice',
+    why: 'a job is run again the instant it finishes, because its own time still counts as ahead',
+    file: 'apps/api/src/modules/jobs/schedule.ts',
+    find: 'while (candidate.getTime() <= after.getTime())',
+    replace: 'while (candidate.getTime() < after.getTime())',
+    tests: ['apps/api/src/modules/jobs/schedule.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',

@@ -44,6 +44,8 @@ interface Resolved {
       environment?: Record<string, string>;
       volumes?: { type: string; source?: string; read_only?: boolean }[];
       depends_on?: Record<string, { condition: string }>;
+      command?: string[];
+      healthcheck?: { disable?: boolean };
     }
   >;
 }
@@ -92,7 +94,13 @@ describe('integration: the production compose file', () => {
 
   test('resolves with every required variable set', () => {
     expect(resolved.code).toBe(0);
-    expect(Object.keys(model.services).sort()).toEqual(['api', 'garage', 'postgres', 'proxy']);
+    expect(Object.keys(model.services).sort()).toEqual([
+      'api',
+      'garage',
+      'postgres',
+      'proxy',
+      'scheduler',
+    ]);
   });
 
   test('every image but the API is pinned by digest, and the API image is a variable', () => {
@@ -176,6 +184,35 @@ describe('integration: the production compose file', () => {
     expect(api?.environment?.['DATABASE_URL']).toBe(
       `postgres://purlay:${ENVIRONMENT['POSTGRES_PASSWORD'] ?? ''}@postgres:5432/purlay`,
     );
+  });
+
+  test('the scheduler ships with it (D-30): the same image and settings, hardened, after a ready API', () => {
+    const scheduler = model.services['scheduler'];
+    const api = model.services['api'];
+    expect(scheduler?.image).toBe(api?.image ?? '');
+    expect(scheduler?.command).toEqual(['apps/api/src/cli/schedule.ts']);
+    // The jobs read the API's configuration: the same database, bucket and keys, not a copy that drifts.
+    for (const key of [
+      'DATABASE_URL',
+      'S3_ENDPOINT',
+      'S3_ACCESS_KEY_ID',
+      'ENCRYPTION_KEY',
+      'NODE_ENV',
+    ]) {
+      expect({ key, value: scheduler?.environment?.[key] }).toEqual({
+        key,
+        value: api?.environment?.[key],
+      });
+    }
+    // The API migrates; the scheduler starts after it is ready, and never migrates itself.
+    expect(scheduler?.environment?.['MIGRATE_ON_START']).not.toBe('true');
+    expect(scheduler?.depends_on?.['api']?.condition).toBe('service_healthy');
+    expect(scheduler?.read_only).toBe(true);
+    expect(scheduler?.cap_drop).toEqual(['ALL']);
+    expect(scheduler?.security_opt).toContain('no-new-privileges:true');
+    expect(scheduler?.ports ?? []).toEqual([]);
+    // The image's healthcheck asks the API's port, which this container does not open.
+    expect(scheduler?.healthcheck?.disable).toBe(true);
   });
 
   test('the proxy waits for a ready API, and the API for a healthy database and store', () => {
