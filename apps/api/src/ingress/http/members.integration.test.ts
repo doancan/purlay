@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { WorkspaceMember } from '@purlay/types';
+import { AuditPage, WorkspaceMember } from '@purlay/types';
 import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
 import { NOW, testDependencies } from '../../testing/doubles';
@@ -96,6 +96,32 @@ describe('integration: managing members over HTTP', () => {
       expect(await outcome(await call(db, 'GET', `/api/workspaces/${workspaceId}`, member))).toBe(
         '404 WORKSPACE_NOT_FOUND',
       );
+    });
+  });
+
+  test('the trail is read as the contract has it, by an owner; a member is refused', async () => {
+    await withRollback(async (db) => {
+      const { owner, member, workspaceId } = await aTeam(db);
+      await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
+        role: 'admin',
+      });
+      const read = await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=10`, owner);
+      expect(read.status).toBe(200);
+      const page: unknown = await read.json();
+      expect(Value.Check(AuditPage, page)).toBe(true);
+      expect(page).toMatchObject({
+        data: [{ action: 'member.role_changed', metadata: { from: 'member', to: 'admin' } }],
+        nextCursor: null,
+      });
+      await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
+        role: 'member',
+      });
+      expect(
+        await outcome(await call(db, 'GET', `/api/workspaces/${workspaceId}/audit`, member)),
+      ).toBe('403 FORBIDDEN');
+      expect(
+        await outcome(await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=0`, owner)),
+      ).toBe('400 VALIDATION_FAILED');
     });
   });
 });

@@ -261,6 +261,32 @@ export type NotificationQuery = Static<typeof NotificationQuery>;
 export const NotificationPage = Page(Notification);
 export type NotificationPage = Static<typeof NotificationPage>;
 
+/** `GET /api/workspaces/:workspaceId/audit` — newest first, keyset by `before` (D-26, #70). */
+export const AuditQuery = FromClient({
+  before: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type AuditQuery = Static<typeof AuditQuery>;
+
+/**
+ * One administrative action: who, what, to whom, and for a change from what to what. Never anything
+ * a person wrote. The actor is null once they were erased (D-27).
+ */
+export const AuditEntry = Type.Object({
+  id: Uuid,
+  actor: Type.Union([User, Type.Null()]),
+  action: Type.String({ minLength: 1, maxLength: 64 }),
+  targetType: Type.String({ minLength: 1, maxLength: 32 }),
+  targetId: Type.Union([Uuid, Type.Null()]),
+  metadata: Type.Record(Type.String(), Type.String()),
+  createdAt: Timestamp,
+});
+export type AuditEntry = Static<typeof AuditEntry>;
+export const AuditPage = Page(AuditEntry);
+export type AuditPage = Static<typeof AuditPage>;
+
 /**
  * `PUT /api/notifications/read` — these, by id; or everything in a workspace, up to and including
  * `before` when given, so what arrived after the person looked is not read for them (D-106).

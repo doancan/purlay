@@ -9,7 +9,9 @@
  * which `append-only.test.ts` holds.
  */
 import type { Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { PAGE_LIMIT, messageId, type AuditPage, type AuditQuery } from '@purlay/types';
+import { AppError } from '../../platform/errors';
+import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
 
 /** The verbs recorded so far; each is a stable machine-readable name, never built from input. */
@@ -47,3 +49,73 @@ export const recordAudit = async (
     })
     .execute();
 };
+
+/**
+ * `GET /api/workspaces/:workspaceId/audit` (#70): the workspace's trail, newest first, a page at a
+ * time by keyset on the id. An owner's and an admin's to read, as managing members is (§7.4); a
+ * member is refused for what they are, after their membership has made the workspace exist for them.
+ */
+export const auditTrail = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  query: AuditQuery,
+): Promise<AuditPage> => {
+  if (context.role === 'member') {
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only an owner or an admin reads the trail.',
+    });
+  }
+  const limit = query.limit ?? PAGE_LIMIT.default;
+  let statement = executor
+    .selectFrom('audit_log')
+    .leftJoin('users', 'users.id', 'audit_log.actor_user_id')
+    .select([
+      'audit_log.id',
+      'audit_log.action',
+      'audit_log.target_type',
+      'audit_log.target_id',
+      'audit_log.metadata',
+      'audit_log.created_at',
+      'users.id as actor_id',
+      'users.username',
+      'users.display_name',
+      'users.avatar_url',
+    ])
+    .where('audit_log.workspace_id', '=', context.workspaceId)
+    .orderBy('audit_log.id', 'desc')
+    .limit(limit + 1);
+  if (query.before !== undefined) statement = statement.where('audit_log.id', '<', query.before);
+  const rows = await statement.execute();
+  const page = rows.slice(0, limit);
+  return {
+    data: page.map((row) => ({
+      id: row.id,
+      actor:
+        row.actor_id === null || row.username === null || row.display_name === null
+          ? null
+          : {
+              id: row.actor_id,
+              username: row.username,
+              displayName: row.display_name,
+              avatarUrl: row.avatar_url,
+            },
+      action: row.action,
+      targetType: row.target_type,
+      targetId: row.target_id,
+      metadata: asMetadata(row.metadata),
+      createdAt: new Date(row.created_at).toISOString(),
+    })),
+    nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+  };
+};
+
+/** What was written as names and strings, read back as such; anything else is not shown. */
+const asMetadata = (value: unknown): Record<string, string> =>
+  typeof value === 'object' && value !== null
+    ? Object.fromEntries(
+        Object.entries(value).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string',
+        ),
+      )
+    : {};

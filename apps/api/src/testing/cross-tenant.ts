@@ -254,6 +254,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'an upload names no channel; it is the uploader’s alone until a message carries it',
     },
   },
+  'GET /api/workspaces/:workspaceId/audit': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'returns who did what and never anything written; a channel appears only as the id an admin created it under',
+    },
+  },
   'PATCH /api/workspaces/:workspaceId/members/:userId': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ role: 'admin' }),

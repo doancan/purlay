@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: reading the audit trail (D-26)
+
+- `GET /api/workspaces/:id/audit` gives an owner or admin the workspace's trail, newest first, a page
+  at a time; a member is refused. The inbox and the trail read their query strings through one helper.
+
 ### Feature — 2026-10-12: the audit trail records administrative actions (D-26)
 
 - A role change (with from and to), a member removed, somebody joining by the open door and a channel
