@@ -1855,6 +1855,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
   },
   {
+    id: 'api-memory-budget-lets-the-line-through',
+    why: 'an API at exactly its memory budget passes, and the budget is a line nobody is held to',
+    file: 'scripts/budget-api.ts',
+    find: '  rss < BUDGET_BYTES\n',
+    replace: '  rss <= BUDGET_BYTES\n',
+    tests: ['scripts/budget-api.test.ts'],
+  },
+  {
     id: 'upload-exemption-widened',
     why: 'any route is let in as an upload: 25 MiB of anything reaches the parser of a JSON route',
     file: 'apps/api/src/ingress/http/edge.ts',

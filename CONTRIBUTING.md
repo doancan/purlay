@@ -90,6 +90,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, and touches only what its issues are about (D-74) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:reset` | Throw the data away and start again |
+| `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
 | `bun run audit:gate` | The dependency audit, blocking at high severity; a finding with no fix is allowed only by an expiring entry in `scripts/audit-allowlist.json` (#247) |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
 | `bun run job <name>` | A scheduled job (D-30): `sweep:orphans`, `sweep:sessions`, `sweep:link-previews`, `reconcile:storage`; `jobs:status` says what each last did and exits non-zero when one is overdue or never ran. Reads the same configuration as the API |
