@@ -46,13 +46,18 @@ bun run verify
 
 # ── 3. One build, of the commit and nothing beside it ────────────────────────
 # The context is the commit's own tree, so a file git ignores — a stale compiled `.js` beside
-# its source, a local `.env` — cannot reach the image, whatever the working tree holds.
+# its source, a local `.env` — cannot reach the image, whatever the working tree holds. It is
+# a directory, not the archive piped in: BuildKit does not apply `.dockerignore` to a context
+# read from stdin, and an image built that way carried every test and the demo seeder.
 LICENSE="$(bun -e 'console.log(require("./package.json").license)')"
-git archive --format=tar "$SHA" | docker buildx build --platform "$PLATFORM" --load \
+CONTEXT="$(mktemp -d "${TMPDIR:-/tmp}/purlay-release.XXXXXX")"
+trap 'rm -rf -- "$CONTEXT"' EXIT
+git archive --format=tar "$SHA" | tar -x -C "$CONTEXT"
+docker buildx build --platform "$PLATFORM" --load \
   --label "org.opencontainers.image.source=https://github.com/$REPOSITORY" \
   --label "org.opencontainers.image.revision=$SHA" \
   --label "org.opencontainers.image.licenses=$LICENSE" \
-  --tag "$TAG" -
+  --tag "$TAG" "$CONTEXT"
 
 # ── 4. That image, started the way production starts it ─────────────────────
 scripts/image-smoke.sh "$TAG"
