@@ -90,6 +90,11 @@ export const en = {
   'invite.gone.body': 'It may have expired or been revoked. Ask for a new one.',
   'invite.failed.title': 'Could not read the invitation',
   'invite.home': 'Go home',
+  'github.state.open': 'Open',
+  'github.state.closed': 'Closed',
+  'github.state.merged': 'Merged',
+  'github.openedPr': 'Pull request by {login}',
+  'github.openedIssue': 'Issue by {login}',
   'invite.admin.entry': 'Invite people…',
   'invite.admin.title': 'Invite people to {workspace}',
   'invite.admin.description':

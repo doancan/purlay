@@ -204,6 +204,15 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('an unfurl names the workspace and the link in the body, and reads a card or none (D-112)', async () => {
+    const url = 'https://github.com/purlay/purlay/pull/1';
+    const none = harness(null);
+    expect(await none.api.unfurl(ID, url)).toBeNull();
+    expect(none.calls).toEqual([
+      { method: 'POST', url: '/api/integrations/github/unfurl', body: { workspaceId: ID, url } },
+    ]);
+  });
+
   test('the notification level goes in the body, to the channel it is for', async () => {
     const set = harness(null);
     await set.api.setNotificationLevel(ID, 'none');

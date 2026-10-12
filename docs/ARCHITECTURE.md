@@ -670,6 +670,11 @@ export interface GitHubCardMetadata {
 }
 ```
 
+`ciStatus` and `reviewDecision` are the shape this is going towards: the contract and the unfurl do
+not carry them yet (#423), so a card shows the kind, the state, the title and the author. The client
+reads the links from the words with the server's engine (`metadataOf`) and draws no avatar, which is
+an image on GitHub's host (#110).
+
 ---
 
 ## 9. Attachments

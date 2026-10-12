@@ -94,6 +94,11 @@ chat the team already uses.
       ○ Open · 4 replies · last 12m ago                  Show thread T
 ```
 
+- **A GitHub pull request or issue linked in the words is a card under them** (D-2, D-23): the
+  kind, `owner/repo#number`, its state in words, its title as a link that opens in a new tab, and who
+  opened it — never their avatar, which is another host's image (#110). Up to five, in the order
+  written. A link with no card — no token, nothing there, GitHub silent — stays a link, with nothing
+  drawn and nothing said.
 - **Avatars, and no bubbles** (D-100). An avatar in a fixed column names who is speaking before a word is
   read; the text is not put in a bubble, because a bubble makes a code block a box inside a box and
   narrows every line it holds. Your own messages are on the same edge as everyone else's: a chat

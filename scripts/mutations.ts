@@ -2123,4 +2123,21 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    .filter(() => false)\n',
     tests: ['apps/api/src/platform/config.test.ts'],
   },
+  {
+    id: 'github-card-drawn-for-nothing',
+    why: 'a link the server has no card for draws an empty card, or breaks the row',
+    file: 'apps/web/src/features/content/github-cards.tsx',
+    find: '    return card === undefined || card === null ? [] : [{ url, card }];\n',
+    replace:
+      '    return card === undefined ? [] : [{ url, card: card ?? ({} as GitHubCardMetadata) }];\n',
+    tests: ['apps/web/src/features/content/github-cards.test.tsx'],
+  },
+  {
+    id: 'github-card-opens-without-noopener',
+    why: "a card's link hands the reader's tab to GitHub's page (window.opener) and says where they came from",
+    file: 'apps/web/src/features/content/github-cards.tsx',
+    find: '        rel="noopener noreferrer"\n',
+    replace: '',
+    tests: ['apps/web/src/features/content/github-cards.test.tsx'],
+  },
 ];
