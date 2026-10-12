@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-11: a reader who has just scrolled up is not carried down by a message landing first
+
+- Whether the feed follows what arrives is measured from where the reader is at that moment, not
+  taken from the browser's last scroll report, which comes a frame late. Under load a message could
+  land inside that frame: the reader who had scrolled up was moved to the bottom and shown no pill.
+  The same holds when the box changes size, and a reader at the bottom of a box that shrank stays
+  there. Found by the browser suite under load.
+
 ### Feature — 2026-10-11: messages are drawn as the markdown they were written in (D-101)
 
 - `renderContent` draws the tree the server read: emphasis, strong, strikethrough, inline and fenced

@@ -6,6 +6,7 @@
  * fires. What the harness adds is a `<main>` with a text box in it, because the feed's
  * Escape goes "to the composer" and the composer is another slice's component.
  */
+import { afterEach } from 'bun:test';
 import { act } from '@testing-library/react';
 import type { Channel, Message, MessagePage, User } from '@purlay/types';
 import type { Api } from '../data/api';
@@ -81,6 +82,17 @@ const Region = ({
   );
 };
 
+/**
+ * What a test that failed before `unmountAll` left mounted. Its scroll metrics are patched onto
+ * the prototype, so left in place they would fail the next file's tests for a reason that is
+ * not theirs.
+ */
+const leftover = new Set<() => void>();
+afterEach(() => {
+  for (const cleanup of leftover) cleanup();
+  leftover.clear();
+});
+
 /** Mounts a channel and lets its queries answer. Scroll metrics are installed until `unmountAll`. */
 export const mountChannel = async (options: ChannelOptions = {}): Promise<ChannelView> => {
   const { metrics, restore } = installScrollMetrics();
@@ -133,6 +145,12 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
       ...(options.dark === undefined ? {} : { dark: options.dark }),
     },
   );
+  const unmountAll = (): void => {
+    if (!leftover.delete(unmountAll)) return;
+    view.unmount();
+    restore();
+  };
+  leftover.add(unmountAll);
   await settle();
   return Object.assign(view, {
     feed,
@@ -146,9 +164,6 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
       if (el === null) throw new Error('the feed has no scroller on screen');
       return el;
     },
-    unmountAll: (): void => {
-      view.unmount();
-      restore();
-    },
+    unmountAll,
   });
 };

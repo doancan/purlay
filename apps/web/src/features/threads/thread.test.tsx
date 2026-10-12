@@ -777,13 +777,28 @@ describe('the root stays where it is', () => {
   });
 
   test('and does not carry a reader at the bottom down with the growth', async () => {
-    const view = await mount();
-    const bottom = view.metrics.assigned.at(-1);
-    view.metrics.top = bottom ?? 0;
-    const count = view.metrics.assigned.length;
+    const view = await mount(); // 1000 tall in a 400 box, the reader at the bottom: 600
+    expect(view.metrics.top).toBe(600);
     await showThread(view);
+    view.metrics.scrollHeight = 1400; // the thread opened beneath the root
+    view.metrics.assigned.length = 0;
     view.feed.resize();
-    expect(view.metrics.assigned.slice(count).every((top) => top !== (bottom ?? 0) + 1)).toBe(true);
+    expect(view.metrics.assigned).not.toContain(1000);
+    expect(view.metrics.top).toBe(600);
+    view.unmountAll();
+  });
+
+  test('and the hold ends with the next scroll: growth at the bottom is followed again', async () => {
+    const view = await mount();
+    await showThread(view);
+    view.metrics.scrollHeight = 1400;
+    view.feed.resize();
+    view.metrics.top = 1000; // the reader went to the new bottom themselves
+    fireEvent.scroll(view.scroller());
+    view.metrics.scrollHeight = 1500;
+    view.metrics.assigned.length = 0;
+    view.feed.resize();
+    expect(view.metrics.assigned).toContain(1100);
     view.unmountAll();
   });
 
