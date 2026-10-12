@@ -72,6 +72,15 @@ export const ErrorCode = Type.Union([
   Type.Literal('PAYLOAD_TOO_LARGE'),
   /** A body with no `Content-Length`: its size cannot be judged before it is read (D-109 §4). */
   Type.Literal('LENGTH_REQUIRED'),
+  /** The workspace's storage would pass its quota with this file (D-109 §5). */
+  Type.Literal('STORAGE_QUOTA_EXCEEDED'),
+  /** The person already holds as many unattached uploads here as they may (D-109 §5). */
+  Type.Literal('TOO_MANY_PENDING_UPLOADS'),
+  /**
+   * An attachment id already used for another upload — somebody else's, another workspace's, or
+   * the same person's with other bytes. A retry of the same upload answers the attachment instead.
+   */
+  Type.Literal('ATTACHMENT_ID_CONFLICT'),
   /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
@@ -124,6 +133,9 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   PAYLOAD_TOO_LARGE: 413,
   LENGTH_REQUIRED: 411,
+  STORAGE_QUOTA_EXCEEDED: 413,
+  TOO_MANY_PENDING_UPLOADS: 409,
+  ATTACHMENT_ID_CONFLICT: 409,
   RATE_LIMITED: 429,
 
   INTERNAL: 500,

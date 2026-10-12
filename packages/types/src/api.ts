@@ -284,3 +284,39 @@ export type DeepWorkResponse = Static<typeof DeepWorkResponse>;
 export const ATTACHMENT_BYTES_MAX = 26_214_400;
 export const ATTACHMENT_SIDE_MAX = 16_384;
 export const ATTACHMENT_PIXELS_MAX = 40_000_000;
+
+/** What a file is to the product: an image Purlay re-encoded and can draw, or anything else (D-109 §1). */
+export const AttachmentKind = Type.Union([
+  Type.Literal('image'),
+  Type.Literal('video'),
+  Type.Literal('audio'),
+  Type.Literal('file'),
+]);
+export type AttachmentKind = Static<typeof AttachmentKind>;
+
+/** An uploaded file, as its uploader and the readers of its message see it (D-109). */
+export const Attachment = Type.Object({
+  id: Uuid,
+  fileName: Type.String({ minLength: 1, maxLength: 255 }),
+  mimeType: Type.String({ minLength: 1, maxLength: 128 }),
+  sizeBytes: Type.Integer({ minimum: 1, maximum: ATTACHMENT_BYTES_MAX }),
+  kind: AttachmentKind,
+  /** Present for an image, so the client reserves its space before it loads. */
+  width: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  height: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+});
+export type Attachment = Static<typeof Attachment>;
+
+/**
+ * `POST /api/workspaces/:workspaceId/uploads?id=&name=` — the body is the file's bytes (D-109 §3).
+ * `id` is the client's UUIDv7 for the attachment; `name` its file name, with no control or
+ * bidirectional-override characters.
+ */
+export const UploadQuery = FromClient({
+  id: Uuid,
+  name: Type.String({ minLength: 1, maxLength: 255, format: 'name' }),
+});
+export type UploadQuery = Static<typeof UploadQuery>;
+
+/** How many unattached uploads one person may hold in a workspace (D-109 §5). */
+export const PENDING_UPLOADS_MAX = 20;
