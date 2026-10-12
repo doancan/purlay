@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the error-tracking bound test waits by the clock
+
+- `error-tracking.bounded.test.ts` gave up after a hundred tries of 20 ms; under the full suite's load
+  two requests took longer, and it failed waiting rather than asserting. It now waits up to four
+  seconds by the clock, inside an explicit ten for the two tests that wait.
+
 ### Feature — 2026-10-13: every channel switch is measured in the page, for O-5
 
 - The router marks each change of address and the feed measures to the frame that draws the new

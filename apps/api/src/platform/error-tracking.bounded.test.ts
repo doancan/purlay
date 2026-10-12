@@ -37,12 +37,21 @@ const silentCollector = (): { dsn: string; received: () => number } => {
   return { dsn: `http://key@127.0.0.1:${String(server.port)}/1`, received: () => received };
 };
 
+/**
+ * Waits for the condition, by the clock rather than a count of tries: under the full suite's load two
+ * requests took longer than the two seconds a hundred tries had, and the test failed waiting, not
+ * asserting. Four seconds, inside the ten each such test is given.
+ */
+const UNTIL_MS = 4_000;
+/** The bound on a test that waits with `until`: the wait, and room for what follows it. */
+const WAITING_TEST_MS = 10_000;
 const until = async (condition: () => boolean, what: string): Promise<void> => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const deadline = performance.now() + UNTIL_MS;
+  while (performance.now() < deadline) {
     if (condition()) return;
     await Bun.sleep(20);
   }
-  throw new Error(`gave up waiting for ${what}`);
+  if (!condition()) throw new Error(`gave up waiting for ${what}`);
 };
 
 const movingClock = (): { clock: Clock; advance: (ms: number) => void } => {
@@ -60,52 +69,60 @@ const report = (tracker: ErrorTracker, label: string): void => {
 };
 
 describe('a collector that never answers', () => {
-  test('does not stop later errors being reported: each request is given up on after the timeout', async () => {
-    const collector = silentCollector();
-    const failures: unknown[] = [];
-    const tracker = createErrorTracker({
-      dsn: collector.dsn,
-      environment: 'development',
-      clock: { now: () => NOW },
-      send: fetchDelivery,
-      maxInFlight: 3,
-      timeoutMs: 150,
-      onFailure: (error) => failures.push(error),
-    });
+  test(
+    'does not stop later errors being reported: each request is given up on after the timeout',
+    async () => {
+      const collector = silentCollector();
+      const failures: unknown[] = [];
+      const tracker = createErrorTracker({
+        dsn: collector.dsn,
+        environment: 'development',
+        clock: { now: () => NOW },
+        send: fetchDelivery,
+        maxInFlight: 3,
+        timeoutMs: 150,
+        onFailure: (error) => failures.push(error),
+      });
 
-    for (let i = 0; i < 8; i += 1) report(tracker, `first burst ${String(i)}`);
-    await until(() => collector.received() === 3, 'the first three requests to arrive');
-    expect(tracker.dropped()).toBe(5);
+      for (let i = 0; i < 8; i += 1) report(tracker, `first burst ${String(i)}`);
+      await until(() => collector.received() === 3, 'the first three requests to arrive');
+      expect(tracker.dropped()).toBe(5);
 
-    // Without a timeout the three slots stay taken for ever and nothing below is ever sent.
-    await until(() => failures.length === 3, 'the three requests to time out');
-    for (let i = 0; i < 3; i += 1) report(tracker, `second burst ${String(i)}`);
-    await until(() => collector.received() === 6, 'the second burst to reach the collector');
-    expect(collector.received()).toBe(6);
-  });
+      // Without a timeout the three slots stay taken for ever and nothing below is ever sent.
+      await until(() => failures.length === 3, 'the three requests to time out');
+      for (let i = 0; i < 3; i += 1) report(tracker, `second burst ${String(i)}`);
+      await until(() => collector.received() === 6, 'the second burst to reach the collector');
+      expect(collector.received()).toBe(6);
+    },
+    WAITING_TEST_MS,
+  );
 
-  test('is not waited on at shutdown beyond a short bound, and what is left is abandoned', async () => {
-    const collector = silentCollector();
-    const failures: unknown[] = [];
-    const tracker = createErrorTracker({
-      dsn: collector.dsn,
-      environment: 'development',
-      clock: { now: () => NOW },
-      send: fetchDelivery,
-      timeoutMs: 60_000,
-      onFailure: (error) => failures.push(error),
-    });
-    report(tracker, 'one');
-    report(tracker, 'two');
-    await until(() => collector.received() === 2, 'both requests to arrive');
+  test(
+    'is not waited on at shutdown beyond a short bound, and what is left is abandoned',
+    async () => {
+      const collector = silentCollector();
+      const failures: unknown[] = [];
+      const tracker = createErrorTracker({
+        dsn: collector.dsn,
+        environment: 'development',
+        clock: { now: () => NOW },
+        send: fetchDelivery,
+        timeoutMs: 60_000,
+        onFailure: (error) => failures.push(error),
+      });
+      report(tracker, 'one');
+      report(tracker, 'two');
+      await until(() => collector.received() === 2, 'both requests to arrive');
 
-    const started = performance.now();
-    await tracker.flush(150);
-    const elapsed = performance.now() - started;
-    expect(elapsed).toBeLessThan(1_500);
-    // Abandoned means ended, not forgotten: the sockets are released.
-    await until(() => failures.length === 2, 'the abandoned requests to be reported');
-  });
+      const started = performance.now();
+      await tracker.flush(150);
+      const elapsed = performance.now() - started;
+      expect(elapsed).toBeLessThan(1_500);
+      // Abandoned means ended, not forgotten: the sockets are released.
+      await until(() => failures.length === 2, 'the abandoned requests to be reported');
+    },
+    WAITING_TEST_MS,
+  );
 });
 
 describe('a collector that redirects', () => {
