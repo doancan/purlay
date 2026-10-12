@@ -1,0 +1,155 @@
+/**
+ * Unfurling a GitHub link (D-23, `ARCHITECTURE.md` §8.3, D-112, #66), against a real HTTP server
+ * standing in for GitHub's API: the card is fetched with the workspace's own token and cached for
+ * that workspace alone — so a private repository's card never reaches another — and a link that is
+ * not there is cached as such, so a dead link in a busy channel costs one request, not one a render.
+ */
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { fixedClock } from '../../platform/clock';
+import { credentialCipher } from '../../platform/crypto';
+import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
+import { aRecordingLogger } from '../../testing/doubles';
+import { aRoom } from '../../testing/rooms';
+import { setGitHubToken } from './github';
+import {
+  NEGATIVE_TTL_MS,
+  UNAVAILABLE_TTL_MS,
+  githubApi,
+  unfurl,
+  type UnfurlDependencies,
+} from './unfurl';
+
+const NOW = new Date('2026-09-09T12:00:00.000Z');
+const cipher = credentialCipher(Buffer.alloc(32, 9).toString('base64'));
+
+/** GitHub, as far as these tests need it: what was asked, with which token, and what it answers. */
+const asked: { path: string; authorization: string | null }[] = [];
+let answer: (path: string) => Response = () => new Response('{}', { status: 404 });
+let server: ReturnType<typeof Bun.serve>;
+beforeAll(() => {
+  server = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      const path = new URL(request.url).pathname;
+      asked.push({ path, authorization: request.headers.get('authorization') });
+      return answer(path);
+    },
+  });
+});
+afterAll(async () => {
+  await server.stop(true);
+  await closeIntegrationDatabase();
+});
+
+const pull = {
+  title: 'Retry the socket with backoff',
+  state: 'closed',
+  merged_at: '2026-09-08T10:00:00Z',
+  user: { login: 'octo', avatar_url: 'https://avatars.githubusercontent.com/u/1' },
+};
+const PR = 'https://github.com/acme/api/pull/42';
+
+const aWorkspaceWithToken = async (
+  db: Executor,
+  token: string | null,
+): Promise<WorkspaceContext> => {
+  const room = await aRoom(db, ['alice']);
+  const alice = room.members['alice'];
+  if (alice === undefined) throw new Error('room');
+  const context = await requireWorkspaceMembership(db, alice.userId, room.workspaceId);
+  if (token !== null) await setGitHubToken(db, fixedClock(NOW), cipher, context, token);
+  return context;
+};
+
+const dependencies = (db: Executor, at: Date = NOW): UnfurlDependencies => ({
+  database: db,
+  clock: fixedClock(at),
+  cipher,
+  github: githubApi(`http://localhost:${String(server.port)}`),
+  log: aRecordingLogger().log,
+});
+
+describe('integration: unfurling a GitHub link', () => {
+  test('a merged pull request is its card, fetched once with the workspace’s token, then cached', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (path): Response =>
+        path === '/repos/acme/api/pulls/42'
+          ? Response.json(pull)
+          : new Response('{}', { status: 404 });
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const card = await unfurl(dependencies(db), context, PR);
+      expect(card).toEqual({
+        type: 'pr',
+        repo: 'acme/api',
+        number: 42,
+        title: 'Retry the socket with backoff',
+        state: 'merged',
+        author: { login: 'octo', avatarUrl: 'https://avatars.githubusercontent.com/u/1' },
+      });
+      expect(await unfurl(dependencies(db), context, PR)).toEqual(card);
+      expect(asked).toEqual([
+        { path: '/repos/acme/api/pulls/42', authorization: 'Bearer ghp_workspace_a' },
+      ]);
+    });
+  });
+
+  test('a link that is not there is none, and asked about once within the hour', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (): Response => new Response('{"message":"Not Found"}', { status: 404 });
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const issue = 'https://github.com/acme/api/issues/7';
+      expect(await unfurl(dependencies(db), context, issue)).toBeNull();
+      expect(
+        await unfurl(
+          dependencies(db, new Date(NOW.getTime() + NEGATIVE_TTL_MS - 1)),
+          context,
+          issue,
+        ),
+      ).toBeNull();
+      expect(asked).toHaveLength(1);
+      await unfurl(dependencies(db, new Date(NOW.getTime() + NEGATIVE_TTL_MS)), context, issue);
+      expect(asked).toHaveLength(2);
+    });
+  });
+
+  test('another workspace never gets a card this one’s token fetched: the cache is the workspace’s', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (): Response => Response.json(pull);
+      const theirs = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const ours = await aWorkspaceWithToken(db, null);
+      expect(await unfurl(dependencies(db), theirs, PR)).not.toBeNull();
+      // No token here, and no borrowing from the cache another workspace filled.
+      expect(await unfurl(dependencies(db), ours, PR)).toBeNull();
+      expect(asked).toHaveLength(1);
+    });
+  });
+
+  test('GitHub failing, or answering nonsense, is none for a minute, said in the log, and not a 500', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (): Response => new Response('busy', { status: 502 });
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const recorded = aRecordingLogger();
+      const failing = { ...dependencies(db), log: recorded.log };
+      expect(await unfurl(failing, context, PR)).toBeNull();
+      expect(
+        recorded.lines.find((line) => line['msg'] === 'GitHub did not answer an unfurl'),
+      ).toMatchObject({
+        level: 'warn',
+      });
+      expect(await unfurl(failing, context, PR)).toBeNull();
+      expect(asked).toHaveLength(1);
+      answer = (): Response => Response.json({ title: 7 });
+      expect(
+        await unfurl(dependencies(db, new Date(NOW.getTime() + UNAVAILABLE_TTL_MS)), context, PR),
+      ).toBeNull();
+      expect(asked).toHaveLength(2);
+      // The token is never in what is logged.
+      expect(JSON.stringify(recorded.lines)).not.toContain('ghp_workspace_a');
+    });
+  });
+});

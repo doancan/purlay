@@ -215,7 +215,7 @@ An upload not attached to a message within 24 hours is swept (`ARCHITECTURE.md` 
 | ○ | `GET` | `/api/workspaces/:workspaceId/integrations/github` | admin — `GitHubIntegration`: `{ configured, updatedAt }`; never returns the token. A member is `403 FORBIDDEN` |
 | ○ | `PUT` | `/api/workspaces/:workspaceId/integrations/github` | admin — `{ token }` (`SetGitHubTokenRequest`), `204`. Sealed at rest with the one cipher (D-39 §6), recorded in the audit trail without the token |
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/integrations/github` | admin — `204`; removing none is `204` too, and records nothing |
-| ① | `POST` | `/api/integrations/github/unfurl` | member — `{ url }` → `GitHubCardMetadata \| null` |
+| ○ | `POST` | `/api/integrations/github/unfurl` | member — `{ workspaceId, url }` (`UnfurlRequest`; `url` a `GitHubLink`) → `UnfurlResponse`, the `GitHubCardMetadata` or `null`: no token, nothing there, or GitHub not answering. Fetched with the workspace's token and cached for that workspace (D-112) |
 | ② | `POST` | `/api/webhooks/github` | **Unauthenticated by cookie** — verified by HMAC signature instead |
 
 `GET` on the integration returns configuration status only. The encrypted token is never

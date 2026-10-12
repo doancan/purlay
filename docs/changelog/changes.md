@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-12: GitHub links unfurl (D-23, D-112, #66)
+
+- `POST /api/integrations/github/unfurl` answers a pull request's or an issue's card, fetched with
+  the workspace's token and cached for that workspace alone, so a private repository's card never
+  reaches another. A link that is not there is asked about once an hour; GitHub failing, once a
+  minute. Only a github.com pull request or issue is accepted, and the request to GitHub is built from
+  its parts.
+
 ### Operations — 2026-10-12: expired link previews are swept (D-23)
 
 - `bun run job sweep:link-previews` removes the unfurl cache past its expiry, and the scheduler runs

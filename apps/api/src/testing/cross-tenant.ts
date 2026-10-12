@@ -254,6 +254,18 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'an upload names no channel; it is the uploader’s alone until a message carries it',
     },
   },
+  'POST /api/integrations/github/unfurl': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: (_now, owner) => ({
+      workspaceId: owner.workspaceId,
+      url: 'https://github.com/acme/api/pull/1',
+    }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'names a workspace and a public address, no channel; the card is the workspace’s (D-112)',
+    },
+  },
   'GET /api/workspaces/:workspaceId/integrations/github': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'the workspace’s own credential, no channel' },
