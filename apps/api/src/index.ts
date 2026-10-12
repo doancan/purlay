@@ -18,6 +18,7 @@ import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform
 import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openJoinNotice } from './modules/workspaces/open-join';
+import { openClient } from './ingress/http/client';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -43,6 +44,13 @@ const log = withErrorTracking(plainLog, errorTracker);
 // Which workspace is open, said before anything else (D-37).
 log.info(openJoinNotice(config.WORKSPACE_OPEN_JOIN_SLUG));
 
+// Opened before anything listens: a build without its shell refuses to start (D-61).
+const client = config.CLIENT_DIST === undefined ? undefined : openClient(config.CLIENT_DIST);
+log.info(
+  client === undefined ? 'no client is served: CLIENT_DIST is unset' : 'serving the client',
+  client === undefined ? {} : { dist: client.dist },
+);
+
 // How to reach the database, for the application's pool and for the connection a
 // migration on start opens for itself (D-87): the same place, the same TLS.
 const connection = {
@@ -64,6 +72,7 @@ const app = createApp({
   log,
   clock: systemClock,
   database,
+  ...(client === undefined ? {} : { client }),
   github: githubClient({
     clientId: config.GITHUB_CLIENT_ID,
     clientSecret: config.GITHUB_CLIENT_SECRET,

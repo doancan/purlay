@@ -14,6 +14,18 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   The same holds when the box changes size, and a reader at the bottom of a box that shrank stays
   there. Found by the browser suite under load.
 
+### Feature — 2026-10-11: the image serves the client, under the document's own security policy (D-61, D-102)
+
+- The API image builds the client and serves it from the one origin: `/` and every path the API does
+  not own is the shell, a hashed asset is cached for good, every other file is revalidated by its
+  entity tag (`304`), and a path under `/api`, `/auth` or `/health` is never answered with HTML.
+  `CLIENT_DIST` names the build; set without an `index.html`, the API refuses to start.
+- The HTML document carries `DOCUMENT_SECURITY_POLICY` — no inline script, nothing framed — with
+  inline style and GitHub's avatar host as two measured exceptions (D-102). API responses keep
+  `default-src 'none'`.
+- The proxy compresses (`encode zstd gzip`). The image smoke test checks the shell, its first script
+  and that script's cache lifetime.
+
 ### Feature — 2026-10-11: messages are drawn as the markdown they were written in (D-101)
 
 - `renderContent` draws the tree the server read: emphasis, strong, strikethrough, inline and fenced

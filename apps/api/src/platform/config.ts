@@ -76,6 +76,11 @@ export const Environment = Type.Object({
   ENCRYPTION_KEY: Type.String({ minLength: 44 }),
   SESSION_TTL_DAYS: Type.Integer({ minimum: 1, maximum: 365, default: 30 }),
 
+  /** The built client this process serves from the one origin (D-61), an absolute path.
+   *  Unset means none is served: Vite serves it in development. Opened, and refused
+   *  without an `index.html`, by the composition root (`ingress/http/client.ts`). */
+  CLIENT_DIST: Type.Optional(Type.String({ minLength: 1 })),
+
   /** Phase 0 has no invitations, so without this a second person cannot join a
    *  workspace and the phase cannot reach its own exit criterion (D-37). */
   WORKSPACE_OPEN_JOIN_SLUG: Type.Optional(Type.String({ minLength: 1 })),

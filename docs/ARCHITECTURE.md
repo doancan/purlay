@@ -747,16 +747,15 @@ would have created for them.
 
 **One public origin.** `APP_URL` is the origin the browser uses. In development Vite proxies
 `/auth`, `/api` and `/ws` to the API process so the two look identical to a browser — that is
-built. In a deployment the API serves the built client from the same origin; that arrives with the
-prerendered shell (#141). There is therefore no CORS to configure, the socket's `Origin`
+built. In a deployment the API serves the built client from the same origin (`API.md` §8, D-102).
+There is therefore no CORS to configure, the socket's `Origin`
 check is an equality, and the session cookie's `SameSite=Lax` is the whole story (D-61).
 
 **Still to come in the deployment.** The development `docker compose` runs the database and object
 storage and nothing else; the deployable stack is below. A **scheduler** container that runs the CLI
 jobs on a cron (#72, D-30) is not there yet. It ships wired by default: the known failure mode of
 external scheduling is the cron nobody installed, and every run records its outcome in `job_runs`
-(`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job. The built client,
-served from the API's origin, arrives with the prerendered shell (#141, #224).
+(`SCHEMA.md` §9.2) so `purlay jobs:status` can report *last successful run* per job.
 
 **Error tracking.** Off unless `ERROR_TRACKING_DSN` is set. When it is, whatever the logger writes at
 `error` is also posted, cleaned as the log is, to a Sentry-compatible endpoint, with no vendor library;
@@ -812,14 +811,16 @@ recovery, off-host copies, encryption.
 **The production stack.** `docker-compose.production.yml` runs the API, PostgreSQL, Garage and Caddy
 behind one origin with automatic TLS: only the proxy publishes ports, the API starts when its
 dependencies are healthy and the proxy when the API is ready, and the file's only inputs are the
-variables in `CONFIG.md` (D-94, D-73). A test resolves it with `docker compose config` and checks
+variables in `CONFIG.md` (D-94, D-73). The proxy compresses; the API does not (D-94). A test resolves it with `docker compose config` and checks
 those properties rather than trusting the YAML.
 
-**The image.** The API builds into a two-stage image whose runtime stage is distroless and runs as
+**The image.** The API builds into a three-stage image whose runtime stage is distroless and runs as
 a numeric non-root user with a read-only root filesystem (`Dockerfile`, D-92). `scripts/image-smoke.sh`
 runs it against a PostgreSQL of its own on a private network in CI and checks liveness, readiness, the container's own health
-check and the absence of a shell; `image.yml` runs on every pull request (so it can be required), and on main builds the image once, pushes it by digest with provenance and an SBOM, smoke-tests that digest and only then tags it. The
-client is not in it: that stage arrives with the prerendered shell (#141, #224).
+check, the absence of a shell, and that `/` is the client's shell naming a script that is served and
+cached for good; `image.yml` runs on every pull request (so it can be required), and on main builds the image once, pushes it by digest with provenance and an SBOM, smoke-tests that digest and only then tags it. The
+middle stage builds the client; only its `dist` reaches the runtime stage, which sets `CLIENT_DIST` to it
+(D-61).
 
 **Migrations on start, for any number of nodes.** With `MIGRATE_ON_START=true` the process calls the
 migrator after its listener opens. The migrator's advisory lock, polled without holding a transaction open

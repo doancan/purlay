@@ -1180,6 +1180,8 @@ actually contain.
 **5 · A content security policy baseline. Phase 1.**
 `default-src 'self'`, no `unsafe-inline` script, images from `'self'` and the proxy only. It lands
 with the content pipeline, because that is when there is user-controlled markup to constrain.
+*(Amended 2026-10-11 by D-102: the document carries this baseline, with inline style and GitHub's
+avatar host as two measured exceptions; the API's own responses keep `default-src 'none'`.)*
 
 **6 · `ENCRYPTION_KEY` is AES-256-GCM.** A random 96-bit nonce per record, stored as a prefix on
 the ciphertext, with the record id as additional authenticated data. `CONFIG.md` named the key and
@@ -2762,6 +2764,9 @@ could sign every device out.
 no-referrer`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`,
 `Cache-Control: no-store`, and `Strict-Transport-Security: max-age=15552000` when `APP_URL` is
 https. No `includeSubDomains` and no `preload`: both bind a domain this product does not own.
+*(Amended 2026-10-11 by D-102: the client's files are the exception — the HTML document carries its
+own policy, a hashed asset is cached for good and every other file is revalidated by entity tag; every
+API response keeps the headers above.)*
 
 **Decided: an inbound `x-request-id` matching `[A-Za-z0-9._-]{1,64}` is kept**; anything else is
 replaced by a fresh id. It is a label for correlating an edge trace — never trusted as identity.
@@ -3474,7 +3479,9 @@ for real only once it is on main.
 
 **What stays with #224.** This is the API. Serving the built client from the same origin waits for
 the prerendered shell (#141), and the image grows a stage for it then; the production compose
-assumes only that one origin fronts the API.
+assumes only that one origin fronts the API. *(Amended 2026-10-11: #224 added the middle stage, which
+builds the client; only `apps/web/dist` reaches the runtime stage, which sets `CLIENT_DIST` (D-61,
+D-102).)*
 
 **Rejected: an Alpine or Debian base.** A shell, a package manager and musl or glibc differences for
 no benefit to a program that needs only its runtime. **Rejected: `bun build --compile` into one
@@ -3599,8 +3606,12 @@ dynamic configuration model for one upstream. A platform ingress is the PaaS D-7
 is the incident the stack exists to prevent. **Rejected: a `.env.example` for production.** A second
 list of the variables beside `CONFIG.md`, which owns them; the test binds the file to the document.
 
-**Not here, deliberately:** the built client (the proxy has one upstream until #224 adds the client
-stage), the scheduler container (D-30; there are no jobs yet), and multiple API nodes (D-25; the
+*(Amended 2026-10-11: the built client is served by the API itself (D-102), so the proxy keeps one
+upstream. Compression is the proxy's — `encode zstd gzip` — and the API sends bodies as they are.
+Rejected: compressing in the API, which a self-hoster behind a proxy of their own would pay for twice,
+in the process whose memory is budgeted.)*
+
+**Not here, deliberately:** the scheduler container (D-30; there are no jobs yet), and multiple API nodes (D-25; the
 compose file is the single-node shape, and a second node is `--scale api=2` behind a sticky balancer
 only after Phase 3 builds the shared adapters).
 
@@ -4218,6 +4229,53 @@ retired the client's own copy — it disagreed on any letter outside ASCII.
 
 **Cost of reversing.** Low: no migration, and stored content is unchanged markdown. A different
 engine means a different `packages/markdown`, and its tests say what the next one must do.
+
+---
+
+### D-102. The document carries its own security policy, with two measured exceptions — closes #112's baseline
+
+D-39 item 5 fixed the baseline — `default-src 'self'`, no inline script, images from `'self'` and the
+proxy — and D-61 put the built client on the API's origin. Until the API served that client (#224) the
+question had no response to answer it on: every response carried the API's own policy,
+`default-src 'none'`, which on a document would load nothing at all. The demo's front server never sent
+a policy, which is why nothing had noticed.
+
+**Decided: two policies, chosen per response, both in `apps/api/src/ingress/http/edge.ts`.** An API
+response keeps `default-src 'none'; frame-ancestors 'none'` — it is data, and loads nothing. The client's
+HTML document gets `DOCUMENT_SECURITY_POLICY`: `default-src 'self'`, `script-src 'self'` (no inline
+script and no `eval`; `theme-init.js` is a file so it needs no hash), `connect-src 'self'` (a same-origin
+`wss:` under CSP Level 3), `font-src 'self'`, `object-src 'none'`, `base-uri 'none'`,
+`form-action 'self'`, `frame-ancestors 'none'`.
+
+**Two exceptions, each observed rather than argued:**
+
+- **`style-src 'self' 'unsafe-inline'`.** The dialog primitive (Radix, D-52) locks scrolling by writing a
+  `<style>` element. With `style-src 'self'` Chromium reports `style-src-elem refused inline` when the
+  command palette opens, and the lock silently does not apply. Inline **style** cannot run code; inline
+  script stays refused.
+- **`img-src` adds `https://avatars.githubusercontent.com`.** Avatars are GitHub's, and the image proxy
+  that would serve them from `'self'` is #110. The exception is marked `TODO(#110)` beside the policy and
+  is removed with it.
+
+**Rejected: initials instead of avatars until #110.** A stricter policy bought by taking back D-100's
+identity for a source that is GitHub's own avatar host. **Rejected: a nonce for the style element.** The
+primitive reads one from a global the bundle would have to set per response, which turns a static shell
+into a rendered one for a style that cannot execute. **Rejected: the proxy (Caddy) setting the policy.**
+Two places would set headers, and a self-hoster running the image behind their own proxy would get none.
+
+**Caching, decided with it.** A file under `/assets` has a content hash in its name and is
+`public, max-age=31536000, immutable`; every other file — the shell, `theme-init.js`, the fonts — is
+`no-cache` with a weak entity tag made of its size and modification time, answered `304` when it has
+not changed. The runtime sends neither an entity tag nor a modification date for a file (measured: a
+conditional request was a full `200`), so without the tag every load downloaded the fonts whole. A file
+in an image keeps its time for the image's life, so the tag changes with a deployment and not with a
+restart. Rejected: hashing each file's bytes per request, which costs a read for an answer the
+metadata already gives; a long lifetime for the fonts, whose names carry no hash, so a changed font
+would be stale for a year. The document also carries `Cross-Origin-Opener-Policy: same-origin`: sign-in
+is a top-level navigation, never a pop-up, so nothing it opens needs a handle back to it.
+
+**Reopened when** #110 lands (drop the avatar host), or when a primitive that needs inline style is
+replaced or learns to take a stylesheet.
 
 ---
 

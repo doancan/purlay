@@ -85,6 +85,28 @@ describe('the install stage', () => {
   });
 });
 
+/**
+ * The paths the Dockerfile copies from the context that `.dockerignore` keeps out of it.
+ * Patterns are matched as patterns, anchored at the root as the builder anchors them, and
+ * a directory excluded excludes what is under it; every source of a `COPY` is judged.
+ */
+const excludedCopies = (ignore: string, file: string): readonly string[] => {
+  const rules = ignore
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .map((line) => ({ include: line.startsWith('!'), pattern: line.replace(/^!/, '') }));
+  const matches = (pattern: string, path: string): boolean =>
+    new Bun.Glob(pattern).match(path) || path.startsWith(`${pattern}/`);
+  const sources = [...file.matchAll(/^COPY\s+(?!--from=)(.+)$/gm)].flatMap((match) =>
+    (match[1] ?? '').split(/\s+/).slice(0, -1),
+  );
+  // The last rule that matches decides, as the builder decides: `!x` after `dir/*` keeps x.
+  return sources
+    .map((path) => path.replace(/^\.\//, '').replace(/\/$/, ''))
+    .filter((path) => rules.findLast((rule) => matches(rule.pattern, path))?.include === false);
+};
+
 describe('.dockerignore', () => {
   test.each([
     '.env',
@@ -100,16 +122,21 @@ describe('.dockerignore', () => {
     expect(dockerignore.split('\n')).toContain(entry);
   });
 
+  test('the checker sees a pattern, not only a line equal to the path', () => {
+    // `apps/web/*` excluded the client's sources while a check that compared lines passed.
+    expect(excludedCopies('apps/web/*\n', 'COPY apps/web/src ./apps/web/src\n')).toEqual([
+      'apps/web/src',
+    ]);
+    expect(excludedCopies('apps/web/e2e\n', 'COPY a b apps/web/e2e/x ./\n')).toEqual([
+      'apps/web/e2e/x',
+    ]);
+    expect(excludedCopies('docs\n', 'COPY --from=client /app/x ./x\n')).toEqual([]);
+    expect(
+      excludedCopies('apps/web/*\n!apps/web/package.json\n', 'COPY apps/web/package.json x\n'),
+    ).toEqual([]);
+  });
+
   test('does not exclude what the Dockerfile copies', () => {
-    const excluded = dockerignore
-      .split('\n')
-      .filter((line) => line !== '' && !line.startsWith('#') && !line.startsWith('!'));
-    const copied = [...dockerfile.matchAll(/^COPY\s+(?:--from=\S+\s+)?(\S+)\s/gm)].flatMap(
-      (match) => match[1] ?? [],
-    );
-    const hostCopies = copied.filter((path) => !path.startsWith('/app'));
-    for (const path of hostCopies) {
-      expect(excluded).not.toContain(path.replace(/^\.\//, '').replace(/\/$/, ''));
-    }
+    expect(excludedCopies(dockerignore, dockerfile)).toEqual([]);
   });
 });

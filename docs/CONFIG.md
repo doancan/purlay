@@ -90,6 +90,7 @@ workspace membership is actually checked (`ARCHITECTURE.md` §9).
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
+| `CLIENT_DIST` | — | — | Absolute path of the built client (`apps/web/dist`), which the API then serves from the one origin (`API.md` §8, D-61). **Set but without an `index.html` refuses to start.** Unset serves no client, as in development, where Vite does. The image sets it |
 | `DEFAULT_LOCALE` | — | `en` | `en` \| `tr`. The fallback when the browser asks for neither (D-41). Read once the interface is translated (#109) |
 
 ## Cloud only — Phase 2.5

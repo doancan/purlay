@@ -15,6 +15,13 @@ const MESSAGES_TESTS = ['apps/api/src/modules/messages/messages.integration.test
 const SOCKET = 'apps/api/src/ingress/ws/socket.ts';
 const SOCKET_TESTS = ['apps/api/src/realtime/sockets.integration.test.ts'];
 
+const CLIENT = 'apps/api/src/ingress/http/client.ts';
+const APP = 'apps/api/src/ingress/http/app.ts';
+const CLIENT_TESTS = [
+  'apps/api/src/ingress/http/client.test.ts',
+  'apps/api/src/ingress/http/serving-the-client.test.ts',
+];
+
 export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'oauth-state-length-check-removed',
@@ -522,5 +529,61 @@ export const MUTATIONS: readonly Mutation[] = [
       'apps/web/src/features/channel/message-feed.test.tsx',
       'apps/web/src/features/threads/thread.test.tsx',
     ],
+  },
+  {
+    id: 'client-path-climbs-out-of-the-build',
+    why: 'a path with an encoded slash is joined and normalised to a file beside the build, and served',
+    file: CLIENT,
+    find: 'return candidate === dist || candidate.startsWith(dist + sep) ? candidate : null;',
+    replace: 'return candidate;',
+    tests: CLIENT_TESTS,
+  },
+  {
+    id: 'client-path-nul-accepted',
+    why: 'a NUL ends the name at the system call, so a file judged by one extension is read as another',
+    file: CLIENT,
+    find: "  if (name.includes('\\0')) return null;\n",
+    replace: '',
+    tests: CLIENT_TESTS,
+  },
+  {
+    id: 'document-served-under-the-api-policy',
+    why: "the shell keeps `default-src 'none'`, or no policy at all, and the browser suite would see a blank page or nothing",
+    file: APP,
+    find: '      if (file.document) Object.assign(set.headers, DOCUMENT_HEADERS);\n',
+    replace: '',
+    tests: CLIENT_TESTS,
+  },
+  {
+    id: 'stale-chunk-answered-with-the-shell',
+    why: 'a chunk an open tab asks for after a deployment is answered with HTML, which the browser runs as script',
+    file: CLIENT,
+    find: 'if (isAssetPath(pathname) || /',
+    replace: 'if (/',
+    tests: CLIENT_TESTS,
+  },
+  {
+    id: 'unchanged-file-sent-again',
+    why: 'every revalidated file, fonts and shell included, is downloaded whole on every load',
+    file: APP,
+    find: "if (isUnchanged(request.headers.get('if-none-match'), file.etag)) {",
+    replace: 'if (false) {',
+    tests: CLIENT_TESTS,
+  },
+  {
+    id: 'client-routes-the-raw-path',
+    why: 'an API path spelled with an escape (`/%61pi/me`) is answered with the shell instead of the API',
+    file: CLIENT,
+    find: "  if (name === null || routeOf(name) !== 'client') return undefined;\n",
+    replace: '  if (name === null) return undefined;\n',
+    tests: CLIENT_TESTS,
+  },
+  {
+    id: 'client-dist-trailing-separator-kept',
+    why: 'a CLIENT_DIST ending in a slash puts every file outside the build, and every page is a 404 behind a green health check',
+    file: CLIENT,
+    find: '  const root = resolve(dist);',
+    replace: '  const root = normalize(dist);',
+    tests: CLIENT_TESTS,
   },
 ];
