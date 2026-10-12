@@ -376,6 +376,9 @@ export const tr = {
   'search.title': 'Ara',
   'search.label': 'Mesajlarda ara',
   'search.hint': 'Görebildiğin tüm kanallarda aramak için Enter’a bas.',
+  'search.hintIn': '{channel} içinde aramak için Enter’a bas.',
+  'search.where': 'Nerede',
+  'search.everywhere': 'Tüm kanallar',
   'search.searching': 'Aranıyor…',
   'search.tooShort': 'En az {min} karakter yaz.',
   'search.prompt':
@@ -383,6 +386,7 @@ export const tr = {
   'search.more': 'Daha fazla yükle',
   'state.search.empty.title': '“{words}” için sonuç yok',
   'state.search.empty.body': 'Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
+  'state.search.empty.bodyIn': '{channel} içinde arandı. Silinmiş bir mesaj hiç bulunmaz.',
   'state.search.error.title': 'Aranamadı',
   'state.search.error.body': 'Sunucu yanıt vermedi. Kelimelerin duruyor; yeniden dene.',
 

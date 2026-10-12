@@ -203,3 +203,68 @@ describe('the states', () => {
     view.unmount();
   });
 });
+
+describe('narrowed to a channel (`PRD.md` §4.6)', () => {
+  const where = (view: Awaited<ReturnType<typeof visit>>): HTMLSelectElement =>
+    within(view.container).getByRole<HTMLSelectElement>('combobox', { name: 'Where' });
+
+  test('choosing a channel asks again in it alone, keeps the choice in the address, and says where it looked', async () => {
+    const asked: string[] = [];
+    const view = await visit(
+      {
+        search: (_workspace, query) => {
+          asked.push(`${query.q}@${query.channelId ?? 'everywhere'}`);
+          return Promise.resolve(page([]));
+        },
+      },
+      { path: '/w/acme/search?q=deploy' },
+    );
+    expect(where(view).value).toBe('');
+    await person().selectOptions(where(view), IDS.deploys);
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=deploy&in=${IDS.deploys}`);
+    expect(asked).toEqual(['deploy@everywhere', `deploy@${IDS.deploys}`]);
+    expect(view.getByText('Searched #deploys. A deleted message is never found.')).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('an address that names a channel opens narrowed, new words keep it, and Every channel lets it go', async () => {
+    const asked: string[] = [];
+    const view = await visit(
+      {
+        search: (_workspace, query) => {
+          asked.push(`${query.q}@${query.channelId ?? 'everywhere'}`);
+          return Promise.resolve(page([]));
+        },
+      },
+      { path: `/w/acme/search?q=deploy&in=${IDS.api}` },
+    );
+    expect(where(view).value).toBe(IDS.api);
+    await person().clear(field(view));
+    await person().type(field(view), 'noon{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=noon&in=${IDS.api}`);
+    await person().selectOptions(where(view), '');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/search?q=noon');
+    expect(asked).toEqual([`deploy@${IDS.api}`, `noon@${IDS.api}`, 'noon@everywhere']);
+    view.unmount();
+  });
+
+  test('an address that names something that is not a channel id searches everywhere, and sends nothing odd', async () => {
+    const asked: (string | undefined)[] = [];
+    const view = await visit(
+      {
+        search: (_workspace, query) => {
+          asked.push(query.channelId);
+          return Promise.resolve(page([]));
+        },
+      },
+      { path: '/w/acme/search?q=deploy&in=not-a-channel' },
+    );
+    expect(asked).toEqual([undefined]);
+    expect(where(view).value).toBe('');
+    view.unmount();
+  });
+});

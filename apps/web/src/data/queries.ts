@@ -117,12 +117,20 @@ export const useNotifications = (
  * One search, newest first, a page at a time (D-105). Asked only for words the server would take:
  * below the minimum the screen says so instead.
  */
-export const useSearch = (workspaceId: string, words: string): UseInfiniteQueryResult<Pages> => {
+export const useSearch = (
+  workspaceId: string,
+  words: string,
+  channelId: string | null = null,
+): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.search(workspaceId, words),
+    queryKey: keys.search(workspaceId, words, channelId),
     queryFn: ({ pageParam, signal }) =>
-      api.search(workspaceId, { q: words, before: pageParam }, signal),
+      api.search(
+        workspaceId,
+        { q: words, before: pageParam, ...(channelId === null ? {} : { channelId }) },
+        signal,
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: words.length >= SEARCH_QUERY_MIN,

@@ -15,7 +15,8 @@ export const keys = {
   thread: (messageId: string) => ['thread', messageId] as const,
   unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
   notifications: (workspaceId: string) => ['notifications', workspaceId] as const,
-  search: (workspaceId: string, words: string) => ['search', workspaceId, words] as const,
+  search: (workspaceId: string, words: string, channelId: string | null) =>
+    ['search', workspaceId, words, channelId] as const,
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,

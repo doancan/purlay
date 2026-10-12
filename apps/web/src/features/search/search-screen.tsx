@@ -11,12 +11,12 @@
  * The states are the ones §8 names: progress inside the field, "No matches for …" with where it
  * looked, and a Retry that keeps the words.
  */
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { SEARCH_QUERY_MIN, type Channel, type Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannels, useSearch } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { href, searchHref, threadHref, wordsInSearch } from '../../router/routes';
+import { channelInSearch, href, searchHref, threadHref, wordsInSearch } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
@@ -81,19 +81,40 @@ const Found = ({
 export const SearchScreen = (): React.JSX.Element => {
   const { search } = useRoute();
   const asked = wordsInSearch(search);
-  return <SearchView key={asked} asked={asked} />;
+  return <SearchView key={asked} asked={asked} channelId={channelInSearch(search)} />;
 };
 
-const SearchView = ({ asked }: { readonly asked: string }): React.JSX.Element => {
+/** How a channel is named in the choice of where to look: `#name`, or `@person` for a direct message. */
+const placeName = (channel: Channel): string =>
+  channel.type === 'direct_message'
+    ? `@${channel.peer?.username ?? channel.name ?? ''}`
+    : `#${channel.name ?? ''}`;
+
+const SearchView = ({
+  asked,
+  channelId,
+}: {
+  readonly asked: string;
+  readonly channelId: string | null;
+}): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   const ports = useFeedPorts();
   const [draft, setDraft] = useState(asked);
   const [tooShort, setTooShort] = useState(false);
-  const query = useSearch(workspace.id, asked);
+  const query = useSearch(workspace.id, asked, channelId);
+  const whereId = useId();
   const channels = useChannels(workspace.id);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
+  const places = useMemo(
+    () =>
+      (channels.data ?? [])
+        .map((channel) => ({ id: channel.id, name: placeName(channel) }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [channels.data],
+  );
+  const narrowed = channelId === null ? undefined : byId.get(channelId);
   const found = useMemo(() => (query.data?.pages ?? []).flatMap((page) => page.data), [query.data]);
   const now = ports.clock.now();
   const searching =
@@ -117,7 +138,11 @@ const SearchView = ({ asked }: { readonly asked: string }): React.JSX.Element =>
     body = (
       <section className="flex flex-col items-center gap-3 px-4 text-center">
         <h2 className="text-title text-ink">{t('state.search.empty.title', { words: asked })}</h2>
-        <p className="text-body text-ink-muted">{t('state.search.empty.body')}</p>
+        <p className="text-body text-ink-muted">
+          {narrowed === undefined
+            ? t('state.search.empty.body')
+            : t('state.search.empty.bodyIn', { channel: placeName(narrowed) })}
+        </p>
       </section>
     );
   } else if (found.length > 0) {
@@ -168,7 +193,9 @@ const SearchView = ({ asked }: { readonly asked: string }): React.JSX.Element =>
               event.preventDefault();
               const words = draft.trim();
               setTooShort(words.length < SEARCH_QUERY_MIN);
-              if (words.length >= SEARCH_QUERY_MIN) navigate(searchHref(workspace.slug, words));
+              if (words.length >= SEARCH_QUERY_MIN) {
+                navigate(searchHref(workspace.slug, words, channelId));
+              }
             }}
           >
             <TextField
@@ -179,11 +206,38 @@ const SearchView = ({ asked }: { readonly asked: string }): React.JSX.Element =>
               aria-busy={searching}
               {...(tooShort
                 ? { error: t('search.tooShort', { min: String(SEARCH_QUERY_MIN) }) }
-                : { hint: searching ? t('search.searching') : t('search.hint') })}
+                : {
+                    hint: searching
+                      ? t('search.searching')
+                      : narrowed === undefined
+                        ? t('search.hint')
+                        : t('search.hintIn', { channel: placeName(narrowed) }),
+                  })}
               onChange={(event) => {
                 setDraft(event.target.value);
               }}
             />
+            <div className="mt-3 flex items-center gap-2">
+              <label htmlFor={whereId} className="text-label text-ink-muted">
+                {t('search.where')}
+              </label>
+              <select
+                id={whereId}
+                value={channelId ?? ''}
+                onChange={(event) => {
+                  const chosen = event.target.value;
+                  navigate(searchHref(workspace.slug, asked, chosen === '' ? null : chosen));
+                }}
+                className="min-w-0 rounded-md border-hairline border-border-subtle bg-surface-000 px-2 py-1 text-label text-ink"
+              >
+                <option value="">{t('search.everywhere')}</option>
+                {places.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </form>
           {body}
         </div>

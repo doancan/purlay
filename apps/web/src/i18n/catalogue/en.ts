@@ -385,6 +385,9 @@ export const en = {
   'search.title': 'Search',
   'search.label': 'Search messages',
   'search.hint': 'Press Enter to search every channel you can see.',
+  'search.hintIn': 'Press Enter to search {channel}.',
+  'search.where': 'Where',
+  'search.everywhere': 'Every channel',
   'search.searching': 'Searching…',
   'search.tooShort': 'Type at least {min} characters.',
   'search.prompt':
@@ -393,6 +396,7 @@ export const en = {
   'state.search.empty.title': 'No matches for “{words}”',
   'state.search.empty.body':
     'Searched every channel you can see. A deleted message is never found.',
+  'state.search.empty.bodyIn': 'Searched {channel}. A deleted message is never found.',
   'state.search.error.title': "Couldn't search",
   'state.search.error.body': 'The server did not answer. Your words are kept; try again.',
 

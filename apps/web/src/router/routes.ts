@@ -122,11 +122,28 @@ export const threadInSearch = (search: string): string | null => {
  */
 const WORDS_PARAM = 'q';
 
-export const searchHref = (slug: string, words: string): string =>
-  words === ''
-    ? href('search', { slug })
-    : `${href('search', { slug })}?${WORDS_PARAM}=${encodeURIComponent(words)}`;
+/** The channel a search is narrowed to (`PRD.md` §4.6), beside the words. */
+const CHANNEL_PARAM = 'in';
+const CHANNEL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const searchHref = (
+  slug: string,
+  words: string,
+  channelId: string | null = null,
+): string => {
+  const params = new URLSearchParams();
+  if (words !== '') params.set(WORDS_PARAM, words);
+  if (channelId !== null) params.set(CHANNEL_PARAM, channelId);
+  const query = params.toString();
+  return query === '' ? href('search', { slug }) : `${href('search', { slug })}?${query}`;
+};
 
 /** The words an address searches for, trimmed; empty when it asks for none. */
 export const wordsInSearch = (search: string): string =>
   (new URLSearchParams(search).get(WORDS_PARAM) ?? '').trim();
+
+/** The channel an address narrows a search to; null for every channel, or for anything not an id. */
+export const channelInSearch = (search: string): string | null => {
+  const named = new URLSearchParams(search).get(CHANNEL_PARAM);
+  return named !== null && CHANNEL_ID.test(named) ? named : null;
+};
