@@ -13,6 +13,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   land inside that frame: the reader who had scrolled up was moved to the bottom and shown no pill.
   The same holds when the box changes size, and a reader at the bottom of a box that shrank stays
   there. Found by the browser suite under load.
+
 ### Feature — 2026-10-11: the image serves the client, under the document's own security policy (D-61, D-102)
 
 - The API image builds the client and serves it from the one origin: `/` and every path the API does

@@ -529,6 +529,8 @@ export const MUTATIONS: readonly Mutation[] = [
       'apps/web/src/features/channel/message-feed.test.tsx',
       'apps/web/src/features/threads/thread.test.tsx',
     ],
+  },
+  {
     id: 'client-path-climbs-out-of-the-build',
     why: 'a path with an encoded slash is joined and normalised to a file beside the build, and served',
     file: CLIENT,
@@ -542,14 +544,6 @@ export const MUTATIONS: readonly Mutation[] = [
     file: CLIENT,
     find: "  if (name.includes('\\0')) return null;\n",
     replace: '',
-    tests: CLIENT_TESTS,
-  },
-  {
-    id: 'client-answers-for-the-api',
-    why: 'a mistyped API call is answered with the shell, and fails as a parse error far from the call',
-    file: APP,
-    find: "dependencies.client === undefined || routeOf(path) !== 'client'",
-    replace: 'dependencies.client === undefined',
     tests: CLIENT_TESTS,
   },
   {

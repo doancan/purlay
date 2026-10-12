@@ -42,7 +42,7 @@ import {
   responseHeaders,
   DOCUMENT_HEADERS,
 } from './edge';
-import { clientFileFor, isUnchanged, routeOf, type Client } from './client';
+import { clientFileFor, isUnchanged, type Client } from './client';
 import { refusalFor } from './errors';
 import {
   createMyWorkspace,
@@ -362,10 +362,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      */
     .get('*', async ({ path, request, set }) => {
       const notFound = new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
+      // `clientFileFor` decides whose the path is, read decoded: one place, so `/%61pi` and
+      // `/api` cannot be judged twice and differently.
       const file =
-        dependencies.client === undefined || routeOf(path) !== 'client'
-          ? undefined
-          : clientFileFor(dependencies.client, path);
+        dependencies.client === undefined ? undefined : clientFileFor(dependencies.client, path);
       if (file === undefined) throw notFound;
       set.headers['cache-control'] = file.cacheControl;
       set.headers.etag = file.etag;
