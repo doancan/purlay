@@ -76,6 +76,52 @@ const feed = (client: QueryClient): string[] =>
     p.data.map((m) => m.id),
   );
 
+/**
+ * A feed already on the screen and being read again (the subscription's answer, a reconnect, a
+ * focus): its first read is held until `release`, any later one answers `fresh`.
+ */
+const rereading = (
+  fresh: Message[],
+): {
+  client: QueryClient;
+  release: (stale: Message[]) => void;
+  asked: () => number;
+  stop: () => void;
+} => {
+  const client = new QueryClient();
+  client.setQueryData(keys.messages(CH), pages([message(3), message(2), message(1)]));
+  let asked = 0;
+  let hold: (page: MessagePage) => void = (): void => undefined;
+  const observer = new InfiniteQueryObserver(client, {
+    queryKey: keys.messages(CH),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page: MessagePage): string | undefined => page.nextCursor ?? undefined,
+    queryFn: (): Promise<MessagePage> => {
+      asked += 1;
+      return asked === 1
+        ? new Promise<MessagePage>((resolve): void => {
+            hold = resolve;
+          })
+        : Promise.resolve<MessagePage>({ data: fresh, nextCursor: null });
+    },
+  });
+  const stop = observer.subscribe(() => undefined);
+  return {
+    client,
+    release: (stale): void => {
+      hold({ data: stale, nextCursor: null });
+    },
+    asked: (): number => asked,
+    stop,
+  };
+};
+
+const settle = async (): Promise<void> => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+};
+
 describe('a message arrives', () => {
   test('a root joins the head of its feed in id order, once, however it arrives', () => {
     const client = seeded();
@@ -159,6 +205,21 @@ describe('a message arrives', () => {
     );
   });
 
+  test('a feed on the screen and being read again keeps a message that arrives meanwhile: the older read is set aside (#347)', async () => {
+    // Found in a browser: the subscription's answer re-reads the feed; a send that landed while
+    // that read was on its way was drawn, then overwritten by the read's older page, and gone.
+    const world = rereading([message(4), message(3), message(2), message(1)]);
+    await Promise.resolve();
+    expect(world.client.isFetching({ queryKey: keys.messages(CH) })).toBe(1);
+    messageCreated(world.client, message(4));
+    expect(feed(world.client)).toEqual([id(4), id(3), id(2), id(1)]);
+    world.release([message(3), message(2), message(1)]);
+    await settle();
+    world.stop();
+    expect(feed(world.client)).toEqual([id(4), id(3), id(2), id(1)]);
+    expect(world.asked()).toBe(2);
+  });
+
   test('a thread with no page yet takes nothing', () => {
     const client = new QueryClient();
     client.setQueryData(keys.thread(id(1)), { pages: [], pageParams: [] });
@@ -208,6 +269,26 @@ describe('a message changes', () => {
     const before = feed(client);
     reactionsUpdated(client, id(99), []);
     expect(feed(client)).toEqual(before);
+  });
+
+  test('a reaction that lands while the feed is being read again is not undone by that read (#347)', async () => {
+    const thumbs = [{ emoji: '👍', userIds: [user.id] }];
+    const world = rereading([message(3), message(2), message(1, { reactions: thumbs })]);
+    await Promise.resolve();
+    reactionsUpdated(world.client, id(1), thumbs);
+    world.release([message(3), message(2), message(1)]);
+    await settle();
+    world.stop();
+    expect(
+      world.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[2]?.reactions,
+    ).toEqual(thumbs);
+  });
+
+  test('a list nobody is reading is written and not asked for again', () => {
+    const client = seeded();
+    messageCreated(client, message(4));
+    reactionsUpdated(client, id(1), []);
+    expect(client.getQueryState(keys.messages(CH))?.isInvalidated).toBe(false);
   });
 
   test('patching touches only the one message', () => {

@@ -60,6 +60,24 @@ const messageLists = (client: QueryClient): [QueryKey, Pages][] => {
 };
 
 /**
+ * A list that is being fetched *now* was asked for before this change, and its answer may have been
+ * written before it too: left alone, that answer replaces what the change just wrote, and the message,
+ * the reaction or the edit is counted and announced and then missing from the screen until something
+ * else reloads it. Found in a browser twice: a reply sent while its thread was still opening, and a
+ * send while the subscription's answer was re-reading a feed already on the screen (#347). Asking
+ * again, the in-flight request is cancelled — which keeps what is cached, change included — in favour
+ * of one that starts after the change.
+ */
+const askAgainIfOnItsWay = (client: QueryClient, key: readonly unknown[]): void => {
+  if (client.isFetching({ queryKey: key, exact: true }) === 0) return;
+  // Invalidating alone would join the request already in flight when there is no data yet to
+  // set aside; it has to be let go of first.
+  void client
+    .cancelQueries({ queryKey: key, exact: true })
+    .then(() => client.invalidateQueries({ queryKey: key, exact: true, refetchType: 'all' }));
+};
+
+/**
  * Edits one message wherever it is cached — the feed, its thread, the open-questions
  * view — so a reaction or a resolution cannot be right in one place and stale in
  * another. A list that does not hold it is left alone.
@@ -75,23 +93,8 @@ export const patchMessage = (
       key,
       mapMessages(data, (m) => (m.id === messageId ? edit(m) : m)),
     );
+    askAgainIfOnItsWay(client, key);
   }
-};
-
-/**
- * A list with nothing cached yet that is being fetched *now* was asked for before this message
- * existed, and its answer may have been written before it too: left alone, the message would be
- * counted and announced and then missing from the screen until something else reloaded it
- * (found in a browser: a reply sent while its thread was still opening). Asking again, the
- * in-flight request is cancelled in favour of one that starts after the message.
- */
-const askAgainIfOnItsWay = (client: QueryClient, key: readonly unknown[]): void => {
-  if (client.isFetching({ queryKey: key, exact: true }) === 0) return;
-  // Invalidating alone would join the request already in flight when there is no data yet to
-  // set aside; it has to be let go of first.
-  void client
-    .cancelQueries({ queryKey: key, exact: true })
-    .then(() => client.invalidateQueries({ queryKey: key, exact: true, refetchType: 'all' }));
 };
 
 /**
@@ -105,7 +108,6 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
   if (message.parentId === null) {
     const key = keys.messages(message.channelId);
     const cached = client.getQueryData<Pages>(key);
-    if (cached === undefined) askAgainIfOnItsWay(client, key);
     if (cached !== undefined) {
       const [first, ...rest] = cached.pages;
       if (first !== undefined) {
@@ -115,10 +117,10 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
         });
       }
     }
+    askAgainIfOnItsWay(client, key);
   } else {
     const key = keys.thread(message.parentId);
     const cached = client.getQueryData<Pages>(key);
-    if (cached === undefined) askAgainIfOnItsWay(client, key);
     const last = cached?.pages.at(-1);
     if (cached !== undefined && last !== undefined) {
       client.setQueryData<Pages>(key, {
@@ -129,6 +131,7 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
         ],
       });
     }
+    askAgainIfOnItsWay(client, key);
   }
   touchChannel(client, message.channelId, message.createdAt);
 };
@@ -210,6 +213,7 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
               : m,
           ),
     );
+    askAgainIfOnItsWay(client, key);
   }
   if (deletedRoot) void client.invalidateQueries({ queryKey: families.unresolved });
 };
