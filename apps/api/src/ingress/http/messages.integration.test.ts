@@ -8,10 +8,15 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { MESSAGE_CONTENT_MAX, MESSAGE_ID_SKEW, messageId } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
+import { MESSAGE_CONTENT_MAX, MESSAGE_ID_SKEW, Message, messageId } from '@purlay/types';
 import { createApp } from './app';
-import { testDependencies } from '../../testing/doubles';
+import { aRecordingLogger, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { atomicallyOn } from '../../platform/transactions';
+import { aMemoryStore } from '../../testing/storage';
+import { storeUpload } from '../../modules/attachments/uploads';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
@@ -371,6 +376,52 @@ describe('integration: messages', () => {
       });
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+    });
+  });
+});
+
+describe('integration: a send carrying attachments, over HTTP', () => {
+  test('words optional beside an upload; none and nothing attached is 400; an unknown id 404', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'att-alice');
+      const channelId = await aChannel(db, alice, 'att-acme');
+      const { workspace_id: workspaceId } = await db
+        .selectFrom('channels')
+        .select('workspace_id')
+        .where('id', '=', channelId)
+        .executeTakeFirstOrThrow();
+      const upload = messageId(new Date(NOW.getTime() - 1_000));
+      await storeUpload(
+        { atomically: atomicallyOn(db), storage: aMemoryStore(), log: aRecordingLogger().log },
+        await requireWorkspaceMembership(db, alice.userId, workspaceId),
+        { id: upload, name: 'shot.txt', bytes: new Uint8Array([1, 2, 3]) },
+      );
+      const post = async (body: object): Promise<Response> =>
+        await call(db, 'POST', `/api/channels/${channelId}/messages`, {
+          cookie: alice.cookie,
+          body,
+        });
+
+      const sent = await post({ id: messageId(NOW), content: '', attachmentIds: [upload] });
+      expect(sent.status).toBe(201);
+      const message: unknown = await sent.json();
+      expect(Value.Check(Message, message)).toBe(true);
+      expect(message).toMatchObject({ content: '', attachments: [{ id: upload, sizeBytes: 3 }] });
+
+      const empty = await post({ id: messageId(NOW), content: '' });
+      expect(empty.status).toBe(400);
+      expect(
+        ((await empty.json()) as { error: { details: { fields: object } } }).error.details.fields,
+      ).toHaveProperty('content');
+      const unknown = await post({
+        id: messageId(NOW),
+        content: 'x',
+        attachmentIds: [messageId(NOW)],
+      });
+      expect(unknown.status).toBe(404);
+      expect(((await unknown.json()) as { error: { code: string } }).error.code).toBe(
+        'ATTACHMENT_NOT_FOUND',
+      );
     });
   });
 });

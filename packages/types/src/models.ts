@@ -172,6 +172,16 @@ export const MessageContent = Type.String({
 });
 
 /**
+ * What a send may carry as its words: empty only beside an attachment (D-109 §7), which the service
+ * says — as a refusal of `content` by name, which a union of two shapes could not. An edit still needs
+ * words (`MessageContent`).
+ */
+export const SendContent = Type.String({
+  maxLength: MESSAGE_CONTENT_MAX,
+  format: 'message-content',
+});
+
+/**
  * The most GitHub links one message records for unfurling (D-101). Each becomes a
  * request to GitHub when it is unfurled (#66), so a sixteen-thousand-character body
  * cannot be a few hundred of them. The rest stay ordinary links.
@@ -261,6 +271,13 @@ export type Attachment = Static<typeof Attachment>;
 
 /** The most attachments one message carries (D-109 §7). */
 export const ATTACHMENTS_PER_MESSAGE_MAX = 10;
+
+/** The uploads a send carries: the sender's own, unattached, each once (D-109 §3, §7). */
+export const AttachmentIds = Type.Array(Uuid, {
+  minItems: 1,
+  maxItems: ATTACHMENTS_PER_MESSAGE_MAX,
+  uniqueItems: true,
+});
 
 export const Message = Type.Object({
   /** A UUIDv7 the client generated. It is also the pagination cursor. (D-8) */

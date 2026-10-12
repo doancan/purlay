@@ -24,8 +24,10 @@ import {
   CurrentUser,
   FromClient,
   Membership,
+  AttachmentIds,
   Message,
   MessageContent,
+  SendContent,
   NotificationLevel,
   Reaction,
   Timestamp,
@@ -122,7 +124,9 @@ export type AddChannelMemberRequest = Static<typeof AddChannelMemberRequest>;
  */
 export const SendMessageRequest = FromClient({
   id: Uuid,
-  content: MessageContent,
+  /** Empty only when the message carries attachments (D-109 §7). */
+  content: SendContent,
+  attachmentIds: Type.Optional(AttachmentIds),
   /**
    * Makes this a reply. Must be a root message of the same channel (I-1); a reply
    * to a reply is refused, because depth is a rule of the service and not of any

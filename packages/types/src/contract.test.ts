@@ -8,8 +8,9 @@
 import { describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody, ErrorCode } from './errors';
-import { Channel, CurrentUser, Message, User } from './models';
+import { ATTACHMENTS_PER_MESSAGE_MAX, Channel, CurrentUser, Message, User } from './models';
 import { ClientFrame, MessageSendFrame, ServerFrame } from './events';
+import { messageId } from './message-id';
 import {
   CreateDirectMessageRequest,
   MeResponse,
@@ -101,10 +102,16 @@ describe('socket frames', () => {
     expect(Value.Check(ClientFrame, send)).toBe(true);
   });
 
-  test('an empty message is refused before it reaches a service', () => {
-    expect(Value.Check(ClientFrame, { ...send, payload: { channelId: id, content: '' } })).toBe(
-      false,
-    );
+  test('a frame may carry attachments; empty words are the service’s to judge, beside them or not', () => {
+    expect(
+      Value.Check(ClientFrame, {
+        ...send,
+        payload: { channelId: id, content: '', attachmentIds: [send.id] },
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(ClientFrame, { ...send, payload: { ...send.payload, attachmentIds: [] } }),
+    ).toBe(false);
   });
 
   /**
@@ -167,6 +174,26 @@ describe('http shapes', () => {
     expect(Value.Check(SendMessageRequest, { id, content: 'hi' })).toBe(true);
     expect(Value.Check(SendMessageRequest, { content: 'hi' })).toBe(false);
     expect(Value.Check(SendMessageRequest, { id: 'not-a-uuid', content: 'hi' })).toBe(false);
+  });
+
+  test('a send may carry attachments: one to the most a message holds, each once; words then optional', () => {
+    const ids = (n: number): string[] =>
+      Array.from({ length: n }, (_, k) => messageId(new Date(Date.UTC(2026, 8, 9, 12, 0, 0, k))));
+    const sends = (extra: object): boolean =>
+      Value.Check(SendMessageRequest, { id, content: 'hi', ...extra });
+    expect(sends({ attachmentIds: ids(1) })).toBe(true);
+    expect(sends({ attachmentIds: ids(ATTACHMENTS_PER_MESSAGE_MAX) })).toBe(true);
+    expect(sends({ attachmentIds: ids(ATTACHMENTS_PER_MESSAGE_MAX + 1) })).toBe(false);
+    expect(sends({ attachmentIds: [] })).toBe(false);
+    const one = ids(1)[0] ?? '';
+    expect(sends({ attachmentIds: [one, one] })).toBe(false);
+    expect(sends({ attachmentIds: ['not-a-uuid'] })).toBe(false);
+    // Empty words pass the contract either way: whether something is attached beside them is the
+    // service's to say, so the refusal names `content` (a union of two shapes could only say "body").
+    expect(Value.Check(SendMessageRequest, { id, content: '', attachmentIds: ids(1) })).toBe(true);
+    expect(Value.Check(SendMessageRequest, { id, content: '' })).toBe(true);
+    // An edit still needs words.
+    expect(Value.Check(EditMessageRequest, { content: '' })).toBe(false);
   });
 
   test('a channel is public unless asked to be private, and never a direct message', () => {

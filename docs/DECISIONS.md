@@ -4483,7 +4483,9 @@ its author deleted a message naming them deadlocked with the delete, and one fai
 every writer takes, in order, the message row `FOR NO KEY UPDATE` — what its own `UPDATE` takes
 anyway; edits, deletes and resolutions of one row still take turns, and a row that only points at it
 is not made to wait — then the channel's memberships ordered by `user_id` (one person's, ordered by
-`channel_id`), then the notifications.
+`channel_id`), then the notifications. A send carrying attachments (D-109 §7) locks the uploads it
+links, after the message row, and its workspace row last, beside the channel's: an upload holds the
+workspace row and locks no existing upload, so the two cannot wait on each other.
 
 ### D-107. What each notification level is told
 
@@ -4598,6 +4600,23 @@ optional only when there is at least one attachment, at most 10 per message.
 the product shows it. **Rejected: `POST /api/uploads` with `multipart/form-data`** (the earlier
 `API.md` row): the form type the CSRF defence exists to refuse. **Rejected: a channel-scoped upload
 route.** `attachments` has no channel; the scope would mean nothing the schema can hold.
+
+**Amended 2026-10-12 (#54, sending them) — the edges §7 left unsaid**, decided in the owner's standing
+instruction to decide and proceed, and open to their reversal:
+- **Linking.** A send names `attachmentIds`; each must be the sender's own, unattached, in this
+  workspace. Any other — unknown, somebody else's, already sent, another workspace's — is one
+  `404 ATTACHMENT_NOT_FOUND` that tells them apart for nobody, and the message is not written. Two
+  sends racing for one upload: one has it, the other is that refusal.
+- **No words, nothing attached** passes the contract and is refused by the service as `400` on
+  `content`. *Rejected: a union of two shapes in the contract*, which says the same rule in the type
+  but reports a refusal as the whole body, so a client cannot point at the field.
+- **A retry with the same message id** answers the stored message, whatever ids it names (D-8): what
+  it carried was decided by the send that wrote it.
+- **An edit still needs words.** A message sent with no words can be given some; a message's words
+  cannot be emptied by an edit, whatever it carries. Removing an attachment is not an edit.
+- **The count.** Linking moves the bytes onto `storage_used_bytes` in the send's transaction
+  (`SCHEMA.md` I-7). Deleting the message does not lower it: the bytes are still stored, and it is the
+  sweep that removes them (#71) that gives them back.
 **Accepted, stated:** the S3 adapter is exercised against Garage locally and in the deployment's smoke
 test, not by CI, which runs PostgreSQL alone (`CONTRIBUTING.md` §2); the store is a port, and every
 test of the rules runs against a double.
