@@ -220,6 +220,10 @@ docker compose -f docker-compose.production.yml --env-file production.env \
 
 It exits non-zero when a job is overdue, so a monitor can run it.
 
+**Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
+never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run
+report:frames` needs (O-4) is exported with `docker compose … logs api` before it rolls over.
+
 **The proxy's access log** records the path and never the query string: an OAuth callback carries a
 one-time `code` and the signed `state` there, and a search carries what was searched for.
 
