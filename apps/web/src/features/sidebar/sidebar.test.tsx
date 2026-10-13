@@ -421,6 +421,19 @@ describe('the workspace menu', () => {
     expect(view.world.history.stack.length).toBeGreaterThan(before);
   });
 
+  test('a dialog the menu opened gives focus back to the name that opened the menu, when it is closed', async () => {
+    const view = await open();
+    const door = within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' });
+    await person().click(door);
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
+    expect(dialog.isConnected).toBe(false);
+    expectFocusOn(door);
+  });
+
   test('choosing another goes to it', async () => {
     const view = await open(
       aSignedInApi({
