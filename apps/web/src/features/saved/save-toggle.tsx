@@ -20,7 +20,7 @@ import { useWorkspaceIfAny } from '../shell/workspace';
 const idsKey = (workspaceId: string): readonly unknown[] => [...keys.saved(workspaceId), 'ids'];
 
 /** Which messages the person has saved in the workspace. */
-export const useSavedIds = (workspaceId: string): UseQueryResult<SavedIds> => {
+const useSavedIds = (workspaceId: string): UseQueryResult<SavedIds> => {
   const api = useApi();
   return useQuery({
     queryKey: idsKey(workspaceId),
