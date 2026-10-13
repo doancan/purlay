@@ -259,6 +259,10 @@ export const en = {
   'conversations.full': 'That is as many as a conversation holds; a channel holds more.',
   'conversations.start': 'Start conversation',
   'conversations.failed': 'The conversation could not be started.',
+  'conversations.details.description':
+    'A conversation’s people never change. To talk with more people, start a new conversation; this one stays as it is.',
+  'conversations.details.people': 'People',
+  'conversations.details.more': 'New conversation with these people…',
   'newChannel.taken': 'A channel with that name already exists. Choose another.',
   'newChannel.invalid':
     'Use lowercase letters, numbers and hyphens, starting with a letter or number.',

@@ -23,6 +23,7 @@ import { IconButton } from '../../ui/icon-button';
 import { AddPeopleDialog } from './add-people';
 import { ChannelDetailsDialog } from './channel-details';
 import { NotificationLevelMenu } from './notification-level-menu';
+import { GroupDetailsDialog } from '../conversations/group-details';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -83,7 +84,28 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             />
           </HeaderTile>
         )}
-        {direct ? (
+        {direct && channel.peers.length >= 2 ? (
+          <>
+            {/* A group's people open its details (D-127); a conversation of two has none. */}
+            <h1 className="min-w-0 shrink-0 truncate text-title text-ink">
+              <button
+                type="button"
+                className="max-w-full truncate rounded-sm hover:text-accent-text"
+                onClick={() => {
+                  setDetails(true);
+                }}
+              >
+                {title}
+              </button>
+            </h1>
+            <GroupDetailsDialog
+              channel={channel}
+              title={title}
+              open={details}
+              onOpenChange={setDetails}
+            />
+          </>
+        ) : direct ? (
           <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
         ) : (
           <>

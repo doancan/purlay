@@ -116,7 +116,10 @@ and **Add people** (the same dialog as the header's); the **notification level**
 and at the foot, in the danger tone, **Leave channel** for a member and **Archive channel** for an owner
 or an admin. Each of the two asks in place first and says what it costs; done, the person is taken to
 the workspace and told in a toast. The last member of a private channel is told to bring somebody in
-first or ask an admin to archive it. A direct message has no details: its title is not a button.
+first or ask an admin to archive it. A direct message between two has no details: its title is not a button. A group's title opens its
+details (D-127): its people, you first, and **New conversation with these people…**, which opens New
+message with them already picked — a group's people never change, so more people is a new
+conversation.
 
 **A channel's name is typed as it is said** (D-123). In **New channel** and in the details, what is typed is turned
 into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes

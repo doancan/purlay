@@ -256,6 +256,10 @@ export const tr = {
   'conversations.full': 'Bir konuşma bu kadar kişi alır; daha fazlası için kanal aç.',
   'conversations.start': 'Konuşmayı başlat',
   'conversations.failed': 'Konuşma başlatılamadı.',
+  'conversations.details.description':
+    'Bir konuşmanın kişileri değişmez. Daha fazla kişiyle konuşmak için yeni bir konuşma başlat; bu konuşma olduğu gibi kalır.',
+  'conversations.details.people': 'Kişiler',
+  'conversations.details.more': 'Bu kişilerle yeni konuşma…',
   'newChannel.create': 'Kanalı oluştur',
   'newChannel.taken': 'Bu adda bir kanal zaten var. Başka bir ad seç.',
   'newChannel.invalid': 'Küçük harf, rakam ve tire kullan; harf ya da rakamla başla.',

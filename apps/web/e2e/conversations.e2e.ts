@@ -41,6 +41,16 @@ test.describe('a group conversation', () => {
       /Bob.*, .*Carol|Carol.*, .*Bob/,
     );
 
+    // Its title opens its details: its people, and a way to more of them.
+    await page.getByRole('heading', { level: 1 }).getByRole('button').click();
+    const details = page.getByRole('dialog');
+    await expect(details.getByRole('listitem')).toHaveCount(3);
+    await expect(
+      details.getByRole('button', { name: 'New conversation with these people…' }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(details).toBeHidden();
+
     const words = `shipping at five ${crypto.randomUUID().slice(0, 6)}`;
     const composer = page.getByRole('textbox', { name: /^Message/ });
     await composer.fill(words);
