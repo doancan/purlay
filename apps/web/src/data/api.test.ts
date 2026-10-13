@@ -297,6 +297,29 @@ describe('the endpoints', () => {
     expect(reactions.calls[1]).toMatchObject({ method: 'DELETE' });
   });
 
+  test('a channel’s settings: a rename and a topic in the body, then leave, archive and who is in it (D-123)', async () => {
+    const renamed = harness({ ...channel, name: 'genel-sohbet' });
+    expect((await renamed.api.updateChannel(ID, { name: 'genel-sohbet', topic: null })).name).toBe(
+      'genel-sohbet',
+    );
+    const done = harness(null);
+    await done.api.leaveChannel(ID);
+    await done.api.archiveChannel(ID);
+    const listed = harness([
+      {
+        user: { id: ID, username: 'a', displayName: 'A', avatarUrl: null },
+        joinedAt: '2026-09-09T08:00:00.000Z',
+      },
+    ]);
+    expect(await listed.api.channelMembers(ID)).toHaveLength(1);
+    expect([...renamed.calls, ...done.calls, ...listed.calls]).toMatchObject([
+      { method: 'PATCH', url: `/api/channels/${ID}`, body: { name: 'genel-sohbet', topic: null } },
+      { method: 'POST', url: `/api/channels/${ID}/leave` },
+      { method: 'DELETE', url: `/api/channels/${ID}` },
+      { method: 'GET', url: `/api/channels/${ID}/members` },
+    ]);
+  });
+
   test('bringing somebody into a channel names them, and reads no answer', async () => {
     const added = harness(null);
     await added.api.addChannelMember(ID, ID);

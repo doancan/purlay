@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Web — 2026-10-13: a channel's name typed as it is said (D-123)
+
+- New channel turns what is typed into the name's form as it is typed — *Genel Sohbet* becomes
+  `genel-sohbet`, Turkish letters and accents folded — instead of refusing it.
+- A channel archived, or left on another screen, while somebody is looking at it says which.
+
 ### API — 2026-10-13: archive and leave a channel (D-123)
 
 - `DELETE /api/channels/:channelId` archives a channel, for an owner or an admin: hidden from

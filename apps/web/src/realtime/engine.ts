@@ -37,6 +37,7 @@ import {
   type Channel,
   type ClientFrame,
   type ErrorCode,
+  type RevokedReason,
   type ServerFrame,
 } from '@purlay/types';
 import type { Api } from '../data/api';
@@ -126,6 +127,11 @@ export interface RealtimeState {
    * arrives (#411).
    */
   readonly typing: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Channels that went away and why, when the server said (D-123): what a screen still showing one
+   * tells the person instead of "not found".
+   */
+  readonly gone: Readonly<Record<string, RevokedReason>>;
 }
 
 export interface Outgoing {
@@ -204,6 +210,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     pending: restored,
     degraded: {},
     typing: {},
+    gone: {},
   }));
   const serverClock = createServerClock(options.clock);
   const timers = new Map<string, () => void>();
@@ -563,6 +570,14 @@ export const createEngine = (options: EngineOptions): Engine => {
       }
       case 'ACCESS_REVOKED': {
         channelsRevoked(client, frame.data.channelIds);
+        const { reason } = frame.data;
+        if (reason !== undefined) {
+          const gone = { ...store.getState().gone };
+          for (const id of frame.data.channelIds) gone[id] = reason;
+          store.setState({ gone });
+        }
+        // A public channel left is still there to see and join again: the list is read again.
+        if (reason === 'left') void client.invalidateQueries({ queryKey: families.channels });
         for (const id of frame.data.channelIds) {
           watched.delete(id);
           connection?.unwatch(id);

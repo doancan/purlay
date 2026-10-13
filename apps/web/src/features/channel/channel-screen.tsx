@@ -32,6 +32,7 @@ import { useRoute } from '../../router/router-provider';
 import { rememberChannel } from '../questions/last-channel';
 import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
+import { useGone } from '../../realtime/realtime-provider';
 import { ChannelHeader, useChannelTitle } from './channel-header';
 import { MessageFeed } from './message-feed';
 import { ThreadsProvider, useOpenThread } from '../threads/thread-context';
@@ -145,6 +146,7 @@ export const ChannelScreen = ({ channelId }: { readonly channelId: string }): Re
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
   const channel = channels.data?.find((c) => c.id === channelId);
+  const gone = useGone(channelId);
   if (channels.isPending) {
     return (
       <>
@@ -156,13 +158,15 @@ export const ChannelScreen = ({ channelId }: { readonly channelId: string }): Re
     );
   }
   if (channel === undefined) {
+    // Archived, or left on another screen, while it was open: said as what happened (D-123).
+    const why = gone === 'archived' ? 'archived' : gone === 'left' ? 'left' : 'missing';
     return (
       <>
         <ScreenBar />
         <EmptyState
           as="h1"
-          title={t('state.channel.missing.title')}
-          body={t('state.channel.missing.body')}
+          title={t(`state.channel.${why}.title`)}
+          body={t(`state.channel.${why}.body`)}
         />
       </>
     );

@@ -511,14 +511,23 @@ describe('a new channel', () => {
     expect(calls).toEqual([{ name: 'leads', type: 'private' }]);
   });
 
-  test('a name that breaks the rule is refused before the server hears, in the field', async () => {
+  test('a name typed the way it is said is put into the rule’s form as it is typed, and sent so (D-123)', async () => {
     const { calls, api } = asked();
     const view = await open(api);
-    await fill(view, 'Not Valid!');
+    await fill(view, 'Genel Sohbet İş ');
+    expect((view.getByLabelText('Name') as HTMLInputElement).value).toBe('genel-sohbet-is-');
     await person().click(view.getByRole('button', { name: 'Create channel' }));
-    expect(
-      view.getAllByRole('alert').some((a) => a.textContent.includes('Use lowercase letters')),
-    ).toBe(true);
+    await settle();
+    expect(calls).toEqual([{ name: 'genel-sohbet-is' }]);
+  });
+
+  test('a name with nothing left of it is refused before the server hears', async () => {
+    const { calls, api } = asked();
+    const view = await open(api);
+    await fill(view, '!!!');
+    expect((view.getByLabelText('Name') as HTMLInputElement).value).toBe('');
+    await person().click(view.getByRole('button', { name: 'Create channel' }));
+    await settle();
     expect(calls).toEqual([]);
   });
 

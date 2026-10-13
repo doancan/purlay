@@ -5334,12 +5334,18 @@ to decide and proceed, and open to their reversal.
 7. **Who is in a channel** is `GET /api/channels/:channelId/members`, for anybody who can see it.
    Not paged, as the workspace's own list is not: a channel's members are some of the workspace's,
    whose size D-25 bounds.
+8. **A name is typed as it is said, and the client puts it in the rule's form as it is typed**
+   (`UX.md` §2): lowercase, a letter's accents taken off and the dotless ı spelled, anything else one
+   hyphen. The server's rule is unchanged — it still accepts any `name` the contract does — so an
+   older client or a script is not refused; the form is the interface's, which is where people type.
 
 **Rejected: archiving a private channel when its last member leaves.** It makes archiving a member's
 act by another door, against 2. **Rejected: letting the last member go.** A conversation nobody can
 read, join or archive through the product. **Rejected: `409` for a direct message.** A new code for a
 request no client sends, where the existing refusal says the same. **Rejected: every member archives**,
-as §7.4 had it: one person could take a channel's history away from everyone in it.
+as §7.4 had it: one person could take a channel's history away from everyone in it. **Rejected:
+refusing a name typed with spaces or capitals**, as New channel did: it answered a person for typing
+the way they speak, and the fix it asked for was always the same one the field can make.
 
 **Cost of reversing:** a role check and a count in `modules/channels/settings.ts`, two rows of the
 permission table, and this paragraph; no data changes shape.

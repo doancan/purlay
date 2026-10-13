@@ -258,3 +258,68 @@ describe('a failure', () => {
     expect(client.getQueryCache().getAll().length).toBeGreaterThan(0);
   });
 });
+
+describe('a channel’s settings (D-123)', () => {
+  const listed = (client: QueryClient): Channel[] | undefined =>
+    client.getQueryData<Channel[]>(keys.channels(WS));
+
+  test('a rename is the server’s name and topic in the list', async () => {
+    const { client } = world();
+    client.setQueryData<Channel[]>(keys.channels(WS), [channel]);
+    const actions = createActions(
+      anApi({
+        updateChannel: () => Promise.resolve({ ...channel, name: 'genel-sohbet', topic: 'x' }),
+      }),
+      client,
+    );
+    await actions.updateChannel(CH, { name: 'genel-sohbet', topic: 'x' });
+    expect(listed(client)?.[0]).toMatchObject({ name: 'genel-sohbet', topic: 'x' });
+  });
+
+  test('leaving takes the channel off the list, and a public one is asked for again; archiving takes it off', async () => {
+    const { client } = world();
+    const secret: Channel = { ...channel, id: MSG, type: 'private' };
+    client.setQueryData<Channel[]>(keys.channels(WS), [channel, secret]);
+    let asked = 0;
+    const actions = createActions(
+      anApi({
+        leaveChannel: () => Promise.resolve(),
+        archiveChannel: () => Promise.resolve(),
+        channels: () => {
+          asked += 1;
+          return Promise.resolve([{ ...channel, state: null, notificationLevel: null }]);
+        },
+      }),
+      client,
+    );
+    await actions.leaveChannel(secret);
+    expect(listed(client)?.map((c) => c.id)).toEqual([CH]);
+    expect(asked).toBe(0);
+    await actions.leaveChannel(channel);
+    expect(client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+    client.setQueryData<Channel[]>(keys.channels(WS), [channel]);
+    await actions.archiveChannel(CH);
+    expect(listed(client)).toEqual([]);
+  });
+
+  test('a refusal writes nothing', async () => {
+    const { client } = world();
+    client.setQueryData<Channel[]>(keys.channels(WS), [channel]);
+    const actions = createActions(
+      anApi({
+        leaveChannel: () => Promise.reject(new ApiError(409, 'LAST_CHANNEL_MEMBER', 'x')),
+        archiveChannel: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'x')),
+      }),
+      client,
+    );
+    const heard: unknown[] = [];
+    await actions.leaveChannel(channel).catch((error: unknown) => {
+      heard.push(error);
+    });
+    await actions.archiveChannel(CH).catch((error: unknown) => {
+      heard.push(error);
+    });
+    expect(heard.map((error) => error instanceof ApiError)).toEqual([true, true]);
+    expect(listed(client)).toEqual([channel]);
+  });
+});

@@ -202,6 +202,12 @@ export const tr = {
   'state.session.error.body': 'Sunucu yanıt vermedi. Oturumun açık; tekrar dene.',
   'state.channel.missing.title': 'Bu kanal burada değil',
   'state.channel.missing.body': 'Ya yok ya da göremiyorsun.',
+  'state.channel.archived.title': 'Bu kanal arşivlendi',
+  'state.channel.archived.body':
+    'Bir yönetici arşivledi. Konuşması saklanıyor, ama artık kimse görmüyor.',
+  'state.channel.left.title': 'Bu kanaldan ayrıldın',
+  'state.channel.left.body':
+    'Başka bir ekranda ayrıldın. Herkese açıksa Kanallara göz at’tan yeniden katılabilirsin.',
   'state.workspace.empty.title': 'Bir kanal seç',
   'state.workspace.empty.body': 'Listeden birini seç ya da ilkini oluştur.',
 
@@ -209,7 +215,8 @@ export const tr = {
   'newChannel.title': 'Yeni kanal',
   'newChannel.description': 'Çalışma alanındaki herkes herkese açık bir kanalı bulup katılabilir.',
   'newChannel.name': 'Ad',
-  'newChannel.nameHint': 'Küçük harf, rakam ve tire. En çok 64 karakter.',
+  'newChannel.nameHint':
+    'Küçük harf, rakam ve tire: boşluklar ve büyük harfler yazarken bunlara dönüşür. En çok 64.',
   'newChannel.topic': 'Konu',
   'newChannel.topicHint': 'İsteğe bağlı. Kanalın ne için olduğunu anlatan tek satır.',
   'newChannel.private': 'Özel',

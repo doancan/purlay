@@ -12,6 +12,7 @@
  * timers, the dice and the clock are arguments (D-46).
  */
 import { useQueryClient } from '@tanstack/react-query';
+import type { RevokedReason } from '@purlay/types';
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useStore } from 'zustand';
 import { useApi } from '../data/api-provider';
@@ -124,6 +125,10 @@ export const useConnectedOnce = (): boolean =>
 /** Channels whose live updates are not trustworthy right now, and why. */
 export const useDegraded = (): Readonly<Record<string, DegradedReason>> =>
   useStore(useEngine().store, (state) => state.degraded);
+
+/** Why a channel went away, when the server said: archived, or left on another device (D-123). */
+export const useGone = (channelId: string): RevokedReason | undefined =>
+  useStore(useEngine().store, (state) => state.gone[channelId]);
 
 const NOBODY: readonly string[] = [];
 

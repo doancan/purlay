@@ -12,6 +12,7 @@ import {
   Attachment,
   AuditPage,
   ChannelList,
+  ChannelMemberList,
   Channel,
   MeResponse,
   Membership,
@@ -34,6 +35,7 @@ import {
   WorkspaceMemberList,
   type UserRole,
   type CreateChannelRequest,
+  type UpdateChannelRequest,
   type CreateWorkspaceRequest,
   type NotificationLevel,
   type SetDeepWorkRequest,
@@ -99,6 +101,13 @@ export interface Api {
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
+  /** A member's: a new name or topic, answered with the channel as it now is (D-123). */
+  readonly updateChannel: (channelId: string, input: UpdateChannelRequest) => Promise<Channel>;
+  /** An owner's or an admin's: archived, for everyone (D-123). */
+  readonly archiveChannel: (channelId: string) => Promise<void>;
+  readonly leaveChannel: (channelId: string) => Promise<void>;
+  /** Who is in the channel (D-123). */
+  readonly channelMembers: (channelId: string, signal?: AbortSignal) => Promise<ChannelMemberList>;
   /** Brings somebody from the workspace into the channel (D-104); they are told by the server. */
   readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
   /** The caller's own Deep Work in a workspace (D-108). */
@@ -267,6 +276,18 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/channels`,
         Channel,
         options({ body: input }),
+      ),
+    updateChannel: (channelId, input) =>
+      http.request('PATCH', `/api/channels/${at(channelId)}`, Channel, options({ body: input })),
+    archiveChannel: (channelId) => http.send('DELETE', `/api/channels/${at(channelId)}`, options()),
+    leaveChannel: (channelId) =>
+      http.send('POST', `/api/channels/${at(channelId)}/leave`, options()),
+    channelMembers: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/members`,
+        ChannelMemberList,
+        options({}, signal),
       ),
     addChannelMember: (channelId, userId) =>
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
