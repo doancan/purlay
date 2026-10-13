@@ -125,7 +125,7 @@ Everything the owner's team needs to abandon Slack.
 **4.1 · Messaging**
 Inline resolvable threads · GitHub Flavored Markdown · fenced code blocks with language badge,
 line count, copy-raw and clamping above 12 lines · emoji reactions · message edit and delete
-(tombstoned) · typing indicators and presence (ephemeral, D-7)
+(tombstoned) · typing indicators (ephemeral, D-7, D-114)
 
 **4.2 · Threads — the wedge**
 Threads expand and collapse **inline, underneath the parent, in the main feed**. No right-hand
@@ -174,7 +174,8 @@ public self-host path and its documentation stay in Phase 2. (D-73)
 `docker compose up` self-host path and operator documentation · GitHub webhook repo feeds ·
 Web Push notifications · unified/split diff viewer for ` ```diff ` blocks · magic-link auth
 (D-11) · message edit history · **retention policy, account erasure and workspace export**
-(D-27) · **operator compliance documentation** — data map, retention and erasure runbooks (D-28)
+(D-27) · **operator compliance documentation** — data map, retention and erasure runbooks (D-28) ·
+online presence (ephemeral, D-7, D-120)
 
 ### Phase 2.5 — Cloud (v0.4.0)
 

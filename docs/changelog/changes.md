@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-10-13: online presence is Phase 2 (D-120)
+
+- `PRD.md` §4.1 no longer lists presence in Phase 1; Phase 2 does, so the PRD and `UX.md` §2 agree.
+  Nothing in the client or the server changes: neither shows presence. Building it is #480 (`v0.3.0`).
+
 ### Design — 2026-10-12: a conversation with two edges (D-119)
 
 - Messages sit in bubbles: everyone else's on the left on `surface-200` with their avatar, your own on

@@ -56,8 +56,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 - **Sidebar (240px)** — the workspace name, the jump field (the palette's door, `⌘K`), the channels,
   then the people, and your own row at the foot. Unread channels are bold;
   unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar and no
-  presence dot: there is no presence to show (Phase 2), and a dot that is always one colour would be
-  a lie.
+  presence dot: there is no presence to show (Phase 2, D-120), and a dot that is always one colour
+  would be a lie.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
   carries the two views as a segmented control: the feed, and **open questions** with its live count,
   which is the product's argument and so is always one click away.
