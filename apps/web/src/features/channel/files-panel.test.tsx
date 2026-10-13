@@ -141,6 +141,13 @@ describe('a channel’s files panel', () => {
     expect(panelOf(view).querySelector('img')?.getAttribute('src')).toBe(
       `/api/attachments/${fileId(3)}/thumbnail`,
     );
+    // A thumbnail that does not load is the file's glyph, the link still there.
+    act(() => {
+      panelOf(view).querySelector('img')?.dispatchEvent(new Event('error'));
+    });
+    expect(panelOf(view).querySelector('img')).toBeNull();
+    expect(panelOf(view).querySelector('svg.lucide-file')).not.toBeNull();
+    expect(within(panelOf(view)).getByRole('link', { name: 'Open shot.webp' })).toBeDefined();
     view.unmountAll();
   });
 
