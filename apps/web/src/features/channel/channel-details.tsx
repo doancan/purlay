@@ -12,7 +12,7 @@
  */
 import { useQueryClient } from '@tanstack/react-query';
 import type { Channel, UpdateChannelRequest } from '@purlay/types';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
@@ -241,6 +241,20 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   const { show } = useToast();
   const [asking, setAsking] = useState<'leave' | 'archive' | null>(null);
   const [busy, setBusy] = useState(false);
+  const questionId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  // Which button asked, so Cancel can give focus back to it: the question replaces the buttons, and
+  // focus on a button that is gone falls to the dialog itself, far from where the person was.
+  const asked = useRef<'leave' | 'archive' | null>(null);
+  useEffect(() => {
+    if (asking !== null) {
+      asked.current = asking;
+      box.current?.querySelector<HTMLElement>('[data-answer="cancel"]')?.focus();
+    } else if (asked.current !== null) {
+      box.current?.querySelector<HTMLElement>(`[data-ask="${asked.current}"]`)?.focus();
+      asked.current = null;
+    }
+  }, [asking]);
   const [problem, setProblem] = useState<string | null>(null);
   const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
   const member = channel.state !== null;
@@ -267,7 +281,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t-hairline border-border-subtle pt-4">
+    <div ref={box} className="flex flex-col gap-2 border-t-hairline border-border-subtle pt-4">
       {problem !== null && (
         <p role="alert" className="text-label text-danger-text">
           {problem}
@@ -278,6 +292,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
           {member && (
             <Button
               variant="dangerQuiet"
+              data-ask="leave"
               onClick={() => {
                 setAsking('leave');
               }}
@@ -288,6 +303,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
           {archiver && (
             <Button
               variant="dangerQuiet"
+              data-ask="archive"
               onClick={() => {
                 setAsking('archive');
               }}
@@ -297,13 +313,14 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
           )}
         </div>
       ) : (
-        <>
-          <p className="text-label text-ink">
+        <div role="group" aria-labelledby={questionId} className="flex flex-col gap-2">
+          <p id={questionId} className="text-label text-ink">
             {t(asking === 'leave' ? 'details.leaveAsk' : 'details.archiveAsk', { name })}
           </p>
           <div className="flex justify-end gap-2">
             <Button
               variant="ghost"
+              data-answer="cancel"
               onClick={() => {
                 setAsking(null);
                 setProblem(null);
@@ -321,7 +338,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
               {t(asking === 'leave' ? 'details.leave' : 'details.archive')}
             </Button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

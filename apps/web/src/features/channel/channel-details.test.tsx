@@ -9,6 +9,7 @@ import type { Channel, ChannelMember, MeResponse, UpdateChannelRequest } from '@
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
+import { expectFocusOn } from '../../testing/focus';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
 import {
@@ -360,6 +361,29 @@ describe('the name and the topic', () => {
 });
 
 describe('leaving and archiving', () => {
+  test('the question takes focus on Cancel, says what it asks, and Cancel gives focus back to the button that asked', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        me: () => Promise.resolve(asMember()),
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+      },
+    });
+    const dialog = await openDetails(view);
+    const leave = within(dialog).getByRole('button', { name: 'Leave channel' });
+    act(() => {
+      leave.focus();
+    });
+    await person().keyboard('{Enter}');
+    await settle();
+    const question = within(dialog).getByRole('group', { name: /Leave #api\?/ });
+    expectFocusOn(within(question).getByRole('button', { name: 'Cancel' }));
+    await person().keyboard('{Enter}');
+    await settle();
+    expectFocusOn(within(dialog).getByRole('button', { name: 'Leave channel' }));
+    view.unmountAll();
+  });
+
   test('a member is offered Leave and not Archive; Leave asks first, then goes, and the channel leaves the list', async () => {
     const left: string[] = [];
     const view = await mountChannel({
