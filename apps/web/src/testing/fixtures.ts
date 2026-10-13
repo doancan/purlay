@@ -44,8 +44,12 @@ export const WORKSPACE: Workspace = {
   avatarUrl: null,
 };
 
+/** A profile nobody has filled in (D-131). */
+export const NO_PROFILE = { title: null, timeZone: null, status: null };
+
 export const aSession = (): MeResponse => ({
   user: { ...ME, email: 'dogancan@example.test' },
+  profile: NO_PROFILE,
   memberships: [{ workspace: WORKSPACE, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
 });
 
@@ -98,7 +102,12 @@ export const aMessage = (n: number, over: Partial<Message> = {}): Message => ({
 
 /** Everyone in the workspace: the person, and two others. */
 export const someMembers = (): WorkspaceMember[] =>
-  [ME, ALICE, BOB].map((user) => ({ user, role: 'member' as const, joinedAt: WHEN }));
+  [ME, ALICE, BOB].map((user) => ({
+    user,
+    role: 'member' as const,
+    joinedAt: WHEN,
+    profile: NO_PROFILE,
+  }));
 
 export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
   anApi({

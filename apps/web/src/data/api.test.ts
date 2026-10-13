@@ -3,6 +3,7 @@
  * contract says. The responses are real shapes, so the schema check in `http.ts`
  * is exercised too: an endpoint wired to the wrong schema fails here.
  */
+import { NO_PROFILE } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
 import type { Attachment } from '@purlay/types';
 import { createApi, type Api } from './api';
@@ -63,6 +64,7 @@ describe('the endpoints', () => {
   test('identity and workspaces', async () => {
     const me = harness({
       user: { ...user, email: 'a@example.test' },
+      profile: NO_PROFILE,
       memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
     });
     expect((await me.api.me()).user.username).toBe('alice');
@@ -80,7 +82,7 @@ describe('the endpoints', () => {
       body: { name: 'acme', slug: 'acme' },
     });
 
-    const members = harness([{ user, role: 'member', joinedAt: WHEN }]);
+    const members = harness([{ user, role: 'member', joinedAt: WHEN, profile: NO_PROFILE }]);
     await members.api.members(ID);
     expect(members.calls[0]?.url).toBe(`/api/workspaces/${ID}/members`);
   });
@@ -129,6 +131,17 @@ describe('the endpoints', () => {
     const discarded = harness(null);
     await discarded.api.discardAttachment(ID);
     expect(discarded.calls[0]).toMatchObject({ method: 'DELETE', url: `/api/attachments/${ID}` });
+  });
+
+  test('the caller’s own profile (D-131)', async () => {
+    const profile = { title: 'Lead', timeZone: 'Europe/Istanbul', status: null };
+    const call = harness(profile);
+    expect(await call.api.updateProfile({ title: 'Lead' })).toEqual(profile);
+    expect(call.calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: '/api/me/profile',
+      body: { title: 'Lead' },
+    });
   });
 
   test('saved messages: save, move, let go, and the lists (D-128)', async () => {
@@ -316,7 +329,7 @@ describe('the endpoints', () => {
   });
 
   test('a member’s role is sent in the body and the member read back; removing is by id (§7.4)', async () => {
-    const member = { user, role: 'admin' as const, joinedAt: WHEN };
+    const member = { user, role: 'admin' as const, joinedAt: WHEN, profile: NO_PROFILE };
     const changed = harness(member);
     expect(await changed.api.updateMemberRole(ID, ID, 'admin')).toEqual(member);
     const removed = harness(null);
@@ -401,6 +414,7 @@ describe('the endpoints', () => {
       {
         user: { id: ID, username: 'a', displayName: 'A', avatarUrl: null },
         joinedAt: '2026-09-09T08:00:00.000Z',
+        profile: NO_PROFILE,
       },
     ]);
     expect(await listed.api.channelMembers(ID)).toHaveLength(1);

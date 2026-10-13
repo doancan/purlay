@@ -625,8 +625,10 @@ export const createEngine = (options: EngineOptions): Engine => {
         void client.invalidateQueries({ queryKey: keys.saved(frame.data.workspaceId) });
         return;
       case 'WORKSPACE_UPDATED':
-        // No state in the frame (D-124): the memberships are read again, newest wins.
+        // No state in the frame (D-124): the memberships are read again, newest wins — and the
+        // workspace's members, whose profiles it also says changed (D-131).
         void client.invalidateQueries({ queryKey: keys.me });
+        void client.invalidateQueries({ queryKey: keys.members(frame.data.workspaceId) });
         return;
       case 'TYPING':
         startTyping(frame.data.channelId, frame.data.userId, frame.data.ttlMs);

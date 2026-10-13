@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { WorkspaceMember } from '@purlay/types';
-import { ALICE, BOB, IDS, ME, WHEN, aChannel, aUser } from '../../testing/fixtures';
+import { ALICE, BOB, IDS, ME, WHEN, aChannel, aUser, NO_PROFILE } from '../../testing/fixtures';
 import { candidatesFor } from './mention-candidates';
 
 const CAROL = aUser('carol', '00000000-0000-4000-8000-0000000000e4');
@@ -9,6 +9,7 @@ const members: WorkspaceMember[] = [ME, ALICE, BOB, CAROL].map((user) => ({
   user,
   role: 'member',
   joinedAt: WHEN,
+  profile: NO_PROFILE,
 }));
 const names = (people: readonly { readonly username: string }[]): string[] =>
   people.map((person) => person.username);

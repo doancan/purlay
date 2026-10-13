@@ -10,7 +10,16 @@ import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, ME, WHEN, aSession, aSignedInApi } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  ME,
+  WHEN,
+  aSession,
+  aSignedInApi,
+  NO_PROFILE,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { Toaster } from '../../ui/toast';
@@ -30,6 +39,7 @@ const team = (roles: Partial<Record<string, UserRole>> = {}): WorkspaceMember[] 
     user,
     role: roles[user.username] ?? 'member',
     joinedAt: WHEN,
+    profile: NO_PROFILE,
   }));
 
 const open = async (
@@ -89,7 +99,7 @@ describe('members and roles', () => {
       updateMemberRole: (workspaceId, userId, role) => {
         sent.push(`${workspaceId}/${userId}:${role}`);
         members = members.map((m) => (m.user.id === userId ? { ...m, role } : m));
-        return Promise.resolve({ user: ALICE, role, joinedAt: WHEN });
+        return Promise.resolve({ user: ALICE, role, joinedAt: WHEN, profile: NO_PROFILE });
       },
     });
     const dialog = within(view.getByRole('dialog'));

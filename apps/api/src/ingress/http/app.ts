@@ -121,6 +121,7 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
+import { updateMyProfile } from './profile';
 import { deletePin, listPins, putPin } from './pins';
 
 export interface Dependencies {
@@ -345,6 +346,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
 
     .get('/api/me', async ({ request }) => await readMe(dependencies, request))
+    .patch(
+      '/api/me/profile',
+      async ({ request, body }) => await updateMyProfile(sending, request, body),
+    )
     .put('/api/me/locale', async ({ request, body, set }) => {
       await setMyLocale(dependencies, request, body);
       set.status = 204;

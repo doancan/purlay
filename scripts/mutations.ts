@@ -155,6 +155,31 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
   },
   {
+    id: 'profile-words-untrimmed',
+    why: 'a title of spaces is stored as a title, and words keep the spaces around them',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '  const trimmed = value.trim();\n',
+    replace: '  const trimmed = value;\n',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
+  },
+  {
+    id: 'profile-any-time-zone',
+    why: 'a time zone nobody can format in is stored, and every clock that reads it breaks',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '  if (input.timeZone != null && !knownZone(input.timeZone)) {\n',
+    replace: '  if (input.timeZone === "never") {\n',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
+  },
+  {
+    id: 'profile-told-of-nothing',
+    why: 'a profile saved unchanged tells everyone in every workspace the person is in',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '    return { profile: asProfile(before), told: [] };\n',
+    replace:
+      '    return { profile: asProfile(before), told: await workspacesOf(transaction, userId) };\n',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
+  },
+  {
     id: 'saved-again-finds-anyones',
     why: 'saving a message again moves whoever saved it first, and the caller’s own save is never made',
     file: 'apps/api/src/modules/saved/saved.ts',

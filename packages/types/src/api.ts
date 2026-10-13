@@ -26,6 +26,9 @@ import {
   FromClient,
   GitHubLink,
   Membership,
+  PROFILE_STATUS_MAX,
+  PROFILE_TITLE_MAX,
+  Profile,
   AttachmentIds,
   Message,
   MessageContent,
@@ -74,6 +77,8 @@ export type PageQuery = Static<typeof PageQuery>;
 /** `GET /api/me` — the caller, and the workspaces they belong to. */
 export const MeResponse = Type.Object({
   user: CurrentUser,
+  /** The caller's own profile, for the dialog that changes it (D-131). */
+  profile: Profile,
   memberships: Type.Array(Membership),
 });
 export type MeResponse = Static<typeof MeResponse>;
@@ -104,6 +109,8 @@ export const WorkspaceMember = Type.Object({
   user: User,
   role: UserRole,
   joinedAt: Type.String({ format: 'date-time' }),
+  /** What they say about themselves: shown in a conversation with them and where people are picked. */
+  profile: Profile,
 });
 export type WorkspaceMember = Static<typeof WorkspaceMember>;
 
@@ -677,3 +684,29 @@ export type PinnedMessage = Static<typeof PinnedMessage>;
 /** `GET /api/channels/:channelId/pins` — newest pin first, of messages not deleted; bounded, not paged. */
 export const PinList = Type.Array(PinnedMessage, { maxItems: PINS_MAX });
 export type PinList = Static<typeof PinList>;
+
+// ── Profiles (#488, D-131) ──────────────────────────────────────────────────
+
+/**
+ * `PATCH /api/me/profile` — what to change; a field left out is left as it is, and null clears it.
+ * The words are trimmed by the server, and words that trim to nothing clear the field too. The time
+ * zone must be one the server's runtime knows.
+ */
+export const UpdateProfileRequest = FromClient({
+  title: Type.Optional(
+    Type.Union([
+      Type.String({ minLength: 1, maxLength: PROFILE_TITLE_MAX, format: 'name' }),
+      Type.Null(),
+    ]),
+  ),
+  timeZone: Type.Optional(
+    Type.Union([Type.String({ minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9_+\\-/]+$' }), Type.Null()]),
+  ),
+  status: Type.Optional(
+    Type.Union([
+      Type.String({ minLength: 1, maxLength: PROFILE_STATUS_MAX, format: 'name' }),
+      Type.Null(),
+    ]),
+  ),
+});
+export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;

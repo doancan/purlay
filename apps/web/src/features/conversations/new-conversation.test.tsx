@@ -19,6 +19,7 @@ import {
   aSignedInApi,
   aUser,
   someChannels,
+  NO_PROFILE,
 } from '../../testing/fixtures';
 import { CONVERSATION_PEOPLE_MAX } from '@purlay/types';
 import { renderApp } from '../../testing/render';
@@ -121,6 +122,7 @@ describe('New message', () => {
             user,
             role: 'member' as const,
             joinedAt: '2026-09-09T12:00:00.000Z',
+            profile: NO_PROFILE,
           })),
         ),
     });

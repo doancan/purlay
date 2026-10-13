@@ -5715,6 +5715,35 @@ matter. *Counting deleted messages' pins* — the bound would be taken by what n
 
 **Cost of reversing:** migration 0028's table, three routes, the frame, and the client's pins.
 
+### D-131. A profile: a title, a time zone and a status line, the person's own — #488
+
+**Context.** The Superdesign screens show, in a conversation and where people are picked, what a
+person does, the time it is where they are, and a line about what they are on. GitHub gives a name
+and an avatar, which stay GitHub's (D-11). D-125 put profiles in Phase 2.
+
+**Decision.**
+1. **Three fields on the person** (`users.title`, `users.time_zone`, `users.status_text`, migration
+   0029), each null until set and never blank: a title of up to 80 characters, an IANA time zone,
+   a status line of up to 100. Global, as the person is (D-3): the same in every workspace.
+2. **The person's own to change** — `PATCH /api/me/profile`; a field left out is kept, `null` clears
+   it, words are trimmed, and words that trim to nothing clear it. A time zone is one the server's
+   runtime can format in, or `400` on `timeZone`.
+3. **Read where the person is read**: `GET /api/me` carries the caller's, and each workspace member
+   carries theirs, so a conversation, the members and every picker have it with no second request,
+   and nobody outside a shared workspace reads it.
+4. **A change is heard as `WORKSPACE_UPDATED`** by everyone in each workspace the person is in — the
+   frame a rename sends, which carries nothing — and a client reads the members again. Nothing
+   changed, nobody is told.
+5. **No expiry and no emoji on the status**: a line of words, kept until it is changed. A presence
+   ("away") is presence's (#480), not the profile's.
+
+**Rejected.** *Profile fields on `User`* — every message carries its sender, and every message
+would carry a status line. *A `PROFILE_UPDATED` frame* — `WORKSPACE_UPDATED` already reaches exactly
+the people who can see the profile and says "read the workspace again". *A status that clears
+itself* — a timer per person, for a feature nobody has asked to expire yet.
+
+**Cost of reversing:** migration 0029's columns, one route, the `profile` fields of two responses.
+
 ---
 
 ## Part D — Open, deliberately

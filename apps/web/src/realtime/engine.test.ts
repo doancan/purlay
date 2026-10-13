@@ -17,7 +17,7 @@ import {
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
 import { anApi } from '../testing/fake-api';
-import { IDS, aSession } from '../testing/fixtures';
+import { IDS, aSession, NO_PROFILE } from '../testing/fixtures';
 import { fakeSchedule, memoryStorage, type MemoryStorage } from '../testing/fakes';
 import type { Api } from '../data/api';
 import type { Clock } from './clock';
@@ -940,6 +940,17 @@ describe('the frames', () => {
     w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
   });
+
+  test('and its members, whose profiles it may be saying changed — that workspace’s only (D-131)', () => {
+    const w = world();
+    w.client.setQueryData(keys.members(WS), []);
+    w.client.setQueryData(keys.members(IDS.browse), []);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.members(IDS.browse))?.isInvalidated).toBe(false);
+  });
 });
 
 describe('Deep Work changed in another tab (#526)', () => {
@@ -1088,7 +1099,11 @@ describe('is the session still there', () => {
 
   type Me = Api['me'];
   const answers: Me = () =>
-    Promise.resolve({ user: { ...ME, email: 'a@example.test' }, memberships: [] });
+    Promise.resolve({
+      user: { ...ME, email: 'a@example.test' },
+      profile: NO_PROFILE,
+      memberships: [],
+    });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
   const broken: Me = () => Promise.reject(new Error('boom'));
