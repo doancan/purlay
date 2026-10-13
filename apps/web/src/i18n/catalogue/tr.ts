@@ -243,6 +243,22 @@ export const tr = {
   'header.questions': 'Açık sorular',
   'header.noTopic': 'Henüz konu yok',
 
+  // ── Kanal ayrıntıları ───────────────────────────────────────────────────
+  'details.title': '#{name} ayrıntıları',
+  'details.description': 'Adı ve konusu, içinde kimlerin olduğu ve sana neyin haber verildiği.',
+  'details.name': 'Ad',
+  'details.topic': 'Konu',
+  'details.topicInvalid': 'Konuyu kontrol karakterleri olmadan düz metin olarak yaz.',
+  'details.save': 'Kaydet',
+  'details.saved': 'Kaydedildi.',
+  'details.saveFailed': 'Değişiklik kaydedilmedi.',
+  'details.onlyMembers': 'Adını ya da konusunu değiştirmek için kanala katıl.',
+  'details.members': 'Üyeler ({number})',
+  'details.membersFailed': 'Bu kanalda kimlerin olduğu yüklenemedi.',
+  'details.nobody': 'Bu kanalda kimse yok. Herkes katılabilir.',
+  'details.you': 'sen',
+  'details.notifications': 'Bildirimler',
+
   // ── Mesajlar ────────────────────────────────────────────────────────────
   'message.react': 'Tepki ver',
   'message.reacted': 'Tepki verildi',

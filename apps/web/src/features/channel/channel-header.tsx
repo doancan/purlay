@@ -21,6 +21,7 @@ import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { IconButton } from '../../ui/icon-button';
 import { AddPeopleDialog } from './add-people';
+import { ChannelDetailsDialog } from './channel-details';
 import { NotificationLevelMenu } from './notification-level-menu';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
@@ -62,6 +63,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   // A member brings people in (D-104); a direct message is between its two people.
   const canAdd = !direct && channel.state !== null;
   const [adding, setAdding] = useState(false);
+  const [details, setDetails] = useState(false);
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
@@ -76,16 +78,39 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             />
           </HeaderTile>
         )}
-        <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
-        {!direct && (
+        {direct ? (
+          <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
+        ) : (
           <>
+            {/* The name opens the channel's details (D-123); the heading's name stays the channel's. */}
+            <h1 className="min-w-0 shrink-0 truncate text-title text-ink">
+              <button
+                type="button"
+                className="max-w-full truncate rounded-sm hover:text-accent-text"
+                onClick={() => {
+                  setDetails(true);
+                }}
+              >
+                {title}
+              </button>
+            </h1>
             <span
               aria-hidden="true"
               className="h-4 shrink-0 border-l-hairline border-border-subtle max-narrow:hidden"
             />
-            <span className="truncate text-label text-ink-muted max-narrow:hidden">
+            {/* The topic is part of the same target for a pointer; a key reaches it by the name. */}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="truncate text-left text-label text-ink-muted hover:text-ink max-narrow:hidden"
+              onClick={() => {
+                setDetails(true);
+              }}
+            >
               {channel.topic ?? t('header.noTopic')}
-            </span>
+            </button>
+            <ChannelDetailsDialog channel={channel} open={details} onOpenChange={setDetails} />
           </>
         )}
       </div>

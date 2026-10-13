@@ -61,7 +61,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   would be a lie.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
   carries the two views as a segmented control: the feed, and **open questions** with its live count,
-  which is the product's argument and so is always one click away.
+  which is the product's argument and so is always one click away. The channel's **name opens its
+  details** (and so does the topic, for a pointer) — see *Channel details* below.
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
 - **Member list** — collapsed by default. Presence is decoration, not information.
@@ -99,7 +100,13 @@ in the row first, because it costs the person every channel. The last owner is s
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
 Admin* — and when. An action newer than the client is said by its name, never dropped.
 
-**A channel's name is typed as it is said** (D-123). In **New channel**, what is typed is turned
+**Channel details** (D-123). Clicking a channel's name in its header opens a dialog, drawn after the
+Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
+with **Save** (somebody who has not joined reads them and is told to join); the **members** with a count
+and **Add people** (the same dialog as the header's); and the **notification level** (the header's
+menu). A direct message has no details: its title is not a button.
+
+**A channel's name is typed as it is said** (D-123). In **New channel** and in the details, what is typed is turned
 into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes
 `istanbul`: lowercase, accents and Turkish letters folded to their plain letter, anything else one
 hyphen (`features/channel/channel-name.ts`). Somebody looking at a channel that is archived, or that
@@ -339,6 +346,7 @@ missing specified behaviour and does not merge.
 | Sign-in | n/a — always the one button | n/a — nothing is fetched before the click | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
+| Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 
 **A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
 **Go home**; the rail and the sidebar stay, and going anywhere else draws afresh. A failure outside a

@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Web — 2026-10-13: a channel's details, from its name (D-123)
+
+- The channel's name in its header opens its details: the name and topic with Save, the members with
+  Add people, and the notification level. A rename reaches every open screen without a reload.
+
 ### Web — 2026-10-13: a channel's name typed as it is said (D-123)
 
 - New channel turns what is typed into the name's form as it is typed — *Genel Sohbet* becomes
