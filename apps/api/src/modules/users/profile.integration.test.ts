@@ -71,6 +71,24 @@ describe('integration: a profile', () => {
     });
   });
 
+  test('a time zone is stored as the runtime spells it, and an offset is not a zone', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = idOf(room, 'alice');
+      expect(
+        (await updateProfile(db, alice, { timeZone: 'europe/istanbul' })).profile.timeZone,
+      ).toBe('Europe/Istanbul');
+      for (const offset of ['+05', '-0300']) {
+        await sql`savepoint attempt`.execute(db);
+        const body = (await refusal(updateProfile(db, alice, { timeZone: offset }))) as {
+          code?: string;
+        };
+        await sql`rollback to savepoint attempt`.execute(db);
+        expect({ offset, code: body.code }).toEqual({ offset, code: 'VALIDATION_FAILED' });
+      }
+    });
+  });
+
   test('tells everyone in each workspace the person is in; nothing changed, nobody', async () => {
     await withRollback(async (db) => {
       const one = await aRoom(db, ['alice', 'bob']);
@@ -79,6 +97,29 @@ describe('integration: a profile', () => {
       await db
         .insertInto('workspace_members')
         .values({ workspace_id: two.workspaceId, user_id: alice, role: 'member' })
+        .execute();
+
+      // Nobody outside: a workspace alice is not in, one she was in and left, and one archived.
+      await aRoom(db, ['dan']);
+      const left = await aRoom(db, ['erin']);
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: left.workspaceId, user_id: alice, role: 'member' })
+        .execute();
+      await db
+        .deleteFrom('workspace_members')
+        .where('workspace_id', '=', left.workspaceId)
+        .where('user_id', '=', alice)
+        .execute();
+      const archived = await aRoom(db, ['frank']);
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: archived.workspaceId, user_id: alice, role: 'member' })
+        .execute();
+      await db
+        .updateTable('workspaces')
+        .set({ deleted_at: new Date() })
+        .where('id', '=', archived.workspaceId)
         .execute();
 
       const change = await updateProfile(db, alice, { status: 'Heads down' });

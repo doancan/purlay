@@ -40,6 +40,8 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'endpoint',
   'p256dh',
   'auth',
+  // A person's status line: free words, as a message's are (D-131).
+  'status_text',
 ]);
 
 const REDACTED = '[redacted]';

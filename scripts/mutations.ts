@@ -171,6 +171,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
   },
   {
+    id: 'profile-told-in-archived-workspaces',
+    why: 'a profile change reaches the people of a workspace that is gone',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: "    .where('workspaces.deleted_at', 'is', null)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
+  },
+  {
     id: 'profile-told-of-nothing',
     why: 'a profile saved unchanged tells everyone in every workspace the person is in',
     file: 'apps/api/src/modules/users/profile.ts',

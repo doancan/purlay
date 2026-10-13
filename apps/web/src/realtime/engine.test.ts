@@ -941,6 +941,20 @@ describe('the frames', () => {
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
   });
 
+  test('back from a gap, every workspace’s members are read again: a profile may have changed (D-131)', () => {
+    const w = world();
+    w.client.setQueryData(keys.members(WS), []);
+    w.engine.start();
+    w.open();
+    expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(false);
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    for (let waited = 0; w.sockets.length < 2 && waited < 10_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    w.open();
+    expect(w.client.getQueryState(keys.members(WS))?.isInvalidated).toBe(true);
+  });
+
   test('and its members, whose profiles it may be saying changed — that workspace’s only (D-131)', () => {
     const w = world();
     w.client.setQueryData(keys.members(WS), []);

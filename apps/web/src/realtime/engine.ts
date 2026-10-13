@@ -427,6 +427,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
     // the person's own topic, which a socket that was down never hears (D-124).
     void client.invalidateQueries({ queryKey: keys.me });
+    // And a profile changed while away (D-131), which no frame will now say.
+    void client.invalidateQueries({ queryKey: families.members });
   };
 
   /** Waits on the injected schedule; false when the page stopped meanwhile. */

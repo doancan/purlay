@@ -5,8 +5,8 @@
  *   where they read the person — its members, which is where a conversation and a picker find them.
  * - **Words are trimmed**, and words that trim to nothing clear the field: a title of spaces is no
  *   title. The contract has already refused what no name may hold (`format: 'name'`).
- * - **A time zone is one the runtime knows** — the same list every browser formats with — or it is
- *   refused, on `timeZone`.
+ * - **A time zone is one the runtime knows**, stored as the runtime spells it, or it is refused, on
+ *   `timeZone`.
  * - **A change says who to tell**: everyone in every workspace the person is in, so each reads the
  *   members again. Nothing changed, nobody is told.
  */
@@ -29,15 +29,20 @@ export const asProfile = (row: ProfileRow): Profile => ({
   status: row.status_text,
 });
 
-/** Whether the runtime can format a time in this zone: the test every browser applies too. */
-const knownZone = (zone: string): boolean => {
+/**
+ * The zone's own name, as the runtime spells it — `europe/istanbul` is `Europe/Istanbul` — or null
+ * for a zone it cannot format in. Stored spelled so, every reader gets the one name, and an offset
+ * typed as a zone (`+05`) is not a zone.
+ */
+const canonicalZone = (zone: string): string | null => {
+  let resolved: string;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
-    return true;
+    resolved = new Intl.DateTimeFormat('en-US', { timeZone: zone }).resolvedOptions().timeZone;
   } catch (error) {
-    if (error instanceof RangeError) return false;
+    if (error instanceof RangeError) return null;
     throw error;
   }
+  return resolved.includes('/') || resolved === 'UTC' ? resolved : null;
 };
 
 /** A field's words as stored: trimmed, and nothing for words that trim to nothing. */
@@ -59,7 +64,8 @@ export const updateProfile = async (
   userId: string,
   input: UpdateProfileRequest,
 ): Promise<ProfileChange> => {
-  if (input.timeZone != null && !knownZone(input.timeZone)) {
+  const zone = input.timeZone == null ? input.timeZone : canonicalZone(input.timeZone);
+  if (zone === null && input.timeZone != null) {
     throw new AppError({
       code: 'VALIDATION_FAILED',
       message: 'That time zone is not one we know.',
@@ -74,7 +80,7 @@ export const updateProfile = async (
     .executeTakeFirstOrThrow();
   const after: ProfileRow = {
     title: input.title === undefined ? before.title : stored(input.title),
-    time_zone: input.timeZone === undefined ? before.time_zone : input.timeZone,
+    time_zone: zone === undefined ? before.time_zone : zone,
     status_text: input.status === undefined ? before.status_text : stored(input.status),
   };
   if (
