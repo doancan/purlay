@@ -399,7 +399,7 @@ describe('a channel’s files, kept current', () => {
     const { view, asked } = await counting();
     await arrive(view, {
       event: 'MESSAGE_CREATED',
-      data: aMessage(6, { channelId: IDS.general, attachments: [aFile(6).attachment] }),
+      data: aMessage(6, { channelId: IDS.deploys, attachments: [aFile(6).attachment] }),
       ts: 1,
     });
     expect(asked()).toBe(1);
