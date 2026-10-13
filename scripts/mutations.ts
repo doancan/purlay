@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'erased-person-shown-in-a-group',
+    why: 'an erased account’s name and picture go on being handed out to every group it was in',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: '  person.erased\n',
+    replace: '  false\n',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
+    id: 'group-filled-in-again',
+    why: 'somebody removed and let back in returns to a group, and reads what was written while out',
+    file: 'apps/api/src/modules/channels/direct-messages.ts',
+    find: '  if (inserted !== undefined || people.length <= 2) {\n',
+    replace: '  if (true) {\n',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
     id: 'group-shown-as-one-person',
     why: 'a group conversation reads as a direct message with its first person, and is answered as one',
     file: 'apps/api/src/modules/channels/channels.ts',

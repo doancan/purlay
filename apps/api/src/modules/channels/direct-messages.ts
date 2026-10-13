@@ -9,12 +9,13 @@
  * loser reads the winner's row, which is visible by then because the conflict waits for the
  * winner to commit.
  *
- * A note to self is a direct message whose two ids are the same, with one member. Its people
+ * A note to self is a direct message whose two ids are the same, with one member. How many people
+ * a conversation holds is bounded by the request's contract and by `dm_key_form` (D-127). Its people
  * never change: there is no adding to a conversation and no leaving one — more people is another
  * conversation (D-127).
  */
 import type { Transaction } from '@purlay/db';
-import { CONVERSATION_PEOPLE_MAX, type Channel } from '@purlay/types';
+import type { Channel } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
@@ -60,13 +61,6 @@ export const openConversation = async (
     });
   }
   const people = self ? [context.userId] : [context.userId, ...new Set(others)];
-  if (people.length > CONVERSATION_PEOPLE_MAX) {
-    throw new AppError({
-      code: 'VALIDATION_FAILED',
-      message: 'That is more people than a conversation holds; a channel holds them.',
-      details: { fields: { userIds: `at most ${String(CONVERSATION_PEOPLE_MAX - 1)} people` } },
-    });
-  }
   await requireWorkspacePeople(executor, context, others);
 
   const dmKey = self ? `${context.userId}:${context.userId}` : conversationKey(people);
@@ -96,16 +90,33 @@ export const openConversation = async (
         .executeTakeFirstOrThrow()
     ).id;
 
-  // Everybody is a member whether the conversation is new or not: a membership that is already
-  // there is left alone, and one that is somehow missing is restored, so a direct message can
-  // never exist that one of its people cannot open.
-  await executor
-    .insertInto('channel_members')
-    .values(
-      people.map((userId) => ({ channel_id: channelId, user_id: userId, joined_at: clock.now() })),
-    )
-    .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
-    .execute();
+  if (inserted !== undefined || people.length <= 2) {
+    // Everybody is a member of a new conversation. Of two people, a membership that is somehow
+    // missing is restored, so a direct message can never exist that one of its people cannot open.
+    await executor
+      .insertInto('channel_members')
+      .values(
+        people.map((userId) => ({
+          channel_id: channelId,
+          user_id: userId,
+          joined_at: clock.now(),
+        })),
+      )
+      .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
+      .execute();
+  } else {
+    // A group is never filled in again: somebody removed from the workspace and let back in does
+    // not return to read what its people wrote meanwhile (D-127 §3). The caller must still be in it.
+    const member = await executor
+      .selectFrom('channel_members')
+      .select('user_id')
+      .where('channel_id', '=', channelId)
+      .where('user_id', '=', context.userId)
+      .executeTakeFirst();
+    if (member === undefined) {
+      throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
+    }
+  }
 
   const channel = await channelFor(executor, context.userId, channelId);
   // Read once each, in turn, and only when it is new: at most nine, the same transaction.

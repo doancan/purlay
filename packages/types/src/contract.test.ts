@@ -73,6 +73,7 @@ describe('models', () => {
       state: null,
       notificationLevel: null,
       peer: user,
+      peers: [user],
     };
     expect(Value.Check(Channel, dm)).toBe(true);
     expect(Value.Check(Channel, { ...dm, type: 'nonsense' })).toBe(false);
@@ -501,6 +502,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
           state,
           notificationLevel: 'mentions',
           peer: user,
+          peers: [user],
         },
         ts: 1,
       },

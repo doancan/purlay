@@ -5578,7 +5578,10 @@ two people, and D-123 §4 gave it no rename, archive or leave.
    message): more people is another conversation, started from this one's people, and the history
    stays where it was written. *Why not leave:* the set is the identity, so anybody in it reopening
    the set would bring a leaver back — silently, and able to read what was said after they left.
-   Closing a conversation from one's own sidebar is a later choice, if the team asks for it.
+   Closing a conversation from one's own sidebar is a later choice, if the team asks for it. For
+   the same reason a group is never filled in again: somebody removed from the workspace and let
+   back in (D-111) is not returned to it by anybody reopening the set — only a conversation of two
+   restores a missing membership, as before — and opening a group one is not in is `404`.
 4. **Every message tells every other person in it**, as `direct_message`, push included (D-126):
    what is written in a conversation is written to its people. Weighed against D-12's quiet: a
    person mutes one conversation with notification level `none`, as for any channel.

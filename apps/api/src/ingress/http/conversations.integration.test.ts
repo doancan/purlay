@@ -8,6 +8,8 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { Value } from '@sinclair/typebox/value';
 import { Channel, CONVERSATION_PEOPLE_MAX, messageId } from '@purlay/types';
 import { createApp } from './app';
+import { openConversationWith } from './channels';
+import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
@@ -161,7 +163,9 @@ describe('integration: opening a group conversation', () => {
     await withRollback(async (db) => {
       const { workspaceId, people } = await aWorkspace(db, 3);
       const [ann, ben, cat] = people as [SignedInUser, SignedInUser, SignedInUser];
-      const stranger = await aSignedInUser(db, clock, 'gc-stranger');
+      // A person of another workspace, not merely of none.
+      const elsewhere = await aWorkspace(db, 1);
+      const [stranger] = elsewhere.people as [SignedInUser];
       const outside = await open(db, workspaceId, ann, [ben, stranger]);
       expect(outside.status).toBe(404);
       expect(await outside.json()).toMatchObject({ error: { code: 'USER_NOT_FOUND' } });
@@ -215,6 +219,80 @@ describe('integration: a group conversation is its people’s', () => {
           state: { unreadCount: 1, unreadMentionCount: 1 },
         });
       }
+    });
+  });
+});
+
+describe('integration: a group’s people stay its people', () => {
+  test('somebody removed from the workspace and let back in does not return to it', async () => {
+    await withRollback(async (db) => {
+      const { workspaceId, people } = await aWorkspace(db, 3);
+      const [ann, ben, cat] = people as [SignedInUser, SignedInUser, SignedInUser];
+      const group = (await (await open(db, workspaceId, ann, [ben, cat])).json()) as Channel;
+      // Removed (D-111): out of the workspace and every channel in it; then invited back.
+      await db.deleteFrom('channel_members').where('user_id', '=', cat.userId).execute();
+      await db
+        .deleteFrom('workspace_members')
+        .where('workspace_id', '=', workspaceId)
+        .where('user_id', '=', cat.userId)
+        .execute();
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: cat.userId, role: 'member', joined_at: NOW })
+        .execute();
+      expect((await open(db, workspaceId, ann, [ben, cat])).status).toBe(200);
+      expect((await open(db, workspaceId, cat, [ann, ben])).status).toBe(404);
+      const members = await db
+        .selectFrom('channel_members')
+        .select('user_id')
+        .where('channel_id', '=', group.id)
+        .execute();
+      expect(members.map((member) => member.user_id)).not.toContain(cat.userId);
+      expect((await call(db, 'GET', `/api/channels/${group.id}/messages`, cat)).status).toBe(404);
+    });
+  });
+
+  test('an erased person in it is named as such, and nothing their account held is handed out', async () => {
+    await withRollback(async (db) => {
+      const { workspaceId, people } = await aWorkspace(db, 3);
+      const [ann, ben, cat] = people as [SignedInUser, SignedInUser, SignedInUser];
+      const group = (await (await open(db, workspaceId, ann, [ben, cat])).json()) as Channel;
+      await db
+        .updateTable('users')
+        .set({ deleted_at: NOW, avatar_url: 'https://avatars.example/cat.png' })
+        .where('id', '=', cat.userId)
+        .execute();
+      const seen = (await channelsOf(db, workspaceId, ann)).find((c) => c.id === group.id);
+      expect(seen?.peers.find((peer) => peer.id === cat.userId)).toEqual({
+        id: cat.userId,
+        username: 'deleted',
+        displayName: 'Deleted user',
+        avatarUrl: null,
+      });
+    });
+  });
+
+  test('its other people are told it exists, once, when it is made — nobody else', async () => {
+    await withRollback(async (db) => {
+      const { workspaceId, people } = await aWorkspace(db, 4);
+      const [ann, ben, cat] = people as [SignedInUser, SignedInUser, SignedInUser];
+      const topics: string[] = [];
+      const bus: EventBus = {
+        publish: (topic, frame): Promise<void> => {
+          if (frame.event === 'CHANNEL_ADDED') topics.push(topic);
+          return Promise.resolve();
+        },
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      };
+      const request = (): Request =>
+        new Request('https://purlay.test/', { headers: { cookie: ann.cookie } });
+      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const body = { userIds: [cat.userId, ben.userId] };
+      await openConversationWith(dependencies, request(), workspaceId, body);
+      await openConversationWith(dependencies, request(), workspaceId, body);
+      expect(topics.sort()).toEqual([userTopic(ben.userId), userTopic(cat.userId)].sort());
     });
   });
 });

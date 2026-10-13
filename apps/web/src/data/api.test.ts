@@ -22,6 +22,7 @@ const channel = {
   state,
   notificationLevel: 'mentions',
   peer: null,
+  peers: [],
 };
 const message = {
   id: ID,
