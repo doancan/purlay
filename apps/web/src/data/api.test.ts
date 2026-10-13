@@ -153,6 +153,16 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('a channel’s files, a page at a time (D-129)', async () => {
+    const list = harness({ data: [], nextCursor: null });
+    await list.api.files(ID);
+    await list.api.files(ID, 'f1');
+    expect(list.calls.map((call) => [call.method, call.url])).toEqual([
+      ['GET', `/api/channels/${ID}/files`],
+      ['GET', `/api/channels/${ID}/files?before=f1`],
+    ]);
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);

@@ -47,7 +47,8 @@ interface ThreadsApi {
   /** Opens a root's thread in the panel and moves focus into it, or keeps it where it is. */
   readonly open: (rootId: string, focus?: PanelFocus | 'none') => void;
   /** Closes the panel and puts focus back on the root's row in the feed. */
-  readonly close: () => void;
+  /** Closes the panel; focus goes back to the root's row unless what closed it takes focus itself. */
+  readonly close: (options?: { readonly restoreFocus?: boolean }) => void;
   /** Resolved from here: folds the open thread away with the product's one animation, then closes it. */
   readonly settle: (rootId: string) => Promise<void>;
   /** The panel's body, which `settle` folds. */
@@ -119,11 +120,11 @@ export const ThreadsProvider = ({
     setState({ openId: rootId, focusRequest: focus === 'none' ? null : focus });
   }, []);
 
-  const close = useCallback((): void => {
+  const close = useCallback((options?: { readonly restoreFocus?: boolean }): void => {
     const was = latest.current;
     if (was === null) return;
     latest.current = null;
-    returnTo.current = was;
+    returnTo.current = options?.restoreFocus === false ? null : was;
     setState({ openId: null, focusRequest: null });
   }, []);
 

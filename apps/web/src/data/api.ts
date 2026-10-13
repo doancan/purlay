@@ -20,6 +20,7 @@ import {
   MessagePage,
   CreatedInvitation,
   DeepWorkResponse,
+  FilePage,
   GitHubIntegration,
   InvitationPage,
   InvitationPreview,
@@ -139,6 +140,8 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<SavedPage>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
+  /** A channel's files, newest message first; older than `before`, a file's id (D-129). */
+  readonly files: (channelId: string, before?: string, signal?: AbortSignal) => Promise<FilePage>;
 
   readonly messages: (
     channelId: string,
@@ -355,6 +358,13 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/saved/ids`,
         SavedIds,
         options({}, signal),
+      ),
+    files: (channelId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/files`,
+        FilePage,
+        options(before === undefined ? {} : { query: { before } }, signal),
       ),
     saved: (workspaceId, state, before, signal) =>
       http.request(

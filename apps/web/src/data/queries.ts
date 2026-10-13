@@ -20,6 +20,7 @@ import type {
   MeResponse,
   Message,
   MessagePage,
+  FilePage,
   NotificationPage,
   WorkspaceMember,
   ChannelMember,
@@ -101,6 +102,19 @@ export const useThread = (messageId: string, enabled = true): UseInfiniteQueryRe
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
     ...KEEP_MESSAGES,
+  });
+};
+
+/** A channel's files, newest message first, a page at a time (D-129). */
+export const useChannelFiles = (
+  channelId: string,
+): UseInfiniteQueryResult<InfiniteData<FilePage>> => {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: keys.files(channelId),
+    queryFn: ({ pageParam, signal }) => api.files(channelId, pageParam, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 };
 

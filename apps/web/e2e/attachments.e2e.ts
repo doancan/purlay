@@ -56,4 +56,36 @@ test.describe('an attachment', () => {
       .poll(async () => await image.evaluate((element: HTMLImageElement) => element.naturalWidth))
       .toBeGreaterThan(0);
   });
+
+  test('shared by one person, it appears in the other’s Files panel as it arrives (D-129)', async ({
+    page,
+    signIn,
+    room,
+    asPerson,
+  }) => {
+    const made = await room({ messages: [{ by: 'alice', text: 'the files are coming' }] });
+    await signIn();
+    await page.goto(made.path);
+    await page.getByRole('button', { name: 'Files in this channel' }).click();
+    const panel = page.getByRole('complementary', { name: /^Files/ });
+    await expect(panel.getByRole('heading', { name: 'No files yet' })).toBeVisible();
+
+    const alice = await asPerson('alice');
+    await alice.goto(made.path);
+    await alice.locator('input[type="file"]').setInputFiles({
+      name: 'diagram.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    const sending = alice.getByRole('list', { name: 'Files to send' });
+    await expect(sending.getByText('diagram.png')).toBeVisible();
+    await expect(sending.getByText(/Uploading/)).toHaveCount(0);
+    const composer = alice.getByRole('textbox', { name: `Message ${made.name}` });
+    await composer.fill('the diagram');
+    await composer.press('Enter');
+
+    // Told by the socket, read again: no reload on this side.
+    await expect(panel.getByRole('link', { name: 'Open diagram.png' })).toBeVisible();
+    await expect(panel.getByText('alice', { exact: false }).first()).toBeVisible();
+  });
 });
