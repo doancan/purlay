@@ -89,6 +89,13 @@ test.describe('a conversation', () => {
     await expect(panel).toBeVisible();
     // The panel's replies drawn, not its skeleton (D-122).
     await expect(panel.getByText('and a follow-up')).toBeVisible();
+    // A linked thread takes focus in its heading. Whether the browser draws a ring for focus moved
+    // by a script depends on what it saw before, so the picture is taken with focus let go: rings
+    // are focus.e2e.ts's to check, every one of them.
+    await expect(panel.getByRole('heading', { level: 2 })).toBeFocused();
+    await page.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+    });
     await snap(page, 'threads.png');
   });
 
