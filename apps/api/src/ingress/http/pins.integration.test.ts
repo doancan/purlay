@@ -4,13 +4,15 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
-import { messageId, type ServerFrame } from '@purlay/types';
+import { messageId, type PinList, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { issueSession } from '../../modules/auth/sessions';
 import { aRoom } from '../../testing/rooms';
+import { testDependencies } from '../../testing/doubles';
+import { createApp } from './app';
 import { deletePin, putPin } from './pins';
 
 afterAll(async () => {
@@ -75,6 +77,44 @@ describe('integration: who is told of a pin', () => {
         [channelTopic(room.channelId), frame],
         [channelTopic(room.channelId), frame],
       ]);
+    });
+  });
+});
+
+describe('integration: the routes', () => {
+  test('PUT and DELETE answer 204 with nothing in them, and GET lists what is pinned', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const message = messageId(NOW);
+      await db
+        .insertInto('messages')
+        .values({
+          id: message,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          sender_id: room.members['alice']?.userId ?? '',
+          content: 'pin this',
+        })
+        .execute();
+      const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const app = createApp(testDependencies({ database: db, clock }));
+      const call = async (method: string, path: string): Promise<Response> =>
+        await app.handle(
+          new Request(`https://purlay.test${path}`, {
+            method,
+            headers: { cookie: `${SESSION_COOKIE}=${token}` },
+          }),
+        );
+      const pins = async (): Promise<PinList> =>
+        (await (await call('GET', `/api/channels/${room.channelId}/pins`)).json()) as PinList;
+
+      const pinned = await call('PUT', `/api/messages/${message}/pin`);
+      expect([pinned.status, await pinned.text()]).toEqual([204, '']);
+      expect((await pins()).map((pin) => pin.message.id)).toEqual([message]);
+
+      const unpinned = await call('DELETE', `/api/messages/${message}/pin`);
+      expect([unpinned.status, await unpinned.text()]).toEqual([204, '']);
+      expect(await pins()).toEqual([]);
     });
   });
 });

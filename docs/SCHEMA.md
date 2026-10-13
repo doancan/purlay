@@ -857,8 +857,8 @@ CREATE INDEX idx_pinned_messages_pinned_by ON pinned_messages (pinned_by);
 ```
 
 At most `PINS_MAX` a channel, counted over pins of messages not deleted, under the channel's row
-locked. A soft delete keeps the row (hidden, and still let go by an unpin); a retention purge
-cascades it.
+locked. Deleting the message deletes its pin in the same transaction; a pin left by a delete that
+raced it is hidden, not counted, and still let go by an unpin; a retention purge cascades it.
 
 ## 8. GitHub Integration
 

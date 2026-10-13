@@ -109,7 +109,7 @@ describe('integration: pinning', () => {
     });
   });
 
-  test('a deleted message cannot be pinned, its pin is not listed, and it can still be let go', async () => {
+  test('a message deleted as it was pinned: it cannot be pinned again, its pin is not listed, and it can be let go', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const kept = await said(db, room);
@@ -164,6 +164,47 @@ describe('integration: pinning', () => {
       const [pin] = await channelPins(db, contextOf(room, 'alice'));
       expect(pin?.message.id).toBe(message);
       expect(pin?.pinnedBy).toBeNull();
+    });
+  });
+
+  test('in an archived channel there is nothing to pin or let go', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const message = await said(db, room);
+      await pinMessage(db, at(0), idOf(room, 'alice'), message);
+      await db
+        .updateTable('channels')
+        .set({ deleted_at: NOW })
+        .where('id', '=', room.channelId)
+        .execute();
+      expect(await attempt(db, () => unpinMessage(db, idOf(room, 'alice'), message))).toBe(
+        'MESSAGE_NOT_FOUND',
+      );
+      expect(await attempt(db, () => pinMessage(db, at(1), idOf(room, 'alice'), message))).toBe(
+        'MESSAGE_NOT_FOUND',
+      );
+    });
+  });
+
+  test('a conversation has pins, and a reply can be one, with its thread’s root', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { type: 'direct_message' });
+      const root = await said(db, room);
+      const reply = anId();
+      await db
+        .insertInto('messages')
+        .values({
+          id: reply,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          sender_id: idOf(room, 'bob'),
+          content: 'the answer',
+          parent_id: root,
+        })
+        .execute();
+      await pinMessage(db, at(0), idOf(room, 'bob'), reply);
+      const [pin] = await channelPins(db, contextOf(room, 'alice'));
+      expect([pin?.message.id, pin?.message.parentId]).toEqual([reply, root]);
     });
   });
 

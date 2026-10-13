@@ -39,4 +39,5 @@ export const families = {
   thread: ['thread'] as const,
   unresolved: ['unresolved'] as const,
   notifications: ['notifications'] as const,
+  pins: ['pins'] as const,
 } as const;

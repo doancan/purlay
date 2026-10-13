@@ -66,6 +66,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/pins/pins.integration.test.ts'],
   },
   {
+    id: 'pins-kept-for-deleted-messages',
+    why: 'a deleted message keeps its pin, and the rows grow with every deletion',
+    file: 'apps/api/src/modules/messages/delete.ts',
+    find: "  await executor.deleteFrom('pinned_messages').where('message_id', '=', messageId).execute();\n",
+    replace: '',
+    tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
+  },
+  {
     id: 'pins-bound-one-past',
     why: 'a channel holds one pin more than the bound',
     file: 'apps/api/src/modules/pins/pins.ts',

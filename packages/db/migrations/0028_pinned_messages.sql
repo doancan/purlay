@@ -7,8 +7,8 @@
 --   * The message is in this channel, and the channel in this workspace (I-1, I-4): the two
 --     composite keys `mentions` has, so a pin cannot point across a tenant.
 --   * `pinned_by` outlives its person as NULL: the pin is the channel's, not theirs.
---   * Cascades with the message row (a retention purge), the channel and the workspace. A soft
---     delete keeps it and the list hides it; unpinning a deleted message still lets it go.
+--   * Cascades with the message row (a retention purge), the channel and the workspace. Deleting
+--     the message deletes its pin too (`messages/delete.ts`).
 --
 -- A new table with no rows: one transaction, as 0026.
 

@@ -9,12 +9,15 @@
  *   row locked: two pins racing at the bound cannot both be the last.
  * - **A change says whether it was one.** Pinning what is pinned, or letting go of what is not,
  *   changes nothing and tells nobody; the caller's answer is the same.
- * - **What the list shows**: messages not deleted, newest pin first, each with who pinned it.
+ * - **What the list shows**: messages not deleted, newest pin first, each with who pinned it. A
+ *   message deleted takes its pin with it (`messages/delete.ts`); one deleted as it was being pinned
+ *   leaves a pin nobody sees, which neither the list nor the bound counts, and an unpin lets go.
+ * - **A conversation has pins too, and a reply can be one**: the list carries its thread's root.
  */
 import type { Executor, Transaction } from '@purlay/db';
 import { PINS_MAX, type PinList } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { channelNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
+import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
 
@@ -27,19 +30,11 @@ export interface PinChange {
 }
 
 /**
- * The channel's row, locked for the change, and the caller a member of it. Archived between the
- * guard's read and this lock is gone, as the guard would now say.
+ * The caller a member of the channel, then its row locked for the change. Membership first: a
+ * visible non-member is refused without holding the row a send writes. Archived between the guard's
+ * read and the lock, the message is gone with it, as the guard would now say.
  */
 const lockForMember = async (executor: Transaction, context: ChannelContext): Promise<void> => {
-  const row = await executor
-    .selectFrom('channels')
-    .select('id')
-    .where('id', '=', context.channelId)
-    .where('deleted_at', 'is', null)
-    // NO KEY UPDATE: the lock a send's own write takes, so a message pointing here is not made to wait.
-    .forNoKeyUpdate()
-    .executeTakeFirst();
-  if (row === undefined) throw channelNotFound();
   const member = await executor
     .selectFrom('channel_members')
     .select('user_id')
@@ -49,6 +44,15 @@ const lockForMember = async (executor: Transaction, context: ChannelContext): Pr
   if (member === undefined) {
     throw new AppError({ code: 'FORBIDDEN', message: 'Join the channel to pin in it.' });
   }
+  const row = await executor
+    .selectFrom('channels')
+    .select('id')
+    .where('id', '=', context.channelId)
+    .where('deleted_at', 'is', null)
+    // NO KEY UPDATE: the lock a send's own write takes, so a message pointing here is not made to wait.
+    .forNoKeyUpdate()
+    .executeTakeFirst();
+  if (row === undefined) throw messageNotFound();
 };
 
 /** Pins the message for everyone in its channel; pinned already, it is left as it was. */

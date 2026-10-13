@@ -5688,8 +5688,13 @@ messages a team keeps at hand — the runbook, the decision, the link everyone a
    channel's row locked (`NO KEY UPDATE`, the lock a send's own write takes): two pins at the bound
    cannot both be the last. Past it, `409 PINS_LIMIT`; pinning what is pinned is never refused. The
    list is bounded by the same number and not paged.
-4. **A deleted message's pin is hidden, not removed** — a tombstone hides what it held (D-103) — and
-   an unpin still lets it go; a retention purge cascades it.
+4. **A deleted message takes its pin with it**, in the same transaction as its mentions (D-103): a
+   tombstone kept at hand is nothing to keep, and kept, the rows would grow with every deletion. One
+   deleted as it was being pinned leaves a pin that neither the list nor the bound counts, and an
+   unpin still lets it go.
+7. **A conversation has pins, and a reply can be one**: the list carries the reply's thread root, so
+   it opens where it was said. A pin's message is always whole in the list, and a client changes its
+   copy there as it changes the feed's — an edit, a reaction, a thread.
 5. **Heard as `PINS_UPDATED`** on the channel's topic, with nothing but the channel in it, only when
    something changed; a client reads the pins again, so two changes heard in either order leave the
    same list. A resubscription and a deletion read them again too.

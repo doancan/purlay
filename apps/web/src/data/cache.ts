@@ -17,6 +17,7 @@
  */
 import type { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query';
 import type {
+  PinList,
   Channel,
   ChannelState,
   Message,
@@ -119,11 +120,33 @@ export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
  * view — so a reaction or a resolution cannot be right in one place and stale in
  * another. A list that does not hold it is left alone.
  */
+/**
+ * A pinned message changed — its words, its reactions, its thread: the pins hold the whole message
+ * (D-130), so it changes there too, where it is held, without reading the list again.
+ */
+const patchPins = (
+  client: QueryClient,
+  messageId: string,
+  edit: (message: Message) => Message,
+): void => {
+  for (const [key, pins] of client.getQueriesData<PinList>({ queryKey: families.pins })) {
+    if (pins?.some((pin) => pin.message.id === messageId) !== true) continue;
+    client.setQueryData<PinList>(
+      key,
+      pins.map((pin) =>
+        pin.message.id === messageId ? { ...pin, message: edit(pin.message) } : pin,
+      ),
+    );
+    askAgainIfOnItsWay(client, key);
+  }
+};
+
 export const patchMessage = (
   client: QueryClient,
   messageId: string,
   edit: (message: Message) => Message,
 ): void => {
+  patchPins(client, messageId, edit);
   for (const [key, data] of messageLists(client)) {
     if (!hasMessage(data, messageId)) continue;
     client.setQueryData<Pages>(
@@ -230,6 +253,13 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
   if (revision.deletedAt !== null) {
     readAgain(client, keys.files(revision.channelId));
     readAgain(client, keys.pins(revision.channelId));
+  } else {
+    patchPins(client, id, (m) => ({
+      ...m,
+      content: revision.content,
+      editedAt: revision.editedAt,
+      mentions: [...revision.mentions],
+    }));
   }
   const deletedRoot = revision.deletedAt !== null && revision.parentId === null;
   for (const [key, data] of messageLists(client)) {

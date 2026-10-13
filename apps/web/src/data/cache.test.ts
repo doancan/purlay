@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { InfiniteQueryObserver, QueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { Channel, FilePage, Message, MessagePage } from '@purlay/types';
+import type { Channel, FilePage, Message, MessagePage, PinList } from '@purlay/types';
 import {
   channelAdded,
   channelsRevoked,
@@ -394,6 +394,24 @@ describe('the read position', () => {
   });
 });
 
+describe('a channel’s pins hold whole messages (D-130)', () => {
+  test('a reaction or a thread on a pinned message changes its pinned copy too', () => {
+    const client = seeded();
+    client.setQueryData(keys.pins(CH), [
+      { message: message(2), pinnedBy: null, pinnedAt: '2026-09-09T08:00:00.000Z' },
+      { message: message(1), pinnedBy: null, pinnedAt: '2026-09-09T07:00:00.000Z' },
+    ]);
+    const reaction = { emoji: '👍', count: 1, userIds: [user.id] };
+    reactionsUpdated(client, id(2), [reaction]);
+    threadUpdated(client, id(2), { ...empty, replyCount: 3 });
+    const pins = client.getQueryData<PinList>(keys.pins(CH));
+    expect(pins?.[0]?.message.reactions).toEqual([reaction]);
+    expect(pins?.[0]?.message.thread?.replyCount).toBe(3);
+    // The other pin is left as it was.
+    expect(pins?.[1]?.message).toEqual(message(1));
+  });
+});
+
 describe('a channel’s files list (D-129)', () => {
   const ATTACHMENT = {
     id: id(50),
@@ -437,11 +455,17 @@ describe('a channel’s files list (D-129)', () => {
       deletedAt: null,
       mentions: [],
     };
-    client.setQueryData(keys.pins(CH), []);
+    client.setQueryData(keys.pins(CH), [
+      { message: message(2), pinnedBy: null, pinnedAt: '2026-09-09T08:00:00.000Z' },
+    ]);
     const pinsStale = (): boolean | undefined => client.getQueryState(keys.pins(CH))?.isInvalidated;
+    const pinnedWords = (): string | undefined =>
+      client.getQueryData<PinList>(keys.pins(CH))?.[0]?.message.content;
     messageRevised(client, revision);
     expect(stale(client, CH)).toBe(false);
+    // An edit changes the pinned copy where it is held, without reading the pins again.
     expect(pinsStale()).toBe(false);
+    expect(pinnedWords()).toBe('changed');
     messageRevised(client, { ...revision, editedAt: null, deletedAt: '2026-09-09T08:00:00.000Z' });
     expect(stale(client, CH)).toBe(true);
     // A deleted message's pin leaves the pins too (D-130).
