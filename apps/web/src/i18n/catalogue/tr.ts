@@ -583,6 +583,8 @@ export const tr = {
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',
   'failure.tooLarge': 'Purlay’ın aldığından büyük.',
   'failure.refused': 'Bu reddedildi. Girdiğini kontrol edip tekrar dene.',
+  'failure.savedLimit':
+    'Bir çalışma alanında saklanabilecek kayıtlı mesaj sınırına ulaştın. Önce bazılarını tamamla ya da kaldır.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

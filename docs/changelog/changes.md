@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: saved items, the API (D-128, part of #484)
+
+- `PUT`/`DELETE /api/messages/:id/saved` save a message, move it to In progress, Archived or
+  Completed, or let it go; `GET /api/workspaces/:id/saved?state=` pages them and `…/saved/ids` names
+  them. Only what the person can read now, at most 1000 a workspace, and their own devices are told
+  `SAVED_UPDATED`. No reminder: reminders stay a non-goal (`PRD.md` §6).
+
 ### Feature — 2026-10-13: a group's details (D-127, #486)
 
 - A group's title opens its details: its people, you first, and New conversation with these

@@ -966,6 +966,19 @@ describe('Deep Work changed in another tab (#526)', () => {
     );
     expect(me()?.memberships.find((m) => m.workspace.id === WS)?.deepWorkUntil).toBeNull();
   });
+
+  test('saved messages changed elsewhere are read again, in that workspace only (D-128)', () => {
+    const w = world();
+    w.client.setQueryData([...keys.saved(WS), 'ids'], []);
+    w.client.setQueryData([...keys.saved(IDS.browse), 'ids'], []);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'SAVED_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    const stale = (workspaceId: string): boolean | undefined =>
+      w.client.getQueryState([...keys.saved(workspaceId), 'ids'])?.isInvalidated;
+    expect(stale(WS)).toBe(true);
+    expect(stale(IDS.browse)).toBe(false);
+  });
 });
 
 describe('watching channels', () => {

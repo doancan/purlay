@@ -344,6 +344,17 @@ export const DeepWorkUpdatedFrame = Type.Object({
 });
 
 /**
+ * The person's saved messages changed in a workspace (D-128): saved, moved or removed, in another
+ * tab or another device. On their own `user:` topic only; it carries no message, and a client asks
+ * again for what it shows.
+ */
+export const SavedUpdatedFrame = Type.Object({
+  event: Type.Literal('SAVED_UPDATED'),
+  data: Type.Object({ workspaceId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A channel's name or topic changed (D-123). The whole of both, so a client replaces what it holds;
  * on the channel's topic, at the channel row's version, and a client drops one older than what it
  * has applied — two renames published from different requests can arrive in either order.
@@ -406,6 +417,7 @@ export const ServerFrame = Type.Union([
   SessionEndedFrame,
   AccessRevokedFrame,
   DeepWorkUpdatedFrame,
+  SavedUpdatedFrame,
   TypingServerFrame,
   WorkspaceUpdatedFrame,
   PongFrame,

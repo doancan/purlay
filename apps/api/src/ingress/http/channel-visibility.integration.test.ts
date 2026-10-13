@@ -174,6 +174,20 @@ const aWorld = async (db: Executor): Promise<World> => {
         })),
       )
       .execute();
+    // And both saved it (D-128): what the saved lists must not show the outsider from a channel
+    // they cannot see — their own saves there included — and do show from the visible one.
+    await db
+      .insertInto('saved_messages')
+      .values(
+        [owner.id, outsider.id].map((user) => ({
+          id: Bun.randomUUIDv7(),
+          user_id: user,
+          workspace_id: workspaceId,
+          channel_id: channelId,
+          message_id: root,
+        })),
+      )
+      .execute();
     return root;
   };
 

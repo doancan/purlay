@@ -245,6 +245,15 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
   },
+  'PUT /api/messages/:messageId/saved': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    body: () => ({}),
+    visibility: MESSAGE,
+  },
+  'DELETE /api/messages/:messageId/saved': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE,
+  },
   'DELETE /api/messages/:messageId': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE_BY_AUTHOR,
@@ -376,6 +385,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason:
         'names a link and no channel; another workspace’s link under your own is `invitations.integration.test.ts`',
     },
+  },
+  'GET /api/workspaces/:workspaceId/saved': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide', query: 'state=in_progress' },
+  },
+  'GET /api/workspaces/:workspaceId/saved/ids': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'workspace-wide' },
   },
   'GET /api/notifications': {
     refusal: 'WORKSPACE_NOT_FOUND',

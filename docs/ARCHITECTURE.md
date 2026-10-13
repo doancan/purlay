@@ -221,7 +221,8 @@ What the shape is for, which the types do not say:
   version, never its reactions or thread (D-103). A rename or a new topic is `CHANNEL_UPDATED` on the
   channel's topic, at the channel's version; an archive and a leave are `ACCESS_REVOKED`, saying why
   (D-123). A change of the person's own Deep Work is `DEEP_WORK_UPDATED` on their `user:` topic, so
-  their other tabs draw it (#526). Typing is a `TYPING` frame
+  their other tabs draw it (#526); a change of their saved messages is `SAVED_UPDATED` there too, with
+  nothing but the workspace in it, and the client reads what it shows again (D-128). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. Each frame joined the union

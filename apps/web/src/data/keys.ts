@@ -24,6 +24,8 @@ export const keys = {
   audit: (workspaceId: string) => ['audit', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
   pushKey: ['push-key'] as const,
+  /** Every view of a person's saved messages in a workspace: the ids, and each state's pages. */
+  saved: (workspaceId: string) => ['saved', workspaceId] as const,
 } as const;
 
 /** The families, for the code that addresses one of them whole. */
