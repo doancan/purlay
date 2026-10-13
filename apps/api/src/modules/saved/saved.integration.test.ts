@@ -94,6 +94,21 @@ describe('integration: saving a message', () => {
     });
   });
 
+  test('two people’s saves of one message are each their own, moved and let go apart', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const first = await aMessageIn(db, room);
+      await save(db, idOf(room, 'alice'), first);
+      await save(db, idOf(room, 'bob'), first);
+      await save(db, idOf(room, 'alice'), first, 'completed');
+      expect(await listed(db, room, 'bob')).toEqual([first]);
+      expect(await listed(db, room, 'alice', 'completed')).toEqual([first]);
+      await unsaveMessage(db, idOf(room, 'alice'), first);
+      expect(await listed(db, room, 'bob')).toEqual([first]);
+      expect(await listed(db, room, 'alice', 'completed')).toEqual([]);
+    });
+  });
+
   test('let go is gone, and letting go twice is the same answer', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);

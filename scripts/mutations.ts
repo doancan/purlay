@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'saved-again-finds-anyones',
+    why: 'saving a message again moves whoever saved it first, and the caller’s own save is never made',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: "    .select('id')\n    .where('user_id', '=', userId)\n",
+    replace: "    .select('id')\n",
+    tests: ['apps/api/src/modules/saved/saved.integration.test.ts'],
+  },
+  {
+    id: 'saved-let-go-for-everybody',
+    why: 'letting a save go deletes every person’s save of that message',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: "    .deleteFrom('saved_messages')\n    .where('user_id', '=', userId)\n",
+    replace: "    .deleteFrom('saved_messages')\n",
+    tests: ['apps/api/src/modules/saved/saved.integration.test.ts'],
+  },
+  {
     id: 'saved-bound-unlocked',
     why: 'two saves at the bound at once are both taken, past the bound',
     file: 'apps/api/src/modules/saved/saved.ts',
