@@ -79,6 +79,27 @@ describe('workspace settings', () => {
     view.unmount();
   });
 
+  test('Cancel closes it and asks nothing; opened again, it starts from the name as it is', async () => {
+    let calls = 0;
+    const view = await open({
+      renameWorkspace: () => {
+        calls += 1;
+        return Promise.resolve(WORKSPACE);
+      },
+    });
+    await person().click(view.getByRole('menuitem', { name: 'Workspace settings…' }));
+    const dialog = view.getByRole('dialog', { name: 'Workspace settings' });
+    await person().type(within(dialog).getByLabelText('Name'), ' half typed');
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(calls).toBe(0);
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Workspace settings…' }));
+    const again = view.getByRole('dialog', { name: 'Workspace settings' });
+    expect(within(again).getByLabelText<HTMLInputElement>('Name').value).toBe(WORKSPACE.name);
+    view.unmount();
+  });
+
   test('a blank name is not sent; a refusal says why and keeps what was typed', async () => {
     let calls = 0;
     const view = await open({
