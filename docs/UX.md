@@ -64,6 +64,10 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
 - **Member list** — collapsed by default. Presence is decoration, not information.
+- **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
+  direct message, or the screen's name. While anything needs the person it starts with the same count
+  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). It is the only
+  signal a tab in the background has in Phase 1.
 
 **Below 900px** the rail and the sidebar become one overlay and the channel fills the window.
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
@@ -308,6 +312,11 @@ missing specified behaviour and does not merge.
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
 | Sign-in | n/a — always the one button | n/a — nothing is fetched before the click | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
+| People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
+
+**A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
+**Go home**; the rail and the sidebar stay, and going anywhere else draws afresh. A failure outside a
+screen says "Purlay stopped working" with the same two ways out. Never a blank page (D-96).
 
 **Connection loss** shows a single non-blocking bar: `Reconnecting…`. The composer stays
 enabled — messages queue and send on reconnect (`ARCHITECTURE.md` §5.4). Disabling input on a

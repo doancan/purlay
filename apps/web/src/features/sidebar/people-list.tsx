@@ -8,6 +8,10 @@
  * the list, labelled "you": a direct message with yourself is the scratchpad
  * (`PRD.md` §4.3). Each has an avatar and none has a presence dot, because there is no
  * presence — drawing a dot that is always the same colour would be a lie (`UX.md` §2).
+ *
+ * Alone in a workspace, the section says so under the person's own row (`UX.md` §8), and offers an
+ * owner or an admin the invite dialog the workspace menu opens; a member is not offered what the
+ * server would refuse them (D-115).
  */
 import { useDescribeFailure } from '../../data/failure';
 import { useState } from 'react';
@@ -17,16 +21,18 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
+import { Button } from '../../ui/button';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { ActionRow, ChannelRow } from './channel-row';
+import { InviteDialog } from './invite-dialog';
 import { people } from './ordering';
-import { SectionError, SectionLoading } from './section-state';
+import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
 export const PeopleList = (): React.JSX.Element => {
   const { t } = useI18n();
-  const { workspace } = useWorkspace();
+  const { workspace, role } = useWorkspace();
   const { user: me } = useSession();
   const members = useMembers(workspace.id);
   const channels = useChannels(workspace.id);
@@ -35,6 +41,7 @@ export const PeopleList = (): React.JSX.Element => {
   const { show } = useToast();
   const describe = useDescribeFailure();
   const [opening, setOpening] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
 
   const open = async (userId: string): Promise<void> => {
@@ -54,6 +61,8 @@ export const PeopleList = (): React.JSX.Element => {
   const failed = members.isError || channels.isError;
   const waiting = members.isPending || channels.isPending;
   const entries = people(members.data ?? [], channels.data ?? []);
+  const alone = entries.every((entry) => entry.user.id === me.id);
+  const mayInvite = role === 'owner' || role === 'admin';
 
   return (
     <section aria-labelledby="sidebar-people" className="flex flex-col">
@@ -114,6 +123,27 @@ export const PeopleList = (): React.JSX.Element => {
           })}
         </ul>
       )}
+      {!waiting && !failed && alone ? (
+        <SectionEmpty
+          title={t('sidebar.people.empty')}
+          body={t('sidebar.people.emptyBody')}
+          {...(mayInvite
+            ? {
+                action: (
+                  <Button
+                    glyph="person"
+                    onClick={() => {
+                      setInviting(true);
+                    }}
+                  >
+                    {t('invite.admin.entry')}
+                  </Button>
+                ),
+              }
+            : {})}
+        />
+      ) : null}
+      {mayInvite ? <InviteDialog open={inviting} onOpenChange={setInviting} /> : null}
     </section>
   );
 };

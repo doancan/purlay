@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Interface — 2026-10-13: the tab says what needs you, and a failure is never a blank page (D-106, D-96)
+
+- The browser tab is titled `<place> · <workspace> · Purlay`, prefixed `(N)` with the mention badges'
+  sum while anything needs the person, live over the socket and quiet in Deep Work.
+- A screen that throws while drawing is replaced by a short explanation with Reload and Go home, and
+  the shell stays; anything else that throws gets the same at the root. React reports the error to
+  the console.
+- Alone in a workspace, the People section says so, and offers an owner or an admin **Invite people…**.
+
 ### Quality — 2026-10-13: the client is always built for production, and survives StrictMode
 
 - `bun run build:web` sets `NODE_ENV=production` itself. A root `.env` with `NODE_ENV=development`

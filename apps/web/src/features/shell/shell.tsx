@@ -15,6 +15,7 @@ import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
 import { ConnectionBar } from './connection-bar';
+import { ScreenBoundary } from './failure-boundary';
 import { UpdateBar } from './update-bar';
 import { DeepWorkBar, DeepWorkProvider } from './deep-work';
 import { GlobalKeys } from './global-keys';
@@ -22,6 +23,7 @@ import { NotFound } from './not-found';
 import { NavProvider } from './nav';
 import { OverlayProvider } from './overlay';
 import { SidebarSlot } from './sidebar-slot';
+import { TabTitle } from './tab-title';
 import { WorkspaceScopeProvider } from './workspace';
 
 export const Shell = ({
@@ -37,6 +39,7 @@ export const Shell = ({
         <OverlayProvider>
           <DeepWorkProvider>
             <GlobalKeys />
+            <TabTitle />
             <NavProvider>
               <div className="flex h-screen bg-surface-100 text-ink">
                 <SidebarSlot />
@@ -44,7 +47,9 @@ export const Shell = ({
                   <ConnectionBar />
                   <UpdateBar />
                   <DeepWorkBar />
-                  <Main className="flex min-h-0 flex-1 flex-col">{children}</Main>
+                  <Main className="flex min-h-0 flex-1 flex-col">
+                    <ScreenBoundary>{children}</ScreenBoundary>
+                  </Main>
                 </div>
               </div>
             </NavProvider>

@@ -175,6 +175,51 @@ describe('the people section', () => {
     ]);
   });
 
+  describe('alone in the workspace', () => {
+    const alone = (role: 'owner' | 'admin' | 'member'): Api =>
+      aSignedInApi({
+        me: () =>
+          Promise.resolve({
+            ...aSession(),
+            memberships: [
+              {
+                workspace: WORKSPACE,
+                role,
+                joinedAt: '2026-09-09T08:00:00.000Z',
+                deepWorkUntil: null,
+              },
+            ],
+          }),
+        members: () => Promise.resolve([{ user: ME, role, joinedAt: '2026-09-09T08:00:00.000Z' }]),
+        invitations: () => Promise.resolve({ data: [], nextCursor: null }),
+      });
+    const people = (view: View): HTMLElement =>
+      some(view.getByRole('heading', { name: 'People' }).closest('section'));
+
+    test('an owner is told nobody else is here, keeps the note to self, and is offered the invite dialog', async () => {
+      const view = await open(alone('owner'));
+      const section = within(people(view));
+      expect(section.getByText('Nobody else is here yet.')).toBeDefined();
+      expect(section.getByRole('button', { name: 'Dogancan you' })).toBeDefined();
+      await expectNoAxeViolations(view.container);
+      await person().click(section.getByRole('button', { name: 'Invite people…' }));
+      await settle();
+      expect(view.getByRole('dialog', { name: 'Invite people to acme-eng' })).toBeDefined();
+    });
+
+    test('a member is told the same and offered nothing the server would refuse', async () => {
+      const view = await open(alone('member'));
+      const section = within(people(view));
+      expect(section.getByText('Nobody else is here yet.')).toBeDefined();
+      expect(section.queryByRole('button', { name: 'Invite people…' })).toBeNull();
+    });
+
+    test('with anybody else there, there is no empty state', async () => {
+      const view = await open();
+      expect(within(people(view)).queryByText('Nobody else is here yet.')).toBeNull();
+    });
+  });
+
   test('each person has an avatar with their initials, hidden from a screen reader, and none has a presence dot', async () => {
     const view = await open();
     const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));

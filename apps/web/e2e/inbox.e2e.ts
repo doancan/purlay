@@ -51,4 +51,35 @@ test.describe('the inbox', () => {
       })
       .toBe(false);
   });
+
+  test('a mention in another channel counts in the title of the tab, live', async ({
+    page,
+    signIn,
+    room,
+    tenant,
+    api,
+    world,
+  }) => {
+    const here = await room({ members: ['dogancan', 'carol'] });
+    const there = await room({ members: ['dogancan', 'carol'] });
+    await signIn();
+    await page.goto(here.path);
+    await shellReady(page);
+    const place = `#${here.name} · ${world.workspace.name} · Purlay`;
+    await expect(page).toHaveTitle(new RegExp(`^(\\(\\d+\\) )?${place}$`));
+
+    await api('carol').say(there.id, `@dogancan please look at ${there.name}`);
+    // Other tests write to this workspace at the same time, so the count is not known in advance:
+    // it is the server's own sum of the badges, and it has to include this mention.
+    const viewer = api('dogancan');
+    await expect
+      .poll(async () => {
+        const channels: { id: string; state: { unreadMentionCount: number } | null }[] =
+          await viewer.get(`/api/workspaces/${tenant.workspaceId}/channels`);
+        const counted = channels.find((c) => c.id === there.id)?.state?.unreadMentionCount;
+        const sum = channels.reduce((n, c) => n + (c.state?.unreadMentionCount ?? 0), 0);
+        return counted === 1 && (await page.title()) === `(${String(sum)}) ${place}`;
+      })
+      .toBe(true);
+  });
 });

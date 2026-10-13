@@ -3800,6 +3800,14 @@ alone, in the stack, the message and every string in the fields; a request path 
 is not a place on the machine and is left alone. Run again: 25 failing requests, ten delivered, one drop
 notice, the next five delivered after the timeout, SIGTERM answered in two seconds.
 
+**Amended 2026-10-13 (#492) — the client's render failures.** Still not reported to the tracker, and
+still no client endpoint or SDK for it: that would be a new service for what this decision left out on
+purpose. What changed is where a failure lands: a boundary around the routed screen, inside the shell
+and keyed by the address, so the rail and the sidebar outlive it; and one directly under the words, for
+anything else that can still be said in the person's language. Each offers Reload and Go home as full
+loads. The report is React's own, to the console. **Rejected:** a boundary above the words — it could
+only speak English, and the catalogue that failed is what it would need.
+
 ---
 
 ### D-97. Visual values are tokens in one file; the vocabulary is generated and the build judges it
@@ -4540,6 +4548,16 @@ is not made to wait — then the channel's memberships ordered by `user_id` (one
 `channel_id`), then the notifications. A send carrying attachments (D-109 §7) locks the uploads it
 links, after the message row, and its workspace row last, beside the channel's: an upload holds the
 workspace row and locks no existing upload, so the two cannot wait on each other.
+
+**Amended 2026-10-13 (#491) — the tab's title says the same fact.** Phase 1 tells nobody anything
+outside the page (D-12), so a tab in the background had no way to say something was waiting. The title
+is `(N) <place> · <workspace> · Purlay` — `#channel`, the other person's display name in a direct
+message, or the screen's own name — and N is the sum of the channels' `unreadMentionCount`: what the
+badges and the inbox dot already say, read from the same cache entry the socket writes, so the three
+cannot disagree. Absent at zero, and absent in Deep Work, where the badges are not drawn either.
+**Rejected:** counting unread messages, which would light the tab for every message in a busy channel —
+the noise D-12 exists to prevent; and counting only mentions and direct messages, a second definition
+of "needs you" beside `NEEDS_YOU`, which D-29 and D-107 already settled.
 
 ### D-107. What each notification level is told
 
