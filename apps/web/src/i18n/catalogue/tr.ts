@@ -194,7 +194,7 @@ export const tr = {
   'workspace.settings.save': 'Kaydet',
   'workspace.settings.empty': 'Çalışma alanının bir adı olmalı.',
   'workspace.settings.invalid':
-    'Bu ad kullanılamaz. En fazla 64 karakter kullan, denetim karakteri olmadan.',
+    'Bu ad kullanılamaz. En fazla {max} karakter kullan, denetim karakteri olmadan.',
   'workspace.settings.failed': 'Ad değiştirilemedi.',
   'workspace.create.title': 'Çalışma alanı oluştur',
   'workspace.create.body':

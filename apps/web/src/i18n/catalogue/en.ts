@@ -196,7 +196,7 @@ export const en = {
   'workspace.settings.save': 'Save',
   'workspace.settings.empty': 'A workspace needs a name.',
   'workspace.settings.invalid':
-    'That name cannot be used. Use at most 64 characters, without control characters.',
+    'That name cannot be used. Use at most {max} characters, without control characters.',
   'workspace.settings.failed': 'The name was not changed.',
   'workspace.create.title': 'Create a workspace',
   'workspace.create.body': 'A workspace is where one team talks. You can invite the others after.',

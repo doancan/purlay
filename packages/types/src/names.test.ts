@@ -74,3 +74,23 @@ describe('workspace and channel names', () => {
     }
   });
 });
+
+describe('a name a person can see (#507 review)', () => {
+  test.each([
+    ['spaces', '   '],
+    ['a zero-width space', '​'],
+    ['spaces around a zero-width space', ' ​ '],
+    ['a word joiner and a byte order mark', '⁠﻿'],
+  ])('%s is refused: a sidebar would show nothing', (_what, name) => {
+    expect(workspace(name)).toBe(false);
+  });
+
+  test.each([
+    ['letters', 'Acme'],
+    ['letters with spaces around them', ' Acme '],
+    ['a right-to-left name with its mark', '‏שלום'],
+    ['an emoji', '🚀'],
+  ])('%s is a name', (_what, name) => {
+    expect(workspace(name)).toBe(true);
+  });
+});

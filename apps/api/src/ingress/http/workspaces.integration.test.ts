@@ -260,6 +260,49 @@ describe('integration: renaming a workspace (D-124)', () => {
     });
   });
 
+  test('a rename touches this workspace only: another one, its owner’s included, keeps its name', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-only');
+      const mine = await aWorkspace(db, owner.cookie, 'mine');
+      const other = await aWorkspace(db, owner.cookie, 'other');
+      const stranger = await signedIn(db, 'rn-stranger');
+      const theirs = await aWorkspace(db, stranger.cookie, 'theirs');
+      expect(
+        (
+          await call(db, 'PATCH', `/api/workspaces/${mine.id}`, {
+            cookie: owner.cookie,
+            body: { name: 'renamed' },
+          })
+        ).status,
+      ).toBe(200);
+      const names = await db
+        .selectFrom('workspaces')
+        .select(['id', 'name'])
+        .where('id', 'in', [mine.id, other.id, theirs.id])
+        .execute();
+      expect(Object.fromEntries(names.map((w) => [w.id, w.name]))).toEqual({
+        [mine.id]: 'renamed',
+        [other.id]: 'other',
+        [theirs.id]: 'theirs',
+      });
+    });
+  });
+
+  test('a name of spaces, or of nothing a person can see, is refused before anything is written', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-blank');
+      const made = await aWorkspace(db, owner.cookie, 'kept');
+      for (const name of ['   ', '\u200B', ' \u200B ']) {
+        const refused = await call(db, 'PATCH', `/api/workspaces/${made.id}`, {
+          cookie: owner.cookie,
+          body: { name },
+        });
+        expect(refused.status).toBe(400);
+      }
+      expect(await trail(db, made.id)).toEqual([]);
+    });
+  });
+
   test('the same name again changes nothing and records nothing', async () => {
     await withRollback(async (db) => {
       const owner = await signedIn(db, 'rn-same');

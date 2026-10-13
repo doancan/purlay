@@ -79,8 +79,11 @@ export type MeResponse = Static<typeof MeResponse>;
 
 // ── Workspaces ──────────────────────────────────────────────────────────────
 
+/** The longest workspace name, as `workspaces.name` holds it (`VARCHAR(64)`, migration 0003). */
+export const WORKSPACE_NAME_MAX = 64;
+
 export const CreateWorkspaceRequest = FromClient({
-  name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
+  name: Type.String({ minLength: 1, maxLength: WORKSPACE_NAME_MAX, format: 'name' }),
   /** Lowercase, and an identifier rather than prose — hence `COLLATE "C"` (D-40). */
   slug: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
 });
@@ -91,7 +94,7 @@ export type CreateWorkspaceRequest = Static<typeof CreateWorkspaceRequest>;
  * only: the slug is its address, in every link already pasted, and does not move (D-124).
  */
 export const UpdateWorkspaceRequest = FromClient({
-  name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
+  name: Type.String({ minLength: 1, maxLength: WORKSPACE_NAME_MAX, format: 'name' }),
 });
 export type UpdateWorkspaceRequest = Static<typeof UpdateWorkspaceRequest>;
 

@@ -505,6 +505,20 @@ describe('a reconnect', () => {
     expect(w.client.getQueryState(keys.unresolved(WS))?.isInvalidated).toBe(true);
     expect(w.engine.store.getState().status).toBe('open');
   });
+
+  test('reads the memberships again: a workspace renamed while the socket was down is not replayed', () => {
+    const w = world();
+    w.client.setQueryData(keys.me, { stale: false });
+    w.engine.start();
+    w.open();
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    for (let waited = 0; w.sockets.length < 2 && waited < 10_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
+    w.open();
+    expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
+  });
 });
 
 describe('a send that failed because the server could not be reached', () => {

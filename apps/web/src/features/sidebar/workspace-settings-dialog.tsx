@@ -7,6 +7,7 @@
  * every other tab of every member hears `WORKSPACE_UPDATED` and reads it again. What the server
  * refuses comes back under the field, and what was typed stays for a retry.
  */
+import { WORKSPACE_NAME_MAX } from '@purlay/types';
 import { useId, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
@@ -60,7 +61,7 @@ export const WorkspaceSettingsDialog = ({
       setBusy(false);
       setProblem(
         isApiError(failure) && failure.code === 'VALIDATION_FAILED'
-          ? t('workspace.settings.invalid')
+          ? t('workspace.settings.invalid', { max: WORKSPACE_NAME_MAX })
           : `${t('workspace.settings.failed')} ${describe(failure)}`,
       );
     }
@@ -97,7 +98,7 @@ export const WorkspaceSettingsDialog = ({
         <TextField
           label={t('workspace.create.name')}
           value={name}
-          maxLength={64}
+          maxLength={WORKSPACE_NAME_MAX}
           required
           autoComplete="off"
           {...(problem === null ? {} : { error: problem })}
