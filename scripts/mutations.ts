@@ -58,6 +58,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/pins/pins.integration.test.ts'],
   },
   {
+    id: 'pins-bound-of-every-channel',
+    why: 'the bound counts every channel’s pins, so one workspace’s pins refuse another’s',
+    file: 'apps/api/src/modules/pins/pins.ts',
+    find: "    .select((eb) => eb.fn.countAll<string>().as('count'))\n    .where('pinned_messages.channel_id', '=', context.channelId)\n",
+    replace: "    .select((eb) => eb.fn.countAll<string>().as('count'))\n",
+    tests: ['apps/api/src/modules/pins/pins.integration.test.ts'],
+  },
+  {
     id: 'pins-bound-one-past',
     why: 'a channel holds one pin more than the bound',
     file: 'apps/api/src/modules/pins/pins.ts',

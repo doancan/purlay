@@ -206,6 +206,18 @@ describe('integration: at most PINS_MAX a channel', () => {
     return ids;
   };
 
+  test('another channel at the bound does not take this one’s places', async () => {
+    await withRollback(async (db) => {
+      const full = await aRoom(db, ['alice']);
+      await pinned(db, full, PINS_MAX);
+      const here = await aRoom(db, ['alice']);
+      const message = await said(db, here);
+      expect(await attempt(db, () => pinMessage(db, at(0), idOf(here, 'alice'), message))).toBe(
+        'taken',
+      );
+    });
+  });
+
   test('one below the bound is taken; at it, refused; a deleted message’s pin does not count', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
