@@ -88,7 +88,7 @@ describe('the header', () => {
     expect(title.textContent).toBe('api');
     // A place you go is named in the sans; the mono is for what is machine text (D-110).
     expect(title.className).not.toContain('font-mono');
-    expect(title.className).toContain('text-heading');
+    expect(title.className).toContain('text-title');
     expect(view.getByText('Backend deploys and incident follow-ups')).toBeDefined();
     const feedTab = view.getByRole('link', { name: 'Feed' });
     expect(feedTab.getAttribute('aria-current')).toBe('page');
@@ -280,9 +280,9 @@ describe('the feed, populated', () => {
     const rows = view.container.querySelectorAll('[data-message-row]');
     expect(rows).toHaveLength(4);
     // The second row has no name: it is under the first.
-    expect(rows[0]?.textContent).toContain('alice');
-    expect(rows[1]?.textContent).not.toContain('alice');
-    expect(rows[2]?.className).toContain('bg-accent-subtle');
+    expect(rows[0]?.textContent).toContain('Alice');
+    expect(rows[1]?.textContent).not.toContain('Alice');
+    expect(rows[2]?.querySelector('[data-bubble]')?.className).toContain('border-accent-text');
     expect(rows[2]?.textContent).toContain('You were mentioned');
     expect(view.getByRole('link', { name: /example\.test/ })).toBeDefined();
     view.unmountAll();
@@ -309,14 +309,14 @@ describe('the feed, populated', () => {
     view.unmountAll();
   });
 
-  test('the day is a label at the left with a rule after it (D-110)', async () => {
+  test('the day is a label between two rules (D-118)', async () => {
     const view = await mountChannel({ messages: page(rich) });
     const label = Array.from(view.container.querySelectorAll('span')).find(
       (node) => node.textContent === 'Today',
     );
-    expect(label?.parentElement?.className).not.toContain('justify-center');
+    expect(label?.previousElementSibling?.className).toContain('border-t-hairline');
     expect(label?.nextElementSibling?.className).toContain('border-t-hairline');
-    expect(label?.parentElement?.firstElementChild).toBe(label ?? null);
+    expect(label?.parentElement?.className).toContain('uppercase');
     expect(view.container.querySelector('[role="feed"]')?.className).toContain('max-w-feed');
     view.unmountAll();
   });

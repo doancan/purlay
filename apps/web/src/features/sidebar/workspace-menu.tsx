@@ -51,7 +51,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
           <button
             type="button"
             aria-label={t('sidebar.switch')}
-            className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-accent text-label font-semibold text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover max-narrow:h-touch max-narrow:w-touch"
+            className="inline-flex size-avatar-lg items-center justify-center rounded-xl bg-accent text-heading text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover max-narrow:h-touch max-narrow:w-touch"
           >
             {initialsOf(workspace.name)}
           </button>

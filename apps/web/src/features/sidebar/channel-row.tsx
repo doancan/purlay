@@ -2,7 +2,7 @@
  * One line of the sidebar that goes somewhere: a channel, or a conversation with a person.
  *
  * The treatment is the same for both because the signal is the same (`UX.md` §2): a row
- * with something unread is **bold**, the row you are in is on `accent-subtle`, and a count
+ * with something unread is **bold**, the row you are in is filled with the accent, and a count
  * — the only one in the product — appears only for what *needs you*, a mention or a
  * message in a direct message. Bold is the unread signal, never a dot or a colour, so it
  * survives colour-blindness and a screen reader hears it as the word "unread" before the
@@ -17,12 +17,12 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useDeepWork } from '../shell/deep-work';
 
 const rowClasses =
-  'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard hover:bg-surface-200 max-narrow:h-touch';
+  'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
 
 const toneClasses = {
-  quiet: 'text-ink-subtle',
-  unread: 'text-ink font-semibold',
-  current: 'bg-accent-subtle text-accent-text font-medium hover:bg-accent-subtle',
+  quiet: 'text-nav-ink-muted hover:bg-nav-hover',
+  unread: 'text-nav-ink font-semibold hover:bg-nav-hover',
+  current: 'bg-accent text-on-accent font-medium',
 } as const;
 
 /** What a row looks like, from what is true of it: where you are beats what is unread. */

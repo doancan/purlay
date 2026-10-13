@@ -97,8 +97,11 @@ describe('the frame', () => {
       expect(region?.className).not.toContain('shadow-card');
       expect(region?.className).not.toContain('bg-canvas');
     }
-    // Navigation is one tone; one hairline divides it from the conversation.
-    for (const region of [rail, side]) expect(region.className).toContain('bg-surface-000');
+    // Navigation is dark navy in both themes, drawn in the dark theme; one hairline divides it
+    // from the conversation (D-118).
+    expect(rail.className).toContain('bg-nav-rail');
+    expect(side.className).toContain('bg-nav-surface');
+    for (const region of [rail, side]) expect(region.getAttribute('data-theme')).toBe('dark');
     expect(side.className).toContain('border-r-hairline');
     expect(view.getAllByRole('main')).toHaveLength(1);
   });

@@ -29,6 +29,11 @@ export interface Pair {
   readonly background: string;
   readonly minimum: number;
   readonly why: string;
+  /**
+   * The one theme the pair is ever drawn in. Navigation is always drawn in the dark theme
+   * (`data-theme="dark"` on the rail and the sidebar), so what sits there is judged there.
+   */
+  readonly theme?: string;
 }
 
 const cross = (
@@ -42,6 +47,13 @@ const cross = (
   );
 
 const SURFACES = ['surface-000', 'surface-050', 'surface-100', 'surface-200'] as const;
+/**
+ * Navigation is drawn in the dark theme whatever the page's theme (v10, D-118): its own grounds,
+ * and every shared control inside it speaks the dark theme's inks.
+ */
+const NAV = ['nav-rail', 'nav-surface', 'nav-hover'] as const;
+const inNav = (pairs: readonly Pair[]): readonly Pair[] =>
+  pairs.map((pair) => ({ ...pair, theme: 'dark' }));
 const AVATARS = ['avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6'] as const;
 const READING = [...SURFACES, 'accent-subtle', 'code-bg'] as const;
 const SYNTAX = [
@@ -87,6 +99,21 @@ export const PAIRS: readonly Pair[] = [
   ...cross(['warning-text'], ['warning-subtle'], TEXT, 'a status pill: open, Deep Work'),
   ...cross(['success-text'], ['success-subtle'], TEXT, 'a status pill: resolved'),
   ...cross(SYNTAX, ['code-bg'], TEXT, 'code, the usual casualty (UX §9)'),
+  ...inNav([
+    ...cross(
+      ['nav-ink', 'nav-ink-muted'],
+      NAV,
+      TEXT,
+      'a channel, a person, a section in the sidebar',
+    ),
+    ...cross(
+      ['ink', 'ink-muted', 'ink-subtle', 'accent-text', 'danger-text'],
+      NAV,
+      TEXT,
+      'a shared control or state drawn inside navigation',
+    ),
+    ...cross(['focus-ring'], NAV, BOUNDARY, 'the keyboard focus ring inside navigation'),
+  ]),
   ...cross(['border-strong'], READING, BOUNDARY, 'the edge of a control'),
   ...cross(['focus-ring'], READING, BOUNDARY, 'the keyboard focus ring (UX §8)'),
 ];
@@ -115,6 +142,10 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   accent: 'a fill; its legibility is `on-accent` on it, and its words are `accent-text`',
   'accent-hover': 'a fill; its legibility is `on-accent` on it',
   'border-subtle': 'decorative: a divider that carries no meaning, so it is allowed to be faint',
+  'nav-rail': 'a background; it is the `background` of the pairs above',
+  'nav-surface': 'a background; it is the `background` of the pairs above',
+  'nav-hover': 'a background; it is the `background` of the pairs above',
+  'nav-border': 'decorative: a divider inside navigation that carries no meaning',
   danger:
     'a fill; its legibility is `on-status` on it, and it never carries meaning without a label',
   warning:

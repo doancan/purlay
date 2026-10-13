@@ -175,7 +175,7 @@ describe('what it shows', () => {
     const card = view.container.querySelector('[data-composer-card]');
     // A card that floats a little above the conversation (D-110).
     expect(card?.className).toContain('rounded-2xl');
-    expect(card?.className).toContain('shadow-card');
+    expect(card?.className).toContain('shadow-raised');
     expect(card?.contains(box())).toBe(true);
     const send = view.getByRole('button', { name: 'Send' });
     expect(card?.contains(send)).toBe(true);

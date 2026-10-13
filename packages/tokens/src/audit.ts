@@ -14,6 +14,7 @@ export const audit = (model: Model): readonly string[] => {
 
   for (const pair of PAIRS) {
     for (const theme of model.themes) {
+      if (pair.theme !== undefined && pair.theme !== theme.id) continue;
       const foreground = byName.get(pair.foreground)?.resolved[theme.id];
       const background = byName.get(pair.background)?.resolved[theme.id];
       if (foreground === undefined || background === undefined) {

@@ -94,10 +94,8 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
 
   return (
     <figure className="my-2 flex flex-col overflow-hidden rounded-xl border-hairline border-border-subtle bg-code-bg shadow-card">
-      <figcaption className="flex h-row items-center gap-2 border-b-hairline border-border-subtle bg-surface-100 pr-1 pl-3 text-caption text-ink-muted">
-        <span className="rounded-pill bg-accent-subtle px-2 font-mono font-medium text-accent-text">
-          {language === '' ? t('message.code.plain') : language}
-        </span>
+      <figcaption className="flex h-row items-center gap-2 border-b-hairline border-border-subtle bg-surface-050 pr-1 pl-3 text-caption text-ink-muted">
+        <span className="font-mono">{language === '' ? t('message.code.plain') : language}</span>
         <span className="font-mono text-ink-subtle">{t('message.code.lines', { count })}</span>
         <button
           type="button"
@@ -115,7 +113,7 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
           tabIndex={clamped ? undefined : 0}
           aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
           className={cn(
-            'overflow-x-auto px-3 py-2 text-code text-ink',
+            'overflow-x-auto p-3 text-code text-ink',
             clamped && 'max-h-code overflow-y-hidden',
           )}
         >

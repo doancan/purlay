@@ -114,9 +114,9 @@ describe('where a channel opens', () => {
       api: m.api,
     });
     expect(view.getByText('New')).toBeDefined();
-    // The marker is a chip on a line in the accent, so it is seen as a place and not as a word.
-    expect(view.getByText('New').className).toContain('bg-accent');
-    expect(view.getByText('New').className).toContain('rounded-pill');
+    // The marker is a rule and a word in the danger colour, so it is seen as a place (D-118).
+    expect(view.getByText('New').parentElement?.className).toContain('text-danger-text');
+    expect(view.getByText('New').previousElementSibling?.className).toContain('border-danger');
     expect(view.metrics.assigned.at(-1)).toBe(252); // 300 − 48
     advance(view, READ_DEBOUNCE_MS * 4);
     expect(m.calls).toEqual([]);
@@ -826,7 +826,7 @@ describe('a send on its way', () => {
       view.world.timers.advance(ACK_DEADLINE_MS);
     });
     const row = view.getByText('hello').closest('[data-message-row]');
-    expect(row?.className).toContain('border-danger');
+    expect(row?.querySelector('[data-bubble]')?.className).toContain('border-danger');
     expect(row?.textContent).toContain('Failed to send');
     expect(view.getByText('Message failed to send')).toBeDefined();
 

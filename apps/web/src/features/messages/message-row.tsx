@@ -1,18 +1,19 @@
 /**
- * One message (`UX.md` §3, D-100): an avatar in a fixed column, then a header line — the name
- * and the time side by side — and the content under it. No bubbles: a bubble turns a code block
- * into a box inside a box, and a message here is half code.
+ * One message (`UX.md` §3, D-119): a conversation with two edges. Everyone else's messages are
+ * on the left, in a bubble on `surface-200`, with an avatar in a fixed column and their name over
+ * the first bubble of a group; your own are on the right, in a bubble on `accent-subtle`, with no
+ * avatar and no name. The time is beside the name (or alone, on your side) in the mono face.
  *
- * **Nothing here reflows.** The avatar column is a fixed width; a grouped message (the same
- * author within five minutes) has no avatar and no header, and its time is in that column but
- * invisible until the row is hovered or focused; the actions are an overlay in the row's corner,
- * there from the start and only faded in. A row is the same height whether the pointer is on it
- * or not.
+ * **Nothing here reflows.** The avatar and the name belong to the *first* message of a group, so a
+ * message arriving below never changes the one above it; a grouped message (the same author
+ * within five minutes) has neither, and its time is drawn in its place but invisible until the
+ * row is hovered or focused. The actions are an overlay on the bubble's top corner, there from
+ * the start and only faded in. A row is the same height whether the pointer is on it or not.
  *
- * **The row serves threads too.** It takes a `children` slot below the content for the
- * thread's summary line and its replies, and an `actions` slot beside the reaction
- * control, so the thread slice adds to a message without editing it; a reply is the same
- * row (grouped or not) with no thread of its own.
+ * **The row serves threads too.** It takes a `children` slot below the bubble for the thread's
+ * summary line and its replies, and an `actions` slot beside the reaction control, so the thread
+ * slice adds to a message without editing it; a reply is the same row (grouped or not) with no
+ * thread of its own, on its author's side.
  *
  * **It is memoised.** A channel renders a page of fifty and a new message must not
  * re-render them: the props are primitives and stable references (the message object is
@@ -107,6 +108,9 @@ const MessageRowView = ({
     event.target.closest('[data-message-row]') === event.currentTarget;
   const on = pointed || focused;
 
+  // Which edge the message sits on: the person's own on the right, everyone else's on the left.
+  const outgoing = message.sender.id === meId;
+
   const time = (
     <time
       dateTime={message.createdAt}
@@ -123,6 +127,7 @@ const MessageRowView = ({
   return (
     <article
       data-editable={mine ? '' : undefined}
+      data-outgoing={outgoing ? '' : undefined}
       onPointerOver={(event) => {
         setPointed(own(event));
       }}
@@ -140,55 +145,96 @@ const MessageRowView = ({
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: message.sender.username, when: absolute })}
       className={cn(
-        'relative flex gap-3 rounded-lg px-2 transition-colors duration-hover ease-standard',
-        grouped ? 'py-1' : 'pt-2 pb-1',
-        mentionsMe ? 'bg-accent-subtle' : on && 'bg-surface-050',
-        failed && 'border-l-marker border-danger',
+        'relative flex gap-3 rounded-lg px-2',
+        grouped ? 'pt-1' : 'pt-3',
+        outgoing && 'flex-row-reverse',
       )}
     >
-      <div
-        className={cn(
-          'flex h-auto shrink-0 items-start justify-center gap-1',
-          compact ? 'size-avatar' : 'size-avatar-lg',
-        )}
-      >
-        {grouped ? (
-          <>
-            {sending}
-            {time}
-          </>
-        ) : (
-          <Avatar
-            name={message.sender.displayName}
-            username={message.sender.username}
-            size={compact ? 'md' : 'lg'}
-          />
-        )}
-      </div>
+      {!outgoing && (
+        <div
+          className={cn(
+            'flex h-auto shrink-0 items-start justify-center gap-1',
+            compact ? 'size-avatar' : 'size-avatar-lg',
+          )}
+        >
+          {grouped ? (
+            <>
+              {sending}
+              {time}
+            </>
+          ) : (
+            <Avatar
+              name={message.sender.displayName}
+              username={message.sender.username}
+              size={compact ? 'md' : 'lg'}
+            />
+          )}
+        </div>
+      )}
 
-      <div className="min-w-0 flex-1">
+      <div className={cn('flex min-w-0 flex-1 flex-col', outgoing ? 'items-end' : 'items-start')}>
         {!grouped && (
-          <div className="flex items-baseline gap-2">
-            <span className="text-body font-semibold text-ink">{message.sender.username}</span>
+          <div className="mb-1 flex items-baseline gap-2 px-1">
+            {!outgoing && (
+              <span className="text-label font-semibold text-ink">
+                {message.sender.displayName}
+              </span>
+            )}
             {time}
             {sending}
           </div>
         )}
         {mentionsMe && <VisuallyHidden>{`${t('message.mention')}. `}</VisuallyHidden>}
-        <div className={dimmed || deleted ? 'text-ink-muted' : undefined}>
-          {editing ? (
-            <MessageEditor message={message} />
-          ) : deleted ? (
-            <p>{t('message.deleted')}</p>
-          ) : (
-            renderContent(message.content, { mentioned })
-          )}
-          {!deleted && message.editedAt !== null && (
-            <span
-              className="text-caption text-ink-subtle"
-              title={format.absolute(message.editedAt)}
-            >
-              {t('message.edited')}
+        <div
+          // The full column, so the bubble's five sixths are of the column and not of itself.
+          className={cn('flex w-full items-end gap-2', outgoing && 'flex-row-reverse')}
+        >
+          <div
+            data-bubble=""
+            className={cn(
+              'relative min-w-0 max-w-5/6 rounded-2xl px-3 py-2',
+              outgoing ? 'bg-accent-subtle' : 'bg-surface-200',
+              (dimmed || deleted) && 'text-ink-muted',
+              mentionsMe && 'border-l-marker border-accent-text',
+              failed && 'border-l-marker border-danger',
+              editing && 'w-full max-w-full',
+            )}
+          >
+            {editing ? (
+              <MessageEditor message={message} />
+            ) : deleted ? (
+              <p>{t('message.deleted')}</p>
+            ) : (
+              renderContent(message.content, { mentioned })
+            )}
+            {!deleted && message.editedAt !== null && (
+              <span
+                className="text-caption text-ink-subtle"
+                title={format.absolute(message.editedAt)}
+              >
+                {t('message.edited')}
+              </span>
+            )}
+            {delivery === 'sent' && !deleted && (
+              <div
+                className={cn(
+                  'absolute -top-4 flex rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-card transition-opacity duration-hover ease-standard',
+                  outgoing ? 'left-2' : 'right-2',
+                  // Hidden, it must not take a click meant for the words under it.
+                  !on && 'pointer-events-none opacity-0',
+                )}
+              >
+                <ReactMenu message={message} meId={meId} />
+                {actions}
+                {mine && <OwnActions message={message} />}
+              </div>
+            )}
+          </div>
+          {/* Your own grouped message has no avatar column, so its time waits beside the bubble. */}
+          {outgoing && grouped && (
+            <span className="flex shrink-0 items-center gap-1 pb-1">
+              {sending}
+              {time}
             </span>
           )}
         </div>
@@ -226,21 +272,8 @@ const MessageRowView = ({
             </button>
           </div>
         )}
-        {children}
+        {children !== undefined && <div className="self-stretch">{children}</div>}
       </div>
-
-      {delivery === 'sent' && !deleted && (
-        <div
-          className={cn(
-            'absolute right-2 -top-3 flex gap-1 rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-float transition-opacity duration-hover ease-standard',
-            !on && 'opacity-0',
-          )}
-        >
-          <ReactMenu message={message} meId={meId} />
-          {actions}
-          {mine && <OwnActions message={message} />}
-        </div>
-      )}
     </article>
   );
 };

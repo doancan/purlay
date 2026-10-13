@@ -4136,7 +4136,8 @@ runs when a person reads, bounded by what they had not).
 ### D-100. The interface has an identity: floating cards, avatars, and one typeface served from here
 
 **Amended 2026-10-12 by D-110**, which replaced the typeface and the cards with a flat interface set in
-Inter and JetBrains Mono. The avatars, the absence of bubbles and the reasons below stand.
+Inter and JetBrains Mono. **Amended again 2026-10-12 by D-119**, which puts messages in bubbles with your
+own on the right: the avatars stand; the absence of bubbles and the single edge do not.
 
 The first client (D-98) was built to the approved prototype and passed every test, and the owner
 looked at it and said it looked like a prototype. They were right, and the reason is worth keeping:
@@ -4686,6 +4687,8 @@ sent; its answer and its failures are read by the same two functions a request's
 
 ### D-110. The interface is flat and quiet: one tone for getting around, one for the conversation
 
+**Amended 2026-10-12 by D-118**: navigation is dark navy in both themes and the accent is blue.
+
 D-100 gave the interface an identity, and the owner replaced it on 2026-10-12 with one of their own: a
 written brief and a reference screen, applied to Purlay as a preview they approved. They chose its
 visual language and its layout, both themes, and a rail that holds only what already exists. The brief
@@ -4731,6 +4734,8 @@ state `UX.md` §8 requires.
    overlay. Avatars are rounded squares — initials on a tint, as D-100 decided — at 36px in the feed,
    28px in a thread and for your own row, 20px in the sidebar's lists. The feed is at most 760px and **hangs from the left edge**,
    which settles the disagreement between UX §2 ("centred") and the token's note ("left-aligned").
+   *Amended by D-119:* a channel's feed and composer are centred, since a conversation with two edges
+   needs both of them on screen.
 6. **Density is in what is shown, not in how tightly it is set.** A sidebar row is 32px and message
    groups are 16px apart; the product stays dense because it shows one column and no chrome, which is
    what UX §1.2 was for. Amends that principle's wording, not its intent.
@@ -4799,8 +4804,6 @@ and proceed, and open to their reversal.
 highest, which is a transfer of control under another name. **Rejected: keeping a removed member's
 private channel memberships** for if they come back: a person removed from a team is not quietly
 still in its private rooms, and coming back is joining again.
-
----
 
 ### D-112. The unfurl cache is the workspace's, and a GitHub outage is held off for a minute
 
@@ -5017,6 +5020,106 @@ processes, and a demonstration restarted mid-session would lose what it showed a
 
 **Accepted, stated:** the browser suite does not exercise S3 itself; `test:storage` does, by hand,
 against the real one.
+
+---
+
+### D-118. Navigation is dark in both themes, the accent is blue, and the vocabulary check judges each class alone
+
+**Amends D-110 §3 and §4.** The owner carried the brief further on Superdesign (project *Relay —
+Developer Team Chat*, draft *Refined Modern Polish*, v10) and asked for the product to match it. That
+draft is now the design the tokens are kept to; `tokens.json` remains the only copy in this repository
+(D-97), and its `meta.source` names the draft.
+
+**Decided.**
+
+1. **Navigation has its own tone, dark in both themes.** The rail (`nav-rail`) and the sidebar
+   (`nav-surface`) are deep navy whatever the theme, with their own hover, hairline and two inks
+   (`nav-hover`, `nav-border`, `nav-ink`, `nav-ink-muted`). They are judged against their own grounds
+   in `pairs.ts`, not against the conversation's. `surface-000` stays as the window's outer ground
+   (sign-in, home). Amends D-110 §2's "navigation shares one tone with the window's greys".
+2. **The accent is blue** (`#2563eb`, hovered `#1d4ed8`), a fill under white in both themes; its
+   words are `accent-text`, blue in light and a light blue in dark. The current sidebar row is the
+   filled accent. Navy is kept where the draft keeps it: the keyword colour in code. Amends D-110 §4's
+   "one deep navy accent". `role: "fill"` stands: `text-accent` still does not exist.
+3. **The focus ring is no longer `accent-text` in light**: it must be seen on white *and* on the navy
+   navigation, and the blue of the text does not reach 3:1 on `nav-surface`. It takes the next blue up.
+4. **The composer has its own elevation**, `shadow-raised`, between the one-pixel card and the overlay.
+5. **Navigation is drawn in the dark theme** (`data-theme="dark"` on the rail and the sidebar), so every
+   shared control inside it — a menu button, a key, a section's loading and failure — speaks the dark
+   theme's inks on the navy without a second set of components. `pairs.ts` judges those inks on the
+   navy grounds in the dark theme only, which is the only theme they are drawn in there.
+6. **The channel, as the draft draws it:** a message is named by the person's display name, rows are
+   16px apart with their avatar, the day is an uppercase label between two rules (amends D-110 §9), the
+   unread marker is a rule and a word in the danger colour, a code block's header is plain mono, a
+   reaction is a 4px chip, and the send button carries the key that sends.
+7. **A focus ring on a card with its own edge is drawn inward**, over that edge: outside it, the 2px
+   gap read as a second border.
+
+**And the check that holds pages to this vocabulary did not work.** `checkVocabulary` gave one
+Tailwind compiler every class in turn; Tailwind's `build` returns the CSS of every candidate it has
+seen, so after the first accepted class nothing could "build to nothing" and a raw value was blamed on
+the class after it. `bg-blue-500`, `p-7` and a typo passed; `CONTRIBUTING.md` §4 said they failed. Each
+class is now judged by its own compiler (the whole application in well under a second), and a test
+judges classes in a row, as the application is judged. Opening it found five classes that had built to
+nothing since they were written — the retired `w-gutter`, `py-16`, and the send button's `size-control`
+— now spoken in tokens. The extractor also stopped reading a compared value (`status === 'failed'`) or a
+function's argument (`buttonStyle('primary')`) as a class.
+
+**Not taken**, as in D-110 and for the same reasons: the thread panel, the call button, CI and deploy
+rows, the Integrations section, presence dots and photographs, the GitHub card's Approve button,
+the Starred section, collapsible sections, the typing line and the member stack in the header.
+
+**Cost of reversing:** the token values and the shell's classes. No contract depends on them.
+
+---
+
+### D-119. A conversation has two edges: bubbles, and your own messages on the right
+
+**Amends D-100 §avatars-and-no-bubbles, D-110 §5 and `UX.md` §3.** The owner looked at the channel
+drawn to D-118 and asked for it "not like Slack, left and right". The reference is the Superdesign
+draft *Purlay Chat — Left/Right Conversation* (project *Purlay — Chat Screen*), branched from a faithful
+reproduction of the current screen so that only the feed changed. D-100 rejected exactly this, for a
+reason that was a trade-off, not a fact; the owner has made the other trade, and the code block is
+designed for it below rather than the objection being forgotten.
+
+**Decided.**
+
+1. **Two edges.** Everyone else's messages are on the left, in a bubble on `surface-200`, with the
+   avatar in its fixed column and the display name over the first bubble of a group. Your own are on
+   the right, in a bubble on `accent-subtle`, with no avatar and no name. The time stays in the mono
+   face: beside the name on the left, alone on the right.
+2. **The avatar and the name belong to a group's *first* message**, not its last as the draft draws
+   them. A last-message avatar moves every time somebody adds to the group, which changes the row
+   above the reader — what `UX.md` §1 forbids. A grouped message's time waits, invisible until hover,
+   where its avatar would be (left) or beside its bubble (right), so nothing reflows on hover either.
+3. **A bubble is at most five sixths of the column** (`max-w-5/6`, a fraction rather than a token
+   because it is a proportion of the feed, not a length), and as wide as its content below that.
+   A code block keeps its own card inside the bubble: the box-in-a-box D-100 warned of is accepted,
+   and kept light by the bubble having no border and no shadow of its own.
+4. **Your own bubble is `accent-subtle`, not the draft's filled accent.** On the filled blue, the
+   words a message can contain — a mention and a link in `accent-text`, an "edited" note in
+   `ink-subtle`, a muted resolved root — fall below AA, and they are drawn by the content renderer
+   rather than by the row, so a second ink set for them would be a second renderer. The tint carries
+   the side; the edge carries it too, so colour is not the only signal.
+5. **A mention of you marks the bubble** with a 2px `accent-text` edge instead of tinting the row, and
+   still says so to a screen reader; a failed send marks it with the danger edge, as before.
+6. **No hover tint.** The bubble is the shape; the row under the pointer only fades in its actions,
+   which sit on the bubble's inner top corner.
+7. **The channel's feed and composer are centred** in the column (amends D-110 §5). The other screens,
+   which have one edge, still hang from the left.
+8. **Square tails are not drawn.** The draft squares the corner nearest the speaker; radius is a
+   whole-corner utility here (`rounded-2xl`), and a per-corner vocabulary for one shape is not worth a
+   token family.
+
+**Rejected.**
+
+- *The filled accent bubble, with a second ink set for what sits on it.* The draft's look, but every
+  inline style the renderer draws would need an on-accent twin, judged in `pairs.ts`, for one surface.
+- *Avatar and time under the last bubble*, as drawn: see 2.
+- *Keeping one edge and only adding bubbles.* Not what was asked: the request was for sides.
+
+**Cost of reversing:** `message-row.tsx` and its tests, two centring classes, and this paragraph. No
+contract, route, keyboard path or required state depends on which side a message is drawn on.
 
 ---
 

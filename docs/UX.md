@@ -29,7 +29,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone, the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one dark navy tone (D-118), the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -99,13 +99,21 @@ one a link to GitHub stays a plain link, which the dialog says.
 ## 3. The message row
 
 ```
-  (a) alice  14:32                                                [☺][↩]
-      The retry backoff is 4s because the upstream rate-limits at 15/min.
-      ┌─────────────────────────────────────────────────── ts ─┐
-      │ const backoff = 4_000;                          Copy   │
-      └────────────────────────────────────────────────────────┘
+  (a) Alice  14:32                                   [☺][↩]
+      ╭───────────────────────────────────────────────╮
+      │ The retry backoff is 4s because the upstream  │
+      │ rate-limits at 15/min.                        │
+      │ ┌──────────────────────────────── ts ─┐       │
+      │ │ const backoff = 4_000;       Copy   │       │
+      │ └─────────────────────────────────────┘       │
+      ╰───────────────────────────────────────────────╯
       👍 3   🎉 1
-      ○ Open · 4 replies · last 12m ago                  Show thread T
+      ○ Open · 4 replies · last 12m ago      Show thread T
+
+                                                   14:35
+                          ╭───────────────────────────╮
+                          │ Ship it — I'll watch CI.  │
+                          ╰───────────────────────────╯
 ```
 
 - **A GitHub pull request or issue linked in the words is a card under them** (D-2, D-23): the
@@ -117,16 +125,19 @@ one a link to GitHub stays a plain link, which the dialog says.
 - **A link to a picture is the picture, under the words** — up to three, in the order written, each a
   link to the original, drawn through the API's proxy so the picture's host never sees who is reading
   (#110). One the proxy cannot show draws nothing; the link stays a link.
-- **Avatars, and no bubbles** (D-100). An avatar in a fixed column names who is speaking before a word is
-  read; the text is not put in a bubble, because a bubble makes a code block a box inside a box and
-  narrows every line it holds. Your own messages are on the same edge as everyone else's: a chat
-  with two edges is read by following the speaker, and this one is read by following the thread.
-- **The header line** is the name and the time, side by side, in the mono face for the time.
+- **Two edges, in bubbles** (D-119, amending D-100). Everyone else's messages are on the left in a `surface-200`
+  bubble, with an avatar in a fixed column; your own are on the right in an `accent-subtle` bubble,
+  with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
+  card inside it. The channel's feed and composer are centred.
+- **The header line** is over a group's first bubble: the name and the time on the left, the time
+  alone on the right, the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
-  their time shows in the avatar's column on hover.
-- **Hover controls** are a small raised group at the row's corner and never reflow the row. Only
-  the row under the pointer shows its own: a reply inside a thread is a row of its own.
-- **A message that mentions you** sits in a rounded tint, and says so to a screen reader.
+  their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
+  The avatar belongs to the group's first message, so a message arriving below never changes one above.
+- **Hover controls** are a small raised group on the bubble's inner top corner and never reflow the
+  row; the row itself is not tinted. Only the row under the pointer shows its own: a reply inside a
+  thread is a row of its own.
+- **A message that mentions you** has a 2px accent edge on its bubble, and says so to a screen reader.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
@@ -137,7 +148,7 @@ one a link to GitHub stays a plain link, which the dialog says.
 |---|---|---|
 | `sending` | Full opacity, subtle clock glyph beside the time | Paints in < 16ms, before any network call (`PRD.md` §5) |
 | `sent` | Glyph removed | On `ACK`. **The row does not move** — the id was final from the start (D-8) |
-| `failed` | Left border in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
+| `failed` | The bubble's left edge in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
 
 The `sending` state is deliberately **not** dimmed to 50% opacity. Dimming implies "not real
 yet"; in an optimistic UI the message *is* real, and flickering opacity on every send is visual
@@ -322,8 +333,8 @@ Decided here so Phase 0 does not invent one at random.
   second) with a system stack behind them while they load (D-110). Base 14px, code 13px, line-height
   1.6 prose / 1.54 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
-  choice kept per device. Both are designed together: neutral greys and one deep navy accent, with
-  dark derived in the same terms (D-110). Every colour pair is computed in both. Never colour alone
+  choice kept per device. Both are designed together: neutral greys, one blue accent and a navigation
+  that is dark navy in both, with dark derived in the same terms (D-110, D-118). Every colour pair is computed in both. Never colour alone
   to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.

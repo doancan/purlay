@@ -30,25 +30,31 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
   return (
     <aside
       aria-label={t('sidebar.label')}
+      // Navigation is drawn in the dark theme whatever the page's (D-118).
+      data-theme="dark"
       className={cn(
-        'flex w-sidebar shrink-0 flex-col bg-surface-000',
-        overlay ? 'h-full' : 'border-r-hairline border-border-subtle',
+        'flex w-sidebar shrink-0 flex-col bg-nav-surface',
+        overlay ? 'h-full' : 'border-r-hairline border-nav-border',
       )}
     >
       <div className="h-drag shrink-0" />
-      <p className="truncate px-4 pt-2 pb-3 text-title text-ink">{workspace.name}</p>
+      <p className="truncate px-4 py-3 text-title text-nav-ink">{workspace.name}</p>
       <div className="px-3 pb-3">
         <JumpField />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2 pb-4">
-        <ChannelList />
-        <PeopleList />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
+        <div className="pt-1 pb-3">
+          <ChannelList />
+        </div>
+        <div className="border-t-hairline border-nav-border py-3">
+          <PeopleList />
+        </div>
       </div>
-      <footer className="flex items-center gap-2 border-t-hairline border-border-subtle px-4 py-3">
+      <footer className="flex shrink-0 items-center gap-3 border-t-hairline border-nav-border px-3 py-3">
         <Avatar size="md" name={user.displayName} username={user.username} />
-        <div className="min-w-0">
-          <p className="truncate text-label text-ink">{user.displayName}</p>
-          <p className="truncate font-mono text-caption text-ink-subtle">{`@${user.username}`}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-label font-semibold text-nav-ink">{user.displayName}</p>
+          <p className="truncate font-mono text-caption text-nav-ink-muted">{`@${user.username}`}</p>
         </div>
       </footer>
     </aside>
