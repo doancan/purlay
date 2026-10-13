@@ -160,7 +160,7 @@ const ThreadPanelView = ({
           ref={heading}
           id={headingId}
           tabIndex={-1}
-          className="min-w-0 truncate text-title font-semibold text-ink outline-none"
+          className="min-w-0 truncate text-title font-semibold text-ink"
         >
           {t('thread.panel.title')}{' '}
           <span className="font-normal text-ink-muted">{`· ${channelLabel}`}</span>
