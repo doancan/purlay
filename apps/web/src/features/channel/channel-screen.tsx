@@ -8,6 +8,10 @@
  * reading it causes), the focused row, the scroll state — starts fresh when the person
  * moves to another channel and again when they come back.
  *
+ * **A thread opens beside it** (D-122): the channel's column and the thread panel share one row,
+ * and the panel covers the column on a narrow window. Which thread is open belongs to this visit,
+ * like the rest, unless the address names one.
+ *
  * A channel the person can see but has not joined has no read position and cannot be
  * written to; it shows its messages and a way to join, in place of the composer, so a link
  * to a public channel is useful before they are in it.
@@ -30,6 +34,9 @@ import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
 import { ChannelHeader, useChannelTitle } from './channel-header';
 import { MessageFeed } from './message-feed';
+import { ThreadsProvider, useOpenThread } from '../threads/thread-context';
+import { cn } from '../../ui/cn';
+import { ThreadPanel } from '../threads/thread';
 
 const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t } = useI18n();
@@ -65,11 +72,30 @@ const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   );
 };
 
+/**
+ * The channel's own column: header, feed and composer. Below the narrow line an open thread covers
+ * it, and what is covered is hidden too — from a screen reader and from Tab — while keeping its
+ * place and its scroll, so closing the thread puts the reader back where they were.
+ */
+const ConversationColumn = ({
+  children,
+}: {
+  readonly children: React.ReactNode;
+}): React.JSX.Element => {
+  const { openId } = useOpenThread();
+  return (
+    <div className={cn('flex min-w-0 flex-1 flex-col', openId !== null && 'max-narrow:invisible')}>
+      {children}
+    </div>
+  );
+};
+
 const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const title = useChannelTitle(channel);
   const { workspace } = useWorkspace();
   const { search } = useRoute();
   const member = channel.state !== null;
+  const conversation = channel.type === 'direct_message';
   // The thread the address asks for, read when the channel opens and not again.
   const [openThread] = useState(() => threadInSearch(search));
   useEffect(() => {
@@ -84,21 +110,32 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
 
   return (
     <EditingProvider>
-      <ChannelHeader channel={channel} />
-      <MessageFeed
-        channelId={channel.id}
-        channelName={title}
-        conversation={channel.type === 'direct_message'}
-        markerAfter={member && opened.unread ? opened.after : undefined}
-        readAtOpen={opened.after}
-        member={member}
-        openThread={openThread}
-      />
-      {member ? (
-        <Composer channelId={channel.id} channelName={title} autoFocus />
-      ) : (
-        <JoinBar channel={channel} />
-      )}
+      <ThreadsProvider openThread={openThread}>
+        <div className="relative flex min-h-0 flex-1">
+          <ConversationColumn>
+            <ChannelHeader channel={channel} />
+            <MessageFeed
+              channelId={channel.id}
+              channelName={title}
+              conversation={conversation}
+              markerAfter={member && opened.unread ? opened.after : undefined}
+              readAtOpen={opened.after}
+              member={member}
+              openThread={openThread}
+            />
+            {member ? (
+              <Composer channelId={channel.id} channelName={title} autoFocus />
+            ) : (
+              <JoinBar channel={channel} />
+            )}
+          </ConversationColumn>
+          <ThreadPanel
+            channelId={channel.id}
+            channelLabel={conversation ? title : `#${title}`}
+            channelName={title}
+          />
+        </div>
+      </ThreadsProvider>
     </EditingProvider>
   );
 };

@@ -88,6 +88,7 @@ export const sizeTokens = [
   'size-rail',
   'size-sidebar',
   'size-members',
+  'size-thread',
   'size-feed-max',
   'size-narrow',
   'size-attachment',

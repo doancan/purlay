@@ -59,8 +59,22 @@ test.describe('focus', () => {
       seen.add(stop.what);
       if (stop.ring < 2) unringed.push(`${stop.what} (${String(stop.ring)}px)`);
     }
-    // Enough of the page was crossed for the answer to mean something.
-    expect(seen.size).toBeGreaterThan(10);
+    // Enough of the page was crossed for the answer to mean something. On a narrow window the
+    // thread panel covers the channel and what it covers is out of the Tab order (D-122), so the
+    // page is the panel: its own controls were all reached, and nothing else was counted.
+    if (test.info().project.name.includes('narrow')) {
+      for (const control of [
+        'button "Close thread"',
+        'button "Resolve',
+        'textarea "Message a thread in',
+      ]) {
+        const reached = [...seen].some((stop) => stop.startsWith(control));
+        expect(reached, `${control} was not reached: ${[...seen].join(', ')}`).toBe(true);
+      }
+      expect(seen.size).toBeGreaterThan(4);
+    } else {
+      expect(seen.size).toBeGreaterThan(10);
+    }
     expect(unringed).toEqual([]);
   });
 });

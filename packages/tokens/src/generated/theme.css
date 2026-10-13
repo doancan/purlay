@@ -75,6 +75,7 @@
   --container-rail: var(--size-rail);
   --container-sidebar: var(--size-sidebar);
   --container-members: var(--size-members);
+  --container-thread: var(--size-thread);
   --container-feed: var(--size-feed-max);
   --container-attachment: var(--size-attachment);
   --height-attachment: var(--size-attachment);

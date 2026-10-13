@@ -50,7 +50,7 @@ test.describe('cold load', () => {
     const route = `/w/${world.workspace.slug}/c/${world.channels.api}`;
     // The frame is the sidebar, or — below the breakpoint, where it is an overlay — the toggle that opens it.
     const frame = page
-      .getByRole('complementary')
+      .getByRole('complementary', { name: 'Workspace' })
       .or(page.getByRole('button', { name: 'Open navigation' }));
     // Warm: the first visit puts the bundle in the browser's cache.
     await page.goto(route);

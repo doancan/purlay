@@ -232,21 +232,29 @@ export const isNarrow = (page: Page): boolean =>
 
 /**
  * The app's frame is up — the sidebar at a desktop width, its toggle at a narrow one — and the
- * screen has its title. Keys are listened for only after this.
+ * screen has its title. Keys are listened for only after this. At a narrow width a thread open in
+ * its panel covers the channel, toggle and title included (D-122), so the panel's own heading is
+ * the frame then.
  */
 export const shellReady = async (page: Page): Promise<void> => {
   const toggle = page.getByRole('button', { name: 'Open navigation' });
-  await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  const thread = page.getByRole('heading', { level: 2, name: /^Thread · / });
+  await expect(
+    toggle
+      .or(page.getByRole('complementary', { name: 'Workspace' }))
+      .or(thread)
+      .first(),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 }).or(thread).first()).toBeVisible();
 };
 
 /** The workspace sidebar, wherever this width keeps it: in place, or inside the overlay's dialog. */
-const sidebarOf = (page: Page): Locator => page.getByRole('complementary');
+const sidebarOf = (page: Page): Locator => page.getByRole('complementary', { name: 'Workspace' });
 
 /** Opens the sidebar if it is behind its toggle, and returns it. Safe to call when it is open. */
 export const openNav = async (page: Page): Promise<Locator> => {
   const toggle = page.getByRole('button', { name: 'Open navigation' });
-  await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
+  await expect(toggle.or(page.getByRole('complementary', { name: 'Workspace' }))).toBeVisible();
   if (await toggle.isVisible()) await toggle.click();
   const sidebar = sidebarOf(page);
   await expect(sidebar).toBeVisible();

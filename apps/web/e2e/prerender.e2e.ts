@@ -75,7 +75,7 @@ test.describe('the swap', () => {
     const narrow = (page.viewportSize()?.width ?? 0) < 900;
     const real = narrow
       ? page.getByRole('button', { name: 'Open navigation' })
-      : page.getByRole('complementary');
+      : page.getByRole('complementary', { name: 'Workspace' });
     await expect(real).toBeVisible();
     const after = await page.evaluate(() => {
       const sidebar = document.querySelector('aside');

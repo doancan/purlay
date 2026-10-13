@@ -1,12 +1,12 @@
 /**
- * The thread under a root, the way `UX.md` §4 draws it: the line that says where it stands,
- * the replies in place, the box to answer in, and Resolve — all through the real channel
- * screen over an API the test wrote and a socket it drives.
+ * A root's thread, the way `UX.md` §4 draws it (D-122): the line under the root that says where
+ * it stands, and the panel beside the feed that it opens — the root, the replies, the box to
+ * answer in, and Resolve — all through the real channel screen over an API the test wrote and a
+ * socket it drives.
  *
- * What these cannot show — whether the root really stays where it was in a browser's layout
- * engine, whether the fold looks like a fold, whether a reply near the end keeps the end in
- * view as it is laid out — is Playwright's; here the *numbers* the code assigns are asserted
- * (`installScrollMetrics`) and the geometry is stubbed where a rule depends on it.
+ * What these cannot show — the panel's width beside the feed, the overlay on a narrow window,
+ * whether the fold looks like a fold — is Playwright's; here the *numbers* the code assigns are
+ * asserted and the geometry is stubbed where a rule depends on it.
  */
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
@@ -148,23 +148,30 @@ describe('a root and its thread, closed', () => {
   });
 });
 
-describe('opening it, in place', () => {
-  test('shows the replies under the root, the count, Resolve and Collapse, and the box to answer in', async () => {
+describe('opening it, in the panel', () => {
+  test('shows the root, the replies under a count, Resolve, Close and the box to answer in, beside the feed', async () => {
     const view = await mount();
     await showThread(view);
-    const section = view.container.querySelector<HTMLElement>('[data-thread-root]');
-    if (section === null) throw new Error('the thread did not open');
-    const inside = within(section);
+    const panel = view.getByRole('complementary', { name: 'Thread · #api' });
+    expect(panel).toBe(sectionOf(view));
+    const inside = within(panel);
+    expect(inside.getByText('Why is the backoff 4s?')).toBeDefined();
+    expect(inside.getByText('2 replies')).toBeDefined();
     expect(inside.getByText('answer 3')).toBeDefined();
     expect(inside.getByText('answer 4')).toBeDefined();
-    expect(inside.getByRole('button', { name: /^2 replies/ }).getAttribute('aria-expanded')).toBe(
-      'true',
-    );
     expect(inside.getByRole('button', { name: /Resolve/ })).toBeDefined();
-    expect(inside.getByRole('button', { name: /Collapse/ })).toBeDefined();
+    expect(inside.getByRole('button', { name: 'Close thread' })).toBeDefined();
     expect(inside.getByLabelText('Message a thread in api')).toBeDefined();
-    // It is under *its* root, in the same column: no drawer.
-    expect(rowOf(view, messageIdAt(ROOT)).contains(section)).toBe(true);
+    // Beside the feed, not inside it: the root's row is marked as the one open, and its line says so.
+    const row = rowOf(view, messageIdAt(ROOT));
+    expect(row.contains(panel)).toBe(false);
+    expect(row.hasAttribute('data-thread-open')).toBe(true);
+    expect(rowOf(view, messageIdAt(1)).hasAttribute('data-thread-open')).toBe(false);
+    const line = within(row).getByRole('button', { name: /Thread open/ });
+    expect(line.getAttribute('aria-expanded')).toBe('true');
+    expect(line.getAttribute('aria-controls')).toBe(panel.id);
+    // Focus went into the panel, to its heading.
+    expect(document.activeElement).toBe(inside.getByRole('heading', { name: 'Thread · #api' }));
     await expectNoAxeViolations(view.container);
     view.unmountAll();
   });
@@ -195,7 +202,7 @@ describe('opening it, in place', () => {
     expect(
       view.getAllByRole('status').some((n) => n.textContent.includes('Loading replies…')),
     ).toBe(true);
-    expect(view.getByText('Why is the backoff 4s?')).toBeDefined();
+    expect(within(sectionOf(view)).getByText('Why is the backoff 4s?')).toBeDefined();
     await expectNoAxeViolations(view.container);
     await act(async () => {
       release(replies(3));
@@ -218,7 +225,7 @@ describe('opening it, in place', () => {
     });
     await showThread(view);
     expect(view.getByRole('alert').textContent).toContain("Couldn't load replies");
-    expect(view.getByText('Why is the backoff 4s?')).toBeDefined();
+    expect(within(sectionOf(view)).getByText('Why is the backoff 4s?')).toBeDefined();
     await expectNoAxeViolations(view.container);
     const retry = within(view.getByRole('alert')).getByRole('button', { name: 'Retry' });
     await person().click(retry);
@@ -246,29 +253,40 @@ describe('opening it, in place', () => {
     const rows = Array.from(
       view.container.querySelectorAll('[data-thread-root] [data-message-row]'),
     ).map((r) => r.getAttribute('data-message-id'));
-    expect(rows).toEqual([messageIdAt(3), messageIdAt(4)]);
+    // The root first, at the top of the panel, then its replies.
+    expect(rows).toEqual([messageIdAt(ROOT), messageIdAt(3), messageIdAt(4)]);
     expect(view.queryByRole('button', { name: 'Load more replies' })).toBeNull();
     view.unmountAll();
   });
 
-  test('collapsing puts it back to one line, and the Collapse button does it', async () => {
+  test('Close closes the panel, unmarks the row, and puts focus back on the root in the feed', async () => {
     const view = await mount();
     await showThread(view);
-    await person().click(view.getByRole('button', { name: /Collapse/ }));
+    await person().click(view.getByRole('button', { name: 'Close thread' }));
     await settle();
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
     expect(view.getByRole('button', { name: /Show thread/ }).getAttribute('aria-expanded')).toBe(
       'false',
     );
+    const row = rowOf(view, messageIdAt(ROOT));
+    expect(row.hasAttribute('data-thread-open')).toBe(false);
+    expect(document.activeElement).toBe(row);
     view.unmountAll();
   });
 
-  test('the count in its header is a button for the same thing', async () => {
-    const view = await mount();
-    await showThread(view);
-    await person().click(view.getByRole('button', { name: /^2 replies/ }));
+  test('one thread at a time: opening another replaces the one in the panel', async () => {
+    const other = aMessage(4, { content: 'Another question?', thread: open });
+    const view = await mount({ messages: page([aMessage(1), rootMessage(), other]) });
+    const [first] = view.getAllByRole('button', { name: /Show thread/ });
+    if (first === undefined) throw new Error('no thread line');
+    await person().click(first);
     await settle();
-    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    expect(sectionOf(view).dataset['threadRoot']).toBe(messageIdAt(ROOT));
+    await person().click(view.getByRole('button', { name: /Show thread/ }));
+    await settle();
+    expect(view.container.querySelectorAll('[data-thread-root]')).toHaveLength(1);
+    expect(sectionOf(view).dataset['threadRoot']).toBe(messageIdAt(4));
+    expect(rowOf(view, messageIdAt(ROOT)).hasAttribute('data-thread-open')).toBe(false);
     view.unmountAll();
   });
 
@@ -408,7 +426,7 @@ describe('live', () => {
     view.unmountAll();
   });
 
-  test('resolved on another device while it is open: it folds, without ceremony', async () => {
+  test('resolved on another device while it is open: the panel stays where the reader is, and says so', async () => {
     const animate = spyOn(HTMLElement.prototype, 'animate' as never);
     document.documentElement.style.setProperty('--duration-collapse', '120ms');
     const view = await mount();
@@ -421,7 +439,10 @@ describe('live', () => {
       ts: 1,
     });
     await settle();
-    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    // Nothing here asked for it, so nothing here closes under the person reading or writing (D-122).
+    const panel = sectionOf(view);
+    expect(within(panel).getByText('Resolved by alice · 2 replies')).toBeDefined();
+    expect(within(panel).getByRole('button', { name: /Reopen/ })).toBeDefined();
     expect(animate).not.toHaveBeenCalled();
     animate.mockRestore();
     view.unmountAll();
@@ -444,7 +465,7 @@ describe('live', () => {
 describe('resolving and reopening', () => {
   const resolvedRoot = (): Message => rootMessage({ thread: closed });
 
-  test('Resolve asks the server, folds the thread, says so, and leaves the resolved line', async () => {
+  test('Resolve asks the server, folds the thread, closes the panel, says so, and leaves the resolved line', async () => {
     const asked: string[] = [];
     const view = await mount({
       api: {
@@ -462,6 +483,7 @@ describe('resolving and reopening', () => {
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
       'Resolved by alice',
     );
+    expect(document.activeElement).toBe(rowOf(view, messageIdAt(ROOT)));
     expect(view.getAllByRole('status').some((n) => n.textContent === 'Thread resolved')).toBe(true);
     view.unmountAll();
   });
@@ -565,7 +587,7 @@ describe('resolving and reopening', () => {
     await settle();
     expect(view.container.querySelector('[data-thread-root]')).not.toBeNull();
     expect(view.getAllByRole('status').some((n) => n.textContent === 'Thread reopened')).toBe(true);
-    await person().click(view.getByRole('button', { name: /Collapse/ }));
+    await person().click(view.getByRole('button', { name: 'Close thread' }));
     await settle();
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
       'Open · 2 replies',
@@ -579,7 +601,7 @@ describe('the keyboard (UX §7)', () => {
     fireEvent.keyDown(el, { key: k, ...init });
   };
 
-  test('T opens and closes the thread of the focused message; R opens it and goes to the reply box', async () => {
+  test('T opens the thread of the focused message in the panel and moves focus there; Esc brings it back; R goes to the reply box', async () => {
     const view = await mount();
     const row = rowOf(view, messageIdAt(ROOT));
     act(() => {
@@ -587,10 +609,13 @@ describe('the keyboard (UX §7)', () => {
     });
     key(row, 't');
     await settle();
-    expect(view.container.querySelector('[data-thread-root]')).not.toBeNull();
-    key(row, 'T');
+    const panel = sectionOf(view);
+    const heading = within(panel).getByRole('heading', { name: 'Thread · #api' });
+    expect(document.activeElement).toBe(heading);
+    key(heading, 'Escape');
     await settle();
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    expect(document.activeElement).toBe(row);
     key(row, 'r');
     await settle();
     expect(document.activeElement).toBe(view.getByLabelText('Message a thread in api'));
@@ -611,6 +636,30 @@ describe('the keyboard (UX §7)', () => {
     key(box, 't');
     key(box, 'r');
     expect(document.activeElement).toBe(box);
+    view.unmountAll();
+  });
+
+  test('R on a message that is still sending, or failed, opens no thread: it has none yet', async () => {
+    const view = await mount();
+    connect(view);
+    const sending = view.engine().send({ channelId: IDS.api, content: 'on its way' });
+    await settle();
+    const row = rowOf(view, sending);
+    act(() => {
+      row.focus();
+    });
+    key(row, 'r');
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    act(() => {
+      view.feed.timers.advance(ACK_DEADLINE_MS);
+      view.world.timers.advance(ACK_DEADLINE_MS);
+    });
+    await settle();
+    expect(within(rowOf(view, sending)).getByText('Failed to send')).toBeDefined();
+    key(rowOf(view, sending), 'r');
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
     view.unmountAll();
   });
 
@@ -679,7 +728,7 @@ describe('the keyboard (UX §7)', () => {
     view.unmountAll();
   });
 
-  test("Esc inside an open thread folds it and keeps the person on its root; outside one it is the feed's", async () => {
+  test("Esc inside the panel closes it and puts the person back on its root; outside it, it is the feed's", async () => {
     const view = await mount();
     await showThread(view);
     const box = view.getByLabelText('Message a thread in api');
@@ -700,7 +749,7 @@ describe('the keyboard (UX §7)', () => {
     view.unmountAll();
   });
 
-  test("Esc on the question itself folds the thread under it, and a thread left open never takes the feed's Esc", async () => {
+  test("Esc on the question itself closes its thread beside it, and a thread left open never takes the feed's Esc", async () => {
     const view = await mount();
     await showThread(view);
     const root = rowOf(view, messageIdAt(ROOT));
@@ -713,7 +762,7 @@ describe('the keyboard (UX §7)', () => {
     expect(document.activeElement).toBe(root);
 
     // With a thread open and the person on some *other* message, Esc goes to the channel's
-    // composer — not to the reply box of the thread that is open, which comes first in the page.
+    // composer — not to the reply box in the panel, which is in the same region.
     await showThread(view);
     const other = rowOf(view, messageIdAt(1));
     act(() => {
@@ -735,140 +784,58 @@ describe('the keyboard (UX §7)', () => {
   });
 });
 
-describe('the root stays where it is', () => {
-  const stubTops = (
-    tops: { before: number; after: number },
-    open: () => boolean,
-  ): { restore: () => void } => {
-    const spy = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: HTMLElement,
-    ): DOMRect {
-      const isRoot = this.getAttribute('data-message-id') === messageIdAt(ROOT);
-      const top = isRoot ? (open() ? tops.after : tops.before) : 0;
-      return {
-        top,
-        bottom: top,
-        left: 0,
-        right: 0,
-        width: 0,
-        height: 0,
-        x: 0,
-        y: top,
-        toJSON: (): object => ({}),
-      };
-    });
+describe('the feed and the panel keep their places', () => {
+  test('opening a thread does not move the feed: nothing is pushed, so nothing is scrolled', async () => {
+    const view = await mount(); // 1000 tall in a 400 box, the reader at the bottom: 600
+    expect(view.metrics.top).toBe(600);
+    view.metrics.assigned.length = 0;
+    await showThread(view);
+    expect(view.metrics.assigned).toEqual([]);
+    expect(view.metrics.top).toBe(600);
+    view.unmountAll();
+  });
+
+  /** The panel's own scroller, with a height the test sets and a scroll position it reads. */
+  const panelScroller = (
+    view: ChannelView,
+  ): { el: HTMLElement; setHeight: (h: number) => void } => {
+    const el = sectionOf(view).querySelector<HTMLElement>('.overflow-y-auto');
+    if (el === null) throw new Error('the panel has no scroller');
+    let height = 500;
+    Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => height });
+    Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => 400 });
     return {
-      restore: (): void => {
-        spy.mockRestore();
+      el,
+      setHeight: (h: number): void => {
+        height = h;
       },
     };
   };
 
-  test('opening a thread gives the root back the place it had, by the amount it was pushed', async () => {
-    let opened = false;
-    const view = await mount({ layout: { scrollHeight: 2000, clientHeight: 400 } });
-    const stub = stubTops({ before: 200, after: 260 }, () => opened);
-    const before = view.metrics.assigned.length;
-    opened = true;
-    await showThread(view);
-    expect(view.metrics.assigned.length).toBeGreaterThan(before);
-    stub.restore();
-    view.unmountAll();
-  });
-
-  test('and does not carry a reader at the bottom down with the growth', async () => {
-    const view = await mount(); // 1000 tall in a 400 box, the reader at the bottom: 600
-    expect(view.metrics.top).toBe(600);
-    await showThread(view);
-    view.metrics.scrollHeight = 1400; // the thread opened beneath the root
-    view.metrics.assigned.length = 0;
-    view.feed.resize();
-    expect(view.metrics.assigned).not.toContain(1000);
-    expect(view.metrics.top).toBe(600);
-    view.unmountAll();
-  });
-
-  test('and the hold ends with the next scroll: growth at the bottom is followed again', async () => {
+  test('a reply that lands near the end of the open thread keeps the end in view', async () => {
     const view = await mount();
+    connect(view);
     await showThread(view);
-    view.metrics.scrollHeight = 1400;
-    view.feed.resize();
-    view.metrics.top = 1000; // the reader went to the new bottom themselves
-    fireEvent.scroll(view.scroller());
-    view.metrics.scrollHeight = 1500;
-    view.metrics.assigned.length = 0;
-    view.feed.resize();
-    expect(view.metrics.assigned).toContain(1100);
+    const { el, setHeight } = panelScroller(view);
+    // A first arrival sets the height the next one is measured against.
+    await arrive(view, { event: 'MESSAGE_CREATED', data: reply(6), ts: 1 });
+    el.scrollTop = 100; // 500 tall in a 400 box: at the end
+    setHeight(600);
+    await arrive(view, { event: 'MESSAGE_CREATED', data: reply(7), ts: 1 });
+    expect(el.scrollTop).toBe(200);
     view.unmountAll();
   });
 
-  test('a reply that lands near the end of an open thread keeps the end in view', async () => {
-    const view = await mount({ layout: { scrollHeight: 2000, clientHeight: 400 } });
+  test('a reader further up the thread is not dragged down by a reply', async () => {
+    const view = await mount();
     connect(view);
-    let end = 380;
-    const spy = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: HTMLElement,
-    ): DOMRect {
-      const isScroller = this.className.includes('overflow-y-auto');
-      const bottom = isScroller
-        ? 400
-        : this.parentElement?.getAttribute('data-thread-root') === null
-          ? end
-          : end;
-      return {
-        top: bottom,
-        bottom,
-        left: 0,
-        right: 0,
-        width: 0,
-        height: 0,
-        x: 0,
-        y: bottom,
-        toJSON: (): object => ({}),
-      };
-    });
     await showThread(view);
-    const count = view.metrics.assigned.length;
-    end = 470;
+    const { el, setHeight } = panelScroller(view);
+    await arrive(view, { event: 'MESSAGE_CREATED', data: reply(6), ts: 1 });
+    el.scrollTop = 0; // 100 above the end of a 500 box: reading the root
+    setHeight(600);
     await arrive(view, { event: 'MESSAGE_CREATED', data: reply(7), ts: 1 });
-    expect(view.metrics.assigned.length).toBeGreaterThan(count);
-    spy.mockRestore();
-    view.unmountAll();
-  });
-});
-
-describe('the end of a thread, when the reader is moved by something else', () => {
-  test('a scroll is not mistaken for growth: the reader who is taken elsewhere is not dragged back', async () => {
-    const view = await mount({ layout: { scrollHeight: 2000, clientHeight: 400 } });
-    connect(view);
-    // The end of the thread is fixed in the *content* (at 380); where it is on screen is the
-    // content position less wherever the reader has scrolled to.
-    const spy = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-      this: HTMLElement,
-    ): DOMRect {
-      const isScroller = this.className.includes('overflow-y-auto');
-      const bottom = isScroller ? 400 : 380 - view.metrics.top;
-      return {
-        top: isScroller ? 0 : bottom,
-        bottom,
-        left: 0,
-        right: 0,
-        width: 0,
-        height: 0,
-        x: 0,
-        y: bottom,
-        toJSON: (): object => ({}),
-      };
-    });
-    view.metrics.top = 1600;
-    await showThread(view);
-    // The reader is taken to the thread (a link to it scrolls it into view) and a reply lands: the
-    // thread's box grew by a few pixels, not by the sixteen hundred the reader was just carried.
-    view.metrics.top = 0;
-    const count = view.metrics.assigned.length;
-    await arrive(view, { event: 'MESSAGE_CREATED', data: reply(7), ts: 1 });
-    expect(view.metrics.assigned.slice(count).filter((top) => top > 400)).toEqual([]);
-    spy.mockRestore();
+    expect(el.scrollTop).toBe(0);
     view.unmountAll();
   });
 });
@@ -909,9 +876,84 @@ describe('a thread asked for by the address', () => {
     view.unmountAll();
   });
 
+  test('once its root is brought into view, the feed lets go of the bottom: growth does not carry the reader away', async () => {
+    const spy = spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => undefined);
+    const view = await mount({ path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}` });
+    await settle();
+    expect(spy).toHaveBeenCalled();
+    view.metrics.scrollHeight = 1400; // older content, or a picture, grew the feed
+    view.metrics.assigned.length = 0;
+    view.feed.resize();
+    expect(view.metrics.assigned).not.toContain(1000);
+    spy.mockRestore();
+    view.unmountAll();
+  });
+
+  test('and the hold ends with the next scroll: growth at the bottom is followed again', async () => {
+    const spy = spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => undefined);
+    const view = await mount({ path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}` });
+    await settle();
+    view.metrics.scrollHeight = 1400;
+    view.feed.resize();
+    view.metrics.top = 1000; // the reader went to the new bottom themselves
+    fireEvent.scroll(view.scroller());
+    view.metrics.scrollHeight = 1500;
+    view.metrics.assigned.length = 0;
+    view.feed.resize();
+    expect(view.metrics.assigned).toContain(1100);
+    spy.mockRestore();
+    view.unmountAll();
+  });
+
   test('an address that names nothing real opens nothing', async () => {
     const view = await mount({ path: `/w/acme/c/${IDS.api}?thread=not-an-id` });
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a thread opened by the address takes focus, so a narrow window, where it covers the composer, keeps it', async () => {
+    const view = await mount({ path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}` });
+    await settle();
+    const panel = sectionOf(view);
+    expect(
+      document.activeElement === within(panel).getByRole('heading', { name: 'Thread · #api' }),
+    ).toBe(true);
+    view.unmountAll();
+  });
+
+  test('a thread the whole history does not hold says so, instead of loading for ever', async () => {
+    const view = await mount({
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(99)}`,
+      messages: page([aMessage(1)]),
+    });
+    await settle();
+    const panel = sectionOf(view);
+    expect(within(panel).getByText('This thread is not in this channel.')).toBeDefined();
+    expect(within(panel).queryByLabelText('Loading replies…')).toBeNull();
+    await person().click(within(panel).getByRole('button', { name: 'Close thread' }));
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a read-back that fails on its way to the root says so in the panel, and Retry finds it', async () => {
+    let calls = 0;
+    const view = await mount({
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}`,
+      messages: () => {
+        calls += 1;
+        if (calls === 1) return Promise.resolve(page([aMessage(5)], 'older'));
+        if (calls === 2) return Promise.reject(new Error('the network went away'));
+        return Promise.resolve(page([aMessage(1), rootMessage()]));
+      },
+    });
+    await settle();
+    const panel = sectionOf(view);
+    const alert = within(panel).getByRole('alert');
+    expect(alert.textContent).toContain("Couldn't load this thread");
+    await person().click(within(alert).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(within(sectionOf(view)).getByText('Why is the backoff 4s?')).toBeDefined();
     view.unmountAll();
   });
 });

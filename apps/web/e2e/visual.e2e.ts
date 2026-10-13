@@ -19,20 +19,25 @@ const RICH = [
   'Two lines\nand a third line',
 ];
 
+// Only what is on screen: a thread panel on a narrow window covers the channel, and a mask drawn
+// over what is under it would paint over the panel instead (D-122).
 const masks = (page: Page): Locator[] => [
-  page.locator('time'),
+  page.locator('time:visible'),
   // The title and the topic beside it: a test's room has a name of its own length, and the group
   // takes the header's room whatever it is, so the mask is one size every run.
-  page.locator('[data-header-title]'),
+  page.locator('[data-header-title]:visible'),
+  // The thread panel names the room too.
+  page.locator('[data-thread-root] h2'),
   page.getByRole('textbox'),
-  page.locator('[data-feed-marker]'),
+  page.locator('[data-feed-marker]:visible'),
   // The workspace-wide count of open questions moves with every other test.
   page.getByRole('link', { name: /^Open questions/ }),
 ];
 
 const ready = async (page: Page): Promise<void> => {
   await shellReady(page);
-  await expect(page.locator('[data-message-row]').first()).toBeVisible();
+  // The first row that is on screen: under a thread panel on a narrow window, that is the panel's root.
+  await expect(page.locator('[data-message-row]:visible').first()).toBeVisible();
   // Fonts and layout settled: the pictures must not catch a reflow.
   await page.evaluate(() => document.fonts.ready);
 };
@@ -60,7 +65,7 @@ test.describe('a conversation', () => {
     await snap(page, 'conversation.png');
   });
 
-  test('with a thread collapsed, one open, and one resolved', async ({
+  test('with a thread closed, one open in the panel, and one resolved', async ({
     page,
     signIn,
     room,
@@ -78,7 +83,10 @@ test.describe('a conversation', () => {
     await signIn();
     await page.goto(`${made.path}?thread=${open.id}`);
     await ready(page);
-    await expect(page.locator(`[data-thread-root="${open.id}"]`)).toBeVisible();
+    const panel = page.locator(`[data-thread-root="${open.id}"]`);
+    await expect(panel).toBeVisible();
+    // The panel's replies drawn, not its skeleton (D-122).
+    await expect(panel.getByText('and a follow-up')).toBeVisible();
     await snap(page, 'threads.png');
   });
 

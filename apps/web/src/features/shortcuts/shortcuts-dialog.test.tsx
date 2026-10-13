@@ -41,7 +41,7 @@ describe('the reference', () => {
       'Close the topmost thing',
       'Previous or next unread channel',
       'Move between messages',
-      'Expand or collapse the focused thread',
+      'Open the focused thread in the panel',
       'Reply to the focused message',
       'Resolve or reopen the focused thread',
       'Send the message',

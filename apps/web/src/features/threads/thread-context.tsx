@@ -1,69 +1,74 @@
 /**
- * Which threads are open in this channel visit, and the keys that act on them
- * (`UX.md` §4, §7).
+ * Which thread is open in the panel in this channel visit, and the keys that act on threads
+ * (`UX.md` §4, §7; D-122).
  *
- * **Expansion belongs to the screen**, not to the cache or the server: it is where the
- * person is looking. The provider sits inside the feed, which is keyed by the channel, so
- * every thread is collapsed when the channel changes and again when the person comes back —
- * a thread opened last week is not one to find open today.
+ * **One thread at a time, beside the feed.** The panel shows one root's thread; opening another
+ * replaces it. **Which one belongs to the screen**, not to the cache or the server: the provider
+ * sits inside the channel view, which is keyed by the channel, so the panel is closed when the
+ * channel changes and again when the person comes back — unless the address asks for one
+ * (`?thread=`).
  *
- * **Two contexts, on purpose.** What can be *done* (`useThreads`) is stable for the life of
- * the feed — functions that read the latest state through a ref — so the fifty rows of a
- * channel, each offering a Reply button, are not re-rendered when one thread opens. What is
- * *open* (`useThreadView`) changes, and is read only by the thread it is about.
+ * **Two contexts, on purpose.** What can be *done* (`useThreads`) is stable for the life of the
+ * channel — functions that read the latest state through a ref — so the fifty rows of a channel,
+ * each offering a Reply button, are not re-rendered when a thread opens. What is *open*
+ * (`useThreadView`, `useOpenThread`) changes, and is read by the row it marks and the panel.
  *
- * **The root does not move.** Opening or closing a thread changes the height of what is
- * below the root it belongs to, and the feed's rule of sticking to the bottom (or the
- * browser's own anchoring) would answer by moving the root. Every change records where the
- * root's row is first and puts it back after the layout, and tells the feed it is no longer
- * "at the bottom" so it does not scroll to follow the growth (`UX.md` §6: expanding a
- * thread anchors on the root).
+ * **Focus follows the panel** (`UX.md` §7): opening moves focus into it — its heading, or the
+ * reply box when the person asked to reply — and closing puts it back on the root's row in the
+ * feed, so a keyboard user is never left on something that has gone.
  *
- * **Keys act on the focused message** and only there: on a row, or inside its thread. `T`
- * and `R` are single keys and so never fire while someone is typing; Resolve (⌘⇧R) and Esc
- * are the two a person reaches for from inside the reply box, so those work there.
+ * **Keys act on the focused message** and only there: on a row, or inside the panel. `T` and `R`
+ * are single keys and so never fire while someone is typing; Resolve (⌘⇧R) and Esc are the two a
+ * person reaches for from inside the reply box, so those work there.
  */
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
+import { foldAway } from './collapse';
 
-/** What a thread lets the keyboard do to it. */
+/** What a root's row lets the keyboard and the panel do to its thread. */
 interface ThreadControls {
-  /** Only a root that has replies has a thread to show, hide or resolve. */
+  /** Only a root that has replies has a thread to show or resolve. */
   readonly hasReplies: () => boolean;
   readonly toggleResolution: () => void;
 }
 
-/** What the screen can do about threads. Stable for the life of the feed. */
+/** Where focus goes when the panel has opened. */
+type PanelFocus = 'panel' | 'reply';
+
+/** What the screen can do about threads. Stable for the life of the channel view. */
 interface ThreadsApi {
-  readonly toggle: (rootId: string) => void;
-  /** Opens a thread; with `focusReply` the reply box takes focus once it is there. */
-  readonly expand: (rootId: string, options?: { readonly focusReply?: boolean }) => void;
-  readonly collapse: (rootId: string) => void;
-  /** The feed's scrolling element. */
-  readonly scroller: React.RefObject<HTMLElement | null>;
-  /** The reply box has taken focus (or there was nothing to take it): the request is spent. */
-  readonly clearReplyRequest: () => void;
+  /** Opens a root's thread in the panel and moves focus into it, or keeps it where it is. */
+  readonly open: (rootId: string, focus?: PanelFocus | 'none') => void;
+  /** Closes the panel and puts focus back on the root's row in the feed. */
+  readonly close: () => void;
+  /** Resolved from here: folds the open thread away with the product's one animation, then closes it. */
+  readonly settle: (rootId: string) => Promise<void>;
+  /** The panel's body, which `settle` folds. */
+  readonly body: React.RefObject<HTMLElement | null>;
+  /** The focus the panel was opened with has been given: the request is spent. */
+  readonly clearFocusRequest: () => void;
   readonly register: (rootId: string, controls: ThreadControls) => () => void;
-  /** Handles a key pressed in the feed; true when it was this slice's. */
+  /** Resolve or reopen a root's thread, by the controls its row registered. */
+  readonly toggleResolution: (rootId: string) => void;
+  /** Handles a key pressed on a row or in the panel; true when it was this slice's. */
   readonly handleKey: (event: React.KeyboardEvent) => boolean;
 }
 
 interface ThreadsState {
-  readonly expanded: ReadonlySet<string>;
-  /** The root whose reply box should take focus now, until it has. */
-  readonly replyRequest: string | null;
+  readonly openId: string | null;
+  /** Where focus should go now that the panel is open, until it has. */
+  readonly focusRequest: PanelFocus | null;
 }
 
 const ThreadsContext = createContext<ThreadsApi | null>(null);
-const StateContext = createContext<ThreadsState>({ expanded: new Set(), replyRequest: null });
+const StateContext = createContext<ThreadsState>({ openId: null, focusRequest: null });
 
 export const useThreads = (): ThreadsApi => {
   const api = useContext(ThreadsContext);
@@ -71,140 +76,106 @@ export const useThreads = (): ThreadsApi => {
   return api;
 };
 
-/** Whether one root's thread is open, and whether its reply box has been asked for. */
-export const useThreadView = (
-  rootId: string,
-): { readonly expanded: boolean; readonly replyRequested: boolean } => {
-  const { expanded, replyRequest } = useContext(StateContext);
-  return { expanded: expanded.has(rootId), replyRequested: replyRequest === rootId };
-};
+/** The thread open in the panel, and where focus is to go in it. */
+export const useOpenThread = (): ThreadsState => useContext(StateContext);
+
+/** Whether one root's thread is the one open in the panel. */
+export const useThreadView = (rootId: string): boolean =>
+  useContext(StateContext).openId === rootId;
+
+/** The root's own row in the channel's feed — not its copy at the top of the panel. */
+const feedRowOf = (rootId: string): HTMLElement | null =>
+  document.querySelector<HTMLElement>(
+    `[role="feed"] [data-message-row][data-message-id="${rootId}"]`,
+  );
 
 const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
   (target.matches('input, textarea, select') || target.isContentEditable);
 
 export interface ThreadsProviderProps {
-  /** The feed's scrolling element, whose scroll position is kept steady. */
-  readonly scroller: React.RefObject<HTMLElement | null>;
-  /** Tells the feed the reader is deliberately not following the bottom. */
-  readonly holdPlace: () => void;
-  /** A thread to open when the channel does (the open-questions view links to one). */
+  /** A thread to open when the channel does (the open-questions view and the inbox link to one). */
   readonly openThread?: string | null | undefined;
   readonly children: React.ReactNode;
 }
 
 export const ThreadsProvider = ({
-  scroller,
-  holdPlace,
   openThread = null,
   children,
 }: ThreadsProviderProps): React.JSX.Element => {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-    () => new Set(openThread === null ? [] : [openThread]),
-  );
-  const [replyRequest, setReplyRequest] = useState<string | null>(null);
-  const latest = useRef(expanded);
-  latest.current = expanded;
-  const controls = useRef(new Map<string, ThreadControls>());
-  const anchor = useRef<{ readonly id: string; readonly top: number } | null>(null);
-  const reveal = useRef(openThread);
-
-  const rowOf = useCallback(
-    (rootId: string): HTMLElement | null =>
-      scroller.current?.querySelector<HTMLElement>(
-        `[data-message-row][data-message-id="${rootId}"]`,
-      ) ?? null,
-    [scroller],
-  );
-
-  const change = useCallback(
-    (rootId: string, open: boolean): void => {
-      if (latest.current.has(rootId) === open) return;
-      const row = rowOf(rootId);
-      if (row !== null) anchor.current = { id: rootId, top: row.getBoundingClientRect().top };
-      holdPlace();
-      setExpanded((current) => {
-        const next = new Set(current);
-        if (open) next.add(rootId);
-        else next.delete(rootId);
-        return next;
-      });
-    },
-    [rowOf, holdPlace],
-  );
-
-  // After the layout that follows an open or a close, give the root back its place.
-  useLayoutEffect(() => {
-    const held = anchor.current;
-    anchor.current = null;
-    const el = scroller.current;
-    if (held === null || el === null) return;
-    const row = rowOf(held.id);
-    if (row === null) return;
-    el.scrollTop += row.getBoundingClientRect().top - held.top;
-  }, [expanded, scroller, rowOf]);
-
-  // A thread asked for by the address is brought into view once its row is on screen.
-  useEffect(() => {
-    if (reveal.current === null) return;
-    const row = rowOf(reveal.current);
-    if (row === null) return;
-    reveal.current = null;
-    // The reader was at the bottom when the feed opened, and the feed follows the bottom while the
-    // box around it changes size: without letting go first, the resize that comes with the thread
-    // opening and the older pages above it carries the reader straight back down, out of sight of
-    // the thing the link was for (found in a browser, in a channel with a hundred messages).
-    holdPlace();
-    row.scrollIntoView({ block: 'center' });
+  // A thread the address opens takes focus like one opened by hand: on a narrow window the panel
+  // covers the composer that would otherwise have it.
+  const [state, setState] = useState<ThreadsState>({
+    openId: openThread,
+    focusRequest: openThread === null ? null : 'panel',
   });
+  const latest = useRef(state.openId);
+  latest.current = state.openId;
+  const controls = useRef(new Map<string, ThreadControls>());
+  const body = useRef<HTMLElement>(null);
+  const returnTo = useRef<string | null>(null);
 
-  const expand = useCallback(
-    (rootId: string, options?: { readonly focusReply?: boolean }): void => {
-      change(rootId, true);
-      if (options?.focusReply === true) setReplyRequest(rootId);
+  const open = useCallback((rootId: string, focus: PanelFocus | 'none' = 'panel'): void => {
+    setState({ openId: rootId, focusRequest: focus === 'none' ? null : focus });
+  }, []);
+
+  const close = useCallback((): void => {
+    const was = latest.current;
+    if (was === null) return;
+    latest.current = null;
+    returnTo.current = was;
+    setState({ openId: null, focusRequest: null });
+  }, []);
+
+  // Focus goes back to the root once the panel has gone: on a narrow window the conversation is
+  // hidden under the panel until then, and a hidden row cannot take focus.
+  useLayoutEffect(() => {
+    const id = returnTo.current;
+    if (state.openId !== null || id === null) return;
+    returnTo.current = null;
+    feedRowOf(id)?.focus();
+  }, [state.openId]);
+
+  const settle = useCallback(
+    async (rootId: string): Promise<void> => {
+      if (latest.current !== rootId) return;
+      if (body.current !== null) await foldAway(body.current);
+      if (latest.current === rootId) close();
     },
-    [change],
+    [close],
   );
-  const collapse = useCallback(
-    (rootId: string): void => {
-      change(rootId, false);
-    },
-    [change],
-  );
-  const toggle = useCallback(
-    (rootId: string): void => {
-      change(rootId, !latest.current.has(rootId));
-    },
-    [change],
-  );
+
   const register = useCallback((rootId: string, entry: ThreadControls): (() => void) => {
     controls.current.set(rootId, entry);
     return (): void => {
-      controls.current.delete(rootId);
+      if (controls.current.get(rootId) === entry) controls.current.delete(rootId);
     };
   }, []);
-  const clearReplyRequest = useCallback((): void => {
-    setReplyRequest(null);
+  const toggleResolution = useCallback((rootId: string): void => {
+    controls.current.get(rootId)?.toggleResolution();
+  }, []);
+  const clearFocusRequest = useCallback((): void => {
+    setState((current) =>
+      current.focusRequest === null ? current : { ...current, focusRequest: null },
+    );
   }, []);
 
   const handleKey = useCallback(
     (event: React.KeyboardEvent): boolean => {
       const target = event.target as HTMLElement;
-      const inThread = target.closest<HTMLElement>('[data-thread-root]');
+      const inPanel = target.closest<HTMLElement>('[data-thread-root]');
       const row = target.closest<HTMLElement>('[data-message-row]');
-      const rootId = inThread?.dataset['threadRoot'] ?? row?.dataset['messageId'];
+      const rootId = inPanel?.dataset['threadRoot'] ?? row?.dataset['messageId'];
       if (rootId === undefined) return false;
       const key = event.key.toLowerCase();
 
       if (event.key === 'Escape') {
-        // Out of a thread: fold it and keep the person on its root. Focus on the root itself counts —
-        // the thread is *its* content, so Esc on the question closes the thread under it, which is
-        // what "Esc closes the topmost thing" (`UX.md` §7) means when the thread is the topmost thing
-        // and the person has not moved into it (found in a browser: T opened it, Esc did not close it).
-        if (!latest.current.has(rootId)) return false;
+        // In the panel, Esc closes it and returns to the root (`UX.md` §7: the topmost thing).
+        // On the root's own row, with its thread open beside it, the thread is still the topmost
+        // thing, so Esc there closes it too; on any other row Esc is the feed's.
+        if (inPanel === null && latest.current !== rootId) return false;
         event.preventDefault();
-        collapse(rootId);
-        rowOf(rootId)?.focus();
+        close();
         return true;
       }
       if (key === 'r' && event.shiftKey && (event.metaKey || event.ctrlKey) && !event.altKey) {
@@ -217,26 +188,37 @@ export const ThreadsProvider = ({
         return false;
       }
       if (key === 't') {
-        if (controls.current.get(rootId)?.hasReplies() !== true) return false;
+        if (inPanel === null && controls.current.get(rootId)?.hasReplies() !== true) return false;
         event.preventDefault();
-        toggle(rootId);
+        open(rootId, 'panel');
         return true;
       }
       if (key === 'r') {
+        // A reply has no thread of its own (I-1): R on one in the panel answers its root. In the
+        // feed only a sent root registers controls; one still sending, or failed, has no thread yet.
+        if (inPanel === null && !controls.current.has(rootId)) return false;
         event.preventDefault();
-        expand(rootId, { focusReply: true });
+        open(rootId, 'reply');
         return true;
       }
       return false;
     },
-    [collapse, expand, toggle, rowOf],
+    [close, open],
   );
 
   const api = useMemo<ThreadsApi>(
-    () => ({ toggle, expand, collapse, scroller, clearReplyRequest, register, handleKey }),
-    [toggle, expand, collapse, scroller, clearReplyRequest, register, handleKey],
+    () => ({
+      open,
+      close,
+      settle,
+      body,
+      clearFocusRequest,
+      register,
+      toggleResolution,
+      handleKey,
+    }),
+    [open, close, settle, clearFocusRequest, register, toggleResolution, handleKey],
   );
-  const state = useMemo<ThreadsState>(() => ({ expanded, replyRequest }), [expanded, replyRequest]);
 
   return (
     <ThreadsContext.Provider value={api}>

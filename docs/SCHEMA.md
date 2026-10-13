@@ -477,7 +477,7 @@ CREATE TABLE messages (
 ```sql
 -- Primary feed. Keyset pagination on `id` alone: UUIDv7 is byte-wise time-ordered,
 -- and PostgreSQL compares the uuid type byte-wise, so this index IS chronological.
--- Root messages only, because thread replies render inline under their parent. (D-8)
+-- Root messages only, because thread replies are read with their root, in its thread (D-8, D-122).
 -- A deleted root with replies keeps its place, as its tombstone (D-103 §7). Redefined by 0016.
 CREATE INDEX idx_messages_channel_feed
     ON messages (channel_id, id DESC)

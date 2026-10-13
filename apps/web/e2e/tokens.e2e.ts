@@ -16,7 +16,7 @@ test.describe('the tokens, as computed', () => {
     await page.goto('/');
     // Below the breakpoint the sidebar is an overlay, so it is opened to be measured.
     const toggle = page.getByRole('button', { name: 'Open navigation' });
-    await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
+    await expect(toggle.or(page.getByRole('complementary', { name: 'Workspace' }))).toBeVisible();
     if (await toggle.isVisible()) await toggle.click();
     await page.waitForSelector('aside svg');
   });

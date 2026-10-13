@@ -1,7 +1,8 @@
 /**
- * The wedge, end to end (`UX.md` §4, D-99 §5): a thread opens in place under its question, can be
- * answered and closed from the keyboard, and the questions nobody has answered yet are one screen
- * away. Every test makes its own room, so threads opened and closed here are nobody else's.
+ * The wedge, end to end (`UX.md` §4, D-99 §5, D-122): a thread opens in the panel beside its
+ * question, can be answered and closed from the keyboard, and the questions nobody has answered yet
+ * are one screen away. Every test makes its own room, so threads opened and closed here are nobody
+ * else's.
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Persona, type Room } from './fixtures';
@@ -32,7 +33,7 @@ const threadOf = (page: Page, rootId: string): Locator =>
   page.locator(`[data-thread-root="${rootId}"]`);
 
 test.describe('opening and closing a thread', () => {
-  test('with the mouse: in place under its question, and the question does not move', async ({
+  test('with the mouse: in the panel beside the feed, the question marked and not moved; Close brings focus back', async ({
     page,
     signIn,
     room,
@@ -41,22 +42,39 @@ test.describe('opening and closing a thread', () => {
     const made = await aQuestion(room, api);
     await signIn();
     await page.goto(made.path);
-    const row = rowWith(page, made.question);
+    const row = rowWith(page, made.question).first();
     const before = (await row.boundingBox())?.y ?? -1;
     await page.getByRole('button', { name: /Open · 2 replies/ }).click();
     const thread = threadOf(page, made.rootId);
     await expect(thread).toBeVisible();
+    await expect(page.getByRole('complementary', { name: `Thread · #${made.name}` })).toBeVisible();
     await expect(thread.getByText('the upstream rate limit')).toBeVisible();
-    // Opened under the question, not beside it (there is no drawer), and the question stayed.
+    await expect(row).toHaveAttribute('data-thread-open', '');
     expect(await page.getByRole('dialog').count()).toBe(0);
-    expect(Math.abs(((await row.boundingBox())?.y ?? -1) - before)).toBeLessThan(1.5);
+    const panel = await thread.boundingBox();
+    const main = await page.getByRole('main').boundingBox();
+    const narrow = test.info().project.name.includes('narrow');
+    if (narrow) {
+      // Below the narrow line it covers the conversation.
+      expect(Math.abs((panel?.x ?? -1) - (main?.x ?? 0))).toBeLessThan(1.5);
+      expect(Math.abs((panel?.width ?? -1) - (main?.width ?? 0))).toBeLessThan(1.5);
+    } else {
+      // Beside the feed, at the token's width, and the question stayed where it was.
+      expect(Math.round(panel?.width ?? -1)).toBe(380); // `size-thread` (D-122)
+      expect((panel?.x ?? 0) + 1).toBeGreaterThanOrEqual(
+        ((await page.getByRole('feed').boundingBox())?.x ?? 0) +
+          ((await page.getByRole('feed').boundingBox())?.width ?? 0),
+      );
+      expect(Math.abs(((await row.boundingBox())?.y ?? -1) - before)).toBeLessThan(1.5);
+    }
 
-    await thread.getByRole('button', { name: /^Collapse/ }).click();
+    await thread.getByRole('button', { name: 'Close thread' }).click();
     await expect(thread).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Open · 2 replies/ })).toBeVisible();
+    await expect(row).toBeFocused();
   });
 
-  test('with the keyboard: T opens the focused question’s thread, Esc closes it, and R goes straight to the reply box', async ({
+  test('with the keyboard: T opens the focused question’s thread in the panel and focus goes in, Esc closes it and focus comes back, and R goes straight to the reply box', async ({
     page,
     signIn,
     room,
@@ -65,13 +83,15 @@ test.describe('opening and closing a thread', () => {
     const made = await aQuestion(room, api);
     await signIn();
     await page.goto(made.path);
-    const row = rowWith(page, made.question);
+    const row = rowWith(page, made.question).first();
     await row.focus();
     await page.keyboard.press('t');
     const thread = threadOf(page, made.rootId);
     await expect(thread).toBeVisible();
+    await expect(thread.getByRole('heading', { name: /^Thread/ })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(thread).toHaveCount(0);
+    await expect(row).toBeFocused();
 
     await row.focus();
     await page.keyboard.press('r');
@@ -81,7 +101,7 @@ test.describe('opening and closing a thread', () => {
 });
 
 test.describe('answering', () => {
-  test('from the inline reply box: the answer appears under the question, the count follows, and the server has exactly one', async ({
+  test('from the panel’s reply box: the answer appears in the thread, the count follows, and the server has exactly one', async ({
     page,
     signIn,
     room,
@@ -96,13 +116,13 @@ test.describe('answering', () => {
     await reply.fill('so it will stay at four');
     await reply.press('Enter');
     await expect(thread.getByText('so it will stay at four')).toBeVisible();
-    await expect(thread.getByRole('button', { name: /^3 replies/ })).toBeVisible();
+    await expect(thread.getByText('3 replies', { exact: true })).toBeVisible();
 
     const replies = await api('dogancan').get<{ data: { content: string }[] }>(
       `/api/messages/${made.rootId}/thread`,
     );
     expect(replies.data.filter((r) => r.content === 'so it will stay at four')).toHaveLength(1);
-    // One row for it, inside the thread: a reply has no row of its own in the channel's feed.
+    // One row for it, in the panel: a reply has no row of its own in the channel's feed.
     await expect(
       thread.locator('[data-message-row]', { hasText: 'so it will stay at four' }),
     ).toHaveCount(1);
@@ -110,7 +130,7 @@ test.describe('answering', () => {
 });
 
 test.describe('resolving', () => {
-  test('with Cmd/Ctrl+Shift+R: the thread closes and reads as resolved, the page does not reload, and the same keys reopen it', async ({
+  test('with Cmd/Ctrl+Shift+R: the panel closes and the thread reads as resolved, the page does not reload, and the same keys reopen it', async ({
     page,
     signIn,
     room,
@@ -123,7 +143,7 @@ test.describe('resolving', () => {
     await page.evaluate(() => {
       (window as unknown as { __stayed: boolean }).__stayed = true;
     });
-    const row = rowWith(page, made.question);
+    const row = rowWith(page, made.question).first();
     await row.focus();
     await page.keyboard.press('t');
     await expect(threadOf(page, made.rootId)).toBeVisible();
@@ -140,7 +160,7 @@ test.describe('resolving', () => {
     // Resolved is dimmed in the feed: the channel goes quiet as questions close.
     await expect(rowWith(page, made.question).locator('.text-ink-muted').first()).toBeVisible();
 
-    // Reopening is done from inside the thread, so it stays open: resolved becomes open, in place.
+    // Reopening is done from inside the panel, so it stays open: resolved becomes open, in place.
     await row.focus();
     await page.keyboard.press('t');
     await expect(threadOf(page, made.rootId)).toBeVisible();
@@ -195,20 +215,24 @@ test.describe('resolving', () => {
       // Its replies drawn before anything is measured: under load they arrived after Resolve was
       // pressed, and the thread grew as it went — `[163,163,231]`, a size that is not motion (#347).
       await expect(thread.getByText('documented in the postmortem')).toBeVisible();
-      // Press Resolve in the page and sample the thread's height on every frame until it is gone.
+      // Press Resolve in the page and sample the height of the panel's thread on every frame until
+      // the panel is gone: the panel keeps its height, and what folds is the thread inside it.
       const heights = await tab.evaluate(async (rootId) => {
         const section = document.querySelector<HTMLElement>(`[data-thread-root="${rootId}"]`);
+        const body = section?.querySelector<HTMLElement>('[data-thread-body]') ?? null;
         const button = [...(section?.querySelectorAll('button') ?? [])].find((b) =>
           b.textContent.startsWith('Resolve'),
         );
-        if (section === null || button === undefined) return [-1];
+        if (body === null || button === undefined) return [-1];
         // Its height before the press, taken now rather than on a frame: under reduced motion the
         // thread can be gone by the first frame, and a run that measured nothing proved nothing (#347).
-        const samples: number[] = [section.getBoundingClientRect().height];
+        const samples: number[] = [body.getBoundingClientRect().height];
         button.click();
         await new Promise<void>((resolve) => {
           const step = (): void => {
-            const live = document.querySelector<HTMLElement>(`[data-thread-root="${rootId}"]`);
+            const live = document.querySelector<HTMLElement>(
+              `[data-thread-root="${rootId}"] [data-thread-body]`,
+            );
             if (live === null || samples.length > 60) {
               resolve();
               return;
@@ -268,7 +292,7 @@ test.describe('the open questions', () => {
     await expect(group).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('a link with ?thread= lands on a thread older than the first page, opened and in sight', async ({
+  test('a link with ?thread= lands on a thread older than the first page: open in the panel, its question in sight in the feed', async ({
     page,
     signIn,
     room,
@@ -293,8 +317,16 @@ test.describe('the open questions', () => {
     const thread = threadOf(page, root.id);
     await expect(thread).toBeVisible({ timeout: 10_000 });
     await expect(thread.getByText('an old answer')).toBeVisible();
-    // In sight: inside the visible part of the feed, not above or below it.
-    const box = await thread.boundingBox();
+    // On a narrow window the panel covers the feed; closed, the feed is where the question is.
+    if (test.info().project.name.includes('narrow')) {
+      await thread.getByRole('button', { name: 'Close thread' }).click();
+      await expect(thread).toHaveCount(0);
+    }
+    // The question in sight: inside the visible part of the feed, not above or below it.
+    const box = await page
+      .getByRole('feed')
+      .locator(`[data-message-row][data-message-id="${root.id}"]`)
+      .boundingBox();
     const frame = await page.getByRole('feed').locator('..').boundingBox();
     expect(box?.y ?? -1).toBeGreaterThanOrEqual((frame?.y ?? 0) - 1);
     expect(box?.y ?? 1e9).toBeLessThanOrEqual((frame?.y ?? 0) + (frame?.height ?? 0));
