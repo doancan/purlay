@@ -12,6 +12,7 @@ import {
   type Channel,
   type ChannelState,
   type Reaction,
+  type RevokedReason,
   type ServerFrame,
   type ThreadSummary,
   type Topic,
@@ -34,35 +35,37 @@ export const userTopic = (userId: string): Topic => `user:${userId}`;
 /**
  * What a change that removes visibility publishes (D-85). Each is called **after**
  * the change commits, by the service that made it, with the bus it was given — a
- * socket is never told it lost something that was then rolled back.
- *
- * Phase 0 has no endpoint that removes a member, leaves a channel, deletes a
- * channel or deletes a user, so nothing calls these yet but the tests. Phase 1's
- * do, and are required to: remove member (#51), leave channel and delete channel
- * (#98), and the deletion of a user.
+ * socket is never told it lost something that was then rolled back: removing a
+ * member (#51), leaving a channel and archiving one (D-123), and the deletion of a
+ * user.
  */
 
 /**
  * One user lost access to these channels — removed from a workspace (every channel
  * of it they could see), removed from a private channel, or left one. Their
  * sockets, on any node, stop receiving the channels and are told; they stay open.
+ * A leave says so, so the person's other screens can say it too (D-123).
  */
 export const publishAccessRevoked = async (
   bus: EventBus,
   clock: Clock,
   userId: string,
   channelIds: readonly string[],
+  reason?: RevokedReason,
 ): Promise<void> => {
   for (let at = 0; at < channelIds.length; at += ACCESS_REVOKED_MAX_CHANNELS) {
     await bus.publish(userTopic(userId), {
       event: 'ACCESS_REVOKED',
-      data: { channelIds: channelIds.slice(at, at + ACCESS_REVOKED_MAX_CHANNELS) },
+      data: {
+        channelIds: channelIds.slice(at, at + ACCESS_REVOKED_MAX_CHANNELS),
+        ...(reason === undefined ? {} : { reason }),
+      },
       ts: clock.now().getTime(),
     });
   }
 };
 
-/** A channel went away: everyone watching it, on any node, stops receiving it. */
+/** A channel was archived: everyone watching it, on any node, stops receiving it, and is told why. */
 export const publishChannelRevoked = async (
   bus: EventBus,
   clock: Clock,
@@ -70,7 +73,7 @@ export const publishChannelRevoked = async (
 ): Promise<void> => {
   await bus.publish(channelTopic(channelId), {
     event: 'ACCESS_REVOKED',
-    data: { channelIds: [channelId] },
+    data: { channelIds: [channelId], reason: 'archived' },
     ts: clock.now().getTime(),
   });
 };

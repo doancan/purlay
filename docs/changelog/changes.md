@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### API — 2026-10-13: archive and leave a channel (D-123)
+
+- `DELETE /api/channels/:channelId` archives a channel, for an owner or an admin: hidden from
+  everyone, its messages and memberships kept, its name free, and on the audit trail.
+- `POST /api/channels/:channelId/leave` takes the caller out; the last member of a private channel is
+  refused (`409 LAST_CHANNEL_MEMBER`). `ACCESS_REVOKED` now says why when it is either.
+
 ### API — 2026-10-13: rename a channel and set its topic (D-123)
 
 - `PATCH /api/channels/:channelId` renames a channel or sets its topic, for a member of it; a taken

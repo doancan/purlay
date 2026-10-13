@@ -92,6 +92,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('IMAGE_NOT_AVAILABLE'),
   Type.Literal('LAST_OWNER'),
   /**
+   * Leaving a private channel nobody else is in: nobody could bring anyone back into it, so it is
+   * refused rather than left unreachable. Bring somebody in first, or ask an admin to archive it (D-123).
+   */
+  Type.Literal('LAST_CHANNEL_MEMBER'),
+  /**
    * Too many frames on one connection. The frame was not processed; sending it
    * again later is safe, because a message id makes a resend idempotent (D-8).
    */
@@ -152,6 +157,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   INVITATION_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,
+  LAST_CHANNEL_MEMBER: 409,
   RATE_LIMITED: 429,
 
   INTERNAL: 500,

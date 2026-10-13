@@ -299,6 +299,10 @@ export const SessionEndedFrame = Type.Object({
   ...envelope,
 });
 
+/** Why a channel went away, when that is worth telling somebody who was looking at it. */
+export const RevokedReason = Type.Union([Type.Literal('archived'), Type.Literal('left')]);
+export type RevokedReason = Static<typeof RevokedReason>;
+
 /**
  * The connection may no longer see these channels, and delivery for them has
  * stopped. The connection stays open: every other channel it watches is
@@ -313,6 +317,11 @@ export const AccessRevokedFrame = Type.Object({
   event: Type.Literal('ACCESS_REVOKED'),
   data: Type.Object({
     channelIds: Type.Array(Uuid, { minItems: 1, maxItems: ACCESS_REVOKED_MAX_CHANNELS }),
+    /**
+     * Why, when a person looking at the channel should be told something other than "not found":
+     * an admin archived it, or the person left it on another device (D-123). Absent for a removal.
+     */
+    reason: Type.Optional(RevokedReason),
   }),
   ...envelope,
 });

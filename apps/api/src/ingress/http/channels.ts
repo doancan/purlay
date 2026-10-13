@@ -25,7 +25,9 @@ import {
   NO_LOG,
   publication,
   publishAfterCommit,
+  publishAccessRevoked,
   publishChannelAdded,
+  publishChannelRevoked,
   publishChannelState,
   publishChannelUpdated,
   type EventBus,
@@ -43,7 +45,12 @@ import { openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
 import { markRead } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
-import { channelMembers, updateChannel } from '../../modules/channels/settings';
+import {
+  archiveChannel,
+  channelMembers,
+  leaveChannel,
+  updateChannel,
+} from '../../modules/channels/settings';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -243,6 +250,52 @@ export const changeChannel = async (
     ]);
   }
   return channel;
+};
+
+/**
+ * `DELETE /api/channels/:channelId` — an owner or an admin archives it (D-123). Everyone watching
+ * it stops receiving it, on the channel's topic, and is told it was archived.
+ */
+export const archive = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  await atomicallyOn(database)(async (transaction) => {
+    await archiveChannel(transaction, clock, context);
+  });
+  await publishAfterCommit(log, [
+    [publication('ACCESS_REVOKED', () => publishChannelRevoked(bus, clock, channelId))],
+  ]);
+};
+
+/**
+ * `POST /api/channels/:channelId/leave` — out of the channel (D-123). The caller's own sockets stop
+ * receiving it and are told they left; not being in it is the same `204`, and tells nobody.
+ */
+export const leave = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const left = await atomicallyOn(database)(
+    async (transaction) => await leaveChannel(transaction, context),
+  );
+  if (left) {
+    await publishAfterCommit(log, [
+      [
+        publication('ACCESS_REVOKED', () =>
+          publishAccessRevoked(bus, clock, userId, [channelId], 'left'),
+        ),
+      ],
+    ]);
+  }
 };
 
 /** `GET /api/channels/:channelId/members` — who is in it, for anybody who can see it (D-123). */

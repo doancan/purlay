@@ -163,6 +163,7 @@ export const tr = {
   'audit.action.member.joined': '{actor} bir davet bağlantısıyla katıldı',
   'audit.action.channel.created': '{actor}, {channel} kanalını oluşturdu',
   'audit.action.channel.renamed': '{actor}, {from} kanalının adını {to} yaptı',
+  'audit.action.channel.archived': '{actor}, {channel} kanalını arşivledi',
   'audit.action.integration.token_set': '{actor} GitHub tokenını ayarladı',
   'audit.action.integration.token_removed': '{actor} GitHub tokenını kaldırdı',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',

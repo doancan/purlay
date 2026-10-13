@@ -23,6 +23,8 @@ interface World {
   readonly db: Executor;
   readonly people: Readonly<Record<UserRole | 'target', SignedInUser>>;
   readonly workspaceId: string;
+  /** Public, and everybody is in it. */
+  readonly channelId: string;
   /** A message the target wrote. */
   readonly messageId: string;
 }
@@ -55,6 +57,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     db,
     people: { owner, admin, member, target },
     workspaceId: '',
+    channelId: '',
     messageId: '',
   };
   const workspace = await call(partial, 'POST', '/api/workspaces', owner, { name: slug, slug });
@@ -83,7 +86,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     content: 'written by the target',
   });
   expect(sent.status).toBe(201);
-  return { ...world, messageId: id };
+  return { ...world, channelId, messageId: id };
 };
 
 /** Each case's request, made as one role. */
@@ -157,6 +160,8 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'archive a channel': async (world, as) =>
+    await call(world, 'DELETE', `/api/channels/${world.channelId}`, as),
   'delete somebody else’s message': async (world, as) =>
     await call(world, 'DELETE', `/api/messages/${world.messageId}`, as),
 };
