@@ -169,7 +169,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
         </Link>
       </nav>
       <IconButton
-        label={t('files.open')}
+        label={t(direct ? 'files.openConversation' : 'files.open')}
         glyph="file"
         data-panel-toggle="files"
         aria-pressed={filesOpen}

@@ -170,6 +170,8 @@ describe('a channel’s files panel', () => {
 
     expect(within(panelOf(view)).getByRole('link', { name: /report-1\.pdf/ })).toBeDefined();
     expect(calls).toBe(2);
+    // The Retry that worked has gone; focus did not go with it.
+    expectFocusOn(within(panelOf(view)).getByRole('heading', { name: /Files/ }));
     view.unmountAll();
   });
 
@@ -204,6 +206,8 @@ describe('a channel’s files panel', () => {
         .map((link) => link.textContent),
     ).toEqual(['report-3.pdf', 'report-1.pdf']);
     expect(within(panelOf(view)).queryByRole('button', { name: 'Load more' })).toBeNull();
+    // The last Load more has gone; focus stays in the panel, where Esc still closes it.
+    expectFocusOn(within(panelOf(view)).getByRole('heading', { name: /Files/ }));
     view.unmountAll();
   });
 
@@ -242,11 +246,17 @@ describe('a channel’s files panel', () => {
     });
     await openFiles(view);
 
-    await person().click(within(panelOf(view)).getByRole('button', { name: 'Open its thread' }));
+    await person().click(
+      within(panelOf(view)).getByRole('button', {
+        name: 'Open the thread report-4.pdf was shared in',
+      }),
+    );
     await settle();
 
     expect(view.queryByRole('complementary', { name: /Files/ })).toBeNull();
-    expect(view.container.querySelector(`[data-thread-root="${root.id}"]`)).not.toBeNull();
+    const thread = view.container.querySelector<HTMLElement>(`[data-thread-root="${root.id}"]`);
+    expect(thread).not.toBeNull();
+    expectFocusOn(thread?.querySelector('h2') ?? null);
     view.unmountAll();
   });
 
@@ -277,7 +287,47 @@ describe('a channel’s files panel', () => {
     await openFiles(view);
 
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
-    expect(panelOf(view)).toBeDefined();
+    expectFocusOn(within(panelOf(view)).getByRole('heading', { name: /Files/ }));
+    // On a narrow window the conversation under the panel is out of reach.
+    expect(view.container.querySelector('header')?.parentElement?.className).toContain(
+      'max-narrow:invisible',
+    );
+    view.unmountAll();
+  });
+
+  test('a thread opened from the feed with T closes the files and takes focus', async () => {
+    const root = aMessage(2, {
+      thread: {
+        replyCount: 1,
+        lastReplyAt: aMessage(4).createdAt,
+        resolvedAt: null,
+        resolvedBy: null,
+      },
+    });
+    const view = await mountChannel({
+      messages: page([aMessage(1), root]),
+      api: {
+        files: () => Promise.resolve(filePage([])),
+        thread: (): Promise<ThreadPage> =>
+          Promise.resolve({
+            data: [aMessage(4, { parentId: root.id, thread: null })],
+            nextCursor: null,
+          }),
+      },
+    });
+    await openFiles(view);
+    const row = view.container.querySelector<HTMLElement>(
+      `[role="feed"] [data-message-row][data-message-id="${root.id}"]`,
+    );
+    act(() => {
+      row?.focus();
+    });
+    await person().keyboard('t');
+    await settle();
+
+    expect(view.queryByRole('complementary', { name: /Files/ })).toBeNull();
+    const thread = view.container.querySelector<HTMLElement>(`[data-thread-root="${root.id}"]`);
+    expectFocusOn(thread?.querySelector('h2') ?? null);
     view.unmountAll();
   });
 });
@@ -339,6 +389,64 @@ describe('a channel’s files, kept current', () => {
 
     await arrive(view, revised(2, aMessage(9).createdAt));
     expect(asked()).toBe(2);
+    // A deletion older than what was already applied says nothing new.
+    await arrive(view, revised(1, aMessage(9).createdAt));
+    expect(asked()).toBe(2);
+    view.unmountAll();
+  });
+
+  test('another channel’s files do not read this one again', async () => {
+    const { view, asked } = await counting();
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: aMessage(6, { channelId: IDS.general, attachments: [aFile(6).attachment] }),
+      ts: 1,
+    });
+    expect(asked()).toBe(1);
+    view.unmountAll();
+  });
+
+  test('closed, it is still read again when it next opens after a change', async () => {
+    const { view, asked } = await counting();
+    await person().keyboard('{Escape}');
+    await settle();
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: aMessage(6, { attachments: [aFile(6).attachment] }),
+      ts: 1,
+    });
+    await openFiles(view);
+    expect(asked()).toBe(2);
+    view.unmountAll();
+  });
+
+  test('a read again that fails says the list may be behind, and Retry brings it up to date', async () => {
+    let calls = 0;
+    const view = await mount(() => {
+      calls += 1;
+      return calls === 2
+        ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+        : Promise.resolve(filePage(calls === 1 ? [aFile(1)] : [aFile(6), aFile(1)]));
+    });
+    act(() => {
+      view.world.sockets.open();
+    });
+    await openFiles(view);
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: aMessage(6, { attachments: [aFile(6).attachment] }),
+      ts: 1,
+    });
+    const alert = within(panelOf(view)).getByRole('alert');
+    expect(alert.textContent).toContain('The list could not be brought up to date.');
+    // What was there stays, said to be behind rather than taken away.
+    expect(within(panelOf(view)).getAllByRole('link')).toHaveLength(1);
+
+    await person().click(within(alert).getByRole('button', { name: 'Retry' }));
+    await settle();
+
+    expect(within(panelOf(view)).queryByRole('alert')).toBeNull();
+    expect(within(panelOf(view)).getAllByRole('link')).toHaveLength(2);
     view.unmountAll();
   });
 });

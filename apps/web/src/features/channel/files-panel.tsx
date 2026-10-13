@@ -22,6 +22,7 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
 import { useThreads } from '../threads/thread-context';
 import { useFeedPorts } from './feed-ports';
+import { useNowMinute } from './now-minute';
 import { useSidePanel } from './side-panel';
 
 export const FILES_PANEL_ID = 'channel-files';
@@ -99,6 +100,7 @@ const FileRow = ({
           <button
             type="button"
             className="self-start rounded-sm text-caption text-accent-text underline"
+            aria-label={t('files.inThreadOf', { name: attachment.fileName })}
             onClick={() => {
               threads.open(parentId);
             }}
@@ -121,7 +123,8 @@ const FilesPanelView = ({
   const { t } = useI18n();
   const { close } = useSidePanel();
   const query = useChannelFiles(channelId);
-  const now = useFeedPorts().clock.now();
+  const now = new Date(useNowMinute(useFeedPorts()));
+  const panelRef = useRef<HTMLElement>(null);
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const files = useMemo(() => query.data?.pages.flatMap((page) => page.data) ?? [], [query.data]);
@@ -130,6 +133,23 @@ const FilesPanelView = ({
   useEffect(() => {
     heading.current?.focus();
   }, []);
+
+  // A control that answered by going away — the last Load more, a Retry that worked — leaves focus
+  // nowhere, and Esc with it: once the answer is drawn, focus comes back to the heading.
+  const answering = useRef(false);
+  const fetching = query.isFetching;
+  // An answer that comes at once is drawn in one render with the start of its read: when it landed,
+  // not only whether a read is on its way, says that there is an answer.
+  const landed = Math.max(query.dataUpdatedAt, query.errorUpdatedAt);
+  useEffect(() => {
+    if (!answering.current || fetching) return;
+    answering.current = false;
+    if (!(panelRef.current?.contains(document.activeElement) ?? false)) heading.current?.focus();
+  }, [fetching, landed]);
+  const readAgain = (): void => {
+    answering.current = true;
+    void query.refetch();
+  };
 
   let body: React.JSX.Element;
   if (query.isPending) {
@@ -149,9 +169,7 @@ const FilesPanelView = ({
         title={t('files.error.title')}
         body={t('files.error.body')}
         retryLabel={t('common.retry')}
-        onRetry={() => {
-          void query.refetch();
-        }}
+        onRetry={readAgain}
       />
     );
   } else if (files.length === 0) {
@@ -175,6 +193,16 @@ const FilesPanelView = ({
             <FileRow key={file.attachment.id} file={file} now={now} />
           ))}
         </ul>
+        {query.isRefetchError && (
+          <p role="alert" className="flex items-center gap-2 px-2 text-label text-danger-text">
+            <Icon name="failed" size="sm" />
+            {t('files.staleFailed')}
+            <span aria-hidden="true">·</span>
+            <button type="button" className="underline" onClick={readAgain}>
+              {t('common.retry')}
+            </button>
+          </p>
+        )}
         {query.isFetchNextPageError && (
           <p role="alert" className="flex items-center gap-2 px-2 text-label text-danger-text">
             <Icon name="failed" size="sm" />
@@ -187,6 +215,7 @@ const FilesPanelView = ({
               variant="secondary"
               busy={query.isFetchingNextPage}
               onClick={() => {
+                answering.current = true;
                 void query.fetchNextPage();
               }}
             >
@@ -200,6 +229,7 @@ const FilesPanelView = ({
 
   return (
     <aside
+      ref={panelRef}
       id={FILES_PANEL_ID}
       aria-labelledby={headingId}
       onKeyDown={(event) => {

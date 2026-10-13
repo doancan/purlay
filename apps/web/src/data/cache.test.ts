@@ -4,12 +4,13 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { InfiniteQueryObserver, QueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { Channel, Message, MessagePage } from '@purlay/types';
+import type { Channel, FilePage, Message, MessagePage } from '@purlay/types';
 import {
   channelAdded,
   channelsRevoked,
   channelStateChanged,
   messageCreated,
+  messageRevised,
   newestMessageId,
   patchMessage,
   reactionsUpdated,
@@ -352,6 +353,16 @@ describe('the channel list', () => {
     expect(cached(client, keys.messages(CH))).toBeUndefined();
   });
 
+  test('a revoked channel takes its files list with it (D-129)', () => {
+    const client = seeded();
+    client.setQueryData(keys.files(CH), {
+      pages: [{ data: [], nextCursor: null }],
+      pageParams: [undefined],
+    });
+    channelsRevoked(client, [CH]);
+    expect(cached(client, keys.files(CH))).toBeUndefined();
+  });
+
   test('a revoked channel takes its members and its threads with it, and leaves other threads (#521)', () => {
     const client = seeded();
     const OTHER = '00000000-0000-4000-8000-0000000000c2';
@@ -378,5 +389,90 @@ describe('the read position', () => {
   test('is the newest id in the feed, or nothing when there is no feed', () => {
     expect(newestMessageId(seeded(), CH)).toBe(id(3));
     expect(newestMessageId(new QueryClient(), CH)).toBeNull();
+  });
+});
+
+describe('a channel’s files list (D-129)', () => {
+  const ATTACHMENT = {
+    id: id(50),
+    fileName: 'a.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 1,
+    kind: 'file' as const,
+    width: null,
+    height: null,
+  };
+  const OTHER = '00000000-0000-4000-8000-0000000000c2';
+  const listed = (client: QueryClient, channelId: string): void => {
+    client.setQueryData(keys.files(channelId), {
+      pages: [{ data: [], nextCursor: null }],
+      pageParams: [undefined],
+    });
+  };
+  const stale = (client: QueryClient, channelId: string): boolean | undefined =>
+    client.getQueryState(keys.files(channelId))?.isInvalidated;
+
+  test('a message with files reads its channel’s list again; one without, or elsewhere, does not', () => {
+    const client = seeded();
+    listed(client, CH);
+    listed(client, OTHER);
+    messageCreated(client, message(4));
+    expect(stale(client, CH)).toBe(false);
+    messageCreated(client, message(5, { attachments: [ATTACHMENT] }));
+    expect(stale(client, CH)).toBe(true);
+    expect(stale(client, OTHER)).toBe(false);
+  });
+
+  test('a deletion reads the list again, from the socket or the person’s own; an edit does not', () => {
+    const client = seeded();
+    listed(client, CH);
+    const revision = {
+      channelId: CH,
+      messageId: id(2),
+      parentId: null,
+      content: 'changed',
+      editedAt: '2026-09-09T08:00:00.000Z',
+      deletedAt: null,
+      mentions: [],
+    };
+    messageRevised(client, revision);
+    expect(stale(client, CH)).toBe(false);
+    messageRevised(client, { ...revision, editedAt: null, deletedAt: '2026-09-09T08:00:00.000Z' });
+    expect(stale(client, CH)).toBe(true);
+  });
+
+  test('a Load more on its way is not cancelled: the list is read again once it is in', async () => {
+    const client = new QueryClient();
+    let asked = 0;
+    let hold: (page: FilePage) => void = (): void => undefined;
+    const observer = new InfiniteQueryObserver(client, {
+      queryKey: keys.files(CH),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (page: FilePage): string | undefined => page.nextCursor ?? undefined,
+      queryFn: ({ pageParam }): Promise<FilePage> => {
+        asked += 1;
+        if (pageParam === undefined) return Promise.resolve({ data: [], nextCursor: id(60) });
+        return new Promise<FilePage>((resolve): void => {
+          hold = resolve;
+        });
+      },
+    });
+    const stop = observer.subscribe(() => undefined);
+    await settle();
+    const more = observer.fetchNextPage();
+    await settle();
+    expect(asked).toBe(2);
+
+    messageCreated(client, message(6, { attachments: [ATTACHMENT] }));
+    await settle();
+    expect(asked).toBe(2);
+    hold({ data: [], nextCursor: null });
+    const done = await more;
+
+    expect(done.isFetchNextPageError).toBe(false);
+    expect(done.data?.pages).toHaveLength(2);
+    await settle();
+    expect(asked).toBeGreaterThan(2);
+    stop();
   });
 });

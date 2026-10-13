@@ -79,6 +79,42 @@ const askAgainIfOnItsWay = (client: QueryClient, key: readonly unknown[]): void 
 };
 
 /**
+ * A list that is not being fetched right now. One that is is left to finish: cancelling a feed
+ * that is still reading back to the reader's place (or a first page that is on its way) to ask
+ * again fights the code that is driving it, and stalls it on its loading state (found by the
+ * unread specs under load) — and cancelling a "Load more" loses the page without a word.
+ */
+const settled = (query: { readonly state: { readonly fetchStatus: string } }): boolean =>
+  query.state.fetchStatus === 'idle';
+
+/**
+ * Marks what is cached under the key to be read again: what is settled now, and what is being read
+ * as soon as that read is done. A read on its way is not cancelled — that stalls the screen driving
+ * it — but it may have begun before the change and bring back what has already changed; left
+ * alone, a reply that landed in that gap was never shown (#347).
+ */
+export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
+  const cache = client.getQueryCache();
+  // Which are on their way is read before anything is asked again: asked first, a settled list is
+  // on its way too by the time it is looked at, and would be read a second time when it lands.
+  const onTheirWay = cache.findAll({ queryKey }).filter((query) => !settled(query));
+  void client.invalidateQueries({ queryKey, predicate: settled });
+  for (const query of onTheirWay) {
+    const unsubscribe = cache.subscribe((event) => {
+      if (event.query !== query) return;
+      // Gone from the cache first: nothing left to read again, and nothing left to listen for.
+      if (event.type === 'removed') {
+        unsubscribe();
+        return;
+      }
+      if (!settled(query)) return;
+      unsubscribe();
+      void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
+    });
+  }
+};
+
+/**
  * Edits one message wherever it is cached — the feed, its thread, the open-questions
  * view — so a reaction or a resolution cannot be right in one place and stale in
  * another. A list that does not hold it is left alone.
@@ -106,6 +142,8 @@ export const patchMessage = (
  * Either way the channel moves to the top of the sidebar's order.
  */
 export const messageCreated = (client: QueryClient, message: Message): void => {
+  // A channel's files list has no frame of its own: a message carrying files reads it again (D-129).
+  if (message.attachments.length > 0) readAgain(client, keys.files(message.channelId));
   if (message.parentId === null) {
     const key = keys.messages(message.channelId);
     const cached = client.getQueryData<Pages>(key);
@@ -187,6 +225,8 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  // A deleted message's files leave the list (D-129); whether it had any, only the list knows.
+  if (revision.deletedAt !== null) readAgain(client, keys.files(revision.channelId));
   const deletedRoot = revision.deletedAt !== null && revision.parentId === null;
   for (const [key, data] of messageLists(client)) {
     const held = data.pages.flatMap((page) => page.data).find((m) => m.id === id);
@@ -295,6 +335,7 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
   for (const id of channelIds) {
     client.removeQueries({ queryKey: keys.messages(id) });
     client.removeQueries({ queryKey: keys.channelMembers(id) });
+    client.removeQueries({ queryKey: keys.files(id) });
   }
   // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
   client.removeQueries({

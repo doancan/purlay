@@ -77,9 +77,9 @@ test.describe('an attachment', () => {
       mimeType: 'image/png',
       buffer: PNG,
     });
-    await expect(
-      alice.getByRole('list', { name: 'Files', exact: true }).getByText(/Uploading/),
-    ).toHaveCount(0);
+    const sending = alice.getByRole('list', { name: 'Files to send' });
+    await expect(sending.getByText('diagram.png')).toBeVisible();
+    await expect(sending.getByText(/Uploading/)).toHaveCount(0);
     const composer = alice.getByRole('textbox', { name: `Message ${made.name}` });
     await composer.fill('the diagram');
     await composer.press('Enter');

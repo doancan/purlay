@@ -376,7 +376,7 @@ missing specified behaviour and does not merge.
 | Search | "No matches for `<query>`" + scope hint | Inline progress in the input | Retry, query preserved |
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
-| Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more** |
+| Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
 | Sign-in | n/a — always the one button | n/a — nothing is fetched before the click | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121) |

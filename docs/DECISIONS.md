@@ -5656,7 +5656,9 @@ meant walking every message of the channel to find the few that carry one.
 6. **A panel beside the conversation, not a screen of its own**: the header's Files control opens it
    in the thread's place, one panel at a time, and which is open belongs to the channel visit as a
    thread does (D-122). It is read when it opens and again when a frame says it changed — a message
-   with files arriving, one deleted, or a resubscription — with no frame of its own.
+   with files arriving, one deleted, or a resubscription — with no frame of its own. A read on its
+   way is never cancelled for it: the list is read again once that read is in. Read again, it is read
+   whole — each page loaded so far, one request a page — which a panel of a few pages can afford.
 
 **Rejected.** *Joining through `messages` on every read* — correct, but an index cannot serve a
 channel's attachments ordered by message without the channel on the attachment, and the list is read

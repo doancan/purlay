@@ -52,14 +52,17 @@ export const SidePanelProvider = ({
   const [panel, setPanel] = useState<SidePanelName | null>(null);
   const returnTo = useRef<SidePanelName | null>(null);
 
-  // A thread opening takes the side: the list gives way, and focus is the thread's.
+  // A thread opening takes the side: the list gives way at once — it is never drawn beside the
+  // thread, not even for a frame — and is closed, so it does not come back when the thread does.
   useEffect(() => {
     if (openId !== null) setPanel(null);
   }, [openId]);
+  const shown = openId === null ? panel : null;
 
   const open = useCallback(
     (next: SidePanelName): void => {
-      if (openId !== null) threads.close();
+      // The panel takes focus itself: the thread's root is not focused on the way, which would scroll the feed.
+      if (openId !== null) threads.close({ restoreFocus: false });
       returnTo.current = null;
       setPanel(next);
     },
@@ -82,6 +85,6 @@ export const SidePanelProvider = ({
     panelToggleOf(was)?.focus();
   }, [panel]);
 
-  const api = useMemo<SidePanelApi>(() => ({ panel, open, close }), [panel, open, close]);
+  const api = useMemo<SidePanelApi>(() => ({ panel: shown, open, close }), [shown, open, close]);
   return <SidePanelContext.Provider value={api}>{children}</SidePanelContext.Provider>;
 };
