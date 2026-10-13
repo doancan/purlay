@@ -86,6 +86,15 @@ export const CreateWorkspaceRequest = FromClient({
 });
 export type CreateWorkspaceRequest = Static<typeof CreateWorkspaceRequest>;
 
+/**
+ * `PATCH /api/workspaces/:workspaceId` — an owner or an admin renames the workspace (D-124). The name
+ * only: the slug is its address, in every link already pasted, and does not move (D-124).
+ */
+export const UpdateWorkspaceRequest = FromClient({
+  name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
+});
+export type UpdateWorkspaceRequest = Static<typeof UpdateWorkspaceRequest>;
+
 /** A member as the rest of the workspace sees them — never their email address. */
 export const WorkspaceMember = Type.Object({
   user: User,
@@ -369,6 +378,7 @@ export const AUDIT_ACTIONS = [
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
+  'workspace.renamed',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

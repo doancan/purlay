@@ -241,6 +241,57 @@ describe('integration: a session that ends on another node', () => {
   });
 });
 
+describe('integration: a workspace renamed (D-124)', () => {
+  test('renamed on one node, each member’s socket on another is told; a stranger’s and a removed member’s are not', async () => {
+    const room = await aRoom();
+    const carol = await aSignedInUser(cloned.db, clock, 'carol');
+    const dave = await aSignedInUser(cloned.db, clock, 'dave');
+    await cloned.db
+      .insertInto('workspace_members')
+      .values({
+        workspace_id: room.workspaceId,
+        user_id: dave.userId,
+        role: 'member',
+        joined_at: NOW,
+      })
+      .execute();
+    const bob = await connect(room.bob.cookie);
+    const stranger = await connect(carol.cookie);
+    const removed = await connect(dave.cookie);
+    await settle(bob);
+    await settle(stranger);
+    await settle(removed);
+    expect(
+      (
+        await http(
+          'DELETE',
+          `/api/workspaces/${room.workspaceId}/members/${dave.userId}`,
+          room.alice.cookie,
+        )
+      ).status,
+    ).toBe(204);
+
+    const renamed = await http('PATCH', `/api/workspaces/${room.workspaceId}`, room.alice.cookie, {
+      name: 'renamed across nodes',
+    });
+    expect(renamed.status).toBe(200);
+    await bob.until(
+      (frames) => frames.some((f) => f.event === 'WORKSPACE_UPDATED'),
+      'the notice of the rename',
+    );
+    expect(bob.frames.find((f) => f.event === 'WORKSPACE_UPDATED')?.data).toEqual({
+      workspaceId: room.workspaceId,
+    });
+    await settle(stranger);
+    await settle(removed);
+    expect(stranger.frames.some((f) => f.event === 'WORKSPACE_UPDATED')).toBe(false);
+    expect(removed.frames.some((f) => f.event === 'WORKSPACE_UPDATED')).toBe(false);
+    await bob.close();
+    await stranger.close();
+    await removed.close();
+  });
+});
+
 describe('integration: a membership that ends', () => {
   test('removing a member stops the channel on the socket, which stays open', async () => {
     const room = await aRoom();

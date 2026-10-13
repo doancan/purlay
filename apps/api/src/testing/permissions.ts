@@ -28,6 +28,10 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/workspaces/:workspaceId/members/:userId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'rename the workspace': {
+    endpoint: 'PATCH /api/workspaces/:workspaceId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'read the audit trail': {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },

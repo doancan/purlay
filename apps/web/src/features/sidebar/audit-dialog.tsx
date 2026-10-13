@@ -109,6 +109,12 @@ export const AuditDialog = ({
           actor,
           author: person(entry.metadata['authorId']),
         });
+      case 'workspace.renamed':
+        return t('audit.action.workspace.renamed', {
+          actor,
+          from: entry.metadata['from'] ?? '',
+          to: entry.metadata['to'] ?? '',
+        });
       case undefined:
         return t('audit.unknown', { actor, action: entry.action });
     }

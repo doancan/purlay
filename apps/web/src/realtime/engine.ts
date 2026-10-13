@@ -639,6 +639,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'SESSION_ENDED':
         options.onSessionEnded();
         return;
+      case 'WORKSPACE_UPDATED':
+        // No state in the frame (D-124): the memberships are read again, newest wins.
+        void client.invalidateQueries({ queryKey: keys.me });
+        return;
       case 'TYPING':
         startTyping(frame.data.channelId, frame.data.userId, frame.data.ttlMs);
         return;

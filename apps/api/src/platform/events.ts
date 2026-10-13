@@ -223,6 +223,26 @@ export const publishChannelAdded = async (
 };
 
 /**
+ * A workspace changed (D-124): each of its members, on their own topic, is told to read it again.
+ * Per member rather than on `workspace:`, which no socket listens on: membership is read as the change
+ * commits, so somebody removed a moment ago is not told.
+ */
+export const publishWorkspaceUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  userIds: readonly string[],
+  workspaceId: string,
+): Promise<void> => {
+  for (const userId of userIds) {
+    await bus.publish(userTopic(userId), {
+      event: 'WORKSPACE_UPDATED',
+      data: { workspaceId },
+      ts: clock.now().getTime(),
+    });
+  }
+};
+
+/**
  * The logger a caller that did not pass one gets: nothing is written. The application's own
  * wiring always passes the real one (a test through `createApp` proves it), so this is for the
  * module-level tests that drive a function without an application around it.

@@ -58,6 +58,8 @@ export interface Api {
   readonly me: (signal?: AbortSignal) => Promise<MeResponse>;
   readonly workspaces: (signal?: AbortSignal) => Promise<Membership[]>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
+  /** A new name, an owner's or an admin's; the slug stays (D-124). */
+  readonly renameWorkspace: (workspaceId: string, name: string) => Promise<Workspace>;
   /** What an invitation's token opens (D-115); the token goes in the body, never the path. */
   readonly previewInvitation: (token: string, signal?: AbortSignal) => Promise<InvitationPreview>;
   readonly acceptInvitation: (token: string) => Promise<Membership>;
@@ -190,6 +192,13 @@ export const createApi = (http: Http): Api => {
       http.request('GET', '/api/workspaces', Memberships, options({}, signal)),
     createWorkspace: (input) =>
       http.request('POST', '/api/workspaces', Workspace, options({ body: input })),
+    renameWorkspace: (workspaceId, name) =>
+      http.request(
+        'PATCH',
+        `/api/workspaces/${at(workspaceId)}`,
+        Workspace,
+        options({ body: { name } }),
+      ),
     previewInvitation: (token, signal) =>
       http.request(
         'POST',

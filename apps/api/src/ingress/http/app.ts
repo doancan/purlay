@@ -68,6 +68,7 @@ import {
   updateMemberRole,
   readMe,
   readWorkspace,
+  updateWorkspace,
 } from './workspaces';
 import {
   createWorkspaceChannel,
@@ -344,6 +345,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/workspaces/:workspaceId',
       async ({ request, params }) => await readWorkspace(dependencies, request, params.workspaceId),
+    )
+    .patch(
+      '/api/workspaces/:workspaceId',
+      async ({ request, params, body }) =>
+        await updateWorkspace(sending, request, params.workspaceId, body),
     )
     .get(
       '/api/workspaces/:workspaceId/members',

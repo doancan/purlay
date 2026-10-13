@@ -19,6 +19,7 @@ import { AuditDialog } from './audit-dialog';
 import { GitHubDialog } from './github-dialog';
 import { InviteDialog } from './invite-dialog';
 import { MembersDialog } from './members-dialog';
+import { WorkspaceSettingsDialog } from './workspace-settings-dialog';
 
 export const WorkspaceMenu = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -29,6 +30,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   const [connecting, setConnecting] = useState(false);
   const [managing, setManaging] = useState(false);
   const [auditing, setAuditing] = useState(false);
+  const [settling, setSettling] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Making links and the GitHub token are an owner's and an admin's (D-115, D-23); a member is not
   // offered what would be refused.
@@ -100,11 +102,22 @@ export const WorkspaceMenu = (): React.JSX.Element => {
             {t('audit.entry')}
           </MenuItem>
         )}
+        {mayInvite && (
+          <MenuItem
+            glyph="settings"
+            onSelect={() => {
+              setSettling(true);
+            }}
+          >
+            {t('workspace.settings.entry')}
+          </MenuItem>
+        )}
       </Menu>
       <InviteDialog open={inviting} onOpenChange={setInviting} />
       <GitHubDialog open={connecting} onOpenChange={setConnecting} />
       <MembersDialog open={managing} onOpenChange={setManaging} />
       <AuditDialog open={auditing} onOpenChange={setAuditing} />
+      <WorkspaceSettingsDialog open={settling} onOpenChange={setSettling} />
     </>
   );
 };

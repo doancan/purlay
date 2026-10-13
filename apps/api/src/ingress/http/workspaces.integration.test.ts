@@ -216,3 +216,89 @@ describe('integration: who am I', () => {
     });
   });
 });
+
+describe('integration: renaming a workspace (D-124)', () => {
+  const trail = async (db: Executor, workspaceId: string): Promise<Record<string, unknown>[]> =>
+    await db
+      .selectFrom('audit_log')
+      .select(['action', 'actor_user_id', 'target_type', 'target_id', 'metadata'])
+      .where('workspace_id', '=', workspaceId)
+      .where('action', '=', 'workspace.renamed')
+      .execute();
+
+  test('an owner renames it: the name moves, the address does not, and the trail says from what to what', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-owner');
+      const made = await aWorkspace(db, owner.cookie, 'before');
+      const renamed = await call(db, 'PATCH', `/api/workspaces/${made.id}`, {
+        cookie: owner.cookie,
+        body: { name: 'After the move' },
+      });
+      expect(renamed.status).toBe(200);
+      expect(await renamed.json()).toEqual({
+        id: made.id,
+        name: 'After the move',
+        slug: made.slug,
+        avatarUrl: null,
+      });
+      const me = (await (await call(db, 'GET', '/api/me', { cookie: owner.cookie })).json()) as {
+        memberships: { workspace: { id: string; name: string; slug: string } }[];
+      };
+      expect(me.memberships.find((m) => m.workspace.id === made.id)?.workspace).toMatchObject({
+        name: 'After the move',
+        slug: made.slug,
+      });
+      expect(await trail(db, made.id)).toEqual([
+        {
+          action: 'workspace.renamed',
+          actor_user_id: owner.userId,
+          target_type: 'workspace',
+          target_id: made.id,
+          metadata: { from: 'before', to: 'After the move' },
+        },
+      ]);
+    });
+  });
+
+  test('the same name again changes nothing and records nothing', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-same');
+      const made = await aWorkspace(db, owner.cookie, 'same');
+      const again = await call(db, 'PATCH', `/api/workspaces/${made.id}`, {
+        cookie: owner.cookie,
+        body: { name: 'same' },
+      });
+      expect(again.status).toBe(200);
+      expect(await trail(db, made.id)).toEqual([]);
+    });
+  });
+
+  test('a member is refused for what they are; a name empty, too long, or beside a slug is 400', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-own');
+      const member = await signedIn(db, 'rn-mem');
+      const made = await aWorkspace(db, owner.cookie, 'kept');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: made.id, user_id: member.userId, role: 'member', joined_at: NOW })
+        .execute();
+      const as = async (cookie: string, body: unknown): Promise<string> => {
+        const response = await call(db, 'PATCH', `/api/workspaces/${made.id}`, { cookie, body });
+        const parsed: unknown = await response.json();
+        return Value.Check(ErrorResponse, parsed)
+          ? `${String(response.status)} ${parsed.error.code}`
+          : String(response.status);
+      };
+      expect(await as(member.cookie, { name: 'taken over' })).toBe('403 FORBIDDEN');
+      expect(await as(owner.cookie, { name: '' })).toBe('400 VALIDATION_FAILED');
+      expect(await as(owner.cookie, { name: 'x'.repeat(65) })).toBe('400 VALIDATION_FAILED');
+      expect(await as(owner.cookie, { name: 'new', slug: 'moved' })).toBe('400 VALIDATION_FAILED');
+      const workspace = await db
+        .selectFrom('workspaces')
+        .select(['name', 'slug'])
+        .where('id', '=', made.id)
+        .executeTakeFirstOrThrow();
+      expect(workspace).toEqual({ name: 'kept', slug: made.slug });
+    });
+  });
+});

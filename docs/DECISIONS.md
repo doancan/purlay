@@ -5394,7 +5394,7 @@ the way they speak, and the fix it asked for was always the same one the field c
 **Cost of reversing:** a role check and a count in `modules/channels/settings.ts`, two rows of the
 permission table, and this paragraph; no data changes shape.
 
-### D-124. What is the person's and what is the workspace's — #495
+### D-124. What is the person's and what is the workspace's — #495, #496
 
 Deep Work started only from `Cmd/Ctrl+Shift+D`, for a fixed hour, though the API takes any instant
 within `DEEP_WORK_MAX_HOURS` (D-108). The sidebar's foot showed who was signed in and did nothing;
@@ -5430,17 +5430,32 @@ in the owner's standing instruction to decide and proceed, and open to their rev
 5. **Signing out everywhere asks first.** It ends sessions on devices that are not in front of the
    person, so it is a dialog with the choice named on its button, and a refusal is a toast with the
    person still signed in — as signing out here already was.
+6. **A workspace is renamed, and its slug stays** (`PATCH /api/workspaces/:workspaceId`, an owner's
+   or an admin's, `ARCHITECTURE.md` §7.4). The slug is the address in every link already pasted into
+   a chat or a bookmark; moving it with the name would break them all for a cosmetic change. The same
+   name again changes nothing and records nothing. The trail (D-26: *workspace settings change*)
+   keeps the name before and after — a setting an admin typed, not anything a person said.
+7. **Every member's tabs hear it as `WORKSPACE_UPDATED`, on each member's own `user:` topic, carrying
+   no state**: the client reads its memberships again. The members are read as the rename commits, so
+   somebody removed a moment before is not told. `DELETE` of a workspace stays unbuilt (①).
 
 **Rejected.**
 
+- *Publishing on `workspace:`.* No socket listens on it, and one that did would have to be told when
+  its person leaves; a removed member's tab would keep hearing the workspace until it reconnected.
+- *The new name in the frame.* Two renames can be heard in the opposite order to their commits, and
+  ordering them needs a version column on `workspaces` (`0015_state_versions`) for a row that changes
+  a few times in its life. Reading the memberships again is one request and cannot be out of order.
+- *The slug following the name.* See 6.
 - *A submenu for the durations, or a picker for any time.* Each is a new primitive (D-52) for four
   choices; the server's bound already makes "any time" mean "any time today or tomorrow".
 - *Keeping Sign out in the workspace menu as well.* Two homes for one act.
 - *A Settings page.* Five choices fit in a menu; a page is a route, a layout and a back button for them.
 
 **Cost of reversing:** the choices in `deep-work.tsx`, `account-menu.tsx`, the footer and the rail's
-foot, the palette's Deep Work items, the seed's outsiders, and this decision. No contract changes: both
-endpoints existed.
+foot, the palette's Deep Work items, the seed's outsiders, and this decision; for the rename, the
+endpoint, its audit action and `WORKSPACE_UPDATED` — a frame a client older than it ignores as unknown
+(D-82), so removing it breaks nobody.
 
 ---
 

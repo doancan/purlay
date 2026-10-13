@@ -26,7 +26,7 @@ export interface AuditEntry {
   /** Who did it; null only when nobody did (a job). */
   readonly actorUserId: string | null;
   readonly action: AuditAction;
-  readonly targetType: 'user' | 'channel' | 'integration' | 'invitation' | 'message';
+  readonly targetType: 'user' | 'channel' | 'integration' | 'invitation' | 'message' | 'workspace';
   readonly targetId: string;
   /** What changed, by name: never content, never a token, never an email address. */
   readonly metadata?: Readonly<Record<string, string>>;

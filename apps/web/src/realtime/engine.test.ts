@@ -913,6 +913,16 @@ describe('the frames', () => {
     w.deliver(frame({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: T0 }));
     expect(w.ended.count).toBe(1);
   });
+
+  test('a workspace that changed has the memberships read again, not patched from the frame', () => {
+    const w = world();
+    w.client.setQueryData(keys.me, { stale: false });
+    w.engine.start();
+    w.open();
+    expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
+    w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
+  });
 });
 
 describe('watching channels', () => {

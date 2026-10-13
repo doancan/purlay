@@ -168,6 +168,7 @@ export const tr = {
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
+  'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
   'github.entry': 'GitHub bağlantısı…',
   'github.title': '{workspace} için GitHub',
   'github.description':
@@ -186,6 +187,15 @@ export const tr = {
   'invite.admin.revokeFailed': 'Link iptal edilemedi.',
   'workspace.none.body':
     'Bir sahibinden seni eklemesini iste ya da zaten bir çalışma alanına ait hesapla giriş yap.',
+  'workspace.settings.entry': 'Çalışma alanı ayarları…',
+  'workspace.settings.title': 'Çalışma alanı ayarları',
+  'workspace.settings.description':
+    'Herkesin gördüğü ad. Adres /w/{slug} olarak kalır, paylaşılmış bağlantılar çalışmaya devam eder.',
+  'workspace.settings.save': 'Kaydet',
+  'workspace.settings.empty': 'Çalışma alanının bir adı olmalı.',
+  'workspace.settings.invalid':
+    'Bu ad kullanılamaz. En fazla 64 karakter kullan, denetim karakteri olmadan.',
+  'workspace.settings.failed': 'Ad değiştirilemedi.',
   'workspace.create.title': 'Çalışma alanı oluştur',
   'workspace.create.body':
     'Çalışma alanı, bir ekibin konuştuğu yerdir. Diğerlerini sonra davet edebilirsin.',

@@ -213,7 +213,8 @@ What the shape is for, which the types do not say:
 - **A frame exists when the feature that sends it is built.** The client sends messages (a reply
   carries `parentId`), subscribes, unsubscribes and pings. Resolution, reactions and read state are
   HTTP and are heard here as `THREAD_UPDATED`, `REACTIONS_UPDATED` and, on the person's own `user:`
-  topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). An edit and a delete are heard as
+  topic, `CHANNEL_STATE`, `CHANNEL_ADDED` and `WORKSPACE_UPDATED` — a workspace renamed, read again
+  rather than patched from the frame (D-98, D-99, D-124). An edit and a delete are heard as
   `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
   version, never its reactions or thread (D-103). A rename or a new topic is `CHANNEL_UPDATED` on the
   channel's topic, at the channel's version; an archive and a leave are `ACCESS_REVOKED`, saying why
@@ -556,6 +557,7 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 |---|:--:|:--:|:--:|
 | Delete workspace, transfer ownership | ✅ | — | — |
 | Manage members and roles | ✅ | ✅ | — |
+| Rename the workspace | ✅ | ✅ | — |
 | Configure GitHub integration | ✅ | ✅ | — |
 | Create channels | ✅ | ✅ | ✅ |
 | Archive channels (D-123) | ✅ | ✅ | — |
