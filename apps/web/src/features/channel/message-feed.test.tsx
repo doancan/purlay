@@ -35,6 +35,7 @@ import { ACK_DEADLINE_MS } from '../../realtime/engine';
 import * as Content from '../content/render-content';
 import { SEEK_LIMIT_PAGES } from './message-feed';
 import { READ_DEBOUNCE_MS } from './use-mark-read';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -910,25 +911,25 @@ describe('the keyboard', () => {
       c.focus();
     });
     press(c, 'ArrowUp');
-    expect(document.activeElement).toBe(b);
+    expectFocusOn(b);
     press(b, 'ArrowUp');
-    expect(document.activeElement).toBe(a);
+    expectFocusOn(a);
     press(a, 'ArrowUp');
-    expect(document.activeElement).toBe(a);
+    expectFocusOn(a);
     press(a, 'ArrowDown');
-    expect(document.activeElement).toBe(b);
+    expectFocusOn(b);
     press(b, 'End');
-    expect(document.activeElement).toBe(c);
+    expectFocusOn(c);
     press(c, 'ArrowDown');
-    expect(document.activeElement).toBe(c);
+    expectFocusOn(c);
     press(c, 'Home');
-    expect(document.activeElement).toBe(a);
+    expectFocusOn(a);
     // From the feed's own box, with no row focused: ↓ is the first, ↑ the last.
     const feed = view.getByRole('feed');
     press(feed, 'ArrowDown');
-    expect(document.activeElement).toBe(a);
+    expectFocusOn(a);
     press(feed, 'ArrowUp');
-    expect(document.activeElement).toBe(c);
+    expectFocusOn(c);
     view.unmountAll();
   });
 
@@ -942,11 +943,11 @@ describe('the keyboard', () => {
     press(b, 'ArrowUp', { metaKey: true });
     press(b, 'ArrowUp', { altKey: true });
     press(b, 'a');
-    expect(document.activeElement).toBe(b);
+    expectFocusOn(b);
     const field = document.createElement('input');
     a.append(field);
     press(field, 'ArrowDown');
-    expect(document.activeElement).toBe(b);
+    expectFocusOn(b);
     view.unmountAll();
   });
 
@@ -957,7 +958,7 @@ describe('the keyboard', () => {
       b.focus();
     });
     press(b, 'Escape');
-    expect(document.activeElement).toBe(view.getByLabelText('Message api'));
+    expectFocusOn(view.getByLabelText('Message api'));
     act(() => {
       b.focus();
     });
@@ -983,13 +984,13 @@ describe('the keyboard', () => {
       b.focus();
     });
     press(b, 'Escape');
-    expect(document.activeElement).toBe(box);
+    expectFocusOn(box);
     box.remove();
     act(() => {
       b.focus();
     });
     press(b, 'Escape');
-    expect(document.activeElement).toBe(b);
+    expectFocusOn(b);
     view.unmountAll();
   });
 });

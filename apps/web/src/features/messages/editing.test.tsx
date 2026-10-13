@@ -11,6 +11,7 @@ import { mountChannel, page, settle, type ChannelView } from '../../testing/chan
 import { installDom } from '../../testing/dom';
 import { BOB, ME, aMessage } from '../../testing/fixtures';
 import { person } from '../../testing/user';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -68,7 +69,7 @@ describe('editing', () => {
     expect((box as HTMLTextAreaElement).value).toBe('teh deploy is at noon');
     await expectNoAxeViolations(rowOf(view, mine));
     // Where the words are, with nothing else in between: the menu gave focus back to nobody.
-    expect(document.activeElement).toBe(box);
+    expectFocusOn(box);
     const user = person();
     await user.keyboard('{Control>}a{/Control}the deploy is at noon{Enter}');
     expect(asked).toEqual(['the deploy is at noon']);

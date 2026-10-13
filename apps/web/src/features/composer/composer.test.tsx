@@ -28,6 +28,7 @@ import type { Api } from '../../data/api';
 import { Composer, DRAFT_DEBOUNCE_MS, type ComposerProps } from './composer';
 import { ComposerPortsContext } from './composer-ports';
 import type { DraftStorage } from './drafts';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -271,7 +272,7 @@ describe('sending', () => {
     await press(user, '{Enter}');
     expect(sent()).toEqual([{ channelId: IDS.api, content: 'hello team' }]);
     expect(box().value).toBe('');
-    expect(document.activeElement === box()).toBe(true);
+    expectFocusOn(box());
     expect(ids).toHaveLength(1);
     expect(ids[0]).toMatch(/^[0-9a-f-]{36}$/);
   });
@@ -281,7 +282,7 @@ describe('sending', () => {
     await user.type(box(), 'by button');
     await user.click(view.getByRole('button', { name: /Send/ }));
     expect(sent()).toEqual([{ channelId: IDS.api, content: 'by button' }]);
-    expect(document.activeElement === box()).toBe(true);
+    expectFocusOn(box());
   });
 
   test('Shift+Enter is a new line and sends nothing', async () => {
@@ -394,7 +395,7 @@ describe('keys that are not a send', () => {
   test('Escape leaves the box, back to the feed', async () => {
     const { box, user } = await mount();
     await user.click(box());
-    expect(document.activeElement === box()).toBe(true);
+    expectFocusOn(box());
     await press(user, '{Escape}');
     expect(document.activeElement === box()).toBe(false);
   });
@@ -505,7 +506,7 @@ describe('pasting', () => {
     expect(view.getByText('Pasted text became a code block')).toBeDefined();
     await user.click(view.getByRole('button', { name: 'Undo' }));
     expect(box().value).toBe('before ');
-    expect(document.activeElement === box()).toBe(true);
+    expectFocusOn(box());
   });
 
   test('replaces the selection, not the whole text, and the caret lands after the block', async () => {
@@ -625,10 +626,10 @@ describe('drafts', () => {
 describe('focus', () => {
   test('a channel opens ready to write, and switching channels does it again', async () => {
     const { box, rerender, user } = await mount({ props: { autoFocus: true } });
-    expect(document.activeElement === box()).toBe(true);
+    expectFocusOn(box());
     await press(user, '{Escape}');
     rerender({ channelId: IDS.deploys, channelName: 'deploys' });
-    expect(document.activeElement === box()).toBe(true);
+    expectFocusOn(box());
   });
 
   test("a thread's box does not take focus when it appears", async () => {
@@ -657,7 +658,7 @@ describe('the three buttons under the box (D-110)', () => {
     });
     await user.click(view.getByRole('button', { name: 'Bold' }));
     expect(box().value).toBe('fix **it**');
-    expect(document.activeElement).toBe(box());
+    expectFocusOn(box());
     expect([box().selectionStart, box().selectionEnd]).toEqual([6, 8]);
   });
 
@@ -676,7 +677,7 @@ describe('the three buttons under the box (D-110)', () => {
     await user.keyboard('hi');
     await user.click(view.getByRole('button', { name: 'Mention someone' }));
     expect(box().value).toBe('hi @');
-    expect(document.activeElement).toBe(box());
+    expectFocusOn(box());
   });
 
   test('what they insert is a draft like any other, and sends as typed', async () => {

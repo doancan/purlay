@@ -15,6 +15,7 @@ import { Button } from './button';
 import { Dialog } from './dialog';
 import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator } from './menu';
 import { Tooltip } from './tooltip';
+import { expectFocusOn } from '../testing/focus';
 
 installDom();
 
@@ -119,7 +120,7 @@ describe('Dialog', () => {
     // Radix returns focus on the next tick; the comparison is a boolean so a miss
     // does not print the whole document.
     await waitFor(() => {
-      expect(document.activeElement === opener).toBe(true);
+      expectFocusOn(opener);
     });
   });
 
@@ -214,7 +215,7 @@ describe('Menu', () => {
       expect(queryByRole('menu')).toBeNull();
     });
     await waitFor(() => {
-      expect(document.activeElement === trigger).toBe(true);
+      expectFocusOn(trigger);
     });
   });
 

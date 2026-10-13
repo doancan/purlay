@@ -26,6 +26,7 @@ import { renderApp } from '../../testing/render';
 import { Toaster } from '../../ui/toast';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -552,7 +553,7 @@ describe('a new channel', () => {
       expect(view.queryByRole('dialog')).toBeNull();
     });
     await waitFor(() => {
-      expect(document.activeElement === opener).toBe(true);
+      expectFocusOn(opener);
     });
     await person().click(opener);
     expect((view.getByLabelText('Name') as HTMLInputElement).value).toBe('');
