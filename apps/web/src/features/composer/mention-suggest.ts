@@ -26,6 +26,9 @@ const QUERY_MAX = 64;
 /** What may not stand before the `@` — the same letters `mentionsIn` refuses there (`a@b.c` is an address). */
 const GLUED = /[\p{L}\p{N}_@`]/u;
 
+/** What a handle is written with: a caret before one of these is inside a name, not at its end. */
+const HANDLE_LETTER = /[\p{L}\p{N}_-]/u;
+
 /** A mention being typed: the `@` at `start`, and what follows it up to the caret. */
 export interface MentionQuery {
   readonly start: number;
@@ -36,6 +39,8 @@ export interface MentionQuery {
  * The mention the caret is at the end of, or null. At least one character after the `@` — a lone
  * `@` is still punctuation — and none of them space or another `@`; never inside a code fence,
  * where an `@` is quoted, not addressed.
+ * The caret must be at the end of the name: one that has more name after it is being moved
+ * through, not written.
  */
 export const mentionQuery = (text: string, caret: number): MentionQuery | null => {
   const from = Math.max(0, caret - QUERY_MAX - 1);
@@ -49,6 +54,8 @@ export const mentionQuery = (text: string, caret: number): MentionQuery | null =
   if (at < from || text.charAt(at) !== '@') return null;
   const query = text.slice(at + 1, caret);
   if (query === '') return null;
+  // Inside a name already written, choosing would leave the rest of it behind (`@alice ice`).
+  if (HANDLE_LETTER.test(text.charAt(caret))) return null;
   if (at > 0 && GLUED.test(text.charAt(at - 1))) return null;
   if (insideFence(text.slice(0, at))) return null;
   return { start: at, query };
@@ -63,7 +70,8 @@ const startsAWord = (name: string, query: string): boolean =>
   name.split(/[\s\-_.]+/u).some((word) => word.startsWith(query));
 
 /**
- * The people whose name or handle matches, best first: a handle or a name that *starts* with what
+ * The people whose name or handle matches, best first: the handle typed out exactly, then a handle or
+ * a name that *starts* with what
  * was typed, then one with a word that does (`chen` for Alice Chen), then one that contains it.
  * Inside a tier alphabetical by name, so the same letters always give the same list.
  *
@@ -77,14 +85,18 @@ export const suggest = (people: readonly User[], query: string): readonly User[]
   for (const person of people) {
     const handle = fold(person.username);
     const name = fold(person.displayName);
+    // A handle typed out exactly is first, above everything that merely starts with it: `@ali`
+    // then Enter mentions Ali, never Alice because her name sorts first.
     const tier =
-      handle.startsWith(q) || name.startsWith(q)
-        ? 0
-        : startsAWord(name, q) || startsAWord(handle, q)
-          ? 1
-          : handle.includes(q) || name.includes(q)
-            ? 2
-            : null;
+      handle === q
+        ? -1
+        : handle.startsWith(q) || name.startsWith(q)
+          ? 0
+          : startsAWord(name, q) || startsAWord(handle, q)
+            ? 1
+            : handle.includes(q) || name.includes(q)
+              ? 2
+              : null;
     if (tier !== null) ranked.push({ person, tier });
   }
   ranked.sort(

@@ -44,6 +44,15 @@ describe('mentionQuery', () => {
     expect(mentionQuery('hi @al and more', 'hi @al'.length)).toEqual({ start: 3, query: 'al' });
   });
 
+  test('is nothing with the caret inside a name already written: the rest of it would be left behind', () => {
+    // `@alice hi` with the caret after `@al`: choosing would have written `@alice ice hi`.
+    expect(mentionQuery('@alice hi', '@al'.length)).toBeNull();
+    expect(mentionQuery('@isil-k hi', '@isil'.length)).toBeNull();
+    // At the end of the name, or before a space or a comma, it is still being written.
+    expect(mentionQuery('@al hi', '@al'.length)).toEqual({ start: 0, query: 'al' });
+    expect(mentionQuery('@al, hi', '@al'.length)).toEqual({ start: 0, query: 'al' });
+  });
+
   test('is nothing where the @ is glued to a word, an address or another @', () => {
     expect(at('mail me at me@example')).toBeNull();
     expect(at('@@ali')).toBeNull();
@@ -111,6 +120,14 @@ describe('suggest', () => {
       'aliveli',
       'alice',
     ]);
+  });
+});
+
+describe('suggest, a handle typed out', () => {
+  test('comes first, whatever its name sorts as: Enter must mention who was typed', () => {
+    const ali = person('ali', 'Mehmet Ali');
+    expect(suggest([ALICE, ali], 'ali').map((p) => p.username)).toEqual(['ali', 'alice']);
+    expect(suggest([ALICE, ali], 'ALI')[0]?.username).toBe('ali');
   });
 });
 
