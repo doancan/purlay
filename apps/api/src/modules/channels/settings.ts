@@ -17,10 +17,8 @@ import { recordAudit } from '../audit/audit';
 import type { Clock } from '../../platform/clock';
 import { channelNotFound, type ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { channelFor } from './channels';
-
-/** The roles that archive a channel (`ARCHITECTURE.md` §7.4, D-123). */
-const ARCHIVERS: readonly string[] = ['owner', 'admin'];
 
 /** The channel row, locked for the change about to be made; a direct message is not one to change. */
 const lockNamed = async (
@@ -147,13 +145,10 @@ export const archiveChannel = async (
   context: ChannelContext,
 ): Promise<void> => {
   const current = await lockNamed(executor, context);
-  const role = await executor
-    .selectFrom('workspace_members')
-    .select('role')
-    .where('workspace_id', '=', context.workspaceId)
-    .where('user_id', '=', context.userId)
-    .executeTakeFirst();
-  if (role === undefined || !ARCHIVERS.includes(role.role)) {
+  // The role is read again inside the transaction, through the guard, so a demotion that committed
+  // first is the answer here; and it is this workspace's role, never another membership's.
+  const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  if (role === 'member') {
     throw new AppError({
       code: 'FORBIDDEN',
       message: 'Only an owner or an admin archives a channel.',

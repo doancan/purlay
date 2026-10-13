@@ -344,6 +344,37 @@ describe('integration: archiving a channel', () => {
     });
   });
 
+  test('the role that archives is the one held in this workspace: an owner elsewhere is a member here, 403', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      // Carol owned a workspace of her own before she was brought in here as a member: her first
+      // membership row is an owner's, so a role read without this workspace would find it.
+      const carol = await aSignedInUser(db, clock, 'set-carol');
+      const slug = aUniqueSlug('set-own');
+      expect(
+        (await world.call('POST', '/api/workspaces', carol, { name: slug, slug })).status,
+      ).toBe(201);
+      await db
+        .insertInto('workspace_members')
+        .values({
+          workspace_id: world.workspaceId,
+          user_id: carol.userId,
+          role: 'member',
+          joined_at: NOW,
+        })
+        .execute();
+      const refused = await world.call('DELETE', `/api/channels/${world.channelId}`, carol);
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      const still = await db
+        .selectFrom('channels')
+        .select('deleted_at')
+        .where('id', '=', world.channelId)
+        .executeTakeFirstOrThrow();
+      expect(still.deleted_at).toBeNull();
+    });
+  });
+
   test('a direct message is not archived: 404, for an owner too', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
