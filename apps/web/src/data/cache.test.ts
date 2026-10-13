@@ -351,6 +351,21 @@ describe('the channel list', () => {
     expect(cached(client, keys.messages(CH))).toBeUndefined();
   });
 
+  test('a revoked channel takes its members and its threads with it, and leaves other threads (#521)', () => {
+    const client = seeded();
+    const OTHER = '00000000-0000-4000-8000-0000000000c2';
+    client.setQueryData(keys.channelMembers(CH), [{ user, joinedAt: '2026-09-09T08:00:00.000Z' }]);
+    client.setQueryData(keys.thread(id(2)), pages([message(7, { parentId: id(2) })]));
+    client.setQueryData(
+      keys.thread(id(9)),
+      pages([message(8, { parentId: id(9), channelId: OTHER })]),
+    );
+    channelsRevoked(client, [CH]);
+    expect(cached(client, keys.channelMembers(CH))).toBeUndefined();
+    expect(cached(client, keys.thread(id(2)))).toBeUndefined();
+    expect(cached(client, keys.thread(id(9)))).toBeDefined();
+  });
+
   test('a list that was never cached is not invented by a revocation', () => {
     const client = new QueryClient();
     channelsRevoked(client, [CH]);

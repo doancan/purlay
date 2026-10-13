@@ -273,7 +273,18 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
       list.filter((c) => !channelIds.includes(c.id)),
     );
   }
-  for (const id of channelIds) client.removeQueries({ queryKey: keys.messages(id) });
+  for (const id of channelIds) {
+    client.removeQueries({ queryKey: keys.messages(id) });
+    client.removeQueries({ queryKey: keys.channelMembers(id) });
+  }
+  // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
+  client.removeQueries({
+    queryKey: families.thread,
+    predicate: (query) =>
+      ((query.state.data as Pages | undefined)?.pages ?? []).some((page) =>
+        page.data.some((m) => channelIds.includes(m.channelId)),
+      ),
+  });
 };
 
 /** The newest message id the cache holds for a channel's feed — what a read position names. */

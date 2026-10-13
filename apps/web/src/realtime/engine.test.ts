@@ -818,6 +818,94 @@ describe('the frames', () => {
     expect(new Set(sent[0]?.payload['channelIds'] as string[])).toEqual(new Set([CH, CH2, CH3]));
   });
 
+  test('a channel taken away takes its unsent messages with it, from the store and from storage, and says how many (#521)', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH2, content: 'on its way' });
+    const failing = w.engine.send({ channelId: CH2, content: 'refused' });
+    const elsewhere = w.engine.send({ channelId: CH, content: 'stays' });
+    w.deliver(
+      frame({ event: 'ERROR', data: { code: 'INTERNAL', message: 'no' }, refId: failing, ts: T0 }),
+    );
+    expect(w.engine.store.getState().lost).toBeNull();
+
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2], reason: 'archived' }, ts: T0 }),
+    );
+
+    expect(w.pending().map((p) => p.id)).toEqual([elsewhere]);
+    expect(w.engine.store.getState().lost).toEqual({ count: 2, seq: 1 });
+    // A reload brings back only what is still somebody's to send.
+    expect(
+      world({}, { storage })
+        .pending()
+        .map((p) => p.id),
+    ).toEqual([elsewhere]);
+  });
+
+  test('a send the server answers with the channel gone goes, and is counted, rather than waiting failed for ever (#521)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'into nothing' });
+    w.deliver(
+      frame({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: id,
+        ts: T0,
+      }),
+    );
+    expect(w.pending()).toEqual([]);
+    expect(w.engine.store.getState().lost).toEqual({ count: 1, seq: 1 });
+  });
+
+  test('a subscription refused for good takes the channel’s unsent messages too (#521)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH2, content: 'waiting' });
+    w.timers.advance(2_000);
+    const subscribe = w.sentOps('SUBSCRIBE').at(-1);
+    w.deliver(
+      frame({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: subscribe?.id ?? '',
+        ts: T0,
+      }),
+    );
+    expect(w.pending().filter((p) => p.channelId === CH2)).toEqual([]);
+    expect(w.engine.store.getState().lost?.count).toBe(1);
+  });
+
+  test('channels lost while nobody was told — dropped from the list — take their unsent messages (#521)', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH2, content: 'waiting' });
+    w.engine.lose([CH2]);
+    expect(w.pending()).toEqual([]);
+    expect(w.engine.store.getState().lost?.count).toBe(1);
+  });
+
+  test('a channel taken away with nothing unsent says nothing (#521)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2] }, ts: T0 }));
+    expect(w.engine.store.getState().lost).toBeNull();
+  });
+
   test("the end of the session is the screen's to handle", () => {
     const w = world();
     w.engine.start();

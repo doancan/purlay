@@ -357,6 +357,11 @@ missing specified behaviour and does not merge.
 **Go home**; the rail and the sidebar stay, and going anywhere else draws afresh. A failure outside a
 screen says "Purlay stopped working" with the same two ways out. Never a blank page (D-96).
 
+**Unsent messages of a channel the person lost** — archived, left on another device, or their
+membership ended, or gone from the channel list read after a time offline — are removed, and one
+notice says how many were removed and why. Nothing could send them, and kept they would wait with
+no screen to show them (#521).
+
 **Connection loss** shows a single non-blocking bar: `Reconnecting…`. The composer stays
 enabled — messages queue and send on reconnect (`ARCHITECTURE.md` §5.4). Disabling input on a
 transient network blip is the failure mode this whole architecture exists to avoid.
