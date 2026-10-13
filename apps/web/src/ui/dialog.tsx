@@ -44,6 +44,22 @@ interface DialogProps {
   readonly footer?: React.ReactNode;
 }
 
+/**
+ * Where focus goes back to when a dialog closes: what opened it — or, for an item of a menu, the
+ * menu's own button. A menu item is gone by the time the dialog closes (the menu closed as it
+ * opened the dialog), and focus sent to a node that is gone falls to the page (`expectFocusOn`
+ * caught it, #506). Radix labels a menu by its trigger, so the button is found from the menu.
+ */
+const openerOf = (active: Element | null): HTMLElement | null => {
+  if (!(active instanceof HTMLElement)) return null;
+  const trigger = active.closest('[role="menu"]')?.getAttribute('aria-labelledby');
+  const button = trigger == null ? null : document.getElementById(trigger);
+  // A trigger that is itself gone (a submenu's item) is no better than the item: nothing, then, and
+  // Radix's own return is left to stand.
+  const opener = button ?? active;
+  return opener.isConnected ? opener : null;
+};
+
 export const Dialog = ({
   open,
   onOpenChange,
@@ -62,12 +78,13 @@ export const Dialog = ({
           className={contentClasses}
           onOpenAutoFocus={() => {
             // Fired before Radix moves focus in, so the active element is still the opener.
-            returnTo.current =
-              document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            returnTo.current = openerOf(document.activeElement);
           }}
           onCloseAutoFocus={(event) => {
+            // Ours when we know where; Radix's own return otherwise, rather than nowhere.
+            if (returnTo.current?.isConnected !== true) return;
             event.preventDefault();
-            returnTo.current?.focus();
+            returnTo.current.focus();
           }}
         >
           <div className="flex flex-col gap-1 pr-6">

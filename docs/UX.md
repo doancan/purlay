@@ -44,18 +44,21 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
  │ ?3 │  # deploys    2  │      ┌ ts · 14 lines ──────────── Copy ┐       │         │
  │ ⌕  │ People           │      └─────────────────────────────────┘       │         │
  │    │  (SC) Sarah Chen │ ┌──────────────────────────────────────┐       │         │
- │ ⚙  │ (DÖ) you         │ └────────────────────────────────── ➤ ┘       │         │
+ │    │ (DÖ) you       ⚙ │ └────────────────────────────────── ➤ ┘       │         │
  └────┴──────────────────┴────────────────────────────────────────────────┴─────────┘
 ```
 
 - **Rail (56px)** — the workspace tile, which opens the workspace switcher; then channels, the
   inbox (a dot while anything needs you — the same fact as the mention badges, D-106), open
-  questions (a neutral count: they are the team's, not a summons) and search; at the foot,
-  settings — theme, language and the shortcut reference. Every entry is a route or a menu that
-  exists without the rail; it adds no destination. Its top is an empty drag strip for the desktop
+  questions (a neutral count: they are the team's, not a summons) and search. Every entry is a route
+  or a menu that exists without the rail; it adds no destination. It has no gear: what is the
+  person's is the account menu's (D-124). Its top is an empty drag strip for the desktop
   shell (D-14).
 - **Sidebar (240px)** — the workspace name, the jump field (the palette's door, `⌘K`), the channels,
-  then the people, and your own row at the foot. Unread channels are bold;
+  then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
+  for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is on, until when, the
+  minutes left and its end; the theme; the language; the shortcut reference; **Sign out**; and **Sign
+  out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
   unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar and no
   presence dot: there is no presence to show (Phase 2, D-120), and a dot that is always one colour
   would be a lie.
@@ -327,7 +330,7 @@ trade a certain cost for a hypothetical benefit.
 | `E` | Edit (own messages) |
 | `Cmd/Ctrl+Shift+R` | Resolve / reopen the focused thread — on its root, or anywhere in its panel |
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
-| `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; the palette offers another while (D-124) |
+| `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; another while is the account menu's or the palette's |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
 product; an invisible focus ring is a broken product, not a style choice. (`PRD.md` §5)
@@ -366,8 +369,8 @@ no screen to show them (#521).
 enabled — messages queue and send on reconnect (`ARCHITECTURE.md` §5.4). Disabling input on a
 transient network blip is the failure mode this whole architecture exists to avoid.
 
-**Deep Work** shows a persistent, quiet indicator in the header with its expiry. A mode you can
-forget you are in is a mode that loses you messages.
+**Deep Work** shows a persistent, quiet indicator in the header with its expiry, and the account menu
+says the minutes left. A mode you can forget you are in is a mode that loses you messages.
 
 ---
 

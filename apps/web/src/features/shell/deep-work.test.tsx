@@ -149,6 +149,7 @@ describe('outside a workspace', () => {
       seen.value?.end();
     }).not.toThrow();
     expect(seen.value?.until).toBeNull();
+    expect(seen.value?.minutesLeft()).toBe(0);
     view.unmount();
   });
 });

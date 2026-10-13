@@ -241,6 +241,26 @@ describe('signing out', () => {
     await createActions(anApi({ signOut: () => Promise.resolve() }), client).signOut();
     expect(client.getQueryCache().getAll()).toHaveLength(0);
   });
+
+  test('everywhere asks to end every session, and forgets the page the same way', async () => {
+    const { client } = world();
+    const asked: string[] = [];
+    await createActions(
+      anApi({
+        signOut: () => {
+          asked.push('here');
+          return Promise.resolve();
+        },
+        signOutEverywhere: () => {
+          asked.push('everywhere');
+          return Promise.resolve();
+        },
+      }),
+      client,
+    ).signOut('everywhere');
+    expect(asked).toEqual(['everywhere']);
+    expect(client.getQueryCache().getAll()).toHaveLength(0);
+  });
 });
 
 describe('a failure', () => {

@@ -69,6 +69,8 @@ interface DeepWork {
   readonly toggle: () => void;
   readonly start: (choice: DeepWorkChoice) => void;
   readonly end: () => void;
+  /** Whole minutes until it ends, at least one while it lasts; asked when it is drawn. */
+  readonly minutesLeft: () => number;
 }
 
 const DeepWorkContext = createContext<DeepWork | null>(null);
@@ -78,6 +80,7 @@ const OFF: DeepWork = {
   toggle: () => undefined,
   start: () => undefined,
   end: () => undefined,
+  minutesLeft: () => 0,
 };
 
 /** Deep Work here; off, and changing nothing, outside a workspace. */
@@ -175,7 +178,18 @@ export const DeepWorkProvider = ({
     };
   }, [toggle]);
 
-  const value = useMemo(() => ({ until, toggle, start, end }), [until, toggle, start, end]);
+  const minutesLeft = useCallback(
+    (): number =>
+      until === null
+        ? 0
+        : Math.max(1, Math.ceil((new Date(until).getTime() - clock.now().getTime()) / 60_000)),
+    [clock, until],
+  );
+
+  const value = useMemo(
+    () => ({ until, toggle, start, end, minutesLeft }),
+    [until, toggle, start, end, minutesLeft],
+  );
   return <DeepWorkContext.Provider value={value}>{children}</DeepWorkContext.Provider>;
 };
 

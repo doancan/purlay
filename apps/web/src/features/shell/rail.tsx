@@ -1,5 +1,7 @@
 /**
- * The rail: the workspace, the places you go, and settings, down the window's left edge (D-110).
+ * The rail: the workspace and the places you go, down the window's left edge (D-110). What is the
+ * person's own — theme, language, the shortcut reference — is in the account menu at the sidebar's
+ * foot (D-124), not on a gear here.
  *
  * Every entry is a route or a menu that exists without the rail — it adds no destination. Its top
  * is an empty strip the desktop shell will draw its window controls over (D-14). Below the narrow
@@ -13,7 +15,6 @@ import { SearchLink } from '../search/search-link';
 import { OpenQuestionsLink } from '../sidebar/open-questions-link';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
 import { RailItemContent, railItemClasses } from './rail-item';
-import { SettingsMenu } from './settings-menu';
 import { useWorkspace } from './workspace';
 
 /** The conversations: the workspace's front door, which opens the channel you were last in. */
@@ -63,9 +64,6 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
         <InboxLink />
         <OpenQuestionsLink />
         <SearchLink />
-      </div>
-      <div className="mt-auto">
-        <SettingsMenu />
       </div>
     </nav>
   );

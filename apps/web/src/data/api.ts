@@ -172,6 +172,8 @@ export interface Api {
   readonly discardAttachment: (attachmentId: string) => Promise<void>;
 
   readonly signOut: () => Promise<void>;
+  /** Ends every session the person holds, this one with them (D-11). */
+  readonly signOutEverywhere: () => Promise<void>;
 }
 
 export const createApi = (http: Http): Api => {
@@ -406,5 +408,6 @@ export const createApi = (http: Http): Api => {
     discardAttachment: (attachmentId) =>
       http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
     signOut: () => http.send('POST', '/auth/logout', options()),
+    signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
   };
 };

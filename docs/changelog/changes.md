@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Interface — 2026-10-13: the account menu (D-124)
+
+- The sidebar's foot — your avatar, name and handle — opens the account menu: Deep Work for 30
+  minutes, an hour, two hours or until tomorrow (or, while on, the minutes left and its end), the
+  theme, the language, the shortcut reference, **Sign out** and **Sign out everywhere…**, which asks
+  first and ends every session you hold.
+- The rail's settings gear is gone and Sign out has left the workspace menu: each lives once, in the
+  account menu.
+
+### Interface — 2026-10-13: Deep Work for a while (D-124)
+
 ### Interface — 2026-10-13: Deep Work for a while (D-124)
 
 - The command palette starts Deep Work for 30 minutes, an hour, two hours or until tomorrow, and ends

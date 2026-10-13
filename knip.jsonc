@@ -23,7 +23,9 @@
       // Run by `scripts/demo.ts` as a subprocess (`bun run apps/api/src/cli/seed-demo.ts`),
       // which knip does not read. Not dead: it is how the demo and the browser tests get
       // their workspace, and it lives in `cli/` beside `write-env-example.ts` for the same reason.
-      "entry": ["src/index.ts", "src/cli/seed-demo.ts"],
+      // `demo-session.ts` likewise: the browser suite's fixtures run it for a session the seed did
+      // not make (`apps/web/e2e/fixtures.ts`, `freshSessionOf`).
+      "entry": ["src/index.ts", "src/cli/seed-demo.ts", "src/cli/demo-session.ts"],
     },
     "apps/web": {
       // The first exemption. The realtime client library and the browser clock

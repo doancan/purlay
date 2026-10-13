@@ -100,6 +100,12 @@ await run(['bun', 'run', 'apps/api/src/cli/seed-demo.ts', '--out', seeded], {
 const world = JSON.parse(readFileSync(seeded, 'utf8')) as {
   personas: Record<string, { token: string }>;
 };
+// Where this world lives, for a browser test that needs a session the seed did not make (a test
+// that signs a person out everywhere ends the seeded ones): `apps/api/src/cli/demo-session.ts`.
+writeFileSync(
+  seeded,
+  JSON.stringify({ ...JSON.parse(readFileSync(seeded, 'utf8')), database: demoUrl }, null, 2),
+);
 const sessions = Object.fromEntries(
   Object.entries(world.personas).map(([name, persona]) => [name, persona.token]),
 );
