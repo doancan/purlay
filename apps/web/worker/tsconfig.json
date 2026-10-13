@@ -1,0 +1,12 @@
+{
+  "extends": "../../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../../.tsbuild/web-worker",
+    "rootDir": ".",
+    "tsBuildInfoFile": "../../../.tsbuild/web-worker.tsbuildinfo",
+    "lib": ["ES2023", "WebWorker"],
+    "types": ["bun"]
+  },
+  "include": ["*.ts"],
+  "references": [{ "path": "../../../packages/types" }]
+}

@@ -514,6 +514,13 @@ export const PushUnsubscribeRequest = FromClient({
 export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
 
 /**
+ * A path of this site. `//host`, `/\\host` and a slash after a tab or a newline are other sites'
+ * addresses spelled like one, so a second slash or a backslash after the first, any backslash, and
+ * control characters are refused.
+ */
+const SITE_PATH = '^/(?![/\\\\])[^\\\\\\u0000-\\u001f\\u007f]*$';
+
+/**
  * What a push carries, encrypted for the device (RFC 8291) and read by its service worker: who and
  * where, never what was said (D-126), and the address to open. `tag` folds the notifications of one
  * channel into one on the device.
@@ -521,10 +528,20 @@ export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
 export const PushPayload = Type.Object({
   title: Type.String({ maxLength: 200 }),
   body: Type.String({ maxLength: 200 }),
-  url: Type.String({ pattern: '^/', maxLength: 512 }),
+  url: Type.String({ pattern: SITE_PATH, maxLength: 512 }),
   tag: Type.String({ maxLength: 100 }),
 });
 export type PushPayload = Static<typeof PushPayload>;
+
+/**
+ * What the push worker tells an open tab when its notification is clicked: go to this path. The
+ * worker cannot navigate a tab it does not control, and the tab's own router keeps its state.
+ */
+export const PushOpenMessage = Type.Object({
+  kind: Type.Literal('push-open'),
+  url: Type.String({ pattern: SITE_PATH, maxLength: 512 }),
+});
+export type PushOpenMessage = Static<typeof PushOpenMessage>;
 
 /**
  * `POST /api/workspaces/:workspaceId/uploads?id=&name=` — the body is the file's bytes (D-109 §3).

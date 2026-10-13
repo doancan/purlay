@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: the push worker (D-126, part of #78)
+
+- `apps/web/worker/push-worker.ts`, built by Vite as an entry of its own to `/push-worker.js`: a push
+  is always shown, folded by its tag, and a payload it cannot read is shown as the plain notice; a
+  click focuses an open tab and tells it the path (`PushOpenMessage`), or opens one. A path is the
+  only address it opens: `PushPayload.url` now refuses `//host`.
+- Tested from both sides against the contract, and in a browser: Chromium's DevTools protocol
+  delivers a push to the built worker.
+
 ### Feature — 2026-10-13: a device can be subscribed for Web Push (D-126, part of #78)
 
 - Migration 0024: `push_subscriptions` (a person's devices, tied to the session they were made in) and
