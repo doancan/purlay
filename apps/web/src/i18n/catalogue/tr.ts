@@ -258,6 +258,18 @@ export const tr = {
   'details.nobody': 'Bu kanalda kimse yok. Herkes katılabilir.',
   'details.you': 'sen',
   'details.notifications': 'Bildirimler',
+  'details.leave': 'Kanaldan ayrıl',
+  'details.leaveAsk':
+    '#{name} kanalından ayrılıyor musun? Herkese açık bir kanala yeniden katılabilirsin; özel bir kanala seni bir üyenin geri eklemesi gerekir.',
+  'details.leaveFailed': 'Kanaldan ayrılamadın.',
+  'details.lastMember':
+    'Bu özel kanalda kalan son kişi sensin. Önce birini ekle ya da bir yöneticiden arşivlemesini iste.',
+  'details.left': '#{name} kanalından ayrıldın.',
+  'details.archive': 'Kanalı arşivle',
+  'details.archiveAsk':
+    '#{name} arşivlensin mi? Artık kimse görmeyecek. Konuşması saklanır, adı yeniden kullanılabilir.',
+  'details.archiveFailed': 'Kanal arşivlenmedi.',
+  'details.archived': '#{name} arşivlendi.',
 
   // ── Mesajlar ────────────────────────────────────────────────────────────
   'message.react': 'Tepki ver',

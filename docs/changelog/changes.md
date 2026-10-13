@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Web — 2026-10-13: leave or archive a channel from its details (D-123)
+
+- The details end with Leave channel for a member and Archive channel for an owner or an admin, in
+  the danger tone (a new `dangerQuiet` button), each asking first. The last member of a private
+  channel is told what to do instead. Leaving takes the channel off every tab of the person who left.
+
 ### Web — 2026-10-13: a channel's details, from its name (D-123)
 
 - The channel's name in its header opens its details: the name and topic with Save, the members with

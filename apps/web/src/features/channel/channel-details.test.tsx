@@ -1,6 +1,7 @@
 /**
- * A channel's details, opened from its name in the header (D-123): the name and topic, and who is
- * in it in its three states (`UX.md` §8).
+ * A channel's details, opened from its name in the header (D-123): the name and topic, who is in
+ * it in its three states (`UX.md` §8), and Leave and Archive — who is offered each, that each asks
+ * first, and what a refusal says.
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
@@ -8,6 +9,7 @@ import type { Channel, ChannelMember, MeResponse, UpdateChannelRequest } from '@
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
+import { expectFocusOn } from '../../testing/focus';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
 import {
@@ -41,6 +43,8 @@ const openDetails = async (view: ChannelView): Promise<HTMLElement> => {
   await settle();
   return view.getByRole('dialog', { name: 'Details of #api' });
 };
+
+const here = (view: ChannelView): string => view.world.history.stack.at(-1) ?? '';
 
 describe('opening it', () => {
   test('the channel’s name in the header opens it, and the heading is still the name', async () => {
@@ -339,7 +343,7 @@ describe('the name and the topic', () => {
     view.unmountAll();
   });
 
-  test('somebody who has not joined is shown them, and offered nothing to change', async () => {
+  test('somebody who has not joined is shown them, and offered nothing to change or leave', async () => {
     const view = await mountChannel({
       channelId: IDS.browse,
       messages: page([]),
@@ -350,6 +354,120 @@ describe('the name and the topic', () => {
     const dialog = view.getByRole('dialog', { name: 'Details of #browse' });
     expect(within(dialog).queryByLabelText('Name')).toBeNull();
     expect(within(dialog).getByText(/Join the channel to change/)).toBeDefined();
+    expect(within(dialog).queryByRole('button', { name: 'Leave channel' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Archive channel' })).toBeNull();
+    view.unmountAll();
+  });
+});
+
+describe('leaving and archiving', () => {
+  test('the question takes focus on Cancel, says what it asks, and Cancel gives focus back to the button that asked', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        me: () => Promise.resolve(asMember()),
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+      },
+    });
+    const dialog = await openDetails(view);
+    const leave = within(dialog).getByRole('button', { name: 'Leave channel' });
+    act(() => {
+      leave.focus();
+    });
+    await person().keyboard('{Enter}');
+    await settle();
+    const question = within(dialog).getByRole('group', { name: /Leave #api\?/ });
+    expectFocusOn(within(question).getByRole('button', { name: 'Cancel' }));
+    await person().keyboard('{Enter}');
+    await settle();
+    expectFocusOn(within(dialog).getByRole('button', { name: 'Leave channel' }));
+    view.unmountAll();
+  });
+
+  test('a member is offered Leave and not Archive; Leave asks first, then goes, and the channel leaves the list', async () => {
+    const left: string[] = [];
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        me: () => Promise.resolve(asMember()),
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+        leaveChannel: (id) => {
+          left.push(id);
+          return Promise.resolve();
+        },
+      },
+    });
+    const dialog = await openDetails(view);
+    expect(within(dialog).queryByRole('button', { name: 'Archive channel' })).toBeNull();
+    await person().click(within(dialog).getByRole('button', { name: 'Leave channel' }));
+    expect(left).toEqual([]);
+    expect(within(dialog).getByText(/Leave #api\?/)).toBeDefined();
+    await person().click(within(dialog).getByRole('button', { name: 'Leave channel' }));
+    await settle();
+    expect(left).toEqual([IDS.api]);
+    expect(here(view)).toBe('/w/acme');
+    view.unmountAll();
+  });
+
+  test('the last member of a private channel is told what to do instead', async () => {
+    const secret = { ...aChannel(IDS.api, 'api'), type: 'private' as const };
+    const view = await mountChannel({
+      messages: page([]),
+      channels: [secret, ...someChannels().filter((c) => c.id !== IDS.api)],
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        leaveChannel: () => Promise.reject(new ApiError(409, 'LAST_CHANNEL_MEMBER', 'x')),
+      },
+    });
+    const dialog = await openDetails(view);
+    await person().click(within(dialog).getByRole('button', { name: 'Leave channel' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Leave channel' }));
+    await settle();
+    expect(within(dialog).getByRole('alert').textContent).toContain('Bring somebody in first');
+    view.unmountAll();
+  });
+
+  test('an archive that fails says so, and the channel stays', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        archiveChannel: () => Promise.reject(new ApiError(500, 'INTERNAL', 'x')),
+      },
+    });
+    const dialog = await openDetails(view);
+    const where = [...view.world.history.stack];
+    await person().click(within(dialog).getByRole('button', { name: 'Archive channel' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Archive channel' }));
+    await settle();
+    expect(within(dialog).getByRole('alert').textContent).toContain('was not archived');
+    expect(view.world.history.stack).toEqual(where);
+    view.unmountAll();
+  });
+
+  test('an owner archives after being asked, and is taken to the workspace', async () => {
+    const archived: string[] = [];
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        archiveChannel: (id) => {
+          archived.push(id);
+          return Promise.resolve();
+        },
+      },
+    });
+    const dialog = await openDetails(view);
+    await person().click(within(dialog).getByRole('button', { name: 'Archive channel' }));
+    expect(within(dialog).getByText(/Archive #api\?/)).toBeDefined();
+    await expectNoAxeViolations(dialog);
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(archived).toEqual([]);
+    await person().click(within(dialog).getByRole('button', { name: 'Archive channel' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Archive channel' }));
+    await settle();
+    expect(archived).toEqual([IDS.api]);
+    expect(here(view)).toBe('/w/acme');
     view.unmountAll();
   });
 });

@@ -73,8 +73,10 @@ describe('Button', () => {
         <Button variant="danger" className="w-sidebar">
           d
         </Button>
+        <Button variant="dangerQuiet">q</Button>
       </div>,
     );
+    expect(getByRole('button', { name: 'q' }).className).toContain('text-danger-text');
     expect(getByRole('button', { name: 'p' }).className).toContain('bg-accent');
     expect(getByRole('button', { name: 's' }).className).toContain('shadow-card');
     expect(getByRole('button', { name: 'g' }).className).toContain('border-transparent');
@@ -91,6 +93,7 @@ describe('Button', () => {
         <Button>Cancel</Button>
         <Button variant="ghost">More</Button>
         <Button variant="danger">Delete</Button>
+        <Button variant="dangerQuiet">Leave</Button>
         <Button disabled>Disabled</Button>
         <Button busy>Busy</Button>
       </div>,

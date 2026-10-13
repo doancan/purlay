@@ -1,26 +1,34 @@
 /**
  * A channel's details (D-123), opened from its name in the header: the Details panel of the
  * Superdesign screens, drawn as the product's dialog — its name and topic, who is in it with Add
- * people, and what the person is told about. Files and pins are not here (#485).
+ * people, what the person is told about, and at the bottom, in the danger tone, Leave and (for an
+ * owner or an admin) Archive. Files and pins are not here (#485).
  *
- * What is offered is what the server would allow: only a member edits the name and topic. The server
- * stays the authority, and what it refuses is said in words — a taken name under the name field.
+ * What is offered is what the server would allow: only a member edits the name and topic, only a
+ * member leaves, only an owner or an admin archives. The server stays the authority, and what it
+ * refuses is said in words — a taken name under the name field, the last member of a private channel
+ * in a sentence that says what to do instead. Leaving and archiving cost something, so each asks
+ * first, in place, as removing a member does.
  */
 import { useQueryClient } from '@tanstack/react-query';
 import type { Channel, UpdateChannelRequest } from '@purlay/types';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useChannelMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
+import { href } from '../../router/routes';
+import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { TextField } from '../../ui/text-field';
+import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
+import { useWorkspace } from '../shell/workspace';
 import { AddPeopleDialog } from './add-people';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
@@ -219,6 +227,123 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   );
 };
 
+/**
+ * Leave, for a member, and Archive, for an owner or an admin: each asks in place first, says what it
+ * costs, and when done takes the person to the workspace and says so in a toast.
+ */
+const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element | null => {
+  const { t } = useI18n();
+  const describe = useDescribeFailure();
+  const { leaveChannel, archiveChannel } = useActions();
+  const { workspace } = useWorkspace();
+  const { memberships } = useSession();
+  const { navigate } = useRoute();
+  const { show } = useToast();
+  const [asking, setAsking] = useState<'leave' | 'archive' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const questionId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  // Which button asked, so Cancel can give focus back to it: the question replaces the buttons, and
+  // focus on a button that is gone falls to the dialog itself, far from where the person was.
+  const asked = useRef<'leave' | 'archive' | null>(null);
+  useEffect(() => {
+    if (asking !== null) {
+      asked.current = asking;
+      box.current?.querySelector<HTMLElement>('[data-answer="cancel"]')?.focus();
+    } else if (asked.current !== null) {
+      box.current?.querySelector<HTMLElement>(`[data-ask="${asked.current}"]`)?.focus();
+      asked.current = null;
+    }
+  }, [asking]);
+  const [problem, setProblem] = useState<string | null>(null);
+  const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
+  const member = channel.state !== null;
+  const archiver = role === 'owner' || role === 'admin';
+  const name = channel.name ?? '';
+  if (!member && !archiver) return null;
+
+  const act = async (what: 'leave' | 'archive'): Promise<void> => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      if (what === 'leave') await leaveChannel(channel);
+      else await archiveChannel(channel.id);
+      show({ message: t(what === 'leave' ? 'details.left' : 'details.archived', { name }) });
+      navigate(href('workspace', { slug: workspace.slug }));
+    } catch (failure) {
+      setBusy(false);
+      setProblem(
+        isApiError(failure) && failure.code === 'LAST_CHANNEL_MEMBER'
+          ? t('details.lastMember')
+          : `${t(what === 'leave' ? 'details.leaveFailed' : 'details.archiveFailed')} ${describe(failure)}`,
+      );
+    }
+  };
+
+  return (
+    <div ref={box} className="flex flex-col gap-2 border-t-hairline border-border-subtle pt-4">
+      {problem !== null && (
+        <p role="alert" className="text-label text-danger-text">
+          {problem}
+        </p>
+      )}
+      {asking === null ? (
+        <div className="flex flex-wrap gap-2">
+          {member && (
+            <Button
+              variant="dangerQuiet"
+              data-ask="leave"
+              onClick={() => {
+                setAsking('leave');
+              }}
+            >
+              {t('details.leave')}
+            </Button>
+          )}
+          {archiver && (
+            <Button
+              variant="dangerQuiet"
+              data-ask="archive"
+              onClick={() => {
+                setAsking('archive');
+              }}
+            >
+              {t('details.archive')}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div role="group" aria-labelledby={questionId} className="flex flex-col gap-2">
+          <p id={questionId} className="text-label text-ink">
+            {t(asking === 'leave' ? 'details.leaveAsk' : 'details.archiveAsk', { name })}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              data-answer="cancel"
+              onClick={() => {
+                setAsking(null);
+                setProblem(null);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              busy={busy}
+              onClick={() => {
+                void act(asking);
+              }}
+            >
+              {t(asking === 'leave' ? 'details.leave' : 'details.archive')}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ChannelDetailsDialog = ({
   channel,
   open,
@@ -245,6 +370,7 @@ export const ChannelDetailsDialog = ({
           <NotificationLevelMenu channel={channel} />
         </div>
       )}
+      <Farewell channel={channel} />
     </Dialog>
   );
 };
