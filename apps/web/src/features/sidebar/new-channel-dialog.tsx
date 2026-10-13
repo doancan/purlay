@@ -19,12 +19,8 @@ import { Icon } from '../../components/icon';
 import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useWorkspace } from '../shell/workspace';
-import {
-  CHANNEL_NAME,
-  CHANNEL_NAME_MAX,
-  finishedChannelName,
-  toChannelName,
-} from '../channel/channel-name';
+import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from '../channel/channel-name';
+import { typeChannelName } from '../channel/name-field';
 
 interface Problem {
   readonly field: 'name' | 'form';
@@ -130,7 +126,7 @@ export const NewChannelDialog = ({
           spellCheck={false}
           {...(problem?.field === 'name' ? { error: problem.message } : {})}
           onChange={(event) => {
-            setName(toChannelName(event.target.value));
+            typeChannelName(event.target, setName);
           }}
         />
         <TextField

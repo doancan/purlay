@@ -521,6 +521,16 @@ describe('a new channel', () => {
     expect(calls).toEqual([{ name: 'genel-sohbet-is' }]);
   });
 
+  test('typing in the middle of a name keeps the caret where the person is typing', async () => {
+    const view = await open(asked().api);
+    await fill(view, 'genelsohbet');
+    const field = view.getByLabelText('Name') as HTMLInputElement;
+    // A space after `genel` becomes a hyphen; the next letter lands after it, not at the end.
+    await person().type(field, ' x', { initialSelectionStart: 5, initialSelectionEnd: 5 });
+    expect(field.value).toBe('genel-xsohbet');
+    expect(field.selectionStart).toBe('genel-x'.length);
+  });
+
   test('a name with nothing left of it is refused before the server hears', async () => {
     const { calls, api } = asked();
     const view = await open(api);
