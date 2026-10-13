@@ -21,6 +21,7 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import type { MeResponse, Membership, Workspace, WorkspaceMember } from '@purlay/types';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
@@ -217,6 +218,15 @@ export const renameWorkspace = async (
     .where('deleted_at', 'is', null)
     .forUpdate()
     .executeTakeFirstOrThrow();
+  // The role as it is now, under the lock a role change takes too: an admin demoted after the
+  // request began is a member here (#527), whatever the guard said before.
+  const now = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  if (now.role === 'member') {
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only an owner or an admin renames the workspace.',
+    });
+  }
   if (before.name === name) return { workspace: asWorkspace(before), memberIds: [] };
   const row = await executor
     .updateTable('workspaces')

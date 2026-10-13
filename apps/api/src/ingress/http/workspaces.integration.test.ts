@@ -14,6 +14,9 @@ import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { AppError } from '../../platform/errors';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { renameWorkspace } from '../../modules/workspaces/workspaces';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -313,6 +316,38 @@ describe('integration: renaming a workspace (D-124)', () => {
       });
       expect(again.status).toBe(200);
       expect(await trail(db, made.id)).toEqual([]);
+    });
+  });
+
+  test('an admin demoted after the request began is refused: the role is read where the rename is written (#527)', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-race-owner');
+      const admin = await signedIn(db, 'rn-race-admin');
+      const made = await aWorkspace(db, owner.cookie, 'race');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: made.id, user_id: admin.userId, role: 'admin', joined_at: NOW })
+        .execute();
+      // The guard's answer, as the request had it before the demotion committed.
+      const context = await requireWorkspaceMembership(db, admin.userId, made.id);
+      expect(context.role).toBe('admin');
+      await db
+        .updateTable('workspace_members')
+        .set({ role: 'member' })
+        .where('workspace_id', '=', made.id)
+        .where('user_id', '=', admin.userId)
+        .execute();
+      let refused = '';
+      await renameWorkspace(db, clock, context, 'taken over').catch((error: unknown) => {
+        refused = error instanceof AppError ? error.body.code : String(error);
+      });
+      expect(refused).toBe('FORBIDDEN');
+      const kept = await db
+        .selectFrom('workspaces')
+        .select('name')
+        .where('id', '=', made.id)
+        .executeTakeFirstOrThrow();
+      expect(kept.name).toBe('race');
     });
   });
 
