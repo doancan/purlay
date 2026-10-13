@@ -9,9 +9,16 @@ import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { createApp } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
+import { revokeAllSessions } from '../modules/auth/sessions';
 import { testConfig, testDependencies } from '../testing/doubles';
 import { PERSONAS } from './demo-script';
-import { assertDemoDatabase, neverSignsIn, plannedMessages, seedDemo } from './demo-seed';
+import {
+  assertDemoDatabase,
+  freshSession,
+  neverSignsIn,
+  plannedMessages,
+  seedDemo,
+} from './demo-seed';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -177,6 +184,44 @@ describe('integration: the database the seed will write to', () => {
           .where('username', 'in', Object.keys(PERSONAS))
           .execute(),
       ).toHaveLength(0);
+    });
+  });
+});
+
+describe('integration: a fresh session for a seeded person (#522 follow-up)', () => {
+  test('is a new working session, so a test that signs a person out everywhere can run again', async () => {
+    await withRollback(async (db) => {
+      const config = testConfig({
+        DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_e2e_test',
+      });
+      const manifest = await seedDemo({ database: db, config, now: NOW });
+      const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
+      const me = async (token: string): Promise<number> =>
+        (
+          await app.handle(
+            new Request('http://localhost/api/me', {
+              headers: { cookie: `${SESSION_COOKIE}=${token}` },
+            }),
+          )
+        ).status;
+
+      // Every session erin holds ends, as signing out everywhere ends them.
+      await revokeAllSessions(db, fixedClock(NOW), manifest.outsiders.erin.userId);
+      expect(await me(manifest.outsiders.erin.tokens[0])).toBe(401);
+
+      const token = await freshSession(db, fixedClock(NOW), config.DATABASE_URL, 'erin');
+      expect(await me(token)).toBe(200);
+    });
+  });
+
+  test('is refused outside a scratch database, and for somebody who is not there', async () => {
+    await withRollback(async (db) => {
+      await expect(
+        freshSession(db, fixedClock(NOW), 'postgres://u:p@localhost:5432/purlay', 'erin'),
+      ).rejects.toThrow(/refusing to seed "purlay"/);
+      await expect(
+        freshSession(db, fixedClock(NOW), 'postgres://u:p@localhost:5432/purlay_e2e_x', 'nobody'),
+      ).rejects.toThrow(/nobody called nobody/);
     });
   });
 });

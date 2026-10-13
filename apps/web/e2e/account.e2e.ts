@@ -20,8 +20,9 @@ test.describe('the account menu', () => {
     workspaceOf,
   }) => {
     const workspace = await workspaceOf('erin');
-    const here = await asOutsider('erin', 0);
-    const there = await asOutsider('erin', 1);
+    // Sessions of their own: this ends every session erin holds, the seeded ones included.
+    const here = await asOutsider('erin', 'fresh');
+    const there = await asOutsider('erin', 'fresh');
     for (const page of [here, there]) {
       await page.goto(`/w/${workspace.slug}`);
       await shellReady(page);

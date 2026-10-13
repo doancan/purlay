@@ -17,6 +17,7 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -66,7 +67,21 @@ interface World {
   >;
   readonly messages: Readonly<Record<string, string>>;
   readonly counts: { readonly messages: number };
+  /** The scratch database this world lives in (`scripts/demo.ts`), for `freshSessionOf`. */
+  readonly database: string;
 }
+
+/**
+ * A session the seed did not make, for an outsider (`apps/api/src/cli/demo-session.ts`): signing out
+ * everywhere ends every session a person holds, so a test of it would leave the seeded ones dead for
+ * its own retry, or a second run against the same server.
+ */
+const freshSessionOf = (world: World, outsider: Outsider): string =>
+  execFileSync('bun', ['run', 'apps/api/src/cli/demo-session.ts', '--as', outsider], {
+    cwd: join(import.meta.dirname, '../../..'),
+    env: { ...process.env, DATABASE_URL: world.database },
+    encoding: 'utf8',
+  }).trim();
 
 const SESSION_COOKIE = '__Host-purlay_session';
 
@@ -116,8 +131,8 @@ interface Fixtures {
    * signed in and closed with the test. The page under test is `page`; this is who it talks to.
    */
   readonly asPerson: (persona: Persona) => Promise<Page>;
-  /** An outsider's browser, signed in with the first or the second of their sessions. */
-  readonly asOutsider: (outsider: Outsider, session?: 0 | 1) => Promise<Page>;
+  /** An outsider's browser, signed in with the first or the second seeded session, or a fresh one. */
+  readonly asOutsider: (outsider: Outsider, session?: 0 | 1 | 'fresh') => Promise<Page>;
   /** A workspace an outsider makes, through the API, with a name of the test's own. */
   readonly workspaceOf: (outsider: Outsider) => Promise<OwnWorkspace>;
 }
@@ -260,7 +275,11 @@ export const test = base.extend<Fixtures>({
       contexts.push(context);
       throttling.watch(context);
       await securityPolicy.watch(context);
-      await signInAs(context, baseURL ?? '', world.outsiders[outsider].tokens[session]);
+      const token =
+        session === 'fresh'
+          ? freshSessionOf(world, outsider)
+          : world.outsiders[outsider].tokens[session];
+      await signInAs(context, baseURL ?? '', token);
       return await context.newPage();
     });
     for (const context of contexts) await securityPolicy.settle(context);
@@ -282,7 +301,8 @@ export const test = base.extend<Fixtures>({
       const response = await fetch(`${baseURL ?? ''}/api/workspaces`, {
         method: 'POST',
         headers: {
-          cookie: `${SESSION_COOKIE}=${world.outsiders[outsider].tokens[0]}`,
+          // A fresh session: a test that signed this outsider out everywhere ended the seeded ones.
+          cookie: `${SESSION_COOKIE}=${freshSessionOf(world, outsider)}`,
           'content-type': 'application/json',
         },
         body: JSON.stringify({ name: slug, slug }),

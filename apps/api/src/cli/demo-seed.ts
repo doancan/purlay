@@ -134,6 +134,27 @@ export const assertDemoDatabase = (connectionString: string): void => {
   }
 };
 
+/**
+ * A new session for a person the seed made, in a scratch database only. Signing out everywhere ends
+ * every session a person holds, so a browser test of it would leave the seeded ones dead for a retry
+ * or a second run against the same server; it asks for a session of its own instead.
+ */
+export const freshSession = async (
+  database: Executor,
+  clock: Clock,
+  connectionString: string,
+  username: string,
+): Promise<string> => {
+  assertDemoDatabase(connectionString);
+  const user = await database
+    .selectFrom('users')
+    .select('id')
+    .where('username', '=', username)
+    .executeTakeFirst();
+  if (user === undefined) throw new Error(`nobody called ${username} is in this database`);
+  return (await issueSession(database, clock, user.id, SESSION_DAYS)).token;
+};
+
 export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   const { database, config } = options;
   assertDemoDatabase(config.DATABASE_URL);
