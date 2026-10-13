@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-13: letting go of channels no longer spends the frame budget a send needs
+
+- The client sent one `UNSUBSCRIBE` per channel. When several channels left together — a list read
+  again after channels were archived or left, a workspace switched — the burst spent the socket's
+  frame budget, and a message sent in that second was refused as *going too fast* (#523; measured
+  in the browser suite: 14 `UNSUBSCRIBE` frames in one second, then the send refused). Channels let
+  go together are now one frame, chunked at `SUBSCRIBE_MAX_CHANNELS`, and channels the server
+  revoked are forgotten without a frame, since the server already dropped them.
+
 ### Web — 2026-10-13: leave or archive a channel from its details (D-123)
 
 - The details end with Leave channel for a member and Archive channel for an owner or an admin, in

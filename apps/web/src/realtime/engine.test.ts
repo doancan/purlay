@@ -38,6 +38,7 @@ const C1 = '0199155c-6200-7b7f-8c11-0000000000d1';
 const C2 = '0199155c-6200-7b7f-8c11-0000000000d2';
 const CH = '00000000-0000-4000-8000-0000000000c1';
 const CH2 = '00000000-0000-4000-8000-0000000000c2';
+const CH3 = '00000000-0000-4000-8000-0000000000c3';
 const WS = '00000000-0000-4000-8000-0000000000a1';
 const ME = {
   id: '00000000-0000-4000-8000-0000000000e1',
@@ -741,9 +742,16 @@ describe('the frames', () => {
     w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2] }, ts: T0 }));
     w.timers.advance(2_000);
     expect(w.client.getQueryData<Channel[]>(keys.channels(WS))?.map((c) => c.id)).toEqual([CH]);
-    expect(w.sentOps('UNSUBSCRIBE').flatMap((s) => s.payload['channelIds'] as string[])).toContain(
-      CH2,
-    );
+    // Let go without a frame (the server dropped it as it said so, #523), and not asked for again.
+    expect(w.sentOps('UNSUBSCRIBE')).toEqual([]);
+    const before = watching().filter((id) => id === CH2).length;
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    for (let waited = 0; w.sockets.length < 2 && waited < 10_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    w.open();
+    w.timers.advance(2_000);
+    expect(watching().filter((id) => id === CH2)).toHaveLength(before);
   });
 
   test('a channel archived, or left on another screen, is remembered with why; a removal says nothing (D-123)', () => {
@@ -779,6 +787,35 @@ describe('the frames', () => {
     expect(w.engine.store.getState().gone).toEqual({});
     w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2] }, ts: T0 }));
     expect(w.engine.store.getState().gone).toEqual({});
+  });
+
+  test('channels taken away are let go without a frame: the server already dropped them (#523)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2), channel(CH3)]);
+    w.engine.watch([CH, CH2, CH3]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [CH, CH2, CH3], reason: 'archived' },
+        ts: T0,
+      }),
+    );
+    expect(w.sentOps('UNSUBSCRIBE')).toEqual([]);
+  });
+
+  test('channels leaving the watched set together go in one UNSUBSCRIBE (#523)', () => {
+    const w = world();
+    w.engine.watch([CH, CH2, CH3]);
+    w.engine.start();
+    w.open();
+    w.timers.advance(2_000);
+    answerAll(w);
+    w.engine.watch([]);
+    const sent = w.sentOps('UNSUBSCRIBE');
+    expect(sent).toHaveLength(1);
+    expect(new Set(sent[0]?.payload['channelIds'] as string[])).toEqual(new Set([CH, CH2, CH3]));
   });
 
   test("the end of the session is the screen's to handle", () => {
