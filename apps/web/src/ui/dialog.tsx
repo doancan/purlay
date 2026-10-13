@@ -54,7 +54,10 @@ const openerOf = (active: Element | null): HTMLElement | null => {
   if (!(active instanceof HTMLElement)) return null;
   const trigger = active.closest('[role="menu"]')?.getAttribute('aria-labelledby');
   const button = trigger == null ? null : document.getElementById(trigger);
-  return button ?? active;
+  // A trigger that is itself gone (a submenu's item) is no better than the item: nothing, then, and
+  // Radix's own return is left to stand.
+  const opener = button ?? active;
+  return opener.isConnected ? opener : null;
 };
 
 export const Dialog = ({
@@ -78,8 +81,10 @@ export const Dialog = ({
             returnTo.current = openerOf(document.activeElement);
           }}
           onCloseAutoFocus={(event) => {
+            // Ours when we know where; Radix's own return otherwise, rather than nowhere.
+            if (returnTo.current?.isConnected !== true) return;
             event.preventDefault();
-            returnTo.current?.focus();
+            returnTo.current.focus();
           }}
         >
           <div className="flex flex-col gap-1 pr-6">
