@@ -65,6 +65,24 @@ export const publishAccessRevoked = async (
   }
 };
 
+/**
+ * The person's Deep Work in a workspace changed: their own sockets, on any node, draw it (#526).
+ * Nobody else hears of it — it is the person's own quiet (D-108).
+ */
+export const publishDeepWorkUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  userId: string,
+  workspaceId: string,
+  until: string | null,
+): Promise<void> => {
+  await bus.publish(userTopic(userId), {
+    event: 'DEEP_WORK_UPDATED',
+    data: { workspaceId, until },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel was archived: everyone watching it, on any node, stops receiving it, and is told why. */
 export const publishChannelRevoked = async (
   bus: EventBus,

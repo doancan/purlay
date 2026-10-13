@@ -49,6 +49,7 @@ import {
   NO_LOG,
   publication,
   publishAccessRevoked,
+  publishDeepWorkUpdated,
   publishAfterCommit,
   publishWorkspaceUpdated,
   type EventBus,
@@ -127,16 +128,25 @@ export const listWorkspaceMembers = async (
  * until an instant, or ended. A workspace they are not in is the stranger's `404`.
  */
 export const setMyDeepWork = async (
-  dependencies: WorkspaceDependencies,
+  dependencies: MemberWriteDependencies,
   request: Request,
   workspaceId: string,
   body: unknown,
 ): Promise<DeepWorkResponse> => {
-  const { database, clock } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(SetDeepWorkRequest, body);
-  return await setDeepWork(database, clock, context, input);
+  const answer = await setDeepWork(database, clock, context, input);
+  // The person's other tabs draw it too (#526).
+  await publishAfterCommit(log, [
+    [
+      publication('DEEP_WORK_UPDATED', () =>
+        publishDeepWorkUpdated(bus, clock, userId, workspaceId, answer.until),
+      ),
+    ],
+  ]);
+  return answer;
 };
 
 export interface MemberWriteDependencies extends WorkspaceDependencies {

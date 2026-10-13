@@ -8,6 +8,7 @@ import {
   CLOSE_CODES,
   type Attachment,
   type Channel,
+  type MeResponse,
   type Message,
   type MessagePage,
   type ServerFrame,
@@ -16,6 +17,7 @@ import {
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
 import { anApi } from '../testing/fake-api';
+import { IDS, aSession } from '../testing/fixtures';
 import { fakeSchedule, memoryStorage, type MemoryStorage } from '../testing/fakes';
 import type { Api } from '../data/api';
 import type { Clock } from './clock';
@@ -936,6 +938,32 @@ describe('the frames', () => {
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
     w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
+  });
+});
+
+describe('Deep Work changed in another tab (#526)', () => {
+  test('is drawn here: the membership says until when, and an end clears it', () => {
+    const w = world();
+    const other = {
+      ...aSession().memberships[0]!,
+      workspace: { ...aSession().memberships[0]!.workspace, id: IDS.browse },
+    };
+    w.client.setQueryData(keys.me, {
+      ...aSession(),
+      memberships: [...aSession().memberships, other],
+    });
+    w.engine.start();
+    w.open();
+    const until = '2026-09-09T13:00:00.000Z';
+    w.deliver(frame({ event: 'DEEP_WORK_UPDATED', data: { workspaceId: WS, until }, ts: T0 }));
+    const me = (): MeResponse | undefined => w.client.getQueryData<MeResponse>(keys.me);
+    expect(me()?.memberships.find((m) => m.workspace.id === WS)?.deepWorkUntil).toBe(until);
+    // Another workspace's Deep Work is its own.
+    expect(me()?.memberships.find((m) => m.workspace.id === IDS.browse)?.deepWorkUntil).toBeNull();
+    w.deliver(
+      frame({ event: 'DEEP_WORK_UPDATED', data: { workspaceId: WS, until: null }, ts: T0 }),
+    );
+    expect(me()?.memberships.find((m) => m.workspace.id === WS)?.deepWorkUntil).toBeNull();
   });
 });
 
