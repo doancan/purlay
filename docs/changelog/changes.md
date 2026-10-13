@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a channel's files, in a panel (D-129, part of #485)
+
+- **Files** in a channel's header opens every file shared there beside the conversation, newest
+  first, with who shared it and when: an image opens, a file downloads, and one said in a thread
+  opens that thread. Kept current as files arrive or their messages are deleted.
+
 ### Feature — 2026-10-14: a channel's files, the API (D-129, part of #485)
 
 - `GET /api/channels/:channelId/files` lists every file shared in a channel, newest message first, with who

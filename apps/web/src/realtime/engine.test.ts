@@ -1443,6 +1443,18 @@ describe('what happened between a list being read and the channel being subscrib
     expect(w.client.getQueryState(keys.messages(OTHER_CH))?.isInvalidated).toBe(false);
   });
 
+  test('a channel’s files read before the subscription was answered are read again (D-129)', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.files(CH), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.files(OTHER_CH), { pages: [], pageParams: [] });
+    answerAll(w);
+    expect(w.client.getQueryState(keys.files(CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.files(OTHER_CH))?.isInvalidated).toBe(false);
+  });
+
   /**
    * #347: a read already on its way when the answer came is left to finish — cancelling it stalls
    * the screen driving it — but what it brings back may predate the subscription, so it is read

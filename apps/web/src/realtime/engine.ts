@@ -553,6 +553,8 @@ export const createEngine = (options: EngineOptions): Engine => {
             // (found in a browser: a reaction taken back in that gap stayed on the other screen).
             // Read again, what is cached for the channel is correct from this moment on.
             readAgain(keys.messages(channelId));
+            // A file sent, or its message deleted, in the gap is in no frame either (D-129).
+            readAgain(keys.files(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(families.thread);
@@ -582,6 +584,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'MESSAGE_CREATED': {
         messageCreated(client, frame.data);
         forget(frame.data.id);
+        // A channel's files list carries no frame of its own: a message with files reads it again.
+        if (frame.data.attachments.length > 0) {
+          void client.invalidateQueries({ queryKey: keys.files(frame.data.channelId) });
+        }
         // What they were typing has arrived.
         stopTyping(frame.data.channelId, frame.data.sender.id);
         return;
@@ -599,6 +605,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'MESSAGE_REVISED':
         if (isNewest('revision', frame.data.messageId, frame.version)) {
           messageRevised(client, frame.data);
+          // A deleted message's files leave the list (D-129); whether it had any, only the list knows.
+          if (frame.data.deletedAt !== null) {
+            void client.invalidateQueries({ queryKey: keys.files(frame.data.channelId) });
+          }
         }
         return;
       case 'CHANNEL_STATE':
