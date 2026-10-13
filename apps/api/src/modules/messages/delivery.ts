@@ -207,14 +207,17 @@ export const notify = async (
   return inserted.map((row) => row.user_id);
 };
 
+/** What a delivery moved: the members whose numbers changed, and who it told for the first time. */
+export interface Recorded {
+  readonly recipients: readonly ChannelStateUpdate[];
+  /** Whose devices may be told, once the write has committed (D-126). */
+  readonly told: readonly string[];
+}
+
 /**
- * Writes the mentions and notifications for a new message and moves the counters,
- * returning the channel members whose numbers changed.
+ * Writes the mentions and notifications for a new message and moves the counters.
  */
-export const recordDelivery = async (
-  executor: Executor,
-  delivery: Delivery,
-): Promise<readonly ChannelStateUpdate[]> => {
+export const recordDelivery = async (executor: Executor, delivery: Delivery): Promise<Recorded> => {
   const { context, messageId, mentioned, thread, now } = delivery;
   const sender = context.userId;
 
@@ -306,15 +309,18 @@ export const recordDelivery = async (
     ])
     .execute();
 
-  return changed.map((row) => ({
-    userId: row.user_id,
-    state: {
-      lastReadMessageId: row.last_read_message_id,
-      unreadCount: row.unread_count,
-      unreadMentionCount: row.unread_mention_count,
-    },
-    version: row.state_version,
-  }));
+  return {
+    recipients: changed.map((row) => ({
+      userId: row.user_id,
+      state: {
+        lastReadMessageId: row.last_read_message_id,
+        unreadCount: row.unread_count,
+        unreadMentionCount: row.unread_mention_count,
+      },
+      version: row.state_version,
+    })),
+    told: notified,
+  };
 };
 
 /**

@@ -21,6 +21,8 @@ import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
+import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
+import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -56,6 +58,30 @@ const connection = databaseConnection(config, log);
 
 const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
 
+// Web Push (#78, D-126): on with the three keys, which the configuration has checked are one pair.
+const push =
+  config.VAPID_PUBLIC_KEY === undefined ||
+  config.VAPID_PRIVATE_KEY === undefined ||
+  config.VAPID_SUBJECT === undefined
+    ? undefined
+    : await createPushSender({
+        database,
+        clock: systemClock,
+        log,
+        // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
+        post: async (url, headers, body) =>
+          await postExternal(url, headers, body, {
+            lookup: checkingLookup(systemResolver),
+            timeoutMs: PUSH_TIMEOUT_MS,
+          }),
+        keys: {
+          publicKey: config.VAPID_PUBLIC_KEY,
+          privateKey: config.VAPID_PRIVATE_KEY,
+          subject: config.VAPID_SUBJECT,
+        },
+      });
+log.info(push === undefined ? 'web push is off: no VAPID keys' : 'web push is on');
+
 const app = createApp({
   config,
   log,
@@ -63,6 +89,7 @@ const app = createApp({
   database,
   storage: storeFor(config),
   ...(client === undefined ? {} : { client }),
+  ...(push === undefined ? {} : { push }),
   github: githubClient({
     clientId: config.GITHUB_CLIENT_ID,
     clientSecret: config.GITHUB_CLIENT_SECRET,
@@ -77,7 +104,9 @@ log.info('listening', { port: app.listen(config.PORT) });
 installShutdown({
   drain: app.drain,
   closeDatabase: async () => {
-    // Reports of the shutdown itself are still in flight.
+    // Pushes for writes already committed, within their own bound, then the reports of the
+    // shutdown itself: the error tracker still has its time.
+    await push?.flush();
     await errorTracker.flush();
     await database.destroy();
   },

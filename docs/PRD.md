@@ -163,8 +163,10 @@ integration credentials, workspace and channel settings. Never message content.
 Pasting a PR or Issue URL renders a card: title, state (`open`/`closed`/`merged`), author, CI
 status, review decision. Cached in PostgreSQL (D-23). Workspace-level credential.
 
-> **Stated plainly:** Phase 1 notifies **in-app only**. With the tab closed, Purlay is silent.
-> Web Push is Phase 2. Hiding this would fail dogfooding on day one. (D-12)
+> **Stated plainly:** Phase 1 notifies **in-app only**. With the tab closed, Purlay is silent —
+> unless the server has Web Push keys and the person turned notifications on for that device, which
+> is Phase 2's, started early (D-125, D-126): then what needs them, and only that, reaches the
+> device. Hiding this would fail dogfooding on day one. (D-12)
 
 **Where it is dogfooded.** On the team's own server, provisionally — an internal deployment of the
 same single-node shape a self-hoster runs, built so moving it is a move and not a rewrite. The

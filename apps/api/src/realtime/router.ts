@@ -34,6 +34,7 @@ import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../platform/errors';
 import { requireChannelById, requireChannelsById } from '../platform/channels';
 import { send, type missedIn } from '../modules/messages/messages';
+import type { PushSender } from '../modules/push/sender';
 import { replaySince } from '../modules/messages/replay';
 import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
@@ -55,6 +56,8 @@ export interface RouterDependencies {
    * (D-84, amended).
    */
   readonly userWrites: RateLimiter;
+  /** Devices told of what a socket's send needs them for; absent where push is off (D-126). */
+  readonly push?: PushSender | undefined;
   /** Who is typing where, on this node (§6.1). */
   readonly presence: PresenceRegistry;
   readonly log: Logger;

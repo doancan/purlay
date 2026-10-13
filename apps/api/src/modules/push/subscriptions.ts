@@ -11,6 +11,7 @@ import type { PushLocale, PushSubscribeRequest } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireLiveSession } from '../auth/sessions';
+import { externalImageAddress } from '../images/proxy';
 
 /** Devices a person keeps told; past it the oldest goes. Browsers, not a log of them. */
 export const PUSH_SUBSCRIPTIONS_MAX = 20;
@@ -71,6 +72,15 @@ export const subscribe = async (
       code: 'VALIDATION_FAILED',
       message: 'That subscription cannot be encrypted for.',
       details: { fields: { 'keys/p256dh': 'not a P-256 public key' } },
+    });
+  }
+  // The rule a push is sent under (`sender.ts`), at the door: an address it could never reach is
+  // refused here rather than stored and dropped by a delivery nobody waits on.
+  if (externalImageAddress(input.endpoint) === null) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'That subscription cannot be sent to.',
+      details: { fields: { endpoint: 'not an address a push may be sent to' } },
     });
   }
   await requireLiveSession(transaction, clock, subscriber.sessionId);

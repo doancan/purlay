@@ -25,6 +25,7 @@ import { requireLiveSession } from '../auth/sessions';
 import { notify, resolveMentions, type ChannelStateUpdate } from './delivery';
 import { readBody } from './body';
 import { readBuilt } from './reader';
+import type { PushSender } from '../push/sender';
 
 export interface Revised {
   readonly message: Message;
@@ -34,6 +35,8 @@ export interface Revised {
   readonly version: number;
   /** The members whose counters moved: the newly named, where the message is still unread. */
   readonly recipients: readonly ChannelStateUpdate[];
+  /** The newly named, told for the first time: their devices are next (D-126). */
+  readonly told: readonly string[];
   /** Why the content is stored as typed, when it is; null when it was read (D-101). */
   readonly unformatted: Extract<Reading, { tree: null }>['reason'] | null;
   readonly engineFailure?: unknown;
@@ -90,6 +93,7 @@ export const reviseMessage = async (
       changed: false,
       version: row.state_version,
       recipients: [],
+      told: [],
       unformatted: null,
     };
   }
@@ -182,6 +186,7 @@ export const reviseMessage = async (
     changed: true,
     version: updated.state_version,
     recipients,
+    told,
     unformatted: reading.tree === null ? reading.reason : null,
     ...(reading.tree === null && reading.reason === 'engine'
       ? { engineFailure: reading.error }
@@ -238,6 +243,8 @@ export interface EditDependencies {
   readonly bus: EventBus;
   readonly log?: Logger;
   readonly engine?: Engine;
+  /** Devices told of a mention an edit added; absent where push is off (D-126). */
+  readonly push?: PushSender | undefined;
 }
 
 /**
@@ -250,7 +257,7 @@ export const edit = async (
   messageId: string,
   content: string,
 ): Promise<Message> => {
-  const { atomically, clock, bus, log = NO_LOG, engine } = dependencies;
+  const { atomically, clock, bus, log = NO_LOG, engine, push } = dependencies;
   const revised = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     await requireLiveSession(transaction, clock, caller.sessionId);
@@ -300,5 +307,6 @@ export const edit = async (
       ),
     ),
   ]);
+  push?.told(message.id, revised.told);
   return revised.message;
 };

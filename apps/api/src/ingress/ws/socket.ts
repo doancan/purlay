@@ -34,6 +34,7 @@ import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
 import { refusalFor } from '../http/errors';
+import type { PushSender } from '../../modules/push/sender';
 
 export interface SocketDependencies {
   readonly config: Pick<Config, 'APP_URL'>;
@@ -45,6 +46,8 @@ export interface SocketDependencies {
   readonly userWrites: RateLimiter;
   /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
+  /** Devices told of what a send needs them for; absent where push is off (D-126). */
+  readonly push?: PushSender | undefined;
 }
 
 export interface ConnectionLimits {
@@ -245,6 +248,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   userWrites: dependencies.userWrites,
                   presence,
                   log,
+                  push: dependencies.push,
                   // The real boundary. D-35: one transaction, published after it returns.
                   atomically,
                   socket: hub,
