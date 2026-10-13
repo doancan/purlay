@@ -50,4 +50,28 @@ test.describe('Deep Work', () => {
     await shellReady(page);
     await expect(bar).toHaveCount(0);
   });
+
+  test('started in one tab is drawn in the person’s other tab, and so is its end (#526)', async ({
+    asOutsider,
+    workspaceOf,
+  }) => {
+    const workspace = await workspaceOf('frank');
+    const here = await asOutsider('frank');
+    // Another tab of the same browser: the same person, its own socket.
+    const there = await here.context().newPage();
+    for (const page of [here, there]) {
+      await page.goto(`/w/${workspace.slug}`);
+      await shellReady(page);
+    }
+    const barOf = (page: Page): ReturnType<Page['getByRole']> =>
+      page.getByRole('status').filter({ hasText: /Deep Work until/ });
+
+    await palette(here, 'For 1 hour');
+    await expect(barOf(here)).toBeVisible();
+    await expect(barOf(there)).toBeVisible();
+
+    await palette(here, 'End Deep Work');
+    await expect(barOf(here)).toHaveCount(0);
+    await expect(barOf(there)).toHaveCount(0);
+  });
 });

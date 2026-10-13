@@ -327,6 +327,23 @@ export const AccessRevokedFrame = Type.Object({
 });
 
 /**
+ * The person's own Deep Work in a workspace changed, on another device or tab (D-108, #526): until
+ * when, or `null` for ended. On the person's own `user:` topic only, so their other tabs draw the
+ * same bar and the same menu as the one that changed it; nobody else is told.
+ */
+export const DeepWorkUpdatedFrame = Type.Object({
+  event: Type.Literal('DEEP_WORK_UPDATED'),
+  data: Type.Object(
+    {
+      workspaceId: Uuid,
+      until: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+    },
+    { additionalProperties: false },
+  ),
+  ...envelope,
+});
+
+/**
  * A channel's name or topic changed (D-123). The whole of both, so a client replaces what it holds;
  * on the channel's topic, at the channel row's version, and a client drops one older than what it
  * has applied — two renames published from different requests can arrive in either order.
@@ -388,6 +405,7 @@ export const ServerFrame = Type.Union([
   ChannelUpdatedFrame,
   SessionEndedFrame,
   AccessRevokedFrame,
+  DeepWorkUpdatedFrame,
   TypingServerFrame,
   WorkspaceUpdatedFrame,
   PongFrame,

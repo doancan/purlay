@@ -4624,6 +4624,11 @@ holding them back would make them disagree with the rows, and lose what came in 
 **Rejected: an open-ended Deep Work.** D-15 asks for expiry so it cannot be left on; a bound is the
 expiry nobody has to remember to set.
 
+**Amended 2026-10-13 (#526).** A change of Deep Work is published as `DEEP_WORK_UPDATED`, with the
+workspace and until when, on the person's own `user:` topic: their other tabs and devices draw the
+same bar at once instead of after a reload. Nobody else is told — it is the person's own quiet. A
+tab whose socket was down reads the memberships again on reconnect.
+
 ### D-109. Attachments: what is stored, who may read it, and the edge that lets 25 MiB in
 
 D-16 ships attachments in Phase 1; `ARCHITECTURE.md` §9 gives the flow; the spikes chose Garage and

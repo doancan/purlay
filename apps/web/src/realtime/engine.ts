@@ -46,6 +46,7 @@ import {
   channelRenamed,
   channelStateChanged,
   channelsRevoked,
+  deepWorkChanged,
   messageCreated,
   messageRevised,
   reactionsUpdated,
@@ -639,6 +640,9 @@ export const createEngine = (options: EngineOptions): Engine => {
         }
         return;
       }
+      case 'DEEP_WORK_UPDATED':
+        deepWorkChanged(client, frame.data.workspaceId, frame.data.until);
+        return;
       case 'SESSION_ENDED':
         options.onSessionEnded();
         return;

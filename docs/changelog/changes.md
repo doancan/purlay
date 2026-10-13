@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: Deep Work started or ended in one tab is drawn in the others
+
+- `PUT …/deep-work` now publishes `DEEP_WORK_UPDATED` on the person's own topic; their other tabs and
+  devices draw the bar and its end at once instead of after a reload (#526, D-108 amended).
+
 ### Interface — 2026-10-13: the workspace menu from the workspace's name (D-124)
 
 - The workspace's name at the top of the sidebar, with a chevron, opens the workspace menu; the rail's

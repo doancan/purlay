@@ -439,7 +439,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .put(
       '/api/workspaces/:workspaceId/deep-work',
       async ({ request, params, body }) =>
-        await setMyDeepWork(dependencies, request, params.workspaceId, body),
+        await setMyDeepWork(sending, request, params.workspaceId, body),
     )
 
     .get(

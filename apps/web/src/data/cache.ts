@@ -25,6 +25,7 @@ import type {
   ThreadSummary,
   MessageRevision,
   NotificationLevel,
+  MeResponse,
 } from '@purlay/types';
 import { families, keys } from './keys';
 
@@ -251,6 +252,24 @@ export const channelRenamed = (
   named: { readonly name: string; readonly topic: string | null },
 ): void => {
   editChannels(client, channelId, (c) => ({ ...c, name: named.name, topic: named.topic }));
+};
+
+/** The person's Deep Work in one workspace, as another tab or device set it (#526). */
+export const deepWorkChanged = (
+  client: QueryClient,
+  workspaceId: string,
+  until: string | null,
+): void => {
+  client.setQueryData<MeResponse>(keys.me, (me) =>
+    me === undefined
+      ? me
+      : {
+          ...me,
+          memberships: me.memberships.map((m) =>
+            m.workspace.id === workspaceId ? { ...m, deepWorkUntil: until } : m,
+          ),
+        },
+  );
 };
 
 /** A channel appeared for the caller. Added once, however many frames say so. */
