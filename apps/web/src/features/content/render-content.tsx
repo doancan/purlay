@@ -51,6 +51,8 @@ const hostOf = (href: SafeHref): string => new URL(href.href).host;
 /** What the inline pieces are drawn with: who is really mentioned, and whether this is a link's label. */
 interface InlineScope {
   readonly mentioned: ReadonlySet<string>;
+  /** The reader's own lower-case username: a mention of them is filled, not just coloured. */
+  readonly me: string | null;
   readonly inLabel: boolean;
   /** The first piece here directly follows code or a link, so a name it starts with is glued to it. */
   readonly glued: boolean;
@@ -79,7 +81,16 @@ const Prose = ({
     if (scope.glued && span.start === 0) continue;
     out.push(
       text.slice(from, span.start),
-      <span key={span.start} data-mention="" className="font-medium text-accent-text">
+      <span
+        key={span.start}
+        data-mention=""
+        data-mention-me={span.name.toLowerCase() === scope.me ? '' : undefined}
+        className={
+          span.name.toLowerCase() === scope.me
+            ? 'rounded-sm bg-accent px-1 font-medium text-on-accent'
+            : 'font-medium text-accent-text'
+        }
+      >
         {text.slice(span.start, span.end)}
       </span>,
     );
@@ -273,8 +284,14 @@ const BlockNode = ({
       return <CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />;
     case 'blockquote':
       return (
-        <blockquote className="flex flex-col gap-1 border-l-marker border-border-strong pl-3 text-ink-muted">
-          <Blocks nodes={node.children} scope={scope} />
+        // A block of its own rather than an edge: an edge is what marked a mention, and a quote read as one.
+        <blockquote className="flex gap-2 rounded-md bg-surface-050 px-3 py-2 text-ink-muted">
+          <span className="mt-1 shrink-0">
+            <Icon name="quote" size="sm" />
+          </span>
+          <div className="flex min-w-0 flex-col gap-1">
+            <Blocks nodes={node.children} scope={scope} />
+          </div>
         </blockquote>
       );
     case 'list': {
@@ -332,6 +349,7 @@ const AsTyped = ({
 interface BodyProps {
   readonly content: string;
   readonly mentioned: ReadonlySet<string>;
+  readonly me: string | null;
   readonly engine: Engine | undefined;
 }
 
@@ -341,13 +359,13 @@ const READINGS_KEPT = 1000;
 /** The real engine's readings, once per text. A test's engine is never cached: it is the test's. */
 export const readBody = readingCache((text: string) => readMarkdown(text), READINGS_KEPT);
 
-const Body = ({ content, mentioned, engine }: BodyProps): React.JSX.Element => {
+const Body = ({ content, mentioned, me, engine }: BodyProps): React.JSX.Element => {
   // Read inside render, so a defect in the reading is caught by the boundary around it.
   const reading = useMemo(
     () => (engine === undefined ? readBody(content) : readMarkdown(content, engine)),
     [content, engine],
   );
-  const scope = useMemo(() => ({ mentioned, inLabel: false, glued: false }), [mentioned]);
+  const scope = useMemo(() => ({ mentioned, me, inLabel: false, glued: false }), [mentioned, me]);
   // The engine failing inside the bounds is a gap in them (D-101 §8): thrown to the boundary, which
   // shows the body as typed and has React report the cause, never silently drawn as text.
   if (reading.tree === null && reading.reason === 'engine') throw reading.error;
@@ -386,6 +404,8 @@ class BodyBoundary extends Component<
 export interface RenderOptions {
   /** Lower-case usernames of the people this message really mentions. */
   readonly mentioned?: ReadonlySet<string>;
+  /** The reader's own lower-case username, so their own name stands out from everyone else's. */
+  readonly me?: string | undefined;
   /** The engine's readings; the real one unless a test injects a failure (`readMarkdown`). */
   readonly engine?: Engine;
 }
@@ -394,7 +414,7 @@ const NOBODY: ReadonlySet<string> = new Set();
 
 export const renderContent = (
   content: string,
-  { mentioned = NOBODY, engine }: RenderOptions = {},
+  { mentioned = NOBODY, me, engine }: RenderOptions = {},
 ): React.JSX.Element => (
   // `overflow-x-clip`: wrapping can break between grapheme clusters but not inside one, and a
   // joiner chain of three hundred emoji is one cluster (found in a browser: the row was 4,000 px
@@ -404,7 +424,7 @@ export const renderContent = (
     className="flex min-w-0 flex-col gap-1 overflow-x-clip text-body text-ink"
   >
     <BodyBoundary key={content} content={content}>
-      <Body content={content} mentioned={mentioned} engine={engine} />
+      <Body content={content} mentioned={mentioned} me={me ?? null} engine={engine} />
     </BodyBoundary>
   </div>
 );

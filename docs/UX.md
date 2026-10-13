@@ -163,7 +163,9 @@ one a link to GitHub stays a plain link, which the dialog says.
 - **Hover controls** are a small raised group on the bubble's inner top corner (on a narrow window,
   your own message's outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
   thread panel is a row of its own.
-- **A message that mentions you** has a 2px accent edge on its bubble, and says so to a screen reader.
+- **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
+  the bubble has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
+  never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
