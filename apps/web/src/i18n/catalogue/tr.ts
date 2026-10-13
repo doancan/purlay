@@ -247,7 +247,8 @@ export const tr = {
   'conversations.title': 'Konuşmalar',
   'conversations.new': 'Yeni mesaj',
   'conversations.empty': 'Bir kanal açmadan birkaç kişiyle aynı anda konuş.',
-  'conversations.dialog.description': 'En fazla {max} kişi. Aynı kişiler her zaman aynı konuşmayı açar.',
+  'conversations.dialog.description':
+    'En fazla {max} kişi. Aynı kişiler her zaman aynı konuşmayı açar.',
   'conversations.to': 'Kime: {names}',
   'conversations.toNobody': 'Kime: henüz kimse',
   'conversations.pick': 'Seç',

@@ -250,7 +250,8 @@ export const en = {
   'conversations.title': 'Conversations',
   'conversations.new': 'New message',
   'conversations.empty': 'Talk to a few people at once, without a channel.',
-  'conversations.dialog.description': 'Up to {max} people. The same people always open the same conversation.',
+  'conversations.dialog.description':
+    'Up to {max} people. The same people always open the same conversation.',
   'conversations.to': 'To: {names}',
   'conversations.toNobody': 'To: nobody yet',
   'conversations.pick': 'Pick',
