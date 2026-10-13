@@ -103,6 +103,9 @@ CREATE TABLE users (
     -- Best-effort, updated lazily. Live presence is in-memory and never persisted. (D-7)
     last_seen_at  TIMESTAMPTZ,
 
+    -- The language this person's notifications are written in, set by their client (D-41, D-126).
+    locale        TEXT NOT NULL DEFAULT 'en' CONSTRAINT users_locale_known CHECK (locale IN ('en', 'tr')),
+
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
 
@@ -151,9 +154,6 @@ A person's devices that are told, by Web Push, of what needs them while Purlay i
 and the language the server writes those notices in (D-41).
 
 ```sql
-ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'en'
-    CONSTRAINT users_locale_known CHECK (locale IN ('en', 'tr'));
-
 CREATE TABLE push_subscriptions (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -169,9 +169,9 @@ CREATE TABLE push_subscriptions (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     failures    INTEGER NOT NULL DEFAULT 0,   -- deliveries in a row the push service did not take
 
-    CHECK (endpoint LIKE 'https://%'),
-    CHECK (length(endpoint) <= 2048),
-    CHECK (failures >= 0)
+    CONSTRAINT push_subscriptions_endpoint_is_https CHECK (endpoint LIKE 'https://%'),
+    CONSTRAINT push_subscriptions_endpoint_bounded CHECK (length(endpoint) <= 2048),
+    CONSTRAINT push_subscriptions_failures_counted CHECK (failures >= 0)
 );
 
 CREATE INDEX idx_push_subscriptions_user    ON push_subscriptions (user_id, created_at);
