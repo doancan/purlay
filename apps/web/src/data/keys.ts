@@ -23,6 +23,7 @@ export const keys = {
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
   audit: (workspaceId: string) => ['audit', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
+  pushKey: ['push-key'] as const,
 } as const;
 
 /** The families, for the code that addresses one of them whole. */

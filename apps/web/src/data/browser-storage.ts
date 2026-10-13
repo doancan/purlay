@@ -22,8 +22,16 @@ export interface ClientStorage {
   readonly length: number;
 }
 
-/** The keys that hold what a person wrote or where they were. Anything else on the page is the device's. */
-const PERSONAL_PREFIXES = ['purlay.draft.', 'purlay.lastChannel.', 'purlay.pending.'] as const;
+/**
+ * The keys that hold what a person wrote, where they were, or that push here is theirs (D-126).
+ * Anything else on the page is the device's.
+ */
+const PERSONAL_PREFIXES = [
+  'purlay.draft.',
+  'purlay.lastChannel.',
+  'purlay.pending.',
+  'purlay.push.',
+] as const;
 
 const noted = new Set<string>();
 

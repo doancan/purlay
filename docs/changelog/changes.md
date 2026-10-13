@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: notifications on this device, in the account menu (D-126, part of #78)
+
+- The account menu turns them on and off: the browser is asked once, the server is sent the
+  subscription and the person's language, and a refusal says where it is undone. Offered only where
+  the browser has push and the server has keys.
+- A browser's subscription is honoured only for the person who turned it on there (signing out
+  forgets who), re-sent on every load to tie it to the session, and made again under a replaced key.
+  A changed language is told to the server; a clicked notice opens its conversation in the tab.
+
 ### Feature — 2026-10-13: the push worker (D-126, part of #78)
 
 - `apps/web/worker/push-worker.ts`, built by Vite as an entry of its own to `/push-worker.js`: a push

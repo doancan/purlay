@@ -31,6 +31,8 @@ import type { ClientStorage } from '../data/browser-storage';
 import { StorageProvider } from '../data/storage-provider';
 import { RealtimePortsContext, type RealtimePorts } from '../realtime/realtime-provider';
 import { createQueryClient } from './query-client';
+import type { PushDevice } from '../features/push/device';
+import { PushDeviceContext } from '../features/push/push';
 
 export interface AppPorts {
   readonly theme?: ThemePorts;
@@ -44,6 +46,8 @@ export interface AppPorts {
   readonly realtime?: RealtimePorts;
   /** Where drafts, the last channel and unsent messages live; the browser's when absent, none when `null`. */
   readonly storage?: ClientStorage | null;
+  /** This browser's Web Push; the browser's when absent, none when `null` (D-126). */
+  readonly push?: PushDevice | null;
 }
 
 interface AppProvidersProps {
@@ -79,7 +83,9 @@ export const AppProviders = ({
                         <ToastProvider
                           {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
                         >
-                          {children}
+                          <PushDeviceContext.Provider value={ports.push}>
+                            {children}
+                          </PushDeviceContext.Provider>
                         </ToastProvider>
                       </TooltipProvider>
                     </RealtimePortsContext.Provider>

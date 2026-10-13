@@ -84,6 +84,32 @@ describe('the endpoints', () => {
     expect(members.calls[0]?.url).toBe(`/api/workspaces/${ID}/members`);
   });
 
+  test('a device told by push, and the language it is told in (D-126)', async () => {
+    const key = `B${'A'.repeat(86)}`;
+    const read = harness({ publicKey: key });
+    expect(await read.api.pushKey()).toEqual({ publicKey: key });
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/push/key' });
+
+    const device = harness(null);
+    const subscription = {
+      endpoint: 'https://push.example.com/1',
+      keys: { p256dh: key, auth: 'A'.repeat(22) },
+      locale: 'tr',
+    } as const;
+    await device.api.subscribePush(subscription);
+    await device.api.unsubscribePush('https://push.example.com/1');
+    await device.api.setLocale('en');
+    expect(device.calls).toEqual([
+      { method: 'POST', url: '/api/push/subscriptions', body: subscription },
+      {
+        method: 'POST',
+        url: '/api/push/subscriptions/remove',
+        body: { endpoint: 'https://push.example.com/1' },
+      },
+      { method: 'PUT', url: '/api/me/locale', body: { locale: 'en' } },
+    ]);
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);

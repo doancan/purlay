@@ -502,6 +502,14 @@ export const tr = {
     other: '{until} saatine kadar Deep Work, {count} dakika kaldı',
   },
   'deepWork.stop': 'Deep Work’ü bitir',
+
+  // ── Notifications on this device: Web Push (D-126) ─────────────────────
+  'push.label': 'Bu cihazda bildirimler',
+  'push.turnOn': 'Aç',
+  'push.turnOff': 'Kapat',
+  'push.working': 'Bir saniye…',
+  'push.blocked': 'Engellendi: tarayıcının site ayarlarından izin ver',
+  'push.failed': 'Bu cihazdaki bildirimler değiştirilemedi.',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
 
   // ── Notification level (D-107) ─────────────────────────────────────────

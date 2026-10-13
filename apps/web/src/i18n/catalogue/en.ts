@@ -517,6 +517,14 @@ export const en = {
     other: 'Deep Work until {until}, {count} minutes left',
   },
   'deepWork.stop': 'End Deep Work',
+
+  // ── Notifications on this device: Web Push (D-126) ─────────────────────
+  'push.label': 'Notifications on this device',
+  'push.turnOn': 'Turn on',
+  'push.turnOff': 'Turn off',
+  'push.working': 'One moment…',
+  'push.blocked': 'Blocked: allow them in the browser’s site settings',
+  'push.failed': 'Notifications on this device were not changed.',
   'shortcuts.deepWork': 'Start or end Deep Work',
 
   // ── Notification level (D-107) ─────────────────────────────────────────

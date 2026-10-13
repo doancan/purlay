@@ -22,6 +22,7 @@ import { createQueryClient } from '../app/query-client';
 import { en } from '../i18n/catalogue/en';
 import { tr } from '../i18n/catalogue/tr';
 import type { Locale } from '../i18n/types';
+import type { PushDevice } from '../features/push/device';
 import { anApi } from './fake-api';
 import { fakeColourScheme, fakeHistory, fakeSchedule, fakeSockets, memoryStorage } from './fakes';
 
@@ -35,11 +36,13 @@ export interface WorldOptions {
   readonly theme?: 'light' | 'dark';
   /** The API the screens talk to. Absent, any call to it is a failure of the test. */
   readonly api?: Api;
+  /** This browser's Web Push. Absent, the browser has none, and nothing about it is drawn. */
+  readonly push?: PushDevice | null;
 }
 
 export const renderApp = async (
   ui: React.ReactElement,
-  { locale = 'en', path = '/', dark = false, theme, api = anApi() }: WorldOptions = {},
+  { locale = 'en', path = '/', dark = false, theme, api = anApi(), push = null }: WorldOptions = {},
 ): Promise<RenderResult & { readonly world: ReturnType<typeof makeWorld> }> => {
   const world = makeWorld({ locale, path, dark, ...(theme === undefined ? {} : { theme }) });
   const result = render(
@@ -58,6 +61,7 @@ export const renderApp = async (
         queryClient: world.client,
         api,
         storage: world.storage,
+        push,
         realtime: {
           openSocket: world.sockets.openSocket,
           schedule: world.timers.schedule,

@@ -5530,8 +5530,9 @@ people can aim.
    credentials, no address literal, no `localhost` or dotless host) and its checked public-address
    lookup, no redirect, a short timeout. A browser chose the endpoint; anybody signed in could choose
    any other, so the server must never reach inside.
-7. **Off without keys.** `VAPID_*` all three or none; none is push off — the API answers
-   `PUSH_UNAVAILABLE` and production still starts, since the inbox is the record. Changing the pair
+7. **Off without keys.** `VAPID_*` all three or none; none is push off — the key is `null`, an
+   answer every signed-in page can ask for without an error, a subscription is `PUSH_UNAVAILABLE`, and
+   production still starts, since the inbox is the record. Changing the pair
    leaves old subscriptions inert (each remembers the key it was made with); devices subscribe again.
 8. **Sent by the node that committed the write,** not through the `EventBus`: a second node does not
    double it (D-7).
