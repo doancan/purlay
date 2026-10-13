@@ -170,6 +170,10 @@ describe('how long a choice lasts (D-124)', () => {
   test('after midnight and before five, the night is not over: tomorrow is this morning', () => {
     expect(deepWorkEnd('tomorrow', at(1))).toEqual(new Date(2026, 8, 9, 9, 0, 0));
     expect(deepWorkEnd('tomorrow', at(0))).toEqual(new Date(2026, 8, 9, 9, 0, 0));
+    // One minute before five, still the night.
+    expect(deepWorkEnd('tomorrow', new Date(2026, 8, 9, 4, 59, 0))).toEqual(
+      new Date(2026, 8, 9, 9, 0, 0),
+    );
     // From five a new day has begun: tomorrow is the next day's morning, within the bound.
     expect(deepWorkEnd('tomorrow', at(5)).getDate()).toBe(10);
   });
