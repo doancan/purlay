@@ -25,6 +25,7 @@ import { installDom } from '../../testing/dom';
 import { ALICE, BOB, IDS, aMessage, messageIdAt } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { ACK_DEADLINE_MS } from '../../realtime/engine';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -171,7 +172,7 @@ describe('opening it, in the panel', () => {
     expect(line.getAttribute('aria-expanded')).toBe('true');
     expect(line.getAttribute('aria-controls')).toBe(panel.id);
     // Focus went into the panel, to its heading.
-    expect(document.activeElement).toBe(inside.getByRole('heading', { name: 'Thread · #api' }));
+    expectFocusOn(inside.getByRole('heading', { name: 'Thread · #api' }));
     await expectNoAxeViolations(view.container);
     view.unmountAll();
   });
@@ -270,7 +271,7 @@ describe('opening it, in the panel', () => {
     );
     const row = rowOf(view, messageIdAt(ROOT));
     expect(row.hasAttribute('data-thread-open')).toBe(false);
-    expect(document.activeElement).toBe(row);
+    expectFocusOn(row);
     view.unmountAll();
   });
 
@@ -311,7 +312,7 @@ describe('replying', () => {
     expect(within(section).getByText('No replies yet')).toBeDefined();
     expect(within(section).queryByRole('button', { name: /Resolve/ })).toBeNull();
     const box = within(section).getByLabelText('Message a thread in api');
-    expect(document.activeElement).toBe(box);
+    expectFocusOn(box);
     await expectNoAxeViolations(view.container);
     view.unmountAll();
   });
@@ -483,7 +484,7 @@ describe('resolving and reopening', () => {
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
       'Resolved by alice',
     );
-    expect(document.activeElement).toBe(rowOf(view, messageIdAt(ROOT)));
+    expectFocusOn(rowOf(view, messageIdAt(ROOT)));
     expect(view.getAllByRole('status').some((n) => n.textContent === 'Thread resolved')).toBe(true);
     view.unmountAll();
   });
@@ -611,14 +612,14 @@ describe('the keyboard (UX §7)', () => {
     await settle();
     const panel = sectionOf(view);
     const heading = within(panel).getByRole('heading', { name: 'Thread · #api' });
-    expect(document.activeElement).toBe(heading);
+    expectFocusOn(heading);
     key(heading, 'Escape');
     await settle();
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
-    expect(document.activeElement).toBe(row);
+    expectFocusOn(row);
     key(row, 'r');
     await settle();
-    expect(document.activeElement).toBe(view.getByLabelText('Message a thread in api'));
+    expectFocusOn(view.getByLabelText('Message a thread in api'));
     view.unmountAll();
   });
 
@@ -635,7 +636,7 @@ describe('the keyboard (UX §7)', () => {
     const box = view.getByLabelText('Message a thread in api');
     key(box, 't');
     key(box, 'r');
-    expect(document.activeElement).toBe(box);
+    expectFocusOn(box);
     view.unmountAll();
   });
 
@@ -738,14 +739,14 @@ describe('the keyboard (UX §7)', () => {
     key(box, 'Escape');
     await settle();
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
-    expect(document.activeElement).toBe(rowOf(view, messageIdAt(ROOT)));
+    expectFocusOn(rowOf(view, messageIdAt(ROOT)));
     // Out of a thread: the feed's own Escape, which goes to the channel's composer.
     const other = rowOf(view, messageIdAt(1));
     act(() => {
       other.focus();
     });
     key(other, 'Escape');
-    expect(document.activeElement).toBe(view.getByLabelText('Message api'));
+    expectFocusOn(view.getByLabelText('Message api'));
     view.unmountAll();
   });
 
@@ -759,7 +760,7 @@ describe('the keyboard (UX §7)', () => {
     key(root, 'Escape');
     await settle();
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
-    expect(document.activeElement).toBe(root);
+    expectFocusOn(root);
 
     // With a thread open and the person on some *other* message, Esc goes to the channel's
     // composer — not to the reply box in the panel, which is in the same region.
@@ -769,7 +770,7 @@ describe('the keyboard (UX §7)', () => {
       other.focus();
     });
     key(other, 'Escape');
-    expect(document.activeElement).toBe(view.getByLabelText('Message api'));
+    expectFocusOn(view.getByLabelText('Message api'));
     view.unmountAll();
   });
 
@@ -779,7 +780,7 @@ describe('the keyboard (UX §7)', () => {
       within(rowOf(view, messageIdAt(ROOT))).getByRole('button', { name: 'Reply' }),
     );
     await settle();
-    expect(document.activeElement).toBe(view.getByLabelText('Message a thread in api'));
+    expectFocusOn(view.getByLabelText('Message a thread in api'));
     view.unmountAll();
   });
 });

@@ -196,6 +196,22 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "import { screen } from '@testing-library/react';\n\nexport const use = (): unknown => screen;\n",
   },
+  // A focus assertion through `toBe` passed with focus on another element (#518).
+  {
+    rule: 'focus is asserted by identity, never by toBe on document.activeElement (#518)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/web/src/__enforcement__.test.tsx',
+    source:
+      "import { expect } from 'bun:test';\n\nexport const check = (el: Element): void => {\n  expect(document.activeElement).toBe(el);\n};\n",
+  },
+  {
+    rule: 'focus compared with === is let through (#518)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/web/src/__enforcement__.test.tsx',
+    source:
+      "import { expect } from 'bun:test';\n\nexport const check = (el: Element): void => {\n  expect(document.activeElement === el).toBe(false);\n};\n",
+    allowed: true,
+  },
   // `new Date()` was refused and `Date.now()` was not, so the rule could be met by
   // reading the clock the other way. (#202)
   {

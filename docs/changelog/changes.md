@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: focus is asserted by identity
+
+- `expect(document.activeElement).toBe(element)` passed under Bun with focus on a **different**
+  rendered element (#518): inside a mounted app every pair of connected elements compared equal. All
+  53 such assertions now go through `expectFocusOn` (`apps/web/src/testing/focus.ts`), which compares
+  with `===` and names both elements when it fails; none of them turned red, so no keyboard path was
+  broken behind them. Lint refuses the old form, shown by `verify:enforcement`.
+
 ### Interface — 2026-10-13: the tab says what needs you, and a failure is never a blank page (D-106, D-96)
 
 - The browser tab is titled `<place> · <workspace> · Purlay`, prefixed `(N)` with the mention badges'

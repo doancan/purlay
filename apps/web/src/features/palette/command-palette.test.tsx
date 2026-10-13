@@ -17,6 +17,7 @@ import { person } from '../../testing/user';
 import { SessionGate } from '../session/session';
 import { WorkspaceScopeProvider } from '../shell/workspace';
 import { CommandPalette } from './command-palette';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -153,7 +154,7 @@ describe('what is on offer before anything is typed', () => {
   test('is a combobox that owns focus, with its listbox and its current option named', async () => {
     const { input, view } = await mount();
     const box = input();
-    expect(document.activeElement === box).toBe(true);
+    expectFocusOn(box);
     expect(box.getAttribute('aria-expanded')).toBe('true');
     expect(box.getAttribute('aria-controls')).toBe(view.getByRole('listbox').id);
     const first = document.getElementById(box.getAttribute('aria-activedescendant') ?? '');
@@ -253,7 +254,7 @@ describe('the keyboard', () => {
     expect(selected()).toBe(all.at(-1));
     await user.keyboard('{ArrowDown}');
     expect(selected()).toBe(all[0]);
-    expect(document.activeElement === input()).toBe(true);
+    expectFocusOn(input());
   });
 
   test('Home and End jump to the ends without moving the caret', async () => {
@@ -442,7 +443,7 @@ describe('the pointer', () => {
     const { view, input, here } = await mount();
     const option = view.getByRole('option', { name: /deploys/ });
     fireEvent.mouseDown(option);
-    expect(document.activeElement === input()).toBe(true);
+    expectFocusOn(input());
     fireEvent.click(option);
     await settle();
     expect(here()).toBe(`/w/acme/c/${IDS.deploys}`);
@@ -488,10 +489,10 @@ describe('focus', () => {
     });
     await person().click(opener);
     await settle();
-    expect(document.activeElement === view.getByRole('combobox')).toBe(true);
+    expectFocusOn(view.getByRole('combobox'));
     await person().keyboard('{Escape}');
     await settle();
-    expect(document.activeElement === opener).toBe(true);
+    expectFocusOn(opener);
   });
 });
 

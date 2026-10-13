@@ -647,6 +647,25 @@ export default defineConfig([
     rules: { 'no-restricted-syntax': ['error', ...BRAND_SELECTORS] },
   },
 
+  // Focus is asserted by identity. `expect(document.activeElement).toBe(el)` passed under Bun with
+  // focus on a different rendered element (#518); `expectFocusOn` compares with `===`. Repeats the
+  // brand selectors, since a later `no-restricted-syntax` replaces an earlier one.
+  {
+    files: ['apps/web/**/*.test.ts', 'apps/web/**/*.test.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...BRAND_SELECTORS,
+        {
+          selector:
+            "CallExpression[callee.name='expect'] > MemberExpression.arguments[object.name='document'][property.name='activeElement']",
+          message:
+            'Assert focus with `expectFocusOn(element)` from apps/web/src/testing/focus.ts: `toBe` on two rendered elements can pass for the wrong one (#518).',
+        },
+      ],
+    },
+  },
+
   // Tests may reach further, but they may not weaken the type rules.
   {
     files: ['**/*.test.ts', 'scripts/**/*.ts'],

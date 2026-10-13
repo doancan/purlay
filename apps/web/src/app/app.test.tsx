@@ -23,6 +23,7 @@ import { ApiError } from '../data/errors';
 import type { Api } from '../data/api';
 import { anApi } from '../testing/fake-api';
 import { IDS, aSignedInApi } from '../testing/fixtures';
+import { expectFocusOn } from '../testing/focus';
 
 installDom();
 
@@ -129,7 +130,7 @@ describe('what an address shows', () => {
 describe('focus follows navigation', () => {
   test('is not moved on first render, where the browser has already done it', async () => {
     await mounted('/sign-in');
-    expect(document.activeElement === document.body).toBe(true);
+    expectFocusOn(document.body);
   });
 
   // StrictMode runs the frame's effect, its cleanup, and the effect again on the first render, with
@@ -142,7 +143,7 @@ describe('focus follows navigation', () => {
       </StrictMode>,
     );
     await settle();
-    expect(document.activeElement === document.body).toBe(true);
+    expectFocusOn(document.body);
   });
 
   test('moves to main when the address changes, with the effects run twice', async () => {
@@ -152,10 +153,10 @@ describe('focus follows navigation', () => {
       </StrictMode>,
     );
     await settle();
-    expect(document.activeElement === document.body).toBe(true);
+    expectFocusOn(document.body);
     fireEvent.click(getByRole('link', { name: 'Go to your channels' }));
     await settle();
-    expect(document.activeElement === getByRole('main')).toBe(true);
+    expectFocusOn(getByRole('main'));
   });
 
   test('moves to main when the address changes', async () => {
@@ -166,7 +167,7 @@ describe('focus follows navigation', () => {
     });
     fireEvent.click(link);
     await settle();
-    expect(document.activeElement === getByRole('main')).toBe(true);
+    expectFocusOn(getByRole('main'));
   });
 
   test('reaches a main that was not there yet when the address changed', async () => {
@@ -174,7 +175,7 @@ describe('focus follows navigation', () => {
     const { getByRole } = await mounted('/nowhere', signedIn());
     fireEvent.click(getByRole('link', { name: 'Go to your channels' }));
     await settle();
-    expect(document.activeElement === getByRole('main')).toBe(true);
+    expectFocusOn(getByRole('main'));
   });
 });
 

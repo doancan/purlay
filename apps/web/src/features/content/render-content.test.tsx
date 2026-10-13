@@ -28,6 +28,7 @@ import { ContentPortsContext, type ContentPorts } from './content-ports';
 import type { HighlightToken } from './highlight';
 import { CLAMP_ABOVE_LINES } from './code-block';
 import { renderContent } from './render-content';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -296,7 +297,7 @@ describe('markdown', () => {
   test('Tab reaches the table box, so a keyboard can scroll what overflows it', async () => {
     const view = await mount('| a | b |\n|-|-|\n| 1 | 2 |');
     await person().tab();
-    expect(document.activeElement).toBe(view.getByRole('group', { name: 'Table' }));
+    expectFocusOn(view.getByRole('group', { name: 'Table' }));
   });
 
   test('an empty body draws an empty box, not a failure', async () => {

@@ -14,6 +14,7 @@ import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { NavToggle } from './nav';
 import { NarrowPortContext, browserNarrow, useNarrow, type NarrowPort } from './narrow';
+import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
@@ -122,7 +123,7 @@ describe('a narrow window', () => {
     await person().keyboard('{Escape}');
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement === toggle).toBe(true);
+    expectFocusOn(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -134,7 +135,7 @@ describe('a narrow window', () => {
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
     expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.deploys}`);
-    expect(document.activeElement === view.getByRole('main')).toBe(true);
+    expectFocusOn(view.getByRole('main'));
   });
 
   test('widening the window gives the sidebar back to the layout and closes the overlay', async () => {
