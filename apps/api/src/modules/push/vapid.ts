@@ -20,7 +20,7 @@ export interface VapidKeys {
 const LIFETIME_SECONDS = 12 * 60 * 60;
 
 const base64url = (value: string | ArrayBuffer): string =>
-  Buffer.from(typeof value === 'string' ? new TextEncoder().encode(value) : value).toString(
+  (typeof value === 'string' ? Buffer.from(value, 'utf8') : Buffer.from(value)).toString(
     'base64url',
   );
 
