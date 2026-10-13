@@ -288,6 +288,16 @@ const isSequence = (bytes: Buffer): boolean => {
  * here (D-126). Never quotes either value.
  */
 const vapidProblems = (publicKey: string, privateKey: string): string[] => {
+  // One spelling: the browser hands back the key it was given, and a second spelling of the same
+  // bytes would read as a key the operator replaced, re-subscribing every device on every load.
+  for (const [name, value] of [
+    ['VAPID_PUBLIC_KEY', publicKey],
+    ['VAPID_PRIVATE_KEY', privateKey],
+  ] as const) {
+    if (Buffer.from(value, 'base64url').toString('base64url') !== value) {
+      return [`${name}: not canonical base64url; copy it as \`bun run push:keys\` printed it`];
+    }
+  }
   const pair = createECDH('prime256v1');
   try {
     pair.setPrivateKey(Buffer.from(privateKey, 'base64url'));

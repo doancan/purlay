@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: Web Push's encryption and signature, and `bun run push:keys` (D-126, part of #78)
+
+- `modules/push/encrypt.ts`: a push's body encrypted for one browser (RFC 8291, `aes128gcm`),
+  reproducing the RFC's Appendix A byte for byte. `modules/push/vapid.ts`: the ES256 token of RFC
+  8292, valid for twelve hours, read back and verified in its test.
+- `bun run push:keys` prints a pair the configuration accepts. The API now also refuses a key spelled
+  other than canonically, which would have re-subscribed every device on every load.
+- `expect(…).rejects` and `.resolves` are refused by lint: Bun does not type them as promises, so an
+  unawaited one passed whatever happened, as one test in the subscription slice did.
+
 ### Feature — 2026-10-13: notifications on this device, in the account menu (D-126, part of #78)
 
 - The account menu turns them on and off: the browser is asked once, the server is sent the

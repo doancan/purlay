@@ -456,7 +456,10 @@ const aVapidPair = (): { publicKey: string; privateKey: string } => {
   pair.generateKeys();
   return {
     publicKey: pair.getPublicKey().toString('base64url'),
-    privateKey: pair.getPrivateKey().toString('base64url'),
+    // Padded: ECDH drops a leading zero byte, about one key in two hundred.
+    privateKey: Buffer.from(pair.getPrivateKey().toString('hex').padStart(64, '0'), 'hex').toString(
+      'base64url',
+    ),
   };
 };
 
@@ -498,6 +501,18 @@ describe('Web Push keys (#78)', () => {
     expect(mixed).toContain('VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY: not one pair');
     // Never the values: the private key is a secret.
     expect(mixed).not.toContain(other.privateKey);
+    // The same bytes spelled a second way: 87 characters carry 522 bits for 520, and the last
+    // character's lowest bit is one decoding drops.
+    const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const last = ALPHABET.indexOf(one.publicKey.slice(-1));
+    const respelled = `${one.publicKey.slice(0, -1)}${ALPHABET[last | 1] ?? ''}`;
+    expect(respelled).not.toBe(one.publicKey);
+    expect(
+      Buffer.from(respelled, 'base64url').equals(Buffer.from(one.publicKey, 'base64url')),
+    ).toBe(true);
+    expect(refusal({ ...valid, ...vapid, VAPID_PUBLIC_KEY: respelled })).toContain(
+      'VAPID_PUBLIC_KEY: not canonical base64url',
+    );
     // Zero is not a private key, though it has the shape of one.
     expect(refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: 'A'.repeat(43) })).toContain(
       'VAPID_PRIVATE_KEY: not a P-256 private key',
