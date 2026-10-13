@@ -5552,6 +5552,11 @@ people can aim.
 - *The `web-push` package* — what it does, `crypto.subtle` does in Bun, measured against RFC 8291's own
   example (CONTRIBUTING §1.12).
 
+**Not the credential cipher.** A push's body is encrypted to one browser's key in the one format a
+push service carries (RFC 8291), on the wire and never stored; the credential cipher seals what
+Purlay keeps (D-39 §6, #113). The test that holds "one cipher" names `modules/push/encrypt.ts` as
+the second place, and why.
+
 **Cost of reversing:** migration 0024's table and column, `modules/push`, four routes, the worker, the
 account menu's item, and this decision; push is off with the keys unset, without a code change.
 
