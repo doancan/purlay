@@ -76,12 +76,24 @@ interface World {
  * everywhere ends every session a person holds, so a test of it would leave the seeded ones dead for
  * its own retry, or a second run against the same server.
  */
-const freshSessionOf = (world: World, outsider: Outsider): string =>
-  execFileSync('bun', ['run', 'apps/api/src/cli/demo-session.ts', '--as', outsider], {
-    cwd: join(import.meta.dirname, '../../..'),
-    env: { ...process.env, DATABASE_URL: world.database },
-    encoding: 'utf8',
-  }).trim();
+const freshSessionOf = (world: World, outsider: Outsider): string => {
+  const printed = execFileSync(
+    'bun',
+    ['run', 'apps/api/src/cli/demo-session.ts', '--as', outsider],
+    {
+      cwd: join(import.meta.dirname, '../../..'),
+      env: { ...process.env, DATABASE_URL: world.database },
+      encoding: 'utf8',
+    },
+  ).trim();
+  // Fail here, saying what came back, rather than as a 401 three steps later.
+  if (!/^[\w-]{32,}$/.test(printed)) {
+    throw new Error(
+      `demo-session.ts printed something that is not a token: ${printed.slice(0, 80)}`,
+    );
+  }
+  return printed;
+};
 
 const SESSION_COOKIE = '__Host-purlay_session';
 
