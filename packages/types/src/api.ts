@@ -521,10 +521,21 @@ export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
 export const PushPayload = Type.Object({
   title: Type.String({ maxLength: 200 }),
   body: Type.String({ maxLength: 200 }),
-  url: Type.String({ pattern: '^/', maxLength: 512 }),
+  // A path of this site: `//host` is another site's address spelled like one.
+  url: Type.String({ pattern: '^/(?!/)', maxLength: 512 }),
   tag: Type.String({ maxLength: 100 }),
 });
 export type PushPayload = Static<typeof PushPayload>;
+
+/**
+ * What the push worker tells an open tab when its notification is clicked: go to this path. The
+ * worker cannot navigate a tab it does not control, and the tab's own router keeps its state.
+ */
+export const PushOpenMessage = Type.Object({
+  kind: Type.Literal('push-open'),
+  url: Type.String({ pattern: '^/(?!/)', maxLength: 512 }),
+});
+export type PushOpenMessage = Static<typeof PushOpenMessage>;
 
 /**
  * `POST /api/workspaces/:workspaceId/uploads?id=&name=` — the body is the file's bytes (D-109 §3).

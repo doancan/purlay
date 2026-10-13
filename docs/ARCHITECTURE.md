@@ -144,6 +144,8 @@ purlay/
 │   │       └── index.ts
 │   │
 │   └── web/
+│       ├── worker/          the push worker (D-126): built alone to `/push-worker.js`, its own
+│       │                    compiler project (the WebWorker library), importing nothing the page does
 │       └── src/
 │           ├── app/             providers (one tree, every port optional), the frame, the outlet
 │           ├── features/        vertical slices: chat, threads, palette, notifications, auth
