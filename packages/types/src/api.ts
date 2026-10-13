@@ -700,7 +700,10 @@ export const UpdateProfileRequest = FromClient({
     ]),
   ),
   timeZone: Type.Optional(
-    Type.Union([Type.String({ minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9_+\\-/]+$' }), Type.Null()]),
+    Type.Union([
+      Type.String({ minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9_+\\-/]+$' }),
+      Type.Null(),
+    ]),
   ),
   status: Type.Optional(
     Type.Union([
