@@ -825,7 +825,7 @@ describe('the frames', () => {
     w.engine.watch([CH, CH2]);
     w.engine.start();
     w.open();
-    const sending = w.engine.send({ channelId: CH2, content: 'on its way' });
+    w.engine.send({ channelId: CH2, content: 'on its way' });
     const failing = w.engine.send({ channelId: CH2, content: 'refused' });
     const elsewhere = w.engine.send({ channelId: CH, content: 'stays' });
     w.deliver(
@@ -845,7 +845,55 @@ describe('the frames', () => {
         .pending()
         .map((p) => p.id),
     ).toEqual([elsewhere]);
-    expect([sending, failing]).not.toContain(elsewhere);
+  });
+
+  test('a send the server answers with the channel gone goes, and is counted, rather than waiting failed for ever (#521)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'into nothing' });
+    w.deliver(
+      frame({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: id,
+        ts: T0,
+      }),
+    );
+    expect(w.pending()).toEqual([]);
+    expect(w.engine.store.getState().lost).toEqual({ count: 1, seq: 1 });
+  });
+
+  test('a subscription refused for good takes the channel’s unsent messages too (#521)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH2, content: 'waiting' });
+    w.timers.advance(2_000);
+    const subscribe = w.sentOps('SUBSCRIBE').at(-1);
+    w.deliver(
+      frame({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: subscribe?.id ?? '',
+        ts: T0,
+      }),
+    );
+    expect(w.pending().filter((p) => p.channelId === CH2)).toEqual([]);
+    expect(w.engine.store.getState().lost?.count).toBe(1);
+  });
+
+  test('channels lost while nobody was told — dropped from the list — take their unsent messages (#521)', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH2, content: 'waiting' });
+    w.engine.lose([CH2]);
+    expect(w.pending()).toEqual([]);
+    expect(w.engine.store.getState().lost?.count).toBe(1);
   });
 
   test('a channel taken away with nothing unsent says nothing (#521)', () => {

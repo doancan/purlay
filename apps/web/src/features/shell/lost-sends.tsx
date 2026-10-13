@@ -12,10 +12,12 @@ export const LostSends = (): null => {
   const { t } = useI18n();
   const { show } = useToast();
   const lost = useLost();
-  const said = useRef(lost?.seq ?? 0);
+  // By identity, not by number: each loss is a new object, and an engine made afresh under this
+  // component starts its numbers again.
+  const said = useRef(lost);
   useEffect(() => {
-    if (lost === null || lost.seq === said.current) return;
-    said.current = lost.seq;
+    if (lost === null || lost === said.current) return;
+    said.current = lost;
     show({ message: t('delivery.lostWithChannel', { count: lost.count }) });
   }, [lost, show, t]);
   return null;

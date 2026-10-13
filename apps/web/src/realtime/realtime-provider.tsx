@@ -13,7 +13,7 @@
  */
 import { useQueryClient } from '@tanstack/react-query';
 import type { RevokedReason } from '@purlay/types';
-import { createContext, useContext, useEffect, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useApi } from '../data/api-provider';
 import { keys } from '../data/keys';
@@ -105,6 +105,20 @@ export const RealtimeProvider = ({
   useEffect(() => {
     engine.watch(memberOf);
   }, [engine, memberOf]);
+
+  // A channel this workspace's list no longer has the person in — read again after a time offline,
+  // say, when its ACCESS_REVOKED was never heard — is lost, and so are its unsent messages (#521).
+  // Only within this provider, which is one workspace's: another workspace's channels are not lost.
+  const memberBefore = useRef<readonly string[] | null>(null);
+  useEffect(() => {
+    if (channels.data === undefined) return;
+    const before = memberBefore.current;
+    memberBefore.current = memberOf;
+    if (before === null) return;
+    const now = new Set(memberOf);
+    const gone = before.filter((id) => !now.has(id));
+    if (gone.length > 0) engine.lose(gone);
+  }, [engine, channels.data, memberOf]);
 
   return <EngineContext.Provider value={engine}>{children}</EngineContext.Provider>;
 };

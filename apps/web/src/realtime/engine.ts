@@ -181,6 +181,11 @@ export interface Engine {
    * would drop (D-114).
    */
   readonly announceTyping: (channelId: string) => void;
+  /**
+   * Channels the person lost without being told — gone from a list read again, as after a time
+   * offline: their unsent messages go, as they do on `ACCESS_REVOKED` (#521).
+   */
+  readonly lose: (channelIds: readonly string[]) => void;
 }
 
 const isSendAck = (
@@ -334,18 +339,27 @@ export const createEngine = (options: EngineOptions): Engine => {
    * A channel the person lost takes its unsent messages with it: nothing could send them, and kept
    * they would sit in storage with no screen that shows them (#521). Said once, with how many.
    */
-  const dropUnsent = (channelIds: readonly string[]): void => {
-    const doomed = store.getState().pending.filter((p) => channelIds.includes(p.channelId));
+  const drop = (doomed: readonly PendingMessage[]): void => {
     if (doomed.length === 0) return;
-    for (const p of doomed) {
-      timers.get(p.id)?.();
-      timers.delete(p.id);
+    const ids = new Set(doomed.map((p) => p.id));
+    for (const id of ids) {
+      timers.get(id)?.();
+      timers.delete(id);
     }
-    change((all) => all.filter((p) => !channelIds.includes(p.channelId)));
+    change((all) => all.filter((p) => !ids.has(p.id)));
     const seq = (store.getState().lost?.seq ?? 0) + 1;
-    store.setState({ lost: { count: doomed.length, seq } });
+    store.setState({ lost: { count: ids.size, seq } });
+  };
+  const dropUnsent = (channelIds: readonly string[]): void => {
+    drop(store.getState().pending.filter((p) => channelIds.includes(p.channelId)));
   };
   const fail = (id: string, reason: FailureCode): void => {
+    // The channel is gone: no retry can send it, and no screen shows it (#521).
+    const failing = find(id);
+    if (reason === 'CHANNEL_NOT_FOUND' && failing !== undefined) {
+      drop([failing]);
+      return;
+    }
     timers.get(id)?.();
     timers.delete(id);
     if (find(id) !== undefined) update(id, { delivery: 'failed', reason });
@@ -735,6 +749,9 @@ export const createEngine = (options: EngineOptions): Engine => {
     },
     discard: (id): void => {
       if (find(id)?.delivery === 'failed') forget(id);
+    },
+    lose: (channelIds): void => {
+      dropUnsent(channelIds);
     },
     announceTyping: (channelId): void => {
       if (connection === null) return;

@@ -358,9 +358,9 @@ missing specified behaviour and does not merge.
 screen says "Purlay stopped working" with the same two ways out. Never a blank page (D-96).
 
 **Unsent messages of a channel the person lost** — archived, left on another device, or their
-membership ended — are removed, and one notice says how many: "2 unsent messages were removed: their
-channel is no longer open to you." Nothing could send them, and kept they would wait with no screen
-to show them (#521).
+membership ended, or gone from the channel list read after a time offline — are removed, and one
+notice says how many were removed and why. Nothing could send them, and kept they would wait with
+no screen to show them (#521).
 
 **Connection loss** shows a single non-blocking bar: `Reconnecting…`. The composer stays
 enabled — messages queue and send on reconnect (`ARCHITECTURE.md` §5.4). Disabling input on a

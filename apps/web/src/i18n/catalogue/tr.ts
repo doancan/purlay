@@ -350,7 +350,8 @@ export const tr = {
   'delivery.failed': 'Gönderilemedi',
   'delivery.retry': 'Yeniden dene',
   'delivery.lostWithChannel': {
-    other: 'Kanala artık erişimin olmadığı için gönderilmemiş {count} mesaj kaldırıldı.',
+    one: 'Teslim edilmemiş bir mesaj kaldırıldı: kanalına artık erişimin yok.',
+    other: 'Teslim edilmemiş {count} mesaj kaldırıldı: kanallarına artık erişimin yok.',
   },
   'delivery.delete': 'Sil',
   'delivery.announce.sent': 'Mesaj gönderildi',
