@@ -9,6 +9,7 @@ import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
+import { expectFocusOn } from '../../testing/focus';
 import { installDom } from '../../testing/dom';
 import { IDS, aSession, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
@@ -248,6 +249,27 @@ describe('signing out everywhere', () => {
     await settle();
     expect(asked).toEqual([]);
     expect(here(view)).not.toBe('/sign-in');
+    view.unmount();
+  });
+
+  test('Cancel gives focus back to the account button: the menu item that opened it is gone', async () => {
+    const view = await open(counted().api);
+    const trigger = view.getByRole('button', { name: 'Account: Dogancan' });
+    act(() => {
+      trigger.focus();
+    });
+    await person().keyboard('{Enter}');
+    await settle();
+    const item = view.getByRole('menuitem', { name: 'Sign out everywhere…' });
+    act(() => {
+      item.focus();
+    });
+    await person().keyboard('{Enter}');
+    await settle();
+    const dialog = view.getByRole('dialog', { name: 'Sign out everywhere?' });
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expectFocusOn(trigger);
     view.unmount();
   });
 
