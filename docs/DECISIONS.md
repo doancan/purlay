@@ -5326,9 +5326,11 @@ to decide and proceed, and open to their reversal.
    archive is `ACCESS_REVOKED` on the channel's topic and a leave on the person's own, each with a
    `reason` (`archived`, `left`) so a person looking at the channel is told what happened rather than
    that it is not found. The field is optional, so a client built before it reads the frame as before.
-   **Who hears it:** the sockets watching the channel, which are its members'. Somebody who can see a
-   public channel without being in it sees the change when their list is next read: no socket watches
-   a channel for a non-member, and a workspace topic for this is what D-85 rejected.
+   **Who hears it:** the sockets watching the channel — every socket that subscribed to it, which a
+   `SUBSCRIBE` allows to anybody who can see it (a member, or anyone in the workspace for a public
+   channel; `router.ts` checks visibility, not membership). Somebody who can see a public channel and
+   has not opened it sees the change when their list is next read; a workspace topic for this is what
+   D-85 rejected.
 7. **Who is in a channel** is `GET /api/channels/:channelId/members`, for anybody who can see it.
    Not paged, as the workspace's own list is not: a channel's members are some of the workspace's,
    whose size D-25 bounds.

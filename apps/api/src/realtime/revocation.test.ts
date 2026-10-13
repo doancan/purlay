@@ -29,19 +29,46 @@ const C2 = '00000000-0000-4000-8000-0000000000c2';
 const aMessage = (channelId: string, id: string): ServerFrame =>
   ({ event: 'MESSAGE_CREATED', data: { id, channelId }, ts: 1 }) as ServerFrame;
 
+/** Every frame whose data names a channel: the ones a refused or revoked channel must drop. */
+type ChannelFrameEvent = Extract<ServerFrame, { data: { channelId: string } }>['event'];
+
 /**
  * One frame of every kind that is about a channel, for it (#412). Each names the channel in its
- * data, so a filter that knows only `MESSAGE_CREATED` lets the rest through.
+ * data, so a filter that knows only `MESSAGE_CREATED` lets the rest through. Keyed by the event, so
+ * a new kind of channel frame does not compile here until it has a sample — a hand-kept list missed
+ * `CHANNEL_UPDATED` once.
  */
-const everyChannelFrame = (channelId: string): ServerFrame[] =>
-  [
-    aMessage(channelId, 'created'),
-    { event: 'THREAD_UPDATED', data: { channelId, messageId: 'm' }, version: 1, ts: 1 },
-    { event: 'REACTIONS_UPDATED', data: { channelId, messageId: 'm' }, version: 1, ts: 1 },
-    { event: 'MESSAGE_REVISED', data: { channelId, messageId: 'm', content: 'secret' }, ts: 1 },
-    { event: 'CHANNEL_STATE', data: { channelId }, version: 1, ts: 1 },
-    { event: 'TYPING', data: { channelId, userId: 'u', ttlMs: 1 }, ts: 1 },
-  ] as ServerFrame[];
+const everyChannelFrame = (channelId: string): ServerFrame[] => {
+  const samples: Record<ChannelFrameEvent, unknown> = {
+    MESSAGE_CREATED: aMessage(channelId, 'created'),
+    THREAD_UPDATED: {
+      event: 'THREAD_UPDATED',
+      data: { channelId, messageId: 'm' },
+      version: 1,
+      ts: 1,
+    },
+    REACTIONS_UPDATED: {
+      event: 'REACTIONS_UPDATED',
+      data: { channelId, messageId: 'm' },
+      version: 1,
+      ts: 1,
+    },
+    MESSAGE_REVISED: {
+      event: 'MESSAGE_REVISED',
+      data: { channelId, messageId: 'm', content: 'secret' },
+      ts: 1,
+    },
+    CHANNEL_STATE: { event: 'CHANNEL_STATE', data: { channelId }, version: 1, ts: 1 },
+    CHANNEL_UPDATED: {
+      event: 'CHANNEL_UPDATED',
+      data: { channelId, name: 'secret-name', topic: null },
+      version: 1,
+      ts: 1,
+    },
+    TYPING: { event: 'TYPING', data: { channelId, userId: 'u', ttlMs: 1 }, ts: 1 },
+  };
+  return Object.values(samples) as ServerFrame[];
+};
 
 interface Node {
   readonly hub: SocketHub;

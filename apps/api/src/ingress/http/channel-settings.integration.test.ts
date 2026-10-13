@@ -214,6 +214,26 @@ describe('integration: renaming a channel and setting its topic', () => {
     });
   });
 
+  test('a name a channel of another workspace has is free here: the check stays inside the workspace', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      // Bob makes a workspace of his own with a channel called `elsewhere`. Were the check not
+      // scoped, its 409 would tell anybody which names other tenants use.
+      const slug = aUniqueSlug('set-other');
+      const theirs = await world.call('POST', '/api/workspaces', world.bob, { name: slug, slug });
+      const theirId = ((await theirs.json()) as { id: string }).id;
+      const made = await world.call('POST', `/api/workspaces/${theirId}/channels`, world.bob, {
+        name: 'elsewhere',
+      });
+      expect(made.status).toBe(201);
+
+      const renamed = await world.call('PATCH', `/api/channels/${world.channelId}`, world.owner, {
+        name: 'elsewhere',
+      });
+      expect(renamed.status).toBe(200);
+    });
+  });
+
   test('somebody who can see it but is not in it is 403; a direct message is 404; a bad name 400', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
