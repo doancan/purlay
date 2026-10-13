@@ -22,7 +22,7 @@ import {
 import { useOpenThread, useThreads } from '../threads/thread-context';
 
 /** The panels a channel has besides a thread. */
-export type SidePanelName = 'files';
+type SidePanelName = 'files';
 
 interface SidePanelApi {
   readonly panel: SidePanelName | null;
@@ -39,7 +39,7 @@ export const useSidePanel = (): SidePanelApi => {
 };
 
 /** The header's control for a panel, where focus goes back to when the panel closes. */
-export const panelToggleOf = (panel: SidePanelName): HTMLElement | null =>
+const panelToggleOf = (panel: SidePanelName): HTMLElement | null =>
   document.querySelector<HTMLElement>(`[data-panel-toggle="${panel}"]`);
 
 export const SidePanelProvider = ({
