@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-13: unsent messages go with a channel the person lost, and say so
+
+- A message still sending, or failed, in a channel that was then archived, left on another device
+  or taken away stayed in the pending store and in local storage with no screen that showed it. The
+  engine now removes them when the channel goes (`ACCESS_REVOKED`, or a subscription refused for
+  good) and one notice says how many, in both languages. The channel's member list and its threads
+  leave the cache with it (#521).
+
 ### Fix — 2026-10-13: letting go of channels no longer spends the frame budget a send needs
 
 - The client sent one `UNSUBSCRIBE` per channel. When several channels left together — a list read

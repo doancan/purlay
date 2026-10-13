@@ -15,6 +15,7 @@ import { RealtimeProvider } from '../../realtime/realtime-provider';
 import { Main } from '../../ui/main';
 import { SessionGate } from '../session/session';
 import { ConnectionBar } from './connection-bar';
+import { LostSends } from './lost-sends';
 import { ScreenBoundary } from './failure-boundary';
 import { UpdateBar } from './update-bar';
 import { DeepWorkBar, DeepWorkProvider } from './deep-work';
@@ -40,6 +41,7 @@ export const Shell = ({
           <DeepWorkProvider>
             <GlobalKeys />
             <TabTitle />
+            <LostSends />
             <NavProvider>
               <div className="flex h-screen bg-surface-100 text-ink">
                 <SidebarSlot />

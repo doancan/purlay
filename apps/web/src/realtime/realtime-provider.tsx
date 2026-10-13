@@ -130,6 +130,10 @@ export const useDegraded = (): Readonly<Record<string, DegradedReason>> =>
 export const useGone = (channelId: string): RevokedReason | undefined =>
   useStore(useEngine().store, (state) => state.gone[channelId]);
 
+/** The last time unsent messages went with a channel the person lost (#521), or null. */
+export const useLost = (): { readonly count: number; readonly seq: number } | null =>
+  useStore(useEngine().store, (state) => state.lost);
+
 const NOBODY: readonly string[] = [];
 
 /** Who else is typing in a channel, in the order they began (D-114). */

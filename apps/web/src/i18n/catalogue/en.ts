@@ -356,6 +356,10 @@ export const en = {
   'delivery.sent': 'Sent',
   'delivery.failed': 'Failed to send',
   'delivery.retry': 'Retry',
+  'delivery.lostWithChannel': {
+    one: '{count} unsent message was removed: its channel is no longer open to you.',
+    other: '{count} unsent messages were removed: their channel is no longer open to you.',
+  },
   'delivery.delete': 'Delete',
   'delivery.announce.sent': 'Message sent',
   'delivery.announce.failed': 'Message failed to send',

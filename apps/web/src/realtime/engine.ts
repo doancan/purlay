@@ -132,6 +132,11 @@ export interface RealtimeState {
    * tells the person instead of "not found".
    */
   readonly gone: Readonly<Record<string, RevokedReason>>;
+  /**
+   * The last time unsent messages went with a channel the person lost (#521): how many, and a number
+   * that rises each time, so a notice says it once per loss. Null until it first happens.
+   */
+  readonly lost: { readonly count: number; readonly seq: number } | null;
 }
 
 export interface Outgoing {
@@ -211,6 +216,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     degraded: {},
     typing: {},
     gone: {},
+    lost: null,
   }));
   const serverClock = createServerClock(options.clock);
   const timers = new Map<string, () => void>();
@@ -323,6 +329,21 @@ export const createEngine = (options: EngineOptions): Engine => {
     timers.get(id)?.();
     timers.delete(id);
     change((all) => all.filter((p) => p.id !== id));
+  };
+  /**
+   * A channel the person lost takes its unsent messages with it: nothing could send them, and kept
+   * they would sit in storage with no screen that shows them (#521). Said once, with how many.
+   */
+  const dropUnsent = (channelIds: readonly string[]): void => {
+    const doomed = store.getState().pending.filter((p) => channelIds.includes(p.channelId));
+    if (doomed.length === 0) return;
+    for (const p of doomed) {
+      timers.get(p.id)?.();
+      timers.delete(p.id);
+    }
+    change((all) => all.filter((p) => !channelIds.includes(p.channelId)));
+    const seq = (store.getState().lost?.seq ?? 0) + 1;
+    store.setState({ lost: { count: doomed.length, seq } });
   };
   const fail = (id: string, reason: FailureCode): void => {
     timers.get(id)?.();
@@ -459,6 +480,7 @@ export const createEngine = (options: EngineOptions): Engine => {
   /** A `SUBSCRIBE` the server will not take: said, and for a channel that is gone, let go. */
   const refused = (channelIds: readonly string[], code: ErrorCode): void => {
     if (PERMANENT.has(code)) {
+      dropUnsent(channelIds);
       // Refused, so never subscribed: let go without a frame (#523).
       connection?.forget(channelIds);
       for (const id of channelIds) {
@@ -582,6 +604,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       }
       case 'ACCESS_REVOKED': {
         channelsRevoked(client, frame.data.channelIds);
+        dropUnsent(frame.data.channelIds);
         const { reason } = frame.data;
         if (reason === undefined) forgetWhyGone(frame.data.channelIds);
         else {

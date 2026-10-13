@@ -818,6 +818,46 @@ describe('the frames', () => {
     expect(new Set(sent[0]?.payload['channelIds'] as string[])).toEqual(new Set([CH, CH2, CH3]));
   });
 
+  test('a channel taken away takes its unsent messages with it, from the store and from storage, and says how many (#521)', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    const sending = w.engine.send({ channelId: CH2, content: 'on its way' });
+    const failing = w.engine.send({ channelId: CH2, content: 'refused' });
+    const elsewhere = w.engine.send({ channelId: CH, content: 'stays' });
+    w.deliver(
+      frame({ event: 'ERROR', data: { code: 'INTERNAL', message: 'no' }, refId: failing, ts: T0 }),
+    );
+    expect(w.engine.store.getState().lost).toBeNull();
+
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2], reason: 'archived' }, ts: T0 }),
+    );
+
+    expect(w.pending().map((p) => p.id)).toEqual([elsewhere]);
+    expect(w.engine.store.getState().lost).toEqual({ count: 2, seq: 1 });
+    // A reload brings back only what is still somebody's to send.
+    expect(
+      world({}, { storage })
+        .pending()
+        .map((p) => p.id),
+    ).toEqual([elsewhere]);
+    expect([sending, failing]).not.toContain(elsewhere);
+  });
+
+  test('a channel taken away with nothing unsent says nothing (#521)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2] }, ts: T0 }));
+    expect(w.engine.store.getState().lost).toBeNull();
+  });
+
   test("the end of the session is the screen's to handle", () => {
     const w = world();
     w.engine.start();
