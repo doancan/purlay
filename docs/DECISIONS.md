@@ -5104,7 +5104,9 @@ designed for it below rather than the objection being forgotten.
 5. **A mention of you marks the bubble** with a 2px `accent-text` edge instead of tinting the row, and
    still says so to a screen reader; a failed send marks it with the danger edge, as before.
 6. **No hover tint.** The bubble is the shape; the row under the pointer only fades in its actions,
-   which sit on the bubble's inner top corner.
+   which sit on the bubble's inner top corner — except your own message on a narrow window, where
+   they sit on its outer corner: a short bubble is narrower than they are, and from the inner corner
+   they ran past the feed's edge and scrolled the conversation sideways (`UX.md` §2).
 7. **The channel's feed and composer are centred** in the column (amends D-110 §5). The other screens,
    which have one edge, still hang from the left.
 8. **Square tails are not drawn.** The draft squares the corner nearest the speaker; radius is a

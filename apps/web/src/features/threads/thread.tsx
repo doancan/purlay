@@ -254,14 +254,15 @@ const ThreadView = ({
       className="mt-2"
     >
       <div ref={body} className="flex flex-col gap-1 border-l-marker border-border-subtle pl-4">
-        <div className="flex items-center justify-between gap-2">
+        {/* Wraps rather than widening the feed: on a narrow window the actions take a line of their own. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             aria-expanded="true"
             onClick={() => {
               threads.toggle(root.id);
             }}
-            className="inline-flex h-control items-center gap-2 rounded-md px-1 text-label font-medium text-ink-muted transition-colors duration-hover ease-standard hover:text-ink"
+            className="inline-flex h-control items-center gap-2 whitespace-nowrap rounded-md px-1 text-label font-medium text-ink-muted transition-colors duration-hover ease-standard hover:text-ink"
           >
             <Icon name="collapse" size="sm" />
             {replyCount === 0 ? t('thread.none') : counted}

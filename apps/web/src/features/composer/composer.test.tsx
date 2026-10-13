@@ -168,9 +168,7 @@ describe('what it shows', () => {
   test('is a labelled textarea for the channel, in one card with a send button, and no prompt prefix', async () => {
     const { view, box } = await mount();
     expect(view.getByRole('textbox', { name: 'Message api' })).toBe(box());
-    expect(box().getAttribute('placeholder')).toBe(
-      'Write to api. Enter sends, Shift+Enter adds a line.',
-    );
+    expect(box().getAttribute('placeholder')).toBe('Write to api');
     expect(view.queryByText('api ›')).toBeNull();
     const card = view.container.querySelector('[data-composer-card]');
     // A card that floats a little above the conversation (D-110).
@@ -254,7 +252,7 @@ describe('what it shows', () => {
 
   test('says its words in Turkish', async () => {
     const { view } = await mount({ locale: 'tr' });
-    expect(view.getByRole('textbox', { name: 'api kanalına mesaj' })).toBeDefined();
+    expect(view.getByRole('textbox', { name: 'api için mesaj' })).toBeDefined();
     expect(view.getByRole('button', { name: /Gönder/ })).toBeDefined();
   });
 
