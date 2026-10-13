@@ -111,6 +111,26 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('a group conversation, a workspace’s name, and an unsent attachment let go', async () => {
+    const group = harness(channel);
+    await group.api.openConversation(ID, ['u1', 'u2']);
+    expect(group.calls[0]).toMatchObject({
+      method: 'POST',
+      url: `/api/workspaces/${ID}/conversations`,
+      body: { userIds: ['u1', 'u2'] },
+    });
+    const renamed = harness(workspace);
+    await renamed.api.renameWorkspace(ID, 'acme two');
+    expect(renamed.calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: `/api/workspaces/${ID}`,
+      body: { name: 'acme two' },
+    });
+    const discarded = harness(null);
+    await discarded.api.discardAttachment(ID);
+    expect(discarded.calls[0]).toMatchObject({ method: 'DELETE', url: `/api/attachments/${ID}` });
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);

@@ -31,6 +31,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   createChannel: unexpected('createChannel'),
   joinChannel: unexpected('joinChannel'),
   openDirectMessage: unexpected('openDirectMessage'),
+  openConversation: unexpected('openConversation'),
   markRead: unexpected('markRead'),
   messages: unexpected('messages'),
   send: unexpected('send'),

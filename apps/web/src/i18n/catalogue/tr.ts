@@ -242,6 +242,20 @@ export const tr = {
   'people.none': 'Bu çalışma alanında henüz başka kimse yok.',
   'people.noMatch': 'Bu isimde kimse yok.',
   'people.addFailed': '{name} eklenmedi.',
+
+  // ── Group conversations (D-127) ────────────────────────────────────────
+  'conversations.title': 'Konuşmalar',
+  'conversations.new': 'Yeni mesaj',
+  'conversations.empty': 'Bir kanal açmadan birkaç kişiyle aynı anda konuş.',
+  'conversations.dialog.description':
+    'En fazla {max} kişi. Aynı kişiler her zaman aynı konuşmayı açar.',
+  'conversations.to': 'Kime: {names}',
+  'conversations.toNobody': 'Kime: henüz kimse',
+  'conversations.pick': 'Seç',
+  'conversations.picked': 'Seçildi',
+  'conversations.full': 'Bir konuşma bu kadar kişi alır; daha fazlası için kanal aç.',
+  'conversations.start': 'Konuşmayı başlat',
+  'conversations.failed': 'Konuşma başlatılamadı.',
   'newChannel.create': 'Kanalı oluştur',
   'newChannel.taken': 'Bu adda bir kanal zaten var. Başka bir ad seç.',
   'newChannel.invalid': 'Küçük harf, rakam ve tire kullan; harf ya da rakamla başla.',

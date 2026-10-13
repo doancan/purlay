@@ -36,6 +36,12 @@ export const joinableChannels = (channels: readonly Channel[]): Channel[] =>
     .filter((c) => c.state === null && c.type === 'public')
     .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
+/** Group conversations the person is in (D-127): three people or more, most recently active first. */
+export const groups = (channels: readonly Channel[]): Channel[] =>
+  joined(channels)
+    .filter((c) => c.type === 'direct_message' && c.peers.length >= 2)
+    .sort(byActivity);
+
 /** One line of the People list: somebody, and the conversation with them if there is one. */
 export interface Person {
   readonly user: User;

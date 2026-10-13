@@ -50,7 +50,12 @@ export const useChannelTitle = (channel: Channel): string => {
   const { user } = useSession();
   if (channel.type !== 'direct_message') return channel.name ?? '';
   const peer = channel.peer;
-  if (peer === null) return channel.name ?? '';
+  // A group is its people, by name (D-127).
+  if (peer === null) {
+    return channel.peers.length > 0
+      ? channel.peers.map((person) => person.displayName).join(', ')
+      : (channel.name ?? '');
+  }
   return peer.id === user.id ? t('feed.selfDm', { name: peer.username }) : peer.username;
 };
 

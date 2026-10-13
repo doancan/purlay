@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: group conversations in the sidebar, started from New message (D-127, part of #486)
+
+- A Conversations section lists each group by its people; New message picks up to nine people
+  ("To: …") and starts the conversation of exactly them. A group's title, in the header and the
+  tab, is its people.
+
 ### Feature — 2026-10-13: group conversations, the API (D-127, part of #486)
 
 - A direct message of up to ten people: `POST /api/workspaces/:id/conversations` opens the

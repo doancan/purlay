@@ -51,6 +51,9 @@ export const TabTitle = (): null => {
     const peer = channel?.peer ?? null;
     if (channel?.type === 'direct_message' && peer !== null) {
       place = peer.id === user.id ? t('feed.selfDm', { name: peer.displayName }) : peer.displayName;
+    } else if (channel?.type === 'direct_message' && channel.peers.length > 0) {
+      // A group, by its people's names (D-127).
+      place = channel.peers.map((person) => person.displayName).join(', ');
     } else if (typeof channel?.name === 'string') place = `#${channel.name}`;
   }
   const title = tabTitle(t, {
