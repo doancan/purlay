@@ -538,6 +538,15 @@ describe('the Pins panel', () => {
     view.unmountAll();
   });
 
+  test('chosen from the header’s menu — the one a narrow window shows — it opens and takes focus', async () => {
+    const view = await mountChannel({ messages: page([first]) });
+    await person().click(view.getByRole('button', { name: 'Files and pinned messages' }));
+    await person().click(await view.findByRole('menuitem', { name: 'Pinned messages' }));
+    await settle();
+    expectFocusOn(within(panelOf(view)).getByRole('heading', { name: /Pinned/ }));
+    view.unmountAll();
+  });
+
   test('PINS_UPDATED reads the channel’s pins again, and they show', async () => {
     const server = aServer();
     const view = await mountChannel({ messages: page([first]), api: { pins: server.pins } });

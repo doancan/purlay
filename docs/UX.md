@@ -84,6 +84,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
+- **On a narrow window** the Files and Pinned messages controls are one menu, **Files and pinned
+  messages**, so the channel's name keeps its room in the header.
 - **Pins panel** — the same place again, opened by the header's **Pinned messages** control (D-130):
   the channel's pinned messages, newest pin first, each with who said it and when, its words, and who
   pinned it; a pinned reply opens its thread, and a member unpins from the row. **Pin** sits beside
@@ -193,8 +195,8 @@ they were.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
   their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
-- **Hover controls** are a small raised group on the bubble's inner top corner (on a narrow window,
-  your own message's outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
+- **Hover controls** are a small raised group on the bubble's inner top corner (on
+  your own message, its outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
   thread panel is a row of its own.
 - **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
   the bubble has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,

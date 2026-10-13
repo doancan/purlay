@@ -5176,9 +5176,10 @@ designed for it below rather than the objection being forgotten.
    `surface-050` with a quote glyph and no edge. Rejected: tinting the whole bubble, which is what
    your own messages already wear (`accent-subtle`), so a mention in a DM to yourself would vanish.
 6. **No hover tint.** The bubble is the shape; the row under the pointer only fades in its actions,
-   which sit on the bubble's inner top corner — except your own message on a narrow window, where
-   they sit on its outer corner: a short bubble is narrower than they are, and from the inner corner
-   they ran past the feed's edge and scrolled the conversation sideways (`UX.md` §2).
+   which sit on the bubble's inner top corner — except your own message, where they sit on its
+   outer corner: a short bubble is narrower than they are, and from the inner corner they ran past
+   the feed's edge and scrolled the conversation sideways — first on a narrow window, and on a wide
+   one too once Pin joined them (D-130) (`UX.md` §2).
 7. **The channel's feed and composer are centred** in the column (amends D-110 §5). The other screens,
    which have one edge, still hang from the left.
 8. **Square tails are not drawn.** The draft squares the corner nearest the speaker; radius is a

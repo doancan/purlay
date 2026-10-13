@@ -270,3 +270,19 @@ export const railLink = async (page: Page, name: string): Promise<Locator> => {
 /** The sidebar entry of a channel (its name may be preceded by "unread"), with the sidebar open. */
 export const navLink = async (page: Page, name: string): Promise<Locator> =>
   (await openNav(page)).getByRole('link', { name: new RegExp(`^(unread )?${name}`) });
+
+/**
+ * Opens a panel beside the conversation (D-129, D-130) as a person does at this width: its own
+ * button on a wide window, the header's one menu of them on a narrow one.
+ */
+export const openPanel = async (
+  page: Page,
+  name: 'Files in this channel' | 'Pinned messages',
+): Promise<void> => {
+  if (isNarrow(page)) {
+    await page.getByRole('button', { name: 'Files and pinned messages' }).click();
+    await page.getByRole('menuitem', { name }).click();
+  } else {
+    await page.getByRole('button', { name }).click();
+  }
+};

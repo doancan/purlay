@@ -7,7 +7,7 @@
  * the screenshots draw, gets no pins.
  */
 import { expect, test } from './fixtures';
-import { apiAs, shellReady } from './support';
+import { apiAs, isNarrow, openPanel, shellReady } from './support';
 
 test.describe('pins', () => {
   test('pinned by one person, the other sees it at once, and unpinned the same way', async ({
@@ -35,7 +35,7 @@ test.describe('pins', () => {
     const watcher = await asPerson('bob');
     await watcher.goto(path);
     await shellReady(watcher);
-    await watcher.getByRole('button', { name: 'Pinned messages' }).click();
+    await openPanel(watcher, 'Pinned messages');
     const panel = watcher.getByRole('complementary', { name: /^Pinned/ });
     await expect(panel.getByRole('heading', { name: 'Nothing pinned yet' })).toBeVisible();
 
@@ -52,12 +52,18 @@ test.describe('pins', () => {
     await expect(panel.getByText('Pinned by Alice', { exact: false })).toBeVisible();
     // On a narrow window the panel covers the feed: closed, the feed shows the mark too.
     await watcher.keyboard.press('Escape');
+    // Focus is back on the control that opened it, whichever this width shows.
+    await expect(
+      watcher.getByRole('button', {
+        name: isNarrow(watcher) ? 'Files and pinned messages' : 'Pinned messages',
+      }),
+    ).toBeFocused();
     await expect(
       watcher.locator(`[role="feed"] [data-message-id="${message.id}"]`).getByText('Pinned', {
         exact: true,
       }),
     ).toBeVisible();
-    await watcher.getByRole('button', { name: 'Pinned messages' }).click();
+    await openPanel(watcher, 'Pinned messages');
 
     await panel.getByRole('button', { name: /^Unpin the message from/ }).click();
     await expect(panel.getByRole('heading', { name: 'Nothing pinned yet' })).toBeVisible();

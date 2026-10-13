@@ -24,9 +24,7 @@ import { AddPeopleDialog } from './add-people';
 import { ChannelDetailsDialog } from './channel-details';
 import { NotificationLevelMenu } from './notification-level-menu';
 import { GroupDetailsDialog } from '../conversations/group-details';
-import { FILES_PANEL_ID } from './files-panel';
-import { PINS_PANEL_ID } from '../pins/pins-panel';
-import { useSidePanel } from './side-panel';
+import { PanelControls } from './panel-controls';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -73,9 +71,6 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const canAdd = !direct && channel.state !== null;
   const [adding, setAdding] = useState(false);
   const [details, setDetails] = useState(false);
-  const side = useSidePanel();
-  const filesOpen = side.panel === 'files';
-  const pinsOpen = side.panel === 'pins';
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
@@ -170,28 +165,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           )}
         </Link>
       </nav>
-      <IconButton
-        label={t(direct ? 'files.openConversation' : 'files.open')}
-        glyph="file"
-        data-panel-toggle="files"
-        aria-pressed={filesOpen}
-        aria-controls={filesOpen ? FILES_PANEL_ID : undefined}
-        onClick={() => {
-          if (filesOpen) side.close();
-          else side.open('files');
-        }}
-      />
-      <IconButton
-        label={t('pins.open')}
-        glyph="pin"
-        data-panel-toggle="pins"
-        aria-pressed={pinsOpen}
-        aria-controls={pinsOpen ? PINS_PANEL_ID : undefined}
-        onClick={() => {
-          if (pinsOpen) side.close();
-          else side.open('pins');
-        }}
-      />
+      <PanelControls direct={direct} />
       <NotificationLevelMenu channel={channel} />
       {canAdd && (
         <>

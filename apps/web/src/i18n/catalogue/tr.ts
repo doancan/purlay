@@ -304,6 +304,7 @@ export const tr = {
   'message.reacted': 'Tepki verildi',
   'message.reply': 'Yanıtla',
   'message.edited': 'düzenlendi',
+  'panels.menu': 'Dosyalar ve pinli mesajlar',
   'pins.pin': 'Pinle',
   'pins.unpinOf': '{name} kişisinin mesajındaki pini kaldır',
   'pins.threadOf': "{name} kişisinin mesajının thread'ini aç",

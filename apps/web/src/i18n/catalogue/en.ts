@@ -307,6 +307,7 @@ export const en = {
   'message.reacted': 'Reacted',
   'message.reply': 'Reply',
   'message.edited': 'edited',
+  'panels.menu': 'Files and pinned messages',
   'pins.pin': 'Pin',
   'pins.unpinOf': 'Unpin the message from {name}',
   'pins.threadOf': 'Open the thread of the message from {name}',
