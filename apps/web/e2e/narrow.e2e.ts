@@ -56,20 +56,35 @@ test.describe('at a phone width', () => {
     }
   });
 
-  test('an open thread keeps its actions inside the feed', async ({ page, signIn, world }) => {
-    // Found by hand: "N replies", Resolve and Collapse on one line are wider than a phone, and the
-    // feed scrolled sideways under the whole conversation. They wrap instead.
+  test('an open thread covers the conversation, runs off no side, and Close is a finger wide and brings it back', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    // Found by hand when threads were inline: "N replies", Resolve and Collapse on one line were
+    // wider than a phone. In the panel (D-126) the status and Resolve wrap the same way.
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     await page
       .getByRole('button', { name: /^Open · \d+ repl/ })
       .first()
       .click();
-    await expect(page.getByRole('button', { name: 'Collapse' })).toBeVisible();
+    const panel = page.getByRole('complementary', { name: /^Thread · / });
+    await expect(panel).toBeVisible();
+    const box = await panel.boundingBox();
+    expect(Math.round(box?.x ?? -1)).toBe(0);
+    expect(Math.round(box?.width ?? -1)).toBe(390);
     expect(
       await horizontalOverflow(page),
-      'the open thread is wider than the feed',
+      'the open thread is wider than the window',
     ).toBeLessThanOrEqual(0);
+    const close = panel.getByRole('button', { name: 'Close thread' });
+    const target = await close.boundingBox();
+    expect(target?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await close.click();
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByRole('feed')).toBeVisible();
   });
 
   test('the composer, focused, keeps its hints inside it', async ({ page, signIn, world }) => {

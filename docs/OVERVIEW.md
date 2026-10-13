@@ -88,9 +88,9 @@ an admission that drift is expected.
 
 ## What it is, in one screen
 
-- **Channels, DMs and threads.** Threads expand inline under their parent — never in a side
-  drawer — and can be marked **Resolved**, which collapses them and keeps them searchable.
-  This is the product's central idea. (`PRD.md` §4.2)
+- **Channels, DMs and threads.** A thread opens in a panel beside the feed, its root staying in
+  the feed with its live status, and can be marked **Resolved**, which closes it and keeps it
+  searchable. This is the product's central idea. (`PRD.md` §4.2, D-126)
 - **Quiet by default.** A direct `@username`, a DM, or a reply in a thread you are part of
   (D-29). `@here` and `@channel` are rejected by the parser and do not exist. Deep Work mode
   stops delivery server-side.

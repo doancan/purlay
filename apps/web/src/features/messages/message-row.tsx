@@ -10,10 +10,10 @@
  * row is hovered or focused. The actions are an overlay on the bubble's top corner, there from
  * the start and only faded in. A row is the same height whether the pointer is on it or not.
  *
- * **The row serves threads too.** It takes a `children` slot below the bubble for the thread's
- * summary line and its replies, and an `actions` slot beside the reaction control, so the thread
- * slice adds to a message without editing it; a reply is the same row (grouped or not) with no
- * thread of its own, on its author's side.
+ * **The row serves threads too.** It takes a `children` slot below the bubble for the line that
+ * opens the thread in the panel, and an `actions` slot beside the reaction control, so the thread
+ * slice adds to a message without editing it; a reply is the same row (grouped or not) in the
+ * panel, with no thread of its own, on its author's side (D-126).
  *
  * **It is memoised.** A channel renders a page of fifty and a new message must not
  * re-render them: the props are primitives and stable references (the message object is
@@ -61,6 +61,8 @@ export interface MessageRowProps {
   readonly dimmed?: boolean;
   /** A thread's reply: a smaller avatar, so the root stays the larger thing in the block. */
   readonly compact?: boolean;
+  /** This root's thread is the one open in the panel (D-126): the row says so, to the eye and to a test. */
+  readonly threadOpen?: boolean;
   /** More hover actions beside React — the thread slice's Reply. */
   readonly actions?: React.ReactNode;
   /** Below the content and the reactions: a thread's summary line and its replies. */
@@ -80,6 +82,7 @@ const MessageRowView = ({
   onDiscard,
   dimmed = false,
   compact = false,
+  threadOpen = false,
   actions,
   children,
 }: MessageRowProps): React.JSX.Element => {
@@ -98,9 +101,10 @@ const MessageRowView = ({
   // The author's own, sent and not deleted: theirs to edit and delete (D-103).
   const mine = message.sender.id === meId && delivery === 'sent' && !deleted;
   const editing = useEditing().editingId === message.id && mine;
-  // Whether the pointer or focus is on THIS row and not on a row nested inside it. A thread's
-  // replies are rows inside the root's row, so CSS `group-hover` would show every reply's actions
-  // whenever the root is hovered; the nearest row is the one that answers.
+  // Whether the pointer or focus is on THIS row and not on a row nested inside it. Replies were
+  // once rows inside the root's row, where CSS `group-hover` showed every reply's actions whenever
+  // the root was hovered; they are in the thread panel now (D-126), and the nearest row still
+  // answers, so a row placed inside another never again lights up both.
   const [pointed, setPointed] = useState(false);
   const [focused, setFocused] = useState(false);
   const own = (event: React.SyntheticEvent): boolean =>
@@ -128,6 +132,7 @@ const MessageRowView = ({
     <article
       data-editable={mine ? '' : undefined}
       data-outgoing={outgoing ? '' : undefined}
+      data-thread-open={threadOpen ? '' : undefined}
       onPointerOver={(event) => {
         setPointed(own(event));
       }}

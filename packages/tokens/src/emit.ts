@@ -28,6 +28,7 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-rail': '--container-rail',
   'size-sidebar': '--container-sidebar',
   'size-members': '--container-members',
+  'size-thread': '--container-thread',
   'size-feed-max': '--container-feed',
   // A picture's box is bounded on its longest side: a width, and a height for one taller than wide.
   'size-attachment': ['--container-attachment', '--height-attachment'],

@@ -3950,7 +3950,7 @@ usable — and nothing else:
 | Slice | Backend | Client |
 |---|---|---|
 | Phase 0 as specified | exists | sign-in, workspace and channel list, create channel, message list, composer, optimistic send, scroll anchoring |
-| Threads and resolution | replies (`parentId`, I-1), thread counters, `GET …/thread`, `POST`/`DELETE …/resolve`, `GET …/unresolved` | inline thread, Resolve/Reopen, the open-questions view |
+| Threads and resolution | replies (`parentId`, I-1), thread counters, `GET …/thread`, `POST`/`DELETE …/resolve`, `GET …/unresolved` | the thread (inline; in a panel since D-126), Resolve/Reopen, the open-questions view |
 | Read state and mentions | `@username` parsing (D-12, D-29), unread counters, `PUT …/read` (I-3, I-6) | bold channels, mention badge, the *New* marker |
 | Reactions | `PUT`/`DELETE …/reactions/:emoji` | React, counts |
 | DMs | `POST …/dms` (I-5) | People section |
@@ -4770,7 +4770,8 @@ state `UX.md` §8 requires.
 **Not taken from the brief, and why.**
 
 - *A thread panel on the right.* PRD §4.2 is the product's wedge: threads open inline under their
-  parent. The reference's panel is the one thing the product exists to refuse.
+  parent. The reference's panel is the one thing the product exists to refuse. *Reversed by D-126:*
+  the owner chose the panel.
 - *A call button, CI and deploy event rows, an incident banner, an Integrations section.* Audio and
   video are permanent non-goals (PRD §6); webhook feeds are Phase 2 (PRD §4, D-5). A diff block is the
   Phase 2 diff viewer.
@@ -5084,7 +5085,7 @@ nothing since they were written — the retired `w-gutter`, `py-16`, and the sen
 — now spoken in tokens. The extractor also stopped reading a compared value (`status === 'failed'`) or a
 function's argument (`buttonStyle('primary')`) as a class.
 
-**Not taken**, as in D-110 and for the same reasons: the thread panel, the call button, CI and deploy
+**Not taken**, as in D-110 and for the same reasons: the thread panel (since taken, D-126), the call button, CI and deploy
 rows, the Integrations section, presence dots and photographs, the GitHub card's Approve button,
 the Starred section, collapsible sections, the typing line and the member stack in the header.
 
@@ -5154,8 +5155,8 @@ the owner. Two documents disagreeing is a defect in one of them. Decided by the 
 already said so and now names this decision; nothing in the code changes, because nothing in it
 shows presence. `PresenceRegistry` keeps only its typing half until presence is built (#480,
 `ARCHITECTURE.md` §6.1).
-1. **Quiet by default (D-12) and the inline thread are the product's reasons to exist;** a green dot is
-   neither.
+1. **Quiet by default (D-12) and the resolvable thread are the product's reasons to exist;** a green
+   dot is neither. (Written as "the inline thread"; it opens in a panel since D-126.)
 2. **On one node, "online" means "has a tab open".** A team learns to ignore that within days, and the
    inbox and mentions already reach people who are away.
 3. **Typing (D-114) answers the question presence is most often asked for** — is anyone here right now —
@@ -5228,6 +5229,63 @@ depends on it.
 
 ---
 
+### D-126. A thread opens in a panel beside the feed — closes #494
+
+`PRD.md` §4.2 put threads **inline, underneath the parent, in the main feed**, with "no right-hand
+drawer", and `UX.md` §1 and §4 built the interaction on it; D-110 and D-119 named the reference's
+thread panel as the one thing not taken from it. On 2026-10-13 the owner decided otherwise, from the
+Superdesign screen `frontend-feed.html`: **threads open in a side panel on the right.** This amends
+`PRD.md` §4.2, `UX.md` §1, §4, §6 and §7, and the "not taken: the thread panel" of D-110 and D-119.
+What the wedge *is* does not change: a thread is resolvable, resolved threads go quiet and stay
+searchable, and the open questions are one screen away (D-98, D-99). Where it is read changes.
+
+**Decided.**
+
+1. **One thread at a time, in a panel on the right of the feed.** Its header says *Thread · #channel*
+   with a close control; under it the root, its status and **Resolve / Reopen**, a rule labelled *N
+   replies*, the replies as the feed draws them (two edges, D-119), and the reply box at the bottom.
+   Opening another thread replaces it. Which thread is open belongs to the channel visit, as expansion
+   did: a channel opened again opens with none, unless the address names one (`?thread=`).
+2. **The root stays in the feed, marked.** Its line — *Open · 4 replies · last 12m ago* or *Resolved by
+   alice* — is the way in; while its thread is in the panel the line is filled and says *Thread open*,
+   and its `aria-expanded` and `aria-controls` point at the panel.
+3. **Width.** On a wide window the panel is a fixed width, `size-thread` (380px, the design's) and the
+   feed keeps the rest. Below the narrow line (`size-narrow`) it covers the conversation, header and
+   composer included, and what it covers is hidden from a screen reader and from Tab — kept in place,
+   so closing returns the reader to where they were. Nothing scrolls sideways at either width.
+4. **Focus and keys.** The panel is a complementary region labelled by its heading. Opening it moves
+   focus in — to the heading, or to the reply box when the person pressed Reply or `R` — and closing it,
+   by `Esc` anywhere in it or the close control, puts focus back on the root's row in the feed. `T` on
+   a focused root opens its thread in the panel; `R` and `⌘⇧R` work as before, on the row and inside
+   the panel.
+5. **Resolving from here closes the panel**, after the thread inside it folds with the product's one
+   animation (UX §4.3); focus returns to the root. **Resolved by somebody else, it stays open** and only
+   its status changes: nothing this person did asked for it, and a panel that vanishes under someone
+   writing a reply moves content under the reader (UX §1). Inline, a remote resolution collapsed the
+   thread; that rule is reversed.
+6. **No "Also send to #channel".** The design draws the checkbox; the product has no such feature, so
+   the panel has no such control. Adding one is a decision of its own.
+
+**Rejected.**
+
+- *Keeping threads inline.* It is what PRD §4.2 argued for — a drawer makes a discussion feel like a
+  footnote — and what the code did until now. The owner's design is the reason it changes: in a feed of
+  two-edged bubbles an expanded thread pushed the conversation down by its whole length, and the panel
+  keeps both the channel and the thread on screen at once. The footnote risk is answered by keeping the
+  root and its live status in the feed, and the open-questions view, rather than by where the replies
+  are drawn.
+- *Several threads open at once, or a panel per thread.* One panel is the design, and two would leave
+  the feed a column too narrow to read.
+- *A resizable panel.* `UX.md` §2 keeps resizable panes out of Phase 1: a saved layout is one more state
+  to sync, for no benefit at this size.
+- *Closing the panel when another device resolves the thread.* See 5.
+
+**Cost of reversing:** the threads slice of the client (`features/threads`), the channel screen's
+layout, `size-thread`, their tests and screenshots, and the documents named above. No contract, route,
+schema or stored value depends on where a thread is drawn.
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.
@@ -5257,8 +5315,8 @@ Recorded so they are not silently assumed. None block Phase 0.
 - ~~**O-6 · The two markdown packages D-36 named as categories.**~~ **Closed by D-101:** one
   engine, `mdast-util-from-markdown` with four GFM extensions, on both sides, narrowed to what the
   product renders and bounded so a body past the bounds is shown as typed.
-- **O-5 · Scroll virtualization.** Inline expandable threads produce variable-height rows,
-  which is the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
+- **O-5 · Scroll virtualization.** Variable-height rows — code blocks, cards, pictures, and until
+  D-126 inline expandable threads — are the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
   ship **unvirtualized** with a 50-message window — and the scroll-anchoring rules that hold
   either way. What remains open is whether to adopt virtualization at all, decided against the
   `< 100ms` channel-switch budget. *Measure first.* **How it is measured in use:** every switch is a

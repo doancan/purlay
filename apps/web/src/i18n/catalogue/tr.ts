@@ -317,16 +317,15 @@ export const tr = {
   'delivery.announce.failed': 'Mesaj gönderilemedi',
 
   // ── Thread (UX §4) ──────────────────────────────────────────────────────
-  'thread.label': '{name} tarafından başlatılan thread: {status}',
-  'thread.status.open': 'açık',
-  'thread.status.resolved': 'çözüldü',
   'thread.replies': {
     other: '{count} yanıt',
   },
   'thread.open': 'Açık · {replies} · son: {when}',
   'thread.resolved': 'Çözen: {name} · {replies}',
   'thread.show': "Thread'i göster",
-  'thread.collapse': 'Daralt',
+  'thread.shown': 'Thread açık',
+  'thread.panel.title': 'Thread',
+  'thread.close': "Thread'i kapat",
   'thread.resolve': 'Çöz',
   'thread.reopen': 'Yeniden aç',
   'thread.replyPlaceholder': "Thread'e yanıt yaz…",
@@ -336,7 +335,7 @@ export const tr = {
   'thread.announce.resolved': 'Thread çözüldü',
   'thread.announce.reopened': 'Thread yeniden açıldı',
 
-  // ── Threads, in place (D-98) ────────────────────────────────────────────
+  // ── Threads, in the panel (D-126) ───────────────────────────────────────
   'thread.reply': 'Yanıtla',
   'thread.loadMore': 'Daha fazla yanıt yükle',
   'thread.none': 'Henüz yanıt yok',
@@ -540,7 +539,7 @@ export const tr = {
   'shortcuts.reference': 'Bu listeyi göster',
   'shortcuts.close': 'En üstteki şeyi kapat',
   'shortcuts.move': 'Mesajlar arasında gez',
-  'shortcuts.thread': 'Odaktaki thread’i aç ya da daralt',
+  'shortcuts.thread': 'Odaktaki thread’i panelde aç',
   'shortcuts.reply': 'Odaktaki mesajı yanıtla',
   'shortcuts.edit': 'Kendi mesajını düzenle',
   'shortcuts.resolve': 'Odaktaki thread’i çöz ya da yeniden aç',

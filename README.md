@@ -19,9 +19,9 @@ either one.
 
 ## What makes it different
 
-**Threads that end in an answer.** A thread expands inline underneath its parent message — never
-in a side drawer — and can be marked **Resolved**. Resolving collapses it and keeps it fully
-searchable. A workspace-wide view lists every question still open.
+**Threads that end in an answer.** A thread opens in a panel beside the conversation, while its
+question stays in the feed with its status, and can be marked **Resolved**. Resolving closes it and
+keeps it fully searchable. A workspace-wide view lists every question still open.
 
 **Quiet by default.** A direct `@username`, a DM, or a reply in a thread you asked in or joined.
 `@here` and `@channel` are rejected by the message parser: they do not exist, rather than being
@@ -75,7 +75,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 121 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 122 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |

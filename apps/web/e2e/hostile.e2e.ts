@@ -222,11 +222,15 @@ test.describe('hostile content', () => {
     await page.goto(`${made.path}?thread=${root.id}`);
     const thread = page.locator(`[data-thread-root="${root.id}"]`);
     await expect(thread).toBeVisible();
-    await expect(thread.locator('[data-message-row]')).toHaveCount(9);
+    // The root at the top of the panel, and the nine replies under it.
+    await expect(thread.locator('[data-message-row]')).toHaveCount(10);
     expect(await page.evaluate(() => (window as unknown as { __pwned?: unknown }).__pwned)).toBe(
       undefined,
     );
     expect((await sidewaysScroll(page)).feed).toBeLessThanOrEqual(1);
+    // The replies are in the panel (D-126), which scrolls on its own: it does not scroll sideways either.
+    const panel = thread.locator('[data-thread-body]').locator('..');
+    expect(await panel.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   });
 
   test('typed into the composer, a character the server cannot take is refused with words, and the rest goes', async ({

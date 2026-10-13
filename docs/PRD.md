@@ -123,15 +123,16 @@ Nothing else. No threads, no markdown rendering, no uploads.
 Everything the owner's team needs to abandon Slack.
 
 **4.1 · Messaging**
-Inline resolvable threads · GitHub Flavored Markdown · fenced code blocks with language badge,
+Resolvable threads · GitHub Flavored Markdown · fenced code blocks with language badge,
 line count, copy-raw and clamping above 12 lines · emoji reactions · message edit and delete
 (tombstoned) · typing indicators (ephemeral, D-7, D-114)
 
 **4.2 · Threads — the wedge**
-Threads expand and collapse **inline, underneath the parent, in the main feed**. No right-hand
-drawer: a drawer makes a conversation feel like a footnote, which is exactly how knowledge gets
-lost. A thread has a `Resolved` state, borrowed from GitHub PR review. Resolving auto-collapses
-it and keeps it searchable. A workspace-wide "open questions" view lists unresolved threads.
+A thread opens in a **panel on the right of the feed**, and its root stays in the feed with the
+thread's live status, so a conversation never becomes a footnote nobody sees (D-126, which replaced
+threads expanding inline). A thread has a `Resolved` state, borrowed from GitHub PR review.
+Resolving closes it and keeps it searchable. A workspace-wide "open questions" view lists
+unresolved threads.
 
 **4.3 · Channels & DMs**
 Public and private channels · DMs, workspace-scoped (D-6) · a DM to yourself, which is also the

@@ -207,7 +207,7 @@ test.describe('a message', () => {
 });
 
 test.describe('a thread', () => {
-  test('updates its summary live when collapsed and gains the reply live when open', async ({
+  test('updates its summary live when closed and gains the reply live when open in the panel', async ({
     page,
     signIn,
     room,
@@ -232,7 +232,7 @@ test.describe('a thread', () => {
     await expect(thread.getByText('documented in the postmortem')).toBeVisible();
     await alice.say(made.id, 'linking it here', { parentId: root.id });
     await expect(thread.getByText('linking it here')).toBeVisible();
-    await expect(thread.getByRole('button', { name: /^3 replies/ })).toBeVisible();
+    await expect(thread.getByText('3 replies', { exact: true })).toBeVisible();
   });
 
   test('resolved by another person shows as resolved at once, and leaves the open questions', async ({

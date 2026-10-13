@@ -12,9 +12,9 @@
  * and a message arriving while the reader is scrolled up raises a pill instead of moving them.
  *
  * **Keyboard**: one row is in the tab order (roving focus) and ↑ ↓ Home End move between
- * rows; Escape returns to the composer — or, from inside an open thread, folds the thread
- * first (`features/threads`, which also owns T, R and ⌘⇧R on the focused row). Visible focus is the global ring, which a row never
- * hides.
+ * rows (`row-keys.ts`); Escape returns to the composer — or, on the root whose thread is open in
+ * the panel, closes the panel first (`features/threads`, which also owns T, R and ⌘⇧R on the
+ * focused row). Visible focus is the global ring, which a row never hides.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { measureSwitch } from '../../app/switch-timing';
@@ -30,34 +30,15 @@ import { EmptyState, ErrorState } from '../../ui/states';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
-import { ThreadsProvider, useThreads } from '../threads/thread-context';
+import { useThreads } from '../threads/thread-context';
 import { ThreadedMessageRow } from '../threads/threaded-row';
 import { useEditing } from '../messages/editing';
+import { handleRowKeys } from '../messages/row-keys';
 import { buildFeed, newestConfirmedId, type FeedItem } from './feed-model';
-import { useFeedPorts, type FeedPorts } from './feed-ports';
+import { useFeedPorts } from './feed-ports';
+import { useNowMinute } from './now-minute';
 import { useFeedScroll } from './use-feed-scroll';
 import { useMarkRead } from './use-mark-read';
-
-const MINUTE_MS = 60_000;
-
-const floorMinute = (date: Date): number => Math.floor(date.getTime() / MINUTE_MS) * MINUTE_MS;
-
-/** The current minute, ticking on the minute: a row's "12m ago" is right without a timer per row. */
-const useNowMinute = (ports: FeedPorts): number => {
-  const [now, setNow] = useState(() => floorMinute(ports.clock.now()));
-  useEffect(() => {
-    let cancel = (): void => undefined;
-    const tick = (): void => {
-      setNow(floorMinute(ports.clock.now()));
-      cancel = ports.schedule(tick, MINUTE_MS);
-    };
-    cancel = ports.schedule(tick, MINUTE_MS - (ports.clock.now().getTime() % MINUTE_MS));
-    return (): void => {
-      cancel();
-    };
-  }, [ports]);
-  return now;
-};
 
 /** Says what happened to a send, to a screen reader, once each time it happens. */
 const useDeliveryAnnouncer = (items: readonly FeedItem[]): string => {
@@ -85,9 +66,9 @@ const useDeliveryAnnouncer = (items: readonly FeedItem[]): string => {
 
 /**
  * The channel's composer, wherever the screen put it: the text box in this region that is for
- * writing *to the channel*. A thread has a reply box of its own, earlier in the document than the
- * channel's, and Esc "to the composer" must not land in it (found in a browser: with a thread open,
- * Esc moved focus into its reply box).
+ * writing *to the channel*. The thread panel has a reply box of its own in the same region, and Esc
+ * "to the composer" must not land in it (found in a browser, when threads were inline: with a
+ * thread open, Esc moved focus into its reply box).
  */
 const composerIn = (region: Element | null): HTMLElement | null => {
   const outsideThreads = (candidates: Iterable<HTMLElement>): HTMLElement | undefined =>
@@ -99,15 +80,10 @@ const composerIn = (region: Element | null): HTMLElement | null => {
   );
 };
 
-const isTypingTarget = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement &&
-  (target.matches('input, textarea, select') || target.isContentEditable);
-
 interface FeedListProps {
   readonly content: React.RefObject<HTMLDivElement | null>;
   readonly scroller: React.RefObject<HTMLDivElement | null>;
   readonly items: readonly FeedItem[];
-  readonly channelName: string;
   readonly ariaLabel: string;
   readonly busy: boolean;
   readonly meId: string;
@@ -121,15 +97,14 @@ interface FeedListProps {
 }
 
 /**
- * The stream itself, and the keyboard that moves through it. It is its own component so it
- * can sit *inside* the threads' provider and ask it first what a key means (T, R, ⌘⇧R, and
- * Escape from within an open thread) before the feed's own keys get it.
+ * The stream itself, and the keyboard that moves through it. It asks the threads' slice first
+ * what a key means (T, R, ⌘⇧R, and Escape on the root whose thread is open) before the feed's own
+ * keys get it.
  */
 const FeedList = ({
   content,
   scroller,
   items,
-  channelName,
   ariaLabel,
   busy,
   meId,
@@ -155,31 +130,7 @@ const FeedList = ({
       composerIn(scroller.current.closest('main'))?.focus();
       return;
     }
-    if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
-    const focusedRow = (event.target as HTMLElement).closest<HTMLElement>('[data-message-row]');
-    if (event.key.toLowerCase() === 'e' && focusedRow?.hasAttribute('data-editable') === true) {
-      // `E` edits a focused message of one's own (`UX.md` §7).
-      const id = focusedRow.dataset['messageId'];
-      if (id !== undefined) {
-        event.preventDefault();
-        editing.start(id);
-        return;
-      }
-    }
-    const all = rows();
-    const current = all.findIndex(
-      (row) => row === (event.target as HTMLElement).closest('[data-message-row]'),
-    );
-    let next = -1;
-    if (event.key === 'ArrowUp') next = current === -1 ? all.length - 1 : Math.max(0, current - 1);
-    else if (event.key === 'ArrowDown')
-      next = current === -1 ? 0 : Math.min(all.length - 1, current + 1);
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = all.length - 1;
-    const row = all[next];
-    if (row === undefined) return;
-    event.preventDefault();
-    row.focus();
+    handleRowKeys(event, rows(), editing.start);
   };
 
   const onFocus = (event: React.FocusEvent<HTMLDivElement>): void => {
@@ -233,7 +184,6 @@ const FeedList = ({
             delivery={item.delivery}
             failure={item.failure}
             grouped={item.grouped}
-            channelName={channelName}
             meId={meId}
             nowMinute={nowMinute}
             members={members}
@@ -268,7 +218,7 @@ export interface MessageFeedProps {
   readonly readAtOpen: string | null;
   /** Only members have a read position to move. */
   readonly member: boolean;
-  /** A thread to open with the channel, from the address (`?thread=`); brought into view once loaded. */
+  /** The thread the address opened in the panel (`?thread=`): its root is read back to and brought into view. */
   readonly openThread?: string | null;
 }
 
@@ -430,6 +380,23 @@ export const MessageFeed = ({
     }
   }, [wanted, ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
+  // Its root, once here, is brought into view beside the panel that shows its thread. The reader was
+  // at the bottom when the feed opened, and the feed follows the bottom while the box around it
+  // changes size: without letting go first, the older pages read back above it carry the reader
+  // straight back down, out of sight of the thing the link was for (found in a browser, in a
+  // channel with a hundred messages).
+  const revealed = useRef(openThread === null);
+  useEffect(() => {
+    if (revealed.current || !ready || openThread === null) return;
+    const row = scroller.current?.querySelector<HTMLElement>(
+      `[data-message-row][data-message-id="${openThread}"]`,
+    );
+    if (row === null || row === undefined) return;
+    revealed.current = true;
+    holdPlace();
+    row.scrollIntoView({ block: 'center' });
+  });
+
   // One function for every row, so a row's props do not change when another row's do.
   const retry = useCallback(
     (id: string): void => {
@@ -525,23 +492,20 @@ export const MessageFeed = ({
             <span>{t(conversation ? 'feed.startConversation' : 'feed.start')}</span>
           )}
         </div>
-        <ThreadsProvider scroller={scroller} holdPlace={holdPlace} openThread={openThread}>
-          <FeedList
-            content={content}
-            scroller={scroller}
-            items={items}
-            channelName={channelName}
-            ariaLabel={t('feed.label', { channel: channelName })}
-            busy={isFetchingNextPage}
-            meId={user.id}
-            nowMinute={nowMinute}
-            members={members}
-            tabbable={tabbable}
-            onRetry={retry}
-            onDiscard={discard}
-            onFocusRow={setFocusedId}
-          />
-        </ThreadsProvider>
+        <FeedList
+          content={content}
+          scroller={scroller}
+          items={items}
+          ariaLabel={t('feed.label', { channel: channelName })}
+          busy={isFetchingNextPage}
+          meId={user.id}
+          nowMinute={nowMinute}
+          members={members}
+          tabbable={tabbable}
+          onRetry={retry}
+          onDiscard={discard}
+          onFocusRow={setFocusedId}
+        />
       </div>
 
       {newBelow > 0 && !atBottom && (

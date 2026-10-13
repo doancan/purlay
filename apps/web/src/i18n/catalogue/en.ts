@@ -324,9 +324,6 @@ export const en = {
   'delivery.announce.failed': 'Message failed to send',
 
   // ── Threads (UX §4) ─────────────────────────────────────────────────────
-  'thread.label': 'Thread by {name}: {status}',
-  'thread.status.open': 'open',
-  'thread.status.resolved': 'resolved',
   'thread.replies': {
     one: '{count} reply',
     other: '{count} replies',
@@ -334,7 +331,9 @@ export const en = {
   'thread.open': 'Open · {replies} · last {when}',
   'thread.resolved': 'Resolved by {name} · {replies}',
   'thread.show': 'Show thread',
-  'thread.collapse': 'Collapse',
+  'thread.shown': 'Thread open',
+  'thread.panel.title': 'Thread',
+  'thread.close': 'Close thread',
   'thread.resolve': 'Resolve',
   'thread.reopen': 'Reopen',
   'thread.replyPlaceholder': 'Reply to thread…',
@@ -344,7 +343,7 @@ export const en = {
   'thread.announce.resolved': 'Thread resolved',
   'thread.announce.reopened': 'Thread reopened',
 
-  // ── Threads, in place (D-98) ────────────────────────────────────────────
+  // ── Threads, in the panel (D-126) ───────────────────────────────────────
   'thread.reply': 'Reply',
   'thread.loadMore': 'Load more replies',
   'thread.none': 'No replies yet',
@@ -555,7 +554,7 @@ export const en = {
   'shortcuts.reference': 'Show this list',
   'shortcuts.close': 'Close the topmost thing',
   'shortcuts.move': 'Move between messages',
-  'shortcuts.thread': 'Expand or collapse the focused thread',
+  'shortcuts.thread': 'Open the focused thread in the panel',
   'shortcuts.reply': 'Reply to the focused message',
   'shortcuts.edit': 'Edit your own message',
   'shortcuts.resolve': 'Resolve or reopen the focused thread',

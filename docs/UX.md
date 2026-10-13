@@ -4,7 +4,7 @@
 > keyboard model, and the interaction rules for the resolvable thread.
 >
 > **Why this document exists:** Purlay's differentiator is not a feature, it is a behaviour.
-> "Threads resolve inline" is three sentences in the PRD and an entire interaction model in
+> "Threads resolve" is three sentences in the PRD and an entire interaction model in
 > practice. Building Phase 0's UI without settling this risks building a shape Phase 1 has to
 > undo.
 
@@ -12,15 +12,16 @@
 
 ## 1. Principles
 
-1. **The feed is the product.** Everything important happens in one column. There is no
-   right-hand drawer, no separate thread view, no modal that hides the conversation behind it.
-   A drawer turns a discussion into a footnote — which is precisely how knowledge gets lost.
+1. **The feed is the product.** The conversation happens in one column, and a thread opens
+   *beside* it, in a panel on the right, never in a modal that hides the conversation behind it
+   (D-126). What keeps a thread from becoming a footnote is that its root stays in the feed with its
+   live status — open or resolved — and the open questions are one click away.
 2. **Density over comfort.** This is a tool for people who read a lot of text quickly. The
    density is in what is shown — one column, no chrome, nothing decorative — not in how tightly it
    is set: prose gets a readable line, and the screen gets nothing else. (D-110)
 3. **Keyboard first, mouse optional.** Every action reachable by mouse has a key. The command
    palette is the primary navigation surface, not a power-user extra.
-4. **Never move content under the reader.** Late-arriving content, expanding threads and
+4. **Never move content under the reader.** Late-arriving content, an opening thread and
    resolving images must not shift what someone is currently reading. (§6)
 5. **State is always visible.** Sending, failed, unread, resolved, offline — each has a
    distinct, non-decorative visual. A message whose delivery state is ambiguous is a bug.
@@ -64,12 +65,17 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
 - **Member list** — collapsed by default. Presence is decoration, not information.
+- **Thread panel (380px)** — on the right of the channel, only while a thread is open (§4, D-126).
+  The feed keeps the rest of the width.
+
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
   as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). It is the only
   signal a tab in the background has in Phase 1.
 
-**Below 900px** the rail and the sidebar become one overlay and the channel fills the window.
+**Below 900px** the rail and the sidebar become one overlay and the channel fills the window. An
+open thread covers the channel — header and composer included — and its close control is the way
+back; what it covers is hidden from a screen reader and from Tab until it closes.
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
 
@@ -139,8 +145,8 @@ one a link to GitHub stays a plain link, which the dialog says.
   their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
 - **Hover controls** are a small raised group on the bubble's inner top corner (on a narrow window,
-  your own message's outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply inside a
-  thread is a row of its own.
+  your own message's outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
+  thread panel is a row of its own.
 - **A message that mentions you** has a 2px accent edge on its bubble, and says so to a screen reader.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
@@ -162,35 +168,47 @@ noise on the most frequent action in the product.
 
 ## 4. Threads — the wedge
 
-### 4.1. Collapsed
+### 4.1. In the feed
 
 A root message with replies shows one line beneath it:
 
 ```
-  ▸ 4 replies · last 12m ago                          ● unresolved
+  ○ Open · 4 replies · last 12m ago                     Show thread T
 ```
 
-Clicking it, or pressing `T` on the focused message, expands **in place**. The affordance is
-absent when there are no replies — an empty thread control on every message is clutter that
-teaches people to ignore that region.
+Clicking it, or pressing `T` on the focused message, opens the thread **in the panel** on the
+right (D-126). The affordance is absent when there are no replies — an empty thread control on
+every message is clutter that teaches people to ignore that region. While a root's thread is in
+the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from.
 
-### 4.2. Expanded
+### 4.2. The panel
 
 ```
-  │ The retry backoff is 4s because the upstream rate-limits at 15/min.
-  │
-  ├─▾ 4 replies                                    [Resolve] [Collapse]
-  │  ┌ bob  14:35
-  │  │ Is that documented anywhere?
-  │  ┌ alice  14:38
-  │  │ Only in the incident postmortem. Linking it here.
-  │  └────────────────────────────────────────────────────────
-  │  [ Reply to thread…                                        ]
-  └─────────────────────────────────────────────────────────────
+  ┌ Thread · #api ─────────────────────────── × ┐
+  │ (AC) Alice  14:32                           │
+  │      ╭ The retry backoff is 4s because… ╮   │
+  │ ○ Open · 4 replies · last 12m   [Resolve ⌘⇧R]│
+  │ ─────────────── 4 replies ───────────────── │
+  │ (BO) Bob  14:35                             │
+  │      ╭ Is that documented anywhere? ╮       │
+  │                 ╭ Only in the postmortem. ╮ │
+  │ ╭──────────────────────────────────────╮    │
+  │ │ Reply…                             ➤ │    │
+  └─╰──────────────────────────────────────╯────┘
 ```
 
-- Replies are **indented and rule-marked**, so the boundary is unmistakable while scrolling.
-- The thread composer is inline and only present while expanded.
+- **One thread at a time.** Opening another replaces it. A channel opened again opens with no
+  thread, unless its address names one (`?thread=`, from the open questions, the inbox and search),
+  which opens even when its root is older than the feed's first page.
+- **The header** names it — *Thread · #channel*, or the person's name in a conversation — and its
+  close control (`Esc`) closes it.
+- **The root**, its status and **Resolve / Reopen**, a rule labelled *N replies*, then the replies as
+  the feed draws them: two edges, grouped by the same rule (§3). The reply box is at the bottom, and
+  keeps its draft per thread like the channel's (§5). There is no "also send to the channel": the
+  product has no such thing.
+- **Focus**: opening moves it into the panel — the heading, or the reply box after Reply or `R` —
+  and closing puts it back on the root's row in the feed. The panel is a complementary region
+  labelled by its heading.
 - Thread depth is capped at two levels by **invariant I-1** (`SCHEMA.md` §11), which owns the
   rule. The interaction consequence is what belongs here: a reply has no thread affordance of
   its own, so the limit is never something a user can bump into. Unbounded nesting is how a
@@ -201,14 +219,16 @@ teaches people to ignore that region.
 `Resolve` is available to any member (`ARCHITECTURE.md` §7.4) on the **root** message only.
 
 On resolve:
-1. The thread collapses with a short animation — the only place in the product with a
-   non-instant transition, because a state change that reorganizes the reader's view needs to be
-   *seen* to be understood.
+1. Resolved from the panel or the root's row while it is open, the thread folds away with a short
+   animation and the panel closes — the only place in the product with a non-instant transition,
+   because a state change that reorganizes the reader's view needs to be *seen* to be understood.
+   Focus returns to the root. Resolved by somebody else, an open panel stays and only its status
+   changes (D-126).
 2. The affordance line becomes `✓ Resolved by alice · 4 replies`.
 3. A `system_event` message is **not** posted. The resolution is metadata on the root, not
    another line of chatter in a product whose thesis is less noise.
 
-A resolved thread still expands on click, still appears in search, and never collapses its
+A resolved thread still opens on click, still appears in search, and never hides its
 parent message. Reopening is the same control, inverted.
 
 ### 4.4. The open-questions view
@@ -233,7 +253,7 @@ block, a mention — and each only *inserts markdown* that the keys below also p
 | `Shift+Enter` | Newline |
 | ` ``` ` then `Enter` | Opens a code block; `Enter` inside it inserts a newline, `Cmd/Ctrl+Enter` sends |
 | `↑` on an empty composer | Edit your last message |
-| `Esc` | Cancel edit / collapse thread / close palette |
+| `Esc` | Cancel edit / close the thread panel / close palette |
 | `@` | Member autocomplete — **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
@@ -260,15 +280,15 @@ The hardest problem in the product, and the subject of **O-5**.
 - **Anchor on read position, not on bottom.** If the user is scrolled up, incoming messages must
   not move the viewport. A "N new messages ↓" pill appears instead.
 - **Stick to bottom only when already at bottom** (within 80px).
-- **Expanding a thread anchors on the root message**, which stays put while content grows
-  beneath it.
+- **Opening a thread moves nothing in the feed**: it opens beside it. Inside the panel a reply
+  arriving near the end keeps the end in view, and a reader further up is left where they are.
 - **The unread marker** is a horizontal rule labelled "New", placed at
   `channel_members.last_read_message_id`. It persists while the channel is open — it does not
   vanish the instant the messages are seen, because it is the reader's place-holder, not a
   notification.
 - **Marking read** happens when the bottom is reached, or on channel exit. Never on mere render.
 
-**On O-5:** variable-height rows with expandable children defeat naive virtualization, and a
+**On O-5:** variable-height rows defeat naive virtualization, and a
 wrong guess here is expensive. Phase 1 ships **unvirtualized with a 50-message window** and
 paginates on scroll. Virtualization is adopted only if dogfooding shows a measurable problem,
 against the `< 100ms` channel-switch budget in `PRD.md` §5. Building it speculatively would
@@ -282,12 +302,12 @@ trade a certain cost for a hypothetical benefit.
 |---|---|
 | `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
 | `Cmd/Ctrl+/` | Shortcut reference |
-| `Esc` | Close the topmost thing — palette, then edit, then expanded thread |
+| `Esc` | Close the topmost thing — palette, then edit, then the thread panel (focus returns to its root) |
 | `↑` `↓` | Move message focus |
-| `T` | Expand / collapse the focused thread |
+| `T` | Open the focused message's thread in the panel, and move focus there |
 | `R` | Reply to the focused message |
 | `E` | Edit (own messages) |
-| `Cmd/Ctrl+Shift+R` | Resolve / reopen the focused thread |
+| `Cmd/Ctrl+Shift+R` | Resolve / reopen the focused thread — on its root, or anywhere in its panel |
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
 | `Cmd/Ctrl+Shift+D` | Toggle Deep Work |
 
@@ -308,7 +328,7 @@ missing specified behaviour and does not merge.
 | Search | "No matches for `<query>`" + scope hint | Inline progress in the input | Retry, query preserved |
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
-| Thread | n/a — never rendered empty | Inline spinner under the root | Retry inline, root intact |
+| Thread | n/a — never rendered empty | Skeleton under the root, in the panel | Retry in the panel, root intact |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
 | Sign-in | n/a — always the one button | n/a — nothing is fetched before the click | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
@@ -348,7 +368,7 @@ Decided here so Phase 0 does not invent one at random.
   to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
-- **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread collapses
+- **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread folds
   on resolve (§4.3) and the reconnect bar slides. No message entry animation — at conversational
   speed it reads as lag. Everything is instant under reduced motion.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer

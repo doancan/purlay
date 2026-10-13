@@ -138,19 +138,27 @@ test.describe('a thread', () => {
     await status.click();
   };
 
-  test('is loading under its root, and the root stays', async ({ page, signIn, world }) => {
+  test('is loading in the panel, under its root, and the root stays', async ({
+    page,
+    signIn,
+    world,
+  }) => {
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     await expect(page.locator('article').first()).toBeVisible();
     const gate = await held(page, '**/api/messages/*/thread*');
     await openFirstThread(page);
     await expect(page.getByText('Loading replies…')).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Collapse/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close thread' })).toBeVisible();
     gate.release();
     await expect(page.getByText('Loading replies…')).toBeHidden();
   });
 
-  test('has failed inline, with Retry, and the root intact', async ({ page, signIn, world }) => {
+  test('has failed in the panel, with Retry, and the root intact', async ({
+    page,
+    signIn,
+    world,
+  }) => {
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     await expect(page.locator('article').first()).toBeVisible();
@@ -158,7 +166,8 @@ test.describe('a thread', () => {
     await openFirstThread(page);
     await expect(page.getByText("Couldn't load replies")).toBeVisible();
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
-    await expect(page.locator('article').first()).toBeVisible();
+    // The root, intact, at the top of the panel.
+    await expect(page.locator('[data-thread-root] article').first()).toBeVisible();
   });
 });
 
@@ -177,10 +186,10 @@ test.describe('the channel list', () => {
     await page.goto(`/w/${world.workspace.slug}`);
     // On a narrow window the sidebar is behind its toggle.
     const toggle = page.getByRole('button', { name: 'Open navigation' });
-    await expect(toggle.or(page.getByRole('complementary'))).toBeVisible();
+    await expect(toggle.or(page.getByRole('complementary', { name: 'Workspace' }))).toBeVisible();
     if (await toggle.isVisible()) await toggle.click();
     const sidebar = page
-      .getByRole('complementary')
+      .getByRole('complementary', { name: 'Workspace' })
       .or(page.getByRole('dialog', { name: 'Workspace' }));
     const channels = sidebar.getByRole('navigation', { name: 'Channels' });
     await expect(channels.getByRole('alert')).toContainText("Couldn't load channels");
