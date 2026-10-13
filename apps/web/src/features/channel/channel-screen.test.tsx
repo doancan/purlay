@@ -293,13 +293,17 @@ describe('the feed, populated', () => {
   ];
 
   test('groups what is the same author within five minutes and marks the mention', async () => {
-    const view = await mountChannel({ messages: page(rich) });
+    // The reader's own name is filled from the workspace's members, which the sidebar always has.
+    const view = await mountChannel({
+      members: [{ user: ME }, { user: ALICE }, { user: BOB }],
+      messages: page(rich),
+    });
     const rows = view.container.querySelectorAll('[data-message-row]');
     expect(rows).toHaveLength(4);
     // The second row has no name: it is under the first.
     expect(rows[0]?.textContent).toContain('Alice');
     expect(rows[1]?.textContent).not.toContain('Alice');
-    expect(rows[2]?.querySelector('[data-bubble]')?.className).toContain('border-accent-text');
+    expect(rows[2]?.querySelector('[data-mention-me]')).not.toBeNull();
     expect(rows[2]?.textContent).toContain('You were mentioned');
     expect(view.getByRole('link', { name: /example\.test/ })).toBeDefined();
     view.unmountAll();
@@ -312,7 +316,7 @@ describe('the feed, populated', () => {
         aMessage(1, { sender: BOB, content: 'ping @dogancan and @nobody', mentions: [ME.id] }),
       ]),
     });
-    expect(view.getByText('@dogancan').className).toContain('text-accent-text');
+    expect(view.getByText('@dogancan').hasAttribute('data-mention-me')).toBe(true);
     expect(view.container.querySelectorAll('[data-mention]')).toHaveLength(1);
     view.unmountAll();
   });
