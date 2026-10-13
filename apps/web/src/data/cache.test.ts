@@ -56,6 +56,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   state,
   notificationLevel: 'mentions',
   peer: null,
+  peers: [],
   ...over,
 });
 const pages = (...lists: Message[][]): Pages => ({

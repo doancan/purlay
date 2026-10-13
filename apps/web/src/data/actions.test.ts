@@ -52,6 +52,7 @@ const channel: Channel = {
   state,
   notificationLevel: 'mentions',
   peer: null,
+  peers: [],
 };
 
 const world = (): { client: QueryClient } => {

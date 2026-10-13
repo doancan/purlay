@@ -152,6 +152,7 @@ carries.
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see |
 | ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member — `{ name, topic?, type? }`; `type` is `public` (the default) or `private`, seen by its members only (D-104) |
+| ○ | `POST` | `/api/workspaces/:workspaceId/conversations` | member — `{ userIds }` (`OpenConversationRequest`): the people besides the caller, one to nine, or the caller alone for a note to self; returns the existing conversation of that set or creates it, `201`/`200` (I-5, D-127). Somebody not a person of the workspace is `404 USER_NOT_FOUND`; the caller among others, a person twice, or more than `CONVERSATION_PEOPLE_MAX` people is `400` |
 | ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
 | ○ | `PATCH` | `/api/channels/:channelId` | member **of the channel** — `{ name?, topic? }` (`UpdateChannelRequest`; a `null` topic clears it), answered with the `Channel`; the room hears `CHANNEL_UPDATED`. A name another live channel of the workspace has, ignoring case, is `409 CHANNEL_NAME_TAKEN`; not in the channel `403 FORBIDDEN`; a direct message `404 CHANNEL_NOT_FOUND`. A rename is on the audit trail; a topic is not (D-123) |

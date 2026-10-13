@@ -305,8 +305,9 @@ CREATE TABLE channels (
     topic        TEXT,
     type         channel_type NOT NULL DEFAULT 'public',
 
-    -- Sorted, colon-joined pair of user UUIDs. Set only for DMs; the partial
-    -- unique index below uses it to stop a second DM opening between the same pair.
+    -- Sorted, colon-joined user UUIDs of the conversation's people (two, or up to ten for a
+    -- group, D-127). Set only for DMs; the partial unique index below uses it to stop a second
+    -- conversation opening between the same people.
     dm_key       TEXT,
 
     created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -332,10 +333,12 @@ CREATE TABLE channels (
     ),
 
     -- Two lower-case member ids, the first not above the second byte-wise, joined with ':'.
-    -- Added by 0010, NOT VALID then validated. (I-5, D-90)
+    -- Added by 0010 for two people, replaced by 0025 for two to ten (a group conversation, D-127);
+    -- each NOT VALID then validated. Two ids may be equal (a note to self); three or more are
+    -- strictly ascending, `member_key_is_sorted` comparing them byte for byte. (I-5, D-90)
     CONSTRAINT dm_key_form CHECK (dm_key IS NULL
-        OR (dm_key ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-            AND split_part(dm_key, ':', 1) COLLATE "C" <= split_part(dm_key, ':', 2) COLLATE "C")),
+        OR (dm_key ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}){1,9}$'
+            AND public.member_key_is_sorted(dm_key))),
 
     -- The target of the composite keys below: a message names its channel *and* the
     -- channel's workspace, and the database checks that they belong together. (D-90)
@@ -994,7 +997,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-2 | Every workspace has at least one `owner`. The last owner cannot be demoted or removed. | `workspaces/members.ts`, under the workspace row's lock (D-111) |
 | I-3 | `channel_members.last_read_message_id` must belong to that channel. | the database: `channel_members_last_read_channel_fkey` |
 | I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | the database: `messages_channel_workspace_fkey` |
-| I-5 | `dm_key` is the workspace's two member UUIDs, sorted ascending and joined with `:`. The database enforces the form and the order; that the two are members of the workspace is the service's. | `channels.service`, in part `dm_key_form` |
+| I-5 | `dm_key` is the UUIDs of the conversation's people — two, or up to ten for a group (D-127) — sorted ascending and joined with `:`; the same set is the same conversation. The database enforces the form and the order; that they are people of the workspace is the service's. | `channels.service`, in part `dm_key_form` |
 | I-6 | `unread_count` ≥ `unread_mention_count` for every membership row. | the database: `unread_mention_within_unread` (D-99) |
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
@@ -1057,9 +1060,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0022_audit_session.sql       audit_log.session_id; ip_address and user_agent dropped  (D-116)
 0023_channel_versions.sql    channels.state_version  (D-123)
 0024_push_subscriptions.sql  push_subscriptions; users.locale  (D-41, D-126)
+0025_group_conversations.sql dm_key_form for two to ten people  (I-5, D-127)
 ```
 
-Phase 2 adds `0025_github_feeds.sql`; Phase 2's magic links add `0026_email_auth.sql`.
+Phase 2 adds `0026_github_feeds.sql`; Phase 2's magic links add `0027_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration

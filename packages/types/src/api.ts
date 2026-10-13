@@ -252,6 +252,25 @@ export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
 export const ReactionsResponse = Type.Object({ reactions: Type.Array(Reaction) });
 export type ReactionsResponse = Static<typeof ReactionsResponse>;
 
+/**
+ * The most people a conversation has, the caller counted (D-127): past it, it is a channel — with a
+ * name, settings and a topic.
+ */
+export const CONVERSATION_PEOPLE_MAX = 10;
+
+/**
+ * `POST /api/workspaces/:workspaceId/conversations` — the people besides the caller. The same set
+ * opens the same conversation, whatever the order (I-5, D-127).
+ */
+export const OpenConversationRequest = FromClient({
+  userIds: Type.Array(Uuid, {
+    minItems: 1,
+    maxItems: CONVERSATION_PEOPLE_MAX - 1,
+    uniqueItems: true,
+  }),
+});
+export type OpenConversationRequest = Static<typeof OpenConversationRequest>;
+
 /** `POST /api/workspaces/:workspaceId/dms` — the same pair gets the same channel (I-5). */
 export const CreateDirectMessageRequest = FromClient({ userId: Uuid });
 export type CreateDirectMessageRequest = Static<typeof CreateDirectMessageRequest>;

@@ -33,6 +33,46 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'erased-person-shown-in-a-group',
+    why: 'an erased account’s name and picture go on being handed out to every group it was in',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: '  person.erased\n',
+    replace: '  false\n',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
+    id: 'group-filled-in-again',
+    why: 'somebody removed and let back in returns to a group, and reads what was written while out',
+    file: 'apps/api/src/modules/channels/direct-messages.ts',
+    find: '  if (inserted !== undefined || people.length <= 2) {\n',
+    replace: '  if (true) {\n',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
+    id: 'group-shown-as-one-person',
+    why: 'a group conversation reads as a direct message with its first person, and is answered as one',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: "          and cardinality(string_to_array(channels.dm_key, ':')) = 2\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
+    id: 'conversation-names-the-caller',
+    why: 'the caller among the others makes a key the database refuses, a 500 for a mistake a client makes',
+    file: 'apps/api/src/modules/channels/direct-messages.ts',
+    find: '  if (!self && others.includes(context.userId)) {\n',
+    replace: '  if (!self && others.includes(context.userId) && false) {\n',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
+    id: 'conversation-with-a-stranger',
+    why: 'one person outside the workspace among several is let in, and a conversation crosses workspaces',
+    file: 'apps/api/src/modules/channels/members.ts',
+    find: '  if (found.length !== wanted.length) {\n',
+    replace: '  if (found.length === 0) {\n',
+    tests: ['apps/api/src/ingress/http/conversations.integration.test.ts'],
+  },
+  {
     id: 'push-our-fault-counted',
     why: 'a VAPID token the services refuse deletes every device on the server, five pushes each',
     file: 'apps/api/src/modules/push/sender.ts',

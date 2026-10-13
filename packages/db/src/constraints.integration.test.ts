@@ -348,6 +348,51 @@ describe('integration: what the database says about an id and a DM key', () => {
       await insertDm(db, t.workspaceA, `${low ?? ''}:${high ?? ''}`);
     });
   });
+
+  /** `count` fresh lower-case ids, sorted byte for byte as the key compares them. */
+  const sortedIds = async (db: Executor, count: number): Promise<string[]> => {
+    const ids: string[] = [];
+    for (let n = 0; n < count; n += 1) ids.push(await uuid(db, 'gen_random_uuid()'));
+    return ids.sort();
+  };
+
+  test('a conversation of up to ten people, strictly ascending, is a key (D-127)', async () => {
+    await withRollback(async (db) => {
+      const t = await twoTenants(db);
+      await insertDm(db, t.workspaceA, (await sortedIds(db, 3)).join(':'));
+      await insertDm(db, t.workspaceA, (await sortedIds(db, 10)).join(':'));
+      // A note to self is still one id twice.
+      await insertDm(db, t.workspaceA, `${t.userId}:${t.userId}`);
+    });
+  });
+
+  test.each([
+    ['eleven people', async (db: Executor): Promise<string> => (await sortedIds(db, 11)).join(':')],
+    ['one id alone', async (db: Executor): Promise<string> => (await sortedIds(db, 1)).join(':')],
+    [
+      'three not in order',
+      async (db: Executor): Promise<string> => {
+        const [a = '', b = '', c = ''] = await sortedIds(db, 3);
+        return [a, c, b].join(':');
+      },
+    ],
+    [
+      'a person twice among three',
+      async (db: Executor): Promise<string> => {
+        const [a = '', b = ''] = await sortedIds(db, 2);
+        return [a, a, b].join(':');
+      },
+    ],
+  ])('%s is refused', async (_what, keyOf) => {
+    await withRollback(async (db) => {
+      const t = await twoTenants(db);
+      const key = await keyOf(db);
+      const refusal = await refusedWith(async () => {
+        await insertDm(db, t.workspaceA, key);
+      });
+      expect(refusal).toEqual({ code: CHECK, constraint: 'dm_key_form' });
+    });
+  });
 });
 
 describe('integration: nothing is left unvalidated', () => {
