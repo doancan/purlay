@@ -14,10 +14,17 @@ test.describe('the tokens, as computed', () => {
     // Bob: a visit marks channels read, and the viewer's unread state is what the seeded-data spec asserts.
     await signIn('bob');
     await page.goto('/');
+    // `/` goes on to the workspace and then to a channel, and a navigation closes the overlay:
+    // pressing the toggle on the way (measured in 50 of 180 runs, #505) opened a sidebar that the
+    // next address shut. Wait for the channel, then open it and see it open.
+    await page.waitForURL(/\/w\/[^/]+\/c\//);
     // Below the breakpoint the sidebar is an overlay, so it is opened to be measured.
     const toggle = page.getByRole('button', { name: 'Open navigation' });
-    await expect(toggle.or(page.getByRole('complementary', { name: 'Workspace' }))).toBeVisible();
+    const sidebar = page.getByRole('complementary', { name: 'Workspace' });
+    await expect(toggle.or(sidebar)).toBeVisible();
     if (await toggle.isVisible()) await toggle.click();
+    // A column on a wide window; on a narrow one, inside the overlay the toggle opens.
+    await expect(sidebar).toBeVisible();
     await page.waitForSelector('aside svg');
   });
 
