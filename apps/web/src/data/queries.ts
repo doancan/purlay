@@ -51,12 +51,19 @@ export const useMembers = (workspaceId: string): UseQueryResult<WorkspaceMember[
   });
 };
 
-/** Who is in a channel (D-123): read when the channel's details open, again after a change. */
-export const useChannelMembers = (channelId: string): UseQueryResult<ChannelMember[]> => {
+/**
+ * Who is in a channel (D-123): read when the channel's details open, again after a change, and by
+ * the composer of a private channel, whose `@` list offers only them. `enabled` false reads nothing.
+ */
+export const useChannelMembers = (
+  channelId: string,
+  enabled = true,
+): UseQueryResult<ChannelMember[]> => {
   const api = useApi();
   return useQuery({
     queryKey: keys.channelMembers(channelId),
     queryFn: ({ signal }) => api.channelMembers(channelId, signal),
+    enabled,
   });
 };
 

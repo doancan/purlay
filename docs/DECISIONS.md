@@ -4768,6 +4768,36 @@ state `UX.md` §8 requires.
    *Amended 2026-10-12 (#370):* a fourth, **Attach a file**, beside them. It inserts no markdown: it
    picks files to upload (D-109), as pasting and dropping one do. It is no formatting control, so the
    rule that the composer has no WYSIWYG stands.
+   *Amended 2026-10-13 — the `@` list (`UX.md` §5).* The mention button and a typed `@` are now
+   followed, at the first letter, by a list of people, after the Superdesign *new-message-picker*
+   suggestions. Three choices in it were not obvious:
+   - **Who is offered is who the server would tell** (`resolveMentions`, D-34). A public channel: the
+     workspace, from `GET /api/workspaces/:workspaceId/members`, which the sidebar has already loaded.
+     A direct message: its other person (`Channel.peer`). A private channel: **its members now**,
+     from `GET /api/channels/:channelId/members` (D-123), and still in the workspace — read only for a
+     private channel, and nobody is offered while it is being read. Never the writer, never a handle
+     the broadcast refusal would catch (D-12). Someone who wrote there and has left is not offered: a
+     mention of them would reach nobody.
+   - **The text box stays a text box.** The WAI-ARIA combobox pattern puts `role="combobox"` and
+     `aria-expanded` on the input, and HTML allows neither on a `textarea` — axe reports both
+     (`aria-allowed-role`, `aria-allowed-attr`; run on the component before this was written). The
+     `textarea` carries what a `textbox` may: `aria-autocomplete="list"`, `aria-haspopup="listbox"`,
+     and while the list is open `aria-controls` and `aria-activedescendant` naming the current
+     `option`; a polite status says how many match. Focus never leaves the box.
+   - **While it is open the list owns ↑ ↓ Enter Tab and Esc.** Enter chooses and never sends; Esc
+     closes that `@`'s list and nothing else. So that it does not take Enter for nothing, it opens
+     only for a letter after the `@`, and closes once a handle is typed in full and matches nobody else.
+
+   - **A handle typed out is first**, above every name that merely starts with it: `@ali` and Enter
+     mention Ali, never Alice because her name sorts first. **The list opens only at the end of a
+     name**: with the caret inside one already written, choosing would leave the rest of it behind.
+
+   *Rejected:* who the client has seen in a private channel's loaded messages — first built that way,
+   it offered people who had left (the server drops them) and missed quiet members; the member list
+   of D-123 is exact. The whole workspace in a private channel — it
+   offers names the server then drops without a word (`CONTRIBUTING.md` §6.4). `role="combobox"` on the
+   `textarea` with the audit rule switched off for it — an exception to satisfy a pattern HTML forbids
+   (D-48). Opening on a bare `@` — punctuation often enough that a list taking Enter would swallow a send.
 9. **The day** is a label at the column's left with a rule after it, not a centred chip. Amends UX §3.
 
 **Not taken from the brief, and why.**

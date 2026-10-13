@@ -4,7 +4,7 @@
  * time it holds.
  */
 import { describe, expect, test } from 'bun:test';
-import { act, fireEvent } from '@testing-library/react';
+import { act, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
 import {
   ATTACHMENT_BYTES_MAX,
@@ -14,6 +14,7 @@ import {
   type ServerFrame,
 } from '@purlay/types';
 import { ApiError } from '../../data/errors';
+import { keys } from '../../data/keys';
 import { SessionGate } from '../session/session';
 import { WorkspaceScopeProvider } from '../shell/workspace';
 import { RealtimeProvider } from '../../realtime/realtime-provider';
@@ -21,7 +22,19 @@ import { Toaster } from '../../ui/toast';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
 import { fakeSchedule } from '../../testing/fakes';
-import { IDS, aMessage, aSignedInApi } from '../../testing/fixtures';
+import {
+  IDS,
+  WHEN,
+  aChannel,
+  aMessage,
+  aSignedInApi,
+  ALICE as ALICE_USER,
+  BOB as BOB_USER,
+  aUser,
+  messageIdAt,
+  someChannels,
+  someMembers,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
@@ -690,6 +703,296 @@ describe('the three buttons under the box (D-110)', () => {
     await user.click(view.getByRole('button', { name: 'Bold' }));
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['**ship**']);
+  });
+});
+
+describe('@ offers people (UX §5)', () => {
+  const ISIL = { ...aUser('isilk', IDS.bob), displayName: 'Işıl Kaya' };
+  /** The workspace with a Turkish name in it, where Bob was. */
+  const withIsil = (): Api =>
+    aSignedInApi({
+      members: () =>
+        Promise.resolve([
+          ...someMembers().filter((member) => member.user.id !== IDS.bob),
+          { user: ISIL, role: 'member' as const, joinedAt: WHEN },
+        ]),
+    });
+  const list = (view: Mounted['view']): HTMLElement | null =>
+    view.queryByRole('listbox', { name: 'People to mention' });
+  /** Each option as it reads: the name, a space, the handle — the avatar is decoration and hidden. */
+  const options = (view: Mounted['view']): string[] =>
+    view.queryAllByRole('option').map((option) =>
+      Array.from(option.children)
+        .filter((child) => child.getAttribute('aria-hidden') !== 'true')
+        .map((child) => child.textContent)
+        .join(' '),
+    );
+  const activeOption = (box: HTMLTextAreaElement): string =>
+    document.getElementById(box.getAttribute('aria-activedescendant') ?? '')?.textContent ?? '';
+
+  test('a letter after @ opens a list of who matches; a lone @ does not', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('hi @');
+    expect(list(view)).toBeNull();
+    expect(box().getAttribute('aria-activedescendant')).toBeNull();
+    await user.keyboard('al');
+    const shown = list(view);
+    expect(shown).not.toBeNull();
+    // Display name and handle, and nobody whose name does not match — nor the writer.
+    expect(options(view)).toEqual(['Alice @alice']);
+    expect(box().getAttribute('aria-controls')).toBe(shown?.id ?? 'missing');
+    expect(box().getAttribute('aria-autocomplete')).toBe('list');
+    expect(activeOption(box())).toContain('@alice');
+    expect(view.getByRole('option', { name: /Alice/ }).getAttribute('aria-selected')).toBe('true');
+    expect(view.getByText('1 person matches').getAttribute('role')).toBe('status');
+  });
+
+  test('matches the handle as well as the name, and never offers the writer', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('@o');
+    expect(options(view)).toEqual(['Bob @bob']);
+    await user.keyboard('{Backspace}dog');
+    expect(list(view)).toBeNull();
+  });
+
+  test('matches without case or Turkish marks, either way round', async () => {
+    const { view, box, user } = await mount({ api: withIsil() });
+    await user.click(box());
+    await user.keyboard('@ISIL');
+    expect(options(view)).toEqual(['Işıl Kaya @isilk']);
+    await user.keyboard(' @ışı');
+    expect(options(view)).toEqual(['Işıl Kaya @isilk']);
+  });
+
+  test('↓ and ↑ move the current person and wrap; Enter chooses and does not send', async () => {
+    const { view, box, sent, user } = await mount({
+      api: aSignedInApi({
+        members: () =>
+          Promise.resolve([
+            ...someMembers(),
+            {
+              user: aUser('bea', '00000000-0000-4000-8000-0000000000e4'),
+              role: 'member',
+              joinedAt: WHEN,
+            },
+          ]),
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('ping @b');
+    expect(options(view)).toEqual(['Bea @bea', 'Bob @bob']);
+    expect(activeOption(box())).toContain('@bea');
+    await user.keyboard('{ArrowDown}');
+    expect(activeOption(box())).toContain('@bob');
+    expect(view.getByRole('option', { name: /Bob/ }).getAttribute('aria-selected')).toBe('true');
+    await user.keyboard('{ArrowDown}');
+    expect(activeOption(box())).toContain('@bea');
+    await user.keyboard('{ArrowUp}');
+    expect(activeOption(box())).toContain('@bob');
+    await user.keyboard('{Enter}');
+    expect(box().value).toBe('ping @bob ');
+    expect(box().selectionStart).toBe('ping @bob '.length);
+    expect(sent()).toEqual([]);
+    expect(list(view)).toBeNull();
+    expect(box().getAttribute('aria-activedescendant')).toBeNull();
+    // The list is gone, so Enter is a send again — with the handle in it.
+    await user.keyboard('ship it{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: 'ping @bob ship it' }]);
+  });
+
+  test('a handle typed out in full closes the list, so Enter sends as it always did', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.click(box());
+    await user.keyboard('ping @alic');
+    expect(list(view)).not.toBeNull();
+    await user.keyboard('e');
+    expect(list(view)).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: 'ping @alice' }]);
+  });
+
+  test('Tab chooses too, and keeps focus in the box', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('@ali');
+    await user.keyboard('{Tab}');
+    expect(box().value).toBe('@alice ');
+    expectFocusOn(box());
+    expect(list(view)).toBeNull();
+  });
+
+  test('replaces only what was typed after the @, in the middle of the text', async () => {
+    const { box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('thanks  for the review');
+    act(() => {
+      box().setSelectionRange(7, 7);
+    });
+    await user.keyboard('@al{Enter}');
+    expect(box().value).toBe('thanks @alice for the review');
+  });
+
+  test('Esc closes the list and keeps the text and the focus; the same @ stays closed, a new one opens', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.click(box());
+    await user.keyboard('@al');
+    expect(list(view)).not.toBeNull();
+    await user.keyboard('{Escape}');
+    expect(list(view)).toBeNull();
+    expect(box().value).toBe('@al');
+    expectFocusOn(box());
+    await user.keyboard('i');
+    expect(list(view)).toBeNull();
+    // With the list closed Enter is a send, of what was typed.
+    await user.keyboard(' and @b');
+    expect(options(view)).toEqual(['Bob @bob']);
+    await user.keyboard('{Escape}{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: '@ali and @b' }]);
+  });
+
+  test('a click on a person chooses them, and focus stays in the box', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('cc @b');
+    await user.click(view.getByRole('option', { name: /Bob/ }));
+    expect(box().value).toBe('cc @bob ');
+    expectFocusOn(box());
+    expect(list(view)).toBeNull();
+  });
+
+  test('the Mention button and a letter open it too', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('hi');
+    await user.click(view.getByRole('button', { name: 'Mention someone' }));
+    await user.keyboard('b');
+    expect(options(view)).toEqual(['Bob @bob']);
+  });
+
+  test('is not offered inside a code fence, or once focus has left the box', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('```{Enter}@al');
+    expect(list(view)).toBeNull();
+    await user.keyboard('{Enter}```{Shift>}{Enter}{/Shift}@al');
+    expect(list(view)).not.toBeNull();
+    act(() => {
+      box().blur();
+    });
+    expect(list(view)).toBeNull();
+  });
+
+  test("a thread's box offers people too, and Enter there chooses rather than replies", async () => {
+    const { view, box, sent, user } = await mount({ props: { parentId: messageIdAt(1) } });
+    await user.click(box());
+    await user.keyboard('@al{Enter}');
+    expect(box().value).toBe('@alice ');
+    expect(sent()).toEqual([]);
+    expect(list(view)).toBeNull();
+  });
+
+  test('a direct message offers only the other person', async () => {
+    const { view, box, user } = await mount({
+      props: { channelId: IDS.dm, channelName: 'Alice' },
+      api: aSignedInApi({
+        channels: () =>
+          Promise.resolve([
+            ...someChannels(),
+            aChannel(IDS.dm, null, { type: 'direct_message', peer: aUser('alice', IDS.alice) }),
+          ]),
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@a');
+    expect(options(view)).toEqual(['Alice @alice']);
+    await user.keyboard('{Backspace}b');
+    expect(list(view)).toBeNull();
+  });
+
+  test('a private channel offers its members, read from the server: nobody else, though they wrote in it', async () => {
+    let asked = 0;
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        channels: () =>
+          Promise.resolve(
+            someChannels().map((channel) =>
+              channel.id === IDS.api ? { ...channel, type: 'private' as const } : channel,
+            ),
+          ),
+        channelMembers: () => {
+          asked += 1;
+          return Promise.resolve([BOB_USER].map((user) => ({ user, joinedAt: WHEN })));
+        },
+      }),
+    });
+    act(() => {
+      // Alice wrote here once and has left: what the feed holds is not who is in the channel.
+      view.world.client.setQueryData(keys.messages(IDS.api), {
+        pages: [
+          { data: [aMessage(1, { channelId: IDS.api, sender: ALICE_USER })], nextCursor: null },
+        ],
+        pageParams: [undefined],
+      });
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    expect(options(view)).toEqual(['Bob @bob']);
+    await user.keyboard('{Backspace}a');
+    expect(list(view)).toBeNull();
+    expect(asked).toBe(1);
+  });
+
+  test('a private channel whose members could not be read says so after an @, with Retry, and Enter still sends', async () => {
+    let fails = true;
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        channels: () =>
+          Promise.resolve(
+            someChannels().map((channel) =>
+              channel.id === IDS.api ? { ...channel, type: 'private' as const } : channel,
+            ),
+          ),
+        channelMembers: () =>
+          fails
+            ? Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'busy'))
+            : Promise.resolve([BOB_USER].map((user) => ({ user, joinedAt: WHEN }))),
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    await settle();
+    const said = view.getByRole('status', { name: /could not be read/i });
+    expect(list(view)).toBeNull();
+    fails = false;
+    await user.click(within(said).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expectFocusOn(box());
+    expect(options(view)).toEqual(['Bob @bob']);
+  });
+
+  test('a public channel does not read its members: the workspace is who a mention there reaches', async () => {
+    let asked = 0;
+    const { box, user } = await mount({
+      api: aSignedInApi({
+        channelMembers: () => {
+          asked += 1;
+          return Promise.resolve([]);
+        },
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@a');
+    expect(asked).toBe(0);
+  });
+
+  test('passes the accessibility audit while the list is open, and says its words in Turkish', async () => {
+    const { view, box, user } = await mount({ locale: 'tr' });
+    await user.click(box());
+    await user.keyboard('@a');
+    expect(view.getByRole('listbox', { name: 'Anılabilecek kişiler' })).toBeDefined();
+    await expectNoAxeViolations(view.container);
   });
 });
 
