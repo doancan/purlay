@@ -145,6 +145,16 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
   },
+  // Out of one channel, by their own hand: their sockets stop receiving it and are told they left.
+  'apps/api/src/modules/channels/settings.ts#leaveChannel': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/ingress/http/channels.ts',
+  },
+  // Archived: everyone watching it stops receiving it, on the channel's topic (D-123).
+  'apps/api/src/modules/channels/settings.ts#archiveChannel': {
+    publishes: 'publishChannelRevoked',
+    calledFrom: 'apps/api/src/ingress/http/channels.ts',
+  },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',
   },

@@ -91,6 +91,11 @@ export const AuditDialog = ({
           from: `#${entry.metadata['from'] ?? ''}`,
           to: `#${entry.metadata['to'] ?? ''}`,
         });
+      case 'channel.archived':
+        return t('audit.action.channel.archived', {
+          actor,
+          channel: `#${entry.metadata['name'] ?? ''}`,
+        });
       case 'integration.token_set':
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':

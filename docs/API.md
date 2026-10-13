@@ -151,10 +151,10 @@ carries.
 | ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
 | ○ | `PATCH` | `/api/channels/:channelId` | member **of the channel** — `{ name?, topic? }` (`UpdateChannelRequest`; a `null` topic clears it), answered with the `Channel`; the room hears `CHANNEL_UPDATED`. A name another live channel of the workspace has, ignoring case, is `409 CHANNEL_NAME_TAKEN`; not in the channel `403 FORBIDDEN`; a direct message `404 CHANNEL_NOT_FOUND`. A rename is on the audit trail; a topic is not (D-123) |
-| ① | `DELETE` | `/api/channels/:channelId` | admin — soft delete |
+| ○ | `DELETE` | `/api/channels/:channelId` | admin — `204`: archived, a soft delete that keeps its messages and memberships and frees its name. Everyone watching it is sent `ACCESS_REVOKED` with `reason: "archived"`; on the audit trail. A member is `403 FORBIDDEN`; a direct message, or archived already, `404 CHANNEL_NOT_FOUND` (D-123) |
 | ○ | `POST` | `/api/channels/:channelId/join` | member — public only |
 | ○ | `POST` | `/api/channels/:channelId/members` | a member **of the channel** — `{ userId }`, somebody from the workspace, `204`; they are told with `CHANNEL_ADDED`. Somebody already in it is `204` again, told nothing. Not in the channel, or a direct message: `403 FORBIDDEN`; a person not in the workspace: `404 USER_NOT_FOUND` (D-104) |
-| ① | `POST` | `/api/channels/:channelId/leave` | member |
+| ○ | `POST` | `/api/channels/:channelId/leave` | member — `204`; the caller's sockets are sent `ACCESS_REVOKED` with `reason: "left"`. Not in it is `204` again, told nothing. The last member of a private channel is `409 LAST_CHANNEL_MEMBER`; a direct message `404 CHANNEL_NOT_FOUND` (D-123) |
 | ○ | `GET` | `/api/channels/:channelId/members` | member — a `ChannelMemberList`, first to join first; anybody who can see the channel (D-123) |
 | ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
 | ○ | `PUT` | `/api/channels/:channelId/notification-level` | Member only — `{ level }`, `all` \| `mentions` \| `none` (`SetNotificationLevelRequest`); `204`. The caller's own row; a channel they are not in, public or not, is `404 CHANNEL_NOT_FOUND`. From the next message on; the level is on the channel as `notificationLevel`, null for a non-member (D-107) |

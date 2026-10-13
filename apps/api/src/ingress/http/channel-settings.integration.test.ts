@@ -1,17 +1,18 @@
 /**
- * A channel's settings (D-123), driven through real requests: what each answers,
+ * A channel's settings and leaving it (D-123), driven through real requests: what each answers,
  * what it writes, and what it tells the sockets watching — read off the application's own bus.
  *
  * Crossing a tenant and the visibility axis is not here (`cross-tenant.integration.test.ts`,
- * `channel-visibility.integration.test.ts`): each is a table the build checks against `API.md`.
+ * `channel-visibility.integration.test.ts`), nor is the archive per role
+ * (`permissions.integration.test.ts`): each is a table the build checks against `API.md`.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import type { ServerFrame, Topic } from '@purlay/types';
+import { messageId, type ServerFrame, type Topic } from '@purlay/types';
 import { createApp } from './app';
 import { testDependencies, NOW } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { channelTopic } from '../../platform/events';
+import { channelTopic, userTopic } from '../../platform/events';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
@@ -112,6 +113,17 @@ const trail = async (
     .orderBy('id')
     .execute();
 
+const aPrivateChannel = async (world: World, name: string): Promise<string> => {
+  const made = await world.call(
+    'POST',
+    `/api/workspaces/${world.workspaceId}/channels`,
+    world.owner,
+    { name, type: 'private' },
+  );
+  expect(made.status).toBe(201);
+  return ((await made.json()) as { id: string }).id;
+};
+
 const aDirectMessage = async (world: World): Promise<string> => {
   const opened = await world.call('POST', `/api/workspaces/${world.workspaceId}/dms`, world.owner, {
     userId: world.bob.userId,
@@ -208,8 +220,9 @@ describe('integration: renaming a channel and setting its topic', () => {
       // Its own name in another case is not taken by itself.
       expect((await world.call('PATCH', path, world.owner, { name: 'General' })).status).toBe(200);
 
-      // Archived (D-9's soft delete), its name is free again.
-      await db.updateTable('channels').set({ deleted_at: NOW }).where('id', '=', otherId).execute();
+      expect((await world.call('DELETE', `/api/channels/${otherId}`, world.admin)).status).toBe(
+        204,
+      );
       expect((await world.call('PATCH', path, world.owner, { name: 'random' })).status).toBe(200);
     });
   });
@@ -261,16 +274,186 @@ describe('integration: renaming a channel and setting its topic', () => {
   });
 });
 
+describe('integration: archiving a channel', () => {
+  test('an admin archives it: it is gone for everyone, its messages and memberships stay, the room is told why, and the trail has it', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const sent = await world.call(
+        'POST',
+        `/api/channels/${world.channelId}/messages`,
+        world.bob,
+        {
+          id: messageId(NOW),
+          content: 'still here',
+        },
+      );
+      expect(sent.status).toBe(201);
+      world.published.splice(0);
+
+      const archived = await world.call('DELETE', `/api/channels/${world.channelId}`, world.admin);
+      expect(archived.status).toBe(204);
+
+      for (const person of [world.owner, world.bob, world.admin]) {
+        const read = await world.call('GET', `/api/channels/${world.channelId}`, person);
+        expect(read.status).toBe(404);
+        const list = await world.call(
+          'GET',
+          `/api/workspaces/${world.workspaceId}/channels`,
+          person,
+        );
+        expect(((await list.json()) as { id: string }[]).map((c) => c.id)).not.toContain(
+          world.channelId,
+        );
+      }
+      expect(world.published).toEqual([
+        [
+          channelTopic(world.channelId),
+          {
+            event: 'ACCESS_REVOKED',
+            data: { channelIds: [world.channelId], reason: 'archived' },
+            ts: NOW.getTime(),
+          },
+        ],
+      ]);
+      // Soft, and never cascading (D-9).
+      const kept = await db
+        .selectFrom('messages')
+        .select('id')
+        .where('channel_id', '=', world.channelId)
+        .execute();
+      expect(kept).toHaveLength(1);
+      const members = await db
+        .selectFrom('channel_members')
+        .select('user_id')
+        .where('channel_id', '=', world.channelId)
+        .execute();
+      expect(members).toHaveLength(2);
+      expect(await trail(world)).toEqual([
+        { action: 'channel.archived', metadata: { name: 'general' }, target_id: world.channelId },
+      ]);
+
+      const again = await world.call('DELETE', `/api/channels/${world.channelId}`, world.admin);
+      expect(again.status).toBe(404);
+      const reused = await world.call(
+        'POST',
+        `/api/workspaces/${world.workspaceId}/channels`,
+        world.owner,
+        { name: 'general' },
+      );
+      expect(reused.status).toBe(201);
+    });
+  });
+
+  test('the role that archives is the one held in this workspace: an owner elsewhere is a member here, 403', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      // Carol owned a workspace of her own before she was brought in here as a member: her first
+      // membership row is an owner's, so a role read without this workspace would find it.
+      const carol = await aSignedInUser(db, clock, 'set-carol');
+      const slug = aUniqueSlug('set-own');
+      expect(
+        (await world.call('POST', '/api/workspaces', carol, { name: slug, slug })).status,
+      ).toBe(201);
+      await db
+        .insertInto('workspace_members')
+        .values({
+          workspace_id: world.workspaceId,
+          user_id: carol.userId,
+          role: 'member',
+          joined_at: NOW,
+        })
+        .execute();
+      const refused = await world.call('DELETE', `/api/channels/${world.channelId}`, carol);
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      const still = await db
+        .selectFrom('channels')
+        .select('deleted_at')
+        .where('id', '=', world.channelId)
+        .executeTakeFirstOrThrow();
+      expect(still.deleted_at).toBeNull();
+    });
+  });
+
+  test('a direct message is not archived: 404, for an owner too', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const dm = await aDirectMessage(world);
+      const refused = await world.call('DELETE', `/api/channels/${dm}`, world.owner);
+      expect(refused.status).toBe(404);
+      expect(await refused.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
+    });
+  });
+});
+
+describe('integration: leaving a channel', () => {
+  test('leaving a public channel: out of it, still able to see it, and the person’s own sockets are told they left', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const left = await world.call('POST', `/api/channels/${world.channelId}/leave`, world.bob);
+      expect(left.status).toBe(204);
+      const read = await world.call('GET', `/api/channels/${world.channelId}`, world.bob);
+      expect(await read.json()).toMatchObject({ state: null, notificationLevel: null });
+      expect(world.published).toEqual([
+        [
+          userTopic(world.bob.userId),
+          {
+            event: 'ACCESS_REVOKED',
+            data: { channelIds: [world.channelId], reason: 'left' },
+            ts: NOW.getTime(),
+          },
+        ],
+      ]);
+
+      // Not in it any more: the same answer, and nobody is told again.
+      const again = await world.call('POST', `/api/channels/${world.channelId}/leave`, world.bob);
+      expect(again.status).toBe(204);
+      expect(world.published).toHaveLength(1);
+      // Leaving is not an administrative act.
+      expect(await trail(world)).toEqual([]);
+    });
+  });
+
+  test('the last member of a private channel is refused; with somebody else in it they may go, and it is hidden from them', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const channelId = await aPrivateChannel(world, 'leads');
+      const alone = await world.call('POST', `/api/channels/${channelId}/leave`, world.owner);
+      expect(alone.status).toBe(409);
+      expect(await alone.json()).toMatchObject({ error: { code: 'LAST_CHANNEL_MEMBER' } });
+      expect(world.published.filter(([, f]) => f.event === 'ACCESS_REVOKED')).toEqual([]);
+
+      await world.call('POST', `/api/channels/${channelId}/members`, world.owner, {
+        userId: world.bob.userId,
+      });
+      expect(
+        (await world.call('POST', `/api/channels/${channelId}/leave`, world.owner)).status,
+      ).toBe(204);
+      expect((await world.call('GET', `/api/channels/${channelId}`, world.owner)).status).toBe(404);
+      // And now Bob is the last one.
+      expect((await world.call('POST', `/api/channels/${channelId}/leave`, world.bob)).status).toBe(
+        409,
+      );
+    });
+  });
+
+  test('a direct message is not left: 404', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const dm = await aDirectMessage(world);
+      const refused = await world.call('POST', `/api/channels/${dm}/leave`, world.bob);
+      expect(refused.status).toBe(404);
+      expect(await refused.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
+    });
+  });
+});
+
 describe('integration: who is in a channel', () => {
   test('its members, and nobody who left', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       await world.call('POST', `/api/channels/${world.channelId}/join`, world.admin);
-      await db
-        .deleteFrom('channel_members')
-        .where('channel_id', '=', world.channelId)
-        .where('user_id', '=', world.bob.userId)
-        .execute();
+      await world.call('POST', `/api/channels/${world.channelId}/leave`, world.bob);
       // Somebody who can see the channel without being in it may ask.
       const listed = await world.call('GET', `/api/channels/${world.channelId}/members`, world.bob);
       expect(listed.status).toBe(200);

@@ -166,6 +166,7 @@ export const en = {
   'audit.action.member.joined': '{actor} joined by an invitation link',
   'audit.action.channel.created': '{actor} created {channel}',
   'audit.action.channel.renamed': '{actor} renamed {from} to {to}',
+  'audit.action.channel.archived': '{actor} archived {channel}',
   'audit.action.integration.token_set': '{actor} set the GitHub token',
   'audit.action.integration.token_removed': '{actor} removed the GitHub token',
   'audit.action.invitation.created': '{actor} made an invitation link',

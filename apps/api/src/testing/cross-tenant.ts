@@ -105,7 +105,12 @@ export const pathFor = (path: string, ids: Ids): string =>
  * - `none`: it names no channel and returns nothing from one, and says why.
  */
 type Visibility =
-  | { readonly kind: 'channel' }
+  /**
+   * `admin`: only an owner or an admin may use the endpoint, so the caller crossing the axis is made
+   * an admin of the workspace first — the refusal is then for what they cannot see, never for what
+   * they are, and the control succeeds.
+   */
+  | { readonly kind: 'channel'; readonly admin?: true }
   /**
    * `author`: only the message's author may use the endpoint, so the control is a message the
    * caller wrote, and the hidden ones include messages they wrote in channels they cannot see.
@@ -187,6 +192,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ topic: 'crossing' }),
     visibility: CHANNEL,
   },
+  'DELETE /api/channels/:channelId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/leave': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/members': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/members': {

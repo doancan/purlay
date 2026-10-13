@@ -1,13 +1,15 @@
 /**
- * A channel's own settings (D-123): rename it or set what it is for, and see who is in it.
+ * A channel's own settings, and leaving it (D-123): rename it or set what it is for, archive it,
+ * leave it, see who is in it.
  *
  * Each takes the `ChannelContext` the guard minted, so a channel the caller cannot see is the
  * stranger's `404` before anything here runs (D-34). **A direct message has none of these**: it has
  * no name, it is the two people it was opened for (I-5), and it is answered as join answers it —
  * not found, the same as a stranger is told.
  *
- * A write takes the channel row's lock first, so two renames at once take turns rather than both
- * deciding on what the other is about to change.
+ * Each write takes the channel row's lock first, so two renames, a rename and an archive, or the
+ * last two members of a private channel leaving at once, take turns rather than both deciding on
+ * what the other is about to change.
  */
 import type { Executor, Transaction } from '@purlay/db';
 import type { Channel, ChannelMember, UpdateChannelRequest } from '@purlay/types';
@@ -15,6 +17,7 @@ import { recordAudit } from '../audit/audit';
 import type { Clock } from '../../platform/clock';
 import { channelNotFound, type ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { channelFor } from './channels';
 
 /** The channel row, locked for the change about to be made; a direct message is not one to change. */
@@ -128,6 +131,80 @@ export const updateChannel = async (
     channel: await channelFor(executor, context.userId, context.channelId),
     update: { channelId: context.channelId, name, topic, version: written.state_version },
   };
+};
+
+/**
+ * Archives the channel: an owner's or an admin's (`ARCHITECTURE.md` §7.4). Soft deletion that does
+ * not cascade (D-9): the row, its messages and its memberships stay, it stops being visible to
+ * anybody, and its name is free again (`idx_channels_unique_name` holds only live channels).
+ * Archived already is the guard's `404`, as for anything gone.
+ */
+export const archiveChannel = async (
+  executor: Transaction,
+  clock: Clock,
+  context: ChannelContext,
+): Promise<void> => {
+  const current = await lockNamed(executor, context);
+  // The role is read again inside the transaction, through the guard, so a demotion that committed
+  // first is the answer here; and it is this workspace's role, never another membership's.
+  const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  if (role === 'member') {
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only an owner or an admin archives a channel.',
+    });
+  }
+  const now = clock.now();
+  await executor
+    .updateTable('channels')
+    .set({ deleted_at: now, updated_at: now })
+    .where('id', '=', context.channelId)
+    .execute();
+  await recordAudit(executor, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'channel.archived',
+    targetType: 'channel',
+    targetId: context.channelId,
+    // Named, because the channel is no longer listed for the trail to find it by.
+    metadata: { name: current.name },
+  });
+};
+
+/**
+ * Leaves the channel. Not being in it is the same answer — the outcome asked for is already true —
+ * and returns false, so nobody is told.
+ *
+ * **The last member of a private channel is refused** (`409 LAST_CHANNEL_MEMBER`): only a member
+ * brings people into one (D-104), so with nobody left it could never be reached again. They bring
+ * somebody in first, or an admin archives it (D-123). A public channel is anybody's to join, and
+ * may be left empty.
+ */
+export const leaveChannel = async (
+  executor: Transaction,
+  context: ChannelContext,
+): Promise<boolean> => {
+  await lockNamed(executor, context);
+  if (context.channelType === 'private') {
+    const members = await executor
+      .selectFrom('channel_members')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('channel_id', '=', context.channelId)
+      .executeTakeFirstOrThrow();
+    if (Number(members.count) <= 1 && (await isMember(executor, context))) {
+      throw new AppError({
+        code: 'LAST_CHANNEL_MEMBER',
+        message: 'Nobody else is in this private channel. Bring somebody in first.',
+      });
+    }
+  }
+  const left = await executor
+    .deleteFrom('channel_members')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .returning('user_id')
+    .executeTakeFirst();
+  return left !== undefined;
 };
 
 /**

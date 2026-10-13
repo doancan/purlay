@@ -97,6 +97,16 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual([`${ME.displayName} renamed #general to #genel-sohbet`]);
   });
 
+  test('a channel archived is said by the name it had, since it is no longer listed (D-123)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([anEntry(1, { action: 'channel.archived', metadata: { name: 'general' } })]),
+        ),
+    });
+    expect(lines(view)).toEqual([`${ME.displayName} archived #general`]);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>

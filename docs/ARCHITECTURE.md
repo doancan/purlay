@@ -216,7 +216,8 @@ What the shape is for, which the types do not say:
   topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). An edit and a delete are heard as
   `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
   version, never its reactions or thread (D-103). A rename or a new topic is `CHANNEL_UPDATED` on the
-  channel's topic, at the channel's version (D-123). Typing is a `TYPING` frame
+  channel's topic, at the channel's version; an archive and a leave are `ACCESS_REVOKED`, saying why
+  (D-123). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. Each frame joined the union

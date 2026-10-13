@@ -78,7 +78,9 @@ import {
   readUpTo,
   setLevel,
   addChannelMember,
+  archive,
   changeChannel,
+  leave,
   listChannelMembers,
 } from './channels';
 import { markNotificationsRead, readInbox } from './notifications';
@@ -463,6 +465,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await changeChannel(sending, request, params.channelId, body),
     )
+    .delete('/api/channels/:channelId', async ({ request, params, set }) => {
+      await archive(sending, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/channels/:channelId/leave', async ({ request, params, set }) => {
+      await leave(sending, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/channels/:channelId/members',
       async ({ request, params }) =>
