@@ -25,6 +25,8 @@ import {
   InvitationPreview,
   NotificationPage,
   PushKeyResponse,
+  SavedIds,
+  SavedPage,
   ReactionsResponse,
   SearchPage,
   ReadChannelResponse,
@@ -44,6 +46,7 @@ import {
   type SendMessageRequest,
   type PushLocale,
   type PushSubscribeRequest,
+  type SavedState,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
@@ -125,6 +128,16 @@ export interface Api {
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   /** The conversation of the caller and these people, opened or made (D-127). */
   readonly openConversation: (workspaceId: string, userIds: readonly string[]) => Promise<Channel>;
+  /** Saves a message for the caller, or moves its save to `state` (D-128). */
+  readonly saveMessage: (messageId: string, state?: SavedState) => Promise<void>;
+  readonly unsaveMessage: (messageId: string) => Promise<void>;
+  readonly savedIds: (workspaceId: string, signal?: AbortSignal) => Promise<SavedIds>;
+  readonly saved: (
+    workspaceId: string,
+    state: SavedState,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<SavedPage>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
 
   readonly messages: (
@@ -328,6 +341,28 @@ export const createApi = (http: Http): Api => {
       ),
     joinChannel: (channelId) =>
       http.request('POST', `/api/channels/${at(channelId)}/join`, Channel, options()),
+    saveMessage: (messageId, state) =>
+      http.send(
+        'PUT',
+        `/api/messages/${at(messageId)}/saved`,
+        options({ body: state === undefined ? {} : { state } }),
+      ),
+    unsaveMessage: (messageId) =>
+      http.send('DELETE', `/api/messages/${at(messageId)}/saved`, options()),
+    savedIds: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/saved/ids`,
+        SavedIds,
+        options({}, signal),
+      ),
+    saved: (workspaceId, state, before, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/saved`,
+        SavedPage,
+        options({ query: before === undefined ? { state } : { state, before } }, signal),
+      ),
     openConversation: (workspaceId, userIds) =>
       http.request(
         'POST',

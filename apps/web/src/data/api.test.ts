@@ -131,6 +131,28 @@ describe('the endpoints', () => {
     expect(discarded.calls[0]).toMatchObject({ method: 'DELETE', url: `/api/attachments/${ID}` });
   });
 
+  test('saved messages: save, move, let go, and the lists (D-128)', async () => {
+    const write = harness(null);
+    await write.api.saveMessage(ID);
+    await write.api.saveMessage(ID, 'completed');
+    await write.api.unsaveMessage(ID);
+    expect(write.calls).toEqual([
+      { method: 'PUT', url: `/api/messages/${ID}/saved`, body: {} },
+      { method: 'PUT', url: `/api/messages/${ID}/saved`, body: { state: 'completed' } },
+      { method: 'DELETE', url: `/api/messages/${ID}/saved`, body: undefined },
+    ]);
+    const ids = harness([]);
+    await ids.api.savedIds(ID);
+    expect(ids.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/saved/ids` });
+    const list = harness({ data: [], nextCursor: null });
+    await list.api.saved(ID, 'archived');
+    await list.api.saved(ID, 'archived', 'c1');
+    expect(list.calls.map((call) => call.url)).toEqual([
+      `/api/workspaces/${ID}/saved?state=archived`,
+      `/api/workspaces/${ID}/saved?state=archived&before=c1`,
+    ]);
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);
