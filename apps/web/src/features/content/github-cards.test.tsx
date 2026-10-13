@@ -112,6 +112,9 @@ describe('GitHub cards', () => {
   test('no card from the server, or a request that failed: nothing is drawn, the words stand', async () => {
     const none = await show(`see ${PR}`, () => Promise.resolve(null));
     expect(cards(none)).toEqual([]);
+    // Nothing failed on the way to drawing nothing: no boundary caught a card made of no answer.
+    expect(none.queryByText(/stopped working/)).toBeNull();
+    expect(none.queryByRole('alert')).toBeNull();
     const failed = await show(`see ${PR}`, () =>
       Promise.reject(new ApiError(0, 'NETWORK', 'down')),
     );

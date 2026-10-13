@@ -197,8 +197,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'workspace-read-ignores-deletion',
     why: 'a workspace deleted under a live context is still read and returned',
     file: WORKSPACES,
-    find: "    .where('id', '=', context.workspaceId)\n    .where('deleted_at', 'is', null)\n",
-    replace: "    .where('id', '=', context.workspaceId)\n",
+    find: "    .where('deleted_at', 'is', null)\n    .executeTakeFirstOrThrow();\n  return asWorkspace(row);",
+    replace: '    .executeTakeFirstOrThrow();\n  return asWorkspace(row);',
     tests: WORKSPACES_TESTS,
   },
   {
@@ -397,9 +397,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'renderer-own-mention-shape',
     why: 'the client highlights a name the server did not resolve as a mention, after a letter outside ASCII',
     file: 'apps/web/src/features/content/render-content.tsx',
-    find: 'for (const span of mentionsIn(text)) {',
+    find: 'for (const span of scope.inLabel ? [] : mentionsIn(text)) {',
     replace:
-      "for (const span of [...text.matchAll(/@([A-Za-z0-9-]+)/g)].map((m) => ({ start: m.index, end: m.index + m[0].length, name: m[1] ?? '' }))) {",
+      "for (const span of scope.inLabel ? [] : [...text.matchAll(/@([A-Za-z0-9-]+)/g)].map((m) => ({ start: m.index, end: m.index + m[0].length, name: m[1] ?? '' }))) {",
     tests: ['apps/web/src/features/content/render-content.test.tsx'],
   },
   {
@@ -470,7 +470,10 @@ export const MUTATIONS: readonly Mutation[] = [
     file: 'apps/api/src/modules/messages/body.ts',
     find: 'parseMentions(withoutFencedCode(content, engine))',
     replace: 'parseMentions(content)',
-    tests: ['apps/api/src/modules/messages/markdown.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/messages/markdown.integration.test.ts',
+      'apps/api/src/modules/messages/body.test.ts',
+    ],
   },
   {
     id: 'markdown-engine-failure-unlogged',
@@ -616,8 +619,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'release-builds-the-working-tree',
     why: 'a file git ignores — a stale compiled module, a local secret — reaches the published image',
     file: 'scripts/release-image.sh',
-    find: 'git archive --format=tar "$SHA" | docker buildx build',
-    replace: 'docker buildx build',
+    find: 'git archive --format=tar "$SHA" | tar -x -C "$CONTEXT"',
+    replace: 'cp -R . "$CONTEXT"',
     tests: ['scripts/release-image.test.ts'],
   },
   {
@@ -1015,7 +1018,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'inbox-query-key-repeated',
     why: 'the guard checks the first workspaceId and the schema the last, so the two disagree about which workspace is asked for',
-    file: 'apps/api/src/ingress/http/notifications.ts',
+    file: 'apps/api/src/ingress/http/validate.ts',
     find: '  if (repeated !== undefined) {\n',
     replace: '  if (repeated === "never") {\n',
     tests: ['apps/api/src/ingress/http/notifications.integration.test.ts'],
@@ -1080,8 +1083,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'search-field-not-reset-by-the-address',
     why: 'Back to an earlier search shows its results under the later words still in the field',
     file: 'apps/web/src/features/search/search-screen.tsx',
-    find: '  return <SearchView key={asked} asked={asked} />;\n',
-    replace: '  return <SearchView asked={asked} />;\n',
+    find: '  return <SearchView key={asked} asked={asked} channelId={channelInSearch(search)} />;\n',
+    replace: '  return <SearchView asked={asked} channelId={channelInSearch(search)} />;\n',
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {
@@ -1280,7 +1283,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'attachment-size-constant-drifts',
     why: 'the contract says one size and the database another: an upload the client allows is refused by a CHECK, as a 500',
-    file: 'packages/types/src/api.ts',
+    file: 'packages/types/src/models.ts',
     find: 'export const ATTACHMENT_BYTES_MAX = 26_214_400;\n',
     replace: 'export const ATTACHMENT_BYTES_MAX = 52_428_800;\n',
     tests: ['apps/api/src/modules/attachments/bounds.integration.test.ts'],
@@ -2031,8 +2034,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'invitation-made-by-a-member',
     why: 'any member hands out links to the workspace',
     file: 'apps/api/src/modules/workspaces/invitations.ts',
-    find: "  if (context.role === 'member') {\n    throw new AppError({\n",
-    replace: "  if (context.role === 'nobody') {\n    throw new AppError({\n",
+    find: "  if (row.role === 'member') throw forbidden();\n",
+    replace: "  if (row.role === ('nobody' as string)) throw forbidden();\n",
     tests: ['apps/api/src/modules/workspaces/invitations.integration.test.ts'],
   },
   {
@@ -2248,7 +2251,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'image-proxy-unthrottled',
     why: 'any signed-in person can make the node fetch and decode external images without limit',
     file: 'apps/api/src/ingress/http/rate-limit.ts',
-    find: "    const costly = pathname === '/api/images';\n",
+    find: '    const costly = COSTLY_READS.has(pathname);\n',
     replace: '    const costly = false;\n',
     tests: ['apps/api/src/ingress/http/images.integration.test.ts'],
   },

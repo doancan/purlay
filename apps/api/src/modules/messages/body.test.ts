@@ -3,7 +3,7 @@
  * is a failure of this code — never stored, and named by the path that broke the contract.
  */
 import { describe, expect, test } from 'bun:test';
-import type { Engine } from '@purlay/markdown';
+import { MARKDOWN_DELIMITERS_MAX, type Engine } from '@purlay/markdown';
 import { AppError } from '../../platform/errors';
 import { readBody } from './body';
 
@@ -20,6 +20,14 @@ describe('reading a body', () => {
     // Not code to the engine, so not to the server: a backtick pair across a blank line.
     expect(readBody('`one\n\n@bob two`').names).toEqual(['bob']);
     expect(readBody('**@bob**, see `@carol` and @dave').names).toEqual(['bob', 'dave']);
+  });
+
+  test('a body too complex to format, read as typed, still does not mention a name in its fenced code', () => {
+    // Past the delimiter bound the client shows it as typed, and the server reads it the same way.
+    // A tilde fence: backtick runs are code to the plain reading too; only the engine knows this one.
+    const body = readBody(`~~~\n@bob\n~~~\n@alice ${'*a* '.repeat(MARKDOWN_DELIMITERS_MAX)}`);
+    expect(body.reading.tree).toBeNull();
+    expect(body.names).toEqual(['alice']);
   });
 
   test('a broadcast in code is somebody quoting it, not one', () => {
