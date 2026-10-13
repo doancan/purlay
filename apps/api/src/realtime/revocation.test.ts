@@ -233,6 +233,36 @@ describe('a membership that ends, on two nodes', () => {
     expect(b.seen.get('alice')).toEqual(['MESSAGE_CREATED', 'ACCESS_REVOKED']);
   });
 
+  test('frames about the person, not a channel, kept behind a replay are released, not forgotten', async () => {
+    const { b, publisher } = await setup();
+    b.seen.get('alice')?.splice(0);
+    b.hub.hold('alice');
+    await publisher.bus.publish(userTopic('alice'), {
+      event: 'DEEP_WORK_UPDATED',
+      data: { workspaceId: 'w', until: null },
+      ts: 1,
+    });
+    await publisher.bus.publish(userTopic('alice'), {
+      event: 'SAVED_UPDATED',
+      data: { workspaceId: 'w' },
+      ts: 1,
+    });
+    await publisher.bus.publish(userTopic('alice'), {
+      event: 'WORKSPACE_UPDATED',
+      data: { workspaceId: 'w' },
+      ts: 1,
+    });
+    await publisher.bus.publish(channelTopic(C1), aMessage(C1, 'kept'));
+    await publishAccessRevoked(publisher.bus, clock, 'alice', [C1]);
+    b.hub.reply('alice', []);
+    expect(b.seen.get('alice')).toEqual([
+      'DEEP_WORK_UPDATED',
+      'SAVED_UPDATED',
+      'WORKSPACE_UPDATED',
+      'ACCESS_REVOKED',
+    ]);
+  });
+
   test('frames kept for channels a refused subscription named are dropped, not released with the error', async () => {
     const { b, publisher } = await setup();
     b.seen.get('alice')?.splice(0);
