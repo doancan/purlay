@@ -41,13 +41,13 @@ const root = (n: number): Message =>
   });
 
 describe('the rail', () => {
-  test('holds the switcher and the four places, each named, and no gear: preferences are the account menu’s', async () => {
+  test('holds the switcher and the five places, each named, and no gear: preferences are the account menu’s', async () => {
     const view = await open();
     const rail = within(places(view));
     expect(rail.getByRole('button', { name: 'Switch workspace' })).toBeDefined();
     expect(
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
-    ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search']);
+    ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search', 'Saved']);
     expect(rail.queryByRole('button', { name: 'Settings' })).toBeNull();
   });
 
@@ -67,8 +67,12 @@ describe('the rail', () => {
     ['/w/acme/inbox', 'Inbox'],
     ['/w/acme/questions', 'Open questions'],
     ['/w/acme/search', 'Search'],
+    ['/w/acme/saved', 'Saved'],
   ])('on %s, %s is the current page and nothing else is', async (path, current) => {
-    const view = await open(aSignedInApi(), path);
+    const view = await open(
+      aSignedInApi({ saved: () => Promise.resolve({ data: [], nextCursor: null }) }),
+      path,
+    );
     const marked = within(places(view))
       .getAllByRole('link')
       .filter((link) => link.getAttribute('aria-current') === 'page')
@@ -178,13 +182,13 @@ describe('the open questions', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab runs the tile and the four places, then the sidebar from the workspace’s name', async () => {
+  test('Tab runs the tile and the five places, then the sidebar from the workspace’s name', async () => {
     const view = await open();
     act(() => {
       within(places(view)).getByRole('button', { name: 'Switch workspace' }).focus();
     });
     const names: string[] = [];
-    for (let step = 0; step < 6; step++) {
+    for (let step = 0; step < 7; step++) {
       await person().tab();
       const active = document.activeElement;
       names.push(
@@ -196,6 +200,7 @@ describe('the keyboard', () => {
       'Inbox',
       'Open questions',
       'Search',
+      'Saved',
       'acme-eng',
       expect.stringMatching(/^Jump to…/) as unknown as string,
     ]);

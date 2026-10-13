@@ -50,7 +50,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 
 - **Rail (56px)** — the workspace tile, a second door to the workspace menu; then channels, the
   inbox (a dot while anything needs you — the same fact as the mention badges, D-106), open
-  questions (a neutral count: they are the team's, not a summons) and search. Every entry is a route
+  questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
+  messages you kept to come back to, in three tabs, In progress, Archived and Completed, each moved
+  or let go from its row (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. It has no gear: what is the
   person's is the account menu's (D-124). Its top is an empty drag strip for the desktop
   shell (D-14).

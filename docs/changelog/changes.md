@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: the Saved view (D-128, #484)
+
+- Saved on the rail: what you kept, newest saved first, in In progress, Archived and Completed —
+  the tab in the address — each opening its conversation, moved or let go from its row.
+
 ### Feature — 2026-10-14: Save for later on a message (D-128, part of #484)
 
 - Beside React on any message: marked at once, put back and said with Retry when refused, and kept

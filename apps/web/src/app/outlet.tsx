@@ -30,6 +30,7 @@ import { SignInScreen } from '../features/sign-in/sign-in-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
+import { SavedScreen } from '../features/saved/saved-screen';
 
 declare global {
   /**
@@ -115,6 +116,12 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <SearchScreen />
+        </Shell>
+      );
+    case 'saved':
+      return (
+        <Shell slug={match.params.slug}>
+          <SavedScreen />
         </Shell>
       );
     case 'gallery': {
