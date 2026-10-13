@@ -24,6 +24,7 @@ const ROUTES = {
   questions: '/w/:slug/questions',
   inbox: '/w/:slug/inbox',
   search: '/w/:slug/search',
+  saved: '/w/:slug/saved',
   gallery: '/__gallery',
 } as const;
 
