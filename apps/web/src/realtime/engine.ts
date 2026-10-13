@@ -459,9 +459,10 @@ export const createEngine = (options: EngineOptions): Engine => {
   /** A `SUBSCRIBE` the server will not take: said, and for a channel that is gone, let go. */
   const refused = (channelIds: readonly string[], code: ErrorCode): void => {
     if (PERMANENT.has(code)) {
+      // Refused, so never subscribed: let go without a frame (#523).
+      connection?.forget(channelIds);
       for (const id of channelIds) {
         watched.delete(id);
-        connection?.unwatch(id);
         recover(id);
       }
       void client.invalidateQueries({ queryKey: families.channels });
@@ -590,9 +591,10 @@ export const createEngine = (options: EngineOptions): Engine => {
         }
         // A public channel left is still there to see and join again: the list is read again.
         if (reason === 'left') void client.invalidateQueries({ queryKey: families.channels });
+        // The server dropped these as it sent this: let go without a frame (#523).
+        connection?.forget(frame.data.channelIds);
         for (const id of frame.data.channelIds) {
           watched.delete(id);
-          connection?.unwatch(id);
           for (const userId of store.getState().typing[id] ?? []) stopTyping(id, userId);
         }
         return;
@@ -671,12 +673,10 @@ export const createEngine = (options: EngineOptions): Engine => {
     },
     watch: (channelIds): void => {
       const wanted = new Set(channelIds);
-      for (const id of [...watched]) {
-        if (!wanted.has(id)) {
-          watched.delete(id);
-          connection?.unwatch(id);
-        }
-      }
+      const dropped = [...watched].filter((id) => !wanted.has(id));
+      for (const id of dropped) watched.delete(id);
+      // One frame for all of them, not one each (#523).
+      if (dropped.length > 0) connection?.unwatch(dropped);
       for (const id of wanted) {
         if (!watched.has(id)) {
           watched.add(id);
@@ -728,11 +728,9 @@ export const createEngine = (options: EngineOptions): Engine => {
       const stale = Object.keys(store.getState().degraded).filter((id) => id !== UNNAMED);
       store.setState({ degraded: {} });
       // Unwatched and watched again, the channel is subscribed from its cursor as if new.
-      for (const id of stale) {
-        if (!watched.has(id)) continue;
-        connection?.unwatch(id);
-        connection?.watch(id);
-      }
+      const again = stale.filter((id) => watched.has(id));
+      connection?.unwatch(again);
+      for (const id of again) connection?.watch(id);
       void client.invalidateQueries({ queryKey: families.channels });
     },
   };

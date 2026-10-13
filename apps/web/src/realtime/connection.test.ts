@@ -452,6 +452,39 @@ describe('replay by cursor', () => {
     expect(new Set(frames.map((frame) => frame.id)).size).toBe(2);
   });
 
+  test('channels unwatched together go in one frame, chunked at the frame bound (#523)', () => {
+    const h = harness();
+    h.connection.start();
+    h.last().handlers.opened();
+    const many = Array.from({ length: SUBSCRIBE_MAX_CHANNELS + 2 }, (_, n) => channel(n + 1));
+    for (const id of many) h.connection.watch(id);
+    const before = h.last().sent.length;
+    h.connection.unwatch(many);
+    const frames = h
+      .last()
+      .sent.slice(before)
+      .map((raw) => JSON.parse(raw) as ClientFrame);
+    expect(frames.map((f) => f.op)).toEqual(['UNSUBSCRIBE', 'UNSUBSCRIBE']);
+    expect(frames.flatMap((f) => (f.op === 'UNSUBSCRIBE' ? f.payload.channelIds : []))).toEqual(
+      many,
+    );
+  });
+
+  test('a channel the server already let go is forgotten without a frame, and not subscribed again (#523)', () => {
+    const h = harness();
+    h.connection.start();
+    h.last().handlers.opened();
+    h.connection.watch(channel(1));
+    h.connection.watch(channel(2));
+    const before = h.last().sent.length;
+    h.connection.forget([channel(1), channel(2)]);
+    expect(h.last().sent.length).toBe(before);
+    h.last().handlers.closed(1006);
+    h.fireNext();
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last())).toHaveLength(0);
+  });
+
   test('nothing watched, nothing subscribed', () => {
     const h = harness();
     h.connection.start();
@@ -466,7 +499,7 @@ describe('replay by cursor', () => {
     h.connection.watch(channel(1));
     expect(h.subscribes(h.last())).toHaveLength(1);
 
-    h.connection.unwatch(channel(1));
+    h.connection.unwatch([channel(1)]);
     expect(JSON.parse(h.last().sent.at(-1) ?? '{}')).toMatchObject({
       op: 'UNSUBSCRIBE',
       payload: { channelIds: [channel(1)] },
@@ -940,7 +973,7 @@ describe('the cursor and a replay that was one page', () => {
     h.connection.watch(channel(1));
     const socket = openOne(h);
     socket.handlers.message(subscribed(channel(1), idAt(2_000)));
-    h.connection.unwatch(channel(1));
+    h.connection.unwatch([channel(1)]);
     expect(h.connection.pendingContinuations().size).toBe(0);
   });
 });
@@ -1038,7 +1071,7 @@ describe('pacing a large subscription', () => {
     const first = h.subscribes(socket)[0];
     if (first === undefined) throw new Error('chunk missing');
     socket.handlers.message(limited(first.id));
-    h.connection.unwatch(channel(1));
+    h.connection.unwatch([channel(1)]);
     const wait = retryTimer(h);
     if (wait === undefined) throw new Error('no retry scheduled');
     wait.live = false;
@@ -1116,7 +1149,7 @@ describe('pacing a large subscription', () => {
     const h = harness();
     watchMany(h, SUBSCRIBE_MAX_CHANNELS + 1);
     const socket = openOne(h);
-    h.connection.unwatch(channel(SUBSCRIBE_MAX_CHANNELS + 1));
+    h.connection.unwatch([channel(SUBSCRIBE_MAX_CHANNELS + 1)]);
     const first = h.subscribes(socket)[0];
     if (first === undefined) throw new Error('chunk missing');
     socket.handlers.message(ackFor(first));

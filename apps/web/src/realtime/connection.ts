@@ -157,7 +157,14 @@ export interface Connection {
   readonly status: () => ConnectionStatus;
   /** Receive a channel's messages, resuming from the highest id held. */
   readonly watch: (channelId: string) => void;
-  readonly unwatch: (channelId: string) => void;
+  /**
+   * Stop receiving these channels: **one** `UNSUBSCRIBE` for all of them (chunked at the frame's
+   * bound), never one per channel — a burst of per-channel frames spends the socket's frame budget,
+   * and a message sent in that second is refused (#523).
+   */
+  readonly unwatch: (channelIds: readonly string[]) => void;
+  /** Let go of channels the server already dropped (`ACCESS_REVOKED`): nothing is sent (#523). */
+  readonly forget: (channelIds: readonly string[]) => void;
   /** Note an id obtained another way — a history page — so a reconnect resumes above it. */
   readonly observe: (channelId: string, messageId: string) => void;
   /**
@@ -231,6 +238,17 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   let inFlight: { readonly id: string; readonly channelIds: readonly string[] } | null = null;
   let limitedTimes = 0;
   let cancelResend: (() => void) | null = null;
+
+  /** Stops watching these, and returns the ones that were watched, each once. */
+  const letGo = (channelIds: readonly string[]): string[] => {
+    const gone: string[] = [];
+    for (const channelId of channelIds) {
+      if (!watched.delete(channelId)) continue;
+      pending.delete(channelId);
+      gone.push(channelId);
+    }
+    return gone;
+  };
 
   /**
    * Send the next chunk, if none is on the wire. **One at a time**, the next
@@ -477,10 +495,15 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       queue.push(channelId);
       pump();
     },
-    unwatch: (channelId): void => {
-      if (!watched.delete(channelId)) return;
-      pending.delete(channelId);
-      write({ id: options.newId(), op: 'UNSUBSCRIBE', payload: { channelIds: [channelId] } });
+    unwatch: (channelIds): void => {
+      const gone = letGo(channelIds);
+      for (let at = 0; at < gone.length; at += SUBSCRIBE_MAX_CHANNELS) {
+        const chunk = gone.slice(at, at + SUBSCRIBE_MAX_CHANNELS);
+        write({ id: options.newId(), op: 'UNSUBSCRIBE', payload: { channelIds: chunk } });
+      }
+    },
+    forget: (channelIds): void => {
+      letGo(channelIds);
     },
     observe: cursors.observe,
     pendingContinuations: (): ReadonlyMap<string, string> => new Map(pending),
