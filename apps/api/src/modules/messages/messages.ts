@@ -57,6 +57,7 @@ import {
   readSummary,
   type MessageRow,
 } from './reader';
+import type { PushSender } from '../push/sender';
 
 export interface OutgoingMessage {
   readonly id: string;
@@ -84,6 +85,8 @@ export interface Sent {
     readonly version: number;
   } | null;
   readonly recipients: readonly ChannelStateUpdate[];
+  /** Who this write told for the first time; a retry told nobody. Their devices are next (D-126). */
+  readonly told: readonly string[];
   /**
    * Why this write's body is shown as typed rather than formatted (D-101), or null. Only the
    * call that inserted the row reads the body; a retry answers from the row and reads nothing.
@@ -209,6 +212,7 @@ export const sendMessage = async (
       // now: a retry usually means the first answer did not arrive, and if the frames behind
       // it were lost too, this is what repairs the other people's badges (H-API 4).
       recipients: await currentStates(executor, context),
+      told: [],
       unformatted: null,
     };
   };
@@ -312,7 +316,7 @@ export const sendMessage = async (
   }
 
   // The mentions, the notifications and the counters: one place decides who is told (D-99 §1).
-  const recipients = await recordDelivery(executor, {
+  const { recipients, told } = await recordDelivery(executor, {
     context,
     messageId: input.id,
     mentioned: await resolveMentions(executor, context, names),
@@ -358,6 +362,7 @@ export const sendMessage = async (
     message: written,
     thread,
     recipients,
+    told,
     unformatted: reading.tree === null ? reading.reason : null,
     ...(reading.tree === null && reading.reason === 'engine'
       ? { engineFailure: reading.error }
@@ -523,6 +528,8 @@ export interface SendDependencies {
   readonly log?: Logger;
   /** The markdown engine; an argument so a failure inside its bounds can be injected (D-101). */
   readonly engine?: Engine;
+  /** Devices told of what needs their person; absent where push is off (D-126). */
+  readonly push?: PushSender | undefined;
 }
 
 /**
@@ -544,7 +551,7 @@ export const send = async (
   input: OutgoingMessage,
   sessionId?: string,
 ): Promise<Message> => {
-  const { atomically, clock, bus, log = NO_LOG, engine } = dependencies;
+  const { atomically, clock, bus, log = NO_LOG, engine, push } = dependencies;
   const sent = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
@@ -602,5 +609,7 @@ export const send = async (
     ),
   );
   await publishAfterCommit(log, stages);
+  // Last, and not waited for: the room and the numbers are what a client is owed now.
+  push?.told(sent.message.id, sent.told);
   return sent.message;
 };

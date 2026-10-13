@@ -42,6 +42,7 @@ import { aMemoryStore } from '../testing/storage';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { aSignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
+import type { PushSender } from '../modules/push/sender';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -59,6 +60,14 @@ const origin = 'https://purlay.test';
 let server = '';
 /** What the server wrote, for the tests that assert it was written (#127). */
 const recorded = aRecordingLogger();
+/** Whose devices each write asked to have told (D-126): a push sender that keeps the asks. */
+const toldOf: { messageId: string; userIds: readonly string[] }[] = [];
+const push: PushSender = {
+  told: (messageId, userIds): void => {
+    toldOf.push({ messageId, userIds });
+  },
+  flush: () => Promise.resolve(),
+};
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
@@ -69,6 +78,7 @@ beforeAll(async () => {
       clock,
       config: testConfig({ APP_URL: origin }),
       log: recorded.log,
+      push,
     }),
   );
   server = `http://localhost:${String(app.listen(0))}`;
@@ -240,6 +250,34 @@ const history = async (cookie: string, channelId: string): Promise<string[]> => 
 };
 
 const at = (offsetMs: number): Date => new Date(NOW.getTime() + offsetMs);
+
+describe('integration: a send asks for the devices of who it told, through either door (D-126)', () => {
+  test('over the socket and over HTTP, once each, naming who was told for the first time', async () => {
+    const room = await aRoom();
+    const bob = await db
+      .selectFrom('users')
+      .innerJoin('workspace_members', 'workspace_members.user_id', 'users.id')
+      .innerJoin('channels', 'channels.workspace_id', 'workspace_members.workspace_id')
+      .select(['users.id', 'users.username'])
+      .where('channels.id', '=', room.channelId)
+      .where('users.id', '<>', room.aliceId)
+      .executeTakeFirstOrThrow();
+    const alice = await connect(room.alice);
+    const overSocket = sendMessage(alice, room.channelId, `@${bob.username} over the socket`);
+    await alice.until((frames) => ack(frames, overSocket) !== undefined, 'the ACK');
+    const overHttp = messageId(new Date(NOW.getTime() + 1));
+    const response = await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+      id: overHttp,
+      content: `@${bob.username} over HTTP`,
+    });
+    expect(response.status).toBe(201);
+    expect(toldOf.filter((ask) => [overSocket, overHttp].includes(ask.messageId))).toEqual([
+      { messageId: overSocket, userIds: [bob.id] },
+      { messageId: overHttp, userIds: [bob.id] },
+    ]);
+    await alice.close();
+  });
+});
 
 describe('integration: two real sockets', () => {
   test('the ACK carries the sender’s own id, and the other socket receives the message', async () => {

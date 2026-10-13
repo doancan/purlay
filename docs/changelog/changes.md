@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: a device is told what needs its person (D-126, part of #78)
+
+- After a send or an edit commits, through either door, the people it told for the first time have
+  their devices pushed: only a notification still unread, not held back by Deep Work, on a live
+  session's device subscribed under the current key. The words are the inbox's, in the person's
+  language, and what was written is never sent.
+- Sent through the checked address and lookup an external image uses, detached and bounded; `404`
+  or `410` forgets the device, as do five failures in a row. The pushes still on their way are
+  waited for at shutdown.
+
 ### Feature — 2026-10-13: Web Push's encryption and signature, and `bun run push:keys` (D-126, part of #78)
 
 - `modules/push/encrypt.ts`: a push's body encrypted for one browser (RFC 8291, `aes128gcm`),

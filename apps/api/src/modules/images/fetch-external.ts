@@ -129,3 +129,51 @@ export const fetchExternal = async (url: URL, options: FetchOptions): Promise<Fe
     });
     request.end();
   });
+
+export type Posted =
+  | { readonly kind: 'answered'; readonly status: number }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+/**
+ * A POST to somebody else's server on the same terms as a fetch: the checked address, a fresh
+ * connection, nothing about the sender but what is given, no redirect followed, bounded in time. The
+ * answer is its status alone — the body is not read, so a server cannot make this hold memory.
+ * Web Push sends through it (D-126 §6).
+ */
+export const postExternal = async (
+  url: URL,
+  headers: Readonly<Record<string, string>>,
+  body: Uint8Array,
+  options: Omit<FetchOptions, 'maxBytes'>,
+): Promise<Posted> =>
+  await new Promise<Posted>((resolve) => {
+    let settled = false;
+    const finish = (result: Posted): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      request.destroy();
+      resolve(result);
+    };
+    const request = (options.transport ?? https).request(
+      {
+        host: url.hostname,
+        port: options.port ?? 443,
+        path: `${url.pathname}${url.search}`,
+        method: 'POST',
+        lookup: options.lookup,
+        agent: false,
+        headers: { ...headers, 'content-length': String(body.byteLength) },
+      },
+      (response) => {
+        finish({ kind: 'answered', status: response.statusCode ?? 0 });
+      },
+    );
+    const timer = setTimeout(() => {
+      finish({ kind: 'failed', reason: `took longer than ${String(options.timeoutMs)} ms` });
+    }, options.timeoutMs);
+    request.on('error', (error: Error) => {
+      finish({ kind: 'failed', reason: error.message });
+    });
+    request.end(body);
+  });

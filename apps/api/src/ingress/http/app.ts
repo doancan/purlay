@@ -105,6 +105,7 @@ import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
 import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
+import type { PushSender } from '../../modules/push/sender';
 import { serveExternalImage } from './images';
 import {
   dropInvitation,
@@ -146,6 +147,8 @@ export interface Dependencies {
    * serves it, and in a deployment that puts the API behind something else.
    */
   readonly client?: Client;
+  /** Devices told of what needs their person, through both doors; absent where push is off (D-126). */
+  readonly push?: PushSender;
 }
 
 /**

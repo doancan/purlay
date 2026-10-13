@@ -250,6 +250,19 @@ describe('integration: subscribing a device', () => {
           endpoint: `https://push.example.com/${'a'.repeat(2048)}`,
         }),
       ).toBe(400);
+      // Addresses a push could never be sent to: an address literal, a port, a dotless name.
+      for (const endpoint of [
+        'https://10.0.0.7/push',
+        'https://push.example.com:8443/push',
+        'https://intranet/push',
+      ]) {
+        expect({ endpoint, status: await refused({ ...(device(4) as object), endpoint }) }).toEqual(
+          {
+            endpoint,
+            status: 400,
+          },
+        );
+      }
       // The right length, and not a point on the curve.
       expect(
         await refused({

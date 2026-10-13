@@ -12,6 +12,7 @@ import http from 'node:http';
 import {
   checkingLookup,
   fetchExternal,
+  postExternal,
   systemResolver,
   type FetchOptions,
   type Resolver,
@@ -22,9 +23,19 @@ const served: string[] = [];
 let respond: (path: string, res: http.ServerResponse) => void = (_path, res) => {
   res.end('ok');
 };
+let received: { method: string; headers: http.IncomingHttpHeaders; body: string } | null = null;
 const server = http.createServer((req, res) => {
   served.push(req.url ?? '');
-  respond(req.url ?? '', res);
+  const chunks: Buffer[] = [];
+  req.on('data', (chunk: Buffer) => chunks.push(chunk));
+  req.on('end', () => {
+    received = {
+      method: req.method ?? '',
+      headers: req.headers,
+      body: Buffer.concat(chunks).toString('utf8'),
+    };
+    respond(req.url ?? '', res);
+  });
 });
 beforeAll(async () => {
   await new Promise<void>((resolve) => {
@@ -167,5 +178,63 @@ describe('integration: fetching an external image', () => {
     });
     expect(result).toEqual({ kind: 'failed', reason: 'refused an address that is not public' });
     expect(served).toEqual([]);
+  });
+});
+
+describe('integration: posting to an external server', () => {
+  const post = async (
+    resolve: Resolver = toLocal,
+    allowed: (address: string) => boolean = anywhere,
+  ): Promise<unknown> =>
+    await postExternal(
+      new URL('https://push.example/send/1?x=2'),
+      { 'content-encoding': 'aes128gcm', ttl: '60' },
+      new TextEncoder().encode('sealed'),
+      { lookup: checkingLookup(resolve, allowed), transport: http, port, timeoutMs: 1_000 },
+    );
+
+  test('sends the body and the headers given, and answers the status alone', async () => {
+    respond = (_path, res): void => {
+      res.statusCode = 201;
+      res.end('a body that is not read');
+    };
+    expect(await post()).toEqual({ kind: 'answered', status: 201 });
+    expect(served.at(-1)).toBe('/send/1?x=2');
+    expect(received?.method).toBe('POST');
+    expect(received?.body).toBe('sealed');
+    expect(received?.headers['content-encoding']).toBe('aes128gcm');
+    expect(received?.headers['content-length']).toBe('6');
+  });
+
+  test('a redirect is an answer, never followed', async () => {
+    respond = (_path, res): void => {
+      res.statusCode = 302;
+      res.setHeader('location', 'http://127.0.0.1/internal');
+      res.end();
+    };
+    const before = served.length;
+    expect(await post()).toEqual({ kind: 'answered', status: 302 });
+    expect(served.length).toBe(before + 1);
+  });
+
+  test('an address the policy refuses is never connected to', async () => {
+    const before = served.length;
+    expect(await post(toLocal, () => false)).toEqual({
+      kind: 'failed',
+      reason: 'refused an address that is not public',
+    });
+    expect(served.length).toBe(before);
+  });
+
+  test('a server too slow is a failure with its reason', async () => {
+    respond = (): void => undefined;
+    expect(
+      await postExternal(new URL('https://push.example/slow'), {}, new Uint8Array(), {
+        lookup: checkingLookup(toLocal, anywhere),
+        transport: http,
+        port,
+        timeoutMs: 50,
+      }),
+    ).toEqual({ kind: 'failed', reason: 'took longer than 50 ms' });
   });
 });
