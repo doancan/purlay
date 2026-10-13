@@ -228,6 +228,7 @@ const channelOf = (frame: ServerFrame): string | null => {
     case 'ERROR':
     case 'SESSION_ENDED':
     case 'ACCESS_REVOKED':
+    case 'WORKSPACE_UPDATED':
     case 'PONG':
       return null;
   }

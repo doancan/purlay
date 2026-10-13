@@ -17,6 +17,7 @@ import type {
   Channel,
   CreateChannelRequest,
   CreateWorkspaceRequest,
+  MeResponse,
   Membership,
   UpdateChannelRequest,
   Message,
@@ -58,6 +59,8 @@ export interface Actions {
   readonly archiveChannel: (channelId: string) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
+  /** The server's answer is the name everywhere at once; the other tabs hear `WORKSPACE_UPDATED`. */
+  readonly renameWorkspace: (workspaceId: string, name: string) => Promise<Workspace>;
   /** In by an invitation's token (D-115); answers the membership, already listed by `/api/me`. */
   readonly joinWorkspace: (token: string) => Promise<Membership>;
   /** This session, or — `everywhere` — every session the person holds, this one with them. */
@@ -183,6 +186,20 @@ export const createActions = (
       const workspace = await api.createWorkspace(input);
       // A new membership: the identity answer lists it, so ask again.
       await client.invalidateQueries({ queryKey: keys.me });
+      return workspace;
+    },
+    renameWorkspace: async (workspaceId, name): Promise<Workspace> => {
+      const workspace = await api.renameWorkspace(workspaceId, name);
+      client.setQueryData<MeResponse>(keys.me, (me) =>
+        me === undefined
+          ? me
+          : {
+              ...me,
+              memberships: me.memberships.map((m) =>
+                m.workspace.id === workspace.id ? { ...m, workspace } : m,
+              ),
+            },
+      );
       return workspace;
     },
     joinWorkspace: async (token): Promise<Membership> => {

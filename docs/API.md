@@ -119,8 +119,8 @@ an instance-administrator role this product does not have.
 | ○ | `GET` | `/api/workspaces` | — (own memberships) |
 | ○ | `POST` | `/api/workspaces` | — (creator becomes `owner`) |
 | ○ | `GET` | `/api/workspaces/:workspaceId` | member |
-| ① | `PATCH` | `/api/workspaces/:workspaceId` | admin |
-| ① | `DELETE` | `/api/workspaces/:workspaceId` | owner |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId` | admin — `{ name }` (`UpdateWorkspaceRequest`); answers the `Workspace`. The name only: the slug is its address and stays (D-124). The same name is `200` and changes nothing; a member is `403 FORBIDDEN`. On the audit trail with the name before and after; each member's sockets are told `WORKSPACE_UPDATED` and read their memberships again |
+| ① | `DELETE` | `/api/workspaces/:workspaceId` | owner — not built |
 | ○ | `GET` | `/api/workspaces/:workspaceId/members` | member |
 | ○ | `PATCH` | `/api/workspaces/:workspaceId/members/:userId` | admin — `{ role }` (`UpdateMemberRoleRequest`); answers the `WorkspaceMember`. An admin manages members and admins; making somebody an owner, or changing an owner, is an owner's (§7.4). A member is `403 FORBIDDEN`; somebody not in the workspace `404 USER_NOT_FOUND`; leaving no owner `409 LAST_OWNER` (I-2) |
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin — `204`: out of the workspace and its channels; their sockets are sent `ACCESS_REVOKED` for every channel they could see. An owner is an owner's to remove; the last one `409 LAST_OWNER` (I-2) |

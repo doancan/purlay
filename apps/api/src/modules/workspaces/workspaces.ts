@@ -21,8 +21,10 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import type { MeResponse, Membership, Workspace, WorkspaceMember } from '@purlay/types';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
+import { recordAudit } from '../audit/audit';
 import type { WorkspaceContext } from '../../platform/tenancy';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
@@ -180,6 +182,72 @@ export const workspaceIn = async (
     .where('deleted_at', 'is', null)
     .executeTakeFirstOrThrow();
   return asWorkspace(row);
+};
+
+/** What a rename did: the workspace as it now is, and who is in it to be told. */
+export interface Renamed {
+  readonly workspace: Workspace;
+  /** Empty when the name was already this one: nothing changed, and nobody is told. */
+  readonly memberIds: readonly string[];
+}
+
+/**
+ * Renames the workspace, inside the caller's transaction (D-124). An owner's or an admin's
+ * (`ARCHITECTURE.md` §7.4); a member is refused for what they are, after their membership has made
+ * the workspace exist for them. The slug is not touched: it is the address in every link already
+ * pasted. The same name again changes nothing and records nothing. The trail keeps the name before
+ * and after — a setting the admin typed, not anything a person said (D-26).
+ */
+export const renameWorkspace = async (
+  executor: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+  name: string,
+): Promise<Renamed> => {
+  if (context.role === 'member') {
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only an owner or an admin renames the workspace.',
+    });
+  }
+  // Locked, so two renames at once each record the name the other left.
+  const before = await executor
+    .selectFrom('workspaces')
+    .select(['id', 'name', 'slug', 'avatar_url'])
+    .where('id', '=', context.workspaceId)
+    .where('deleted_at', 'is', null)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  // The role as it is now, under the lock a role change takes too: an admin demoted after the
+  // request began is a member here (#527), whatever the guard said before.
+  const now = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  if (now.role === 'member') {
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only an owner or an admin renames the workspace.',
+    });
+  }
+  if (before.name === name) return { workspace: asWorkspace(before), memberIds: [] };
+  const row = await executor
+    .updateTable('workspaces')
+    .set({ name })
+    .where('id', '=', context.workspaceId)
+    .returning(['id', 'name', 'slug', 'avatar_url'])
+    .executeTakeFirstOrThrow();
+  await recordAudit(executor, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'workspace.renamed',
+    targetType: 'workspace',
+    targetId: context.workspaceId,
+    metadata: { from: before.name, to: name },
+  });
+  const members = await executor
+    .selectFrom('workspace_members')
+    .select('user_id')
+    .where('workspace_id', '=', context.workspaceId)
+    .execute();
+  return { workspace: asWorkspace(row), memberIds: members.map((member) => member.user_id) };
 };
 
 /** Everyone in the workspace, as the rest of it may see them — never their email. */

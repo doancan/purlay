@@ -6,6 +6,7 @@
  * workspace is the one thing the API lets anybody create — a form to make the first, on a card
  * with the product's mark like the sign-in screen it follows (D-100).
  */
+import { WORKSPACE_NAME_MAX } from '@purlay/types';
 import { useDescribeFailure } from '../../data/failure';
 import { useEffect, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
@@ -61,7 +62,12 @@ const CreateWorkspace = (): React.JSX.Element => {
       if (isApiError(failure) && failure.code === 'WORKSPACE_SLUG_TAKEN') {
         setError({ field: 'slug', message: t('workspace.create.taken') });
       } else if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
-        setError({ field: 'slug', message: t('workspace.create.invalid') });
+        // Said under the field the server named: a refused name is not an address problem.
+        setError(
+          'name' in failure.fields
+            ? { field: 'name', message: t('workspace.nameInvalid', { max: WORKSPACE_NAME_MAX }) }
+            : { field: 'slug', message: t('workspace.create.invalid') },
+        );
       } else {
         setError({
           field: 'form',
@@ -84,7 +90,8 @@ const CreateWorkspace = (): React.JSX.Element => {
         label={t('workspace.create.name')}
         value={name}
         required
-        maxLength={64}
+        maxLength={WORKSPACE_NAME_MAX}
+        {...(error?.field === 'name' ? { error: error.message } : {})}
         autoComplete="off"
         onChange={(event) => {
           setName(event.target.value);

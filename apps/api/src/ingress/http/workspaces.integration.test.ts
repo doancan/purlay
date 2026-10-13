@@ -14,6 +14,9 @@ import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { AppError } from '../../platform/errors';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { renameWorkspace } from '../../modules/workspaces/workspaces';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -213,6 +216,167 @@ describe('integration: who am I', () => {
   test('without a session it is 401, like every other /api endpoint', async () => {
     await withRollback(async (db) => {
       expect((await call(db, 'GET', '/api/me')).status).toBe(401);
+    });
+  });
+});
+
+describe('integration: renaming a workspace (D-124)', () => {
+  const trail = async (db: Executor, workspaceId: string): Promise<Record<string, unknown>[]> =>
+    await db
+      .selectFrom('audit_log')
+      .select(['action', 'actor_user_id', 'target_type', 'target_id', 'metadata'])
+      .where('workspace_id', '=', workspaceId)
+      .where('action', '=', 'workspace.renamed')
+      .execute();
+
+  test('an owner renames it: the name moves, the address does not, and the trail says from what to what', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-owner');
+      const made = await aWorkspace(db, owner.cookie, 'before');
+      const renamed = await call(db, 'PATCH', `/api/workspaces/${made.id}`, {
+        cookie: owner.cookie,
+        body: { name: 'After the move' },
+      });
+      expect(renamed.status).toBe(200);
+      expect(await renamed.json()).toEqual({
+        id: made.id,
+        name: 'After the move',
+        slug: made.slug,
+        avatarUrl: null,
+      });
+      const me = (await (await call(db, 'GET', '/api/me', { cookie: owner.cookie })).json()) as {
+        memberships: { workspace: { id: string; name: string; slug: string } }[];
+      };
+      expect(me.memberships.find((m) => m.workspace.id === made.id)?.workspace).toMatchObject({
+        name: 'After the move',
+        slug: made.slug,
+      });
+      expect(await trail(db, made.id)).toEqual([
+        {
+          action: 'workspace.renamed',
+          actor_user_id: owner.userId,
+          target_type: 'workspace',
+          target_id: made.id,
+          metadata: { from: 'before', to: 'After the move' },
+        },
+      ]);
+    });
+  });
+
+  test('a rename touches this workspace only: another one, its owner’s included, keeps its name', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-only');
+      const mine = await aWorkspace(db, owner.cookie, 'mine');
+      const other = await aWorkspace(db, owner.cookie, 'other');
+      const stranger = await signedIn(db, 'rn-stranger');
+      const theirs = await aWorkspace(db, stranger.cookie, 'theirs');
+      expect(
+        (
+          await call(db, 'PATCH', `/api/workspaces/${mine.id}`, {
+            cookie: owner.cookie,
+            body: { name: 'renamed' },
+          })
+        ).status,
+      ).toBe(200);
+      const names = await db
+        .selectFrom('workspaces')
+        .select(['id', 'name'])
+        .where('id', 'in', [mine.id, other.id, theirs.id])
+        .execute();
+      expect(Object.fromEntries(names.map((w) => [w.id, w.name]))).toEqual({
+        [mine.id]: 'renamed',
+        [other.id]: 'other',
+        [theirs.id]: 'theirs',
+      });
+    });
+  });
+
+  test('a name of spaces, or of nothing a person can see, is refused before anything is written', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-blank');
+      const made = await aWorkspace(db, owner.cookie, 'kept');
+      for (const name of ['   ', '\u200B', ' \u200B ']) {
+        const refused = await call(db, 'PATCH', `/api/workspaces/${made.id}`, {
+          cookie: owner.cookie,
+          body: { name },
+        });
+        expect(refused.status).toBe(400);
+      }
+      expect(await trail(db, made.id)).toEqual([]);
+    });
+  });
+
+  test('the same name again changes nothing and records nothing', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-same');
+      const made = await aWorkspace(db, owner.cookie, 'same');
+      const again = await call(db, 'PATCH', `/api/workspaces/${made.id}`, {
+        cookie: owner.cookie,
+        body: { name: 'same' },
+      });
+      expect(again.status).toBe(200);
+      expect(await trail(db, made.id)).toEqual([]);
+    });
+  });
+
+  test('an admin demoted after the request began is refused: the role is read where the rename is written (#527)', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-race-owner');
+      const admin = await signedIn(db, 'rn-race-admin');
+      const made = await aWorkspace(db, owner.cookie, 'race');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: made.id, user_id: admin.userId, role: 'admin', joined_at: NOW })
+        .execute();
+      // The guard's answer, as the request had it before the demotion committed.
+      const context = await requireWorkspaceMembership(db, admin.userId, made.id);
+      expect(context.role).toBe('admin');
+      await db
+        .updateTable('workspace_members')
+        .set({ role: 'member' })
+        .where('workspace_id', '=', made.id)
+        .where('user_id', '=', admin.userId)
+        .execute();
+      let refused = '';
+      await renameWorkspace(db, clock, context, 'taken over').catch((error: unknown) => {
+        refused = error instanceof AppError ? error.body.code : String(error);
+      });
+      expect(refused).toBe('FORBIDDEN');
+      const kept = await db
+        .selectFrom('workspaces')
+        .select('name')
+        .where('id', '=', made.id)
+        .executeTakeFirstOrThrow();
+      expect(kept.name).toBe('race');
+    });
+  });
+
+  test('a member is refused for what they are; a name empty, too long, or beside a slug is 400', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rn-own');
+      const member = await signedIn(db, 'rn-mem');
+      const made = await aWorkspace(db, owner.cookie, 'kept');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: made.id, user_id: member.userId, role: 'member', joined_at: NOW })
+        .execute();
+      const as = async (cookie: string, body: unknown): Promise<string> => {
+        const response = await call(db, 'PATCH', `/api/workspaces/${made.id}`, { cookie, body });
+        const parsed: unknown = await response.json();
+        return Value.Check(ErrorResponse, parsed)
+          ? `${String(response.status)} ${parsed.error.code}`
+          : String(response.status);
+      };
+      expect(await as(member.cookie, { name: 'taken over' })).toBe('403 FORBIDDEN');
+      expect(await as(owner.cookie, { name: '' })).toBe('400 VALIDATION_FAILED');
+      expect(await as(owner.cookie, { name: 'x'.repeat(65) })).toBe('400 VALIDATION_FAILED');
+      expect(await as(owner.cookie, { name: 'new', slug: 'moved' })).toBe('400 VALIDATION_FAILED');
+      const workspace = await db
+        .selectFrom('workspaces')
+        .select(['name', 'slug'])
+        .where('id', '=', made.id)
+        .executeTakeFirstOrThrow();
+      expect(workspace).toEqual({ name: 'kept', slug: made.slug });
     });
   });
 });

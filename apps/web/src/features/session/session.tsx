@@ -44,7 +44,10 @@ export const SessionGate = ({
 
   if (me.isPending) return <AppSkeleton />;
   if (signedOut) return null;
-  if (me.isError) {
+  // A read that fails while the page already holds the person — a reconnect reads them again — keeps
+  // the page: a passing 5xx is not a reason to tear down the shell and every composer. A 401 is the
+  // end of the session, and goes to sign-in above whatever is held.
+  if (me.isError && me.data === undefined) {
     return (
       <ErrorState
         title={t('state.session.error.title')}

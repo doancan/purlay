@@ -94,7 +94,14 @@ FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
 FormatRegistry.Set('uri', (value) => URI.test(value));
 FormatRegistry.Set('message-content', isMessageContent);
-FormatRegistry.Set('name', (value) => !FORBIDDEN_IN_NAME.test(value));
+/**
+ * Something a person can see: a character that is neither white space nor an invisible format
+ * character (a zero-width space, a joiner, a byte order mark). A name of only those passed, and a
+ * sidebar showed a workspace with no name (#507 review).
+ */
+const VISIBLE = /[^\s\p{Cf}]/u;
+
+FormatRegistry.Set('name', (value) => !FORBIDDEN_IN_NAME.test(value) && VISIBLE.test(value));
 FormatRegistry.Set('plain-text', isPlainText);
 FormatRegistry.Set('emoji', (value) => EMOJI.test(value));
 

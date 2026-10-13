@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### API — 2026-10-13: renaming a workspace (D-124)
+
+- `PATCH /api/workspaces/:workspaceId` renames a workspace, an owner's or an admin's; the slug stays.
+  It is on the audit trail with the name before and after, and every member's open tabs are told
+  (`WORKSPACE_UPDATED`) and read their memberships again. Deleting a workspace is still not built.
+- **Workspace settings…** in the workspace menu, for owners and admins, is where it is renamed.
+
+### Interface — 2026-10-13: the account menu (D-124)
+
 ### Interface — 2026-10-13: the account menu (D-124)
 
 - The sidebar's foot — your avatar, name and handle — opens the account menu: Deep Work for 30

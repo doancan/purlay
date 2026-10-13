@@ -114,6 +114,10 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       `/api/workspaces/${world.workspaceId}/members/${world.people.target.userId}`,
       as,
     ),
+  'rename the workspace': async (world, as) =>
+    await call(world, 'PATCH', `/api/workspaces/${world.workspaceId}`, as, {
+      name: `renamed by ${as.username}`,
+    }),
   'read the audit trail': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit`, as),
   'see whether the GitHub token is set': async (world, as) =>

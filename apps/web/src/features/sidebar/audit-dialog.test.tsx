@@ -112,6 +112,11 @@ describe('the audit log', () => {
       audit: () =>
         Promise.resolve(
           page([
+            anEntry(10, {
+              action: 'workspace.renamed',
+              targetType: 'workspace',
+              metadata: { from: 'acme', to: 'acme-eng' },
+            }),
             anEntry(9, {
               action: 'member.role_changed',
               targetType: 'user',
@@ -140,6 +145,7 @@ describe('the audit log', () => {
         ),
     });
     expect(lines(view)).toEqual([
+      `${ME.displayName} renamed the workspace from acme to acme-eng`,
       `${ME.displayName} changed ${ALICE.displayName}’s role from Member to Admin`,
       `${ME.displayName} removed ${BOB.displayName}`,
       `${ME.displayName} created #api`,
@@ -158,13 +164,13 @@ describe('the audit log', () => {
       audit: () =>
         Promise.resolve(
           page([
-            anEntry(2, { action: 'workspace.renamed', targetType: 'workspace' }),
+            anEntry(2, { action: 'workspace.deleted', targetType: 'workspace' }),
             anEntry(1, { actor: null, targetId: entryId(77) }),
           ]),
         ),
     });
     expect(lines(view)).toEqual([
-      `${ME.displayName}: workspace.renamed`,
+      `${ME.displayName}: workspace.deleted`,
       'Someone created a channel that is gone',
     ]);
   });

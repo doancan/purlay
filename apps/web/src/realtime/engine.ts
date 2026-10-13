@@ -431,6 +431,9 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.thread });
     void client.invalidateQueries({ queryKey: families.unresolved });
     void client.invalidateQueries({ queryKey: families.channels });
+    // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
+    // the person's own topic, which a socket that was down never hears (D-124).
+    void client.invalidateQueries({ queryKey: keys.me });
   };
 
   /** Waits on the injected schedule; false when the page stopped meanwhile. */
@@ -638,6 +641,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       }
       case 'SESSION_ENDED':
         options.onSessionEnded();
+        return;
+      case 'WORKSPACE_UPDATED':
+        // No state in the frame (D-124): the memberships are read again, newest wins.
+        void client.invalidateQueries({ queryKey: keys.me });
         return;
       case 'TYPING':
         startTyping(frame.data.channelId, frame.data.userId, frame.data.ttlMs);

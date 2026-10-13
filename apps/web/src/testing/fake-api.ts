@@ -55,6 +55,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   setDeepWork: unexpected('setDeepWork'),
   deleteMessage: unexpected('deleteMessage'),
   signOut: unexpected('signOut'),
+  renameWorkspace: unexpected('renameWorkspace'),
   signOutEverywhere: unexpected('signOutEverywhere'),
   ...overrides,
 });

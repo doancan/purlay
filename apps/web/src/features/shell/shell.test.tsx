@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
+import { keys } from '../../data/keys';
 import { installDom } from '../../testing/dom';
 import { anApi } from '../../testing/fake-api';
 import { IDS, aSession, aSignedInApi, aChannel } from '../../testing/fixtures';
@@ -68,6 +69,29 @@ describe('the session gate', () => {
     await settle();
     expect(view.queryByRole('alert')).toBeNull();
     expect(view.getByText('acme-eng')).toBeDefined();
+  });
+});
+
+describe('the session read again', () => {
+  test('a failure while the page already holds the person keeps the page: it is not torn down', async () => {
+    let fail = false;
+    const view = await visit(
+      `/w/acme/c/${IDS.api}`,
+      aSignedInApi({
+        me: () =>
+          fail
+            ? Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'busy'))
+            : Promise.resolve(aSession()),
+      }),
+    );
+    expect(view.getByRole('heading', { level: 1, name: 'api' })).toBeDefined();
+    fail = true;
+    await act(async () => {
+      await view.world.client.refetchQueries({ queryKey: keys.me });
+    });
+    await settle();
+    expect(view.queryByText("Couldn't reach Purlay")).toBeNull();
+    expect(view.getByRole('heading', { level: 1, name: 'api' })).toBeDefined();
   });
 });
 
@@ -207,6 +231,11 @@ describe('a person with no workspace', () => {
       'one the server refuses',
       new ApiError(400, 'VALIDATION_FAILED', 'bad'),
       'Use lowercase letters',
+    ],
+    [
+      'a name the server refuses — one nobody can see — under the name, not the address',
+      new ApiError(400, 'VALIDATION_FAILED', 'bad', { name: 'not a name' }),
+      'Use a name people can see',
     ],
     [
       'a failure it cannot explain',

@@ -356,6 +356,18 @@ export const TypingServerFrame = Type.Object({
   ...envelope,
 });
 
+/**
+ * A workspace the person is in changed — renamed (D-124). On each member's `user:` topic, so a socket
+ * hears it only for a workspace its person belongs to as the change commits. It carries no state: the
+ * client reads its memberships again, so two renames heard in the wrong order cannot leave the old
+ * name standing.
+ */
+export const WorkspaceUpdatedFrame = Type.Object({
+  event: Type.Literal('WORKSPACE_UPDATED'),
+  data: Type.Object({ workspaceId: Uuid }),
+  ...envelope,
+});
+
 export const PongFrame = Type.Object({
   event: Type.Literal('PONG'),
   data: Type.Object({}),
@@ -377,6 +389,7 @@ export const ServerFrame = Type.Union([
   SessionEndedFrame,
   AccessRevokedFrame,
   TypingServerFrame,
+  WorkspaceUpdatedFrame,
   PongFrame,
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;
@@ -441,7 +454,9 @@ export const parseServerMessage = (text: string): ServerMessage => {
  *   belongs to: the end of the account (`SESSION_ENDED`, `account-deleted`) and the
  *   removal of one member's access (`ACCESS_REVOKED`) are published here (D-85).
  * - `user:` also carries what is true for one person only: their read state
- *   (`CHANNEL_STATE`) and a channel that appeared for them (`CHANNEL_ADDED`).
+ *   (`CHANNEL_STATE`), a channel that appeared for them (`CHANNEL_ADDED`), and a workspace of theirs
+ *   that changed (`WORKSPACE_UPDATED`), told to each member rather than on `workspace:`, so somebody
+ *   removed a moment ago is not told.
  * - `workspace:` has no publisher yet; it is named for Phase 1.
  */
 export type Topic =

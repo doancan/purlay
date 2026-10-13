@@ -18,6 +18,7 @@ import {
   SetDeepWorkRequest,
   type AuditPage,
   UpdateMemberRoleRequest,
+  UpdateWorkspaceRequest,
   type DeepWorkResponse,
   type MeResponse,
   type Membership,
@@ -32,6 +33,7 @@ import {
   meOf,
   membersIn,
   membershipsOf,
+  renameWorkspace,
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
@@ -48,6 +50,7 @@ import {
   publication,
   publishAccessRevoked,
   publishAfterCommit,
+  publishWorkspaceUpdated,
   type EventBus,
 } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
@@ -140,6 +143,33 @@ export interface MemberWriteDependencies extends WorkspaceDependencies {
   readonly bus: EventBus;
   readonly log?: Logger;
 }
+
+/**
+ * `PATCH /api/workspaces/:workspaceId` — a new name (D-124). Its members' sockets are told after the
+ * commit, so every tab of theirs reads it again.
+ */
+export const updateWorkspace = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<Workspace> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const { name } = validated(UpdateWorkspaceRequest, body);
+  const { workspace, memberIds } = await atomicallyOn(database)(
+    async (transaction) => await renameWorkspace(transaction, clock, context, name),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, memberIds, workspace.id),
+      ),
+    ],
+  ]);
+  return workspace;
+};
 
 /** `PATCH /api/workspaces/:workspaceId/members/:userId` — a member's new role (§7.4, I-2). */
 export const updateMemberRole = async (

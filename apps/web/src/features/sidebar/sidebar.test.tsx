@@ -343,6 +343,7 @@ describe('the workspace menu', () => {
       'Members…',
       'GitHub connection…',
       'Audit log…',
+      'Workspace settings…',
     ]);
   });
 

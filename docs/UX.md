@@ -123,6 +123,11 @@ too, gives the workspace its one token: a password field and **Save token**, the
 with **Disconnect**. The token is never shown again — the field empties once it is saved — and without
 one a link to GitHub stays a plain link, which the dialog says.
 
+**Workspace settings** (D-124). **Workspace settings…** in the same menu, an owner's or an admin's,
+renames the workspace: a name field and **Save**, and a sentence saying the address stays `/w/<slug>`,
+so links already shared keep working. Saved, the name changes at once in the tab and, without a reload,
+in every open tab of every member.
+
 ---
 
 ## 3. The message row

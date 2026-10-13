@@ -171,6 +171,7 @@ export const en = {
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
+  'audit.action.workspace.renamed': '{actor} renamed the workspace from {from} to {to}',
   'github.entry': 'GitHub connection…',
   'github.title': 'GitHub for {workspace}',
   'github.description':
@@ -188,6 +189,15 @@ export const en = {
   'github.disconnectFailed': 'GitHub was not disconnected.',
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
+  'workspace.settings.entry': 'Workspace settings…',
+  'workspace.settings.title': 'Workspace settings',
+  'workspace.settings.description':
+    'The name everyone sees. The address stays /w/{slug}, so links already shared keep working.',
+  'workspace.settings.save': 'Save',
+  'workspace.settings.empty': 'A workspace needs a name.',
+  'workspace.nameInvalid':
+    'Use a name people can see — letters, numbers or an emoji — at most {max} characters, without control characters.',
+  'workspace.settings.failed': 'The name was not changed.',
   'workspace.create.title': 'Create a workspace',
   'workspace.create.body': 'A workspace is where one team talks. You can invite the others after.',
   'workspace.create.name': 'Name',
