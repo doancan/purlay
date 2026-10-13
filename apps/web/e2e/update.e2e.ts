@@ -25,7 +25,19 @@ test.describe('after a deployment', () => {
     await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
 
     // Narrow, the navigation is a modal over the page: the person closes it to reach the page.
-    if (isNarrow(page)) await page.keyboard.press('Escape');
+    // Choosing closes the menu and gives focus back to Settings, whose tooltip opens on focus, and
+    // Escape closes one layer, the top one: the tooltip first, then the overlay. One Escape pressed
+    // before focus came back closed the overlay; pressed after, it closed the tooltip and left the
+    // overlay over the bar — a race this lost about one run in thirty. So: wait for each layer.
+    if (isNarrow(page)) {
+      const overlay = page.getByRole('dialog', { name: 'Workspace' });
+      await expect(overlay.getByRole('button', { name: 'Settings' })).toBeFocused();
+      await expect(page.getByRole('tooltip', { name: 'Settings' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(overlay).toHaveCount(0);
+    }
     const bar = page.getByRole('status').filter({ hasText: 'Purlay was updated' });
     await expect(bar).toBeVisible();
     // The language whose words did not come stays unchosen: the page is still in English.

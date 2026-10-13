@@ -6,6 +6,20 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Quality — 2026-10-13: the client is always built for production, and survives StrictMode
+
+- `bun run build:web` sets `NODE_ENV=production` itself. A root `.env` with `NODE_ENV=development`
+  (Bun loads it into every `bun run` from the root) had made the browser suite run against React's
+  development build, which is not the production shape D-61 asks for and is three times slower.
+- Two effects that were wrong when React runs an effect, its cleanup and the effect again (as
+  StrictMode does in `bun run dev`): the theme store stopped writing the page after its first
+  cleanup, so a choice changed nothing; and the frame took the second run for a navigation and
+  focused `<main>` on load, so the first Tab passed the skip link. A production build never ran
+  either twice; a development one always did.
+- Two browser tests that passed by winning a race: the inbox test started in the room whose mention
+  it then expected unread (leaving a channel reads it), and the update test's single Escape closed
+  the Settings tooltip instead of the narrow overlay when focus had already returned to Settings.
+
 ### Fix — 2026-10-13: a failed sign-in lands on the sign-in screen, saying why (D-121)
 
 - `GET /auth/github/callback` never answers JSON: a cancel on GitHub, a stale or missing state, an
