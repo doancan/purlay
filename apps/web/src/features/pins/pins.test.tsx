@@ -547,6 +547,34 @@ describe('the Pins panel', () => {
     view.unmountAll();
   });
 
+  test('the same menu opens the files, and the files panel takes focus', async () => {
+    const view = await mountChannel({
+      messages: page([first]),
+      api: { files: () => Promise.resolve({ data: [], nextCursor: null }) },
+    });
+    await person().click(view.getByRole('button', { name: 'Files and pinned messages' }));
+    await person().click(await view.findByRole('menuitem', { name: 'Files in this channel' }));
+    await settle();
+    expectFocusOn(
+      within(view.getByRole('complementary', { name: /^Files/ })).getByRole('heading', {
+        name: /Files/,
+      }),
+    );
+    view.unmountAll();
+  });
+
+  test('a menu closed without a choice gives focus back to its button', async () => {
+    const view = await mountChannel({ messages: page([first]) });
+    const menu = view.getByRole('button', { name: 'Files and pinned messages' });
+    await person().click(menu);
+    await view.findByRole('menuitem', { name: 'Pinned messages' });
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('complementary', { name: /^Pinned|^Files/ })).toBeNull();
+    expectFocusOn(view.getByRole('button', { name: 'Files and pinned messages' }));
+    view.unmountAll();
+  });
+
   test('PINS_UPDATED reads the channel’s pins again, and they show', async () => {
     const server = aServer();
     const view = await mountChannel({ messages: page([first]), api: { pins: server.pins } });
