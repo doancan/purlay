@@ -48,13 +48,15 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
  └────┴──────────────────┴────────────────────────────────────────────────┴─────────┘
 ```
 
-- **Rail (56px)** — the workspace tile, which opens the workspace switcher; then channels, the
+- **Rail (56px)** — the workspace tile, a second door to the workspace menu; then channels, the
   inbox (a dot while anything needs you — the same fact as the mention badges, D-106), open
   questions (a neutral count: they are the team's, not a summons) and search. Every entry is a route
   or a menu that exists without the rail; it adds no destination. It has no gear: what is the
   person's is the account menu's (D-124). Its top is an empty drag strip for the desktop
   shell (D-14).
-- **Sidebar (240px)** — the workspace name, the jump field (the palette's door, `⌘K`), the channels,
+- **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the
+  workspaces to switch to, **Create workspace…**, and an owner's or an admin's items below), the jump
+  field (the palette's door, `⌘K`), the channels,
   then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
   for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is on, until when, the
   minutes left and its end; the theme; the language; the shortcut reference; **Sign out**; and **Sign
@@ -127,6 +129,10 @@ one a link to GitHub stays a plain link, which the dialog says.
 renames the workspace: a name field and **Save**, and a sentence saying the address stays `/w/<slug>`,
 so links already shared keep working. Saved, the name changes at once in the tab and, without a reload,
 in every open tab of every member.
+
+**Another workspace** (D-124). **Create workspace…** in the same menu, anybody's, opens the form `/`
+shows a person with none — a name and an address — and goes to the new workspace, with Back to where
+they were.
 
 ---
 

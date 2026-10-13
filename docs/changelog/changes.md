@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Interface — 2026-10-13: the workspace menu from the workspace's name (D-124)
+
+- The workspace's name at the top of the sidebar, with a chevron, opens the workspace menu; the rail's
+  tile still does too. **Create workspace…** in it makes another workspace with the first-run form.
+
+### API — 2026-10-13: renaming a workspace (D-124)
+
 ### API — 2026-10-13: renaming a workspace (D-124)
 
 - `PATCH /api/workspaces/:workspaceId` renames a workspace, an owner's or an admin's; the slug stays.

@@ -4,7 +4,8 @@
  * A person with a workspace is sent to the first one (`replace`, so Back does not
  * land on a page that only redirects). A person with none sees why, and — because a
  * workspace is the one thing the API lets anybody create — a form to make the first, on a card
- * with the product's mark like the sign-in screen it follows (D-100).
+ * with the product's mark like the sign-in screen it follows (D-100). The same form is the
+ * workspace menu's **Create workspace…**, for a person who has one already (D-124).
  */
 import { WORKSPACE_NAME_MAX } from '@purlay/types';
 import { useDescribeFailure } from '../../data/failure';
@@ -31,7 +32,17 @@ const slugOf = (name: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
 
-const CreateWorkspace = (): React.JSX.Element => {
+interface CreateWorkspaceProps {
+  /** In a dialog, which says what it is for: the form is drawn without its own heading. */
+  readonly framed?: boolean;
+  /** Made: the dialog closes. The page goes to the new workspace either way. */
+  readonly onCreated?: () => void;
+}
+
+export const CreateWorkspace = ({
+  framed = true,
+  onCreated,
+}: CreateWorkspaceProps): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const { createWorkspace } = useActions();
@@ -56,7 +67,9 @@ const CreateWorkspace = (): React.JSX.Element => {
     setError(null);
     try {
       const workspace = await createWorkspace({ name: name.trim(), slug: address });
-      navigate(href('workspace', { slug: workspace.slug }), { replace: true });
+      onCreated?.();
+      // From `/`, which only ever redirects, Back must not return there; from a workspace it may.
+      navigate(href('workspace', { slug: workspace.slug }), { replace: framed });
     } catch (failure) {
       setBusy(false);
       if (isApiError(failure) && failure.code === 'WORKSPACE_SLUG_TAKEN') {
@@ -82,10 +95,18 @@ const CreateWorkspace = (): React.JSX.Element => {
       onSubmit={(event) => {
         void submit(event);
       }}
-      className="flex flex-col gap-4 border-t-hairline border-border-subtle pt-6"
+      className={
+        framed
+          ? 'flex flex-col gap-4 border-t-hairline border-border-subtle pt-6'
+          : 'flex flex-col gap-4'
+      }
     >
-      <h2 className="text-title text-ink">{t('workspace.create.title')}</h2>
-      <p className="text-body text-ink-muted">{t('workspace.create.body')}</p>
+      {framed && (
+        <>
+          <h2 className="text-title text-ink">{t('workspace.create.title')}</h2>
+          <p className="text-body text-ink-muted">{t('workspace.create.body')}</p>
+        </>
+      )}
       <TextField
         label={t('workspace.create.name')}
         value={name}
