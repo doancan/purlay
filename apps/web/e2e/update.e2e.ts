@@ -25,16 +25,12 @@ test.describe('after a deployment', () => {
     await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
 
     // Narrow, the navigation is a modal over the page: the person closes it to reach the page.
-    // Choosing closes the menu and gives focus back to Settings, whose tooltip opens on focus, and
-    // Escape closes one layer, the top one: the tooltip first, then the overlay. One Escape pressed
-    // before focus came back closed the overlay; pressed after, it closed the tooltip and left the
-    // overlay over the bar — a race this lost about one run in thirty. So: wait for each layer.
+    // Choosing closes the menu and gives focus back to the account button; Escape pressed before it
+    // arrived could be taken by the closing menu instead of the overlay (#498 measured the same race
+    // with the rail's Settings, which the account menu replaced). So: wait for focus, then close.
     if (isNarrow(page)) {
       const overlay = page.getByRole('dialog', { name: 'Workspace' });
-      await expect(overlay.getByRole('button', { name: 'Settings' })).toBeFocused();
-      await expect(page.getByRole('tooltip', { name: 'Settings' })).toBeVisible();
-      await page.keyboard.press('Escape');
-      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      await expect(overlay.getByRole('button', { name: /^Account: / })).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(overlay).toHaveCount(0);
     }
