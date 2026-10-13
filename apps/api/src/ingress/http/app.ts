@@ -75,6 +75,7 @@ import {
   createWorkspaceChannel,
   joinPublicChannel,
   listChannels,
+  openConversationWith,
   openDirectMessageWith,
   readChannel,
   readUpTo,
@@ -469,6 +470,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
       set.status = 201;
       return await createWorkspaceChannel(dependencies, request, params.workspaceId, body);
+    })
+    .post('/api/workspaces/:workspaceId/conversations', async ({ request, params, body, set }) => {
+      const { channel, created } = await openConversationWith(
+        { ...dependencies, bus: sockets.bus },
+        request,
+        params.workspaceId,
+        body,
+      );
+      // As `/dms`: 201 when this call made it, 200 when these people already had it (I-5).
+      set.status = created ? 201 : 200;
+      return channel;
     })
     .post('/api/workspaces/:workspaceId/dms', async ({ request, params, body, set }) => {
       const { channel, created } = await openDirectMessageWith(

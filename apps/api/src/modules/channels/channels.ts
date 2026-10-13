@@ -41,9 +41,37 @@ interface ChannelRow {
   readonly peer_display_name: string | null;
   readonly peer_avatar_url: string | null;
   readonly peer_deleted_at: Date | string | null;
+  /** Everybody in a direct message's key, in its order; empty for a channel. */
+  readonly key_people: readonly KeyPerson[];
 }
 
-const asChannel = (row: ChannelRow): Channel => ({
+interface KeyPerson {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly erased: boolean;
+}
+
+/** Erased (I-11): the conversation stays and so does the id a client keys on, and nothing else. */
+const shown = (person: KeyPerson): Channel['peers'][number] =>
+  person.erased
+    ? { id: person.id, username: 'deleted', displayName: 'Deleted user', avatarUrl: null }
+    : {
+        id: person.id,
+        username: person.username,
+        displayName: person.displayName,
+        avatarUrl: person.avatarUrl,
+      };
+
+/** The people besides the caller; the caller alone for a note to self (D-127). */
+const peersOf = (row: ChannelRow, userId: string): Channel['peers'] => {
+  const others = row.key_people.filter((person) => person.id !== userId);
+  const people = others.length > 0 ? others : row.key_people.slice(0, 1);
+  return people.map(shown);
+};
+
+const asChannel = (row: ChannelRow, userId: string): Channel => ({
   id: row.id,
   workspaceId: row.workspace_id,
   name: row.name,
@@ -72,6 +100,7 @@ const asChannel = (row: ChannelRow): Channel => ({
             displayName: row.peer_display_name ?? '',
             avatarUrl: row.peer_avatar_url,
           },
+  peers: peersOf(row, userId),
 });
 
 /**
@@ -98,7 +127,10 @@ const readChannels = async (
     )
     .leftJoin('users', (join) =>
       join.on(
-        sql<boolean>`channels.type = 'direct_message' and users.id = (case
+        // A conversation of two only: a group has no one other person (D-127).
+        sql<boolean>`channels.type = 'direct_message'
+          and cardinality(string_to_array(channels.dm_key, ':')) = 2
+          and users.id = (case
           when split_part(channels.dm_key, ':', 1) = ${userId} then split_part(channels.dm_key, ':', 2)
           else split_part(channels.dm_key, ':', 1) end)::uuid`,
       ),
@@ -120,6 +152,16 @@ const readChannels = async (
       'users.display_name as peer_display_name',
       'users.avatar_url as peer_avatar_url',
       'users.deleted_at as peer_deleted_at',
+      // Its key's people in its order, in this one query: the key is its identity (D-127), and a
+      // group of ten is ten primary-key reads, not a query per channel.
+      sql<readonly KeyPerson[]>`coalesce((
+        select json_agg(json_build_object(
+          'id', person.id, 'username', person.username, 'displayName', person.display_name,
+          'avatarUrl', person.avatar_url, 'erased', person.deleted_at is not null
+        ) order by key_part.place)
+        from unnest(string_to_array(channels.dm_key, ':')) with ordinality as key_part(id, place)
+        join users as person on person.id = key_part.id::uuid
+      ), '[]'::json)`.as('key_people'),
     ]);
   if (only.ids !== undefined) query = query.where('channels.id', 'in', only.ids);
   if (only.id !== undefined) query = query.where('channels.id', '=', only.id);
@@ -141,7 +183,7 @@ export const channelFor = async (
   const [row] = await readChannels(executor, userId, { id: channelId });
   if (row === undefined)
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
-  return asChannel(row);
+  return asChannel(row, userId);
 };
 
 export interface NewChannel {
@@ -222,7 +264,9 @@ export const channelsVisibleIn = async (
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return [];
 
-  return (await readChannels(executor, context.userId, { ids: visible })).map(asChannel);
+  return (await readChannels(executor, context.userId, { ids: visible })).map((row) =>
+    asChannel(row, context.userId),
+  );
 };
 
 /** The channel the context was minted for. There is no other one it could return. */

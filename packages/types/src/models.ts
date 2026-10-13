@@ -146,10 +146,16 @@ export const Channel = Type.Object({
   /** The caller's level here (D-107); null when they are not a member, and so are told nothing. */
   notificationLevel: Type.Union([NotificationLevel, Type.Null()]),
   /**
-   * The other person in a direct message (the caller themselves, for a note to
-   * self). Null for every other kind, which has a name instead (D-6).
+   * The other person in a direct message between two (the caller themselves, for a note to
+   * self). Null for a group conversation and for every other kind, which has a name (D-6, D-127).
    */
   peer: Type.Union([User, Type.Null()]),
+  /**
+   * The people of a direct message other than the caller, in the order of its key: one for a
+   * conversation of two, two to nine for a group (D-127), the caller alone for a note to self.
+   * Empty for a channel.
+   */
+  peers: Type.Array(User, { maxItems: 9 }),
 });
 export type Channel = Static<typeof Channel>;
 

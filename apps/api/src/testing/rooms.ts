@@ -74,8 +74,14 @@ export const aRoom = async (
 
   const dmKey =
     type === 'direct_message'
-      ? // A note to oneself is the pair of a person with themselves (I-5).
-        [people[0]?.userId, people[1]?.userId ?? people[0]?.userId].sort().join(':')
+      ? // Everybody in it, sorted (a group of up to ten, D-127); a note to oneself is the pair of
+        // a person with themselves (I-5).
+        (people.length === 1
+          ? [people[0]?.userId, people[0]?.userId]
+          : people.map((person) => person.userId)
+        )
+          .sort()
+          .join(':')
       : null;
   const channel = await db
     .insertInto('channels')

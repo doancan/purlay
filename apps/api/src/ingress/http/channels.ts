@@ -11,6 +11,7 @@ import type { Executor } from '@purlay/db';
 import {
   AddChannelMemberRequest,
   CreateChannelRequest,
+  OpenConversationRequest,
   CreateDirectMessageRequest,
   ReadChannelRequest,
   SetNotificationLevelRequest,
@@ -41,7 +42,7 @@ import {
   createChannel,
   joinChannel,
 } from '../../modules/channels/channels';
-import { openDirectMessage } from '../../modules/channels/direct-messages';
+import { openConversation, openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
 import { markRead } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
@@ -172,6 +173,34 @@ export const openDirectMessageWith = async (
       [publication('CHANNEL_ADDED', () => publishChannelAdded(bus, clock, input.userId, forPeer))],
     ]);
   }
+  return { channel: opened.channel, created: opened.created };
+};
+
+/**
+ * `POST /api/workspaces/:workspaceId/conversations` — the conversation with these people, opened
+ * if it was not and the same one if it was (I-5, D-127). Each other person is told only when this
+ * call created it, after the commit.
+ */
+export const openConversationWith = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<{ readonly channel: Channel; readonly created: boolean }> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const input = validated(OpenConversationRequest, body);
+  const opened = await atomicallyOn(database)(
+    async (transaction) => await openConversation(transaction, clock, context, input.userIds),
+  );
+  await publishAfterCommit(log, [
+    opened.forOthers.map((other) =>
+      publication('CHANNEL_ADDED', () =>
+        publishChannelAdded(bus, clock, other.userId, other.channel),
+      ),
+    ),
+  ]);
   return { channel: opened.channel, created: opened.created };
 };
 

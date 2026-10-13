@@ -33,6 +33,29 @@ export const requireWorkspacePerson = async (
   }
 };
 
+/**
+ * Refuses unless every id is a person in the workspace whose account has not been deleted: one
+ * query for the whole set. One missing is the same answer as one alone (D-127).
+ */
+export const requireWorkspacePeople = async (
+  executor: Executor,
+  context: Pick<WorkspaceContext, 'workspaceId'>,
+  userIds: readonly string[],
+): Promise<void> => {
+  const wanted = [...new Set(userIds)];
+  const found = await executor
+    .selectFrom('workspace_members')
+    .innerJoin('users', 'users.id', 'workspace_members.user_id')
+    .select('users.id')
+    .where('workspace_members.workspace_id', '=', context.workspaceId)
+    .where('workspace_members.user_id', 'in', wanted)
+    .where('users.deleted_at', 'is', null)
+    .execute();
+  if (found.length !== wanted.length) {
+    throw new AppError({ code: 'USER_NOT_FOUND', message: 'No such person in this workspace.' });
+  }
+};
+
 export interface Added {
   /** The channel as the person brought in sees it, to tell them; null when they were in it. */
   readonly forMember: Channel | null;

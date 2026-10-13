@@ -80,6 +80,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
   notificationLevel: 'mentions',
   peer: null,
+  peers: [],
   ...over,
 });
 

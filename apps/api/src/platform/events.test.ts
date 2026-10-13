@@ -76,6 +76,7 @@ describe('publishing the wedge', () => {
       state,
       notificationLevel: 'mentions',
       peer: user,
+      peers: [user],
     };
     await publishChannelState(bus, clock, OTHER, ID, state, 5);
     await publishChannelAdded(bus, clock, OTHER, channel);

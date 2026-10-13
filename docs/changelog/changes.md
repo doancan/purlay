@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: group conversations, the API (D-127, part of #486)
+
+- A direct message of up to ten people: `POST /api/workspaces/:id/conversations` opens the
+  conversation of a set of people, the same one in any order; every message in it tells every
+  other person. Migration 0025 lets `dm_key` hold two to ten sorted ids.
+- `Channel.peers` names a direct message's people; `peer` is null for a group, so nothing reading it
+  shows a group as one person.
+
 ### Feature — 2026-10-13: a device is told what needs its person (D-126, part of #78)
 
 - After a send or an edit commits, through either door, the people it told for the first time have
