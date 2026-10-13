@@ -2896,6 +2896,13 @@ so it is drawn when there is room again. **Provisional (O-4).**
 
 ---
 
+**Amended 2026-10-13 (#522).** The browser suite starts its servers with `RATE_BUDGETS=roomy`: its
+specs act as the same seeded people in parallel, and spent one person's write budget together, so a
+send failed with 429 under load and never alone. Writes and costly reads are then not limited per
+person; sign-in and each socket's frame budget stay. The limits themselves are tested against the
+real numbers (`rate-limit.integration.test.ts`). Production refuses the setting, so the budgets this
+decision states are the only ones a deployment can run with.
+
 ### D-82. The client notices a dead socket, stops retrying a refusal, ignores what it does not know, and does not trust a cursor past an unfinished replay
 
 D-76 made reconnecting polite. Four ways the client still failed to come back, or came back wrong

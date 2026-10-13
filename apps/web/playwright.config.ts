@@ -122,7 +122,7 @@ export default defineConfig({
   ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
   webServer: servers.map((name, index) => ({
-    command: `bun run scripts/demo.ts ${index === 0 ? '' : '--no-build '}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
+    command: `bun run scripts/demo.ts ${index === 0 ? '' : '--no-build '}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json --roomy-budgets`,
     cwd: '../..',
     env: { VITE_GALLERY: '1' },
     url: `http://localhost:${String(portOf(index))}/health`,

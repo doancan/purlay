@@ -92,6 +92,10 @@ export const Environment = Type.Object({
   /** A directory attachments are kept in instead of a bucket: development and the browser suite only
    *  (D-117). Production refuses it. */
   STORAGE_DIRECTORY: Type.Optional(Type.String({ minLength: 1 })),
+  /** `roomy`: writes and costly reads are not limited per person. For the browser suite, whose
+   *  parallel specs act as the same seeded people and would spend one person's budget together
+   *  (#522); development may use it too. Production refuses it: its budgets are the product's (D-81). */
+  RATE_BUDGETS: Type.Optional(Type.Literal('roomy')),
 });
 
 /**
@@ -235,6 +239,10 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     } else if (storage !== 0) {
       problems.push('STORAGE_DIRECTORY: one store or the other — a directory or the S3 bucket');
     }
+  }
+
+  if (production && config.RATE_BUDGETS !== undefined) {
+    problems.push('RATE_BUDGETS: production keeps the budgets the product states (D-81)');
   }
 
   if (problems.length > 0) throw new ConfigurationError(problems);

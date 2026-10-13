@@ -27,6 +27,7 @@ import type { Clock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { createLogger } from '../platform/logging';
 import { createApp } from '../ingress/http/app';
+import { ROOMY_BUDGET } from '../ingress/http/rate-limit';
 import type { GitHubClient } from '../modules/auth/github';
 import { issueSession } from '../modules/auth/sessions';
 import {
@@ -99,8 +100,6 @@ export const neverSignsIn: GitHubClient = {
   emails: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
 };
 
-const ROOMY = { perSecond: 100_000, burst: 1_000_000 } as const;
-
 /**
  * The only databases the seed will write to: the ones `scripts/demo.ts` and the browser tests
  * create and drop themselves. The seed makes people with 30-day sessions and writes their
@@ -140,7 +139,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     github: neverSignsIn,
     // The seed writes no attachments; the store is the one the configuration names.
     storage: storeFor(config),
-    rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
+    rateBudgets: { auth: ROOMY_BUDGET, writes: ROOMY_BUDGET, costlyReads: ROOMY_BUDGET },
   });
 
   // ── People ────────────────────────────────────────────────────────────────

@@ -82,6 +82,21 @@ export interface HttpBudgets {
   readonly costlyReads: RateBudget;
 }
 
+/** A budget nobody spends in a test or a seed: what `roomy` means. */
+export const ROOMY_BUDGET: RateBudget = { perSecond: 100_000, burst: 1_000_000 };
+
+/**
+ * The budgets a server is started with: the product's (`undefined`, so `createApp` uses its own)
+ * unless the configuration asks for roomy ones, which production refuses (#522). Sign-in stays as
+ * it is: it is per client address, which a browser suite does not share between its specs.
+ */
+export const budgetsFor = (config: {
+  readonly RATE_BUDGETS?: 'roomy' | undefined;
+}): HttpBudgets | undefined =>
+  config.RATE_BUDGETS === 'roomy'
+    ? { auth: AUTH_BUDGET, writes: ROOMY_BUDGET, costlyReads: ROOMY_BUDGET }
+    : undefined;
+
 export interface HttpLimitDependencies {
   readonly database: Executor;
   readonly clock: Clock;

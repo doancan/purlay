@@ -13,6 +13,7 @@ import {
   COSTLY_READ_BUDGET,
   GITHUB_CALL_BUDGET,
   WRITE_BUDGET,
+  budgetsFor,
   httpLimits,
   retryAfterSeconds,
 } from './rate-limit';
@@ -125,5 +126,16 @@ describe('the budgets in force', () => {
     expect(COSTLY_READ_BUDGET).toEqual({ perSecond: 10, burst: 60 });
     // Under the hourly quota of the workspace's one GitHub token, however many members ask.
     expect(GITHUB_CALL_BUDGET.burst + GITHUB_CALL_BUDGET.perSecond * 3600).toBeLessThan(5_000);
+  });
+});
+
+describe('the budgets a server is started with (#522)', () => {
+  test('are the product’s unless the configuration asks for roomy ones', () => {
+    expect(budgetsFor({})).toBeUndefined();
+    const roomy = budgetsFor({ RATE_BUDGETS: 'roomy' });
+    expect(roomy?.writes.burst).toBeGreaterThan(WRITE_BUDGET.burst * 1000);
+    expect(roomy?.costlyReads.burst).toBeGreaterThan(COSTLY_READ_BUDGET.burst * 1000);
+    // Sign-in is per address, not per person: the browser suite does not share it, so it stays.
+    expect(roomy?.auth).toEqual(AUTH_BUDGET);
   });
 });

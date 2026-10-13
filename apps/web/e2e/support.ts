@@ -19,9 +19,10 @@ import { messageId, type Message } from '@purlay/types';
 export type Persona = 'dogancan' | 'alice' | 'bob' | 'carol';
 
 /*
- * Who does what, because the write budget is per person (10 a second, a burst of 20; a send over
- * the socket that exceeds it fails with "You are going too fast") and a project's tests run in
- * parallel against one world:
+ * Who does what. The servers of the suite run with roomy per-person write budgets (`--roomy-budgets`,
+ * #522): several specs act as the same person at once, and would otherwise spend one budget together.
+ * Each socket still has its own frame budget (10 a second, a burst of 20), so a test still keeps a
+ * person's page from sending in floods, and the people still have roles:
  *   dogancan, alice  the people a test drives through the page. Their budget is the page's.
  *   carol, bob       the people who write what is already there — histories, questions, replies —
  *                    through the API, and who make the rooms. Their budget is for that.

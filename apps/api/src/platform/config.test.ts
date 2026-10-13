@@ -448,3 +448,17 @@ describe('the directory store (D-117)', () => {
     );
   });
 });
+
+describe('roomy rate budgets (#522)', () => {
+  test('are for development and the browser suite: production refuses them', () => {
+    expect(refusal({ ...production, RATE_BUDGETS: 'roomy' })).toContain(
+      'RATE_BUDGETS: production keeps the budgets the product states (D-81)',
+    );
+  });
+
+  test('are the one word, or nothing', () => {
+    expect(loadConfig({ ...valid, RATE_BUDGETS: 'roomy' }).RATE_BUDGETS).toBe('roomy');
+    expect(loadConfig(valid).RATE_BUDGETS).toBeUndefined();
+    expect(refusal({ ...valid, RATE_BUDGETS: 'none' })).toContain('RATE_BUDGETS');
+  });
+});

@@ -5,6 +5,7 @@
  *   bun run demo                       build, seed, serve on http://localhost:4173
  *   bun run demo -- --no-build         serve the build that is already in apps/web/dist
  *   bun run demo -- --port 4200 --db purlay_demo_two --manifest /tmp/world.json
+ *   bun run demo -- --roomy-budgets      no per-person write budget (the browser suite, #522)
  *
  * **It can only ever touch a database it created.** The name must start with
  * `purlay_demo` or `purlay_e2e`, and it is dropped and recreated on every start — so
@@ -36,6 +37,9 @@ const port = Number(flag('--port') ?? 4173);
 const apiPort = port + 1;
 const manifestPath = flag('--manifest');
 const build = !has('--no-build');
+// The browser suite's specs act as the same seeded people in parallel, so one person's write budget
+// would be spent by several specs at once (#522); the limit itself is tested against the real one.
+const roomyBudgets = has('--roomy-budgets');
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 
 if (!SAFE_DATABASE.test(databaseName)) {
@@ -129,6 +133,7 @@ const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
     GITHUB_CLIENT_SECRET: 'demo',
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
     ...(files === null ? {} : { STORAGE_DIRECTORY: files }),
+    ...(roomyBudgets ? { RATE_BUDGETS: 'roomy' } : {}),
     // The API serves the build itself, as the image does (D-61).
     CLIENT_DIST: join(root, 'apps/web/dist'),
   },

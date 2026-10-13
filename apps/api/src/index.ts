@@ -15,6 +15,7 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { SIGN_IN_CALLBACK } from './modules/auth/sign-in';
 import { createApp } from './ingress/http/app';
+import { budgetsFor } from './ingress/http/rate-limit';
 import { createLogger } from './platform/logging';
 import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
 import { installShutdown } from './lifecycle';
@@ -56,6 +57,8 @@ const connection = databaseConnection(config, log);
 
 const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
 
+const budgets = budgetsFor(config);
+
 const app = createApp({
   config,
   log,
@@ -63,6 +66,8 @@ const app = createApp({
   database,
   storage: storeFor(config),
   ...(client === undefined ? {} : { client }),
+  // Roomy only where the configuration asks and production allowed it (#522).
+  ...(budgets === undefined ? {} : { rateBudgets: budgets }),
   github: githubClient({
     clientId: config.GITHUB_CLIENT_ID,
     clientSecret: config.GITHUB_CLIENT_SECRET,

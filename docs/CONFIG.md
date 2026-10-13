@@ -75,6 +75,7 @@ ignoring it and leaving an operator to wonder why nobody is let in.
 | `S3_ACCESS_KEY_ID` | production | — | Garage's format: `GK` and 24 hex digits |
 | `S3_SECRET_ACCESS_KEY` | production | — | **Secret** |
 | `STORAGE_DIRECTORY` | — | — | A directory attachments are kept in **instead of a bucket** — the demonstration and the browser suite (D-117). Production refuses to start with it; with the `S3_*` variables it is refused too: one store or the other |
+| `RATE_BUDGETS` | — | — | `roomy`: writes and costly reads are not limited per person — the browser suite, whose parallel specs act as the same seeded people (#522). Sign-in and each socket's frame budget stay as they are. Production refuses to start with it (D-81) |
 
 The four without a default are **all set or none** (D-109). None, outside production, is a server that
 refuses every upload with `503 STORAGE_UNAVAILABLE` rather than pretending; production does not start
