@@ -123,6 +123,8 @@ export interface Api {
   /** What the caller is told about in this channel (D-107). */
   readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
+  /** The conversation of the caller and these people, opened or made (D-127). */
+  readonly openConversation: (workspaceId: string, userIds: readonly string[]) => Promise<Channel>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
 
   readonly messages: (
@@ -326,6 +328,13 @@ export const createApi = (http: Http): Api => {
       ),
     joinChannel: (channelId) =>
       http.request('POST', `/api/channels/${at(channelId)}/join`, Channel, options()),
+    openConversation: (workspaceId, userIds) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/conversations`,
+        Channel,
+        options({ body: { userIds } }),
+      ),
     openDirectMessage: (workspaceId, userId) =>
       http.request(
         'POST',

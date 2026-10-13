@@ -12,6 +12,7 @@
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { ChannelList } from '../sidebar/channel-list';
+import { ConversationList } from '../sidebar/conversation-list';
 import { JumpField } from '../sidebar/jump-field';
 import { PeopleList } from '../sidebar/people-list';
 import { WorkspaceMenu } from '../sidebar/workspace-menu';
@@ -42,6 +43,9 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
         <div className="pt-1 pb-3">
           <ChannelList />
+        </div>
+        <div className="border-t-hairline border-nav-border py-3">
+          <ConversationList />
         </div>
         <div className="border-t-hairline border-nav-border py-3">
           <PeopleList />

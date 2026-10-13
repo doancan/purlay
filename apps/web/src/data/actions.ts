@@ -58,6 +58,7 @@ export interface Actions {
   /** An owner's or an admin's: gone for everyone (D-123). */
   readonly archiveChannel: (channelId: string) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
+  readonly openConversation: (workspaceId: string, userIds: readonly string[]) => Promise<Channel>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
   /** The server's answer is the name everywhere at once; the other tabs hear `WORKSPACE_UPDATED`. */
   readonly renameWorkspace: (workspaceId: string, name: string) => Promise<Workspace>;
@@ -176,6 +177,11 @@ export const createActions = (
     archiveChannel: async (channelId): Promise<void> => {
       await api.archiveChannel(channelId);
       channelsRevoked(client, [channelId]);
+    },
+    openConversation: async (workspaceId, userIds): Promise<Channel> => {
+      const channel = await api.openConversation(workspaceId, userIds);
+      channelAdded(client, channel);
+      return channel;
     },
     openDirectMessage: async (workspaceId, userId): Promise<Channel> => {
       const channel = await api.openDirectMessage(workspaceId, userId);

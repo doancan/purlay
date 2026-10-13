@@ -245,6 +245,19 @@ export const en = {
   'people.none': 'Nobody else is in this workspace yet.',
   'people.noMatch': 'Nobody by that name.',
   'people.addFailed': '{name} was not added.',
+
+  // ── Group conversations (D-127) ────────────────────────────────────────
+  'conversations.title': 'Conversations',
+  'conversations.new': 'New message',
+  'conversations.empty': 'Talk to a few people at once, without a channel.',
+  'conversations.dialog.description': 'Up to {max} people. The same people always open the same conversation.',
+  'conversations.to': 'To: {names}',
+  'conversations.toNobody': 'To: nobody yet',
+  'conversations.pick': 'Pick',
+  'conversations.picked': 'Picked',
+  'conversations.full': 'That is as many as a conversation holds; a channel holds more.',
+  'conversations.start': 'Start conversation',
+  'conversations.failed': 'The conversation could not be started.',
   'newChannel.taken': 'A channel with that name already exists. Choose another.',
   'newChannel.invalid':
     'Use lowercase letters, numbers and hyphens, starting with a letter or number.',
