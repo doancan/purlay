@@ -135,7 +135,7 @@ describe('Deep Work', () => {
 });
 
 describe('outside a workspace', () => {
-  test('there is no Deep Work to read, and nothing to toggle', async () => {
+  test('there is no Deep Work to read, and nothing to start, end or toggle', async () => {
     const seen: { value: ReturnType<typeof useDeepWork> | null } = { value: null };
     const Probe = (): null => {
       seen.value = useDeepWork();
@@ -145,7 +145,10 @@ describe('outside a workspace', () => {
     expect(seen.value?.until).toBeNull();
     expect(() => {
       seen.value?.toggle();
+      seen.value?.start('2h');
+      seen.value?.end();
     }).not.toThrow();
+    expect(seen.value?.until).toBeNull();
     view.unmount();
   });
 });

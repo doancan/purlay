@@ -488,9 +488,6 @@ export const tr = {
   'deepWork.choice.1h': '1 saat',
   'deepWork.choice.2h': '2 saat',
   'deepWork.choice.tomorrow': 'Yarına kadar',
-  'deepWork.left': {
-    other: '{until} saatine kadar Deep Work, {count} dakika kaldı',
-  },
   'deepWork.stop': 'Deep Work’ü bitir',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
 
