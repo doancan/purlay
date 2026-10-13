@@ -99,6 +99,12 @@ in the row first, because it costs the person every channel. The last owner is s
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
 Admin* — and when. An action newer than the client is said by its name, never dropped.
 
+**A channel's name is typed as it is said** (D-123). In **New channel**, what is typed is turned
+into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes
+`istanbul`: lowercase, accents and Turkish letters folded to their plain letter, anything else one
+hyphen (`features/channel/channel-name.ts`). Somebody looking at a channel that is archived, or that
+they left on another screen, is told which, instead of *not found*.
+
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
 too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*
 with **Disconnect**. The token is never shown again — the field empties once it is saved — and without

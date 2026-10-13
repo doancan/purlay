@@ -1,9 +1,8 @@
 /**
  * Make a channel: a name, an optional topic, and nothing else (`API.md` §4).
  *
- * The name is checked here against the same rule the contract states — lowercase letters,
- * numbers and hyphens, starting with a letter or number, at most 64 — so the common
- * mistake is answered before a round trip; the server stays the authority, and what it
+ * The name is put into the form the contract states as it is typed — "Genel Sohbet" becomes
+ * `genel-sohbet` (`channel-name.ts`, D-123) — and checked against it before a round trip; the server stays the authority, and what it
  * refuses comes back into the same field: a taken name as "taken", a field it names as
  * "invalid", anything else as one line under the form. The form is left as it was on a
  * failure, so nothing typed is lost to a retry.
@@ -20,8 +19,8 @@ import { Icon } from '../../components/icon';
 import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useWorkspace } from '../shell/workspace';
-
-const NAME = /^[a-z0-9][a-z0-9-]*$/;
+import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from '../channel/channel-name';
+import { typeChannelName } from '../channel/name-field';
 
 interface Problem {
   readonly field: 'name' | 'form';
@@ -61,8 +60,8 @@ export const NewChannelDialog = ({
 
   const submit = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
-    const wanted = name.trim();
-    if (!NAME.test(wanted)) {
+    const wanted = finishedChannelName(name);
+    if (!CHANNEL_NAME.test(wanted)) {
       setProblem({ field: 'name', message: t('newChannel.invalid') });
       return;
     }
@@ -121,13 +120,13 @@ export const NewChannelDialog = ({
           label={t('newChannel.name')}
           hint={t('newChannel.nameHint')}
           value={name}
-          maxLength={64}
+          maxLength={CHANNEL_NAME_MAX}
           required
           autoComplete="off"
           spellCheck={false}
           {...(problem?.field === 'name' ? { error: problem.message } : {})}
           onChange={(event) => {
-            setName(event.target.value);
+            typeChannelName(event.target, setName);
           }}
         />
         <TextField

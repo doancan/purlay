@@ -37,6 +37,7 @@ import {
   type Channel,
   type ClientFrame,
   type ErrorCode,
+  type RevokedReason,
   type ServerFrame,
 } from '@purlay/types';
 import type { Api } from '../data/api';
@@ -126,6 +127,11 @@ export interface RealtimeState {
    * arrives (#411).
    */
   readonly typing: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Channels that went away and why, when the server said (D-123): what a screen still showing one
+   * tells the person instead of "not found".
+   */
+  readonly gone: Readonly<Record<string, RevokedReason>>;
 }
 
 export interface Outgoing {
@@ -204,6 +210,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     pending: restored,
     degraded: {},
     typing: {},
+    gone: {},
   }));
   const serverClock = createServerClock(options.clock);
   const timers = new Map<string, () => void>();
@@ -267,6 +274,15 @@ export const createEngine = (options: EngineOptions): Engine => {
   // Each typist's end, by channel and person, so a renewed announcement replaces the old end.
   const typingEnds = new Map<string, () => void>();
   const typingKey = (channelId: string, userId: string): string => `${channelId}:${userId}`;
+  /** Drops what was remembered about why these channels went away (D-123). */
+  const forgetWhyGone = (channelIds: readonly string[]): void => {
+    const now = store.getState().gone;
+    if (!channelIds.some((id) => id in now)) return;
+    store.setState({
+      gone: Object.fromEntries(Object.entries(now).filter(([id]) => !channelIds.includes(id))),
+    });
+  };
+
   const stopTyping = (channelId: string, userId: string): void => {
     const key = typingKey(channelId, userId);
     typingEnds.get(key)?.();
@@ -557,12 +573,23 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'CHANNEL_ADDED': {
         const channel: Channel = frame.data;
         channelAdded(client, channel);
+        // Given back, it forgets why it went: a later removal must not read as the old reason.
+        forgetWhyGone([channel.id]);
         watched.add(channel.id);
         connection?.watch(channel.id);
         return;
       }
       case 'ACCESS_REVOKED': {
         channelsRevoked(client, frame.data.channelIds);
+        const { reason } = frame.data;
+        if (reason === undefined) forgetWhyGone(frame.data.channelIds);
+        else {
+          const gone = { ...store.getState().gone };
+          for (const id of frame.data.channelIds) gone[id] = reason;
+          store.setState({ gone });
+        }
+        // A public channel left is still there to see and join again: the list is read again.
+        if (reason === 'left') void client.invalidateQueries({ queryKey: families.channels });
         for (const id of frame.data.channelIds) {
           watched.delete(id);
           connection?.unwatch(id);

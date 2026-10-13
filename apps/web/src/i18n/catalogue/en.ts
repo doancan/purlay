@@ -204,6 +204,12 @@ export const en = {
   'state.session.error.body': 'The server did not answer. You are still signed in; try again.',
   'state.channel.missing.title': 'That channel is not here',
   'state.channel.missing.body': 'It does not exist, or you cannot see it.',
+  'state.channel.archived.title': 'This channel was archived',
+  'state.channel.archived.body':
+    'An admin archived it. Its conversation is kept, but nobody sees it now.',
+  'state.channel.left.title': 'You left this channel',
+  'state.channel.left.body':
+    'You left it on another screen. Join it again from Browse channels if it is public.',
   'state.workspace.empty.title': 'Pick a channel',
   'state.workspace.empty.body': 'Choose one from the list, or create the first.',
 
@@ -211,7 +217,8 @@ export const en = {
   'newChannel.title': 'New channel',
   'newChannel.description': 'Anyone in the workspace can find and join a public channel.',
   'newChannel.name': 'Name',
-  'newChannel.nameHint': 'Lowercase letters, numbers and hyphens. Up to 64 characters.',
+  'newChannel.nameHint':
+    'Lowercase letters, numbers and hyphens: spaces and capitals become them as you type. Up to 64.',
   'newChannel.topic': 'Topic',
   'newChannel.topicHint': 'Optional. One line on what the channel is for.',
   'newChannel.create': 'Create channel',

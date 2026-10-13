@@ -18,13 +18,16 @@ import type {
   CreateChannelRequest,
   CreateWorkspaceRequest,
   Membership,
+  UpdateChannelRequest,
   Message,
   Workspace,
 } from '@purlay/types';
 import type { Api } from './api';
 import {
   channelAdded,
+  channelRenamed,
   channelStateChanged,
+  channelsRevoked,
   patchMessage,
   reactionsUpdated,
   threadUpdated,
@@ -47,6 +50,12 @@ export interface Actions {
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<void>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
+  /** A new name or topic; the list shows what the server kept (D-123). */
+  readonly updateChannel: (channelId: string, input: UpdateChannelRequest) => Promise<Channel>;
+  /** Out of the channel; a public one stays to be seen and joined again (D-123). */
+  readonly leaveChannel: (channel: Channel) => Promise<void>;
+  /** An owner's or an admin's: gone for everyone (D-123). */
+  readonly archiveChannel: (channelId: string) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
   /** In by an invitation's token (D-115); answers the membership, already listed by `/api/me`. */
@@ -142,6 +151,23 @@ export const createActions = (
       const channel = await api.joinChannel(channelId);
       channelAdded(client, channel);
       return channel;
+    },
+    updateChannel: async (channelId, input): Promise<Channel> => {
+      const channel = await api.updateChannel(channelId, input);
+      channelRenamed(client, channelId, { name: channel.name ?? '', topic: channel.topic });
+      return channel;
+    },
+    leaveChannel: async (channel): Promise<void> => {
+      await api.leaveChannel(channel.id);
+      channelsRevoked(client, [channel.id]);
+      // A public channel is still there to see, as one not joined: the list is read again.
+      if (channel.type === 'public') {
+        await client.invalidateQueries({ queryKey: keys.channels(channel.workspaceId) });
+      }
+    },
+    archiveChannel: async (channelId): Promise<void> => {
+      await api.archiveChannel(channelId);
+      channelsRevoked(client, [channelId]);
     },
     openDirectMessage: async (workspaceId, userId): Promise<Channel> => {
       const channel = await api.openDirectMessage(workspaceId, userId);

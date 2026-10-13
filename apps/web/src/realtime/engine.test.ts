@@ -746,6 +746,41 @@ describe('the frames', () => {
     );
   });
 
+  test('a channel archived, or left on another screen, is remembered with why; a removal says nothing (D-123)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH] }, ts: T0 }));
+    expect(w.engine.store.getState().gone).toEqual({});
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2], reason: 'archived' }, ts: T0 }),
+    );
+    expect(w.engine.store.getState().gone).toEqual({ [CH2]: 'archived' });
+    // Left: a public channel is still there to be seen, so the list is asked for again.
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason: 'left' }, ts: T0 }),
+    );
+    expect(w.engine.store.getState().gone).toEqual({ [CH]: 'left', [CH2]: 'archived' });
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+  });
+
+  test('a channel given back forgets why it went: a later removal does not read as the old reason (D-123)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2], reason: 'left' }, ts: T0 }),
+    );
+    expect(w.engine.store.getState().gone).toEqual({ [CH2]: 'left' });
+    w.deliver(frame({ event: 'CHANNEL_ADDED', data: channel(CH2), ts: T0 }));
+    expect(w.engine.store.getState().gone).toEqual({});
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH2] }, ts: T0 }));
+    expect(w.engine.store.getState().gone).toEqual({});
+  });
+
   test("the end of the session is the screen's to handle", () => {
     const w = world();
     w.engine.start();
