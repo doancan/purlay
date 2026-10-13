@@ -4463,6 +4463,15 @@ channel a stranger to it cannot read before it moves in (S-1).
 **Not yet:** leaving and removing (`POST …/leave`, Phase 1, with #51's roles), and the client's half
 — the option when creating, and bringing people in — which is a `web` issue. *Leaving is D-123.*
 
+**Amended 2026-10-13 (#520) — a private channel's name is not private.** Channel names are unique per
+workspace across public and private channels (`idx_channels_unique_name`), so creating or renaming a
+channel to a name a private channel holds answers `409 CHANNEL_NAME_TAKEN`, and a member outside it
+learns that the name is taken. That is accepted: a name is how a channel is found and talked about,
+not what is said in it; the members, the topic and every message stay the members' (`404` to anyone
+else, D-34). **Rejected:** names unique per visibility — two `#design` channels in one sidebar, and a
+migration, for a secret most teams do not keep; answering a free name with the same `409` — a lie
+about a real collision.
+
 ### D-105. What a search finds, and what it is asked with
 
 D-10 fixed the index and the scope; nothing fixed what a search *means*. Served by #63.

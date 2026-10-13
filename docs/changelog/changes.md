@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-10-13: a private channel's name is not private (D-104, amended)
+
+- A name a private channel holds is taken for the whole workspace, and a `409` on creating or renaming
+  says so to a member outside it. Accepted and written down; nothing else about the channel is shown
+  (#520).
+
 ### Feature — 2026-10-13: `@` offers people in the composer (D-110 §8, amended)
 
 - Typing `@` and a letter in a channel's or a thread's composer lists who a mention there would reach,
