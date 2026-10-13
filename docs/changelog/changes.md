@@ -8,7 +8,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ### Feature — 2026-10-14: a channel's files, the API (D-129, part of #485)
 
-- `GET /api/channels/:id/files` lists every file shared in a channel, newest message first, with who
+- `GET /api/channels/:channelId/files` lists every file shared in a channel, newest message first, with who
   shared it, when and in which thread; a deleted message's files and unsent uploads are never shown.
   Each attachment now carries its channel (migration 0027), backfilled for those already sent.
 

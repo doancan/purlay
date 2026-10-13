@@ -51,7 +51,14 @@ const attach = async (
     context,
     { id, name, bytes },
   );
-  await db.updateTable('attachments').set({ message_id: to }).where('id', '=', id).execute();
+  await db
+    .updateTable('attachments')
+    .set((eb) => ({
+      message_id: to,
+      channel_id: eb.selectFrom('messages').select('channel_id').where('id', '=', to),
+    }))
+    .where('id', '=', id)
+    .execute();
   return id;
 };
 

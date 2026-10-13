@@ -5645,10 +5645,12 @@ meant walking every message of the channel to find the few that carry one.
 2. **The list is the channel's, read through its context**: `GET /api/channels/:channelId/files`,
    refused as the channel's messages are (`404 CHANNEL_NOT_FOUND` for one the caller cannot see).
 3. **What the channel shows, no more**: files of messages not deleted — a tombstone hides its files
-   as it hides its words (D-109 §6) — and never an unattached upload, which is its uploader's alone.
+   as it hides its words (D-109 §6), while a reply's file stays when its root is deleted, as the
+   thread does (D-103 §7) — and never an unattached upload, which is its uploader's alone.
 4. **Newest message first, then its files newest first**, keyset on the pair. The cursor is a file's
    id; one that is not a file of this channel's messages is `400`, never an empty page that looks
-   like the end.
+   like the end. A file whose message was deleted after the page was read is still a cursor, so
+   paging on past a deletion goes on where it was.
 5. **Each file says who shared it, when, and where**: its message's id, its thread's root, its sender
    and the message's time, so the list opens the file where it was said.
 

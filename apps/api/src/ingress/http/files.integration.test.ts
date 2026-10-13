@@ -137,6 +137,17 @@ const refusal = async (
   return [response.status, body.error.code];
 };
 
+/** The fields a 400 names, so a refusal for another reason cannot pass for this one. */
+const refusedFields = async (world: World, path: string, who: SignedInUser): Promise<string[]> => {
+  const response = await world.call('GET', path, who);
+  expect(response.status).toBe(400);
+  const body = (await response.json()) as {
+    error: { code: string; details?: { fields?: Record<string, string> } };
+  };
+  expect(body.error.code).toBe('VALIDATION_FAILED');
+  return Object.keys(body.error.details?.fields ?? {});
+};
+
 describe('integration: a channel’s files', () => {
   test('newest message first, its files newest first, with who said it, when and where', async () => {
     await withRollback(async (db) => {
@@ -208,6 +219,45 @@ describe('integration: a channel’s files', () => {
     });
   });
 
+  test('a page’s last file is still its cursor after its message is deleted', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const older = await sendWith(world, world.publicChannel, ['older.txt']);
+      const newer = await sendWith(world, world.publicChannel, ['newer.txt']);
+      const one = await filesOf(world, world.publicChannel, world.member, '?limit=1');
+      expect(one.nextCursor).toBe(newer.files[0] ?? null);
+      expect(
+        (await world.call('DELETE', `/api/messages/${newer.message}`, world.owner)).status,
+      ).toBe(204);
+
+      const two = await filesOf(
+        world,
+        world.publicChannel,
+        world.member,
+        `?limit=1&before=${String(one.nextCursor)}`,
+      );
+
+      expect(two.data.map((file) => file.attachment.id)).toEqual(older.files);
+    });
+  });
+
+  test('a reply’s file stays when its thread’s root is deleted, as the thread does', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const root = await sendWith(world, world.publicChannel, ['root.txt']);
+      const reply = await sendWith(world, world.publicChannel, ['reply.txt'], root.message);
+      expect(
+        (await world.call('DELETE', `/api/messages/${root.message}`, world.owner)).status,
+      ).toBe(204);
+
+      const page = await filesOf(world, world.publicChannel, world.member);
+
+      expect(page.data.map((file) => [file.attachment.id, file.parentId])).toEqual([
+        [reply.files[0], root.message],
+      ]);
+    });
+  });
+
   test('a page exactly as long as what is left says it is the last', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
@@ -255,7 +305,20 @@ describe('integration: a channel’s files are refused as the channel is', () =>
       const path = `/api/channels/${world.publicChannel}/files?before=`;
 
       for (const cursor of [elsewhere.files[0], unsent, anId()]) {
-        expect(await refusal(world, `${path}${String(cursor)}`, world.owner)).toEqual([
+        expect(await refusedFields(world, `${path}${String(cursor)}`, world.owner)).toEqual([
+          'before',
+        ]);
+      }
+    });
+  });
+
+  test('a malformed cursor, limit or parameter is refused', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const path = `/api/channels/${world.publicChannel}/files`;
+
+      for (const query of ['?before=not-an-id', '?limit=abc', '?limit=1.5', `?after=${anId()}`]) {
+        expect(await refusal(world, `${path}${query}`, world.member)).toEqual([
           400,
           'VALIDATION_FAILED',
         ]);

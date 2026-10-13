@@ -6,8 +6,8 @@
  *   binds to the message's own channel (I-1).
  * - **What the channel shows.** An unattached upload is its uploader's alone and is never listed; a
  *   deleted message's files go with its words, as the tombstone hides them (D-109 §6).
- * - **Keyset on the message, then the file.** A message carries up to ten, so the cursor is a file's
- *   id and the next page starts after it within its message.
+ * - **Keyset on the message, then the file.** A message carries several (`ATTACHMENTS_PER_MESSAGE_MAX`),
+ *   so the cursor is a file's id and the next page starts after it within its message.
  */
 import { sql, type Executor } from '@purlay/db';
 import type { FilePage, FileQuery } from '@purlay/types';

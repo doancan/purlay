@@ -134,7 +134,7 @@ purlay/
 │   │       │   ├── channels/    channels, DMs, membership, read state
 │   │       │   ├── messages/    messages, threads, resolution, mentions
 │   │       │   │              keyset on the id alone; OFFSET is a check, not advice
-│   │       │   ├── attachments/ upload, thumbnails, quota
+│   │       │   ├── attachments/ upload, thumbnails, quota, a channel's files
 │   │       │   ├── notifications/
 │   │       │   ├── search/
 │   │       │   └── integrations/github/  unfurl, link_previews cache
@@ -717,11 +717,13 @@ The rules are D-109's; this is the path through the code.
    its type and length before anything is read → `modules/attachments/images.ts` re-encodes an
    image, or leaves a file as sent → `uploads.ts` stores it under an opaque key and checks the quota
    with its row → the `Attachment`, `message_id` still null.
-2. The message is sent carrying those ids; the service links them and adds to
-   `storage_used_bytes` in the same transaction.
+2. The message is sent carrying those ids; the service links them to the message and its channel,
+   and adds to `storage_used_bytes`, in the same transaction.
 3. Every page of messages carries each message's attachments, read in one query for the page
    (`messages/sets.ts`); a tombstone carries none.
-4. Unsent uploads older than a day are swept by `bun run job sweep:orphans` (D-30), and the count is
+4. `GET /api/channels/:channelId/files` → the channel's guard → `modules/attachments/files.ts` reads
+   the channel's files by the channel they carry, newest message first (D-129).
+5. Unsent uploads older than a day are swept by `bun run job sweep:orphans` (D-30), and the count is
    reconciled by `reconcile:storage`.
 
 Downloads are always brokered by the API so membership is actually checked; storage keys are

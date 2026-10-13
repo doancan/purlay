@@ -57,6 +57,15 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
   },
   {
+    id: 'files-cursor-gone-with-its-message',
+    why: 'a message deleted while someone pages stops the list there with a refusal',
+    file: 'apps/api/src/modules/attachments/files.ts',
+    find: "    .where('channel_id', '=', context.channelId)\n    .executeTakeFirst();\n",
+    replace:
+      "    .where('channel_id', '=', context.channelId)\n    .where((eb) => eb.exists(eb.selectFrom('messages').select('id').whereRef('messages.id', '=', 'attachments.message_id').where('messages.deleted_at', 'is', null)))\n    .executeTakeFirst();\n",
+    tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
+  },
+  {
     id: 'files-last-page-not-last',
     why: 'a page exactly as long as what is left says there is more',
     file: 'apps/api/src/modules/attachments/files.ts',

@@ -654,10 +654,6 @@ export type ChannelFile = Static<typeof ChannelFile>;
 export const FilePage = Page(ChannelFile);
 export type FilePage = Static<typeof FilePage>;
 
-export const FileQuery = FromClient({
-  before: Type.Optional(Uuid),
-  limit: Type.Optional(
-    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
-  ),
-});
+/** Older than a file, one way only: the list is read back from the newest. */
+export const FileQuery = Type.Pick(PageQuery, ['before', 'limit']);
 export type FileQuery = Static<typeof FileQuery>;
