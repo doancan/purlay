@@ -50,7 +50,7 @@ const filePage = (files: readonly ChannelFile[], nextCursor: string | null = nul
 
 type Api = NonNullable<ChannelOptions['api']>;
 
-const mount = async (files: Api['files'], api: Api = {}): Promise<ChannelView> =>
+const mount = async (files: NonNullable<Api['files']>, api: Api = {}): Promise<ChannelView> =>
   await mountChannel({
     messages: page([aMessage(1), aMessage(2)]),
     api: { files, ...api },
