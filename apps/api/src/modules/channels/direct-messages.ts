@@ -35,7 +35,7 @@ export interface OpenedConversation {
 }
 
 /** The people, sorted byte for byte: what `dm_key` holds and the database checks (I-5). */
-export const conversationKey = (people: readonly string[]): string =>
+const conversationKey = (people: readonly string[]): string =>
   [...people].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join(':');
 
 /** The pair, sorted: a conversation of two, or one id twice for a note to self. */

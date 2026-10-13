@@ -15,7 +15,7 @@ import { channelFor } from './channels';
  * Refuses unless `userId` is a person in the workspace whose account has not been deleted.
  * Another workspace's member, a stranger and an erased account are the same answer.
  */
-export const requireWorkspacePerson = async (
+const requireWorkspacePerson = async (
   executor: Executor,
   context: Pick<WorkspaceContext, 'workspaceId'>,
   userId: string,
