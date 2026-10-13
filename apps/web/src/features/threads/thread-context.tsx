@@ -103,7 +103,12 @@ export const ThreadsProvider = ({
   openThread = null,
   children,
 }: ThreadsProviderProps): React.JSX.Element => {
-  const [state, setState] = useState<ThreadsState>({ openId: openThread, focusRequest: null });
+  // A thread the address opens takes focus like one opened by hand: on a narrow window the panel
+  // covers the composer that would otherwise have it.
+  const [state, setState] = useState<ThreadsState>({
+    openId: openThread,
+    focusRequest: openThread === null ? null : 'panel',
+  });
   const latest = useRef(state.openId);
   latest.current = state.openId;
   const controls = useRef(new Map<string, ThreadControls>());
@@ -189,7 +194,9 @@ export const ThreadsProvider = ({
         return true;
       }
       if (key === 'r') {
-        // A reply has no thread of its own (I-1): R on one in the panel answers its root.
+        // A reply has no thread of its own (I-1): R on one in the panel answers its root. In the
+        // feed only a sent root registers controls; one still sending, or failed, has no thread yet.
+        if (inPanel === null && !controls.current.has(rootId)) return false;
         event.preventDefault();
         open(rootId, 'reply');
         return true;

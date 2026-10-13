@@ -340,6 +340,8 @@ export const en = {
   'thread.replyLabel': 'Reply to thread',
   'thread.loading': 'Loading replies…',
   'thread.error': "Couldn't load replies",
+  'thread.rootError': "Couldn't load this thread",
+  'thread.notHere': 'This thread is not in this channel.',
   'thread.announce.resolved': 'Thread resolved',
   'thread.announce.reopened': 'Thread reopened',
 

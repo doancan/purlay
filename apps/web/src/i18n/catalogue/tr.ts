@@ -332,6 +332,8 @@ export const tr = {
   'thread.replyLabel': "Thread'e yanıt",
   'thread.loading': 'Yanıtlar yükleniyor…',
   'thread.error': 'Yanıtlar yüklenemedi',
+  'thread.rootError': 'Bu thread yüklenemedi',
+  'thread.notHere': 'Bu thread bu kanalda yok.',
   'thread.announce.resolved': 'Thread çözüldü',
   'thread.announce.reopened': 'Thread yeniden açıldı',
 

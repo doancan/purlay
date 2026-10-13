@@ -639,6 +639,30 @@ describe('the keyboard (UX §7)', () => {
     view.unmountAll();
   });
 
+  test('R on a message that is still sending, or failed, opens no thread: it has none yet', async () => {
+    const view = await mount();
+    connect(view);
+    const sending = view.engine().send({ channelId: IDS.api, content: 'on its way' });
+    await settle();
+    const row = rowOf(view, sending);
+    act(() => {
+      row.focus();
+    });
+    key(row, 'r');
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    act(() => {
+      view.feed.timers.advance(ACK_DEADLINE_MS);
+      view.world.timers.advance(ACK_DEADLINE_MS);
+    });
+    await settle();
+    expect(within(rowOf(view, sending)).getByText('Failed to send')).toBeDefined();
+    key(rowOf(view, sending), 'r');
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    view.unmountAll();
+  });
+
   test("modified letters are the browser's, not ours", async () => {
     const view = await mount();
     const row = rowOf(view, messageIdAt(ROOT));
@@ -884,6 +908,52 @@ describe('a thread asked for by the address', () => {
   test('an address that names nothing real opens nothing', async () => {
     const view = await mount({ path: `/w/acme/c/${IDS.api}?thread=not-an-id` });
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a thread opened by the address takes focus, so a narrow window, where it covers the composer, keeps it', async () => {
+    const view = await mount({ path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}` });
+    await settle();
+    const panel = sectionOf(view);
+    expect(
+      document.activeElement === within(panel).getByRole('heading', { name: 'Thread · #api' }),
+    ).toBe(true);
+    view.unmountAll();
+  });
+
+  test('a thread the whole history does not hold says so, instead of loading for ever', async () => {
+    const view = await mount({
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(99)}`,
+      messages: page([aMessage(1)]),
+    });
+    await settle();
+    const panel = sectionOf(view);
+    expect(within(panel).getByText('This thread is not in this channel.')).toBeDefined();
+    expect(within(panel).queryByLabelText('Loading replies…')).toBeNull();
+    await person().click(within(panel).getByRole('button', { name: 'Close thread' }));
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a read-back that fails on its way to the root says so in the panel, and Retry finds it', async () => {
+    let calls = 0;
+    const view = await mount({
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}`,
+      messages: () => {
+        calls += 1;
+        if (calls === 1) return Promise.resolve(page([aMessage(5)], 'older'));
+        if (calls === 2) return Promise.reject(new Error('the network went away'));
+        return Promise.resolve(page([aMessage(1), rootMessage()]));
+      },
+    });
+    await settle();
+    const panel = sectionOf(view);
+    const alert = within(panel).getByRole('alert');
+    expect(alert.textContent).toContain("Couldn't load this thread");
+    await person().click(within(alert).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(within(sectionOf(view)).getByText('Why is the backoff 4s?')).toBeDefined();
     view.unmountAll();
   });
 });

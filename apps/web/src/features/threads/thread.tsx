@@ -80,6 +80,10 @@ const ThreadPanelView = ({
     () => readingOrder(feed.data).find((m) => m.id === rootId),
     [feed.data, rootId],
   );
+  // The feed reads back older pages until the root is in it (`message-feed.tsx`); when that cannot
+  // go on — it failed, or the whole history has no such root — the panel says so instead of loading.
+  const rootFailed = feed.isError || feed.isFetchNextPageError;
+  const rootGone = feed.isSuccess && !feed.hasNextPage && !feed.isFetching;
   const replyCount = root?.thread?.replyCount ?? 0;
   const resolved = root?.thread?.resolvedAt != null;
   const query = useThread(rootId, root !== undefined && replyCount > 0);
@@ -171,7 +175,28 @@ const ThreadPanelView = ({
         />
       </div>
 
-      {root === undefined ? (
+      {root === undefined && rootFailed ? (
+        <div role="alert" className="flex items-center gap-2 p-4 text-label text-danger-text">
+          <Icon name="failed" size="sm" />
+          {t('thread.rootError')}
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => {
+              // No first page: read it again. A first page: go on reading back from where it stopped.
+              if (feed.data === undefined) void feed.refetch();
+              else void feed.fetchNextPage();
+            }}
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      ) : root === undefined && rootGone ? (
+        <p role="status" className="p-4 text-label text-ink-muted">
+          {t('thread.notHere')}
+        </p>
+      ) : root === undefined ? (
         <LoadingStatus label={t('thread.loading')} className="flex flex-col gap-2 p-4">
           <Skeleton className="w-members" />
           <Skeleton className="w-sidebar" />
