@@ -40,15 +40,25 @@ const MINUTES = { '30m': 30, '1h': 60, '2h': 120 } as const;
 const MORNING_HOUR = 9;
 
 /**
+ * Before this hour the night is not over: "until tomorrow" chosen at one in the morning means the
+ * coming morning, not the next day's (D-124).
+ */
+const NIGHT_ENDS_HOUR = 5;
+
+/**
  * Kept back from the server's bound, so a clock here a little ahead of the server's does not turn
  * "until tomorrow" into a refusal.
  */
 const BOUND_MARGIN_MS = 5 * 60_000;
 
-/** The instant a choice ends at, from now: tomorrow at nine, never further than the server allows. */
+/**
+ * The instant a choice ends at, from now: the next morning at nine — this morning when it is chosen
+ * in the small hours — never further than the server allows.
+ */
 export const deepWorkEnd = (choice: DeepWorkChoice, now: Date): Date => {
   if (choice !== 'tomorrow') return new Date(now.getTime() + MINUTES[choice] * 60_000);
-  const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, MORNING_HOUR);
+  const days = now.getHours() < NIGHT_ENDS_HOUR ? 0 : 1;
+  const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, MORNING_HOUR);
   const bound = now.getTime() + DEEP_WORK_MAX_HOURS * 3_600_000 - BOUND_MARGIN_MS;
   return new Date(Math.min(morning.getTime(), bound));
 };

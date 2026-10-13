@@ -167,6 +167,13 @@ describe('how long a choice lasts (D-124)', () => {
     expect(deepWorkEnd('tomorrow', at(23))).toEqual(new Date(2026, 8, 10, 9, 0, 0));
   });
 
+  test('after midnight and before five, the night is not over: tomorrow is this morning', () => {
+    expect(deepWorkEnd('tomorrow', at(1))).toEqual(new Date(2026, 8, 9, 9, 0, 0));
+    expect(deepWorkEnd('tomorrow', at(0))).toEqual(new Date(2026, 8, 9, 9, 0, 0));
+    // From five a new day has begun: tomorrow is the next day's morning, within the bound.
+    expect(deepWorkEnd('tomorrow', at(5)).getDate()).toBe(10);
+  });
+
   test('never further than the server allows, with room for a clock a little ahead', () => {
     // At eight, nine tomorrow is twenty-five hours away: the server would refuse it.
     const end = deepWorkEnd('tomorrow', at(8));

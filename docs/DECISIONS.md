@@ -5405,8 +5405,9 @@ and open to their reversal.
 1. **Deep Work is started for a chosen while** — 30 minutes, an hour, two hours, or until tomorrow —
    and the instant is what `PUT …/deep-work` is sent, so it is the server's delivery that stops (D-15,
    D-108); the client paints it first and puts it back on a refusal, as before. *Until tomorrow* is nine
-   the next morning in the person's own time, and never later than the server's bound less five
-   minutes, so a clock here a little ahead of the server's cannot turn it into a refusal.
+   the next morning in the person's own time — the coming morning when it is chosen before five, as
+   the night is not over then — and never later than the server's bound less five minutes, so a clock
+   here a little ahead of the server's cannot turn it into a refusal.
    `Cmd/Ctrl+Shift+D` still starts it for an hour; the command palette offers every while, and while
    it is on, its end.
 2. **The browser tests that end a person's sessions, or change their Deep Work, act as outsiders.** The
