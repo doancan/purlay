@@ -216,12 +216,17 @@ describe('integration: a fresh session for a seeded person (#522 follow-up)', ()
 
   test('is refused outside a scratch database, and for somebody who is not there', async () => {
     await withRollback(async (db) => {
-      await expect(
-        freshSession(db, fixedClock(NOW), 'postgres://u:p@localhost:5432/purlay', 'erin'),
-      ).rejects.toThrow(/refusing to seed "purlay"/);
-      await expect(
-        freshSession(db, fixedClock(NOW), 'postgres://u:p@localhost:5432/purlay_e2e_x', 'nobody'),
-      ).rejects.toThrow(/nobody called nobody/);
+      const refusal = async (url: string, who: string): Promise<string> =>
+        await freshSession(db, fixedClock(NOW), url, who).then(
+          () => 'no refusal',
+          (error: unknown) => (error instanceof Error ? error.message : String(error)),
+        );
+      expect(await refusal('postgres://u:p@localhost:5432/purlay', 'erin')).toContain(
+        'refusing to seed "purlay"',
+      );
+      expect(await refusal('postgres://u:p@localhost:5432/purlay_e2e_x', 'nobody')).toContain(
+        'nobody called nobody',
+      );
     });
   });
 });
