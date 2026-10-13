@@ -70,6 +70,7 @@ import {
   readWorkspace,
   updateWorkspace,
 } from './workspaces';
+import { readPushKey, setMyLocale, subscribeDevice, unsubscribeDevice } from './push';
 import {
   createWorkspaceChannel,
   joinPublicChannel,
@@ -337,6 +338,22 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
 
     .get('/api/me', async ({ request }) => await readMe(dependencies, request))
+    .put('/api/me/locale', async ({ request, body, set }) => {
+      await setMyLocale(dependencies, request, body);
+      set.status = 204;
+      return null;
+    })
+    .get('/api/push/key', async ({ request }) => await readPushKey(dependencies, request))
+    .post('/api/push/subscriptions', async ({ request, body, set }) => {
+      await subscribeDevice(dependencies, request, body);
+      set.status = 204;
+      return null;
+    })
+    .post('/api/push/subscriptions/remove', async ({ request, body, set }) => {
+      await unsubscribeDevice(dependencies, request, body);
+      set.status = 204;
+      return null;
+    })
     .get('/api/workspaces', async ({ request }) => await listMyWorkspaces(dependencies, request))
     .post('/api/workspaces', async ({ request, body, set }) => {
       set.status = 201;

@@ -92,6 +92,16 @@ export const Environment = Type.Object({
   /** A directory attachments are kept in instead of a bucket: development and the browser suite only
    *  (D-117). Production refuses it. */
   STORAGE_DIRECTORY: Type.Optional(Type.String({ minLength: 1 })),
+
+  /** Web Push's application-server keys (RFC 8292, #78): the uncompressed P-256 public point and its
+   *  32-byte private scalar, base64url, and who runs it (`mailto:` or `https:`). All three or none:
+   *  none is push switched off — the API says so, and the in-app inbox is still the record (D-12).
+   */
+  VAPID_PUBLIC_KEY: Type.Optional(Type.String({ pattern: '^B[A-Za-z0-9_-]{86}$' })),
+  VAPID_PRIVATE_KEY: Type.Optional(Type.String({ pattern: '^[A-Za-z0-9_-]{43}$' })),
+  VAPID_SUBJECT: Type.Optional(
+    Type.String({ pattern: '^(mailto:[^\\s@]+@[^\\s@]+|https://\\S+)$' }),
+  ),
 });
 
 /**
@@ -113,6 +123,7 @@ const SECRETS: ReadonlySet<string> = new Set([
   'DATABASE_URL',
   'ENCRYPTION_KEY',
   'S3_SECRET_ACCESS_KEY',
+  'VAPID_PRIVATE_KEY',
 ]);
 
 /** The variables this application reads. `.env.example` is generated from it. */
@@ -226,6 +237,12 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     );
   } else if (production && storage === 0) {
     problems.push('S3_ENDPOINT: production refuses to start without the attachment bucket');
+  }
+  const vapid = [config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY, config.VAPID_SUBJECT].filter(
+    (value) => value !== undefined,
+  ).length;
+  if (vapid !== 0 && vapid !== 3) {
+    problems.push('VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: set all three, or none');
   }
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {

@@ -33,6 +33,30 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'push-unsubscribe-anybodys',
+    why: 'a signed-in person stops somebody else’s device being told, by naming its endpoint',
+    file: 'apps/api/src/modules/push/subscriptions.ts',
+    find: "    .where('user_id', '=', userId)\n    .where('endpoint', '=', endpoint)\n",
+    replace: "    .where('endpoint', '=', endpoint)\n",
+    tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
+  },
+  {
+    id: 'push-key-that-is-no-point',
+    why: 'a subscription nobody can encrypt for is stored, and fails inside a delivery nobody waits on',
+    file: 'apps/api/src/modules/push/subscriptions.ts',
+    find: '  if (!(await isPoint(input.keys.p256dh))) {\n',
+    replace: '  if (!(await isPoint(input.keys.p256dh)) && false) {\n',
+    tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
+  },
+  {
+    id: 'push-device-outlives-sign-out',
+    why: 'a shared computer goes on showing the last person’s notices after they signed out',
+    file: 'apps/api/src/modules/auth/sessions.ts',
+    find: '  if (revoked !== undefined) await forgetSessions(executor, [revoked.id]);\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
+  },
+  {
     id: 'oauth-state-length-check-removed',
     why: 'the comparison walks its first argument only, so an empty or truncated signature compares equal and the state needs no signature at all',
     file: 'apps/api/src/modules/auth/state.ts',

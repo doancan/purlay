@@ -5498,6 +5498,61 @@ make `v0.2.0` never finish, and S-1 is a measurement of the product as specified
 
 ---
 
+### D-126. Web Push: who is told, what they are told, and where it may be sent — #78
+
+Phase 1 is silent with the tab closed (D-12, `PRD.md` §4.5). Web Push closes that, and every choice
+below is about not undoing what D-12 made quiet, and not turning the server into something other
+people can aim.
+
+**Decided.**
+
+1. **Who is pushed: the people a write told for the first time.** The notification rows a send
+   inserts — none on a retried send, which writes nothing new; only the newly named on an edit
+   (D-103) — of a reason in `NEEDS_YOU`, not `suppressed_by_deep_work` (D-108), not already read,
+   for a message not deleted, to a person not deleted. `channel_message` included: a member who
+   chose "every message" (D-107) asked to be told. Never the author.
+2. **Who and where, never what.** The title is the sender and the place (`Alice in #api`, or `Alice`
+   in a direct message); the body is the inbox's own words for the reason. The push service relays
+   the payload encrypted for the device (RFC 8291), but a lock screen is not private.
+3. **In the person's language (D-41 kept):** `users.locale`, set by the client when the person
+   subscribes and whenever they change language (`PUT /api/me/locale`).
+4. **A device belongs to a session.** A subscription carries the session it was made in: signing out
+   deletes it, and a push needs that session live — a shared computer stops showing the last
+   person's notices. An endpoint is unique across people: a browser signed into another account
+   moves to it. At most twenty devices a person.
+5. **Always shown.** Browsers penalise a push that shows nothing (Chrome's generic notice, Safari's
+   revocation), so the worker always shows one, folded by channel. Not pushing while the person is
+   at Purlay waits for presence (#480).
+6. **Where a push may be sent:** the image proxy's address rule (`https:` on the default port, no
+   credentials, no address literal, no `localhost` or dotless host) and its checked public-address
+   lookup, no redirect, a short timeout. A browser chose the endpoint; anybody signed in could choose
+   any other, so the server must never reach inside.
+7. **Off without keys.** `VAPID_*` all three or none; none is push off — the API answers
+   `PUSH_UNAVAILABLE` and production still starts, since the inbox is the record. Changing the pair
+   leaves old subscriptions inert (each remembers the key it was made with); devices subscribe again.
+8. **Sent by the node that committed the write,** not through the `EventBus`: a second node does not
+   double it (D-7).
+9. **No dependency.** RFC 8291 and RFC 8292 with `crypto.subtle` (`docs/spikes/web-push.md`).
+
+**Rejected.**
+
+- *Pushing every unread notification of a message, on every send* — a retried send and an edit would
+  ring the phone again for what it already said.
+- *Message text in the push* — what a person wrote ends up on a lock screen; Phase 2 stops at who and
+  where.
+- *A language per device* — D-41 put the column on the person, the first text the server writes for
+  them; a device subscribed in English and a person reading Turkish would disagree.
+- *An allowlist of push-service hosts* — it breaks a browser we have not met; the address rule, the
+  lookup and the per-person bound hold the abuse a stored endpoint allows.
+- *Showing nothing while a Purlay window is open* — penalised by the browsers, as above.
+- *The `web-push` package* — what it does, `crypto.subtle` does in Bun, measured against RFC 8291's own
+  example (CONTRIBUTING §1.12).
+
+**Cost of reversing:** migration 0024's table and column, `modules/push`, four routes, the worker, the
+account menu's item, and this decision; push is off with the keys unset, without a code change.
+
+---
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

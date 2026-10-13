@@ -80,6 +80,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.refused';
     case 'DATABASE_UNAVAILABLE':
     case 'STORAGE_UNAVAILABLE':
+    case 'PUSH_UNAVAILABLE':
     case 'INTERNAL':
     case 'MALFORMED':
     case 'UNKNOWN':

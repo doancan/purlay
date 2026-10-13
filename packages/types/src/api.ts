@@ -477,6 +477,55 @@ export type SetDeepWorkRequest = Static<typeof SetDeepWorkRequest>;
 export const DeepWorkResponse = Type.Object({ until: Type.Union([Timestamp, Type.Null()]) });
 export type DeepWorkResponse = Static<typeof DeepWorkResponse>;
 
+// ── Web Push (#78, D-126) ───────────────────────────────────────────────────
+
+/** A push key or secret as the browser hands it over: base64url, no padding. */
+const Base64Url = (bytes: number): ReturnType<typeof Type.String> =>
+  Type.String({ pattern: `^[A-Za-z0-9_-]{${String(Math.ceil((bytes * 4) / 3))}}$` });
+
+/** `GET /api/push/key` — the application server's public key a browser subscribes with. */
+export const PushKeyResponse = Type.Object({ publicKey: Base64Url(65) });
+export type PushKeyResponse = Static<typeof PushKeyResponse>;
+
+/** The languages a device's notifications are written in — the interface's own (D-41). */
+export const PushLocale = Type.Union([Type.Literal('en'), Type.Literal('tr')]);
+export type PushLocale = Static<typeof PushLocale>;
+
+/**
+ * `POST /api/push/subscriptions` — this device, as its browser's `PushSubscription` describes it,
+ * and the language it is told in. The endpoint is the push service's address for this browser:
+ * `https:` only, and bounded.
+ */
+export const PushSubscribeRequest = FromClient({
+  endpoint: Type.String({ pattern: '^https://', maxLength: 2048 }),
+  keys: FromClient({ p256dh: Base64Url(65), auth: Base64Url(16) }),
+  locale: PushLocale,
+});
+export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
+
+/** `PUT /api/me/locale` — the language the server writes this person's notifications in (D-41). */
+export const SetLocaleRequest = FromClient({ locale: PushLocale });
+export type SetLocaleRequest = Static<typeof SetLocaleRequest>;
+
+/** `POST /api/push/subscriptions/remove` — this device stops being told. */
+export const PushUnsubscribeRequest = FromClient({
+  endpoint: Type.String({ pattern: '^https://', maxLength: 2048 }),
+});
+export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
+
+/**
+ * What a push carries, encrypted for the device (RFC 8291) and read by its service worker: who and
+ * where, never what was said (D-126), and the address to open. `tag` folds the notifications of one
+ * channel into one on the device.
+ */
+export const PushPayload = Type.Object({
+  title: Type.String({ maxLength: 200 }),
+  body: Type.String({ maxLength: 200 }),
+  url: Type.String({ pattern: '^/', maxLength: 512 }),
+  tag: Type.String({ maxLength: 100 }),
+});
+export type PushPayload = Static<typeof PushPayload>;
+
 /**
  * `POST /api/workspaces/:workspaceId/uploads?id=&name=` — the body is the file's bytes (D-109 §3).
  * `id` is the client's UUIDv7 for the attachment; `name` its file name, with no control or

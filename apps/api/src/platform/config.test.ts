@@ -448,3 +448,36 @@ describe('the directory store (D-117)', () => {
     );
   });
 });
+
+describe('Web Push keys (#78)', () => {
+  // A real pair's shape: a 65-byte uncompressed P-256 point and a 32-byte scalar, base64url.
+  const vapid = {
+    VAPID_PUBLIC_KEY: `B${'A'.repeat(86)}`,
+    VAPID_PRIVATE_KEY: 'A'.repeat(43),
+    VAPID_SUBJECT: 'mailto:ops@example.com',
+  };
+
+  test('are all three or none: none is push switched off, in production too', () => {
+    expect(loadConfig(valid).VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(() => loadConfig(production)).not.toThrow();
+    expect(loadConfig({ ...valid, ...vapid }).VAPID_SUBJECT).toBe('mailto:ops@example.com');
+    expect(refusal({ ...valid, VAPID_PUBLIC_KEY: vapid.VAPID_PUBLIC_KEY })).toContain(
+      'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: set all three, or none',
+    );
+  });
+
+  test('have the shapes a push service accepts', () => {
+    expect(refusal({ ...valid, ...vapid, VAPID_PUBLIC_KEY: 'short' })).toContain(
+      'VAPID_PUBLIC_KEY',
+    );
+    expect(refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: 'A'.repeat(44) })).toContain(
+      'VAPID_PRIVATE_KEY',
+    );
+    expect(refusal({ ...valid, ...vapid, VAPID_SUBJECT: 'ops@example.com' })).toContain(
+      'VAPID_SUBJECT',
+    );
+    expect(
+      loadConfig({ ...valid, ...vapid, VAPID_SUBJECT: 'https://chat.example.com' }).VAPID_SUBJECT,
+    ).toBe('https://chat.example.com');
+  });
+});

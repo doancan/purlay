@@ -145,6 +145,43 @@ CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS N
 
 Expired and revoked rows are not kept: `purgeDeadSessions` removes them in bounded batches, called by the scheduler (#71). (D-87)
 
+### 3.3. `push_subscriptions` and `users.locale`
+
+A person's devices that are told, by Web Push, of what needs them while Purlay is closed (#78, D-126),
+and the language the server writes those notices in (D-41).
+
+```sql
+ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'en'
+    CONSTRAINT users_locale_known CHECK (locale IN ('en', 'tr'));
+
+CREATE TABLE push_subscriptions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- The session it was made in: signing out deletes it, and a push needs the session live.
+    session_id  UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    -- The push service's address for this browser; unique across people, so a browser signed
+    -- into another account moves to it rather than telling two.
+    endpoint    TEXT NOT NULL UNIQUE,
+    p256dh      TEXT NOT NULL,   -- the browser's P-256 point, validated as one on the way in
+    auth        TEXT NOT NULL,   -- its 16-byte secret (RFC 8291)
+    -- The application-server key it was made with: after the operator changes it, inert.
+    server_key  TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    failures    INTEGER NOT NULL DEFAULT 0,   -- deliveries in a row the push service did not take
+
+    CHECK (endpoint LIKE 'https://%'),
+    CHECK (length(endpoint) <= 2048),
+    CHECK (failures >= 0)
+);
+
+CREATE INDEX idx_push_subscriptions_user    ON push_subscriptions (user_id, created_at);
+CREATE INDEX idx_push_subscriptions_session ON push_subscriptions (session_id);
+```
+
+At most 20 devices a person, the oldest dropped when a twenty-first subscribes. A session's rows go
+when it is revoked (sign-out, sign out everywhere) and, with the session, when `purgeDeadSessions`
+removes it. The endpoint and both keys are a person's: never logged (`ARCHITECTURE.md` §10).
+
 ---
 
 ## 4. Workspaces & Membership
@@ -1017,9 +1054,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0021_invitations.sql         workspace_invitations  (D-115)
 0022_audit_session.sql       audit_log.session_id; ip_address and user_agent dropped  (D-116)
 0023_channel_versions.sql    channels.state_version  (D-123)
+0024_push_subscriptions.sql  push_subscriptions; users.locale  (D-41, D-126)
 ```
 
-Phase 2 adds `0024_github_feeds.sql`; Phase 2's magic links add `0025_email_auth.sql`.
+Phase 2 adds `0025_github_feeds.sql`; Phase 2's magic links add `0026_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
