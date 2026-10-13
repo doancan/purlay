@@ -66,7 +66,7 @@ describe('integration: who is told of a pin', () => {
       await deletePin(dependencies, alice(), message);
 
       expect(refused).toBe('FORBIDDEN');
-      const frame = {
+      const frame: ServerFrame = {
         event: 'PINS_UPDATED',
         data: { channelId: room.channelId },
         ts: NOW.getTime(),
