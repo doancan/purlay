@@ -1,5 +1,5 @@
 /**
- * The button — one height, four meanings.
+ * The button — one height, five meanings.
  *
  * A control is `h-control` tall (`UX.md` §1: density), a `radius-md` corner with a
  * hairline edge, and says what it does in the `label` text style. The variant is
@@ -10,8 +10,10 @@
  * - `secondary` — the default: an action that is not the point.
  * - `ghost` — in a toolbar or a row, where an edge on every control would be noise.
  * - `danger` — destructive and not undoable, filled so it cannot be mistaken.
+ * - `dangerQuiet` — a destructive action *offered*, not yet taken (Leave, Archive): the danger ink
+ *   with no fill, so it reads as a warning; the step that takes it asks first and is `danger`.
  *
- * `disabled` looks the same for all four on purpose: the variant says what a
+ * `disabled` looks the same for all five on purpose: the variant says what a
  * control would do, and a control that cannot do it says nothing. The edge stays
  * (`border-border-subtle`), so a disabled control is still a control and still
  * readable (`ink-muted` on `surface-200` is in the contrast table).
@@ -31,6 +33,7 @@ const variantClasses = {
   secondary: 'border-border-subtle bg-surface-100 text-ink shadow-card hover:bg-surface-050',
   ghost: 'border-transparent text-ink-muted hover:bg-surface-200 hover:text-ink',
   danger: 'border-danger bg-danger text-on-status',
+  dangerQuiet: 'border-transparent text-danger-text hover:bg-danger-subtle',
 } as const;
 
 export type ButtonVariant = keyof typeof variantClasses;

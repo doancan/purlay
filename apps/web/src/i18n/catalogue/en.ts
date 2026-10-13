@@ -261,6 +261,18 @@ export const en = {
   'details.nobody': 'Nobody is in this channel. Anyone can join it.',
   'details.you': 'you',
   'details.notifications': 'Notifications',
+  'details.leave': 'Leave channel',
+  'details.leaveAsk':
+    'Leave #{name}? You can join a public channel again; a private one needs a member to bring you back.',
+  'details.leaveFailed': 'You did not leave the channel.',
+  'details.lastMember':
+    'You are the last one in this private channel. Bring somebody in first, or ask an admin to archive it.',
+  'details.left': 'You left #{name}.',
+  'details.archive': 'Archive channel',
+  'details.archiveAsk':
+    'Archive #{name}? Nobody will see it any more. Its conversation is kept, and its name is free again.',
+  'details.archiveFailed': 'The channel was not archived.',
+  'details.archived': '#{name} was archived.',
 
   // ── Messages ────────────────────────────────────────────────────────────
   'message.react': 'React',

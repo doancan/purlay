@@ -103,8 +103,11 @@ Admin* — and when. An action newer than the client is said by its name, never 
 **Channel details** (D-123). Clicking a channel's name in its header opens a dialog, drawn after the
 Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
 with **Save** (somebody who has not joined reads them and is told to join); the **members** with a count
-and **Add people** (the same dialog as the header's); and the **notification level** (the header's
-menu). A direct message has no details: its title is not a button.
+and **Add people** (the same dialog as the header's); the **notification level** (the header's menu);
+and at the foot, in the danger tone, **Leave channel** for a member and **Archive channel** for an owner
+or an admin. Each of the two asks in place first and says what it costs; done, the person is taken to
+the workspace and told in a toast. The last member of a private channel is told to bring somebody in
+first or ask an admin to archive it. A direct message has no details: its title is not a button.
 
 **A channel's name is typed as it is said** (D-123). In **New channel** and in the details, what is typed is turned
 into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes
