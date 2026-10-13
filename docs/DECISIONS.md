@@ -5511,8 +5511,9 @@ people can aim.
    (D-103) — of a reason in `NEEDS_YOU`, not `suppressed_by_deep_work` (D-108), not already read,
    for a message not deleted, to a person not deleted. `channel_message` included: a member who
    chose "every message" (D-107) asked to be told. Never the author.
-2. **Who and where, never what.** The title is the sender and the place (`Alice in #api`, or `Alice`
-   in a direct message); the body is the inbox's own words for the reason. The push service relays
+2. **Who and where, never what.** The title is the place: `#api`, the person in a direct message, or
+   a group's other people (D-127); the body is the inbox's own words for the reason, naming who did
+   it (`alice mentioned you`, and in a group `alice wrote to the conversation`). The push service relays
    the payload encrypted for the device (RFC 8291), but a lock screen is not private.
 3. **In the person's language (D-41 kept):** `users.locale`, set by the client when the person
    subscribes and whenever they change language (`PUT /api/me/locale`).

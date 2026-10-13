@@ -9,7 +9,15 @@ import { ApiError } from '../../data/errors';
 import type { Api } from '../../data/api';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, aMessage, aSignedInApi, messageIdAt } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  aChannel,
+  aMessage,
+  aSignedInApi,
+  messageIdAt,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { settle } from '../../testing/channel-harness';
 import { person } from '../../testing/user';
@@ -80,6 +88,25 @@ describe('where a notification takes the person', () => {
 });
 
 describe('the list', () => {
+  test('a message in a group says it was written to the conversation, in both languages', async () => {
+    const group = aChannel(IDS.api, null, { type: 'direct_message', peers: [ALICE, BOB] });
+    for (const [locale, words] of [
+      [undefined, 'bob wrote to the conversation'],
+      ['tr', 'bob konuşmaya yazdı'],
+    ] as const) {
+      const view = await visit(
+        {
+          channels: () => Promise.resolve([group]),
+          notifications: () => Promise.resolve(page([told(3, 'direct_message')])),
+        },
+        locale,
+      );
+      const [row] = view.getAllByRole('button', { name: /words/ }).map((b) => b.textContent);
+      expect(row).toContain(words);
+      view.unmount();
+    }
+  });
+
   test('each row says why, who, where and what, and which are unread', async () => {
     const view = await visit({
       notifications: () =>

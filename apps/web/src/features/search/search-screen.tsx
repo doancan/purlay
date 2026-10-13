@@ -85,10 +85,14 @@ export const SearchScreen = (): React.JSX.Element => {
 };
 
 /** How a channel is named in the choice of where to look: `#name`, or `@person` for a direct message. */
-const placeName = (channel: Channel): string =>
-  channel.type === 'direct_message'
-    ? `@${channel.peer?.username ?? channel.name ?? ''}`
-    : `#${channel.name ?? ''}`;
+const placeName = (channel: Channel): string => {
+  if (channel.type !== 'direct_message') return `#${channel.name ?? ''}`;
+  // A group has no one person: it is named by its people (D-127).
+  if (channel.peer === null && channel.peers.length > 0) {
+    return channel.peers.map((person) => person.displayName).join(', ');
+  }
+  return `@${channel.peer?.username ?? channel.name ?? ''}`;
+};
 
 const SearchView = ({
   asked,

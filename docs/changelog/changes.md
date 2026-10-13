@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: a group is its people everywhere it is named (D-127, part of #486)
+
+- The palette, search's choice of where to look, the inbox ("wrote to the conversation"), mention
+  suggestions (the group's people still in the workspace) and a device's push (titled by the
+  group's other people) no longer treat a group as one person.
+
 ### Feature — 2026-10-13: group conversations in the sidebar, started from New message (D-127, part of #486)
 
 - A Conversations section lists each group by its people; New message picks up to nine people

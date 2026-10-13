@@ -51,15 +51,18 @@ const glyphOf = (type: Notification['type']): GlyphName => {
 };
 
 /** Why the person was told, in words: who did it, except for a resolution of their own question. */
-const useWhy = (): ((notification: Notification) => string) => {
+const useWhy = (): ((notification: Notification, channel: Channel | undefined) => string) => {
   const { t } = useI18n();
-  return (notification) => {
+  return (notification, channel) => {
     const name = notification.message.sender.username;
     switch (notification.type) {
       case 'mention':
         return t('inbox.why.mention', { name });
       case 'direct_message':
-        return t('inbox.why.direct', { name });
+        // In a group it was written to several people, not to you alone (D-127).
+        return channel !== undefined && channel.peers.length >= 2
+          ? t('inbox.why.group', { name })
+          : t('inbox.why.direct', { name });
       case 'thread_reply':
         return t('inbox.why.reply', { name });
       case 'thread_resolved':
@@ -134,7 +137,7 @@ const Row = ({
             <Icon name={glyphOf(notification.type)} size="sm" />
             <span className={cn(unread && 'font-medium text-ink')}>
               {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
-              {why(notification)}
+              {why(notification, channel)}
             </span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}

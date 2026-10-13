@@ -60,6 +60,7 @@ export const stepUnread = (
 export const displayName = (channel: Channel, me: string, youLabel: string): string => {
   if (channel.type !== 'direct_message') return channel.name ?? '';
   const peer = channel.peer;
-  if (peer === null) return '';
+  // A group, by its people (D-127).
+  if (peer === null) return channel.peers.map((person) => person.displayName).join(', ');
   return peer.id === me ? youLabel : peer.displayName;
 };

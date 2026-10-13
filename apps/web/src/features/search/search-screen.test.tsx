@@ -11,7 +11,16 @@ import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { settle } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { BOB, IDS, aMessage, aSignedInApi, messageIdAt } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  aChannel,
+  aMessage,
+  aSignedInApi,
+  messageIdAt,
+  someChannels,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { placeOf } from './search-screen';
@@ -226,6 +235,21 @@ describe('narrowed to a channel (`PRD.md` §4.6)', () => {
     expect(asked).toEqual(['deploy@everywhere', `deploy@${IDS.deploys}`]);
     expect(view.getByText('Searched #deploys. A deleted message is never found.')).toBeDefined();
     await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('a group is offered and said by its people, not as one person (D-127)', async () => {
+    const group = aChannel(IDS.dm, null, { type: 'direct_message', peers: [ALICE, BOB] });
+    const names = `${ALICE.displayName}, ${BOB.displayName}`;
+    const view = await visit(
+      {
+        channels: () => Promise.resolve([...someChannels(), group]),
+        search: () => Promise.resolve(page([])),
+      },
+      { path: `/w/acme/search?q=deploy&in=${IDS.dm}` },
+    );
+    expect(within(where(view)).getByRole('option', { name: names })).toBeDefined();
+    expect(view.getByText(`Searched ${names}. A deleted message is never found.`)).toBeDefined();
     view.unmount();
   });
 
