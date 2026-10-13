@@ -599,6 +599,8 @@ export const en = {
   'failure.slow': 'You are going too fast. Wait a moment and try again.',
   'failure.tooLarge': 'It is larger than Purlay takes.',
   'failure.refused': 'That was refused. Check what you entered and try again.',
+  'failure.savedLimit':
+    'That is as many saved messages as a workspace keeps. Complete or remove some first.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",

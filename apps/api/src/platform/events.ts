@@ -83,6 +83,20 @@ export const publishDeepWorkUpdated = async (
   });
 };
 
+/** The person's saves changed in a workspace (D-128): their own tabs read them again; nobody else. */
+export const publishSavedUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  userId: string,
+  workspaceId: string,
+): Promise<void> => {
+  await bus.publish(userTopic(userId), {
+    event: 'SAVED_UPDATED',
+    data: { workspaceId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel was archived: everyone watching it, on any node, stops receiving it, and is told why. */
 export const publishChannelRevoked = async (
   bus: EventBus,

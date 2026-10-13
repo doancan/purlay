@@ -33,6 +33,47 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'saved-bound-unlocked',
+    why: 'two saves at the bound at once are both taken, past the bound',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: '    .forUpdate()\n',
+    replace: '',
+    tests: ['apps/api/src/modules/saved/saved.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'saved-shown-from-hidden-channels',
+    why: 'a save in a channel the person cannot see is listed, with the message in it',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: "    .where('saved_messages.channel_id', 'in', visible)\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/channel-visibility.integration.test.ts'],
+  },
+  {
+    id: 'saved-shows-deleted-messages',
+    why: 'a deleted message stays in the saved list, which shows what nobody can read',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: "    .where('messages.deleted_at', 'is', null);\n",
+    replace: '    ;\n',
+    tests: ['apps/api/src/modules/saved/saved.integration.test.ts'],
+  },
+  {
+    id: 'saved-again-undoes-done',
+    why: 'saving a completed message again moves it back to in progress',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: "    if (input.state !== undefined) {\n      await transaction\n        .updateTable('saved_messages')\n        .set({ state: input.state, updated_at: clock.now() })\n",
+    replace:
+      "    {\n      await transaction\n        .updateTable('saved_messages')\n        .set({ state: input.state ?? 'in_progress', updated_at: clock.now() })\n",
+    tests: ['apps/api/src/modules/saved/saved.integration.test.ts'],
+  },
+  {
+    id: 'saved-unbounded',
+    why: 'saves past the bound are taken, and the ids list grows without end',
+    file: 'apps/api/src/modules/saved/saved.ts',
+    find: '  if (counted.count >= SAVED_MAX) {\n',
+    replace: '  if (counted.count > SAVED_MAX) {\n',
+    tests: ['apps/api/src/modules/saved/saved.integration.test.ts'],
+  },
+  {
     id: 'erased-person-shown-in-a-group',
     why: 'an erased account’s name and picture go on being handed out to every group it was in',
     file: 'apps/api/src/modules/channels/channels.ts',

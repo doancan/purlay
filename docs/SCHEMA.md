@@ -778,6 +778,45 @@ CREATE INDEX idx_notifications_message   ON notifications (message_id);
 
 ---
 
+### 7.5. `saved_messages`
+
+A person's saved messages (#484, D-128): a message kept to come back to, in progress, archived or
+completed. No reminder: reminders are a permanent non-goal (`PRD.md` §6).
+
+```sql
+CREATE TYPE saved_state AS ENUM ('in_progress', 'archived', 'completed');
+
+CREATE TABLE saved_messages (
+    -- The application's UUIDv7 (D-8), kept when the message is saved again: the page's cursor.
+    id            UUID PRIMARY KEY,
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id    UUID NOT NULL,
+    message_id    UUID NOT NULL,
+    state         saved_state NOT NULL DEFAULT 'in_progress',
+    saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT saved_messages_once UNIQUE (user_id, message_id),
+    -- The message is in this channel, and the channel in this workspace. (I-1, I-4)
+    CONSTRAINT saved_messages_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT saved_messages_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_saved_messages_list      ON saved_messages (user_id, workspace_id, state, id DESC);
+CREATE INDEX idx_saved_messages_message   ON saved_messages (message_id, channel_id);
+CREATE INDEX idx_saved_messages_channel   ON saved_messages (channel_id, workspace_id);
+CREATE INDEX idx_saved_messages_workspace ON saved_messages (workspace_id);
+```
+
+Shown only from channels the person can see now, never a deleted message; at most `SAVED_MAX` shown
+in a workspace. A soft delete keeps the row (hidden); a retention purge cascades it. The account's
+erasure (#83) deletes them: they are a person's own.
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -1061,9 +1100,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0023_channel_versions.sql    channels.state_version  (D-123)
 0024_push_subscriptions.sql  push_subscriptions; users.locale  (D-41, D-126)
 0025_group_conversations.sql dm_key_form for two to ten people  (I-5, D-127)
+0026_saved_messages.sql      saved_messages  (D-128)
 ```
 
-Phase 2 adds `0026_github_feeds.sql`; Phase 2's magic links add `0027_email_auth.sql`.
+Phase 2 adds `0027_github_feeds.sql`; Phase 2's magic links add `0028_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration

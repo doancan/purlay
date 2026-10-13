@@ -33,6 +33,8 @@ export type NotificationLevel = "all" | "mentions" | "none";
 
 export type NotificationType = "channel_message" | "direct_message" | "mention" | "thread_reply" | "thread_resolved";
 
+export type SavedState = "archived" | "completed" | "in_progress";
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserRole = "admin" | "member" | "owner";
@@ -180,6 +182,17 @@ export interface Reactions {
   user_id: string;
 }
 
+export interface SavedMessages {
+  channel_id: string;
+  id: string;
+  message_id: string;
+  saved_at: Generated<Timestamp>;
+  state: Generated<SavedState>;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface Sessions {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -253,6 +266,7 @@ export interface DB {
   notifications: Notifications;
   push_subscriptions: PushSubscriptions;
   reactions: Reactions;
+  saved_messages: SavedMessages;
   sessions: Sessions;
   users: Users;
   workspace_invitations: WorkspaceInvitations;

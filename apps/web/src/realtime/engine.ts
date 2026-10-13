@@ -646,6 +646,10 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'SESSION_ENDED':
         options.onSessionEnded();
         return;
+      case 'SAVED_UPDATED':
+        // No state in the frame (D-128): what is saved is read again, in every view of it.
+        void client.invalidateQueries({ queryKey: keys.saved(frame.data.workspaceId) });
+        return;
       case 'WORKSPACE_UPDATED':
         // No state in the frame (D-124): the memberships are read again, newest wins.
         void client.invalidateQueries({ queryKey: keys.me });

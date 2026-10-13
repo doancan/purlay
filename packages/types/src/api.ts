@@ -578,3 +578,55 @@ export type UploadQuery = Static<typeof UploadQuery>;
 
 /** How many unattached uploads one person may hold in a workspace (D-109 §5). */
 export const PENDING_UPLOADS_MAX = 20;
+
+// ── Saved items (#484, D-128) ──────────────────────────────────────────────
+
+/** How many messages a person keeps saved in a workspace — what the Saved view and its ids hold. */
+export const SAVED_MAX = 1000;
+
+/** Where a saved message is in the person's own work: kept, put away, or done (D-128). */
+export const SavedState = Type.Union([
+  Type.Literal('in_progress'),
+  Type.Literal('archived'),
+  Type.Literal('completed'),
+]);
+export type SavedState = Static<typeof SavedState>;
+
+/**
+ * `PUT /api/messages/:messageId/saved` — save it, or move it to a state. Without `state` a new save
+ * is `in_progress` and an existing one keeps the state it has: saving again never undoes "done".
+ */
+export const SaveMessageRequest = FromClient({ state: Type.Optional(SavedState) });
+export type SaveMessageRequest = Static<typeof SaveMessageRequest>;
+
+/** A message the person saved, as they can read it now. `id` is the save's, and the page's cursor. */
+export const SavedItem = Type.Object({
+  id: Uuid,
+  state: SavedState,
+  savedAt: Type.String({ format: 'date-time' }),
+  message: Message,
+});
+export type SavedItem = Static<typeof SavedItem>;
+
+/** `GET /api/workspaces/:workspaceId/saved` — one state's saves, newest first, keyset on `id`. */
+export const SavedPage = Page(SavedItem);
+export type SavedPage = Static<typeof SavedPage>;
+
+export const SavedQuery = FromClient({
+  state: SavedState,
+  before: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type SavedQuery = Static<typeof SavedQuery>;
+
+/**
+ * `GET /api/workspaces/:workspaceId/saved/ids` — which messages the person has saved, to mark them
+ * where they are read. Not paged: bounded by `SAVED_MAX`.
+ */
+export const SavedIds = Type.Array(
+  Type.Object({ messageId: Uuid, channelId: Uuid, state: SavedState }),
+  { maxItems: SAVED_MAX },
+);
+export type SavedIds = Static<typeof SavedIds>;

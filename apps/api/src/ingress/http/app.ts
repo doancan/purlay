@@ -119,6 +119,7 @@ import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
+import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 
 export interface Dependencies {
   readonly config: Config;
@@ -462,6 +463,24 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
+    .get(
+      '/api/workspaces/:workspaceId/saved',
+      async ({ request, params }) => await listSaved(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/saved/ids',
+      async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
+    )
+    .put('/api/messages/:messageId/saved', async ({ request, params, body, set }) => {
+      await putSaved(sending, request, params.messageId, body);
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/messages/:messageId/saved', async ({ request, params, set }) => {
+      await deleteSaved(sending, request, params.messageId);
+      set.status = 204;
+      return '';
+    })
 
     .get(
       '/api/workspaces/:workspaceId/channels',
