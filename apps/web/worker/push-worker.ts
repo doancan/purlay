@@ -16,7 +16,7 @@ import { noticeOf, openMessage, pathOf, tabFor } from './notice';
 declare const self: ServiceWorkerGlobalScope;
 
 self.addEventListener('push', (event) => {
-  const notice = noticeOf(event.data?.text() ?? null);
+  const notice = noticeOf(event.data?.text() ?? null, self.location.origin);
   event.waitUntil(
     self.registration.showNotification(notice.title, {
       body: notice.body,
@@ -42,6 +42,11 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data: unknown = event.notification.data;
   event.waitUntil(
-    show(pathOf(typeof data === 'object' && data !== null ? Reflect.get(data, 'url') : null)),
+    show(
+      pathOf(
+        typeof data === 'object' && data !== null ? Reflect.get(data, 'url') : null,
+        self.location.origin,
+      ),
+    ),
   );
 });

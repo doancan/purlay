@@ -12,9 +12,17 @@ import type { PushOpenMessage, PushPayload } from '@purlay/types';
 /** What is shown when a push cannot be read. */
 export const PLAIN_NOTICE: PushPayload = { title: 'Purlay', body: '', url: '/', tag: 'purlay' };
 
-/** A path of this site, or the start page: never `//host`, never another scheme. */
-export const pathOf = (value: unknown): string =>
-  typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/';
+/**
+ * A path of this site, or the start page. Judged by where it resolves, not by how it is spelled:
+ * `/\\host`, and a slash after a tab or a newline, are another site's address to a URL parser.
+ */
+export const pathOf = (value: unknown, origin: string): string => {
+  if (typeof value !== 'string' || !value.startsWith('/') || !URL.canParse(value, origin)) {
+    return '/';
+  }
+  const url = new URL(value, origin);
+  return url.origin === origin ? `${url.pathname}${url.search}${url.hash}` : '/';
+};
 
 const textOf = (data: object, name: keyof PushPayload, fallback: string): string => {
   const value: unknown = Reflect.get(data, name);
@@ -22,7 +30,7 @@ const textOf = (data: object, name: keyof PushPayload, fallback: string): string
 };
 
 /** The notice a push's decrypted text becomes. */
-export const noticeOf = (text: string | null): PushPayload => {
+export const noticeOf = (text: string | null, origin: string): PushPayload => {
   if (text === null) return PLAIN_NOTICE;
   let data: unknown;
   try {
@@ -36,7 +44,7 @@ export const noticeOf = (text: string | null): PushPayload => {
   return {
     title: textOf(data, 'title', PLAIN_NOTICE.title),
     body: textOf(data, 'body', ''),
-    url: pathOf(Reflect.get(data, 'url')),
+    url: pathOf(Reflect.get(data, 'url'), origin),
     tag: textOf(data, 'tag', PLAIN_NOTICE.tag),
   };
 };
