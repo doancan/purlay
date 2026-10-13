@@ -196,6 +196,29 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "import { screen } from '@testing-library/react';\n\nexport const use = (): unknown => screen;\n",
   },
+  // An unawaited `rejects` passed whatever the promise did (#78).
+  {
+    rule: 'an expectation on a promise is refused: Bun does not type it as one (#78)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/__enforcement__.test.ts',
+    source:
+      "import { expect, test } from 'bun:test';\n\ntest('x', () => {\n  expect(Promise.reject(new Error('no'))).rejects.toThrow('no');\n});\n",
+  },
+  {
+    rule: 'an expectation on a promise is refused in a component test too (#78)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/web/src/__enforcement__.test.tsx',
+    source:
+      "import { expect, test } from 'bun:test';\n\ntest('x', () => {\n  expect(Promise.resolve(1)).resolves.toBe(1);\n});\n",
+  },
+  {
+    rule: 'a promise awaited, then its outcome asserted, is let through (#78)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/__enforcement__.test.ts',
+    source:
+      "import { expect, test } from 'bun:test';\n\ntest('x', async () => {\n  const outcome = await Promise.reject(new Error('no')).then(\n    () => null,\n    (error: unknown) => error,\n  );\n  expect(String(outcome)).toBe('Error: no');\n});\n",
+    allowed: true,
+  },
   // A focus assertion through `toBe` passed with focus on another element (#518).
   {
     rule: 'focus is asserted by identity, never by toBe on document.activeElement (#518)',

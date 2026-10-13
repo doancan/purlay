@@ -90,7 +90,10 @@ describe('one cipher (#113)', () => {
         readFileSync(path, 'utf8'),
       ),
     );
-    expect(encrypting.map((path) => path.slice(root.length + 1))).toEqual([
+    expect(encrypting.map((path) => path.slice(root.length + 1)).sort()).toEqual([
+      // Not a stored secret: a push's body on the wire, to one browser's key, in the one format
+      // a push service carries (RFC 8291, D-126). Nothing Purlay keeps is sealed there.
+      'apps/api/src/modules/push/encrypt.ts',
       'apps/api/src/platform/crypto.ts',
     ]);
   });

@@ -193,15 +193,17 @@ describe('integration: subscribing a device', () => {
         .where('id', '=', alice.sessionId)
         .execute();
       const input = Value.Parse(PushSubscribeRequest, device(11));
-      expect(
-        subscribe(
-          db,
-          clock,
-          { userId: alice.userId, sessionId: alice.sessionId },
-          input,
-          SERVER_PUBLIC,
-        ),
-      ).rejects.toMatchObject({ body: { code: 'UNAUTHENTICATED' } });
+      const refused: unknown = await subscribe(
+        db,
+        clock,
+        { userId: alice.userId, sessionId: alice.sessionId },
+        input,
+        SERVER_PUBLIC,
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refused).toMatchObject({ body: { code: 'UNAUTHENTICATED' } });
       expect(await rows(db, alice.userId)).toEqual([]);
     });
   });

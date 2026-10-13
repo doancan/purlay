@@ -69,6 +69,18 @@ const CONTEXT_SELECTORS = [
  */
 const HREF_MESSAGE =
   "A link's address is made by SafeHref.of, never asserted. Casting one puts an unchecked address in a tree a renderer trusts. (D-101)";
+/**
+ * Bun's `expect(…).rejects` and `.resolves` are not typed as promises: unawaited, the assertion
+ * settles after the test has passed whatever it was given (#78), and awaiting it is refused by
+ * `await-thenable`. Await the promise itself and assert on what it gave (a `refusal` helper).
+ */
+const SETTLED_EXPECTATION = {
+  selector:
+    "MemberExpression[object.type='CallExpression'][object.callee.name='expect'][property.name=/^(rejects|resolves)$/]",
+  message:
+    'Await the promise and assert on its outcome: `expect(…).rejects`/`.resolves` is not a promise to Bun’s types, and unawaited it passes whatever happened.',
+};
+
 const BRAND_SELECTORS = [
   ...CONTEXT_SELECTORS,
   {
@@ -644,7 +656,7 @@ export default defineConfig([
       '**/*.test.tsx',
       'scripts/**/*.ts',
     ],
-    rules: { 'no-restricted-syntax': ['error', ...BRAND_SELECTORS] },
+    rules: { 'no-restricted-syntax': ['error', ...BRAND_SELECTORS, SETTLED_EXPECTATION] },
   },
 
   // Focus is asserted by identity. `expect(document.activeElement).toBe(el)` passed under Bun with
@@ -656,6 +668,7 @@ export default defineConfig([
       'no-restricted-syntax': [
         'error',
         ...BRAND_SELECTORS,
+        SETTLED_EXPECTATION,
         {
           selector:
             "CallExpression[callee.name='expect'] > MemberExpression.arguments[object.name='document'][property.name='activeElement']",
