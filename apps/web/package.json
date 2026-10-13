@@ -44,7 +44,7 @@
     "vite": "8.3.3"
   },
   "scripts": {
-    "build": "vite build && bun run src/prerender/cli.tsx dist",
+    "build": "NODE_ENV=production vite build && bun run src/prerender/cli.tsx dist",
     "dev": "bun --env-file=../../.env run vite",
     "e2e": "playwright test",
     "e2e:update": "playwright test --update-snapshots"

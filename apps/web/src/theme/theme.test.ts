@@ -66,6 +66,13 @@ const target = (): ThemePorts['target'] & { attributes: Record<string, string> }
   };
 };
 
+/** A store as the provider runs it: created, then connected. */
+const connected = (ports: ThemePorts): ReturnType<typeof createThemeStore> => {
+  const themeStore = createThemeStore(ports);
+  themeStore.connect();
+  return themeStore;
+};
+
 describe('choosing', () => {
   test('anything unrecognised is system, so an old value pins nothing', () => {
     expect(parseChoice(null)).toBe('system');
@@ -109,7 +116,7 @@ describe('the store', () => {
   test('a choice is applied and remembered', () => {
     const storage = memory();
     const html = target();
-    const { store } = createThemeStore({ storage, query: system(true), target: html });
+    const { store } = connected({ storage, query: system(true), target: html });
     store.getState().setChoice('light');
     expect(html.attributes['data-theme']).toBe('light');
     expect(storage.data[THEME_KEY]).toBe('light');
@@ -119,7 +126,7 @@ describe('the store', () => {
   test('only system follows the operating system when it changes its mind', () => {
     const os = system(true);
     const html = target();
-    const { store } = createThemeStore({ storage: memory(), query: os, target: html });
+    const { store } = connected({ storage: memory(), query: os, target: html });
     os.flip(false);
     expect(html.attributes['data-theme']).toBe('light');
     store.getState().setChoice('dark');
@@ -131,12 +138,38 @@ describe('the store', () => {
     expect(html.attributes['data-theme']).toBe('light');
   });
 
-  test('dispose stops listening', () => {
+  test('connecting listens, what it returns stops listening, and connecting again listens again', () => {
     const os = system(false);
-    const themeStore = createThemeStore({ storage: memory(), query: os, target: target() });
-    expect(os.listeners).toBe(1);
-    themeStore.dispose();
+    const html = target();
+    const themeStore = createThemeStore({ storage: memory(), query: os, target: html });
     expect(os.listeners).toBe(0);
+    const disconnect = themeStore.connect();
+    expect(os.listeners).toBe(1);
+    disconnect();
+    expect(os.listeners).toBe(0);
+    themeStore.store.getState().setChoice('dark');
+    expect(html.attributes['data-theme']).toBe('light');
+    // Connected again — what StrictMode does to the provider's effect — it writes the page and
+    // follows the system once more, starting from what changed while it was not listening.
+    themeStore.connect();
+    expect(os.listeners).toBe(1);
+    expect(html.attributes['data-theme']).toBe('dark');
+    themeStore.store.getState().setChoice('system');
+    os.flip(true);
+    expect(html.attributes['data-theme']).toBe('dark');
+    os.flip(false);
+    expect(html.attributes['data-theme']).toBe('light');
+  });
+
+  test('a system preference that changed before connecting is caught up on connect', () => {
+    const os = system(false);
+    const html = target();
+    const themeStore = createThemeStore({ storage: memory(), query: os, target: html });
+    expect(html.attributes['data-theme']).toBe('light');
+    os.flip(true); // with nobody listening yet
+    themeStore.connect();
+    expect(themeStore.store.getState().resolved).toBe('dark');
+    expect(html.attributes['data-theme']).toBe('dark');
   });
 
   test('a storage that throws still gives a working theme', () => {
@@ -149,7 +182,7 @@ describe('the store', () => {
       },
     };
     const html = target();
-    const { store } = createThemeStore({ storage: broken, query: system(false), target: html });
+    const { store } = connected({ storage: broken, query: system(false), target: html });
     expect(store.getState().choice).toBe('system');
     store.getState().setChoice('dark');
     expect(html.attributes['data-theme']).toBe('dark');

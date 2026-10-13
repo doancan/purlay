@@ -3,8 +3,9 @@
  * opening it takes them to the channel, and the server has it read — the real route, the real
  * database, the real page.
  *
- * Each test makes a room of its own (`support.ts`): the four projects share one database, and the
- * words carry the room's name so a row from another project's run is never the one found.
+ * Each test makes a room of its own (`support.ts`), because specs in a project run in parallel
+ * against one world, and the words carry the room's name so another spec's row is never the one
+ * found.
  */
 import { expect, test } from './fixtures';
 import { railLink, shellReady } from './support';
@@ -23,7 +24,11 @@ test.describe('the inbox', () => {
     await api('carol').say(made.id, words);
 
     await signIn();
-    await page.goto(`/w/${tenant.slug}/c/${made.id}`);
+    // Not the room itself: the mention is at its bottom, and leaving a channel reads what the
+    // person reached there (`use-mark-read.ts`) — so starting in the room read the mention on the
+    // way to the inbox, and whether the row still said unread was a race between that request
+    // and the inbox's own.
+    await page.goto(`/w/${tenant.slug}/questions`);
     await shellReady(page);
     await (await railLink(page, 'Inbox')).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
