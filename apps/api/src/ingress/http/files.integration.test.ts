@@ -253,7 +253,7 @@ describe('integration: a channel’s files', () => {
       const page = await filesOf(world, world.publicChannel, world.member);
 
       expect(page.data.map((file) => [file.attachment.id, file.parentId])).toEqual([
-        [reply.files[0], root.message],
+        [reply.files[0] ?? '', root.message],
       ]);
     });
   });
