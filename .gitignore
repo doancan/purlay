@@ -219,3 +219,4 @@ Desktop.ini
 
 # The latency baseline CI keeps between runs (ci.yml).
 .budget/
+.playwright-mcp
