@@ -36,7 +36,17 @@ export const en = {
   'signIn.title': 'Sign in to Purlay',
   'signIn.lede': 'Team chat where a question stays open until somebody closes it.',
   'signIn.github': 'Continue with GitHub',
-  'signIn.failed': 'Sign-in did not finish. Try again.',
+  // Why a sign-in came back unfinished, one per `SignInFailure` (D-121): what happened, then what to do.
+  'signIn.cancelled': 'You cancelled on GitHub — continue with GitHub whenever you are ready.',
+  'signIn.expired':
+    'That sign-in expired or was started in another browser — start again from here.',
+  'signIn.emailRequired':
+    'Your GitHub account has no verified primary email — verify one on GitHub, then sign in again.',
+  'signIn.emailTaken':
+    'That email already belongs to another Purlay account — sign in with the GitHub account it was made with.',
+  'signIn.githubUnavailable': 'GitHub could not be reached — wait a moment and try again.',
+  'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',
+  'signIn.failed': 'Sign-in did not finish — try again.',
   'signIn.ended': 'Your session ended. Sign in again to carry on.',
   'signIn.scope': 'Purlay asks GitHub for your name, username and email, and nothing else.',
 

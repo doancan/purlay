@@ -195,6 +195,7 @@ describe('integration: the address a session records', () => {
       }),
     );
     expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe(ORIGIN);
     expect(callback.headers.getSetCookie().join(';')).toContain(STATE_COOKIE);
   };
 
@@ -240,6 +241,7 @@ describe('integration: the address a session records', () => {
           },
         );
         expect(callback.status).toBe(302);
+        expect(callback.headers.get('location')).toBe(ORIGIN);
         expect(await addresses(db)).toEqual(['127.0.0.1']);
       } finally {
         await app.stop(true);

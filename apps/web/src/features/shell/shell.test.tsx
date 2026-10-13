@@ -13,6 +13,7 @@ import { IDS, aSession, aSignedInApi, aChannel } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
+import { signInFailureHref } from '@purlay/types';
 
 installDom();
 
@@ -293,12 +294,38 @@ describe('the sign-in screen', () => {
     );
   });
 
+  // Every reason the API can send a sign-in back with, and the address shapes besides (D-121).
   test.each([
+    [signInFailureHref('cancelled'), 'You cancelled on GitHub'],
+    [signInFailureHref('expired'), 'That sign-in expired or was started in another browser'],
+    [signInFailureHref('email-required'), 'Your GitHub account has no verified primary email'],
+    [signInFailureHref('email-taken'), 'That email already belongs to another Purlay account'],
+    [signInFailureHref('github-unavailable'), 'GitHub could not be reached'],
+    [signInFailureHref('busy'), 'Purlay is busy right now'],
+    [signInFailureHref('failed'), 'Sign-in did not finish'],
+    // A reason outside the set — an old link — still says it failed.
     ['/sign-in?error=1', 'Sign-in did not finish'],
     ['/sign-in?reason=ended', 'Your session ended'],
   ])('%s says what happened', async (path, words) => {
     const view = await visit(path, out());
     expect(view.getByRole('status').textContent).toContain(words);
+  });
+
+  test('says it in Turkish to a Turkish reader', async () => {
+    const view = await renderApp(<Outlet />, {
+      path: signInFailureHref('email-taken'),
+      api: out(),
+      locale: 'tr',
+    });
+    await settle();
+    expect(view.getByRole('status').textContent).toContain(
+      'Bu e-posta başka bir Purlay hesabına ait',
+    );
+  });
+
+  test('says nothing when nothing went wrong', async () => {
+    const view = await visit('/sign-in', out());
+    expect(within(view.getByRole('main')).queryByRole('status')).toBeNull();
   });
 
   test('is a card on the navigation tone, with the product mark above the title and the button the width of the card', async () => {

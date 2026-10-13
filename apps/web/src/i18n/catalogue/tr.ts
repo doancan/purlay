@@ -37,7 +37,16 @@ export const tr = {
   'signIn.title': "Purlay'e giriş yap",
   'signIn.lede': 'Bir soru, biri kapatana kadar açık kalan ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
-  'signIn.failed': 'Giriş tamamlanamadı. Yeniden dene.',
+  'signIn.cancelled': "GitHub'da girişi iptal ettin — hazır olduğunda GitHub ile devam et.",
+  'signIn.expired':
+    'Bu girişin süresi doldu ya da başka bir tarayıcıda başlatıldı — buradan yeniden başla.',
+  'signIn.emailRequired':
+    "GitHub hesabında doğrulanmış birincil e-posta yok — GitHub'da birini doğrula, sonra yeniden giriş yap.",
+  'signIn.emailTaken':
+    'Bu e-posta başka bir Purlay hesabına ait — o hesabı açtığın GitHub hesabıyla giriş yap.',
+  'signIn.githubUnavailable': "GitHub'a ulaşılamadı — biraz bekleyip yeniden dene.",
+  'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
+  'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
   'signIn.ended': 'Oturumun sona erdi. Devam etmek için yeniden giriş yap.',
   'signIn.scope': "Purlay GitHub'dan yalnızca adını, kullanıcı adını ve e-postanı ister.",
 

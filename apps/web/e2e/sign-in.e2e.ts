@@ -37,6 +37,29 @@ test.describe('the sign-in screen', () => {
     await expect(page.getByText('Sign-in did not finish')).toBeVisible();
   });
 
+  /**
+   * The round trip as the browser makes it (D-121): GitHub sends the browser to the API's
+   * callback, and a sign-in that did not finish lands back here with a sentence — never on
+   * the API's JSON. Neither case needs GitHub: a cancel carries no code, and a callback
+   * without this browser's state cookie is refused before GitHub is asked.
+   */
+  test('a callback that did not finish lands back here, saying why and what to do', async ({
+    page,
+  }) => {
+    await page.goto('/auth/github/callback?error=access_denied&state=anything');
+    await expect(page).toHaveURL(/\/sign-in\?error=cancelled$/);
+    await expect(page.getByRole('main').getByRole('status')).toHaveText(
+      'You cancelled on GitHub — continue with GitHub whenever you are ready.',
+    );
+    await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
+
+    await page.goto('/auth/github/callback?code=a-code&state=not-this-browsers');
+    await expect(page).toHaveURL(/\/sign-in\?error=expired$/);
+    await expect(page.getByRole('main').getByRole('status')).toHaveText(
+      'That sign-in expired or was started in another browser — start again from here.',
+    );
+  });
+
   test('"Continue with GitHub" leaves for the API, which sends the browser to GitHub with a state', async ({
     page,
   }) => {

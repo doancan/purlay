@@ -111,7 +111,9 @@ describe('integration: draining for shutdown', () => {
       await Promise.race([drained.then(() => 'drained'), Bun.sleep(100).then(() => 'waiting')]),
     ).toBe('waiting');
     github.release();
-    expect((await inFlight).status).toBe(302);
+    const finished = await inFlight;
+    expect(finished.status).toBe(302);
+    expect(finished.headers.get('location')).toBe(origin);
     await drained;
 
     const readiness = await app.handle(new Request(`${origin}/health/ready`));

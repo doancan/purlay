@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-13: a failed sign-in lands on the sign-in screen, saying why (D-121)
+
+- `GET /auth/github/callback` never answers JSON: a cancel on GitHub, a stale or missing state, an
+  account with no verified email, an email another account holds, GitHub unreachable, the rate limit
+  or a busy database, and anything unanticipated each come back as `/sign-in?error=<reason>`, one of
+  `SignInFailure` in `@purlay/types`. The address carries the reason and nothing else; the cause is
+  logged.
+- The sign-in screen says, in English and Turkish, one sentence per reason: what happened and what to
+  do. GitHub's own failures now have a type, `GitHubUnavailableError`, instead of becoming `INTERNAL`.
+
 ### Specification — 2026-10-13: online presence is Phase 2 (D-120)
 
 - `PRD.md` §4.1 no longer lists presence in Phase 1; Phase 2 does, so the PRD and `UX.md` §2 agree.

@@ -12,8 +12,11 @@
  * library: the client has a handful of routes, and 15–25 KB of the 250 KB budget
  * is a poor price for matching a path and calling `history.pushState`.
  */
+import { SIGN_IN_PATH } from '@purlay/types';
+
 const ROUTES = {
-  signIn: '/sign-in',
+  // The API sends a failed sign-in back here, so the contract spells it (D-121).
+  signIn: SIGN_IN_PATH,
   invite: '/invite',
   home: '/',
   workspace: '/w/:slug',

@@ -28,8 +28,15 @@ export interface SignInDependencies {
 }
 
 /**
+ * Where GitHub sends the browser back to. Spelled once: the route serves it, the
+ * redirect names it to GitHub, and a failure on it is answered as a redirect
+ * rather than JSON, because only a browser ever arrives there (D-121).
+ */
+export const SIGN_IN_CALLBACK = '/auth/github/callback';
+
+/**
  * The browser talks to one origin, so the callback GitHub is given is
- * `${APP_URL}/auth/github/callback` (D-61).
+ * `APP_URL` followed by `SIGN_IN_CALLBACK` (D-61).
  */
 export const beginSignIn = async ({
   config,
@@ -45,7 +52,7 @@ export const beginSignIn = async ({
       {
         clientId: config.GITHUB_CLIENT_ID,
         clientSecret: config.GITHUB_CLIENT_SECRET,
-        redirectUri: `${config.APP_URL}/auth/github/callback`,
+        redirectUri: `${config.APP_URL}${SIGN_IN_CALLBACK}`,
       },
       state,
     ),

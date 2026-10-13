@@ -306,6 +306,7 @@ missing specified behaviour and does not merge.
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
 | Thread | n/a — never rendered empty | Inline spinner under the root | Retry inline, root intact |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
+| Sign-in | n/a — always the one button | n/a — nothing is fetched before the click | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 
 **Connection loss** shows a single non-blocking bar: `Reconnecting…`. The composer stays

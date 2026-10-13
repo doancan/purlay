@@ -5,13 +5,16 @@
  *
  * Already signed in is not a reason to look at this page: the identity is asked for
  * quietly and a person who has one is sent on. `?reason=ended` is how the client
- * explains that it got here because the session ended, and `?error` that the round trip
- * did not finish; both say what to do, neither blames.
+ * explains that it got here because the session ended, and `?error=<reason>` is how the
+ * API says why the round trip through GitHub did not finish — one sentence per reason in
+ * `SignInFailure` (D-121); each says what to do, none blames.
  *
  * It is the first thing anyone sees of the product, so it is a card on the navigation tone with the
  * product's mark, not a heading on a blank page (D-100).
  */
 import { useEffect } from 'react';
+import { signInFailureIn, type SignInFailure } from '@purlay/types';
+import type { MessageKey } from '../../i18n/types';
 import { useMe } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
@@ -22,16 +25,28 @@ import { Main } from '../../ui/main';
 import { Icon } from '../../components/icon';
 import { LogoMark } from '../shell/notice';
 
+/** The sentence for each reason. A `Record`, so a reason added to the contract is a compile error here. */
+const FAILURE_SENTENCE = {
+  cancelled: 'signIn.cancelled',
+  expired: 'signIn.expired',
+  'email-required': 'signIn.emailRequired',
+  'email-taken': 'signIn.emailTaken',
+  'github-unavailable': 'signIn.githubUnavailable',
+  busy: 'signIn.busy',
+  failed: 'signIn.failed',
+} as const satisfies Readonly<Record<SignInFailure, MessageKey>>;
+
 export const SignInScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { search, navigate } = useRoute();
   const me = useMe();
-  const params = new URLSearchParams(search);
-  const note = params.has('error')
-    ? t('signIn.failed')
-    : params.get('reason') === 'ended'
-      ? t('signIn.ended')
-      : null;
+  const failure = signInFailureIn(search);
+  const note =
+    failure !== null
+      ? t(FAILURE_SENTENCE[failure])
+      : new URLSearchParams(search).get('reason') === 'ended'
+        ? t('signIn.ended')
+        : null;
 
   useEffect(() => {
     if (me.isSuccess) navigate(href('home'), { replace: true });

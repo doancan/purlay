@@ -166,7 +166,10 @@ describe('integration: multi-write requests are atomic', () => {
     };
 
     await whileRefusingInserts('sessions', async () => {
-      expect((await signIn()).status).toBe(500);
+      // The callback is a browser's, so the failure comes back as the sign-in screen (D-121).
+      const refused = await signIn();
+      expect(refused.status).toBe(302);
+      expect(refused.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
     });
     const left = await cloned.db
       .selectFrom('users')
@@ -175,6 +178,8 @@ describe('integration: multi-write requests are atomic', () => {
       .execute();
     expect(left).toEqual([]);
 
-    expect((await signIn()).status).toBe(302);
+    const signedIn = await signIn();
+    expect(signedIn.status).toBe(302);
+    expect(signedIn.headers.get('location')).toBe(ORIGIN);
   });
 });

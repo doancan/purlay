@@ -7,11 +7,13 @@
  * mocked `fetch` would test the mock (D-38).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { githubClient, type GitHubClient } from './github';
+import { GitHubUnavailableError, githubClient, type GitHubClient } from './github';
 
 interface Reply {
   status: number;
   body: unknown;
+  /** Sent as it is, not as JSON: what a proxy's error page looks like. */
+  raw?: string;
 }
 
 let server: ReturnType<typeof Bun.serve>;
@@ -29,6 +31,7 @@ beforeAll(() => {
         body: await request.text(),
       });
       const reply = replies.get(path) ?? { status: 404, body: { message: 'Not Found' } };
+      if (reply.raw !== undefined) return new Response(reply.raw, { status: reply.status });
       return Response.json(reply.body, { status: reply.status });
     },
   });
@@ -50,10 +53,18 @@ const client = (): GitHubClient => {
   );
 };
 
+/**
+ * The message of a refusal — only when it is GitHub's kind. Any other error is a
+ * failure the callback would tell the person was *something else*, so it reads
+ * as a mismatch here rather than passing on its message (D-121).
+ */
 const refusal = async (attempt: () => Promise<unknown>): Promise<string> =>
   await attempt().then(
     () => 'accepted',
-    (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    (error: unknown) =>
+      error instanceof GitHubUnavailableError
+        ? error.message
+        : `not a GitHubUnavailableError: ${String(error)}`,
   );
 
 describe('the GitHub client', () => {
@@ -118,6 +129,25 @@ describe('the GitHub client', () => {
       { email: 'mona@example.test', primary: true, verified: true },
       { email: 'old@example.test', primary: false, verified: false },
     ]);
+  });
+
+  test('an answer that is not JSON is refused as a failure of GitHub, not a SyntaxError', async () => {
+    replies.set('/user', { status: 200, body: null, raw: '<html>Unicorn!</html>' });
+    expect(await refusal(() => client().profile('t'))).toBe(
+      'GitHub answered the profile request with no JSON',
+    );
+  });
+
+  test('a GitHub that cannot be reached is refused as unreachable', async () => {
+    // A port nothing listens on: the connection is refused before any answer.
+    const closed = Bun.serve({ port: 0, fetch: () => new Response() });
+    const base = `http://localhost:${String(closed.port)}`;
+    await closed.stop(true);
+    const unreachable = githubClient(
+      { clientId: 'id', clientSecret: 'secret', redirectUri: 'https://purlay.test/cb' },
+      { oauth: base, api: base },
+    );
+    expect(await refusal(() => unreachable.exchangeCode('c'))).toBe('GitHub could not be reached');
   });
 
   test('emails that are not a list are refused by name, not by a TypeError', async () => {
