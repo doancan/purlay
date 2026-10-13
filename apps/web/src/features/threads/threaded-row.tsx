@@ -1,5 +1,5 @@
 /**
- * A message row with its thread's line: what the feed draws for a root (D-126).
+ * A message row with its thread's line: what the feed draws for a root (D-122).
  *
  * It hands the row the two slots it exposes for this — the line under the content that opens the
  * thread in the panel (`children`) and a Reply beside React (`actions`) — and two more facts:

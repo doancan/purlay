@@ -3950,7 +3950,7 @@ usable — and nothing else:
 | Slice | Backend | Client |
 |---|---|---|
 | Phase 0 as specified | exists | sign-in, workspace and channel list, create channel, message list, composer, optimistic send, scroll anchoring |
-| Threads and resolution | replies (`parentId`, I-1), thread counters, `GET …/thread`, `POST`/`DELETE …/resolve`, `GET …/unresolved` | the thread (inline; in a panel since D-126), Resolve/Reopen, the open-questions view |
+| Threads and resolution | replies (`parentId`, I-1), thread counters, `GET …/thread`, `POST`/`DELETE …/resolve`, `GET …/unresolved` | the thread (inline; in a panel since D-122), Resolve/Reopen, the open-questions view |
 | Read state and mentions | `@username` parsing (D-12, D-29), unread counters, `PUT …/read` (I-3, I-6) | bold channels, mention badge, the *New* marker |
 | Reactions | `PUT`/`DELETE …/reactions/:emoji` | React, counts |
 | DMs | `POST …/dms` (I-5) | People section |
@@ -4770,7 +4770,7 @@ state `UX.md` §8 requires.
 **Not taken from the brief, and why.**
 
 - *A thread panel on the right.* PRD §4.2 is the product's wedge: threads open inline under their
-  parent. The reference's panel is the one thing the product exists to refuse. *Reversed by D-126:*
+  parent. The reference's panel is the one thing the product exists to refuse. *Reversed by D-122:*
   the owner chose the panel.
 - *A call button, CI and deploy event rows, an incident banner, an Integrations section.* Audio and
   video are permanent non-goals (PRD §6); webhook feeds are Phase 2 (PRD §4, D-5). A diff block is the
@@ -5085,7 +5085,7 @@ nothing since they were written — the retired `w-gutter`, `py-16`, and the sen
 — now spoken in tokens. The extractor also stopped reading a compared value (`status === 'failed'`) or a
 function's argument (`buttonStyle('primary')`) as a class.
 
-**Not taken**, as in D-110 and for the same reasons: the thread panel (since taken, D-126), the call button, CI and deploy
+**Not taken**, as in D-110 and for the same reasons: the thread panel (since taken, D-122), the call button, CI and deploy
 rows, the Integrations section, presence dots and photographs, the GitHub card's Approve button,
 the Starred section, collapsible sections, the typing line and the member stack in the header.
 
@@ -5156,7 +5156,7 @@ already said so and now names this decision; nothing in the code changes, becaus
 shows presence. `PresenceRegistry` keeps only its typing half until presence is built (#480,
 `ARCHITECTURE.md` §6.1).
 1. **Quiet by default (D-12) and the resolvable thread are the product's reasons to exist;** a green
-   dot is neither. (Written as "the inline thread"; it opens in a panel since D-126.)
+   dot is neither. (Written as "the inline thread"; it opens in a panel since D-122.)
 2. **On one node, "online" means "has a tab open".** A team learns to ignore that within days, and the
    inbox and mentions already reach people who are away.
 3. **Typing (D-114) answers the question presence is most often asked for** — is anyone here right now —
@@ -5229,7 +5229,7 @@ depends on it.
 
 ---
 
-### D-126. A thread opens in a panel beside the feed — closes #494
+### D-122. A thread opens in a panel beside the feed — closes #494
 
 `PRD.md` §4.2 put threads **inline, underneath the parent, in the main feed**, with "no right-hand
 drawer", and `UX.md` §1 and §4 built the interaction on it; D-110 and D-119 named the reference's
@@ -5316,7 +5316,7 @@ Recorded so they are not silently assumed. None block Phase 0.
   engine, `mdast-util-from-markdown` with four GFM extensions, on both sides, narrowed to what the
   product renders and bounded so a body past the bounds is shown as typed.
 - **O-5 · Scroll virtualization.** Variable-height rows — code blocks, cards, pictures, and until
-  D-126 inline expandable threads — are the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
+  D-122 inline expandable threads — are the hardest UI problem in the product. `UX.md` §6 fixes the Phase 1 stance —
   ship **unvirtualized** with a 50-message window — and the scroll-anchoring rules that hold
   either way. What remains open is whether to adopt virtualization at all, decided against the
   `< 100ms` channel-switch budget. *Measure first.* **How it is measured in use:** every switch is a

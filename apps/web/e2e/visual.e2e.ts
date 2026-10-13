@@ -20,7 +20,7 @@ const RICH = [
 ];
 
 // Only what is on screen: a thread panel on a narrow window covers the channel, and a mask drawn
-// over what is under it would paint over the panel instead (D-126).
+// over what is under it would paint over the panel instead (D-122).
 const masks = (page: Page): Locator[] => [
   page.locator('time:visible'),
   // The title and the topic beside it: a test's room has a name of its own length, and the group
@@ -85,7 +85,7 @@ test.describe('a conversation', () => {
     await ready(page);
     const panel = page.locator(`[data-thread-root="${open.id}"]`);
     await expect(panel).toBeVisible();
-    // The panel's replies drawn, not its skeleton (D-126).
+    // The panel's replies drawn, not its skeleton (D-122).
     await expect(panel.getByText('and a follow-up')).toBeVisible();
     await snap(page, 'threads.png');
   });

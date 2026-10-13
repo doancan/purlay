@@ -335,7 +335,7 @@ export const tr = {
   'thread.announce.resolved': 'Thread çözüldü',
   'thread.announce.reopened': 'Thread yeniden açıldı',
 
-  // ── Threads, in the panel (D-126) ───────────────────────────────────────
+  // ── Threads, in the panel (D-122) ───────────────────────────────────────
   'thread.reply': 'Yanıtla',
   'thread.loadMore': 'Daha fazla yanıt yükle',
   'thread.none': 'Henüz yanıt yok',

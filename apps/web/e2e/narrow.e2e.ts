@@ -62,7 +62,7 @@ test.describe('at a phone width', () => {
     world,
   }) => {
     // Found by hand when threads were inline: "N replies", Resolve and Collapse on one line were
-    // wider than a phone. In the panel (D-126) the status and Resolve wrap the same way.
+    // wider than a phone. In the panel (D-122) the status and Resolve wrap the same way.
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     await page

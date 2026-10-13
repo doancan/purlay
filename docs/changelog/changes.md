@@ -39,7 +39,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - The sign-in screen says, in English and Turkish, one sentence per reason: what happened and what to
   do. GitHub's own failures now have a type, `GitHubUnavailableError`, instead of becoming `INTERNAL`.
 
-### Design — 2026-10-13: threads open in a panel on the right (D-126)
+### Design — 2026-10-13: threads open in a panel on the right (D-122)
 
 - **Show thread**, `T` and Reply open a root's thread in a panel beside the feed: its header and close
   control, the root with its status and Resolve, the replies under an *N replies* rule, and the reply

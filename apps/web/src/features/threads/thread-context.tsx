@@ -1,6 +1,6 @@
 /**
  * Which thread is open in the panel in this channel visit, and the keys that act on threads
- * (`UX.md` §4, §7; D-126).
+ * (`UX.md` §4, §7; D-122).
  *
  * **One thread at a time, beside the feed.** The panel shows one root's thread; opening another
  * replaces it. **Which one belongs to the screen**, not to the cache or the server: the provider

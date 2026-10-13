@@ -343,7 +343,7 @@ export const en = {
   'thread.announce.resolved': 'Thread resolved',
   'thread.announce.reopened': 'Thread reopened',
 
-  // ── Threads, in the panel (D-126) ───────────────────────────────────────
+  // ── Threads, in the panel (D-122) ───────────────────────────────────────
   'thread.reply': 'Reply',
   'thread.loadMore': 'Load more replies',
   'thread.none': 'No replies yet',

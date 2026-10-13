@@ -233,7 +233,7 @@ export const isNarrow = (page: Page): boolean =>
 /**
  * The app's frame is up — the sidebar at a desktop width, its toggle at a narrow one — and the
  * screen has its title. Keys are listened for only after this. At a narrow width a thread open in
- * its panel covers the channel, toggle and title included (D-126), so the panel's own heading is
+ * its panel covers the channel, toggle and title included (D-122), so the panel's own heading is
  * the frame then.
  */
 export const shellReady = async (page: Page): Promise<void> => {

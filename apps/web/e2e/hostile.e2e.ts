@@ -228,7 +228,7 @@ test.describe('hostile content', () => {
       undefined,
     );
     expect((await sidewaysScroll(page)).feed).toBeLessThanOrEqual(1);
-    // The replies are in the panel (D-126), which scrolls on its own: it does not scroll sideways either.
+    // The replies are in the panel (D-122), which scrolls on its own: it does not scroll sideways either.
     const panel = thread.locator('[data-thread-body]').locator('..');
     expect(await panel.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   });

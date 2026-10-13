@@ -1,6 +1,6 @@
 /**
  * The line under a root that says where its thread stands, and opens it in the panel (`UX.md`
- * §4.1, D-126): "Open · 4 replies · last 12m ago" or "Resolved by alice · 4 replies", and
+ * §4.1, D-122): "Open · 4 replies · last 12m ago" or "Resolved by alice · 4 replies", and
  * **Show thread** with its key.
  *
  * **A root nobody has replied to has no line at all** — an empty control on every message is

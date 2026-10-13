@@ -1,5 +1,5 @@
 /**
- * The wedge, end to end (`UX.md` §4, D-99 §5, D-126): a thread opens in the panel beside its
+ * The wedge, end to end (`UX.md` §4, D-99 §5, D-122): a thread opens in the panel beside its
  * question, can be answered and closed from the keyboard, and the questions nobody has answered yet
  * are one screen away. Every test makes its own room, so threads opened and closed here are nobody
  * else's.
@@ -60,7 +60,7 @@ test.describe('opening and closing a thread', () => {
       expect(Math.abs((panel?.width ?? -1) - (main?.width ?? 0))).toBeLessThan(1.5);
     } else {
       // Beside the feed, at the token's width, and the question stayed where it was.
-      expect(Math.round(panel?.width ?? -1)).toBe(380); // `size-thread` (D-126)
+      expect(Math.round(panel?.width ?? -1)).toBe(380); // `size-thread` (D-122)
       expect((panel?.x ?? 0) + 1).toBeGreaterThanOrEqual(
         ((await page.getByRole('feed').boundingBox())?.x ?? 0) +
           ((await page.getByRole('feed').boundingBox())?.width ?? 0),

@@ -1,5 +1,5 @@
 /**
- * A root's thread, the way `UX.md` §4 draws it (D-126): the line under the root that says where
+ * A root's thread, the way `UX.md` §4 draws it (D-122): the line under the root that says where
  * it stands, and the panel beside the feed that it opens — the root, the replies, the box to
  * answer in, and Resolve — all through the real channel screen over an API the test wrote and a
  * socket it drives.
@@ -439,7 +439,7 @@ describe('live', () => {
       ts: 1,
     });
     await settle();
-    // Nothing here asked for it, so nothing here closes under the person reading or writing (D-126).
+    // Nothing here asked for it, so nothing here closes under the person reading or writing (D-122).
     const panel = sectionOf(view);
     expect(within(panel).getByText('Resolved by alice · 2 replies')).toBeDefined();
     expect(within(panel).getByRole('button', { name: /Reopen/ })).toBeDefined();

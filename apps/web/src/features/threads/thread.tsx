@@ -1,5 +1,5 @@
 /**
- * The thread panel (`UX.md` §4.2, D-126): one root's thread, on the right of the feed — a header
+ * The thread panel (`UX.md` §4.2, D-122): one root's thread, on the right of the feed — a header
  * that names it and closes it, the root, the replies under an "N replies" rule, and the box to
  * answer in at the bottom.
  *

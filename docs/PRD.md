@@ -129,7 +129,7 @@ line count, copy-raw and clamping above 12 lines · emoji reactions · message e
 
 **4.2 · Threads — the wedge**
 A thread opens in a **panel on the right of the feed**, and its root stays in the feed with the
-thread's live status, so a conversation never becomes a footnote nobody sees (D-126, which replaced
+thread's live status, so a conversation never becomes a footnote nobody sees (D-122, which replaced
 threads expanding inline). A thread has a `Resolved` state, borrowed from GitHub PR review.
 Resolving closes it and keeps it searchable. A workspace-wide "open questions" view lists
 unresolved threads.

@@ -60,7 +60,7 @@ test.describe('focus', () => {
       if (stop.ring < 2) unringed.push(`${stop.what} (${String(stop.ring)}px)`);
     }
     // Enough of the page was crossed for the answer to mean something. On a narrow window the
-    // thread panel covers the channel and what it covers is out of the Tab order (D-126), so the
+    // thread panel covers the channel and what it covers is out of the Tab order (D-122), so the
     // page is the panel: its own controls were all reached, and nothing else was counted.
     if (test.info().project.name.includes('narrow')) {
       for (const control of [

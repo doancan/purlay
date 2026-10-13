@@ -8,7 +8,7 @@
  * reading it causes), the focused row, the scroll state — starts fresh when the person
  * moves to another channel and again when they come back.
  *
- * **A thread opens beside it** (D-126): the channel's column and the thread panel share one row,
+ * **A thread opens beside it** (D-122): the channel's column and the thread panel share one row,
  * and the panel covers the column on a narrow window. Which thread is open belongs to this visit,
  * like the rest, unless the address names one.
  *

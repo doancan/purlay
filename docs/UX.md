@@ -14,7 +14,7 @@
 
 1. **The feed is the product.** The conversation happens in one column, and a thread opens
    *beside* it, in a panel on the right, never in a modal that hides the conversation behind it
-   (D-126). What keeps a thread from becoming a footnote is that its root stays in the feed with its
+   (D-122). What keeps a thread from becoming a footnote is that its root stays in the feed with its
    live status — open or resolved — and the open questions are one click away.
 2. **Density over comfort.** This is a tool for people who read a lot of text quickly. The
    density is in what is shown — one column, no chrome, nothing decorative — not in how tightly it
@@ -65,7 +65,7 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
 - **Member list** — collapsed by default. Presence is decoration, not information.
-- **Thread panel (380px)** — on the right of the channel, only while a thread is open (§4, D-126).
+- **Thread panel (380px)** — on the right of the channel, only while a thread is open (§4, D-122).
   The feed keeps the rest of the width.
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
@@ -177,7 +177,7 @@ A root message with replies shows one line beneath it:
 ```
 
 Clicking it, or pressing `T` on the focused message, opens the thread **in the panel** on the
-right (D-126). The affordance is absent when there are no replies — an empty thread control on
+right (D-122). The affordance is absent when there are no replies — an empty thread control on
 every message is clutter that teaches people to ignore that region. While a root's thread is in
 the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from.
 
@@ -223,7 +223,7 @@ On resolve:
    animation and the panel closes — the only place in the product with a non-instant transition,
    because a state change that reorganizes the reader's view needs to be *seen* to be understood.
    Focus returns to the root. Resolved by somebody else, an open panel stays and only its status
-   changes (D-126).
+   changes (D-122).
 2. The affordance line becomes `✓ Resolved by alice · 4 replies`.
 3. A `system_event` message is **not** posted. The resolution is metadata on the root, not
    another line of chatter in a product whose thesis is less noise.
