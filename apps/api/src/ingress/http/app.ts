@@ -89,6 +89,7 @@ import {
 import { markNotificationsRead, readInbox } from './notifications';
 import {
   postMessage,
+  readFiles,
   readHistory,
   readThread,
   readSearch,
@@ -566,6 +567,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/channels/:channelId/messages',
       async ({ request, params }) => await readHistory(dependencies, request, params.channelId),
+    )
+    .get(
+      '/api/channels/:channelId/files',
+      async ({ request, params }) => await readFiles(dependencies, request, params.channelId),
     )
     .post('/api/channels/:channelId/messages', async ({ request, params, body, set }) => {
       set.status = 201;

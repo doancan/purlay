@@ -9,6 +9,8 @@
 import type { Executor } from '@purlay/db';
 import {
   EditMessageRequest,
+  FileQuery,
+  type FilePage,
   PageQuery,
   SearchQuery,
   type SearchPage,
@@ -30,8 +32,9 @@ import {
   type ResolveDependencies,
 } from '../../modules/messages/threads';
 import { searchIn } from '../../modules/search/search';
+import { channelFiles } from '../../modules/attachments/files';
 import { requireSession } from './session';
-import { validated } from './validate';
+import { queryOf, validated } from './validate';
 
 /** Reading needs the database and the clock, and nothing that publishes. */
 export interface HistoryDependencies {
@@ -68,6 +71,19 @@ export const readHistory = async (
   const context = await requireChannelById(database, userId, channelId);
   const query = validated(PageQuery, asPageQuery(new URL(request.url)));
   return await messageHistory(database, context, query);
+};
+
+/** `GET /api/channels/:channelId/files` — the channel's files, newest message first (D-129). */
+export const readFiles = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  channelId: string,
+): Promise<FilePage> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const query = validated(FileQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  return await channelFiles(database, context, query);
 };
 
 export const postMessage = async (

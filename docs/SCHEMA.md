@@ -651,7 +651,7 @@ CREATE INDEX idx_reactions_user ON reactions (user_id);
 
 Uploaded before the message exists — the client uploads on paste, then sends the message
 referencing the returned ids — so `message_id` is nullable until the message lands. (D-16, D-109)
-Migration `0018` is the definition; the bounds below are bound to the contract's `ATTACHMENT_*`
+Migration `0018` is the definition, `0027` adds the channel; the bounds below are bound to the contract's `ATTACHMENT_*`
 constants by a test that inserts at each and one past it.
 
 ```sql
@@ -661,6 +661,8 @@ CREATE TABLE attachments (
     workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     -- NULL while unattached: the uploader's own until then (D-109 §6).
     message_id    UUID,
+    -- The message's channel, set with message_id: a channel's files are found by it (D-129).
+    channel_id    UUID,
     uploader_id   UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
     -- Opaque keys in the object store. Never a public URL: reads are brokered.
@@ -682,6 +684,12 @@ CREATE TABLE attachments (
     CONSTRAINT attachments_message_workspace_fkey
         FOREIGN KEY (message_id, workspace_id) REFERENCES messages (id, workspace_id)
         ON DELETE CASCADE,
+    -- Linked and channelled together, and the channel is the message's (I-1, D-129).
+    CONSTRAINT attachments_channel_iff_message
+        CHECK ((message_id IS NULL) = (channel_id IS NULL)),
+    CONSTRAINT attachments_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
     -- 25 MiB. (D-16)
     CONSTRAINT attachment_size_limit
         CHECK (size_bytes > 0 AND size_bytes <= 26214400),
@@ -693,6 +701,9 @@ CREATE INDEX idx_attachments_message    ON attachments (message_id) WHERE messag
 -- A person's unattached uploads: counted against the bound (D-109 §5), and swept (#71).
 CREATE INDEX idx_attachments_unattached ON attachments (workspace_id, uploader_id, created_at)
     WHERE message_id IS NULL;
+-- A channel's files, newest message first (D-129).
+CREATE INDEX idx_attachments_channel    ON attachments (channel_id, message_id DESC, id DESC)
+    WHERE message_id IS NOT NULL;
 CREATE INDEX idx_attachments_uploader   ON attachments (uploader_id);
 CREATE INDEX idx_attachments_workspace  ON attachments (workspace_id);
 ```
@@ -1101,12 +1112,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0024_push_subscriptions.sql  push_subscriptions; users.locale  (D-41, D-126)
 0025_group_conversations.sql dm_key_form for two to ten people  (I-5, D-127)
 0026_saved_messages.sql      saved_messages  (D-128)
+0027_attachment_channels.sql attachments.channel_id: a channel's files  (I-1, D-129)
 ```
 
-Phase 2 adds `0027_github_feeds.sql`; Phase 2's magic links add `0028_email_auth.sql`.
+Phase 2 adds `0028_github_feeds.sql`; Phase 2's magic links add `0029_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

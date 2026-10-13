@@ -5631,6 +5631,35 @@ when.
 
 **Cost of reversing:** migration 0026's table and type, four routes, the frame, and the client's Save.
 
+### D-129. A channel's files: every attachment of its messages, found by the channel — #485
+
+**Context.** The Superdesign screens give a channel a Files list beside its conversation. An
+attachment knew its message and its workspace (D-109), not its channel: listing a channel's files
+meant walking every message of the channel to find the few that carry one.
+
+**Decision.**
+1. **An attachment carries its message's channel** (`attachments.channel_id`, migration 0027): NULL
+   while unattached, set by the same statement that links it to its message, and held there by the
+   database — linked and channelled together or neither, and the channel is the message's by a key to
+   `messages (id, channel_id)`, as `mentions` is (I-1). Rows linked before it are backfilled.
+2. **The list is the channel's, read through its context**: `GET /api/channels/:channelId/files`,
+   refused as the channel's messages are (`404 CHANNEL_NOT_FOUND` for one the caller cannot see).
+3. **What the channel shows, no more**: files of messages not deleted — a tombstone hides its files
+   as it hides its words (D-109 §6) — and never an unattached upload, which is its uploader's alone.
+4. **Newest message first, then its files newest first**, keyset on the pair. The cursor is a file's
+   id; one that is not a file of this channel's messages is `400`, never an empty page that looks
+   like the end.
+5. **Each file says who shared it, when, and where**: its message's id, its thread's root, its sender
+   and the message's time, so the list opens the file where it was said.
+
+**Rejected.** *Joining through `messages` on every read* — correct, but an index cannot serve a
+channel's attachments ordered by message without the channel on the attachment, and the list is read
+each time the panel opens. *Keyset on the attachment's id alone* — an upload's id is the time it was
+uploaded, not the time it was said, so the list would not be in the conversation's order. *A cursor
+that does not exist reading as an empty page* — a list that ends early says nothing is wrong.
+
+**Cost of reversing:** migration 0027's column, its two constraints and index, one route.
+
 ---
 
 ## Part D — Open, deliberately
