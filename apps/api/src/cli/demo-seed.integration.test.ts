@@ -8,6 +8,7 @@ import { Channel, type Message } from '@purlay/types';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { createApp } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
+import { SESSION_COOKIE } from '../platform/cookies';
 import { testConfig, testDependencies } from '../testing/doubles';
 import { PERSONAS } from './demo-script';
 import { assertDemoDatabase, neverSignsIn, plannedMessages, seedDemo } from './demo-seed';
@@ -89,6 +90,23 @@ describe('integration: the demo seed', () => {
         expect(rootOpen?.thread?.resolvedAt).toBeNull();
         expect(rootResolved?.thread?.resolvedBy?.username).toBe('alice');
         expect(rootOpen?.reactions.length).toBeGreaterThan(0);
+
+        // The outsiders are in no workspace, each signed in twice: two sessions, both live.
+        for (const outsider of Object.values(manifest.outsiders)) {
+          const [first, second] = outsider.tokens;
+          expect(first).not.toBe(second);
+          for (const token of outsider.tokens) {
+            const response = await app.handle(
+              new Request(`${config.APP_URL}/api/me`, {
+                headers: { cookie: `${SESSION_COOKIE}=${token}` },
+              }),
+            );
+            expect(response.status).toBe(200);
+            const me = (await response.json()) as { user: { id: string }; memberships: unknown[] };
+            expect(me.user.id).toBe(outsider.userId);
+            expect(me.memberships).toEqual([]);
+          }
+        }
       });
     },
     SEEDING_MS,

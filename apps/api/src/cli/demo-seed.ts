@@ -19,6 +19,10 @@
  * What it writes directly, and why: the four users and their workspace memberships
  * (invitations are not built, and sign-in is GitHub's), and the one private channel
  * (no endpoint creates one yet). Everything else is the API's.
+ *
+ * **Two outsiders** are in no workspace and have two sessions each. They are for the browser
+ * tests that end every session a person holds, or make workspaces of their own: done as one of
+ * the four, either would pull the ground from under every other test of the run (D-124).
  */
 import type { Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
@@ -52,9 +56,21 @@ interface Persona {
   readonly token: string;
 }
 
+/** Somebody in no workspace, signed in twice — two browsers, two sessions. */
+interface Outsider {
+  readonly userId: string;
+  readonly username: string;
+  readonly tokens: readonly [string, string];
+}
+
+/** The outsiders, by name, and their GitHub ids — past the four people's. */
+const OUTSIDERS = { erin: 9_000_101, frank: 9_000_102 } as const;
+type OutsiderKey = keyof typeof OUTSIDERS;
+
 export interface Manifest {
   readonly workspace: { readonly id: string; readonly slug: string; readonly name: string };
   readonly personas: Readonly<Record<PersonaKey, Persona>>;
+  readonly outsiders: Readonly<Record<OutsiderKey, Outsider>>;
   readonly channels: {
     readonly api: string;
     readonly deploys: string;
@@ -147,7 +163,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   const existing = await database
     .selectFrom('users')
     .select('id')
-    .where('username', 'in', Object.keys(PERSONAS))
+    .where('username', 'in', [...Object.keys(PERSONAS), ...Object.keys(OUTSIDERS)])
     .execute();
   if (existing.length > 0) {
     throw new Error(
@@ -177,6 +193,23 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
       cookie: `${SESSION_COOKIE}=${token}`,
       token,
     };
+  }
+
+  const outsiders = {} as Record<OutsiderKey, Outsider>;
+  for (const [key, githubId] of Object.entries(OUTSIDERS) as [OutsiderKey, number][]) {
+    const user = await database
+      .insertInto('users')
+      .values({
+        email: `${key}@elsewhere.example`,
+        username: key,
+        display_name: key.charAt(0).toUpperCase() + key.slice(1),
+        github_id: githubId,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const first = await issueSession(database, clock, user.id, SESSION_DAYS);
+    const second = await issueSession(database, clock, user.id, SESSION_DAYS);
+    outsiders[key] = { userId: user.id, username: key, tokens: [first.token, second.token] };
   }
 
   // ── The request every step goes through ───────────────────────────────────
@@ -350,6 +383,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   return {
     workspace: { id: workspace.id, slug: SLUG, name: WORKSPACE_NAME },
     personas: people,
+    outsiders,
     channels: { api, deploys, incidents, design, security, dmAlice, dmSelf },
     messages: named,
     counts: { messages: total },

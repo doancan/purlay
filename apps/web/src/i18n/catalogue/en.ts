@@ -497,6 +497,16 @@ export const en = {
   'deepWork.on': 'Deep Work until {until}: nothing interrupts you.',
   'deepWork.end': 'End',
   'deepWork.failed': 'Deep Work was not changed.',
+  'deepWork.label': 'Deep Work',
+  'deepWork.choice.30m': 'For 30 minutes',
+  'deepWork.choice.1h': 'For 1 hour',
+  'deepWork.choice.2h': 'For 2 hours',
+  'deepWork.choice.tomorrow': 'Until tomorrow',
+  'deepWork.left': {
+    one: 'Deep Work until {until}, {count} minute left',
+    other: 'Deep Work until {until}, {count} minutes left',
+  },
+  'deepWork.stop': 'End Deep Work',
   'shortcuts.deepWork': 'Start or end Deep Work',
 
   // ── Notification level (D-107) ─────────────────────────────────────────

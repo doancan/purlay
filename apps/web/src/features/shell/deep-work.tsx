@@ -2,7 +2,9 @@
  * Deep Work in the client (D-15, D-108): the server keeps the state and holds back what would
  * interrupt; here the person starts and ends it, sees until when, and the badges keep quiet.
  *
- * - `Cmd/Ctrl+Shift+D` (`UX.md` §7) starts it for an hour, or ends it.
+ * - `Cmd/Ctrl+Shift+D` (`UX.md` §7) starts it for an hour, or ends it. The account menu and the
+ *   palette start it for a chosen while — half an hour, one, two, or until tomorrow morning — and end
+ *   it (D-124): the instant chosen is what the server is sent, and what stops its delivery.
  * - While it lasts a quiet bar says until when, with End (`UX.md` §8: a mode you can forget you are
  *   in is a mode that loses you messages). The mention badges in the sidebar are not drawn; the
  *   counts are still kept, so they are all there when it ends.
@@ -12,7 +14,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { MeResponse, SetDeepWorkRequest } from '@purlay/types';
+import { DEEP_WORK_MAX_HOURS, type MeResponse, type SetDeepWorkRequest } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
@@ -25,18 +27,57 @@ import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from './workspace';
 
-/** How long the shortcut starts it for. */
-const DEEP_WORK_SHORTCUT_MINUTES = 60;
+/** The whiles a person can choose, in the order they are offered (D-124). */
+export const DEEP_WORK_CHOICES = ['30m', '1h', '2h', 'tomorrow'] as const;
+export type DeepWorkChoice = (typeof DEEP_WORK_CHOICES)[number];
+
+/** What the shortcut starts it for. */
+const SHORTCUT_CHOICE: DeepWorkChoice = '1h';
+
+const MINUTES = { '30m': 30, '1h': 60, '2h': 120 } as const;
+
+/** The hour "until tomorrow" ends at, in the person's own time: when a working day starts. */
+const MORNING_HOUR = 9;
+
+/**
+ * Kept back from the server's bound, so a clock here a little ahead of the server's does not turn
+ * "until tomorrow" into a refusal.
+ */
+const BOUND_MARGIN_MS = 5 * 60_000;
+
+/** The instant a choice ends at, from now: tomorrow at nine, never further than the server allows. */
+export const deepWorkEnd = (choice: DeepWorkChoice, now: Date): Date => {
+  if (choice !== 'tomorrow') return new Date(now.getTime() + MINUTES[choice] * 60_000);
+  const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, MORNING_HOUR);
+  const bound = now.getTime() + DEEP_WORK_MAX_HOURS * 3_600_000 - BOUND_MARGIN_MS;
+  return new Date(Math.min(morning.getTime(), bound));
+};
 
 interface DeepWork {
   /** Until when it lasts, or null when it is off (or over). */
   readonly until: string | null;
   readonly toggle: () => void;
+  readonly start: (choice: DeepWorkChoice) => void;
+  readonly end: () => void;
+  /** Whole minutes until it ends, at least one while it lasts; asked when it is drawn. */
+  readonly minutesLeft: () => number;
 }
 
-const DeepWorkContext = createContext<DeepWork>({ until: null, toggle: () => undefined });
+const DeepWorkContext = createContext<DeepWork | null>(null);
 
-export const useDeepWork = (): DeepWork => useContext(DeepWorkContext);
+const OFF: DeepWork = {
+  until: null,
+  toggle: () => undefined,
+  start: () => undefined,
+  end: () => undefined,
+  minutesLeft: () => 0,
+};
+
+/** Deep Work here; off, and changing nothing, outside a workspace. */
+export const useDeepWork = (): DeepWork => useContext(DeepWorkContext) ?? OFF;
+
+/** Deep Work's controls, or `null` where nothing keeps it: a caller draws nothing rather than a dead item. */
+export const useDeepWorkControls = (): DeepWork | null => useContext(DeepWorkContext);
 
 export const DeepWorkProvider = ({
   children,
@@ -86,22 +127,32 @@ export const DeepWorkProvider = ({
     [client, workspace.id],
   );
 
+  const send = useCallback(
+    (input: SetDeepWorkRequest): void => {
+      paint(input.active ? input.until : null);
+      api.setDeepWork(workspace.id, input).catch((failure: unknown) => {
+        paint(until);
+        show({ message: `${t('deepWork.failed')} ${describe(failure)}` });
+      });
+    },
+    [api, describe, paint, show, t, until, workspace.id],
+  );
+
+  const start = useCallback(
+    (choice: DeepWorkChoice): void => {
+      send({ active: true, until: deepWorkEnd(choice, clock.now()).toISOString() });
+    },
+    [clock, send],
+  );
+
+  const end = useCallback((): void => {
+    send({ active: false });
+  }, [send]);
+
   const toggle = useCallback((): void => {
-    const input: SetDeepWorkRequest =
-      until === null
-        ? {
-            active: true,
-            until: new Date(
-              clock.now().getTime() + DEEP_WORK_SHORTCUT_MINUTES * 60_000,
-            ).toISOString(),
-          }
-        : { active: false };
-    paint(input.active ? input.until : null);
-    api.setDeepWork(workspace.id, input).catch((failure: unknown) => {
-      paint(until);
-      show({ message: `${t('deepWork.failed')} ${describe(failure)}` });
-    });
-  }, [api, clock, describe, paint, show, t, until, workspace.id]);
+    if (until === null) start(SHORTCUT_CHOICE);
+    else end();
+  }, [end, start, until]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -117,14 +168,25 @@ export const DeepWorkProvider = ({
     };
   }, [toggle]);
 
-  const value = useMemo(() => ({ until, toggle }), [until, toggle]);
+  const minutesLeft = useCallback(
+    (): number =>
+      until === null
+        ? 0
+        : Math.max(1, Math.ceil((new Date(until).getTime() - clock.now().getTime()) / 60_000)),
+    [clock, until],
+  );
+
+  const value = useMemo(
+    () => ({ until, toggle, start, end, minutesLeft }),
+    [until, toggle, start, end, minutesLeft],
+  );
   return <DeepWorkContext.Provider value={value}>{children}</DeepWorkContext.Provider>;
 };
 
 /** The quiet bar that says Deep Work is on, until when, with End. */
 export const DeepWorkBar = (): React.JSX.Element | null => {
   const { t, format } = useI18n();
-  const { until, toggle } = useDeepWork();
+  const { until, end } = useDeepWork();
   if (until === null) return null;
   return (
     <div
@@ -133,7 +195,7 @@ export const DeepWorkBar = (): React.JSX.Element | null => {
     >
       <Icon name="deep-work" size="sm" />
       {t('deepWork.on', { until: format.absolute(until) })}
-      <button type="button" onClick={toggle} className="underline">
+      <button type="button" onClick={end} className="underline">
         {t('deepWork.end')}
       </button>
     </div>

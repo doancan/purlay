@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Interface — 2026-10-13: Deep Work for a while (D-124)
+
+- The command palette starts Deep Work for 30 minutes, an hour, two hours or until tomorrow, and ends
+  it; the server keeps the instant chosen. `Cmd/Ctrl+Shift+D` still starts it for an hour.
+
 ### Specification — 2026-10-13: a private channel's name is not private (D-104, amended)
 
 - A name a private channel holds is taken for the whole workspace, and a `409` on creating or renaming

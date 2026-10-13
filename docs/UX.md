@@ -327,7 +327,7 @@ trade a certain cost for a hypothetical benefit.
 | `E` | Edit (own messages) |
 | `Cmd/Ctrl+Shift+R` | Resolve / reopen the focused thread — on its root, or anywhere in its panel |
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
-| `Cmd/Ctrl+Shift+D` | Toggle Deep Work |
+| `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; the palette offers another while (D-124) |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
 product; an invisible focus ring is a broken product, not a style choice. (`PRD.md` §5)

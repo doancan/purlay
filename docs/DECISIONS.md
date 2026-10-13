@@ -5394,6 +5394,35 @@ the way they speak, and the fix it asked for was always the same one the field c
 **Cost of reversing:** a role check and a count in `modules/channels/settings.ts`, two rows of the
 permission table, and this paragraph; no data changes shape.
 
+### D-124. What is the person's and what is the workspace's — #495
+
+Deep Work started only from `Cmd/Ctrl+Shift+D`, for a fixed hour, though the API takes any instant
+within `DEEP_WORK_MAX_HOURS` (D-108). Decided in the owner's standing instruction to decide and proceed,
+and open to their reversal.
+
+**Decided.**
+
+1. **Deep Work is started for a chosen while** — 30 minutes, an hour, two hours, or until tomorrow —
+   and the instant is what `PUT …/deep-work` is sent, so it is the server's delivery that stops (D-15,
+   D-108); the client paints it first and puts it back on a refusal, as before. *Until tomorrow* is nine
+   the next morning in the person's own time, and never later than the server's bound less five
+   minutes, so a clock here a little ahead of the server's cannot turn it into a refusal.
+   `Cmd/Ctrl+Shift+D` still starts it for an hour; the command palette offers every while, and while
+   it is on, its end.
+2. **The browser tests that end a person's sessions, or change their Deep Work, act as outsiders.** The
+   demo seed makes two people in no workspace, each signed in twice (`demo-seed.ts`); a test makes a
+   workspace of its own for one of them. Done as one of the four seeded people, Deep Work would quiet
+   the badges other tests photograph, and signing out everywhere would revoke the session every other
+   test of the run signs in with.
+
+**Rejected.**
+
+- *A submenu for the durations, or a picker for any time.* Each is a new primitive (D-52) for four
+  choices; the server's bound already makes "any time" mean "any time today or tomorrow".
+
+**Cost of reversing:** the choices in `deep-work.tsx`, the palette's Deep Work items, the seed's
+outsiders, and this decision. No contract changes: the endpoint took any instant already.
+
 ---
 
 ## Part D — Open, deliberately
