@@ -195,8 +195,8 @@ export const en = {
     'The name everyone sees. The address stays /w/{slug}, so links already shared keep working.',
   'workspace.settings.save': 'Save',
   'workspace.settings.empty': 'A workspace needs a name.',
-  'workspace.settings.invalid':
-    'That name cannot be used. Use at most {max} characters, without control characters.',
+  'workspace.nameInvalid':
+    'Use a name people can see — letters, numbers or an emoji — at most {max} characters, without control characters.',
   'workspace.settings.failed': 'The name was not changed.',
   'workspace.create.title': 'Create a workspace',
   'workspace.create.body': 'A workspace is where one team talks. You can invite the others after.',

@@ -61,7 +61,7 @@ export const WorkspaceSettingsDialog = ({
       setBusy(false);
       setProblem(
         isApiError(failure) && failure.code === 'VALIDATION_FAILED'
-          ? t('workspace.settings.invalid', { max: WORKSPACE_NAME_MAX })
+          ? t('workspace.nameInvalid', { max: WORKSPACE_NAME_MAX })
           : `${t('workspace.settings.failed')} ${describe(failure)}`,
       );
     }
