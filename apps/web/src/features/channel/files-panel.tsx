@@ -10,19 +10,19 @@
  * files arriving, or one deleted (`realtime/engine.ts`); the states are the panel's own (§8):
  * loading, failed with Retry, and empty.
  */
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ChannelFile } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannelFiles } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
-import { IconButton } from '../../ui/icon-button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
 import { useThreads } from '../threads/thread-context';
 import { useFeedPorts } from './feed-ports';
 import { useNowMinute } from './now-minute';
+import { PanelFrame, usePanelFocus } from './panel-frame';
 import { useSidePanel } from './side-panel';
 
 export const FILES_PANEL_ID = 'channel-files';
@@ -121,33 +121,15 @@ const FilesPanelView = ({
   readonly channelLabel: string;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { close } = useSidePanel();
   const query = useChannelFiles(channelId);
   const now = new Date(useNowMinute(useFeedPorts()));
-  const panelRef = useRef<HTMLElement>(null);
-  const headingId = useId();
-  const heading = useRef<HTMLHeadingElement>(null);
   const files = useMemo(() => query.data?.pages.flatMap((page) => page.data) ?? [], [query.data]);
-
-  // Focus moves in as the panel opens (`UX.md` §7).
-  useEffect(() => {
-    heading.current?.focus();
-  }, []);
-
-  // A control that answered by going away — the last Load more, a Retry that worked — leaves focus
-  // nowhere, and Esc with it: once the answer is drawn, focus comes back to the heading.
-  const answering = useRef(false);
-  const fetching = query.isFetching;
-  // An answer that comes at once is drawn in one render with the start of its read: when it landed,
-  // not only whether a read is on its way, says that there is an answer.
-  const landed = Math.max(query.dataUpdatedAt, query.errorUpdatedAt);
-  useEffect(() => {
-    if (!answering.current || fetching) return;
-    answering.current = false;
-    if (!(panelRef.current?.contains(document.activeElement) ?? false)) heading.current?.focus();
-  }, [fetching, landed]);
+  const focus = usePanelFocus(
+    query.isFetching,
+    Math.max(query.dataUpdatedAt, query.errorUpdatedAt),
+  );
   const readAgain = (): void => {
-    answering.current = true;
+    focus.answering();
     void query.refetch();
   };
 
@@ -188,7 +170,7 @@ const FilesPanelView = ({
   } else {
     body = (
       <div className="flex flex-col gap-3 px-2 py-2">
-        <ul aria-labelledby={headingId} className="flex flex-col gap-1">
+        <ul aria-labelledby={focus.headingId} className="flex flex-col gap-1">
           {files.map((file) => (
             <FileRow key={file.attachment.id} file={file} now={now} />
           ))}
@@ -215,7 +197,7 @@ const FilesPanelView = ({
               variant="secondary"
               busy={query.isFetchingNextPage}
               onClick={() => {
-                answering.current = true;
+                focus.answering();
                 void query.fetchNextPage();
               }}
             >
@@ -228,31 +210,15 @@ const FilesPanelView = ({
   }
 
   return (
-    <aside
-      ref={panelRef}
+    <PanelFrame
       id={FILES_PANEL_ID}
-      aria-labelledby={headingId}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || event.defaultPrevented) return;
-        event.preventDefault();
-        close();
-      }}
-      className="flex w-thread shrink-0 flex-col border-l-hairline border-border-subtle bg-surface-100 max-narrow:absolute max-narrow:inset-0 max-narrow:z-sticky max-narrow:w-full"
+      title={t('files.title')}
+      channelLabel={channelLabel}
+      closeLabel={t('files.close')}
+      focus={focus}
     >
-      <div className="flex h-header shrink-0 items-center justify-between gap-2 border-b-hairline border-border-subtle px-4">
-        <h2
-          ref={heading}
-          id={headingId}
-          tabIndex={-1}
-          className="min-w-0 truncate text-title font-semibold text-ink"
-        >
-          {t('files.title')}{' '}
-          <span className="font-normal text-ink-muted">{`· ${channelLabel}`}</span>
-        </h2>
-        <IconButton label={t('files.close')} glyph="close" shortcut="Esc" onClick={close} />
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
-    </aside>
+      {body}
+    </PanelFrame>
   );
 };
 

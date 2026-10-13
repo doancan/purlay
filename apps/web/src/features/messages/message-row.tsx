@@ -36,6 +36,7 @@ import { Attachments } from './attachments';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
 import { SaveToggle } from '../saved/save-toggle';
+import { PinnedMark, PinToggle } from '../pins/pin-toggle';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -220,6 +221,7 @@ const MessageRowView = ({
                 {t('message.edited')}
               </span>
             )}
+            {!deleted && <PinnedMark message={message} />}
             {delivery === 'sent' && !deleted && (
               <div
                 className={cn(
@@ -234,6 +236,7 @@ const MessageRowView = ({
               >
                 <ReactMenu message={message} meId={meId} />
                 <SaveToggle message={message} />
+                <PinToggle message={message} />
                 {actions}
                 {mine && <OwnActions message={message} />}
               </div>

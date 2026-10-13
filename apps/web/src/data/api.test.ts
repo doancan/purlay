@@ -153,6 +153,19 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('a channel’s pins: the list, pin and let go (D-130)', async () => {
+    const list = harness([]);
+    await list.api.pins(ID);
+    expect(list.calls[0]).toMatchObject({ method: 'GET', url: `/api/channels/${ID}/pins` });
+    const write = harness(null);
+    await write.api.pin(ID);
+    await write.api.unpin(ID);
+    expect(write.calls.map((call) => [call.method, call.url])).toEqual([
+      ['PUT', `/api/messages/${ID}/pin`],
+      ['DELETE', `/api/messages/${ID}/pin`],
+    ]);
+  });
+
   test('a channel’s files, a page at a time (D-129)', async () => {
     const list = harness({ data: [], nextCursor: null });
     await list.api.files(ID);

@@ -40,6 +40,7 @@ import { ThreadsProvider, useOpenThread } from '../threads/thread-context';
 import { cn } from '../../ui/cn';
 import { ThreadPanel } from '../threads/thread';
 import { FilesPanel } from './files-panel';
+import { PinsPanel } from '../pins/pins-panel';
 import { SidePanelProvider, useSidePanel } from './side-panel';
 
 const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
@@ -142,6 +143,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
               channelName={title}
             />
             <FilesPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
+            <PinsPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
           </div>
         </SidePanelProvider>
       </ThreadsProvider>

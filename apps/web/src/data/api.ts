@@ -22,6 +22,7 @@ import {
   DeepWorkResponse,
   FilePage,
   GitHubIntegration,
+  PinList,
   InvitationPage,
   InvitationPreview,
   NotificationPage,
@@ -140,6 +141,11 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<SavedPage>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
+  /** A channel's pins, newest first (D-130). */
+  readonly pins: (channelId: string, signal?: AbortSignal) => Promise<PinList>;
+  /** Pins a message for its channel, or lets the pin go (D-130). */
+  readonly pin: (messageId: string) => Promise<void>;
+  readonly unpin: (messageId: string) => Promise<void>;
   /** A channel's files, newest message first; older than `before`, a file's id (D-129). */
   readonly files: (channelId: string, before?: string, signal?: AbortSignal) => Promise<FilePage>;
 
@@ -359,6 +365,10 @@ export const createApi = (http: Http): Api => {
         SavedIds,
         options({}, signal),
       ),
+    pins: (channelId, signal) =>
+      http.request('GET', `/api/channels/${at(channelId)}/pins`, PinList, options({}, signal)),
+    pin: (messageId) => http.send('PUT', `/api/messages/${at(messageId)}/pin`, options()),
+    unpin: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}/pin`, options()),
     files: (channelId, before, signal) =>
       http.request(
         'GET',

@@ -5695,6 +5695,8 @@ messages a team keeps at hand — the runbook, the decision, the link everyone a
 7. **A conversation has pins, and a reply can be one**: the list carries the reply's thread root, so
    it opens where it was said. A pin's message is always whole in the list, and a client changes its
    copy there as it changes the feed's — an edit, a reaction, a thread.
+8. **The feed marks a pinned message from the same list the panel shows**, read once when the
+   channel opens; Pin is a member's control beside Save, painted at once and put back when refused.
 5. **Heard as `PINS_UPDATED`** on the channel's topic, with nothing but the channel in it, only when
    something changed; a client reads the pins again, so two changes heard in either order leave the
    same list. A resubscription and a deletion read them again too.

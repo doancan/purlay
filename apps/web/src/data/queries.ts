@@ -22,6 +22,7 @@ import type {
   MessagePage,
   FilePage,
   NotificationPage,
+  PinList,
   WorkspaceMember,
   ChannelMember,
 } from '@purlay/types';
@@ -102,6 +103,18 @@ export const useThread = (messageId: string, enabled = true): UseInfiniteQueryRe
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
     ...KEEP_MESSAGES,
+  });
+};
+
+/**
+ * A channel's pins, newest first (D-130): the Pins panel's list, and what marks a message pinned in
+ * the feed — one read for the channel, kept current by `PINS_UPDATED`.
+ */
+export const useChannelPins = (channelId: string): UseQueryResult<PinList> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.pins(channelId),
+    queryFn: ({ signal }) => api.pins(channelId, signal),
   });
 };
 
