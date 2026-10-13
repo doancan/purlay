@@ -16,6 +16,7 @@ import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
 import { LOCALES } from '../../i18n/types';
 import { useSession } from '../session/session';
+import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
 import { useWorkspace } from '../shell/workspace';
 import { displayName, inSidebarOrder } from './channels';
 import type { PaletteItem } from './rank';
@@ -27,6 +28,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const { match, navigate } = useRoute();
   const { setChoice } = useTheme();
   const { openDirectMessage } = useActions();
+  const deepWork = useDeepWorkControls();
   const channels = useChannels(workspace.id).data;
   const members = useMembers(workspace.id).data;
 
@@ -95,6 +97,30 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
       });
     }
 
+    // Deep Work as the account menu offers it (D-124): the whiles to start it for, or its end.
+    if (deepWork !== null && deepWork.until === null) {
+      for (const choice of DEEP_WORK_CHOICES) {
+        items.push({
+          id: `deep-work:${choice}`,
+          group: 'settings',
+          label: `${t('deepWork.label')}: ${t(`deepWork.choice.${choice}`)}`,
+          glyph: 'deep-work',
+          recency: '',
+          run: () => {
+            deepWork.start(choice);
+          },
+        });
+      }
+    } else if (deepWork !== null) {
+      items.push({
+        id: 'deep-work:end',
+        group: 'settings',
+        label: t('deepWork.stop'),
+        glyph: 'deep-work',
+        recency: '',
+        run: deepWork.end,
+      });
+    }
     for (const choice of THEME_CHOICES) {
       items.push({
         id: `theme:${choice}`,
@@ -132,5 +158,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     setChoice,
     setLocale,
     openDirectMessage,
+    deepWork,
   ]);
 };

@@ -11,9 +11,11 @@ import AxeBuilder from '@axe-core/playwright';
 import {
   test as base,
   expect,
+  type Browser,
   type BrowserContext,
   type Locator,
   type Page,
+  type TestInfo,
 } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,6 +31,20 @@ import {
 
 export type { Persona, Room };
 
+/**
+ * Somebody in no workspace, signed in twice (`demo-seed.ts`): for a test that ends every session a
+ * person holds, or makes a workspace of its own to change. One test, one outsider — erin's sessions
+ * end in the test that signs her out everywhere, so nothing else may lean on them.
+ */
+type Outsider = 'erin' | 'frank';
+
+/** A workspace as `POST /api/workspaces` answers it. */
+interface OwnWorkspace {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: string;
+}
+
 /** What `scripts/demo.ts` wrote after seeding (`apps/api/src/cli/demo-seed.ts`). */
 interface World {
   readonly workspace: { readonly id: string; readonly slug: string; readonly name: string };
@@ -37,6 +53,16 @@ interface World {
   >;
   readonly channels: Readonly<
     Record<'api' | 'deploys' | 'incidents' | 'design' | 'security' | 'dmAlice' | 'dmSelf', string>
+  >;
+  readonly outsiders: Readonly<
+    Record<
+      Outsider,
+      {
+        readonly userId: string;
+        readonly username: string;
+        readonly tokens: readonly [string, string];
+      }
+    >
   >;
   readonly messages: Readonly<Record<string, string>>;
   readonly counts: { readonly messages: number };
@@ -90,6 +116,10 @@ interface Fixtures {
    * signed in and closed with the test. The page under test is `page`; this is who it talks to.
    */
   readonly asPerson: (persona: Persona) => Promise<Page>;
+  /** An outsider's browser, signed in with the first or the second of their sessions. */
+  readonly asOutsider: (outsider: Outsider, session?: 0 | 1) => Promise<Page>;
+  /** A workspace an outsider makes, through the API, with a name of the test's own. */
+  readonly workspaceOf: (outsider: Outsider) => Promise<OwnWorkspace>;
 }
 
 export const test = base.extend<Fixtures>({
@@ -211,15 +241,7 @@ export const test = base.extend<Fixtures>({
   asPerson: async ({ browser, baseURL, world, throttling, securityPolicy }, use, testInfo) => {
     const contexts: BrowserContext[] = [];
     await use(async (persona) => {
-      const { colorScheme, viewport, reducedMotion, locale, timezoneId } = testInfo.project.use;
-      const context = await browser.newContext({
-        ...(baseURL === undefined ? {} : { baseURL }),
-        ...(colorScheme === undefined ? {} : { colorScheme }),
-        ...(viewport === undefined ? {} : { viewport }),
-        ...(reducedMotion === undefined ? {} : { reducedMotion }),
-        ...(locale === undefined ? {} : { locale }),
-        ...(timezoneId === undefined ? {} : { timezoneId }),
-      });
+      const context = await browserLike(browser, baseURL, testInfo);
       contexts.push(context);
       throttling.watch(context);
       await securityPolicy.watch(context);
@@ -229,6 +251,49 @@ export const test = base.extend<Fixtures>({
     // Before they close: what the last action made a page report must not die with it.
     for (const context of contexts) await securityPolicy.settle(context);
     for (const context of contexts) await context.close();
+  },
+
+  asOutsider: async ({ browser, baseURL, world, throttling, securityPolicy }, use, testInfo) => {
+    const contexts: BrowserContext[] = [];
+    await use(async (outsider, session = 0) => {
+      const context = await browserLike(browser, baseURL, testInfo);
+      contexts.push(context);
+      throttling.watch(context);
+      await securityPolicy.watch(context);
+      await signInAs(context, baseURL ?? '', world.outsiders[outsider].tokens[session]);
+      return await context.newPage();
+    });
+    for (const context of contexts) await securityPolicy.settle(context);
+    for (const context of contexts) await context.close();
+  },
+
+  workspaceOf: async ({ world, baseURL }, use, testInfo) => {
+    let made = 0;
+    await use(async (outsider) => {
+      made += 1;
+      // Unique across attempts and runs, not only within one: a retry, or a second run against a
+      // server that is still up, must not ask for a slug the first one took. What makes it unique
+      // comes first, so the 64-character cut never takes it off.
+      const slug =
+        `${outsider}-${crypto.randomUUID().slice(0, 8)}-${String(testInfo.retry)}-${String(made)}-${testInfo.project.name}`
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, '-')
+          .slice(0, 64);
+      const response = await fetch(`${baseURL ?? ''}/api/workspaces`, {
+        method: 'POST',
+        headers: {
+          cookie: `${SESSION_COOKIE}=${world.outsiders[outsider].tokens[0]}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ name: slug, slug }),
+      });
+      if (response.status !== 201) {
+        throw new Error(
+          `making ${slug} answered ${String(response.status)}: ${await response.text()}`,
+        );
+      }
+      return (await response.json()) as OwnWorkspace;
+    });
   },
 
   expectNoAxe: async ({ page }, use) => {
@@ -247,6 +312,23 @@ export const test = base.extend<Fixtures>({
 });
 
 export { expect };
+
+/** A browser for another person, in this project's colour scheme, window, motion, language and zone. */
+const browserLike = async (
+  browser: Browser,
+  baseURL: string | undefined,
+  testInfo: TestInfo,
+): Promise<BrowserContext> => {
+  const { colorScheme, viewport, reducedMotion, locale, timezoneId } = testInfo.project.use;
+  return await browser.newContext({
+    ...(baseURL === undefined ? {} : { baseURL }),
+    ...(colorScheme === undefined ? {} : { colorScheme }),
+    ...(viewport === undefined ? {} : { viewport }),
+    ...(reducedMotion === undefined ? {} : { reducedMotion }),
+    ...(locale === undefined ? {} : { locale }),
+    ...(timezoneId === undefined ? {} : { timezoneId }),
+  });
+};
 
 /** The cookie a browser holds after signing in: `__Host-` means Secure, host-only, `Path=/`. */
 const signInAs = async (context: BrowserContext, baseURL: string, token: string): Promise<void> => {

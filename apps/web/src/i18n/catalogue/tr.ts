@@ -483,6 +483,12 @@ export const tr = {
   'deepWork.on': '{until} saatine kadar Deep Work: hiçbir şey seni bölmüyor.',
   'deepWork.end': 'Bitir',
   'deepWork.failed': 'Deep Work değiştirilemedi.',
+  'deepWork.label': 'Deep Work',
+  'deepWork.choice.30m': '30 dakika',
+  'deepWork.choice.1h': '1 saat',
+  'deepWork.choice.2h': '2 saat',
+  'deepWork.choice.tomorrow': 'Yarına kadar',
+  'deepWork.stop': 'Deep Work’ü bitir',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
 
   // ── Notification level (D-107) ─────────────────────────────────────────
