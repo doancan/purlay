@@ -5692,15 +5692,19 @@ messages a team keeps at hand — the runbook, the decision, the link everyone a
    tombstone kept at hand is nothing to keep, and kept, the rows would grow with every deletion. One
    deleted as it was being pinned leaves a pin that neither the list nor the bound counts, and an
    unpin still lets it go.
+5. **Heard as `PINS_UPDATED`** on the channel's topic, with nothing but the channel in it, only when
+   something changed; a client reads the pins again, so two changes heard in either order leave the
+   same list. A resubscription and a deletion read them again too.
+6. **Not audited**: a pin is a member's everyday act, not an administrative one (D-26).
 7. **A conversation has pins, and a reply can be one**: the list carries the reply's thread root, so
    it opens where it was said. A pin's message is always whole in the list, and a client changes its
    copy there as it changes the feed's — an edit, a reaction, a thread.
 8. **The feed marks a pinned message from the same list the panel shows**, read once when the
    channel opens; Pin is a member's control beside Save, painted at once and put back when refused.
-5. **Heard as `PINS_UPDATED`** on the channel's topic, with nothing but the channel in it, only when
-   something changed; a client reads the pins again, so two changes heard in either order leave the
-   same list. A resubscription and a deletion read them again too.
-6. **Not audited**: a pin is a member's everyday act, not an administrative one (D-26).
+   What the person has asked and the server has not yet answered is held beside that list for the
+   channel visit, never written into it (D-18): a refusal drops its own request only, whatever
+   anyone else changed meanwhile, and an answer read while a request is on its way cannot take the
+   painted change back. One request a message at a time; Retry only where trying again could help.
 
 **Rejected.** *A `pinned` field on every message* — every frame that carries a message would have to
 say it, and every page; the pins are read once for a channel. *Anyone who can see the channel pins* —

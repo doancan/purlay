@@ -41,6 +41,7 @@ import { cn } from '../../ui/cn';
 import { ThreadPanel } from '../threads/thread';
 import { FilesPanel } from './files-panel';
 import { PinsPanel } from '../pins/pins-panel';
+import { PinIntentsProvider } from '../pins/use-pin';
 import { SidePanelProvider, useSidePanel } from './side-panel';
 
 const JoinBar = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
@@ -119,32 +120,37 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
     <EditingProvider>
       <ThreadsProvider openThread={openThread}>
         <SidePanelProvider>
-          <div className="relative flex min-h-0 flex-1">
-            <ConversationColumn>
-              <ChannelHeader channel={channel} />
-              <MessageFeed
+          <PinIntentsProvider>
+            <div className="relative flex min-h-0 flex-1">
+              <ConversationColumn>
+                <ChannelHeader channel={channel} />
+                <MessageFeed
+                  channelId={channel.id}
+                  channelName={title}
+                  conversation={conversation}
+                  markerAfter={member && opened.unread ? opened.after : undefined}
+                  readAtOpen={opened.after}
+                  member={member}
+                  openThread={openThread}
+                />
+                {member ? (
+                  <Composer channelId={channel.id} channelName={title} autoFocus />
+                ) : (
+                  <JoinBar channel={channel} />
+                )}
+              </ConversationColumn>
+              <ThreadPanel
                 channelId={channel.id}
+                channelLabel={conversation ? title : `#${title}`}
                 channelName={title}
-                conversation={conversation}
-                markerAfter={member && opened.unread ? opened.after : undefined}
-                readAtOpen={opened.after}
-                member={member}
-                openThread={openThread}
               />
-              {member ? (
-                <Composer channelId={channel.id} channelName={title} autoFocus />
-              ) : (
-                <JoinBar channel={channel} />
-              )}
-            </ConversationColumn>
-            <ThreadPanel
-              channelId={channel.id}
-              channelLabel={conversation ? title : `#${title}`}
-              channelName={title}
-            />
-            <FilesPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
-            <PinsPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
-          </div>
+              <FilesPanel
+                channelId={channel.id}
+                channelLabel={conversation ? title : `#${title}`}
+              />
+              <PinsPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
+            </div>
+          </PinIntentsProvider>
         </SidePanelProvider>
       </ThreadsProvider>
     </EditingProvider>

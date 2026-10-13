@@ -44,7 +44,7 @@ test.describe('pins', () => {
     await shellReady(page);
     const row = page.locator(`[data-message-id="${message.id}"]`);
     await row.hover();
-    await row.getByRole('button', { name: 'Pin to this channel' }).click();
+    await row.getByRole('button', { name: 'Pin', exact: true }).click();
     await expect(row.getByText('Pinned', { exact: true })).toBeVisible();
 
     // Told by the socket, read again: no reload on Bob's side.
@@ -59,7 +59,7 @@ test.describe('pins', () => {
     ).toBeVisible();
     await watcher.getByRole('button', { name: 'Pinned messages' }).click();
 
-    await panel.getByRole('button', { name: 'Unpin' }).click();
+    await panel.getByRole('button', { name: /^Unpin the message from/ }).click();
     await expect(panel.getByRole('heading', { name: 'Nothing pinned yet' })).toBeVisible();
     await expect(row.getByText('Pinned', { exact: true })).toBeHidden();
     expect(await alice.get<unknown[]>(`/api/channels/${channel.id}/pins`)).toEqual([]);

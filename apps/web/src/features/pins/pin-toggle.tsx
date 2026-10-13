@@ -1,27 +1,28 @@
 /**
  * Pin, beside Save on a message (D-130), and the mark a pinned message carries in the feed.
  *
- * Both read the channel's one list of pins (`use-pin.ts`); outside a workspace there is no channel
- * to pin in, and both draw nothing. Pin is a member's: for anyone else the button is not there.
+ * Both read the channel's pins with what has been asked laid over them (`use-pin.ts`); outside a
+ * channel visit there is nothing to pin in, and both draw nothing. Pin is a member's: for anyone
+ * else the button is not there. Its name stays "Pin" whatever it is, and `aria-pressed` says whether
+ * the message is — a name that changed with the state would read as a double negative.
  */
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
-import { useWorkspaceIfAny } from '../shell/workspace';
-import { useIsPinned, usePin } from './use-pin';
+import { useHasPinIntents, useIsPinned, usePin } from './use-pin';
 
 const Toggle = ({ message }: { readonly message: Message }): React.JSX.Element | null => {
   const { t } = useI18n();
-  const { pinned, canPin, toggle } = usePin(message);
+  const { pinned, canPin, pending, toggle } = usePin(message);
   if (!canPin) return null;
-  const label = t(pinned ? 'pins.unpin' : 'pins.pin');
   return (
     <button
       type="button"
       aria-pressed={pinned}
-      aria-label={label}
-      title={label}
+      aria-busy={pending}
+      aria-label={t('pins.pin')}
+      title={t(pinned ? 'pins.unpin' : 'pins.pin')}
       className={cn(
         'inline-flex h-control aspect-square items-center justify-center rounded-sm hover:bg-surface-100',
         pinned ? 'text-accent-text' : 'text-ink-muted hover:text-ink',
@@ -34,7 +35,7 @@ const Toggle = ({ message }: { readonly message: Message }): React.JSX.Element |
 };
 
 export const PinToggle = ({ message }: { readonly message: Message }): React.JSX.Element | null =>
-  useWorkspaceIfAny() === null ? null : <Toggle message={message} />;
+  useHasPinIntents() ? <Toggle message={message} /> : null;
 
 const Mark = ({ message }: { readonly message: Message }): React.JSX.Element | null => {
   const { t } = useI18n();
@@ -49,4 +50,4 @@ const Mark = ({ message }: { readonly message: Message }): React.JSX.Element | n
 
 /** "Pinned", under a message that is. */
 export const PinnedMark = ({ message }: { readonly message: Message }): React.JSX.Element | null =>
-  useWorkspaceIfAny() === null ? null : <Mark message={message} />;
+  useHasPinIntents() ? <Mark message={message} /> : null;

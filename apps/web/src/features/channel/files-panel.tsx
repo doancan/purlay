@@ -22,7 +22,7 @@ import { ErrorState } from '../../ui/states';
 import { useThreads } from '../threads/thread-context';
 import { useFeedPorts } from './feed-ports';
 import { useNowMinute } from './now-minute';
-import { PanelFrame, usePanelFocus } from './panel-frame';
+import { PanelEmpty, PanelFrame, StaleBanner, usePanelFocus } from './panel-frame';
 import { useSidePanel } from './side-panel';
 
 export const FILES_PANEL_ID = 'channel-files';
@@ -155,18 +155,7 @@ const FilesPanelView = ({
       />
     );
   } else if (files.length === 0) {
-    body = (
-      <section className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-        <span
-          aria-hidden="true"
-          className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-accent-subtle text-accent-text"
-        >
-          <Icon name="file" size="lg" />
-        </span>
-        <h3 className="text-title text-ink">{t('files.empty.title')}</h3>
-        <p className="text-body text-ink-muted">{t('files.empty.body')}</p>
-      </section>
-    );
+    body = <PanelEmpty glyph="file" title={t('files.empty.title')} body={t('files.empty.body')} />;
   } else {
     body = (
       <div className="flex flex-col gap-3 px-2 py-2">
@@ -175,16 +164,6 @@ const FilesPanelView = ({
             <FileRow key={file.attachment.id} file={file} now={now} />
           ))}
         </ul>
-        {query.isRefetchError && (
-          <p role="alert" className="flex items-center gap-2 px-2 text-label text-danger-text">
-            <Icon name="failed" size="sm" />
-            {t('files.staleFailed')}
-            <span aria-hidden="true">·</span>
-            <button type="button" className="underline" onClick={readAgain}>
-              {t('common.retry')}
-            </button>
-          </p>
-        )}
         {query.isFetchNextPageError && (
           <p role="alert" className="flex items-center gap-2 px-2 text-label text-danger-text">
             <Icon name="failed" size="sm" />
@@ -217,6 +196,7 @@ const FilesPanelView = ({
       closeLabel={t('files.close')}
       focus={focus}
     >
+      {query.isRefetchError && <StaleBanner message={t('files.staleFailed')} onRetry={readAgain} />}
       {body}
     </PanelFrame>
   );
