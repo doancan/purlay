@@ -7,12 +7,13 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { Value } from '@sinclair/typebox/value';
-import { ErrorResponse } from '@purlay/types';
+import type { SignInFailure } from '@purlay/types';
 import { createApp } from './app';
 import { SESSION_COOKIE, STATE_COOKIE } from '../../platform/cookies';
-import { NOW, aGitHubAccount, testDependencies } from '../../testing/doubles';
+import { NOW, aGitHubAccount, aRecordingLogger, testDependencies } from '../../testing/doubles';
+import { GitHubUnavailableError, type GitHubClient } from '../../modules/auth/github';
 import type { Config } from '../../platform/config';
+import type { Logger } from '../../platform/logging';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -22,9 +23,10 @@ const ORIGIN = 'https://purlay.test';
 
 const appFor = (
   database: Executor,
-  github = testDependencies().github,
+  github: GitHubClient = testDependencies().github,
   config = testDependencies().config,
-): ReturnType<typeof createApp> => createApp(testDependencies({ database, github, config }));
+  log: Logger = testDependencies().log,
+): ReturnType<typeof createApp> => createApp(testDependencies({ database, github, config, log }));
 
 /** Everything a browser would carry back from the redirect, in one place. */
 const startAndCallback = async (
@@ -32,14 +34,16 @@ const startAndCallback = async (
   options: {
     code?: string;
     tamperState?: boolean;
-    github?: ReturnType<typeof aGitHubAccount>;
+    github?: GitHubClient;
     config?: Config;
+    log?: Logger;
   } = {},
 ): Promise<Response> => {
   const app = appFor(
     database,
     options.github ?? testDependencies().github,
     options.config ?? testDependencies().config,
+    options.log ?? testDependencies().log,
   );
 
   const started = await app.handle(new Request(`${ORIGIN}/auth/github`));
@@ -58,6 +62,48 @@ const startAndCallback = async (
       {
         headers: { cookie: stateCookie.split(';')[0] ?? '', 'user-agent': 'probe/1.0' },
       },
+    ),
+  );
+};
+
+/**
+ * A sign-in that did not finish, as the browser receives it (D-121): a redirect to
+ * the sign-in screen carrying this reason and nothing else, the state spent, and
+ * no session. Never the API's JSON — that is the page the person was left on.
+ */
+const expectSentBack = (response: Response, failure: SignInFailure): void => {
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=${failure}`);
+  expect(response.headers.get('content-type') ?? '').not.toContain('json');
+  const cookies = response.headers.getSetCookie();
+  expect(cookies.some((cookie) => cookie.startsWith(`${STATE_COOKIE}=;`))).toBe(true);
+  expect(cookies.some((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))).toBe(false);
+};
+
+/** GitHub, failing every call with this error. */
+const aFailingGitHub = (error: Error): GitHubClient => ({
+  exchangeCode: async (): Promise<string> => await Promise.reject(error),
+  profile: async (): Promise<never> => await Promise.reject(error),
+  emails: async (): Promise<never> => await Promise.reject(error),
+});
+
+/** A GitHub the test must not reach: a cancelled sign-in has nothing to exchange. */
+const aGitHubThatMustNotBeCalled = (): GitHubClient =>
+  aFailingGitHub(new Error('GitHub was called for a sign-in that carried no code'));
+
+/** What the browser brings back when GitHub returns it with an `error` instead of a code. */
+const returnedWithError = async (
+  database: Executor,
+  error: string,
+  log: Logger = testDependencies().log,
+): Promise<Response> => {
+  const app = appFor(database, aGitHubThatMustNotBeCalled(), testDependencies().config, log);
+  const started = await app.handle(new Request(`${ORIGIN}/auth/github`));
+  const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
+  return await app.handle(
+    new Request(
+      `${ORIGIN}/auth/github/callback?error=${error}&error_description=The+user+has+denied&state=${state}`,
+      { headers: { cookie: (started.headers.get('set-cookie') ?? '').split(';')[0] ?? '' } },
     ),
   );
 };
@@ -139,11 +185,11 @@ describe('integration: signing in with GitHub', () => {
           .some((cookie) => cookie.startsWith(`${STATE_COOKIE}=;`) && cookie.includes('Max-Age=0'));
 
       const signedIn = await startAndCallback(db);
-      expect(signedIn.status).toBe(302);
+      expect(signedIn.headers.get('location')).toBe(ORIGIN);
       expect(spent(signedIn)).toBe(true);
 
       const refused = await startAndCallback(db, { tamperState: true });
-      expect(refused.status).toBe(400);
+      expect(refused.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=expired`);
       expect(spent(refused)).toBe(true);
     });
   });
@@ -178,30 +224,25 @@ describe('integration: signing in with GitHub', () => {
     });
   });
 
-  test('a tampered state is refused, and no account is created', async () => {
+  test('a tampered state is sent back as expired, and no account is created', async () => {
     await withRollback(async (db) => {
       const response = await startAndCallback(db, { tamperState: true });
 
-      expect(response.status).toBe(400);
-      const body: unknown = await response.json();
-      expect(Value.Check(ErrorResponse, body)).toBe(true);
-      expect(body).toMatchObject({ error: { code: 'OAUTH_STATE_INVALID' } });
-
+      expectSentBack(response, 'expired');
       expect(await accountsFor(db, 'mona@example.test')).toHaveLength(0);
     });
   });
 
-  test('a callback with no cookie at all is refused', async () => {
+  test('a callback with no state cookie at all is sent back as expired', async () => {
     await withRollback(async (db) => {
       const response = await appFor(db).handle(
         new Request(`${ORIGIN}/auth/github/callback?code=a-valid-code&state=anything`),
       );
-      expect(response.status).toBe(400);
-      expect(await response.json()).toMatchObject({ error: { code: 'OAUTH_STATE_INVALID' } });
+      expectSentBack(response, 'expired');
     });
   });
 
-  test('an account with no verified address is refused, and nothing is written', async () => {
+  test('an account with no verified address is sent back saying so, and nothing is written', async () => {
     await withRollback(async (db) => {
       const response = await startAndCallback(db, {
         github: aGitHubAccount({ id: 7, login: 'ghost', name: null, avatarUrl: null }, [
@@ -209,9 +250,80 @@ describe('integration: signing in with GitHub', () => {
         ]),
       });
 
-      expect(response.status).toBe(403);
-      expect(await response.json()).toMatchObject({ error: { code: 'EMAIL_REQUIRED' } });
+      expectSentBack(response, 'email-required');
       expect(await accountsFor(db, 'ghost@example.test')).toHaveLength(0);
+    });
+  });
+
+  test('an address another account holds is sent back as taken, and is not linked (D-38)', async () => {
+    await withRollback(async (db) => {
+      expect((await startAndCallback(db)).headers.get('location')).toBe(ORIGIN);
+      const holder = await accountsFor(db, 'mona@example.test');
+      expect(holder).toHaveLength(1);
+
+      // A different GitHub account, verified on the same address.
+      const response = await startAndCallback(db, {
+        github: aGitHubAccount({ id: 8, login: 'impostor', name: null, avatarUrl: null }, [
+          { email: 'mona@example.test', primary: true, verified: true },
+        ]),
+      });
+
+      expectSentBack(response, 'email-taken');
+      expect(await accountsFor(db, 'mona@example.test')).toEqual(holder);
+    });
+  });
+
+  test('cancelling on GitHub is sent back as cancelled, without calling GitHub', async () => {
+    await withRollback(async (db) => {
+      const response = await returnedWithError(db, 'access_denied');
+
+      // Had `aGitHubThatMustNotBeCalled` been reached, this would read `failed`.
+      expectSentBack(response, 'cancelled');
+      expect(await accountsFor(db, 'mona@example.test')).toHaveLength(0);
+    });
+  });
+
+  test('any other error GitHub returns with is sent back as failed, and written down', async () => {
+    await withRollback(async (db) => {
+      const { log, lines } = aRecordingLogger();
+      const response = await returnedWithError(db, 'redirect_uri_mismatch', log);
+
+      expectSentBack(response, 'failed');
+      expect(lines.find((line) => line['msg'] === 'GitHub refused a sign-in')).toMatchObject({
+        level: 'warn',
+        githubError: 'redirect_uri_mismatch',
+      });
+    });
+  });
+
+  test('a GitHub that cannot be reached is sent back as unavailable, and written down', async () => {
+    await withRollback(async (db) => {
+      const { log, lines } = aRecordingLogger();
+      const response = await startAndCallback(db, {
+        github: aFailingGitHub(new GitHubUnavailableError('GitHub could not be reached')),
+        log,
+      });
+
+      expectSentBack(response, 'github-unavailable');
+      expect(lines.find((line) => line['msg'] === 'GitHub failed a sign-in')).toMatchObject({
+        level: 'warn',
+      });
+      expect(await accountsFor(db, 'mona@example.test')).toHaveLength(0);
+    });
+  });
+
+  test('a failure nobody anticipated is sent back as failed, and its cause is logged as an error', async () => {
+    await withRollback(async (db) => {
+      const { log, lines } = aRecordingLogger();
+      const response = await startAndCallback(db, {
+        github: aFailingGitHub(new Error('a defect, not an outage')),
+        log,
+      });
+
+      expectSentBack(response, 'failed');
+      const failure = lines.find((line) => line['msg'] === 'request failed');
+      expect(failure).toMatchObject({ level: 'error', path: '/auth/github/callback' });
+      expect(JSON.stringify(failure)).toContain('a defect, not an outage');
     });
   });
 
@@ -253,7 +365,7 @@ describe('integration: signing in with GitHub', () => {
 
   test('the session the handshake issued actually expires when it should', async () => {
     await withRollback(async (db) => {
-      expect((await startAndCallback(db)).status).toBe(302);
+      expect((await startAndCallback(db)).headers.get('location')).toBe(ORIGIN);
       // The session belonging to *this* account. `selectAll().executeTakeFirst()`
       // reads whichever row the database returns first, which on a machine that
       // has run the application is somebody else's.

@@ -75,7 +75,7 @@ without disclosing it. (D-33)
 | | Method | Path | Notes |
 |:-:|---|---|---|
 | ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
-| ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL` |
+| ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL`. **Never answers JSON:** a failure is a 302 to the sign-in screen with a reason (below, D-121) |
 | ○ | `POST` | `/auth/logout` | Revokes the current session |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user plus workspace memberships |
@@ -84,6 +84,24 @@ without disclosing it. (D-33)
 Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
 and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id`.
 Neither case is linked silently. (D-38)
+
+**A refused callback is a redirect, not an error body.** Only a browser GitHub redirected ever
+arrives at the callback, so every way it can fail — the rate limit and `INTERNAL` included — answers
+`302` to `APP_URL/sign-in?error=<reason>`, spends the `state` cookie and issues no session. The reason
+is one of `SignInFailure` in `@purlay/types`, and the address carries nothing else: no code, no
+message, nothing GitHub said. The cause is written to the log. (D-121)
+
+| Reason | When |
+|---|---|
+| `cancelled` | GitHub returned `error=access_denied`: the person pressed Cancel |
+| `expired` | `OAUTH_STATE_INVALID` — no state cookie, an expired one, a mismatch, or no `code`; one reason for all of them (D-62) |
+| `email-required` | `EMAIL_REQUIRED` |
+| `email-taken` | `ACCOUNT_EMAIL_CONFLICT`, including a lost race on the email index |
+| `github-unavailable` | GitHub could not be reached, refused, or answered something that is not a usable identity |
+| `busy` | `RATE_LIMITED` or `DATABASE_UNAVAILABLE` |
+| `failed` | Anything else — another GitHub `error` value, or `INTERNAL` |
+
+Every other route here, `/auth/github` and both logouts included, answers as §1 says.
 
 `state` verification is mandatory: without it the callback is a CSRF endpoint that signs
 victims into an attacker's account. (`ARCHITECTURE.md` §7.1)

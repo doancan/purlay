@@ -48,10 +48,42 @@ export const authorizeUrl = (credentials: GitHubCredentials, state: string): str
   return `https://github.com/login/oauth/authorize?${parameters.toString()}`;
 };
 
+/**
+ * Every way GitHub can fail a sign-in that is GitHub's doing rather than the
+ * person's: unreachable, refusing, or answering something that is not a usable
+ * identity. One type, so the callback can tell the person *GitHub did not answer,
+ * try again* instead of *something went wrong* (D-121) — and the message, which
+ * may quote GitHub, goes to the log and never to them.
+ */
+export class GitHubUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'GitHubUnavailableError';
+  }
+}
+
+/** `fetch`, with a network failure said in this module's own terms. */
+const reach = async (url: string, init: RequestInit): Promise<Response> => {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    throw new GitHubUnavailableError('GitHub could not be reached', { cause: error });
+  }
+};
+
 const json = async (response: Response, what: string): Promise<unknown> => {
-  if (!response.ok)
-    throw new Error(`GitHub refused the ${what} request: ${String(response.status)}`);
-  return await response.json();
+  if (!response.ok) {
+    throw new GitHubUnavailableError(
+      `GitHub refused the ${what} request: ${String(response.status)}`,
+    );
+  }
+  try {
+    return await response.json();
+  } catch (error) {
+    throw new GitHubUnavailableError(`GitHub answered the ${what} request with no JSON`, {
+      cause: error,
+    });
+  }
 };
 
 /**
@@ -74,7 +106,7 @@ export const githubClient = (
   endpoints: GitHubEndpoints = GITHUB_ENDPOINTS,
 ): GitHubClient => ({
   exchangeCode: async (code: string): Promise<string> => {
-    const response = await fetch(`${endpoints.oauth}/login/oauth/access_token`, {
+    const response = await reach(`${endpoints.oauth}/login/oauth/access_token`, {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -88,13 +120,13 @@ export const githubClient = (
     if (typeof body.access_token !== 'string') {
       // GitHub answers 200 with `{"error": …}` when the code is bad, so a status
       // check alone would let an empty token through into the next call.
-      throw new Error('GitHub returned no access token');
+      throw new GitHubUnavailableError('GitHub returned no access token');
     }
     return body.access_token;
   },
 
   profile: async (accessToken: string): Promise<GitHubProfile> => {
-    const response = await fetch(`${endpoints.api}/user`, {
+    const response = await reach(`${endpoints.api}/user`, {
       headers: { authorization: `Bearer ${accessToken}`, accept: 'application/vnd.github+json' },
     });
     const body = (await json(response, 'profile')) as {
@@ -104,7 +136,7 @@ export const githubClient = (
       avatar_url?: unknown;
     };
     if (typeof body.id !== 'number' || typeof body.login !== 'string') {
-      throw new Error('GitHub returned a profile without an id or a login');
+      throw new GitHubUnavailableError('GitHub returned a profile without an id or a login');
     }
     return {
       id: body.id,
@@ -121,13 +153,14 @@ export const githubClient = (
    * `NOT NULL` (D-38).
    */
   emails: async (accessToken: string): Promise<readonly GitHubEmail[]> => {
-    const response = await fetch(`${endpoints.api}/user/emails`, {
+    const response = await reach(`${endpoints.api}/user/emails`, {
       headers: { authorization: `Bearer ${accessToken}`, accept: 'application/vnd.github+json' },
     });
     const body = await json(response, 'emails');
     // Checked, not cast: an error object here would otherwise surface as a
     // `TypeError` about `flatMap` instead of saying what GitHub sent.
-    if (!Array.isArray(body)) throw new Error('GitHub returned emails that are not a list');
+    if (!Array.isArray(body))
+      throw new GitHubUnavailableError('GitHub returned emails that are not a list');
     return body.flatMap((entry: unknown) => {
       if (typeof entry !== 'object' || entry === null) return [];
       const { email, primary, verified } = entry as Record<string, unknown>;

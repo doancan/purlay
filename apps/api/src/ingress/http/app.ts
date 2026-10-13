@@ -26,7 +26,15 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
-import { completeSignIn, signOut, signOutEverywhere, startSignIn, type AuthResponse } from './auth';
+import {
+  abandonSignIn,
+  completeSignIn,
+  signOut,
+  signOutEverywhere,
+  startSignIn,
+  type AuthResponse,
+} from './auth';
+import { SIGN_IN_CALLBACK } from '../../modules/auth/sign-in';
 import { clearedStateCookie } from '../../platform/cookies';
 import { clientAddress, peerOf } from './client-address';
 import { GITHUB_CALL_BUDGET, httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
@@ -262,6 +270,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .onError(({ code, error, set, path }) => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
+      // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
+      if (path === SIGN_IN_CALLBACK) {
+        return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code));
+      }
       // The client is told INTERNAL and nothing else; the cause is written here.
       if (refusal.status === 500) log.error('request failed', { err: error, path });
       set.status = refusal.status;
@@ -297,6 +309,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
+    // Spelled out, as every route is, for `scripts/enforcement.test.ts` to read against
+    // `API.md`. It is `SIGN_IN_CALLBACK`: were they to differ, the error hook's redirect
+    // would miss this route and `auth.integration.test.ts` would see JSON (D-121).
     .get('/auth/github/callback', async ({ request, set, server }) => {
       // Spent whatever happens next: set before the handler runs, so a refusal
       // carries it too — measured, a header set before a throw survives into

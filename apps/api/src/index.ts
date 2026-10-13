@@ -13,6 +13,7 @@ import { databaseConnection } from './platform/database';
 import { loadConfig } from './platform/config';
 import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
+import { SIGN_IN_CALLBACK } from './modules/auth/sign-in';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
 import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
@@ -66,7 +67,7 @@ const app = createApp({
     clientId: config.GITHUB_CLIENT_ID,
     clientSecret: config.GITHUB_CLIENT_SECRET,
     // One origin, so this is the origin the browser is already on (D-61).
-    redirectUri: `${config.APP_URL}/auth/github/callback`,
+    redirectUri: `${config.APP_URL}${SIGN_IN_CALLBACK}`,
   }),
 });
 

@@ -124,6 +124,7 @@ describe('integration: the log', () => {
       );
       const signedIn = await signIn(db, github, log);
       expect(signedIn.status).toBe(302);
+      expect(signedIn.headers.get('location')).toBe('https://purlay.test');
       const token = (signedIn.headers.getSetCookie()[0] ?? '').split(';')[0]?.split('=')[1] ?? '';
       expect(token.length).toBeGreaterThan(20);
 
@@ -143,7 +144,7 @@ describe('integration: the log', () => {
         { id: 7002, login: taken.username, name: null, avatarUrl: null },
         [{ email: 'second-of-that-name@example.test', primary: true, verified: true }],
       );
-      expect((await signIn(db, github, log)).status).toBe(302);
+      expect((await signIn(db, github, log)).headers.get('location')).toBe('https://purlay.test');
       expect(
         lines.find((line) => line['msg'] === 'username taken; stored with a suffix'),
       ).toMatchObject({
