@@ -656,6 +656,29 @@ describe('the frames', () => {
       expect(other?.state?.unreadCount).toBe(3);
     });
 
+    test('a channel’s new name and topic replace what the list holds, and a late rename does not undo a newer one (D-123)', () => {
+      const w = world();
+      w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+      w.engine.start();
+      w.open();
+      const renamed = (name: string, version: number): ServerFrame =>
+        frame({
+          event: 'CHANNEL_UPDATED',
+          data: { channelId: CH, name, topic: `about ${name}` },
+          version,
+          ts: T0,
+        });
+      const held = (): Channel | undefined =>
+        w.client.getQueryData<Channel[]>(keys.channels(WS))?.[0];
+
+      w.deliver(renamed('genel-sohbet', 2));
+      expect(held()).toMatchObject({ name: 'genel-sohbet', topic: 'about genel-sohbet' });
+      w.deliver(renamed('general', 1)); // committed first, arrived last
+      expect(held()?.name).toBe('genel-sohbet');
+      w.deliver(renamed('lobby', 3));
+      expect(held()?.name).toBe('lobby');
+    });
+
     test('a thread summary and a reaction set are ordered separately, though they share a counter', () => {
       const w = world();
       const root = echo('0199155c-6200-7b7f-8c11-000000000001');

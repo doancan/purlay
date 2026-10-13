@@ -82,6 +82,21 @@ describe('the audit log', () => {
     expect(admin.getByRole('menuitem', { name: 'Audit log…' })).toBeDefined();
   });
 
+  test('a channel renamed is said with the name it had and the one it has (D-123)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(1, {
+              action: 'channel.renamed',
+              metadata: { from: 'general', to: 'genel-sohbet' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([`${ME.displayName} renamed #general to #genel-sohbet`]);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>

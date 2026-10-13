@@ -78,6 +78,8 @@ import {
   readUpTo,
   setLevel,
   addChannelMember,
+  changeChannel,
+  listChannelMembers,
 } from './channels';
 import { markNotificationsRead, readInbox } from './notifications';
 import {
@@ -455,6 +457,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/channels/:channelId',
       async ({ request, params }) => await readChannel(dependencies, request, params.channelId),
+    )
+    .patch(
+      '/api/channels/:channelId',
+      async ({ request, params, body }) =>
+        await changeChannel(sending, request, params.channelId, body),
+    )
+    .get(
+      '/api/channels/:channelId/members',
+      async ({ request, params }) =>
+        await listChannelMembers(dependencies, request, params.channelId),
     )
     .put(
       '/api/channels/:channelId/read',

@@ -150,11 +150,12 @@ carries.
 | ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member — `{ name, topic?, type? }`; `type` is `public` (the default) or `private`, seen by its members only (D-104) |
 | ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
-| ① | `PATCH` | `/api/channels/:channelId` | member — name, topic |
+| ○ | `PATCH` | `/api/channels/:channelId` | member **of the channel** — `{ name?, topic? }` (`UpdateChannelRequest`; a `null` topic clears it), answered with the `Channel`; the room hears `CHANNEL_UPDATED`. A name another live channel of the workspace has, ignoring case, is `409 CHANNEL_NAME_TAKEN`; not in the channel `403 FORBIDDEN`; a direct message `404 CHANNEL_NOT_FOUND`. A rename is on the audit trail; a topic is not (D-123) |
 | ① | `DELETE` | `/api/channels/:channelId` | admin — soft delete |
 | ○ | `POST` | `/api/channels/:channelId/join` | member — public only |
 | ○ | `POST` | `/api/channels/:channelId/members` | a member **of the channel** — `{ userId }`, somebody from the workspace, `204`; they are told with `CHANNEL_ADDED`. Somebody already in it is `204` again, told nothing. Not in the channel, or a direct message: `403 FORBIDDEN`; a person not in the workspace: `404 USER_NOT_FOUND` (D-104) |
 | ① | `POST` | `/api/channels/:channelId/leave` | member |
+| ○ | `GET` | `/api/channels/:channelId/members` | member — a `ChannelMemberList`, first to join first; anybody who can see the channel (D-123) |
 | ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
 | ○ | `PUT` | `/api/channels/:channelId/notification-level` | Member only — `{ level }`, `all` \| `mentions` \| `none` (`SetNotificationLevelRequest`); `204`. The caller's own row; a channel they are not in, public or not, is `404 CHANNEL_NOT_FOUND`. From the next message on; the level is on the channel as `notificationLevel`, null for a non-member (D-107) |
 
@@ -196,12 +197,12 @@ request answers what it did. Re-sending the same message id re-tells everything 
 they are now — the room hears `MESSAGE_CREATED` again, the thread its summary, each recipient their
 numbers — and counts nothing twice, so a retry repairs a lost announcement (D-88, D-99 amended).
 
-**Whole-state frames carry a `version`.** `THREAD_UPDATED`, `REACTIONS_UPDATED`, `MESSAGE_REVISED` and `CHANNEL_STATE` say
+**Whole-state frames carry a `version`.** `THREAD_UPDATED`, `REACTIONS_UPDATED`, `MESSAGE_REVISED`, `CHANNEL_STATE` and `CHANNEL_UPDATED` (a channel's name and topic, D-123) say
 "this is the state, replace what you hold", and two of them published from different requests can
 arrive in the opposite order to the one their writes committed in. `version` is a positive integer, the
 row's own count of its changes taken in the statement that made them (`state_version`, migration
-`0015`): a client keeps the newest it has applied for each *thing* (a message's summary, a message's
-reactions, a message's words, a channel's state) and drops a frame with a smaller one. Equal is applied again — it is
+`0015`, and `0023` for a channel): a client keeps the newest it has applied for each *thing* (a message's summary, a message's
+reactions, a message's words, a channel's state, a channel's name) and drops a frame with a smaller one. Equal is applied again — it is
 the same state told twice. `THREAD_UPDATED`, `REACTIONS_UPDATED` and `MESSAGE_REVISED` share a message's counter and are
 compared only with frames of their own kind.
 Every mutation here publishes to the `EventBus`, so an action taken over HTTP reaches other

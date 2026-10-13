@@ -215,7 +215,8 @@ What the shape is for, which the types do not say:
   HTTP and are heard here as `THREAD_UPDATED`, `REACTIONS_UPDATED` and, on the person's own `user:`
   topic, `CHANNEL_STATE` and `CHANNEL_ADDED` (D-98, D-99). An edit and a delete are heard as
   `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
-  version, never its reactions or thread (D-103). Typing is a `TYPING` frame
+  version, never its reactions or thread (D-103). A rename or a new topic is `CHANNEL_UPDATED` on the
+  channel's topic, at the channel's version (D-123). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. Each frame joined the union
@@ -555,7 +556,8 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 | Delete workspace, transfer ownership | ✅ | — | — |
 | Manage members and roles | ✅ | ✅ | — |
 | Configure GitHub integration | ✅ | ✅ | — |
-| Create / archive channels | ✅ | ✅ | ✅ |
+| Create channels | ✅ | ✅ | ✅ |
+| Archive channels (D-123) | ✅ | ✅ | — |
 | Delete any message | ✅ | ✅ | — |
 | Edit / delete own message | ✅ | ✅ | ✅ |
 | Resolve a thread | ✅ | ✅ | ✅ |

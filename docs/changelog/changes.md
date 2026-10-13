@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### API — 2026-10-13: rename a channel and set its topic (D-123)
+
+- `PATCH /api/channels/:channelId` renames a channel or sets its topic, for a member of it; a taken
+  name is `409 CHANNEL_NAME_TAKEN`. The room hears `CHANNEL_UPDATED`, versioned by the channel's own
+  `state_version` (migration `0023`), and a rename is on the audit trail.
+- `GET /api/channels/:channelId/members` lists who is in a channel. D-123 also decides archiving and
+  leaving; `ARCHITECTURE.md` §7.4 no longer lets every member archive.
+
 ### Quality — 2026-10-13: focus is asserted by identity
 
 - `expect(document.activeElement).toBe(element)` passed under Bun with focus on a **different**

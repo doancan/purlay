@@ -244,6 +244,15 @@ export const channelLevelChanged = (
   editChannels(client, channelId, (c) => ({ ...c, notificationLevel }));
 };
 
+/** A channel's name or topic changed (D-123): what every screen showing it reads from. */
+export const channelRenamed = (
+  client: QueryClient,
+  channelId: string,
+  named: { readonly name: string; readonly topic: string | null },
+): void => {
+  editChannels(client, channelId, (c) => ({ ...c, name: named.name, topic: named.topic }));
+};
+
 /** A channel appeared for the caller. Added once, however many frames say so. */
 export const channelAdded = (client: QueryClient, channel: Channel): void => {
   const key = keys.channels(channel.workspaceId);

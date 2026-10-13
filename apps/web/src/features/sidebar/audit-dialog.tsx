@@ -85,6 +85,12 @@ export const AuditDialog = ({
           channel: channel?.name == null ? t('audit.goneChannel') : `#${channel.name}`,
         });
       }
+      case 'channel.renamed':
+        return t('audit.action.channel.renamed', {
+          actor,
+          from: `#${entry.metadata['from'] ?? ''}`,
+          to: `#${entry.metadata['to'] ?? ''}`,
+        });
       case 'integration.token_set':
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':

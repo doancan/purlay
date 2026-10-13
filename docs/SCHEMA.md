@@ -275,8 +275,13 @@ CREATE TABLE channels (
     -- Denormalized so the sidebar can order channels without touching `messages`.
     last_message_at TIMESTAMPTZ,
 
+    -- The channel's own count of its renames, raised in the statement that renames under the row
+    -- lock: `CHANNEL_UPDATED` carries it and a client drops an older one (0023, D-123).
+    state_version INTEGER NOT NULL DEFAULT 0,
+
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Archived (D-123): hidden from everyone, its messages and memberships kept, its name free.
     deleted_at   TIMESTAMPTZ,
 
     CONSTRAINT named_unless_dm CHECK (
@@ -1011,12 +1016,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0020_integrations.sql        github_integrations, link_previews  (D-11, D-23, D-39 §6)
 0021_invitations.sql         workspace_invitations  (D-115)
 0022_audit_session.sql       audit_log.session_id; ip_address and user_agent dropped  (D-116)
+0023_channel_versions.sql    channels.state_version  (D-123)
 ```
 
-Phase 2 adds `0023_github_feeds.sql`; Phase 2's magic links add `0024_email_auth.sql`.
+Phase 2 adds `0024_github_feeds.sql`; Phase 2's magic links add `0025_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)
