@@ -271,9 +271,11 @@ export const test = base.extend<Fixtures>({
     let made = 0;
     await use(async (outsider) => {
       made += 1;
-      // Unique across the run: the test's id, the project and a counter.
+      // Unique across attempts and runs, not only within one: a retry, or a second run against a
+      // server that is still up, must not ask for a slug the first one took. What makes it unique
+      // comes first, so the 64-character cut never takes it off.
       const slug =
-        `${outsider}-${testInfo.testId.slice(0, 8)}-${testInfo.project.name}-${String(made)}`
+        `${outsider}-${crypto.randomUUID().slice(0, 8)}-${String(testInfo.retry)}-${String(made)}-${testInfo.project.name}`
           .toLowerCase()
           .replace(/[^a-z0-9-]+/g, '-')
           .slice(0, 64);
