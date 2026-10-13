@@ -32,6 +32,15 @@ export const tr = {
   'app.notFound.title': 'Burada bir şey yok',
   'app.notFound.body': 'Bu adres Purlay içinde hiçbir yere çıkmıyor.',
   'app.notFound.home': 'Kanallarına git',
+  'app.tab': '{place} · {workspace} · Purlay',
+  'app.tab.workspace': '{workspace} · Purlay',
+  'app.tab.waiting': '({count}) {title}',
+  'app.failed.screen': 'Bu ekran çalışmayı durdurdu',
+  'app.failed.app': 'Purlay çalışmayı durdurdu',
+  'app.failed.body':
+    'İçindeki bir şey çizilemedi. Sayfayı yeniden yükle ya da ana sayfaya dönüp oradan devam et.',
+  'app.failed.reload': 'Yeniden yükle',
+  'app.failed.home': 'Ana sayfaya dön',
 
   // ── Giriş ───────────────────────────────────────────────────────────────
   'signIn.title': "Purlay'e giriş yap",
@@ -71,6 +80,7 @@ export const tr = {
   'sidebar.unread': 'okunmamış',
   'sidebar.dm.failed': 'Konuşma açılamadı.',
   'sidebar.people.empty': 'Burada henüz başka kimse yok.',
+  'sidebar.people.emptyBody': 'Katılan herkes burada listelenir; birine mesaj da buradan başlar.',
 
   // ── Dar pencere (UX §2): kenar çubuğu üst katman olur ────────────────────
   'nav.open': 'Gezinmeyi aç',

@@ -3,7 +3,8 @@
  *
  * The order is the dependency order: the theme and the words come first because
  * nothing renders without them (and the words are the one that makes the rest
- * wait, so it takes the `fallback`); the router and the cache next; the tooltip
+ * wait, so it takes the `fallback`); then the boundary that says, in those words, that
+ * something below failed to draw (`failure-boundary.tsx`); the router and the cache next; the tooltip
  * timing and the toast list last, because they are leaves.
  *
  * Every provider takes its outside world as an optional port, so the browser's
@@ -15,6 +16,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { I18nPorts } from '../i18n/i18n-provider';
 import { I18nProvider } from '../i18n/i18n-provider';
+import { AppBoundary } from '../features/shell/failure-boundary';
 import type { Schedule } from '../realtime/connection';
 import type { HistoryPort } from '../router/router';
 import { RouterProvider } from '../router/router-provider';
@@ -64,25 +66,29 @@ export const AppProviders = ({
         {...(ports.i18n === undefined ? {} : { ports: ports.i18n })}
         {...(fallback === undefined ? {} : { fallback })}
       >
-        <RouterProvider {...(ports.history === undefined ? {} : { history: ports.history })}>
-          <QueryClientProvider client={client}>
-            <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
-              <StorageProvider {...(ports.storage === undefined ? {} : { storage: ports.storage })}>
-                <ActionsProvider>
-                  <RealtimePortsContext.Provider value={ports.realtime ?? {}}>
-                    <TooltipProvider>
-                      <ToastProvider
-                        {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
-                      >
-                        {children}
-                      </ToastProvider>
-                    </TooltipProvider>
-                  </RealtimePortsContext.Provider>
-                </ActionsProvider>
-              </StorageProvider>
-            </ApiProvider>
-          </QueryClientProvider>
-        </RouterProvider>
+        <AppBoundary>
+          <RouterProvider {...(ports.history === undefined ? {} : { history: ports.history })}>
+            <QueryClientProvider client={client}>
+              <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
+                <StorageProvider
+                  {...(ports.storage === undefined ? {} : { storage: ports.storage })}
+                >
+                  <ActionsProvider>
+                    <RealtimePortsContext.Provider value={ports.realtime ?? {}}>
+                      <TooltipProvider>
+                        <ToastProvider
+                          {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
+                        >
+                          {children}
+                        </ToastProvider>
+                      </TooltipProvider>
+                    </RealtimePortsContext.Provider>
+                  </ActionsProvider>
+                </StorageProvider>
+              </ApiProvider>
+            </QueryClientProvider>
+          </RouterProvider>
+        </AppBoundary>
       </I18nProvider>
     </ThemeProvider>
   );

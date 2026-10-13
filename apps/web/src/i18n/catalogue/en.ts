@@ -31,6 +31,15 @@ export const en = {
   'app.notFound.title': 'Nothing here',
   'app.notFound.body': 'This address does not lead anywhere in Purlay.',
   'app.notFound.home': 'Go to your channels',
+  'app.tab': '{place} · {workspace} · Purlay',
+  'app.tab.workspace': '{workspace} · Purlay',
+  'app.tab.waiting': '({count}) {title}',
+  'app.failed.screen': 'This screen stopped working',
+  'app.failed.app': 'Purlay stopped working',
+  'app.failed.body':
+    'Something on it failed to draw. Reload the page, or go home and carry on from there.',
+  'app.failed.reload': 'Reload',
+  'app.failed.home': 'Go home',
 
   // ── Sign in ─────────────────────────────────────────────────────────────
   'signIn.title': 'Sign in to Purlay',
@@ -73,6 +82,8 @@ export const en = {
   'sidebar.unread': 'unread',
   'sidebar.dm.failed': 'The conversation could not be opened.',
   'sidebar.people.empty': 'Nobody else is here yet.',
+  'sidebar.people.emptyBody':
+    'Everyone who joins is listed here, and a message to one of them starts here.',
 
   // ── Narrow window (UX §2): the sidebar is an overlay ─────────────────────
   'nav.open': 'Open navigation',
