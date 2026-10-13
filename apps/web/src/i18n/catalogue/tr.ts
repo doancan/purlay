@@ -621,6 +621,7 @@ export const tr = {
   'failure.refused': 'Bu reddedildi. Girdiğini kontrol edip tekrar dene.',
   'failure.savedLimit':
     'Bir çalışma alanında saklanabilecek kayıtlı mesaj sınırına ulaştın. Önce bazılarını tamamla ya da kaldır.',
+  'failure.pinsLimit': 'Bir kanalın tutabileceği pin sınırına ulaşıldı. Önce birini kaldır.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

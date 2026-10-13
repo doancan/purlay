@@ -28,6 +28,8 @@ export const keys = {
   saved: (workspaceId: string) => ['saved', workspaceId] as const,
   /** A channel's files, every page (D-129). */
   files: (channelId: string) => ['files', channelId] as const,
+  /** A channel's pins: the list, and the ids that mark them (D-130). */
+  pins: (channelId: string) => ['pins', channelId] as const,
 } as const;
 
 /** The families, for the code that addresses one of them whole. */

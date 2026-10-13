@@ -81,6 +81,8 @@ export const ErrorCode = Type.Union([
   /** The person already holds as many unattached uploads here as they may (D-109 §5). */
   Type.Literal('TOO_MANY_PENDING_UPLOADS'),
   Type.Literal('SAVED_LIMIT'),
+  /** The channel already has as many pins as it may (D-130). */
+  Type.Literal('PINS_LIMIT'),
   /**
    * An attachment id already used for another upload — somebody else's, another workspace's, or
    * the same person's with other bytes. A retry of the same upload answers the attachment instead.
@@ -156,6 +158,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   STORAGE_QUOTA_EXCEEDED: 413,
   TOO_MANY_PENDING_UPLOADS: 409,
   SAVED_LIMIT: 409,
+  PINS_LIMIT: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
   INVITATION_NOT_FOUND: 404,

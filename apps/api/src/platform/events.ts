@@ -97,6 +97,19 @@ export const publishSavedUpdated = async (
   });
 };
 
+/** A channel's pins changed (D-130): everyone watching it reads them again. Nothing of the pin in it. */
+export const publishPinsUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  channelId: string,
+): Promise<void> => {
+  await bus.publish(channelTopic(channelId), {
+    event: 'PINS_UPDATED',
+    data: { channelId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel was archived: everyone watching it, on any node, stops receiving it, and is told why. */
 export const publishChannelRevoked = async (
   bus: EventBus,

@@ -359,8 +359,10 @@ describe('the channel list', () => {
       pages: [{ data: [], nextCursor: null }],
       pageParams: [undefined],
     });
+    client.setQueryData(keys.pins(CH), []);
     channelsRevoked(client, [CH]);
     expect(cached(client, keys.files(CH))).toBeUndefined();
+    expect(cached(client, keys.pins(CH))).toBeUndefined();
   });
 
   test('a revoked channel takes its members and its threads with it, and leaves other threads (#521)', () => {
@@ -435,10 +437,15 @@ describe('a channel’s files list (D-129)', () => {
       deletedAt: null,
       mentions: [],
     };
+    client.setQueryData(keys.pins(CH), []);
+    const pinsStale = (): boolean | undefined => client.getQueryState(keys.pins(CH))?.isInvalidated;
     messageRevised(client, revision);
     expect(stale(client, CH)).toBe(false);
+    expect(pinsStale()).toBe(false);
     messageRevised(client, { ...revision, editedAt: null, deletedAt: '2026-09-09T08:00:00.000Z' });
     expect(stale(client, CH)).toBe(true);
+    // A deleted message's pin leaves the pins too (D-130).
+    expect(pinsStale()).toBe(true);
   });
 
   test('a Load more on its way is not cancelled: the list is read again once it is in', async () => {

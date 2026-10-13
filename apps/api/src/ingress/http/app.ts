@@ -121,6 +121,7 @@ import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } 
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
+import { deletePin, listPins, putPin } from './pins';
 
 export interface Dependencies {
   readonly config: Config;
@@ -472,6 +473,20 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/saved/ids',
       async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
     )
+    .get(
+      '/api/channels/:channelId/pins',
+      async ({ request, params }) => await listPins(dependencies, request, params.channelId),
+    )
+    .put('/api/messages/:messageId/pin', async ({ request, params, set }) => {
+      await putPin(sending, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
+    .delete('/api/messages/:messageId/pin', async ({ request, params, set }) => {
+      await deletePin(sending, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
     .put('/api/messages/:messageId/saved', async ({ request, params, body, set }) => {
       await putSaved(sending, request, params.messageId, body);
       set.status = 204;

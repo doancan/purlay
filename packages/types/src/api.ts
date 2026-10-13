@@ -657,3 +657,23 @@ export type FilePage = Static<typeof FilePage>;
 /** Older than a file, one way only: the list is read back from the newest. */
 export const FileQuery = Type.Pick(PageQuery, ['before', 'limit']);
 export type FileQuery = Static<typeof FileQuery>;
+
+// ── A channel's pins (#485, D-130) ──────────────────────────────────────────
+
+/** How many messages a channel keeps pinned — what its Pins list holds, unpaged. */
+export const PINS_MAX = 50;
+
+/**
+ * A pinned message, as the caller can read it now, with who pinned it — null once that person's
+ * account is gone — and when.
+ */
+export const PinnedMessage = Type.Object({
+  message: Message,
+  pinnedBy: Type.Union([User, Type.Null()]),
+  pinnedAt: Timestamp,
+});
+export type PinnedMessage = Static<typeof PinnedMessage>;
+
+/** `GET /api/channels/:channelId/pins` — newest pin first, of messages not deleted; bounded, not paged. */
+export const PinList = Type.Array(PinnedMessage, { maxItems: PINS_MAX });
+export type PinList = Static<typeof PinList>;

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a channel's pins, the API (D-130, part of #485)
+
+- `PUT`/`DELETE /api/messages/:messageId/pin` pin a message for its channel or let it go — a
+  member's, at most 50 a channel — and `GET /api/channels/:channelId/pins` lists them, newest first,
+  with who pinned each. Everyone watching the channel hears `PINS_UPDATED` and reads them again.
+
 ### Feature — 2026-10-14: a channel's files, in a panel (D-129, part of #485)
 
 - **Files** in a channel's header opens every file shared there beside the conversation, newest

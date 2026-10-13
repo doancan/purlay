@@ -163,6 +163,14 @@ export interface Notifications {
   workspace_id: string;
 }
 
+export interface PinnedMessages {
+  channel_id: string;
+  message_id: string;
+  pinned_at: Generated<Timestamp>;
+  pinned_by: string | null;
+  workspace_id: string;
+}
+
 export interface PushSubscriptions {
   auth: string;
   created_at: Generated<Timestamp>;
@@ -265,6 +273,7 @@ export interface DB {
   mentions: Mentions;
   messages: Messages;
   notifications: Notifications;
+  pinned_messages: PinnedMessages;
   push_subscriptions: PushSubscriptions;
   reactions: Reactions;
   saved_messages: SavedMessages;

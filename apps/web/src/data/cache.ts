@@ -225,8 +225,12 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
-  // A deleted message's files leave the list (D-129); whether it had any, only the list knows.
-  if (revision.deletedAt !== null) readAgain(client, keys.files(revision.channelId));
+  // A deleted message's files leave the list (D-129), and its pin the pins (D-130); whether it had
+  // either, only the lists know.
+  if (revision.deletedAt !== null) {
+    readAgain(client, keys.files(revision.channelId));
+    readAgain(client, keys.pins(revision.channelId));
+  }
   const deletedRoot = revision.deletedAt !== null && revision.parentId === null;
   for (const [key, data] of messageLists(client)) {
     const held = data.pages.flatMap((page) => page.data).find((m) => m.id === id);
@@ -336,6 +340,7 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
     client.removeQueries({ queryKey: keys.messages(id) });
     client.removeQueries({ queryKey: keys.channelMembers(id) });
     client.removeQueries({ queryKey: keys.files(id) });
+    client.removeQueries({ queryKey: keys.pins(id) });
   }
   // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
   client.removeQueries({
