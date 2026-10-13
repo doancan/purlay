@@ -15,6 +15,7 @@ import {
   resetStorageNotes,
   type ClientStorage,
 } from './browser-storage';
+import { PUSH_OWNER_KEY } from '../features/push/push';
 
 installDom();
 afterEach(resetStorageNotes);
@@ -40,13 +41,15 @@ const refusing = (): ClientStorage => ({
 const note = (): string | undefined => document.documentElement.dataset['storageFailed'];
 
 describe('forgetting a person', () => {
-  test('removes drafts, the last channel and unsent messages — every one, not every other one — and nothing of the device', () => {
+  test('removes drafts, the last channel, unsent messages and whose push this browser’s is — every one, not every other one — and nothing of the device', () => {
     const storage = memoryStorage({
       'purlay.draft.a': '1',
       'purlay.draft.a.b': '2',
       'purlay.draft.c': '3',
       'purlay.lastChannel.w': 'c',
       'purlay.pending.u': '[]',
+      // The next person to sign in here finds push off, not the last person's notices (D-126).
+      [PUSH_OWNER_KEY]: 'u1',
       'purlay.theme': 'dark',
       'purlay.locale': 'tr',
     });

@@ -57,5 +57,9 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   signOut: unexpected('signOut'),
   renameWorkspace: unexpected('renameWorkspace'),
   signOutEverywhere: unexpected('signOutEverywhere'),
+  pushKey: unexpected('pushKey'),
+  subscribePush: unexpected('subscribePush'),
+  unsubscribePush: unexpected('unsubscribePush'),
+  setLocale: unexpected('setLocale'),
   ...overrides,
 });

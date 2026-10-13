@@ -483,8 +483,11 @@ export type DeepWorkResponse = Static<typeof DeepWorkResponse>;
 const Base64Url = (bytes: number): ReturnType<typeof Type.String> =>
   Type.String({ pattern: `^[A-Za-z0-9_-]{${String(Math.ceil((bytes * 4) / 3))}}$` });
 
-/** `GET /api/push/key` — the application server's public key a browser subscribes with. */
-export const PushKeyResponse = Type.Object({ publicKey: Base64Url(65) });
+/**
+ * `GET /api/push/key` — the application server's public key a browser subscribes with, or `null`
+ * where the operator has push off: an answer, not an error, since every signed-in page asks.
+ */
+export const PushKeyResponse = Type.Object({ publicKey: Type.Union([Base64Url(65), Type.Null()]) });
 export type PushKeyResponse = Static<typeof PushKeyResponse>;
 
 /** The languages a device's notifications are written in — the interface's own (D-41). */

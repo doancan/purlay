@@ -59,7 +59,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   field (the palette's door, `⌘K`), the channels,
   then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
   for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is on, until when, the
-  minutes left and its end; the theme; the language; the shortcut reference; **Sign out**; and **Sign
+  minutes left and its end; **notifications on this device** (D-126) — turned on or off, and where the
+  browser blocked them, where that is undone; drawn only where the browser and the server can send
+  them; the theme; the language; the shortcut reference; **Sign out**; and **Sign
   out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
   unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar and no
   presence dot: there is no presence to show (Phase 2, D-120), and a dot that is always one colour

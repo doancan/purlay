@@ -17,6 +17,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { ErrorState } from '../../ui/states';
+import { PushProvider } from '../push/push';
 import type { MeResponse } from '@purlay/types';
 
 const SessionContext = createContext<MeResponse | null>(null);
@@ -59,5 +60,10 @@ export const SessionGate = ({
       />
     );
   }
-  return <SessionContext.Provider value={me.data}>{children}</SessionContext.Provider>;
+  // Push is a person's, on every signed-in page: a device they turned it on in is tied again on load.
+  return (
+    <SessionContext.Provider value={me.data}>
+      <PushProvider userId={me.data.user.id}>{children}</PushProvider>
+    </SessionContext.Provider>
+  );
 };

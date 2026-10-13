@@ -28,7 +28,7 @@ export interface PushDependencies {
   readonly config: Pick<Config, 'VAPID_PUBLIC_KEY'>;
 }
 
-/** The key, or push is off: what every door but the language's needs first. */
+/** The key, or push is off: what subscribing needs first. */
 const serverKey = (config: PushDependencies['config']): string => {
   if (config.VAPID_PUBLIC_KEY === undefined) throw pushUnavailable();
   return config.VAPID_PUBLIC_KEY;
@@ -40,7 +40,7 @@ export const readPushKey = async (
   request: Request,
 ): Promise<PushKeyResponse> => {
   await requireSession(database, clock, request);
-  return { publicKey: serverKey(config) };
+  return { publicKey: config.VAPID_PUBLIC_KEY ?? null };
 };
 
 /** `POST /api/push/subscriptions` — this device, in this session, is told. */

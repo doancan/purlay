@@ -77,7 +77,7 @@ const rows = async (db: Executor, userId: string): Promise<string[]> =>
   ).map((row) => row.endpoint);
 
 describe('integration: the server’s push key', () => {
-  test('is given to a signed-in person, and is 503 PUSH_UNAVAILABLE where push is off', async () => {
+  test('is given to a signed-in person, and is null where push is off', async () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'push-key');
       const key = await call(db, 'GET', '/api/push/key', alice);
@@ -86,8 +86,10 @@ describe('integration: the server’s push key', () => {
       expect(Value.Check(PushKeyResponse, body)).toBe(true);
       expect(body).toEqual({ publicKey: SERVER_PUBLIC });
       const off = await call(db, 'GET', '/api/push/key', alice, undefined, testConfig());
-      expect(off.status).toBe(503);
-      expect(await off.json()).toMatchObject({ error: { code: 'PUSH_UNAVAILABLE' } });
+      expect(off.status).toBe(200);
+      const none: unknown = await off.json();
+      expect(Value.Check(PushKeyResponse, none)).toBe(true);
+      expect(none).toEqual({ publicKey: null });
       expect((await call(db, 'GET', '/api/push/key', undefined)).status).toBe(401);
     });
   });

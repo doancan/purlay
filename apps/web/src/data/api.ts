@@ -24,6 +24,7 @@ import {
   InvitationPage,
   InvitationPreview,
   NotificationPage,
+  PushKeyResponse,
   ReactionsResponse,
   SearchPage,
   ReadChannelResponse,
@@ -41,6 +42,8 @@ import {
   type SetDeepWorkRequest,
   type ReadNotificationsRequest,
   type SendMessageRequest,
+  type PushLocale,
+  type PushSubscribeRequest,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
@@ -176,6 +179,12 @@ export interface Api {
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
+  /** The server's push key; `PUSH_UNAVAILABLE` where the operator has not switched push on (D-126). */
+  readonly pushKey: (signal?: AbortSignal) => Promise<PushKeyResponse>;
+  readonly subscribePush: (input: PushSubscribeRequest) => Promise<void>;
+  readonly unsubscribePush: (endpoint: string) => Promise<void>;
+  /** The language the server writes this person's notifications in. */
+  readonly setLocale: (locale: PushLocale) => Promise<void>;
 }
 
 export const createApi = (http: Http): Api => {
@@ -418,5 +427,11 @@ export const createApi = (http: Http): Api => {
       http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
+    pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),
+    subscribePush: (input) =>
+      http.send('POST', '/api/push/subscriptions', options({ body: input })),
+    unsubscribePush: (endpoint) =>
+      http.send('POST', '/api/push/subscriptions/remove', options({ body: { endpoint } })),
+    setLocale: (locale) => http.send('PUT', '/api/me/locale', options({ body: { locale } })),
   };
 };

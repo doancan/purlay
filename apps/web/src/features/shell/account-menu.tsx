@@ -5,6 +5,8 @@
  * - **Deep Work** is started for a while chosen here — half an hour, one, two, or until tomorrow
  *   morning — and the instant is what the server is sent, so it is the server's delivery that stops
  *   (D-15, D-108). On, it says until when and how long is left, and offers its end.
+ * - **Notifications on this device** (D-126) are turned on and off here, where the browser can be
+ *   told and the server sends them; blocked in the browser, it says where that is undone.
  * - **Sign out everywhere** ends every session the person holds, this one with them (D-11). It asks
  *   first, because it signs out devices that are not in front of them. Either sign-out forgets the
  *   page's cache and leaves with `replace`, so Back does not return to a page that would bounce; a
@@ -22,6 +24,7 @@ import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
+import { usePushControls } from '../push/push';
 import { useSession } from '../session/session';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from './deep-work';
 import { PreferenceItems } from './settings-menu';
@@ -54,6 +57,38 @@ const DeepWorkItems = (): React.JSX.Element | null => {
       ) : (
         <MenuItem glyph="deep-work" onSelect={deepWork.end}>
           {t('deepWork.stop')}
+        </MenuItem>
+      )}
+      <MenuSeparator />
+    </>
+  );
+};
+
+/** Notifications on this device: off, on, on their way, or blocked — and nothing where none can be. */
+const PushItems = (): React.JSX.Element | null => {
+  const { t } = useI18n();
+  const push = usePushControls();
+  if (push === null) return null;
+  const { status } = push;
+  return (
+    <>
+      <MenuLabel>{t('push.label')}</MenuLabel>
+      {status === 'on' ? (
+        <MenuItem glyph="deep-work" onSelect={push.turnOff}>
+          {t('push.turnOff')}
+        </MenuItem>
+      ) : status === 'off' ? (
+        <MenuItem glyph="notifications" onSelect={push.turnOn}>
+          {t('push.turnOn')}
+        </MenuItem>
+      ) : (
+        // Drawn, not offered: what is happening, or where the browser's refusal is undone.
+        <MenuItem
+          glyph={status === 'blocked' ? 'warning' : 'sending'}
+          disabled
+          onSelect={push.turnOn}
+        >
+          {t(status === 'blocked' ? 'push.blocked' : 'push.working')}
         </MenuItem>
       )}
       <MenuSeparator />
@@ -110,6 +145,7 @@ export const AccountMenu = (): React.JSX.Element => {
         }
       >
         <DeepWorkItems />
+        <PushItems />
         <PreferenceItems />
         <MenuSeparator />
         <MenuItem
