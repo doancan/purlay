@@ -17,6 +17,8 @@ const RICH = [
   'Inline `code`, a mention of @alice and @bob, and a token: ' + 'x'.repeat(90),
   '```ts\nconst answer: number = 42;\nconsole.log(`the answer is ${answer}`);\n```',
   'Two lines\nand a third line',
+  // A quotation and a mention of the reader, side by side: they once looked alike (D-119 §5, amended).
+  '> quoted from the runbook\n\n@dogancan this one is yours, and @alice can help.',
 ];
 
 // Only what is on screen: a thread panel on a narrow window covers the channel, and a mask drawn

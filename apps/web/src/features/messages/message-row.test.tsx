@@ -213,15 +213,19 @@ describe('what a row shows', () => {
     expect(other.getAllByRole('article').at(-1)?.tabIndex).toBe(-1);
   });
 
-  test('a mention of the person marks the bubble and says so in words', async () => {
+  test('a mention of the person fills their name, says so in words, and leaves the bubble unmarked', async () => {
+    // An edge on the bubble read as a quote (owner, 2026-10-13): the name itself carries it now.
     const view = await mount(
       props({ message: aMessage(1, { mentions: [ME.id], content: 'hi @dogancan' }) }),
     );
     const bubble = view.getByRole('article').querySelector('[data-bubble]');
-    expect(bubble?.className).toContain('border-l-marker');
-    expect(bubble?.className).toContain('border-accent-text');
+    expect(bubble?.className).not.toContain('border-l-marker');
+    expect(bubble?.className).not.toContain('border-accent-text');
     expect(view.getByRole('article').textContent).toContain('You were mentioned');
-    expect(view.getByText('@dogancan').className).toContain('text-accent-text');
+    const name = view.getByText('@dogancan');
+    expect(name.hasAttribute('data-mention-me')).toBe(true);
+    expect(name.className).toContain('bg-accent');
+    expect(name.className).toContain('text-on-accent');
   });
 
   test("somebody else's mention is highlighted in the text and does not mark the bubble", async () => {
@@ -231,6 +235,7 @@ describe('what a row shows', () => {
     const bubble = view.getByRole('article').querySelector('[data-bubble]');
     expect(bubble?.className).not.toContain('border-accent-text');
     expect(view.getByText('@bob').className).toContain('text-accent-text');
+    expect(view.getByText('@bob').hasAttribute('data-mention-me')).toBe(false);
   });
 
   test('a mention of a person the workspace does not list is plain text', async () => {

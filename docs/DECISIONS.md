@@ -5126,6 +5126,11 @@ designed for it below rather than the objection being forgotten.
    the side; the edge carries it too, so colour is not the only signal.
 5. **A mention of you marks the bubble** with a 2px `accent-text` edge instead of tinting the row, and
    still says so to a screen reader; a failed send marks it with the danger edge, as before.
+   *Amended 2026-10-13 by the owner:* the edge read as a quotation, and a quotation was drawn with an
+   edge too. A mention of you now fills **your own name** in the text (`accent` with `on-accent`), the
+   bubble carries no edge, and the screen-reader words stay; a quotation is a recessed block on
+   `surface-050` with a quote glyph and no edge. Rejected: tinting the whole bubble, which is what
+   your own messages already wear (`accent-subtle`), so a mention in a DM to yourself would vanish.
 6. **No hover tint.** The bubble is the shape; the row under the pointer only fades in its actions,
    which sit on the bubble's inner top corner — except your own message on a narrow window, where
    they sit on its outer corner: a short bubble is narrower than they are, and from the inner corner

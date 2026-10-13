@@ -200,7 +200,6 @@ const MessageRowView = ({
               'relative min-w-0 max-w-5/6 rounded-2xl px-3 py-2',
               outgoing ? 'bg-accent-subtle' : 'bg-surface-200',
               (dimmed || deleted) && 'text-ink-muted',
-              mentionsMe && 'border-l-marker border-accent-text',
               failed && 'border-l-marker border-danger',
               editing && 'w-full max-w-full',
             )}
@@ -210,7 +209,7 @@ const MessageRowView = ({
             ) : deleted ? (
               <p>{t('message.deleted')}</p>
             ) : (
-              renderContent(message.content, { mentioned })
+              renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
             )}
             {!deleted && message.editedAt !== null && (
               <span

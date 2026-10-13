@@ -241,6 +241,14 @@ describe('markdown', () => {
     expect(body(view).querySelector('blockquote')?.textContent).toBe('quoted');
   });
 
+  test('a quotation is a block with a quote glyph, not an edge — an edge is what a mention looked like', async () => {
+    const view = await mount('> quoted');
+    const quote = body(view).querySelector('blockquote');
+    expect(quote?.className).not.toContain('border-l');
+    expect(quote?.className).toContain('rounded-md');
+    expect(quote?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  });
+
   test('a bulleted list, and a numbered one that keeps its first number', async () => {
     const view = await mount('- a\n- b\n\n3. c\n4. d');
     expect(body(view).querySelectorAll('ul > li')).toHaveLength(2);
