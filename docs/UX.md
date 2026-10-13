@@ -189,6 +189,8 @@ they were.
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
 - **Reactions** sit below the content, above the thread affordance.
+- **Save for later** sits beside React on any message the person can read (D-128): marked at once,
+  put back and said with Retry if the server refuses; a saved message's mark is filled.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
 
 ### 3.1. Delivery state

@@ -107,5 +107,7 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     // What the sidebar asks for on every signed-in screen.
     members: () => Promise.resolve(someMembers()),
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),
+    // What every message asks, to mark the saved ones (D-128).
+    savedIds: () => Promise.resolve([]),
     ...overrides,
   });

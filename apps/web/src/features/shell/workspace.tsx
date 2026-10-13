@@ -18,6 +18,9 @@ interface WorkspaceScope {
 
 const WorkspaceContext = createContext<WorkspaceScope | null>(null);
 
+/** The workspace, or null for a part drawn outside one (the gallery, a row on its own). */
+export const useWorkspaceIfAny = (): WorkspaceScope | null => useContext(WorkspaceContext);
+
 export const useWorkspace = (): WorkspaceScope => {
   const scope = useContext(WorkspaceContext);
   if (scope === null) throw new Error('useWorkspace was called outside a WorkspaceScope');

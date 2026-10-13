@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: Save for later on a message (D-128, part of #484)
+
+- Beside React on any message: marked at once, put back and said with Retry when refused, and kept
+  in step across tabs by `SAVED_UPDATED`.
+
 ### Feature — 2026-10-14: saved items, the API (D-128, part of #484)
 
 - `PUT`/`DELETE /api/messages/:id/saved` save a message, move it to In progress, Archived or

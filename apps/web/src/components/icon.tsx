@@ -23,6 +23,8 @@
 import {
   AtSign,
   Bell,
+  Bookmark,
+  BookmarkCheck,
   Bold,
   BellOff,
   Check,
@@ -92,6 +94,8 @@ const glyphs = {
   settings: Settings,
   preferences: Settings2,
   notifications: Bell,
+  save: Bookmark,
+  saved: BookmarkCheck,
   'deep-work': BellOff,
   expand: ChevronRight,
   collapse: ChevronDown,

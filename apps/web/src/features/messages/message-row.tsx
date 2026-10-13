@@ -35,6 +35,7 @@ import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
+import { SaveToggle } from '../saved/save-toggle';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -232,6 +233,7 @@ const MessageRowView = ({
                 )}
               >
                 <ReactMenu message={message} meId={meId} />
+                <SaveToggle message={message} />
                 {actions}
                 {mine && <OwnActions message={message} />}
               </div>
