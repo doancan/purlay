@@ -111,6 +111,8 @@ export const ErrorCode = Type.Union([
    * may be retried. Never told as absence (D-109).
    */
   Type.Literal('STORAGE_UNAVAILABLE'),
+  /** This server has no Web Push keys: push is switched off by its operator (#78). */
+  Type.Literal('PUSH_UNAVAILABLE'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -162,6 +164,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   INTERNAL: 500,
   STORAGE_UNAVAILABLE: 503,
+  PUSH_UNAVAILABLE: 503,
   DATABASE_UNAVAILABLE: 503,
 };
 

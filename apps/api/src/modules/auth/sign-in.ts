@@ -10,6 +10,7 @@ import type { Config } from '../../platform/config';
 import { AppError } from '../../platform/errors';
 import { publishSessionsEnded, type EventBus } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
+import { forgetSessions } from '../push/subscriptions';
 import { atomicallyOn } from '../../platform/transactions';
 import { authorizeUrl, type GitHubClient } from './github';
 import { resolveIdentity } from './identity';
@@ -134,7 +135,13 @@ export const signOut = async (
   token: string | undefined,
 ): Promise<void> => {
   if (token === undefined) return;
-  const revoked = await revokeSession(database, clock, token);
+  // With its devices, in one transaction: a shared computer does not go on showing the last
+  // person's notices, and a sign-out that failed half-way is retried whole (D-126).
+  const revoked = await atomicallyOn(database)(async (transaction) => {
+    const id = await revokeSession(transaction, clock, token);
+    if (id !== undefined) await forgetSessions(transaction, [id]);
+    return id;
+  });
   // After the revocation is written, so a socket is never closed for a sign-out
   // that did not happen (#194).
   if (revoked !== undefined) await publishSessionsEnded(bus, clock, [revoked]);
@@ -145,5 +152,10 @@ export const signOutEverywhere = async (
   { database, clock, bus }: SignOutDependencies,
   userId: string,
 ): Promise<void> => {
-  await publishSessionsEnded(bus, clock, await revokeAllSessions(database, clock, userId));
+  const revoked = await atomicallyOn(database)(async (transaction) => {
+    const ids = await revokeAllSessions(transaction, clock, userId);
+    await forgetSessions(transaction, ids);
+    return ids;
+  });
+  await publishSessionsEnded(bus, clock, revoked);
 };

@@ -160,6 +160,18 @@ export interface Notifications {
   workspace_id: string;
 }
 
+export interface PushSubscriptions {
+  auth: string;
+  created_at: Generated<Timestamp>;
+  endpoint: string;
+  failures: Generated<number>;
+  id: Generated<string>;
+  p256dh: string;
+  server_key: string;
+  session_id: string;
+  user_id: string;
+}
+
 export interface Reactions {
   created_at: Generated<Timestamp>;
   emoji: string;
@@ -189,6 +201,7 @@ export interface Users {
   github_id: Int8 | null;
   id: Generated<string>;
   last_seen_at: Timestamp | null;
+  locale: Generated<string>;
   updated_at: Generated<Timestamp>;
   username: string;
 }
@@ -238,6 +251,7 @@ export interface DB {
   mentions: Mentions;
   messages: Messages;
   notifications: Notifications;
+  push_subscriptions: PushSubscriptions;
   reactions: Reactions;
   sessions: Sessions;
   users: Users;

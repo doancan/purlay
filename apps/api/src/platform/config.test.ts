@@ -5,6 +5,7 @@
  * needs it (`CONFIG.md`). These check that it does — and that it fails usefully,
  * naming every problem at once and never quoting a credential back.
  */
+import { createECDH } from 'node:crypto';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { tlsFromEnvironment } from '@purlay/db';
@@ -445,6 +446,61 @@ describe('the directory store (D-117)', () => {
     ).toContain('STORAGE_DIRECTORY: one store or the other');
     expect(loadConfig({ ...valid, STORAGE_DIRECTORY: '/tmp/files' }).STORAGE_DIRECTORY).toBe(
       '/tmp/files',
+    );
+  });
+});
+
+/** A real pair, base64url: the 65-byte uncompressed point and its 32-byte scalar. */
+const aVapidPair = (): { publicKey: string; privateKey: string } => {
+  const pair = createECDH('prime256v1');
+  pair.generateKeys();
+  return {
+    publicKey: pair.getPublicKey().toString('base64url'),
+    privateKey: pair.getPrivateKey().toString('base64url'),
+  };
+};
+
+describe('Web Push keys (#78)', () => {
+  const one = aVapidPair();
+  const other = aVapidPair();
+  const vapid = {
+    VAPID_PUBLIC_KEY: one.publicKey,
+    VAPID_PRIVATE_KEY: one.privateKey,
+    VAPID_SUBJECT: 'mailto:ops@example.com',
+  };
+
+  test('are all three or none: none is push switched off, in production too', () => {
+    expect(loadConfig(valid).VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(() => loadConfig(production)).not.toThrow();
+    expect(loadConfig({ ...valid, ...vapid }).VAPID_SUBJECT).toBe('mailto:ops@example.com');
+    expect(refusal({ ...valid, VAPID_PUBLIC_KEY: vapid.VAPID_PUBLIC_KEY })).toContain(
+      'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: set all three, or none',
+    );
+  });
+
+  test('have the shapes a push service accepts', () => {
+    expect(refusal({ ...valid, ...vapid, VAPID_PUBLIC_KEY: 'short' })).toContain(
+      'VAPID_PUBLIC_KEY',
+    );
+    expect(refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: 'A'.repeat(44) })).toContain(
+      'VAPID_PRIVATE_KEY',
+    );
+    expect(refusal({ ...valid, ...vapid, VAPID_SUBJECT: 'ops@example.com' })).toContain(
+      'VAPID_SUBJECT',
+    );
+    expect(
+      loadConfig({ ...valid, ...vapid, VAPID_SUBJECT: 'https://chat.example.com' }).VAPID_SUBJECT,
+    ).toBe('https://chat.example.com');
+  });
+
+  test('are one pair: halves of two pairs, or a scalar that is no key, refuse to start', () => {
+    const mixed = refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: other.privateKey });
+    expect(mixed).toContain('VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY: not one pair');
+    // Never the values: the private key is a secret.
+    expect(mixed).not.toContain(other.privateKey);
+    // Zero is not a private key, though it has the shape of one.
+    expect(refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: 'A'.repeat(43) })).toContain(
+      'VAPID_PRIVATE_KEY: not a P-256 private key',
     );
   });
 });

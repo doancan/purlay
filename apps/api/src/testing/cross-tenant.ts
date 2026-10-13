@@ -395,6 +395,12 @@ export const WORKSPACE_WIDE_READS: readonly string[] = [
 /** Endpoints with no tenant to cross, each with the reason. */
 export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
+  'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
+  'GET /api/push/key': 'the server’s public push key, the same for everyone signed in (D-126)',
+  'POST /api/push/subscriptions':
+    'subscribes the caller’s own device and names no workspace (D-126)',
+  'POST /api/push/subscriptions/remove':
+    'removes only the caller’s own device; another person’s endpoint is the same 204 and stays (D-126)',
   'GET /api/workspaces': 'lists the caller’s own memberships and names no workspace',
   'POST /api/workspaces': 'creates a workspace; there is nothing yet to be outside of',
   'GET /api/images':

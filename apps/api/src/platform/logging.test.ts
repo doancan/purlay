@@ -42,8 +42,8 @@ describe('the never-logged list', () => {
 
   test('it holds everything ARCHITECTURE.md §10 says is never logged', () => {
     // Session tokens, the encrypted integration token, message content, email
-    // addresses — and the carriers a token arrives in. Removing one fails here,
-    // not in an incident.
+    // addresses, a device's push address and keys (D-126) — and the carriers a token
+    // arrives in. Removing one fails here, not in an incident.
     for (const key of [
       'token',
       'cookie',
@@ -51,6 +51,9 @@ describe('the never-logged list', () => {
       'access_token_encrypted',
       'content',
       'email',
+      'endpoint',
+      'p256dh',
+      'auth',
     ]) {
       expect({ key, listed: NEVER_LOGGED.has(key) }).toEqual({ key, listed: true });
     }

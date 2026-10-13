@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: a device can be subscribed for Web Push (D-126, part of #78)
+
+- Migration 0024: `push_subscriptions` (a person's devices, tied to the session they were made in) and
+  `users.locale`. `GET /api/push/key`, `POST /api/push/subscriptions` and `…/remove`,
+  `PUT /api/me/locale`; signing out deletes the session's devices. `VAPID_*` configure it, all three
+  or none — none is push off (`PUSH_UNAVAILABLE`). Nothing is pushed yet: the delivery follows.
+
 ### Specification — 2026-10-13: Phase 2 begins while Phase 1 waits on its deployment (D-125)
 
 - The owner started `v0.3.0` work before `v0.2.0`'s exit is demonstrated; the order is in D-125, and

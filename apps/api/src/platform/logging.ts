@@ -36,6 +36,10 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'password',
   'secret',
   'code',
+  // A device's push subscription: the address that reaches it, and the keys that encrypt to it (D-126).
+  'endpoint',
+  'p256dh',
+  'auth',
 ]);
 
 const REDACTED = '[redacted]';

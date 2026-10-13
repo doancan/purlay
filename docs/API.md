@@ -76,9 +76,13 @@ without disclosing it. (D-33)
 |:-:|---|---|---|
 | ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
 | ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL`. **Never answers JSON:** a failure is a 302 to the sign-in screen with a reason (below, D-121) |
-| ○ | `POST` | `/auth/logout` | Revokes the current session |
+| ○ | `POST` | `/auth/logout` | Revokes the current session, and the devices subscribed in it stop being told (D-126) |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user plus workspace memberships |
+| ○ | `PUT` | `/api/me/locale` | `{ locale: 'en' \| 'tr' }` (`SetLocaleRequest`) — the language the server writes the caller's notifications in (D-41, D-126); `204` |
+| ○ | `GET` | `/api/push/key` | The server's Web Push public key (`PushKeyResponse`), or `503 PUSH_UNAVAILABLE` where push is off (D-126) |
+| ○ | `POST` | `/api/push/subscriptions` | This device, as its browser's `PushSubscription` gives it, and the caller's language (`PushSubscribeRequest`); `204`. Tied to the caller's live session; an endpoint another person holds moves to the caller only with the same keys, and the answer is the same either way; at most 20 devices a person, the least recently subscribed dropped; a key that is no P-256 point is `400`; `503 PUSH_UNAVAILABLE` where push is off (D-126) |
+| ○ | `POST` | `/api/push/subscriptions/remove` | `{ endpoint }` — this device stops being told; `204` whether or not it was the caller's, and another person's stays theirs (D-126) |
 | ② | `POST` | `/api/me/erase` | Anonymises the account and revokes every session. **Never cascades to messages** (D-27) |
 
 Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
