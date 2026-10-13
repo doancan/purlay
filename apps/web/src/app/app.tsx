@@ -26,14 +26,15 @@ import { AppSkeleton } from './skeleton';
 const Frame = (): React.JSX.Element => {
   const { t } = useI18n();
   const { pathname } = useRoute();
-  const first = useRef(true);
+  // The address focus was last decided for. A navigation is the address differing from it — not
+  // the effect running a second time, which React may do for one address (StrictMode runs every
+  // effect, its cleanup, and the effect again).
+  const settled = useRef(pathname);
   const navigated = useRef(false);
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    if (settled.current === pathname) return;
+    settled.current = pathname;
     navigated.current = true;
     document.getElementById(MAIN_ID)?.focus();
   }, [pathname]);

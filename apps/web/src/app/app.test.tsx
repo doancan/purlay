@@ -7,6 +7,7 @@
  * is not reachable unless it was asked for.
  */
 import { installDom } from '../testing/dom';
+import { StrictMode } from 'react';
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent, render } from '@testing-library/react';
 import { expectNoAxeViolations } from '../testing/axe';
@@ -129,6 +130,32 @@ describe('focus follows navigation', () => {
   test('is not moved on first render, where the browser has already done it', async () => {
     await mounted('/sign-in');
     expect(document.activeElement === document.body).toBe(true);
+  });
+
+  // StrictMode runs the frame's effect, its cleanup, and the effect again on the first render, with
+  // the address unchanged. Counting runs took the second for a navigation, and the first Tab on
+  // the page then went past the skip link from a focused main.
+  test('is not moved on first render when the effect runs twice for one address', async () => {
+    render(
+      <StrictMode>
+        <App {...worldPorts('/sign-in')} />
+      </StrictMode>,
+    );
+    await settle();
+    expect(document.activeElement === document.body).toBe(true);
+  });
+
+  test('moves to main when the address changes, with the effects run twice', async () => {
+    const { getByRole } = render(
+      <StrictMode>
+        <App {...worldPorts('/nowhere')} />
+      </StrictMode>,
+    );
+    await settle();
+    expect(document.activeElement === document.body).toBe(true);
+    fireEvent.click(getByRole('link', { name: 'Go to your channels' }));
+    await settle();
+    expect(document.activeElement === getByRole('main')).toBe(true);
   });
 
   test('moves to main when the address changes', async () => {
