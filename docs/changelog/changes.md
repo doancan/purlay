@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: a group's details (D-127, #486)
+
+- A group's title opens its details: its people, you first, and New conversation with these
+  people…, which opens New message with them already picked.
+
 ### Feature — 2026-10-13: a group is its people everywhere it is named (D-127, part of #486)
 
 - The palette, search's choice of where to look, the inbox ("wrote to the conversation"), mention

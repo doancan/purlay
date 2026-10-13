@@ -230,3 +230,70 @@ describe('a group’s title', () => {
     view.unmount();
   });
 });
+
+describe('a group’s details', () => {
+  const visitGroup = async (api: Partial<Api> = {}): Promise<View> => {
+    const view = await renderApp(<Outlet />, {
+      path: `/w/acme/c/${GROUP}`,
+      api: aSignedInApi({
+        channels: () => Promise.resolve([...someChannels(), aGroup()]),
+        messages: () => Promise.resolve({ data: [], nextCursor: null }),
+        ...api,
+      }),
+    });
+    await settle();
+    return view;
+  };
+
+  test('open from its title, and list its people, the person themselves first', async () => {
+    const view = await visitGroup();
+    const names = `${ALICE.displayName}, ${BOB.displayName}`;
+    await person().click(view.getByRole('button', { name: names }));
+    const dialog = view.getByRole('dialog');
+    const people = Array.from(dialog.querySelectorAll('li')).map((row) => row.textContent);
+    expect(people).toEqual([
+      expect.stringContaining(ME.displayName) as unknown as string,
+      expect.stringContaining(ALICE.displayName) as unknown as string,
+      expect.stringContaining(BOB.displayName) as unknown as string,
+    ]);
+    expect(dialog.textContent).toContain('A conversation’s people never change.');
+    await expectNoAxeViolations(dialog);
+    view.unmount();
+  });
+
+  test('start a new conversation from its people, already picked', async () => {
+    const asked: (readonly string[])[] = [];
+    const view = await visitGroup({
+      openConversation: (_workspace, userIds) => {
+        asked.push(userIds);
+        return Promise.resolve(aGroup());
+      },
+    });
+    await person().click(
+      view.getByRole('button', { name: `${ALICE.displayName}, ${BOB.displayName}` }),
+    );
+    await person().click(view.getByRole('button', { name: 'New conversation with these people…' }));
+    await settle();
+    const picker = view.getByRole('dialog');
+    expect(picker.textContent).toContain(`To: ${ALICE.displayName}, ${BOB.displayName}`);
+    await person().click(view.getByRole('button', { name: 'Start conversation' }));
+    await settle();
+    expect(asked).toEqual([[ALICE.id, BOB.id]]);
+    view.unmount();
+  });
+
+  test('a conversation of two has none: its title is not a button', async () => {
+    const pair = aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE });
+    const view = await renderApp(<Outlet />, {
+      path: `/w/acme/c/${IDS.dm}`,
+      api: aSignedInApi({
+        channels: () => Promise.resolve([...someChannels(), pair]),
+        messages: () => Promise.resolve({ data: [], nextCursor: null }),
+      }),
+    });
+    await settle();
+    const heading = view.getByRole('heading', { level: 1 });
+    expect(heading.querySelector('button')).toBeNull();
+    view.unmount();
+  });
+});

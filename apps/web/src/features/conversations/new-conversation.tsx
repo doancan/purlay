@@ -26,9 +26,12 @@ const OTHERS_MAX = CONVERSATION_PEOPLE_MAX - 1;
 export const NewConversationDialog = ({
   open,
   onOpenChange,
+  startWith = [],
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  /** People already picked when it opens: a group's, to start a larger conversation from (D-127). */
+  readonly startWith?: readonly string[];
 }): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
@@ -38,7 +41,7 @@ export const NewConversationDialog = ({
   const { navigate } = useRoute();
   const members = useMembers(workspace.id);
   const [filter, setFilter] = useState('');
-  const [picked, setPicked] = useState<readonly string[]>([]);
+  const [picked, setPicked] = useState<readonly string[]>(startWith);
   const [starting, setStarting] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -64,7 +67,7 @@ export const NewConversationDialog = ({
   const close = (next: boolean): void => {
     if (!next) {
       setFilter('');
-      setPicked([]);
+      setPicked(startWith);
       setFailed(null);
     }
     onOpenChange(next);
