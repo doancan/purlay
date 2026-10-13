@@ -182,6 +182,12 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: { kind: 'none', reason: 'creates a channel; it returns only the one created' },
   },
   'GET /api/channels/:channelId': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'PATCH /api/channels/:channelId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ topic: 'crossing' }),
+    visibility: CHANNEL,
+  },
+  'GET /api/channels/:channelId/members': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/members': {
     refusal: 'CHANNEL_NOT_FOUND',

@@ -103,9 +103,14 @@ export type UpdateMemberRoleRequest = Static<typeof UpdateMemberRoleRequest>;
 
 // ── Channels ────────────────────────────────────────────────────────────────
 
+/** A channel's name, as it is created and as it is renamed: one rule for both. */
+const ChannelName = Type.String({ minLength: 1, maxLength: 64, format: 'name' });
+/** What a channel is for, in a line. */
+const ChannelTopic = Type.String({ format: 'plain-text' });
+
 export const CreateChannelRequest = FromClient({
-  name: Type.String({ minLength: 1, maxLength: 64, format: 'name' }),
-  topic: Type.Optional(Type.String({ format: 'plain-text' })),
+  name: ChannelName,
+  topic: Type.Optional(ChannelTopic),
   /** Public unless asked: a private channel is seen only by its members (D-104). */
   type: Type.Optional(Type.Union([Type.Literal('public'), Type.Literal('private')])),
 });
@@ -117,6 +122,31 @@ export type CreateChannelRequest = Static<typeof CreateChannelRequest>;
  */
 export const AddChannelMemberRequest = FromClient({ userId: Uuid });
 export type AddChannelMemberRequest = Static<typeof AddChannelMemberRequest>;
+
+/**
+ * `PATCH /api/channels/:channelId` — a member of the channel renames it or sets what it is for
+ * (D-123). Each field is optional and only what is sent changes; a `null` topic clears it. The answer
+ * is the channel as the caller now sees it, and the room hears `CHANNEL_UPDATED`.
+ */
+export const UpdateChannelRequest = FromClient({
+  name: Type.Optional(ChannelName),
+  topic: Type.Optional(Type.Union([ChannelTopic, Type.Null()])),
+});
+export type UpdateChannelRequest = Static<typeof UpdateChannelRequest>;
+
+/** Somebody in a channel, and since when. */
+export const ChannelMember = Type.Object({
+  user: User,
+  joinedAt: Type.String({ format: 'date-time' }),
+});
+export type ChannelMember = Static<typeof ChannelMember>;
+
+/**
+ * `GET /api/channels/:channelId/members` — who is in it, first to join first. Not paged, as the
+ * workspace's own list is not: a channel's members are some of the workspace's (D-123).
+ */
+export const ChannelMemberList = Type.Array(ChannelMember);
+export type ChannelMemberList = Static<typeof ChannelMemberList>;
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
@@ -332,6 +362,7 @@ export const AUDIT_ACTIONS = [
   'member.removed',
   'member.joined',
   'channel.created',
+  'channel.renamed',
   'integration.token_set',
   'integration.token_removed',
   'invitation.created',

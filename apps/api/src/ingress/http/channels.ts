@@ -14,7 +14,9 @@ import {
   CreateDirectMessageRequest,
   ReadChannelRequest,
   SetNotificationLevelRequest,
+  UpdateChannelRequest,
   type Channel,
+  type ChannelMemberList,
   type ReadChannelResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -25,6 +27,7 @@ import {
   publishAfterCommit,
   publishChannelAdded,
   publishChannelState,
+  publishChannelUpdated,
   type EventBus,
 } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
@@ -40,6 +43,7 @@ import { openDirectMessage } from '../../modules/channels/direct-messages';
 import { addMember } from '../../modules/channels/members';
 import { markRead } from '../../modules/channels/read-state';
 import { setNotificationLevel } from '../../modules/channels/notification-level';
+import { channelMembers, updateChannel } from '../../modules/channels/settings';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -209,4 +213,46 @@ export const setLevel = async (
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SetNotificationLevelRequest, body);
   await setNotificationLevel(database, context, input.level);
+};
+
+/**
+ * `PATCH /api/channels/:channelId` — a member renames the channel or sets its topic (D-123). The
+ * room hears the new name and topic after the commit, at the row's version; asking for what is
+ * already there is answered and tells nobody.
+ */
+export const changeChannel = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  body: unknown,
+): Promise<Channel> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(UpdateChannelRequest, body);
+  const { channel, update } = await atomicallyOn(database)(
+    async (transaction) => await updateChannel(transaction, clock, context, input),
+  );
+  if (update !== null) {
+    await publishAfterCommit(log, [
+      [
+        publication('CHANNEL_UPDATED', () =>
+          publishChannelUpdated(bus, clock, update, update.version),
+        ),
+      ],
+    ]);
+  }
+  return channel;
+};
+
+/** `GET /api/channels/:channelId/members` — who is in it, for anybody who can see it (D-123). */
+export const listChannelMembers = async (
+  dependencies: ChannelDependencies,
+  request: Request,
+  channelId: string,
+): Promise<ChannelMemberList> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  return [...(await channelMembers(database, context))];
 };

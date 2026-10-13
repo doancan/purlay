@@ -318,6 +318,25 @@ export const AccessRevokedFrame = Type.Object({
 });
 
 /**
+ * A channel's name or topic changed (D-123). The whole of both, so a client replaces what it holds;
+ * on the channel's topic, at the channel row's version, and a client drops one older than what it
+ * has applied — two renames published from different requests can arrive in either order.
+ */
+export const ChannelUpdatedFrame = Type.Object({
+  event: Type.Literal('CHANNEL_UPDATED'),
+  data: Type.Object(
+    {
+      channelId: Uuid,
+      name: Type.String({ maxLength: 64 }),
+      topic: Type.Union([Type.String(), Type.Null()]),
+    },
+    { additionalProperties: false },
+  ),
+  ...stateVersion,
+  ...envelope,
+});
+
+/**
  * Somebody is typing in a channel, for `ttlMs` from when this arrives — unless their message
  * arrives first, which ends it. On the channel's topic; the typist's own sockets hear it too, and
  * a client shows nobody themselves.
@@ -345,6 +364,7 @@ export const ServerFrame = Type.Union([
   MessageRevisedFrame,
   ChannelStateFrame,
   ChannelAddedFrame,
+  ChannelUpdatedFrame,
   SessionEndedFrame,
   AccessRevokedFrame,
   TypingServerFrame,
@@ -403,8 +423,8 @@ export const parseServerMessage = (text: string): ServerMessage => {
 /**
  * `workspace:{id}` · `channel:{id}` · `user:{id}` · `session:{id}` (`ARCHITECTURE.md` §6).
  *
- * - `channel:` carries a channel's messages to the sockets watching it, and an
- *   `ACCESS_REVOKED` when the channel itself goes away.
+ * - `channel:` carries a channel's messages to the sockets watching it, its name and
+ *   topic (`CHANNEL_UPDATED`), and an `ACCESS_REVOKED` when the channel itself goes away.
  * - `session:` carries the end of one session to every node holding one of its
  *   sockets, which is why revocation goes through the bus rather than a local
  *   call: on several nodes a local call reaches one of them (D-7, D-25).

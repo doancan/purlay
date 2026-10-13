@@ -85,6 +85,7 @@ export interface Channels {
   id: Generated<string>;
   last_message_at: Timestamp | null;
   name: string | null;
+  state_version: Generated<number>;
   topic: string | null;
   type: Generated<ChannelType>;
   updated_at: Generated<Timestamp>;

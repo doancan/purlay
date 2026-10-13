@@ -75,6 +75,21 @@ export const publishChannelRevoked = async (
   });
 };
 
+/** A channel's name or topic changed: everyone watching it hears both, at the row's version (D-123). */
+export const publishChannelUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  data: { readonly channelId: string; readonly name: string; readonly topic: string | null },
+  version: number,
+): Promise<void> => {
+  await bus.publish(channelTopic(data.channelId), {
+    event: 'CHANNEL_UPDATED',
+    data: { channelId: data.channelId, name: data.name, topic: data.topic },
+    version,
+    ts: clock.now().getTime(),
+  });
+};
+
 /**
  * These sessions were signed out: every socket each holds, on any node, is told and
  * closed. Published after the revocation is written, so a socket is never closed

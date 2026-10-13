@@ -1,0 +1,284 @@
+/**
+ * A channel's settings (D-123), driven through real requests: what each answers,
+ * what it writes, and what it tells the sockets watching — read off the application's own bus.
+ *
+ * Crossing a tenant and the visibility axis is not here (`cross-tenant.integration.test.ts`,
+ * `channel-visibility.integration.test.ts`): each is a table the build checks against `API.md`.
+ */
+import { afterAll, describe, expect, test } from 'bun:test';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import type { ServerFrame, Topic } from '@purlay/types';
+import { createApp } from './app';
+import { testDependencies, NOW } from '../../testing/doubles';
+import { fixedClock } from '../../platform/clock';
+import { channelTopic } from '../../platform/events';
+import { inProcessBackplane, type Backplane } from '../../realtime/bus';
+import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { aUniqueSlug } from '../../testing/users';
+
+afterAll(async () => {
+  await closeIntegrationDatabase();
+});
+
+const clock = fixedClock(NOW);
+
+/** Everything published, in order: the real bus, with a window onto it. */
+const aWatchedBackplane = (): {
+  readonly backplane: Backplane;
+  readonly published: [Topic, ServerFrame][];
+} => {
+  const inner = inProcessBackplane();
+  const published: [Topic, ServerFrame][] = [];
+  return {
+    published,
+    backplane: {
+      node: (deliver, log): ReturnType<Backplane['node']> => {
+        const real = inner.node(deliver, log);
+        return {
+          ...real,
+          publish: async (topic, frame): Promise<void> => {
+            published.push([topic, frame]);
+            await real.publish(topic, frame);
+          },
+        };
+      },
+    },
+  };
+};
+
+interface World {
+  readonly db: Executor;
+  readonly owner: SignedInUser;
+  readonly admin: SignedInUser;
+  readonly bob: SignedInUser;
+  readonly workspaceId: string;
+  /** Public; the owner and Bob are in it. */
+  readonly channelId: string;
+  readonly published: [Topic, ServerFrame][];
+  readonly call: (
+    method: string,
+    path: string,
+    as: SignedInUser,
+    body?: unknown,
+  ) => Promise<Response>;
+}
+
+const aWorld = async (db: Executor): Promise<World> => {
+  const { backplane, published } = aWatchedBackplane();
+  const app = createApp(testDependencies({ database: db, clock, backplane }));
+  const call: World['call'] = async (method, path, as, body) =>
+    await app.handle(
+      new Request(`https://purlay.test${path}`, {
+        method,
+        headers: {
+          cookie: as.cookie,
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    );
+  const owner = await aSignedInUser(db, clock, 'set-owner');
+  const admin = await aSignedInUser(db, clock, 'set-admin');
+  const bob = await aSignedInUser(db, clock, 'set-bob');
+  const slug = aUniqueSlug('set');
+  const workspace = await call('POST', '/api/workspaces', owner, { name: slug, slug });
+  const workspaceId = ((await workspace.json()) as { id: string }).id;
+  await db
+    .insertInto('workspace_members')
+    .values([
+      { workspace_id: workspaceId, user_id: admin.userId, role: 'admin', joined_at: NOW },
+      { workspace_id: workspaceId, user_id: bob.userId, role: 'member', joined_at: NOW },
+    ])
+    .execute();
+  const channel = await call('POST', `/api/workspaces/${workspaceId}/channels`, owner, {
+    name: 'general',
+  });
+  expect(channel.status).toBe(201);
+  const channelId = ((await channel.json()) as { id: string }).id;
+  expect((await call('POST', `/api/channels/${channelId}/join`, bob)).status).toBe(200);
+  published.splice(0);
+  return { db, owner, admin, bob, workspaceId, channelId, published, call };
+};
+
+const trail = async (
+  world: World,
+): Promise<{ action: string; metadata: unknown; target_id: string | null }[]> =>
+  await world.db
+    .selectFrom('audit_log')
+    .select(['action', 'metadata', 'target_id'])
+    .where('workspace_id', '=', world.workspaceId)
+    .where('action', 'like', 'channel.%')
+    .where('action', '!=', 'channel.created')
+    .orderBy('id')
+    .execute();
+
+const aDirectMessage = async (world: World): Promise<string> => {
+  const opened = await world.call('POST', `/api/workspaces/${world.workspaceId}/dms`, world.owner, {
+    userId: world.bob.userId,
+  });
+  expect(opened.status).toBe(201);
+  return ((await opened.json()) as { id: string }).id;
+};
+
+describe('integration: renaming a channel and setting its topic', () => {
+  test('a member renames it: everyone sees the new name, the room hears it at a rising version, and the trail has it', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const renamed = await world.call('PATCH', `/api/channels/${world.channelId}`, world.bob, {
+        name: 'genel-sohbet',
+      });
+      expect(renamed.status).toBe(200);
+      expect(await renamed.json()).toMatchObject({ id: world.channelId, name: 'genel-sohbet' });
+      const seen = await world.call('GET', `/api/channels/${world.channelId}`, world.owner);
+      expect(await seen.json()).toMatchObject({ name: 'genel-sohbet' });
+
+      await world.call('PATCH', `/api/channels/${world.channelId}`, world.owner, {
+        topic: 'Anything that is not a project',
+      });
+      expect(world.published).toEqual([
+        [
+          channelTopic(world.channelId),
+          {
+            event: 'CHANNEL_UPDATED',
+            data: { channelId: world.channelId, name: 'genel-sohbet', topic: null },
+            version: 1,
+            ts: NOW.getTime(),
+          },
+        ],
+        [
+          channelTopic(world.channelId),
+          {
+            event: 'CHANNEL_UPDATED',
+            data: {
+              channelId: world.channelId,
+              name: 'genel-sohbet',
+              topic: 'Anything that is not a project',
+            },
+            version: 2,
+            ts: NOW.getTime(),
+          },
+        ],
+      ]);
+      // The rename, by name; the topic is somebody's words and stays off the trail.
+      expect(await trail(world)).toEqual([
+        {
+          action: 'channel.renamed',
+          metadata: { from: 'general', to: 'genel-sohbet' },
+          target_id: world.channelId,
+        },
+      ]);
+    });
+  });
+
+  test('a null topic clears it; asking for what is there already changes nothing and tells nobody', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const path = `/api/channels/${world.channelId}`;
+      await world.call('PATCH', path, world.owner, { topic: 'x' });
+      const cleared = await world.call('PATCH', path, world.owner, { topic: null });
+      expect(await cleared.json()).toMatchObject({ topic: null });
+      world.published.splice(0);
+
+      for (const body of [{ name: 'general', topic: null }, {}]) {
+        const same = await world.call('PATCH', path, world.owner, body);
+        expect(same.status).toBe(200);
+      }
+      expect(world.published).toEqual([]);
+      expect(await trail(world)).toEqual([]);
+    });
+  });
+
+  test('a name another live channel has, in any case, is 409 CHANNEL_NAME_TAKEN; an archived one’s is free', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const other = await world.call(
+        'POST',
+        `/api/workspaces/${world.workspaceId}/channels`,
+        world.owner,
+        { name: 'random' },
+      );
+      const otherId = ((await other.json()) as { id: string }).id;
+      const path = `/api/channels/${world.channelId}`;
+
+      const taken = await world.call('PATCH', path, world.owner, { name: 'RANDOM' });
+      expect(taken.status).toBe(409);
+      expect(await taken.json()).toMatchObject({ error: { code: 'CHANNEL_NAME_TAKEN' } });
+      expect(world.published).toEqual([]);
+
+      // Its own name in another case is not taken by itself.
+      expect((await world.call('PATCH', path, world.owner, { name: 'General' })).status).toBe(200);
+
+      // Archived (D-9's soft delete), its name is free again.
+      await db.updateTable('channels').set({ deleted_at: NOW }).where('id', '=', otherId).execute();
+      expect((await world.call('PATCH', path, world.owner, { name: 'random' })).status).toBe(200);
+    });
+  });
+
+  test('a name a channel of another workspace has is free here: the check stays inside the workspace', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      // Bob makes a workspace of his own with a channel called `elsewhere`. Were the check not
+      // scoped, its 409 would tell anybody which names other tenants use.
+      const slug = aUniqueSlug('set-other');
+      const theirs = await world.call('POST', '/api/workspaces', world.bob, { name: slug, slug });
+      const theirId = ((await theirs.json()) as { id: string }).id;
+      const made = await world.call('POST', `/api/workspaces/${theirId}/channels`, world.bob, {
+        name: 'elsewhere',
+      });
+      expect(made.status).toBe(201);
+
+      const renamed = await world.call('PATCH', `/api/channels/${world.channelId}`, world.owner, {
+        name: 'elsewhere',
+      });
+      expect(renamed.status).toBe(200);
+    });
+  });
+
+  test('somebody who can see it but is not in it is 403; a direct message is 404; a bad name 400', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const outside = await world.call('PATCH', `/api/channels/${world.channelId}`, world.admin, {
+        topic: 'mine now',
+      });
+      expect(outside.status).toBe(403);
+      expect(await outside.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+
+      const dm = await aDirectMessage(world);
+      const direct = await world.call('PATCH', `/api/channels/${dm}`, world.owner, { name: 'x' });
+      expect(direct.status).toBe(404);
+      expect(await direct.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
+
+      for (const body of [{ name: '' }, { name: 'x'.repeat(65) }, { colour: 'blue' }]) {
+        const bad = await world.call(
+          'PATCH',
+          `/api/channels/${world.channelId}`,
+          world.owner,
+          body,
+        );
+        expect(bad.status).toBe(400);
+      }
+    });
+  });
+});
+
+describe('integration: who is in a channel', () => {
+  test('its members, and nobody who left', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await world.call('POST', `/api/channels/${world.channelId}/join`, world.admin);
+      await db
+        .deleteFrom('channel_members')
+        .where('channel_id', '=', world.channelId)
+        .where('user_id', '=', world.bob.userId)
+        .execute();
+      // Somebody who can see the channel without being in it may ask.
+      const listed = await world.call('GET', `/api/channels/${world.channelId}/members`, world.bob);
+      expect(listed.status).toBe(200);
+      const members = (await listed.json()) as { user: { id: string } }[];
+      // One clock for the whole test, so they joined at the same instant: the order is not asserted.
+      expect(members.map((m) => m.user.id).sort()).toEqual(
+        [world.owner.userId, world.admin.userId].sort(),
+      );
+    });
+  });
+});
