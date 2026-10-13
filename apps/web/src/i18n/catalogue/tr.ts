@@ -346,8 +346,8 @@ export const tr = {
   'upload.remove': '{name}: kaldır',
   'upload.discardFailed': '{name} burada kaldırıldı, ama sunucudan kaldırılamadı.',
   'composer.mention': 'Birini an',
-  'composer.label': '{channel} kanalına mesaj',
-  'composer.placeholder': '{channel} kanalına yaz. Enter gönderir, Shift+Enter yeni satır ekler.',
+  'composer.label': '{channel} için mesaj',
+  'composer.placeholder': '{channel} için yaz',
   'composer.send': 'Gönder',
   'composer.pasted': 'Yapıştırılan metin kod bloğuna dönüştü',
   'composer.tooLong': {

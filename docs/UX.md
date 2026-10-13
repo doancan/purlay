@@ -134,8 +134,8 @@ one a link to GitHub stays a plain link, which the dialog says.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
   their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
-- **Hover controls** are a small raised group on the bubble's inner top corner and never reflow the
-  row; the row itself is not tinted. Only the row under the pointer shows its own: a reply inside a
+- **Hover controls** are a small raised group on the bubble's inner top corner (on a narrow window,
+  your own message's outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply inside a
   thread is a row of its own.
 - **A message that mentions you** has a 2px accent edge on its bubble, and says so to a screen reader.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.

@@ -353,7 +353,7 @@ export const en = {
   'upload.discardFailed': '{name} was removed here, but not from the server.',
   'composer.mention': 'Mention someone',
   'composer.label': 'Message {channel}',
-  'composer.placeholder': 'Write to {channel}. Enter sends, Shift+Enter adds a line.',
+  'composer.placeholder': 'Write to {channel}',
   'composer.send': 'Send',
   'composer.pasted': 'Pasted text became a code block',
   'composer.tooLong': {

@@ -12,8 +12,23 @@ import { expect, test } from './fixtures';
 /** The route of a screen, so a spec says what it means and not where it is. */
 const channelPath = (slug: string, id: string): string => `/w/${slug}/c/${id}`;
 
+/**
+ * How far the widest thing runs past its box: the document, and every region that scrolls on its own.
+ * The feed is one such region, so a row too wide for it scrolls the feed sideways while the document
+ * stays exactly the window's width — measuring the document alone passed with a thread's actions off
+ * the edge. A code block is the one thing meant to scroll sideways, so it and what is inside it are not counted.
+ */
 const horizontalOverflow = async (page: Page): Promise<number> =>
-  await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  await page.evaluate(() => {
+    let widest = document.documentElement.scrollWidth - window.innerWidth;
+    for (const element of document.body.querySelectorAll('*')) {
+      if (element.closest('pre') !== null) continue;
+      const { overflowX } = getComputedStyle(element);
+      if (overflowX !== 'auto' && overflowX !== 'scroll') continue;
+      widest = Math.max(widest, element.scrollWidth - element.clientWidth);
+    }
+    return widest;
+  });
 
 test.describe('at a phone width', () => {
   test.use({ viewport: { width: 390, height: 844 } });
@@ -39,6 +54,22 @@ test.describe('at a phone width', () => {
         `${name} (${path}) is wider than the window`,
       ).toBeLessThanOrEqual(0);
     }
+  });
+
+  test('an open thread keeps its actions inside the feed', async ({ page, signIn, world }) => {
+    // Found by hand: "N replies", Resolve and Collapse on one line are wider than a phone, and the
+    // feed scrolled sideways under the whole conversation. They wrap instead.
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    await page
+      .getByRole('button', { name: /^Open · \d+ repl/ })
+      .first()
+      .click();
+    await expect(page.getByRole('button', { name: 'Collapse' })).toBeVisible();
+    expect(
+      await horizontalOverflow(page),
+      'the open thread is wider than the feed',
+    ).toBeLessThanOrEqual(0);
   });
 
   test('the composer, focused, keeps its hints inside it', async ({ page, signIn, world }) => {
