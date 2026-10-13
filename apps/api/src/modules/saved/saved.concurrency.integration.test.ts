@@ -31,6 +31,17 @@ afterAll(async () => {
   await closeIntegrationDatabase();
 });
 
+/** Whether a statement here is waiting on a lock, asked of the database until one is. */
+const waitingOnALock = async (db: ClonedDatabase['db']): Promise<boolean> => {
+  for (let look = 0; look < 500; look += 1) {
+    const { rows } = await sql<{ count: number }>`
+      select count(*)::int as count from pg_stat_activity
+      where datname = current_database() and wait_event_type = 'Lock'`.execute(db);
+    if ((rows[0]?.count ?? 0) > 0) return true;
+  }
+  return false;
+};
+
 describe('integration: two saves at the bound at once', () => {
   test('one is taken, the other refused', async () => {
     const db = cloned.db;
@@ -86,17 +97,12 @@ describe('integration: two saves at the bound at once', () => {
         (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
       );
 
-    // The second is waiting on the first's lock — or, without one, already finished.
-    let waiting = false;
-    for (let look = 0; look < 200 && !waiting; look += 1) {
-      const { rows } = await sql<{ count: number }>`
-        select count(*)::int as count from pg_stat_activity
-        where datname = current_database() and wait_event_type = 'Lock'`.execute(db);
-      waiting = (rows[0]?.count ?? 0) > 0;
-      const finished = await Promise.race([secondDone.then(() => true), Promise.resolve(false)]);
-      if (finished) break;
-    }
+    // The second is waiting on the first's lock. Asserted, not hoped for: a second that finished
+    // first would have counted without it, and its refusal would prove nothing about the lock.
+    const waited = await waitingOnALock(db);
+    // Let go before asserting, so a failure here does not leave the first transaction open.
     release();
+    expect(waited).toBe(true);
     await firstDone;
     expect(await secondDone).toBe('SAVED_LIMIT');
   });

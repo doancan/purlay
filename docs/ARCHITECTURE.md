@@ -220,7 +220,8 @@ What the shape is for, which the types do not say:
   `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
   version, never its reactions or thread (D-103). A rename or a new topic is `CHANNEL_UPDATED` on the
   channel's topic, at the channel's version; an archive and a leave are `ACCESS_REVOKED`, saying why
-  (D-123). A change of the person's own Deep Work is `DEEP_WORK_UPDATED` on their `user:` topic, so
+  (D-123). A pin or an unpin is `PINS_UPDATED` on the channel's topic, with nothing but the channel in
+  it, and the client reads the pins again (D-130). A change of the person's own Deep Work is `DEEP_WORK_UPDATED` on their `user:` topic, so
   their other tabs draw it (#526); a change of their saved messages is `SAVED_UPDATED` there too, with
   nothing but the workspace in it, and the client reads what it shows again (D-128). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room

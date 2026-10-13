@@ -31,6 +31,7 @@ export type FailureKey =
   | 'failure.tooLarge'
   | 'failure.refused'
   | 'failure.savedLimit'
+  | 'failure.pinsLimit'
   | 'failure.generic';
 
 /** The code of whatever was thrown; anything that is not an `ApiError` is a failure nobody described. */
@@ -67,6 +68,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.refused';
     case 'SAVED_LIMIT':
       return 'failure.savedLimit';
+    case 'PINS_LIMIT':
+      return 'failure.pinsLimit';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':

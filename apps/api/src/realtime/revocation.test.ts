@@ -65,6 +65,7 @@ const everyChannelFrame = (channelId: string): ServerFrame[] => {
       version: 1,
       ts: 1,
     },
+    PINS_UPDATED: { event: 'PINS_UPDATED', data: { channelId }, ts: 1 },
     TYPING: { event: 'TYPING', data: { channelId, userId: 'u', ttlMs: 1 }, ts: 1 },
   };
   return Object.values(samples) as ServerFrame[];

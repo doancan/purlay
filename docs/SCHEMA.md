@@ -828,6 +828,38 @@ Shown only from channels the person can see now, never a deleted message; at mos
 in a workspace. A soft delete keeps the row (hidden); a retention purge cascades it. The account's
 erasure (#83) deletes them: they are a person's own.
 
+### 7.6. `pinned_messages`
+
+A channel's pinned messages (#485, D-130): what its members keep at hand for everyone in it. One row
+per message, whoever pinned it.
+
+```sql
+CREATE TABLE pinned_messages (
+    message_id    UUID PRIMARY KEY,
+    channel_id    UUID NOT NULL,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- The pin is the channel's: it outlives the account of the person who made it.
+    pinned_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+    pinned_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- The message is in this channel, and the channel in this workspace. (I-1, I-4)
+    CONSTRAINT pinned_messages_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT pinned_messages_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_pinned_messages_channel   ON pinned_messages (channel_id, pinned_at DESC);
+CREATE INDEX idx_pinned_messages_workspace ON pinned_messages (workspace_id);
+CREATE INDEX idx_pinned_messages_pinned_by ON pinned_messages (pinned_by);
+```
+
+At most `PINS_MAX` a channel, counted over pins of messages not deleted, under the channel's row
+locked. Deleting the message deletes its pin in the same transaction; a pin left by a delete that
+raced it is hidden, not counted, and still let go by an unpin; a retention purge cascades it.
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -1113,12 +1145,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0025_group_conversations.sql dm_key_form for two to ten people  (I-5, D-127)
 0026_saved_messages.sql      saved_messages  (D-128)
 0027_attachment_channels.sql attachments.channel_id: a channel's files  (I-1, D-129)
+0028_pinned_messages.sql     pinned_messages  (D-130)
 ```
 
-Phase 2 adds `0028_github_feeds.sql`; Phase 2's magic links add `0029_email_auth.sql`.
+Phase 2 adds `0029_github_feeds.sql`; Phase 2's magic links add `0030_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

@@ -147,6 +147,29 @@ describe('integration: who may delete', () => {
     });
   });
 
+  test('its pin goes with it (D-130)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const sent = await post(db, room, 'alice', 'the runbook');
+      await db
+        .insertInto('pinned_messages')
+        .values({
+          message_id: sent.message.id,
+          channel_id: room.channelId,
+          workspace_id: room.workspaceId,
+          pinned_by: room.members['alice']?.userId ?? null,
+        })
+        .execute();
+      await remove(db, room, 'alice', sent.message.id);
+      const pins = await db
+        .selectFrom('pinned_messages')
+        .select('message_id')
+        .where('message_id', '=', sent.message.id)
+        .execute();
+      expect(pins).toEqual([]);
+    });
+  });
+
   test.each(['owner', 'admin'] as const)('a workspace %s, for somebody else', async (role) => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

@@ -17,6 +17,7 @@
  */
 import type { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query';
 import type {
+  PinList,
   Channel,
   ChannelState,
   Message,
@@ -119,11 +120,33 @@ export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
  * view — so a reaction or a resolution cannot be right in one place and stale in
  * another. A list that does not hold it is left alone.
  */
+/**
+ * A pinned message changed — its words, its reactions, its thread: the pins hold the whole message
+ * (D-130), so it changes there too, where it is held, without reading the list again.
+ */
+const patchPins = (
+  client: QueryClient,
+  messageId: string,
+  edit: (message: Message) => Message,
+): void => {
+  for (const [key, pins] of client.getQueriesData<PinList>({ queryKey: families.pins })) {
+    if (pins?.some((pin) => pin.message.id === messageId) !== true) continue;
+    client.setQueryData<PinList>(
+      key,
+      pins.map((pin) =>
+        pin.message.id === messageId ? { ...pin, message: edit(pin.message) } : pin,
+      ),
+    );
+    askAgainIfOnItsWay(client, key);
+  }
+};
+
 export const patchMessage = (
   client: QueryClient,
   messageId: string,
   edit: (message: Message) => Message,
 ): void => {
+  patchPins(client, messageId, edit);
   for (const [key, data] of messageLists(client)) {
     if (!hasMessage(data, messageId)) continue;
     client.setQueryData<Pages>(
@@ -225,8 +248,19 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
-  // A deleted message's files leave the list (D-129); whether it had any, only the list knows.
-  if (revision.deletedAt !== null) readAgain(client, keys.files(revision.channelId));
+  // A deleted message's files leave the list (D-129), and its pin the pins (D-130); whether it had
+  // either, only the lists know.
+  if (revision.deletedAt !== null) {
+    readAgain(client, keys.files(revision.channelId));
+    readAgain(client, keys.pins(revision.channelId));
+  } else {
+    patchPins(client, id, (m) => ({
+      ...m,
+      content: revision.content,
+      editedAt: revision.editedAt,
+      mentions: [...revision.mentions],
+    }));
+  }
   const deletedRoot = revision.deletedAt !== null && revision.parentId === null;
   for (const [key, data] of messageLists(client)) {
     const held = data.pages.flatMap((page) => page.data).find((m) => m.id === id);
@@ -336,6 +370,7 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
     client.removeQueries({ queryKey: keys.messages(id) });
     client.removeQueries({ queryKey: keys.channelMembers(id) });
     client.removeQueries({ queryKey: keys.files(id) });
+    client.removeQueries({ queryKey: keys.pins(id) });
   }
   // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
   client.removeQueries({

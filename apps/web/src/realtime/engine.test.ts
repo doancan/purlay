@@ -979,6 +979,17 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(stale(WS)).toBe(true);
     expect(stale(IDS.browse)).toBe(false);
   });
+
+  test('a channel’s pins changed are read again, in that channel only (D-130)', () => {
+    const w = world();
+    w.client.setQueryData(keys.pins(CH), []);
+    w.client.setQueryData(keys.pins(CH2), []);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'PINS_UPDATED', data: { channelId: CH }, ts: T0 }));
+    expect(w.client.getQueryState(keys.pins(CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.pins(CH2))?.isInvalidated).toBe(false);
+  });
 });
 
 describe('watching channels', () => {
@@ -1450,8 +1461,10 @@ describe('what happened between a list being read and the channel being subscrib
     w.open();
     w.client.setQueryData(keys.files(CH), { pages: [], pageParams: [] });
     w.client.setQueryData(keys.files(OTHER_CH), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.pins(CH), []);
     answerAll(w);
     expect(w.client.getQueryState(keys.files(CH))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.pins(CH))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.files(OTHER_CH))?.isInvalidated).toBe(false);
   });
 

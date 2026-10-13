@@ -522,6 +522,7 @@ export const createEngine = (options: EngineOptions): Engine => {
             readAgain(client, keys.messages(channelId));
             // A file sent, or its message deleted, in the gap is in no frame either (D-129).
             readAgain(client, keys.files(channelId));
+            readAgain(client, keys.pins(channelId));
           }
           // Threads are cached by their root, which names no channel: every one that is held.
           readAgain(client, families.thread);
@@ -614,6 +615,10 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       case 'SESSION_ENDED':
         options.onSessionEnded();
+        return;
+      case 'PINS_UPDATED':
+        // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
+        readAgain(client, keys.pins(frame.data.channelId));
         return;
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.

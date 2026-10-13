@@ -355,6 +355,17 @@ export const SavedUpdatedFrame = Type.Object({
 });
 
 /**
+ * A channel's pins changed (D-130): a message pinned or let go, by anyone in it. On the channel's
+ * topic; it carries no pin, and a client reads the pins again — two changes heard in either order
+ * leave the same list.
+ */
+export const PinsUpdatedFrame = Type.Object({
+  event: Type.Literal('PINS_UPDATED'),
+  data: Type.Object({ channelId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A channel's name or topic changed (D-123). The whole of both, so a client replaces what it holds;
  * on the channel's topic, at the channel row's version, and a client drops one older than what it
  * has applied — two renames published from different requests can arrive in either order.
@@ -418,6 +429,7 @@ export const ServerFrame = Type.Union([
   AccessRevokedFrame,
   DeepWorkUpdatedFrame,
   SavedUpdatedFrame,
+  PinsUpdatedFrame,
   TypingServerFrame,
   WorkspaceUpdatedFrame,
   PongFrame,
