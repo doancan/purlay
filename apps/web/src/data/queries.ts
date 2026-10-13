@@ -22,6 +22,7 @@ import type {
   MessagePage,
   NotificationPage,
   WorkspaceMember,
+  ChannelMember,
 } from '@purlay/types';
 import { SEARCH_QUERY_MIN } from '@purlay/types';
 import { useApi } from './api-provider';
@@ -47,6 +48,15 @@ export const useMembers = (workspaceId: string): UseQueryResult<WorkspaceMember[
   return useQuery({
     queryKey: keys.members(workspaceId),
     queryFn: ({ signal }) => api.members(workspaceId, signal),
+  });
+};
+
+/** Who is in a channel (D-123): read when the channel's details open, again after a change. */
+export const useChannelMembers = (channelId: string): UseQueryResult<ChannelMember[]> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.channelMembers(channelId),
+    queryFn: ({ signal }) => api.channelMembers(channelId, signal),
   });
 };
 

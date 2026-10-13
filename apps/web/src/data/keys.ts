@@ -10,6 +10,7 @@
 export const keys = {
   me: ['me'] as const,
   members: (workspaceId: string) => ['members', workspaceId] as const,
+  channelMembers: (channelId: string) => ['channel-members', channelId] as const,
   channels: (workspaceId: string) => ['channels', workspaceId] as const,
   messages: (channelId: string) => ['messages', channelId] as const,
   thread: (messageId: string) => ['thread', messageId] as const,

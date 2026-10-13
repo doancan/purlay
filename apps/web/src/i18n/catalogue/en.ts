@@ -246,6 +246,21 @@ export const en = {
   'header.questions': 'Open questions',
   'header.noTopic': 'No topic yet',
 
+  // ── Channel details ─────────────────────────────────────────────────────
+  'details.title': 'Details of #{name}',
+  'details.description': 'Its name and topic, who is in it, and what you are told about.',
+  'details.name': 'Name',
+  'details.topic': 'Topic',
+  'details.save': 'Save',
+  'details.saved': 'Saved.',
+  'details.saveFailed': 'The change was not saved.',
+  'details.onlyMembers': 'Join the channel to change its name or topic.',
+  'details.members': 'Members ({number})',
+  'details.membersFailed': 'Who is in this channel could not be loaded.',
+  'details.nobody': 'Nobody is in this channel. Anyone can join it.',
+  'details.you': 'you',
+  'details.notifications': 'Notifications',
+
   // ── Messages ────────────────────────────────────────────────────────────
   'message.react': 'React',
   'message.reacted': 'Reacted',
