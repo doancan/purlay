@@ -417,6 +417,8 @@ export const en = {
   'upload.discardFailed': '{name} was removed here, but not from the server.',
   'composer.mention': 'Mention someone',
   'mention.listLabel': 'People to mention',
+  'mention.reading': 'Reading who is in this channel…',
+  'mention.unreadable': 'Who is in this channel could not be read.',
   'mention.results': {
     one: '{count} person matches',
     other: '{count} people match',

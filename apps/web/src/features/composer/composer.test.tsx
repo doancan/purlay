@@ -4,7 +4,7 @@
  * time it holds.
  */
 import { describe, expect, test } from 'bun:test';
-import { act, fireEvent } from '@testing-library/react';
+import { act, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
 import {
   ATTACHMENT_BYTES_MAX,
@@ -942,6 +942,34 @@ describe('@ offers people (UX §5)', () => {
     await user.keyboard('{Backspace}a');
     expect(list(view)).toBeNull();
     expect(asked).toBe(1);
+  });
+
+  test('a private channel whose members could not be read says so after an @, with Retry, and Enter still sends', async () => {
+    let fails = true;
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        channels: () =>
+          Promise.resolve(
+            someChannels().map((channel) =>
+              channel.id === IDS.api ? { ...channel, type: 'private' as const } : channel,
+            ),
+          ),
+        channelMembers: () =>
+          fails
+            ? Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'busy'))
+            : Promise.resolve([BOB_USER].map((user) => ({ user, joinedAt: WHEN }))),
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    await settle();
+    const said = view.getByRole('status', { name: /could not be read/i });
+    expect(list(view)).toBeNull();
+    fails = false;
+    await user.click(within(said).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expectFocusOn(box());
+    expect(options(view)).toEqual(['Bob @bob']);
   });
 
   test('a public channel does not read its members: the workspace is who a mention there reaches', async () => {

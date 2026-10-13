@@ -8,6 +8,7 @@
  *   workspace. The server tells nobody outside a private channel, so offering anybody else there would
  *   offer a name it silently drops; and while the members are being read, nobody rather than a guess.
  */
+import { useCallback } from 'react';
 import type { Channel, User, WorkspaceMember } from '@purlay/types';
 import { useChannelMembers, useChannels, useMembers } from '../../data/queries';
 import { useSession } from '../session/session';
@@ -34,17 +35,39 @@ export const candidatesFor = (
   );
 };
 
-export const useMentionCandidates = (channelId: string): readonly User[] => {
+/** Who may be offered, and whether that is known yet: a private channel's members are read first. */
+export interface MentionCandidates {
+  readonly people: readonly User[];
+  readonly state: 'ready' | 'reading' | 'failed';
+  /** Read the channel's members again: after a failure, or when a new `@` finds them stale. */
+  readonly refresh: () => void;
+}
+
+export const useMentionCandidates = (channelId: string): MentionCandidates => {
   const { workspace } = useWorkspace();
   const session = useSession();
   const members = useMembers(workspace.id);
   const channels = useChannels(workspace.id);
   const channel = channels.data?.find((each) => each.id === channelId);
-  const inChannel = useChannelMembers(channelId, channel?.type === 'private');
-  return candidatesFor(
-    channel,
-    members.data ?? [],
-    inChannel.data?.map((member) => member.user),
-    session.user.id,
-  );
+  const isPrivate = channel?.type === 'private';
+  const inChannel = useChannelMembers(channelId, isPrivate);
+  const { refetch, isStale } = inChannel;
+  const refresh = useCallback((): void => {
+    if (isPrivate && isStale) void refetch();
+  }, [isPrivate, isStale, refetch]);
+  return {
+    people: candidatesFor(
+      channel,
+      members.data ?? [],
+      inChannel.data?.map((member) => member.user),
+      session.user.id,
+    ),
+    state:
+      !isPrivate || inChannel.data !== undefined
+        ? 'ready'
+        : inChannel.isError
+          ? 'failed'
+          : 'reading',
+    refresh,
+  };
 };

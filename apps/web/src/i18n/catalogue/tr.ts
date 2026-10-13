@@ -408,6 +408,8 @@ export const tr = {
   'upload.discardFailed': '{name} burada kaldırıldı, ama sunucudan kaldırılamadı.',
   'composer.mention': 'Birini an',
   'mention.listLabel': 'Anılabilecek kişiler',
+  'mention.reading': 'Bu kanaldakiler okunuyor…',
+  'mention.unreadable': 'Bu kanalda kimlerin olduğu okunamadı.',
   'mention.results': {
     other: 'Eşleşen kişi: {count}',
   },

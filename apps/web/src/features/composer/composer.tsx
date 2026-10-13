@@ -114,6 +114,7 @@ const Inner = ({
   const [active, setActive] = useState(0);
   const listId = useId();
   const candidates = useMentionCandidates(channelId);
+  const { refresh: refreshCandidates } = candidates;
 
   // Debounced: written a moment after typing stops.
   useEffect(() => {
@@ -199,9 +200,16 @@ const Inner = ({
 
   // The list is drawn only while the box has focus: a person who has moved on is not asked.
   const mention = focused ? mentionQuery(text, caretAt) : null;
-  const suggestions =
-    mention === null || mention.start === dismissedAt ? [] : suggest(candidates, mention.query);
+  const asking = mention !== null && mention.start !== dismissedAt;
+  const suggestions = asking ? suggest(candidates.people, mention.query) : [];
   const open = suggestions.length > 0;
+  // A private channel's members not read yet, or not readable: said, without a list to take Enter.
+  const unknown = asking && candidates.state !== 'ready' ? candidates.state : null;
+  // Each new `@` reads the channel's members again if they are stale: they change without a frame.
+  const mentionStart = mention?.start ?? null;
+  useEffect(() => {
+    if (mentionStart !== null) refreshCandidates();
+  }, [mentionStart, refreshCandidates]);
   const current = Math.min(active, suggestions.length - 1);
   const optionId = (index: number): string => `${listId}-option-${String(index)}`;
 
@@ -449,6 +457,30 @@ const Inner = ({
             focused && 'outline-focus outline-focus-ring -outline-offset-focus',
           )}
         >
+          {unknown !== null && (
+            <div
+              role="status"
+              aria-label={t(unknown === 'failed' ? 'mention.unreadable' : 'mention.reading')}
+              // Retry must not take focus from the box.
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              className="absolute bottom-full left-0 z-popover mb-2 flex w-full max-w-dialog items-center gap-2 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-4 py-2 text-label text-ink-muted shadow-float"
+            >
+              {t(unknown === 'failed' ? 'mention.unreadable' : 'mention.reading')}
+              {unknown === 'failed' && (
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => {
+                    refreshCandidates();
+                  }}
+                >
+                  {t('common.retry')}
+                </button>
+              )}
+            </div>
+          )}
           {open && (
             <div className="absolute bottom-full left-0 z-popover mb-2 w-full max-w-dialog overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
               <div
