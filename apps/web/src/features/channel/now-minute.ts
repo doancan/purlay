@@ -12,7 +12,8 @@ const floorMinute = (date: Date): number => Math.floor(date.getTime() / MINUTE_M
 export const useNowMinute = (ports: FeedPorts): number => {
   const [now, setNow] = useState(() => floorMinute(ports.clock.now()));
   useEffect(() => {
-    let cancel = (): void => undefined;
+    // Assigned before anything can call it: the first schedule is made below, and each tick makes the next.
+    let cancel: () => void;
     const tick = (): void => {
       setNow(floorMinute(ports.clock.now()));
       cancel = ports.schedule(tick, MINUTE_MS);
