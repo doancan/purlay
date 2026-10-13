@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { WorkspaceMember } from '@purlay/types';
-import { ALICE, BOB, IDS, ME, WHEN, aChannel, aMessage, aUser } from '../../testing/fixtures';
+import { ALICE, BOB, IDS, ME, WHEN, aChannel, aUser } from '../../testing/fixtures';
 import { candidatesFor } from './mention-candidates';
 
 const CAROL = aUser('carol', '00000000-0000-4000-8000-0000000000e4');
@@ -15,7 +15,7 @@ const names = (people: readonly { readonly username: string }[]): string[] =>
 
 describe('who the @ list may offer', () => {
   test('in a public channel, everybody in the workspace but the writer', () => {
-    expect(names(candidatesFor(aChannel(IDS.api, 'api'), members, [], ME.id))).toEqual([
+    expect(names(candidatesFor(aChannel(IDS.api, 'api'), members, undefined, ME.id))).toEqual([
       'alice',
       'bob',
       'carol',
@@ -24,25 +24,28 @@ describe('who the @ list may offer', () => {
 
   test('in a direct message, the other person only; in a note to self, nobody', () => {
     const dm = aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE });
-    expect(names(candidatesFor(dm, members, [], ME.id))).toEqual(['alice']);
+    expect(names(candidatesFor(dm, members, undefined, ME.id))).toEqual(['alice']);
     const self = aChannel(IDS.dm, null, { type: 'direct_message', peer: ME });
-    expect(candidatesFor(self, members, [], ME.id)).toEqual([]);
+    expect(candidatesFor(self, members, undefined, ME.id)).toEqual([]);
   });
 
-  test('in a private channel, only who wrote or was named there and is still in the workspace', () => {
+  test('in a private channel, its members now: not who left it, though they wrote there (#500)', () => {
     const security = aChannel(IDS.incidents, 'security', { type: 'private' });
-    const loaded = [
-      aMessage(1, { channelId: IDS.incidents, sender: BOB }),
-      aMessage(2, { channelId: IDS.incidents, sender: ME, mentions: [CAROL.id] }),
-      // Somebody since removed from the workspace wrote here once: not offered.
-      aMessage(3, { channelId: IDS.incidents, sender: FORMER }),
-    ];
-    expect(names(candidatesFor(security, members, loaded, ME.id))).toEqual(['bob', 'carol']);
-    // Alice is in the workspace and wrote nowhere here: a private channel does not offer her.
-    expect(names(candidatesFor(security, members, [], ME.id))).toEqual([]);
+    // Bob and Carol are in it; Alice is in the workspace but not the channel; FORMER is in neither.
+    expect(names(candidatesFor(security, members, [ME, BOB, CAROL, FORMER], ME.id))).toEqual([
+      'bob',
+      'carol',
+    ]);
+    // Alice wrote there once and has left: a mention of her would reach nobody, so she is not offered.
+    expect(names(candidatesFor(security, members, [ME, BOB], ME.id))).toEqual(['bob']);
+  });
+
+  test('in a private channel whose members are not read yet, nobody rather than a guess', () => {
+    const security = aChannel(IDS.incidents, 'security', { type: 'private' });
+    expect(candidatesFor(security, members, undefined, ME.id)).toEqual([]);
   });
 
   test('before the channel is known, nobody', () => {
-    expect(candidatesFor(undefined, members, [], ME.id)).toEqual([]);
+    expect(candidatesFor(undefined, members, undefined, ME.id)).toEqual([]);
   });
 });

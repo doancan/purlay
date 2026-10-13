@@ -5,14 +5,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
-import type { InfiniteData } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ATTACHMENT_BYTES_MAX,
   ATTACHMENTS_PER_MESSAGE_MAX,
   MESSAGE_CONTENT_MAX,
   type Attachment,
-  type MessagePage,
   type ServerFrame,
 } from '@purlay/types';
 import { ApiError } from '../../data/errors';
@@ -821,7 +819,7 @@ describe('@ offers people (UX §5)', () => {
     await user.keyboard('@ali');
     await user.keyboard('{Tab}');
     expect(box().value).toBe('@alice ');
-    expect(document.activeElement).toBe(box());
+    expectFocusOn(box());
     expect(list(view)).toBeNull();
   });
 
@@ -844,7 +842,7 @@ describe('@ offers people (UX §5)', () => {
     await user.keyboard('{Escape}');
     expect(list(view)).toBeNull();
     expect(box().value).toBe('@al');
-    expect(document.activeElement).toBe(box());
+    expectFocusOn(box());
     await user.keyboard('i');
     expect(list(view)).toBeNull();
     // With the list closed Enter is a send, of what was typed.
@@ -860,7 +858,7 @@ describe('@ offers people (UX §5)', () => {
     await user.keyboard('cc @b');
     await user.click(view.getByRole('option', { name: /Bob/ }));
     expect(box().value).toBe('cc @bob ');
-    expect(document.activeElement).toBe(box());
+    expectFocusOn(box());
     expect(list(view)).toBeNull();
   });
 
@@ -913,7 +911,8 @@ describe('@ offers people (UX §5)', () => {
     expect(list(view)).toBeNull();
   });
 
-  test("a private channel offers who the client has seen in it, from its feed and its threads, and no one else's", async () => {
+  test('a private channel offers its members, read from the server: nobody else, though they wrote in it', async () => {
+    let asked = 0;
     const { view, box, user } = await mount({
       api: aSignedInApi({
         channels: () =>
@@ -922,26 +921,42 @@ describe('@ offers people (UX §5)', () => {
               channel.id === IDS.api ? { ...channel, type: 'private' as const } : channel,
             ),
           ),
+        channelMembers: () => {
+          asked += 1;
+          return Promise.resolve([BOB_USER].map((user) => ({ user, joinedAt: WHEN })));
+        },
       }),
     });
-    const page = (
-      sender: typeof BOB_USER,
-      n: number,
-      channelId: string,
-    ): InfiniteData<MessagePage, string | undefined> => ({
-      pages: [{ data: [aMessage(n, { channelId, sender })], nextCursor: null }],
-      pageParams: [undefined],
-    });
     act(() => {
-      view.world.client.setQueryData(keys.messages(IDS.api), page(BOB_USER, 1, IDS.api));
-      // Alice wrote in a thread of another channel: that says nothing about this one.
-      view.world.client.setQueryData(keys.thread(messageIdAt(9)), page(ALICE_USER, 2, IDS.deploys));
+      // Alice wrote here once and has left: what the feed holds is not who is in the channel.
+      view.world.client.setQueryData(keys.messages(IDS.api), {
+        pages: [
+          { data: [aMessage(1, { channelId: IDS.api, sender: ALICE_USER })], nextCursor: null },
+        ],
+        pageParams: [undefined],
+      });
     });
     await user.click(box());
     await user.keyboard('@b');
     expect(options(view)).toEqual(['Bob @bob']);
     await user.keyboard('{Backspace}a');
     expect(list(view)).toBeNull();
+    expect(asked).toBe(1);
+  });
+
+  test('a public channel does not read its members: the workspace is who a mention there reaches', async () => {
+    let asked = 0;
+    const { box, user } = await mount({
+      api: aSignedInApi({
+        channelMembers: () => {
+          asked += 1;
+          return Promise.resolve([]);
+        },
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@a');
+    expect(asked).toBe(0);
   });
 
   test('passes the accessibility audit while the list is open, and says its words in Turkish', async () => {
