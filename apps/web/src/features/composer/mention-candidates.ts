@@ -25,8 +25,15 @@ export const candidatesFor = (
   if (channel === undefined) return [];
   const people = members.map((member) => member.user);
   if (channel.type === 'public') return offerable(people, selfId);
-  if (channel.type === 'direct_message')
-    return channel.peer === null ? [] : offerable([channel.peer], selfId);
+  // A direct message's people are its key's (D-127): two, or a group — offered while they are
+  // still people of the workspace.
+  if (channel.type === 'direct_message') {
+    const its = new Set(channel.peers.map((person) => person.id));
+    return offerable(
+      people.filter((person) => its.has(person.id)),
+      selfId,
+    );
+  }
   if (inChannel === undefined) return [];
   const here = new Set(inChannel.map((person) => person.id));
   return offerable(

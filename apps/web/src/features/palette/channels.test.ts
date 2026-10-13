@@ -3,7 +3,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { Channel } from '@purlay/types';
-import { ALICE, IDS, ME, aChannel } from '../../testing/fixtures';
+import { ALICE, BOB, IDS, ME, aChannel } from '../../testing/fixtures';
 import { displayName, inSidebarOrder, stepUnread } from './channels';
 
 const unread = (n: number): Channel['state'] => ({
@@ -86,6 +86,16 @@ describe('the name a channel goes by', () => {
     expect(
       displayName(aChannel('x', null, { type: 'direct_message', peer: ME }), IDS.me, 'you'),
     ).toBe('you');
+  });
+
+  test('is its people in a group (D-127)', () => {
+    expect(
+      displayName(
+        aChannel('x', null, { type: 'direct_message', peers: [ALICE, BOB] }),
+        IDS.me,
+        'you',
+      ),
+    ).toBe(`${ALICE.displayName}, ${BOB.displayName}`);
   });
 
   test('is empty when there is nothing to call it', () => {

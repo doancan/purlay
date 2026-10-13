@@ -12,6 +12,7 @@ const CATALOGUE_KEY = {
   direct_message: 'inbox.why.direct',
   thread_reply: 'inbox.why.reply',
   channel_message: 'inbox.why.channel',
+  group: 'inbox.why.group',
 } as const;
 
 const catalogue = (locale: 'en' | 'tr'): string =>

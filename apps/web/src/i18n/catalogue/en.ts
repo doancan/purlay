@@ -557,6 +557,7 @@ export const en = {
   'inbox.lede': 'What you were told, newest first',
   'inbox.why.mention': '{name} mentioned you',
   'inbox.why.direct': '{name} wrote to you',
+  'inbox.why.group': '{name} wrote to the conversation',
   'inbox.why.reply': '{name} replied in your thread',
   'inbox.why.resolved': 'Your question was resolved',
   'inbox.why.channel': '{name} wrote',

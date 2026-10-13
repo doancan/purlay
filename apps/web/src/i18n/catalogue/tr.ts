@@ -542,6 +542,7 @@ export const tr = {
   'inbox.lede': 'Sana söylenenler, en yenisi önce',
   'inbox.why.mention': '{name} senden bahsetti',
   'inbox.why.direct': '{name} sana yazdı',
+  'inbox.why.group': '{name} konuşmaya yazdı',
   'inbox.why.reply': '{name} thread’ine yanıt verdi',
   'inbox.why.resolved': 'Sorun çözüldü',
   'inbox.why.channel': '{name} yazdı',

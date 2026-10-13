@@ -29,6 +29,16 @@ describe('who the @ list may offer', () => {
     expect(candidatesFor(self, members, undefined, ME.id)).toEqual([]);
   });
 
+  test('in a group, its people still in the workspace (D-127)', () => {
+    const group = aChannel(IDS.dm, null, { type: 'direct_message', peers: [ALICE, BOB] });
+    expect(names(candidatesFor(group, members, undefined, ME.id))).toEqual(['alice', 'bob']);
+    const gone = aChannel(IDS.dm, null, {
+      type: 'direct_message',
+      peers: [ALICE, { ...BOB, id: '00000000-0000-4000-8000-0000000000ff' }],
+    });
+    expect(names(candidatesFor(gone, members, undefined, ME.id))).toEqual(['alice']);
+  });
+
   test('in a private channel, its members now: not who left it, though they wrote there (#500)', () => {
     const security = aChannel(IDS.incidents, 'security', { type: 'private' });
     // Bob and Carol are in it; Alice is in the workspace but not the channel; FORMER is in neither.

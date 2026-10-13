@@ -229,6 +229,24 @@ describe('integration: a device is told', () => {
     });
   });
 
+  test('of a group, titled by its other people and saying it was written to the conversation', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob', 'carol'], { type: 'direct_message' });
+      const bob = await aBrowser();
+      await subscribeDevice(db, room, 'bob', bob);
+      const service = aPushService();
+      const { say, settled } = await sending(db, service.post);
+      await say(room, 'alice', 'shipping at five');
+      await settled();
+      const [push] = service.sent;
+      const read = await bob.read(push?.body ?? new Uint8Array());
+      const others = ['alice', 'carol'];
+      expect(read).toMatchObject({ body: 'alice wrote to the conversation' });
+      const title = (read as { title: string }).title;
+      expect(title.split(', ').sort()).toEqual(others);
+    });
+  });
+
   test('once: a retried send tells nobody again, and the author is never told', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

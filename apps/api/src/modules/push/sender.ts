@@ -20,7 +20,7 @@
  *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, a push is dropped and
  *   said. `flush` waits for them at shutdown, within its bound.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import type { PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
@@ -108,6 +108,13 @@ const devicesFor = async (
       'author.display_name',
       'c.name',
       'w.slug',
+      // A group's people besides the one told, by name: what its notice is titled (D-127).
+      sql<string | null>`(
+        select string_agg(other.display_name, ', ' order by key_part.place)
+        from unnest(string_to_array(c.dm_key, ':')) with ordinality as key_part(id, place)
+        join users as other on other.id = key_part.id::uuid
+        where cardinality(string_to_array(c.dm_key, ':')) > 2 and other.id <> n.user_id
+      )`.as('group_names'),
     ])
     .where('n.message_id', '=', messageId)
     .where('n.user_id', 'in', userIds)
@@ -130,9 +137,13 @@ const devicesFor = async (
       {
         ...row,
         payload: {
-          // A channel by its name; a direct message by who wrote it.
-          title: row.name === null ? row.display_name : `#${row.name}`,
-          body: pushBody(row.locale === 'tr' ? 'tr' : 'en', reason, row.display_name),
+          // A channel by its name; a group by its people; a direct message by who wrote it.
+          title: row.name !== null ? `#${row.name}` : (row.group_names ?? row.display_name),
+          body: pushBody(
+            row.locale === 'tr' ? 'tr' : 'en',
+            row.group_names !== null && reason === 'direct_message' ? 'group' : reason,
+            row.display_name,
+          ),
           url: `/w/${row.slug}/c/${row.channel_id}`,
           tag: `channel:${row.channel_id}`,
         },
