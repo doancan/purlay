@@ -52,9 +52,9 @@ export const subscribeDevice = async (
   const subscriber = await requireSession(database, clock, request);
   const key = serverKey(config);
   const input = validated(PushSubscribeRequest, body);
-  await atomicallyOn(database)(
-    async (transaction) => await subscribe(transaction, clock, subscriber, input, key),
-  );
+  await atomicallyOn(database)(async (transaction) => {
+    await subscribe(transaction, clock, subscriber, input, key);
+  });
 };
 
 /** `POST /api/push/subscriptions/remove` — this device stops being told. */

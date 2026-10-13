@@ -5,6 +5,7 @@
  * needs it (`CONFIG.md`). These check that it does — and that it fails usefully,
  * naming every problem at once and never quoting a credential back.
  */
+import { createECDH } from 'node:crypto';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { tlsFromEnvironment } from '@purlay/db';
@@ -449,20 +450,19 @@ describe('the directory store (D-117)', () => {
   });
 });
 
-/** A real pair, as `bun run push:keys` would print it: a 65-byte point and its 32-byte scalar. */
-const aVapidPair = async (): Promise<{ publicKey: string; privateKey: string }> => {
-  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
-    'sign',
-  ]);
-  const raw = await crypto.subtle.exportKey('raw', pair.publicKey);
-  const { d } = await crypto.subtle.exportKey('jwk', pair.privateKey);
-  if (d === undefined) throw new Error('the generated key has no private scalar');
-  return { publicKey: Buffer.from(raw).toString('base64url'), privateKey: d };
+/** A real pair, base64url: the 65-byte uncompressed point and its 32-byte scalar. */
+const aVapidPair = (): { publicKey: string; privateKey: string } => {
+  const pair = createECDH('prime256v1');
+  pair.generateKeys();
+  return {
+    publicKey: pair.getPublicKey().toString('base64url'),
+    privateKey: pair.getPrivateKey().toString('base64url'),
+  };
 };
 
-describe('Web Push keys (#78)', async () => {
-  const one = await aVapidPair();
-  const other = await aVapidPair();
+describe('Web Push keys (#78)', () => {
+  const one = aVapidPair();
+  const other = aVapidPair();
   const vapid = {
     VAPID_PUBLIC_KEY: one.publicKey,
     VAPID_PRIVATE_KEY: one.privateKey,
