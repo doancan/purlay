@@ -70,8 +70,12 @@ interface ThemeState {
 
 export interface ThemeStore {
   readonly store: StoreApi<ThemeState>;
-  /** Stops listening to the operating system. */
-  readonly dispose: () => void;
+  /**
+   * Starts writing the page and following the operating system; returns what stops both. It can
+   * be called again after that — a provider whose effect is cleaned up and run again with its
+   * state kept (StrictMode does exactly this) must find the store working, not disposed.
+   */
+  readonly connect: () => () => void;
 }
 
 const read = (storage: KeyValueStorage): ThemeChoice => {
@@ -105,7 +109,6 @@ export const createThemeStore = ({ storage, query, target }: ThemePorts): ThemeS
     target.setAttribute('data-theme', state.resolved);
   };
   apply(store.getState());
-  const unsubscribe = store.subscribe(apply);
 
   // The operating system can change its mind while the page is open (a schedule
   // at dusk is the common case); only `system` is entitled to follow it.
@@ -113,13 +116,20 @@ export const createThemeStore = ({ storage, query, target }: ThemePorts): ThemeS
     const { choice } = store.getState();
     if (choice === 'system') store.setState({ resolved: resolveTheme(choice, query.matches) });
   };
-  query.addEventListener('change', followSystem);
 
   return {
     store,
-    dispose: (): void => {
-      query.removeEventListener('change', followSystem);
-      unsubscribe();
+    connect: (): (() => void) => {
+      const unsubscribe = store.subscribe(apply);
+      query.addEventListener('change', followSystem);
+      // What changed while nothing was listening — the system's preference, between creating
+      // the store and connecting it — is caught up now, and the page written once more.
+      followSystem();
+      apply(store.getState());
+      return (): void => {
+        query.removeEventListener('change', followSystem);
+        unsubscribe();
+      };
     },
   };
 };

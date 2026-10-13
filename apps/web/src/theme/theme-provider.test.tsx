@@ -1,5 +1,6 @@
 import { installDom } from '../testing/dom';
 import { describe, expect, spyOn, test } from 'bun:test';
+import { StrictMode } from 'react';
 import { act, render } from '@testing-library/react';
 import { ThemeProvider, useTheme } from './theme-provider';
 import type { DarkQuery, KeyValueStorage, ThemePorts } from './theme';
@@ -85,6 +86,41 @@ describe('ThemeProvider and useTheme', () => {
       fake.flip(true);
     });
     expect(getByRole('button').textContent).toBe('system/dark');
+  });
+
+  // StrictMode runs every effect, its cleanup, and the effect again — what React does to a provider
+  // it unmounts and brings back with its state kept. A cleanup that stopped the store from writing
+  // the page, with nothing to start it again, left the choice made and the page unchanged.
+  test('a choice still reaches the page after the effects have been cleaned up and run again', () => {
+    const fake = ports();
+    const { getByRole } = render(
+      <StrictMode>
+        <ThemeProvider ports={fake}>
+          <Probe />
+        </ThemeProvider>
+      </StrictMode>,
+    );
+    act(() => {
+      getByRole('button').click();
+    });
+    expect(getByRole('button').textContent).toBe('dark/dark');
+    expect(fake.attributes['data-theme']).toBe('dark');
+  });
+
+  test('the operating system is still followed after the effects have been cleaned up and run again', () => {
+    const fake = ports();
+    const { getByRole } = render(
+      <StrictMode>
+        <ThemeProvider ports={fake}>
+          <Probe />
+        </ThemeProvider>
+      </StrictMode>,
+    );
+    act(() => {
+      fake.flip(true);
+    });
+    expect(getByRole('button').textContent).toBe('system/dark');
+    expect(fake.attributes['data-theme']).toBe('dark');
   });
 
   test('uses the browser when given no ports', () => {

@@ -31,14 +31,11 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider = ({ ports, children }: ThemeProviderProps): React.JSX.Element => {
-  // A lazy initialiser: the store is created once per mount of the provider.
+  // A lazy initialiser: the store is created once per mount of the provider. What it listens to
+  // is started by the effect and stopped by the effect's cleanup, so a cleanup that React follows
+  // with the effect again (StrictMode, a kept state brought back) leaves it listening.
   const [themeStore] = useState(() => createThemeStore(ports ?? browserPorts()));
-  useEffect(
-    () => (): void => {
-      themeStore.dispose();
-    },
-    [themeStore],
-  );
+  useEffect(() => themeStore.connect(), [themeStore]);
   return <ThemeContext value={themeStore}>{children}</ThemeContext>;
 };
 
