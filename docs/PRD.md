@@ -176,7 +176,9 @@ public self-host path and its documentation stay in Phase 2. (D-73)
 Web Push notifications · unified/split diff viewer for ` ```diff ` blocks · magic-link auth
 (D-11) · message edit history · **retention policy, account erasure and workspace export**
 (D-27) · **operator compliance documentation** — data map, retention and erasure runbooks (D-28) ·
-online presence (ephemeral, D-7, D-120)
+online presence (ephemeral, D-7, D-120) · group conversations · saved items · pinned messages and a
+channel's files · profiles with a title, a time zone and a status · starred channels · incident
+channels (D-125)
 
 ### Phase 2.5 — Cloud (v0.4.0)
 

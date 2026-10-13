@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Specification — 2026-10-13: Phase 2 begins while Phase 1 waits on its deployment (D-125)
+
+- The owner started `v0.3.0` work before `v0.2.0`'s exit is demonstrated; the order is in D-125, and
+  the features from the design screens (#484–#489) are Phase 2 in `PRD.md` §4.
+
 ### Feature — 2026-10-13: Deep Work started or ended in one tab is drawn in the others
 
 - `PUT …/deep-work` now publishes `DEEP_WORK_UPDATED` on the person's own topic; their other tabs and
