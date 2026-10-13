@@ -251,6 +251,7 @@ export const en = {
   'details.description': 'Its name and topic, who is in it, and what you are told about.',
   'details.name': 'Name',
   'details.topic': 'Topic',
+  'details.topicInvalid': 'Write the topic as plain text, without control characters.',
   'details.save': 'Save',
   'details.saved': 'Saved.',
   'details.saveFailed': 'The change was not saved.',

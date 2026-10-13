@@ -7,7 +7,7 @@
  * stays the authority, and what it refuses is said in words — a taken name under the name field.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import type { Channel } from '@purlay/types';
+import type { Channel, UpdateChannelRequest } from '@purlay/types';
 import { useId, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
@@ -22,7 +22,8 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 import { AddPeopleDialog } from './add-people';
-import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName, toChannelName } from './channel-name';
+import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
+import { typeChannelName } from './name-field';
 import { NotificationLevelMenu } from './notification-level-menu';
 
 const sectionTitle = 'text-label text-ink-muted';
@@ -33,15 +34,26 @@ const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element =>
   const describe = useDescribeFailure();
   const { updateChannel } = useActions();
   const formId = useId();
-  const [name, setName] = useState(channel.name ?? '');
-  const [topic, setTopic] = useState(channel.topic ?? '');
-  const [problem, setProblem] = useState<{ field: 'name' | 'form'; message: string } | null>(null);
+  // Only what the person edits is theirs; a field they have not touched shows the channel as it is
+  // now, so a rename by somebody else appears here and is never sent back over it (D-123 §6).
+  const [editedName, setName] = useState<string | null>(null);
+  const [editedTopic, setTopic] = useState<string | null>(null);
+  const [problem, setProblem] = useState<{
+    field: 'name' | 'topic' | 'form';
+    message: string;
+  } | null>(null);
   const [state, setState] = useState<'idle' | 'busy' | 'saved'>('idle');
-  const wanted = {
-    name: finishedChannelName(name),
-    topic: topic.trim() === '' ? null : topic.trim(),
+  const name = editedName ?? channel.name ?? '';
+  const topic = editedTopic ?? channel.topic ?? '';
+  const wanted: UpdateChannelRequest = {
+    ...(editedName === null ? {} : { name: finishedChannelName(editedName) }),
+    ...(editedTopic === null
+      ? {}
+      : { topic: editedTopic.trim() === '' ? null : editedTopic.trim() }),
   };
-  const changed = wanted.name !== channel.name || wanted.topic !== channel.topic;
+  const changed =
+    (wanted.name !== undefined && wanted.name !== channel.name) ||
+    (wanted.topic !== undefined && wanted.topic !== channel.topic);
 
   if (channel.state === null) {
     return (
@@ -53,23 +65,27 @@ const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element =>
 
   const submit = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
-    if (!CHANNEL_NAME.test(wanted.name)) {
+    if (wanted.name !== undefined && !CHANNEL_NAME.test(wanted.name)) {
       setProblem({ field: 'name', message: t('newChannel.invalid') });
       return;
     }
     setState('busy');
     setProblem(null);
     try {
-      const saved = await updateChannel(channel.id, wanted);
-      setName(saved.name ?? '');
-      setTopic(saved.topic ?? '');
+      await updateChannel(channel.id, wanted);
+      setName(null);
+      setTopic(null);
       setState('saved');
     } catch (failure) {
       setState('idle');
       if (isApiError(failure) && failure.code === 'CHANNEL_NAME_TAKEN') {
         setProblem({ field: 'name', message: t('newChannel.taken') });
       } else if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
-        setProblem({ field: 'name', message: t('newChannel.invalid') });
+        setProblem(
+          'topic' in failure.fields
+            ? { field: 'topic', message: t('details.topicInvalid') }
+            : { field: 'name', message: t('newChannel.invalid') },
+        );
       } else {
         setProblem({ field: 'form', message: `${t('details.saveFailed')} ${describe(failure)}` });
       }
@@ -93,7 +109,7 @@ const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element =>
         spellCheck={false}
         {...(problem?.field === 'name' ? { error: problem.message } : {})}
         onChange={(event) => {
-          setName(toChannelName(event.target.value));
+          typeChannelName(event.target, setName);
           setState('idle');
         }}
       />
@@ -102,6 +118,7 @@ const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element =>
         hint={t('newChannel.topicHint')}
         value={topic}
         autoComplete="off"
+        {...(problem?.field === 'topic' ? { error: problem.message } : {})}
         onChange={(event) => {
           setTopic(event.target.value);
           setState('idle');

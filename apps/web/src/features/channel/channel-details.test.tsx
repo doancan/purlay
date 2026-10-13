@@ -3,9 +3,10 @@
  * in it in its three states (`UX.md` §8).
  */
 import { describe, expect, test } from 'bun:test';
-import { within } from '@testing-library/react';
-import type { ChannelMember, MeResponse, UpdateChannelRequest } from '@purlay/types';
+import { act, within } from '@testing-library/react';
+import type { Channel, ChannelMember, MeResponse, UpdateChannelRequest } from '@purlay/types';
 import { ApiError } from '../../data/errors';
+import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
@@ -140,15 +141,18 @@ describe('the members', () => {
 describe('the name and the topic', () => {
   test('a name typed the way it is said is saved in the rule’s form, with the topic', async () => {
     const asked: UpdateChannelRequest[] = [];
+    // The server's list, as the server keeps it: the list is read again after the answer.
+    let list = someChannels();
     const view = await mountChannel({
       messages: page([]),
       api: {
+        channels: () => Promise.resolve(list),
         channelMembers: () => Promise.resolve(inChannel(ME)),
         updateChannel: (_id, input) => {
           asked.push(input);
-          return Promise.resolve(
-            aChannel(IDS.api, input.name ?? 'api', { topic: input.topic ?? null }),
-          );
+          const saved = aChannel(IDS.api, input.name ?? 'api', { topic: input.topic ?? null });
+          list = list.map((c) => (c.id === IDS.api ? saved : c));
+          return Promise.resolve(saved);
         },
       },
     });
@@ -191,9 +195,17 @@ describe('the name and the topic', () => {
   });
 
   test.each([
-    ['a name the server refuses', new ApiError(400, 'VALIDATION_FAILED', 'x'), 'Use lowercase'],
-    ['a failure it cannot explain', new ApiError(500, 'INTERNAL', 'x'), 'was not saved'],
-  ])('%s is said in words', async (_why, failure, words) => {
+    [
+      'a topic the server refuses is said under the topic',
+      new ApiError(400, 'VALIDATION_FAILED', 'x', { topic: 'not plain text' }),
+      'Topic',
+    ],
+    [
+      'a name the server refuses is said under the name',
+      new ApiError(400, 'VALIDATION_FAILED', 'x', { name: 'not a name' }),
+      'Name',
+    ],
+  ])('%s', async (_why, failure, field) => {
     const view = await mountChannel({
       messages: page([]),
       api: {
@@ -203,9 +215,109 @@ describe('the name and the topic', () => {
     });
     const dialog = await openDetails(view);
     await person().type(within(dialog).getByLabelText('Topic'), '!');
+    await person().type(within(dialog).getByLabelText('Name'), 'x');
     await person().click(within(dialog).getByRole('button', { name: 'Save' }));
     await settle();
-    expect(within(dialog).getByRole('alert').textContent).toContain(words);
+    const box = within(dialog).getByLabelText(field);
+    const described = box.getAttribute('aria-describedby') ?? '';
+    const said = described
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(said).toContain(field === 'Topic' ? 'Write the topic' : 'Use lowercase');
+    view.unmountAll();
+  });
+
+  test('a failure it cannot explain is said in words', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        updateChannel: () => Promise.reject(new ApiError(500, 'INTERNAL', 'x')),
+      },
+    });
+    const dialog = await openDetails(view);
+    await person().type(within(dialog).getByLabelText('Topic'), '!');
+    await person().click(within(dialog).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(within(dialog).getByRole('alert').textContent).toContain('was not saved');
+    view.unmountAll();
+  });
+
+  test('saving only the topic sends only the topic: a name in an older form is not rewritten', async () => {
+    const asked: UpdateChannelRequest[] = [];
+    const old = aChannel(IDS.api, 'Genel Sohbet');
+    const view = await mountChannel({
+      messages: page([]),
+      channels: [old, ...someChannels().filter((c) => c.id !== IDS.api)],
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        updateChannel: (_id, input) => {
+          asked.push(input);
+          return Promise.resolve({ ...old, topic: input.topic ?? null });
+        },
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Genel Sohbet' }));
+    await settle();
+    const dialog = view.getByRole('dialog');
+    const save = within(dialog).getByRole<HTMLButtonElement>('button', { name: 'Save' });
+    expect(save.disabled).toBe(true);
+    await person().type(within(dialog).getByLabelText('Topic'), 'Weekly');
+    await person().click(save);
+    await settle();
+    expect(asked).toEqual([{ topic: 'Weekly' }]);
+    view.unmountAll();
+  });
+
+  test('a rename by somebody else while it is open is shown, and saving the topic does not undo it', async () => {
+    const asked: UpdateChannelRequest[] = [];
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        updateChannel: (_id, input) => {
+          asked.push(input);
+          return Promise.resolve(aChannel(IDS.api, 'backend', { topic: input.topic ?? null }));
+        },
+      },
+    });
+    const dialog = await openDetails(view);
+    const list = view.world.client.getQueryData<Channel[]>(keys.channels(IDS.workspace)) ?? [];
+    act(() => {
+      view.world.client.setQueryData<Channel[]>(
+        keys.channels(IDS.workspace),
+        list.map((c) => (c.id === IDS.api ? { ...c, name: 'backend' } : c)),
+      );
+    });
+    await settle();
+    expect(within(dialog).getByLabelText<HTMLInputElement>('Name').value).toBe('backend');
+    await person().type(within(dialog).getByLabelText('Topic'), '!');
+    await person().click(within(dialog).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(asked).toEqual([{ topic: 'Backend deploys and incident follow-ups!' }]);
+    view.unmountAll();
+  });
+
+  test('after its own answer, the list is read again: a rename that overtook it is not hidden', async () => {
+    let reads = 0;
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channels: () => {
+          reads += 1;
+          return Promise.resolve(someChannels());
+        },
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        updateChannel: (_id, input) => Promise.resolve(aChannel(IDS.api, input.name ?? 'api')),
+      },
+    });
+    const dialog = await openDetails(view);
+    const before = reads;
+    await person().type(within(dialog).getByLabelText('Name'), '-x');
+    await person().click(within(dialog).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(reads).toBe(before + 1);
     view.unmountAll();
   });
 

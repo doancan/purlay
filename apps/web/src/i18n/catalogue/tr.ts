@@ -248,6 +248,7 @@ export const tr = {
   'details.description': 'Adı ve konusu, içinde kimlerin olduğu ve sana neyin haber verildiği.',
   'details.name': 'Ad',
   'details.topic': 'Konu',
+  'details.topicInvalid': 'Konuyu kontrol karakterleri olmadan düz metin olarak yaz.',
   'details.save': 'Kaydet',
   'details.saved': 'Kaydedildi.',
   'details.saveFailed': 'Değişiklik kaydedilmedi.',
