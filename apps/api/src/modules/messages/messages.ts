@@ -161,7 +161,8 @@ const linkAttachments = async (
   if (ids.length === 0) return 0n;
   const linked = await executor
     .updateTable('attachments')
-    .set({ message_id: messageId })
+    // Its channel with it: a channel's files are found by it (D-129).
+    .set({ message_id: messageId, channel_id: context.channelId })
     .where('id', 'in', ids)
     .where('workspace_id', '=', context.workspaceId)
     .where('uploader_id', '=', context.userId)

@@ -210,6 +210,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: CHANNEL,
   },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'GET /api/channels/:channelId/files': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/workspaces/:workspaceId/conversations': {
     refusal: 'WORKSPACE_NOT_FOUND',
     // The owner's note to self: a set the owner may always open.

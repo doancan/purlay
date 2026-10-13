@@ -22,6 +22,7 @@ import {
   Channel,
   ChannelState,
   CurrentUser,
+  Attachment,
   FromClient,
   GitHubLink,
   Membership,
@@ -630,3 +631,29 @@ export const SavedIds = Type.Array(
   { maxItems: SAVED_MAX },
 );
 export type SavedIds = Static<typeof SavedIds>;
+
+// ── A channel's files (#485, D-129) ─────────────────────────────────────────
+
+/**
+ * A file in a channel, with the message that carried it — enough to name who shared it and when,
+ * and to open it where it was said. `parentId` is the thread's root when it was said in one.
+ */
+export const ChannelFile = Type.Object({
+  attachment: Attachment,
+  messageId: Uuid,
+  parentId: Type.Union([Uuid, Type.Null()]),
+  sender: User,
+  sentAt: Timestamp,
+});
+export type ChannelFile = Static<typeof ChannelFile>;
+
+/**
+ * `GET /api/channels/:channelId/files` — the files of messages not deleted, newest message first.
+ * The cursor is a file's `attachment.id`: the page after it is read from its message on.
+ */
+export const FilePage = Page(ChannelFile);
+export type FilePage = Static<typeof FilePage>;
+
+/** Older than a file, one way only: the list is read back from the newest. */
+export const FileQuery = Type.Pick(PageQuery, ['before', 'limit']);
+export type FileQuery = Static<typeof FileQuery>;

@@ -40,6 +40,7 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 export type UserRole = "admin" | "member" | "owner";
 
 export interface Attachments {
+  channel_id: string | null;
   created_at: Generated<Timestamp>;
   file_name: string;
   height: number | null;
