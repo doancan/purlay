@@ -84,6 +84,13 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
+- **On a narrow window** the Files and Pinned messages controls are one menu, **Files and pinned
+  messages**, so the channel's name keeps its room in the header.
+- **Pins panel** — the same place again, opened by the header's **Pinned messages** control (D-130):
+  the channel's pinned messages, newest pin first, each with who said it and when, its words, and who
+  pinned it; a pinned reply opens its thread, and a member unpins from the row. **Pin** sits beside
+  Save on a message for a member of the channel, painted at once and put back with Retry when
+  refused; a pinned message says **Pinned** under its words, for everyone who can see it.
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
@@ -188,8 +195,8 @@ they were.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
   their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
-- **Hover controls** are a small raised group on the bubble's inner top corner (on a narrow window,
-  your own message's outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
+- **Hover controls** are a small raised group on the bubble's inner top corner (on
+  your own message, its outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
   thread panel is a row of its own.
 - **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
   the bubble has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
@@ -350,7 +357,7 @@ trade a certain cost for a hypothetical benefit.
 |---|---|
 | `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
 | `Cmd/Ctrl+/` | Shortcut reference |
-| `Esc` | Close the topmost thing — palette, then edit, then the thread or files panel (focus returns to its root, or to the Files control) |
+| `Esc` | Close the topmost thing — palette, then edit, then the thread, files or pins panel (focus returns to its root, or to the control that opened the panel) |
 | `↑` `↓` | Move message focus |
 | `T` | Open the focused message's thread in the panel, and move focus there |
 | `R` | Reply to the focused message |
@@ -376,6 +383,7 @@ missing specified behaviour and does not merge.
 | Search | "No matches for `<query>`" + scope hint | Inline progress in the input | Retry, query preserved |
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
+| Pins (panel) | "Nothing pinned yet" — pin a message everyone here should keep at hand | Skeleton rows, in the panel | Retry in the panel; a list that could not be brought up to date says so, with Retry |
 | Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |

@@ -5,6 +5,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { openPanel } from './support';
 
 /** A 2×2 PNG, red and blue: small, and a real image the API decodes and re-encodes. */
 const PNG = Buffer.from(
@@ -66,7 +67,7 @@ test.describe('an attachment', () => {
     const made = await room({ messages: [{ by: 'alice', text: 'the files are coming' }] });
     await signIn();
     await page.goto(made.path);
-    await page.getByRole('button', { name: 'Files in this channel' }).click();
+    await openPanel(page, 'Files in this channel');
     const panel = page.getByRole('complementary', { name: /^Files/ });
     await expect(panel.getByRole('heading', { name: 'No files yet' })).toBeVisible();
 

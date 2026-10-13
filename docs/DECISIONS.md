@@ -5176,9 +5176,10 @@ designed for it below rather than the objection being forgotten.
    `surface-050` with a quote glyph and no edge. Rejected: tinting the whole bubble, which is what
    your own messages already wear (`accent-subtle`), so a mention in a DM to yourself would vanish.
 6. **No hover tint.** The bubble is the shape; the row under the pointer only fades in its actions,
-   which sit on the bubble's inner top corner — except your own message on a narrow window, where
-   they sit on its outer corner: a short bubble is narrower than they are, and from the inner corner
-   they ran past the feed's edge and scrolled the conversation sideways (`UX.md` §2).
+   which sit on the bubble's inner top corner — except your own message, where they sit on its
+   outer corner: a short bubble is narrower than they are, and from the inner corner they ran past
+   the feed's edge and scrolled the conversation sideways — first on a narrow window, and on a wide
+   one too once Pin joined them (D-130) (`UX.md` §2).
 7. **The channel's feed and composer are centred** in the column (amends D-110 §5). The other screens,
    which have one edge, still hang from the left.
 8. **Square tails are not drawn.** The draft squares the corner nearest the speaker; radius is a
@@ -5692,13 +5693,19 @@ messages a team keeps at hand — the runbook, the decision, the link everyone a
    tombstone kept at hand is nothing to keep, and kept, the rows would grow with every deletion. One
    deleted as it was being pinned leaves a pin that neither the list nor the bound counts, and an
    unpin still lets it go.
-7. **A conversation has pins, and a reply can be one**: the list carries the reply's thread root, so
-   it opens where it was said. A pin's message is always whole in the list, and a client changes its
-   copy there as it changes the feed's — an edit, a reaction, a thread.
 5. **Heard as `PINS_UPDATED`** on the channel's topic, with nothing but the channel in it, only when
    something changed; a client reads the pins again, so two changes heard in either order leave the
    same list. A resubscription and a deletion read them again too.
 6. **Not audited**: a pin is a member's everyday act, not an administrative one (D-26).
+7. **A conversation has pins, and a reply can be one**: the list carries the reply's thread root, so
+   it opens where it was said. A pin's message is always whole in the list, and a client changes its
+   copy there as it changes the feed's — an edit, a reaction, a thread.
+8. **The feed marks a pinned message from the same list the panel shows**, read once when the
+   channel opens; Pin is a member's control beside Save, painted at once and put back when refused.
+   What the person has asked and the server has not yet answered is held beside that list for the
+   channel visit, never written into it (D-18): a refusal drops its own request only, whatever
+   anyone else changed meanwhile, and an answer read while a request is on its way cannot take the
+   painted change back. One request a message at a time; Retry only where trying again could help.
 
 **Rejected.** *A `pinned` field on every message* — every frame that carries a message would have to
 say it, and every page; the pins are read once for a channel. *Anyone who can see the channel pins* —

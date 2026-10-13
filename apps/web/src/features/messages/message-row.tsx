@@ -36,6 +36,7 @@ import { Attachments } from './attachments';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
 import { SaveToggle } from '../saved/save-toggle';
+import { PinnedMark, PinToggle } from '../pins/pin-toggle';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -220,20 +221,22 @@ const MessageRowView = ({
                 {t('message.edited')}
               </span>
             )}
+            {!deleted && <PinnedMark message={message} />}
             {delivery === 'sent' && !deleted && (
               <div
                 className={cn(
                   'absolute -top-4 flex rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-card transition-opacity duration-hover ease-standard',
-                  // The inner corner (D-119 §6) — but on a narrow window your own short bubble is
-                  // narrower than the actions, which then ran past the feed's edge and scrolled the
-                  // whole conversation sideways; there they hang from the corner that is always inside.
-                  outgoing ? 'left-2 max-narrow:left-auto max-narrow:right-2' : 'right-2',
+                  // The inner corner (D-119 §6) — but your own short bubble is narrower than the
+                  // actions, which then ran past the feed's edge and scrolled the whole conversation
+                  // sideways; on your own they hang from the corner that is always inside.
+                  'right-2',
                   // Hidden, it must not take a click meant for the words under it.
                   !on && 'pointer-events-none opacity-0',
                 )}
               >
                 <ReactMenu message={message} meId={meId} />
                 <SaveToggle message={message} />
+                <PinToggle message={message} />
                 {actions}
                 {mine && <OwnActions message={message} />}
               </div>

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: pin a message, and a channel's pins in a panel (D-130, closes #485)
+
+- **Pin** beside Save on a message, for a member of the channel: marked at once, put back with Retry
+  when refused. A pinned message says **Pinned** under its words, and **Pinned messages** in the
+  header opens the channel's pins beside the conversation — who said each, who pinned it, a reply's
+  thread, and Unpin — kept current as anyone in the channel pins or lets one go.
+
 ### Feature — 2026-10-14: a channel's pins, the API (D-130, part of #485)
 
 - `PUT`/`DELETE /api/messages/:messageId/pin` pin a message for its channel or let it go — a
