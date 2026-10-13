@@ -21,7 +21,6 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { sessionTokenFrom } from '../../platform/cookies';
-import { forgetSessions } from '../push/subscriptions';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 
 /**
@@ -167,8 +166,6 @@ export const revokeSession = async (
     .where('revoked_at', 'is', null)
     .returning('id')
     .executeTakeFirst();
-  // Its devices stop being told: a shared computer does not show the last person's notices (D-126).
-  if (revoked !== undefined) await forgetSessions(executor, [revoked.id]);
   return revoked?.id;
 };
 
@@ -189,9 +186,7 @@ export const revokeAllSessions = async (
     .where('revoked_at', 'is', null)
     .returning('id')
     .execute();
-  const ids = revoked.map((row) => row.id);
-  await forgetSessions(executor, ids);
-  return ids;
+  return revoked.map((row) => row.id);
 };
 
 /**

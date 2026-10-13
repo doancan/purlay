@@ -81,7 +81,7 @@ without disclosing it. (D-33)
 | ○ | `GET` | `/api/me` | Current user plus workspace memberships |
 | ○ | `PUT` | `/api/me/locale` | `{ locale: 'en' \| 'tr' }` (`SetLocaleRequest`) — the language the server writes the caller's notifications in (D-41, D-126); `204` |
 | ○ | `GET` | `/api/push/key` | The server's Web Push public key (`PushKeyResponse`), or `503 PUSH_UNAVAILABLE` where push is off (D-126) |
-| ○ | `POST` | `/api/push/subscriptions` | This device, as its browser's `PushSubscription` gives it, and the caller's language (`PushSubscribeRequest`); `204`. Tied to the caller's session; an endpoint another person holds moves to the caller; at most 20 devices a person, oldest dropped; a key that is no P-256 point is `400`; `503 PUSH_UNAVAILABLE` where push is off (D-126) |
+| ○ | `POST` | `/api/push/subscriptions` | This device, as its browser's `PushSubscription` gives it, and the caller's language (`PushSubscribeRequest`); `204`. Tied to the caller's live session; an endpoint another person holds moves to the caller only with the same keys, and the answer is the same either way; at most 20 devices a person, the least recently subscribed dropped; a key that is no P-256 point is `400`; `503 PUSH_UNAVAILABLE` where push is off (D-126) |
 | ○ | `POST` | `/api/push/subscriptions/remove` | `{ endpoint }` — this device stops being told; `204` whether or not it was the caller's, and another person's stays theirs (D-126) |
 | ② | `POST` | `/api/me/erase` | Anonymises the account and revokes every session. **Never cascades to messages** (D-27) |
 

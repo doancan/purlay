@@ -18,6 +18,7 @@ import {
   subscribe,
   unsubscribe,
 } from '../../modules/push/subscriptions';
+import { atomicallyOn } from '../../platform/transactions';
 import { requireSession } from './session';
 import { validated } from './validate';
 
@@ -50,7 +51,10 @@ export const subscribeDevice = async (
 ): Promise<void> => {
   const subscriber = await requireSession(database, clock, request);
   const key = serverKey(config);
-  await subscribe(database, subscriber, validated(PushSubscribeRequest, body), key);
+  const input = validated(PushSubscribeRequest, body);
+  await atomicallyOn(database)(
+    async (transaction) => await subscribe(transaction, clock, subscriber, input, key),
+  );
 };
 
 /** `POST /api/push/subscriptions/remove` — this device stops being told. */

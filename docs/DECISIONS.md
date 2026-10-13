@@ -5517,9 +5517,12 @@ people can aim.
 3. **In the person's language (D-41 kept):** `users.locale`, set by the client when the person
    subscribes and whenever they change language (`PUT /api/me/locale`).
 4. **A device belongs to a session.** A subscription carries the session it was made in: signing out
-   deletes it, and a push needs that session live — a shared computer stops showing the last
-   person's notices. An endpoint is unique across people: a browser signed into another account
-   moves to it. At most twenty devices a person.
+   deletes it, in the same transaction, and a subscription is written only while its session is
+   live — a shared computer stops showing the last person's notices. An endpoint is unique across
+   people: a browser signed into another account sends the same endpoint and the same keys, and
+   moves to it; the endpoint alone does not move it, so knowing somebody's address cannot silence
+   their device. At most twenty devices a person, the least recently subscribed dropped. The two
+   VAPID keys are checked to be one pair before the server starts.
 5. **Always shown.** Browsers penalise a push that shows nothing (Chrome's generic notice, Safari's
    revocation), so the worker always shows one, folded by channel. Not pushing while the person is
    at Purlay waits for presence (#480).

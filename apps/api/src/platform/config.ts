@@ -12,6 +12,7 @@
  * walking skeleton reachable. `CONFIG.md` publishes the whole set; this is the
  * part the application reads today, and a test checks it is a subset.
  */
+import { createECDH } from 'node:crypto';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 // Side effect: registers the string formats. TypeBox rejects every value for a
@@ -243,6 +244,8 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   ).length;
   if (vapid !== 0 && vapid !== 3) {
     problems.push('VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: set all three, or none');
+  } else if (config.VAPID_PUBLIC_KEY !== undefined && config.VAPID_PRIVATE_KEY !== undefined) {
+    problems.push(...vapidProblems(config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY));
   }
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {
@@ -277,6 +280,25 @@ const isPeriodic = (bytes: Buffer): boolean => {
 const isSequence = (bytes: Buffer): boolean => {
   const step = ((bytes[1] ?? 0) - (bytes[0] ?? 0) + 256) % 256;
   return bytes.every((byte, i) => i === 0 || byte === (((bytes[i - 1] ?? 0) + step) & 255));
+};
+
+/**
+ * The two push keys are one pair: the public key is the private key's point. Two halves of
+ * different pairs start, are handed to browsers, and have every delivery refused — so it is found
+ * here (D-126). Never quotes either value.
+ */
+const vapidProblems = (publicKey: string, privateKey: string): string[] => {
+  const pair = createECDH('prime256v1');
+  try {
+    pair.setPrivateKey(Buffer.from(privateKey, 'base64url'));
+  } catch (error) {
+    // Refused as a point on the curve: the answer to what is being checked, said as a problem.
+    if (error instanceof Error) return ['VAPID_PRIVATE_KEY: not a P-256 private key'];
+    throw error;
+  }
+  return pair.getPublicKey().equals(Buffer.from(publicKey, 'base64url'))
+    ? []
+    : ['VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY: not one pair; generate both together'];
 };
 
 /**

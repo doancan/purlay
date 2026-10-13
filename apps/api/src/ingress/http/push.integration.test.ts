@@ -5,12 +5,12 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
-import { PushKeyResponse } from '@purlay/types';
+import { PushKeyResponse, PushSubscribeRequest } from '@purlay/types';
 import { createApp } from './app';
 import { NOW, testConfig, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { PUSH_SUBSCRIPTIONS_MAX } from '../../modules/push/subscriptions';
+import { PUSH_SUBSCRIPTIONS_MAX, subscribe } from '../../modules/push/subscriptions';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -129,6 +129,81 @@ describe('integration: subscribing a device', () => {
     });
   });
 
+  test('an endpoint alone does not move it: somebody else’s keys are needed too, and the answer is the same', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'push-take-a');
+      const mallory = await aSignedInUser(db, clock, 'push-take-m');
+      await call(db, 'POST', '/api/push/subscriptions', alice, device(9));
+      const otherKeys = {
+        endpoint: 'https://push.example.com/send/9',
+        keys: { p256dh: P256DH, auth: Buffer.alloc(16, 1).toString('base64url') },
+        locale: 'en',
+      };
+      expect((await call(db, 'POST', '/api/push/subscriptions', mallory, otherKeys)).status).toBe(
+        204,
+      );
+      expect(await rows(db, alice.userId)).toEqual(['https://push.example.com/send/9']);
+      expect(await rows(db, mallory.userId)).toEqual([]);
+    });
+  });
+
+  test('a device subscribing again counts as the newest, so the bound never drops it', async () => {
+    await withRollback(async (db) => {
+      // The browser was Alice's long ago; Bob, at the bound, signs in on it and subscribes it.
+      const alice = await aSignedInUser(db, clock, 'push-again-a');
+      const bob = await aSignedInUser(db, clock, 'push-again-b');
+      const held = async (
+        who: SignedInUser,
+        endpoint: string,
+        minutesAgo: number,
+      ): Promise<void> => {
+        await db
+          .insertInto('push_subscriptions')
+          .values({
+            user_id: who.userId,
+            session_id: who.sessionId,
+            endpoint,
+            p256dh: P256DH,
+            auth: AUTH,
+            server_key: SERVER_PUBLIC,
+            created_at: new Date(NOW.getTime() - minutesAgo * 60_000),
+          })
+          .execute();
+      };
+      await held(alice, 'https://push.example.com/send/10', 24 * 60);
+      for (let n = 1; n <= PUSH_SUBSCRIPTIONS_MAX; n += 1) {
+        await held(bob, `https://push.example.com/bob/${String(n)}`, n);
+      }
+      expect((await call(db, 'POST', '/api/push/subscriptions', bob, device(10))).status).toBe(204);
+      const kept = await rows(db, bob.userId);
+      expect(kept).toHaveLength(PUSH_SUBSCRIPTIONS_MAX);
+      expect(kept).toContain('https://push.example.com/send/10');
+      expect(kept).not.toContain(`https://push.example.com/bob/${String(PUSH_SUBSCRIPTIONS_MAX)}`);
+    });
+  });
+
+  test('is refused for a session signed out since it was read: a raced sign-out leaves no device', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'push-raced');
+      await db
+        .updateTable('sessions')
+        .set({ revoked_at: NOW })
+        .where('id', '=', alice.sessionId)
+        .execute();
+      const input = Value.Parse(PushSubscribeRequest, device(11));
+      expect(
+        subscribe(
+          db,
+          clock,
+          { userId: alice.userId, sessionId: alice.sessionId },
+          input,
+          SERVER_PUBLIC,
+        ),
+      ).rejects.toMatchObject({ body: { code: 'UNAUTHENTICATED' } });
+      expect(await rows(db, alice.userId)).toEqual([]);
+    });
+  });
+
   test(`keeps at most ${String(PUSH_SUBSCRIPTIONS_MAX)} devices a person, dropping the oldest`, async () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'push-bound');
@@ -213,6 +288,15 @@ describe('integration: a device stops being told', () => {
       expect(await remove(alice, 6)).toBe(204);
       expect(await rows(db, alice.userId)).toEqual([]);
       expect(await rows(db, bob.userId)).toEqual(['https://push.example.com/send/7']);
+    });
+  });
+
+  test('signing out everywhere deletes the devices of every session', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'push-everywhere');
+      await call(db, 'POST', '/api/push/subscriptions', alice, device(12));
+      expect((await call(db, 'POST', '/auth/logout-all', alice)).status).toBeLessThan(400);
+      expect(await rows(db, alice.userId)).toEqual([]);
     });
   });
 

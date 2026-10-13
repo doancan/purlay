@@ -449,11 +449,23 @@ describe('the directory store (D-117)', () => {
   });
 });
 
-describe('Web Push keys (#78)', () => {
-  // A real pair's shape: a 65-byte uncompressed P-256 point and a 32-byte scalar, base64url.
+/** A real pair, as `bun run push:keys` would print it: a 65-byte point and its 32-byte scalar. */
+const aVapidPair = async (): Promise<{ publicKey: string; privateKey: string }> => {
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+  ]);
+  const raw = await crypto.subtle.exportKey('raw', pair.publicKey);
+  const { d } = await crypto.subtle.exportKey('jwk', pair.privateKey);
+  if (d === undefined) throw new Error('the generated key has no private scalar');
+  return { publicKey: Buffer.from(raw).toString('base64url'), privateKey: d };
+};
+
+describe('Web Push keys (#78)', async () => {
+  const one = await aVapidPair();
+  const other = await aVapidPair();
   const vapid = {
-    VAPID_PUBLIC_KEY: `B${'A'.repeat(86)}`,
-    VAPID_PRIVATE_KEY: 'A'.repeat(43),
+    VAPID_PUBLIC_KEY: one.publicKey,
+    VAPID_PRIVATE_KEY: one.privateKey,
     VAPID_SUBJECT: 'mailto:ops@example.com',
   };
 
@@ -479,5 +491,16 @@ describe('Web Push keys (#78)', () => {
     expect(
       loadConfig({ ...valid, ...vapid, VAPID_SUBJECT: 'https://chat.example.com' }).VAPID_SUBJECT,
     ).toBe('https://chat.example.com');
+  });
+
+  test('are one pair: halves of two pairs, or a scalar that is no key, refuse to start', () => {
+    const mixed = refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: other.privateKey });
+    expect(mixed).toContain('VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY: not one pair');
+    // Never the values: the private key is a secret.
+    expect(mixed).not.toContain(other.privateKey);
+    // Zero is not a private key, though it has the shape of one.
+    expect(refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: 'A'.repeat(43) })).toContain(
+      'VAPID_PRIVATE_KEY: not a P-256 private key',
+    );
   });
 });

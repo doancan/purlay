@@ -178,8 +178,10 @@ CREATE INDEX idx_push_subscriptions_user    ON push_subscriptions (user_id, crea
 CREATE INDEX idx_push_subscriptions_session ON push_subscriptions (session_id);
 ```
 
-At most 20 devices a person, the oldest dropped when a twenty-first subscribes. A session's rows go
-when it is revoked (sign-out, sign out everywhere) and, with the session, when `purgeDeadSessions`
+At most 20 devices a person, the least recently subscribed dropped when a twenty-first subscribes
+(subscribing again sets `created_at`). A row moves to another person only when they send its keys
+as well as its endpoint. A session's rows go when it is revoked (sign-out, sign out everywhere), in
+the same transaction, and, with the session, when `purgeDeadSessions`
 removes it. The endpoint and both keys are a person's: never logged (`ARCHITECTURE.md` §10).
 
 ---
