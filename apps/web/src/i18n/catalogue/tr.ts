@@ -407,6 +407,13 @@ export const tr = {
   'upload.remove': '{name}: kaldır',
   'upload.discardFailed': '{name} burada kaldırıldı, ama sunucudan kaldırılamadı.',
   'composer.mention': 'Birini an',
+  'mention.listLabel': 'Anılabilecek kişiler',
+  'mention.results': {
+    other: 'Eşleşen kişi: {count}',
+  },
+  'mention.hint.move': 'gez',
+  'mention.hint.insert': 'ekle',
+  'mention.hint.close': 'kapat',
   'composer.label': '{channel} için mesaj',
   'composer.placeholder': '{channel} için yaz',
   'composer.send': 'Gönder',

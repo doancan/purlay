@@ -455,3 +455,66 @@ test.describe('without a connection', () => {
     ]);
   });
 });
+
+test.describe('@ and a name', () => {
+  test('typing @ali offers Alice; choosing her writes her handle, and what is sent is a mention', async ({
+    page,
+    signIn,
+    room,
+    api,
+    expectNoAxe,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.pressSequentially('can you look, @ali');
+    const list = page.getByRole('listbox', { name: 'People to mention' });
+    await expect(list).toBeVisible();
+    const alice = list.getByRole('option', { name: /Alice Chen/ });
+    await expect(alice).toHaveAttribute('aria-selected', 'true');
+    await expect(box).toHaveAttribute(
+      'aria-activedescendant',
+      (await alice.getAttribute('id')) ?? 'missing',
+    );
+    // The open list is audited where it is drawn: names, roles and contrast, in this project's theme.
+    await expectNoAxe();
+    await alice.click();
+    await expect(list).toHaveCount(0);
+    await expect(box).toHaveValue('can you look, @alice ');
+    await expect(box).toBeFocused();
+    await box.pressSequentially('please?');
+    await box.press('Enter');
+    await expectDelivered(page, 'please?');
+    // Drawn as a mention: the server resolved the handle to Alice.
+    await expect(rowWith(page, 'please?').locator('[data-mention]')).toHaveText('@alice');
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([
+      'can you look, @alice please?',
+    ]);
+  });
+
+  test('Enter while the list is open chooses and does not send; Esc closes it and keeps the text', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.pressSequentially('@ali');
+    const list = page.getByRole('listbox', { name: 'People to mention' });
+    // The list is there before Enter is pressed: Enter with no list is a send, as it should be.
+    await expect(list.getByRole('option', { name: /Alice Chen/ })).toBeVisible();
+    await box.press('Enter');
+    await expect(box).toHaveValue('@alice ');
+    await box.pressSequentially('and @bo');
+    await expect(list.getByRole('option', { name: /Bob Okafor/ })).toBeVisible();
+    await box.press('Escape');
+    await expect(list).toHaveCount(0);
+    await expect(box).toHaveValue('@alice and @bo');
+    await expect(box).toBeFocused();
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([]);
+  });
+});

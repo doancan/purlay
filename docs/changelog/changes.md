@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-13: `@` offers people in the composer (D-110 §8, amended)
+
+- Typing `@` and a letter in a channel's or a thread's composer lists who a mention there would reach,
+  matched by display name or handle without case or Turkish accents; `↑` `↓` move, `Enter` or `Tab`
+  writes `@handle `, `Esc` closes the list, and `Enter` while it is open never sends.
+- A private channel offers only the people the client has seen in it; a direct message, its other person.
+
 ### Fix — 2026-10-13: unsent messages go with a channel the person lost, and say so
 
 - A message still sending, or failed, in a channel that was then archived, left on another device

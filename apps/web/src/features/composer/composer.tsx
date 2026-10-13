@@ -18,6 +18,12 @@
  * come back as a 400 (D-99 §3, D-67). The same checks run here so the person is told
  * what to change without a round trip, in the language they read.
  *
+ * **`@` and a letter offer people** (`UX.md` §5): a list of who a mention here would reach, found
+ * by name or handle, that writes `@handle` into the box. While it is open the arrows, Enter, Tab and
+ * Esc are the list's — Enter chooses and never sends. The box stays a text box and the list is
+ * named by `aria-controls` and `aria-activedescendant` on it, not a `combobox` role a `textarea` may
+ * not carry (D-110 §8).
+ *
  * It is keyed by where it writes (`draftKey`), so a channel switch is a fresh composer
  * with that place's draft and the old one's is saved as it goes.
  */
@@ -30,6 +36,7 @@ import { useEngine } from '../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
+import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
 import { IconButton } from '../../ui/icon-button';
 import { Kbd } from '../../ui/kbd';
@@ -50,6 +57,8 @@ import {
 } from './composer-text';
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
 import { draftKey, readDraft, writeDraft } from './drafts';
+import { useMentionCandidates } from './mention-candidates';
+import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
 
@@ -98,6 +107,13 @@ const Inner = ({
   const composing = useRef(false);
   const latest = useRef(text);
   latest.current = text;
+  // Where the caret is, for the `@` list: it reads what was typed up to here.
+  const [caretAt, setCaretAt] = useState(text.length);
+  // The `@` whose list Esc closed; it stays closed until a mention starts somewhere else.
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  const [active, setActive] = useState(0);
+  const listId = useId();
+  const candidates = useMentionCandidates(channelId);
 
   // Debounced: written a moment after typing stops.
   useEffect(() => {
@@ -152,6 +168,8 @@ const Inner = ({
 
   const change = (next: string): void => {
     setText(next);
+    // A new letter is a new list, and its best match is the one Enter takes.
+    setActive(0);
     // Rationed by the engine; an emptied box says nothing, and the announcement runs out (D-114).
     if (next.trim() !== '') engine.announceTyping(channelId);
     // What was wrong with the old text is not known to be wrong with the new.
@@ -176,6 +194,23 @@ const Inner = ({
     const to = box === null ? text.length : box.selectionEnd;
     const next = insertMarkdown(text, { start: at, end: to }, kind);
     inserted.current = next.selection;
+    change(next.text);
+  };
+
+  // The list is drawn only while the box has focus: a person who has moved on is not asked.
+  const mention = focused ? mentionQuery(text, caretAt) : null;
+  const suggestions =
+    mention === null || mention.start === dismissedAt ? [] : suggest(candidates, mention.query);
+  const open = suggestions.length > 0;
+  const current = Math.min(active, suggestions.length - 1);
+  const optionId = (index: number): string => `${listId}-option-${String(index)}`;
+
+  /** Somebody chosen from the list: their handle replaces what was typed after the `@`. */
+  const choose = (username: string): void => {
+    if (mention === null) return;
+    const next = insertMention(text, mention, username);
+    inserted.current = { start: next.caret, end: next.caret };
+    setCaretAt(next.caret);
     change(next.text);
   };
 
@@ -250,6 +285,29 @@ const Inner = ({
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
     // by the flag the composition events keep.
     if (event.nativeEvent.isComposing || event.key === 'Process' || composing.current) return;
+    if (open && mention !== null) {
+      const plain = !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setActive((current + step + suggestions.length) % suggestions.length);
+        return;
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && plain) {
+        // Chooses, and never sends: the message is not finished while a name is being picked.
+        event.preventDefault();
+        const chosen = suggestions[current];
+        if (chosen !== undefined) choose(chosen.username);
+        return;
+      }
+      if (event.key === 'Escape') {
+        // Closes the list and nothing else: the text stays, the focus stays, the thread stays open.
+        event.preventDefault();
+        event.stopPropagation();
+        setDismissedAt(mention.start);
+        return;
+      }
+    }
     if (event.key === 'Escape') {
       event.currentTarget.blur();
       return;
@@ -386,11 +444,66 @@ const Inner = ({
             if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
           }}
           className={cn(
-            'flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
+            'relative flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
             // Drawn inward, over the card's own edge: outside it, the gap reads as a second border.
             focused && 'outline-focus outline-focus-ring -outline-offset-focus',
           )}
         >
+          {open && (
+            <div className="absolute bottom-full left-0 z-popover mb-2 w-full max-w-dialog overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
+              <div
+                id={listId}
+                role="listbox"
+                aria-label={t('mention.listLabel')}
+                // Choosing with the mouse must not take focus from the box: typing goes on there.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                className="max-h-palette-list overflow-y-auto p-1"
+              >
+                {suggestions.map((person, index) => (
+                  <div
+                    key={person.id}
+                    id={optionId(index)}
+                    role="option"
+                    aria-selected={index === current}
+                    onClick={() => {
+                      choose(person.username);
+                    }}
+                    onPointerMove={() => {
+                      if (index !== current) setActive(index);
+                    }}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-md px-3 py-2',
+                      index === current && 'bg-accent-subtle',
+                    )}
+                  >
+                    <Avatar size="sm" name={person.displayName} username={person.username} />
+                    <span className="min-w-0 truncate text-body font-medium text-ink">
+                      {person.displayName}
+                    </span>
+                    <span className="shrink-0 font-mono text-caption text-ink-muted">
+                      @{person.username}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-4 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted">
+                <span>
+                  <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('mention.hint.move')}
+                </span>
+                <span>
+                  <Kbd>Enter</Kbd> {t('mention.hint.insert')}
+                </span>
+                <span>
+                  <Kbd>Esc</Kbd> {t('mention.hint.close')}
+                </span>
+              </div>
+            </div>
+          )}
+          <VisuallyHidden role="status" aria-live="polite">
+            {open ? t('mention.results', { count: suggestions.length }) : ''}
+          </VisuallyHidden>
           <div className={cn('flex gap-2 px-3', compact ? 'items-center py-2' : 'pt-3')}>
             <textarea
               data-composer=""
@@ -400,10 +513,21 @@ const Inner = ({
               aria-label={t('composer.label', { channel: channelName })}
               aria-invalid={error === null ? undefined : true}
               aria-describedby={hintsId}
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              aria-controls={open ? listId : undefined}
+              aria-activedescendant={open ? optionId(current) : undefined}
               placeholder={t('composer.placeholder', { channel: channelName })}
               className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
               onChange={(event) => {
-                change(event.target.value);
+                const { value, selectionStart } = event.target;
+                change(value);
+                setCaretAt(selectionStart);
+                // The `@` that was dismissed is gone: the next one opens again.
+                if (mentionQuery(value, selectionStart) === null) setDismissedAt(null);
+              }}
+              onSelect={(event) => {
+                setCaretAt(event.currentTarget.selectionStart);
               }}
               onKeyDown={onKeyDown}
               onPaste={onPaste}

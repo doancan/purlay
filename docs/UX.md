@@ -272,7 +272,7 @@ block, a mention — and each only *inserts markdown* that the keys below also p
 | ` ``` ` then `Enter` | Opens a code block; `Enter` inside it inserts a newline, `Cmd/Ctrl+Enter` sends |
 | `↑` on an empty composer | Edit your last message |
 | `Esc` | Cancel edit / close the thread panel / close palette |
-| `@` | Member autocomplete — **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
+| `@` and a letter | Member autocomplete: who a mention here would reach, found by display name or handle without case or accents; `↑` `↓` move, `Enter` or `Tab` writes `@handle`, `Esc` closes it, and `Enter` while it is open never sends (D-110 §8). **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
 the upload is still in flight. Pasting over ~12 lines of text is inserted as a fenced block

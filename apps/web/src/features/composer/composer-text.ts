@@ -102,8 +102,8 @@ export type MarkdownKind = 'bold' | 'code' | 'mention';
  * Bold wraps what is selected and keeps it selected; with nothing selected the caret waits
  * between the markers. A code block opens and closes on lines of its own — a fence glued to a
  * sentence is not a fence — around the selection or around an empty line for the caret. A mention
- * is an `@` after a space, so it never glues itself to the word before; the person types the name
- * (there is no member autocomplete yet, `UX.md` §5).
+ * is an `@` after a space, so it never glues itself to the word before; the first letter typed after
+ * it opens the list of people (`mention-suggest.ts`, `UX.md` §5).
  */
 export const insertMarkdown = (
   text: string,

@@ -4768,6 +4768,33 @@ state `UX.md` §8 requires.
    *Amended 2026-10-12 (#370):* a fourth, **Attach a file**, beside them. It inserts no markdown: it
    picks files to upload (D-109), as pasting and dropping one do. It is no formatting control, so the
    rule that the composer has no WYSIWYG stands.
+   *Amended 2026-10-13 — the `@` list (`UX.md` §5).* The mention button and a typed `@` are now
+   followed, at the first letter, by a list of people, after the Superdesign *new-message-picker*
+   suggestions. Three choices in it were not obvious:
+   - **Who is offered is who the server would tell** (`resolveMentions`, D-34). A public channel: the
+     workspace, from `GET /api/workspaces/:workspaceId/members`, which the sidebar has already loaded.
+     A direct message: its other person (`Channel.peer`). A private channel: **only the people the
+     client can show are in it** — who wrote, or was named, in what it has loaded of the channel and
+     its threads, and is still in the workspace. Never the writer, never a handle the broadcast
+     refusal would catch (D-12). Somebody in a private channel who has said nothing yet is not
+     offered, and is still reached by typing their handle.
+   - **The text box stays a text box.** The WAI-ARIA combobox pattern puts `role="combobox"` and
+     `aria-expanded` on the input, and HTML allows neither on a `textarea` — axe reports both
+     (`aria-allowed-role`, `aria-allowed-attr`; run on the component before this was written). The
+     `textarea` carries what a `textbox` may: `aria-autocomplete="list"`, `aria-haspopup="listbox"`,
+     and while the list is open `aria-controls` and `aria-activedescendant` naming the current
+     `option`; a polite status says how many match. Focus never leaves the box.
+   - **While it is open the list owns ↑ ↓ Enter Tab and Esc.** Enter chooses and never sends; Esc
+     closes that `@`'s list and nothing else. So that it does not take Enter for nothing, it opens
+     only for a letter after the `@`, and closes once a handle is typed in full and matches nobody else.
+
+   *Rejected:* a channel member endpoint (`GET /api/channels/:channelId/members`) so a private channel
+   could offer everyone in it — a new contract and a new isolation case, where what the client holds
+   covers public channels and DMs exactly and private channels conservatively; revisit if a private
+   channel's list is found missing its quiet members. The whole workspace in a private channel — it
+   offers names the server then drops without a word (`CONTRIBUTING.md` §6.4). `role="combobox"` on the
+   `textarea` with the audit rule switched off for it — an exception to satisfy a pattern HTML forbids
+   (D-48). Opening on a bare `@` — punctuation often enough that a list taking Enter would swallow a send.
 9. **The day** is a label at the column's left with a rule after it, not a centred chip. Amends UX §3.
 
 **Not taken from the brief, and why.**
