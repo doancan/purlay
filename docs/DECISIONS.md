@@ -5394,7 +5394,7 @@ the way they speak, and the fix it asked for was always the same one the field c
 **Cost of reversing:** a role check and a count in `modules/channels/settings.ts`, two rows of the
 permission table, and this paragraph; no data changes shape.
 
-### D-124. What is the person's and what is the workspace's — #495, #496
+### D-124. What is the person's and what is the workspace's — #495, #496, #497
 
 Deep Work started only from `Cmd/Ctrl+Shift+D`, for a fixed hour, though the API takes any instant
 within `DEEP_WORK_MAX_HOURS` (D-108). The sidebar's foot showed who was signed in and did nothing;
@@ -5438,6 +5438,11 @@ in the owner's standing instruction to decide and proceed, and open to their rev
 7. **Every member's tabs hear it as `WORKSPACE_UPDATED`, on each member's own `user:` topic, carrying
    no state**: the client reads its memberships again. The members are read as the rename commits, so
    somebody removed a moment before is not told. `DELETE` of a workspace stays unbuilt (①).
+8. **The workspace menu opens from the workspace's name at the top of the sidebar**, with a chevron,
+   as the design draws it; the rail's tile stays a second door to the same menu — one component, one
+   list of items, as the jump field and `Cmd/Ctrl+K` are two doors to one palette. It gains **Create
+   workspace…**, anybody's (the API lets anybody make one), which is the first-run form of `/` in a
+   dialog: `/` sends a person with a workspace straight to it, so until now a second could not be made.
 
 **Rejected.**
 

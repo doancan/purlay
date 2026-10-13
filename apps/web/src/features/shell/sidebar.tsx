@@ -1,5 +1,5 @@
 /**
- * The sidebar (`UX.md` §2, D-110): the workspace's name, the way into the palette, the channels,
+ * The sidebar (`UX.md` §2, D-110): the workspace's name, which opens the workspace menu, the way into the palette, the channels,
  * the people, and — at the foot — who you are, which opens the account menu (D-124).
  *
  * Flat, `w-sidebar` wide, in the navigation tone it shares with the rail, and divided from the
@@ -14,8 +14,8 @@ import { cn } from '../../ui/cn';
 import { ChannelList } from '../sidebar/channel-list';
 import { JumpField } from '../sidebar/jump-field';
 import { PeopleList } from '../sidebar/people-list';
+import { WorkspaceMenu } from '../sidebar/workspace-menu';
 import { AccountMenu } from './account-menu';
-import { useWorkspace } from './workspace';
 
 interface SidebarProps {
   /** Inside the narrow window's overlay: as tall as the panel rather than as tall as the page's row. */
@@ -24,7 +24,6 @@ interface SidebarProps {
 
 export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element => {
   const { t } = useI18n();
-  const { workspace } = useWorkspace();
   return (
     <aside
       aria-label={t('sidebar.label')}
@@ -36,7 +35,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
       )}
     >
       <div className="h-drag shrink-0" />
-      <p className="truncate px-4 py-3 text-title text-nav-ink">{workspace.name}</p>
+      <WorkspaceMenu door="name" />
       <div className="px-3 pb-3">
         <JumpField />
       </div>

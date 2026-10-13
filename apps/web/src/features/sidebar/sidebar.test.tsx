@@ -339,12 +339,99 @@ describe('the workspace menu', () => {
     expect(items).toEqual([
       'acme-eng',
       'side-project',
+      'Create workspace…',
       'Invite people…',
       'Members…',
       'GitHub connection…',
       'Audit log…',
       'Workspace settings…',
     ]);
+  });
+
+  test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
+    const view = await open();
+    const sidebar = within(view.getByRole('complementary'));
+    const door = sidebar.getByRole('button', { name: 'acme-eng' });
+    expect(door.getAttribute('aria-haspopup')).toBe('menu');
+    await person().click(door);
+    expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'acme-eng',
+      'Create workspace…',
+      'Invite people…',
+      'Members…',
+      'GitHub connection…',
+      'Audit log…',
+      'Workspace settings…',
+    ]);
+  });
+
+  test('Create workspace… makes another with the first-run form, and goes there with a way Back', async () => {
+    const asked: unknown[] = [];
+    let made = false;
+    const session = aSession();
+    const view = await open(
+      aSignedInApi({
+        me: () =>
+          Promise.resolve(
+            made
+              ? {
+                  ...session,
+                  memberships: [
+                    ...session.memberships,
+                    {
+                      workspace: {
+                        id: IDS.browse,
+                        name: 'New team',
+                        slug: 'new-team',
+                        avatarUrl: null,
+                      },
+                      role: 'owner' as const,
+                      joinedAt: '2026-09-09T12:00:00.000Z',
+                      deepWorkUntil: null,
+                    },
+                  ],
+                }
+              : session,
+          ),
+        createWorkspace: (input) => {
+          asked.push(input);
+          made = true;
+          return Promise.resolve({
+            id: IDS.browse,
+            name: input.name,
+            slug: input.slug,
+            avatarUrl: null,
+          });
+        },
+      }),
+    );
+    const before = view.world.history.stack.length;
+    await person().click(
+      within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' }),
+    );
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
+    await expectNoAxeViolations(dialog);
+    await person().type(within(dialog).getByLabelText('Name'), 'New team');
+    await person().click(within(dialog).getByRole('button', { name: 'Create workspace' }));
+    await settle();
+    expect(asked).toEqual([{ name: 'New team', slug: 'new-team' }]);
+    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
+    expect(here(view)).toMatch(/^\/w\/new-team/);
+    expect(view.world.history.stack.length).toBeGreaterThan(before);
+  });
+
+  test('a dialog the menu opened gives focus back to the name that opened the menu, when it is closed', async () => {
+    const view = await open();
+    const door = within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' });
+    await person().click(door);
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
+    expect(dialog.isConnected).toBe(false);
+    expectFocusOn(door);
   });
 
   test('choosing another goes to it', async () => {

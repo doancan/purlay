@@ -196,6 +196,7 @@ export const tr = {
   'workspace.nameInvalid':
     'Görülebilen bir ad kullan — harf, rakam ya da emoji — en fazla {max} karakter, denetim karakteri olmadan.',
   'workspace.settings.failed': 'Ad değiştirilemedi.',
+  'workspace.create.entry': 'Çalışma alanı oluştur…',
   'workspace.create.title': 'Çalışma alanı oluştur',
   'workspace.create.body':
     'Çalışma alanı, bir ekibin konuştuğu yerdir. Diğerlerini sonra davet edebilirsin.',

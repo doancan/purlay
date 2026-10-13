@@ -198,6 +198,7 @@ export const en = {
   'workspace.nameInvalid':
     'Use a name people can see — letters, numbers or an emoji — at most {max} characters, without control characters.',
   'workspace.settings.failed': 'The name was not changed.',
+  'workspace.create.entry': 'Create workspace…',
   'workspace.create.title': 'Create a workspace',
   'workspace.create.body': 'A workspace is where one team talks. You can invite the others after.',
   'workspace.create.name': 'Name',

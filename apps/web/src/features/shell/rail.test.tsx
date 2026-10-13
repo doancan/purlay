@@ -178,13 +178,13 @@ describe('the open questions', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab runs the tile and the four places, then the sidebar', async () => {
+  test('Tab runs the tile and the four places, then the sidebar from the workspace’s name', async () => {
     const view = await open();
     act(() => {
       within(places(view)).getByRole('button', { name: 'Switch workspace' }).focus();
     });
     const names: string[] = [];
-    for (let step = 0; step < 5; step++) {
+    for (let step = 0; step < 6; step++) {
       await person().tab();
       const active = document.activeElement;
       names.push(
@@ -196,6 +196,7 @@ describe('the keyboard', () => {
       'Inbox',
       'Open questions',
       'Search',
+      'acme-eng',
       expect.stringMatching(/^Jump to…/) as unknown as string,
     ]);
   });
