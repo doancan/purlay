@@ -60,7 +60,8 @@ export interface Actions {
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
   /** In by an invitation's token (D-115); answers the membership, already listed by `/api/me`. */
   readonly joinWorkspace: (token: string) => Promise<Membership>;
-  readonly signOut: () => Promise<void>;
+  /** This session, or — `everywhere` — every session the person holds, this one with them. */
+  readonly signOut: (scope?: 'here' | 'everywhere') => Promise<void>;
 }
 
 export const createActions = (
@@ -190,8 +191,8 @@ export const createActions = (
       await client.invalidateQueries({ queryKey: keys.me });
       return membership;
     },
-    signOut: async (): Promise<void> => {
-      await api.signOut();
+    signOut: async (scope = 'here'): Promise<void> => {
+      await (scope === 'everywhere' ? api.signOutEverywhere() : api.signOut());
       // Nothing cached belongs to the next person to sign in on this page — nor does anything
       // they wrote that the browser kept: a draft is keyed by channel and thread ids alone, so
       // the next person opening the same conversation would otherwise find it.

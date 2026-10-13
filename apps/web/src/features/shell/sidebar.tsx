@@ -1,6 +1,6 @@
 /**
  * The sidebar (`UX.md` §2, D-110): the workspace's name, the way into the palette, the channels,
- * the people, and — at the foot — who you are.
+ * the people, and — at the foot — who you are, which opens the account menu (D-124).
  *
  * Flat, `w-sidebar` wide, in the navigation tone it shares with the rail, and divided from the
  * conversation by one hairline. Sections scroll together when there are more channels than the
@@ -10,12 +10,11 @@
  * it drops the hairline: the dialog is the edge there.
  */
 import { useI18n } from '../../i18n/i18n-provider';
-import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
-import { useSession } from '../session/session';
 import { ChannelList } from '../sidebar/channel-list';
 import { JumpField } from '../sidebar/jump-field';
 import { PeopleList } from '../sidebar/people-list';
+import { AccountMenu } from './account-menu';
 import { useWorkspace } from './workspace';
 
 interface SidebarProps {
@@ -25,7 +24,6 @@ interface SidebarProps {
 
 export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element => {
   const { t } = useI18n();
-  const { user } = useSession();
   const { workspace } = useWorkspace();
   return (
     <aside
@@ -50,12 +48,8 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           <PeopleList />
         </div>
       </div>
-      <footer className="flex shrink-0 items-center gap-3 border-t-hairline border-nav-border px-3 py-3">
-        <Avatar size="md" name={user.displayName} username={user.username} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-label font-semibold text-nav-ink">{user.displayName}</p>
-          <p className="truncate font-mono text-caption text-nav-ink-muted">{`@${user.username}`}</p>
-        </div>
+      <footer className="shrink-0 border-t-hairline border-nav-border p-1">
+        <AccountMenu />
       </footer>
     </aside>
   );

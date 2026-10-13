@@ -1,24 +1,18 @@
 /**
- * The workspace tile at the top of the rail: which workspace this is, a way to another, and who
- * is signed in — one menu (D-110). The rail holds the tile because a person is in one workspace at
- * a time (`UX.md` §2): one tile, not a column of them.
+ * The workspace tile at the top of the rail: which workspace this is, a way to another, and what
+ * an owner or an admin does to it — one menu (D-110). The rail holds the tile because a person is
+ * in one workspace at a time (`UX.md` §2): one tile, not a column of them. Who is signed in, and
+ * signing out, are the account menu's at the sidebar's foot (D-124).
  *
  * Switching is navigation to `/w/:slug`; the workspace the address names is the source of
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
- * Signing out asks the server and then forgets the page's cache (`actions.signOut`) before
- * leaving, so the next person on this screen inherits nothing; `replace` keeps Back from
- * returning to a page that would only bounce to sign-in. A sign-out the server refuses is a
- * toast and the person stays where they are: signed in, and told.
  */
 import { useState } from 'react';
-import { useActions } from '../../data/actions-provider';
-import { useDescribeFailure } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { initialsOf } from '../../ui/avatar';
-import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
-import { useToast } from '../../ui/toast';
+import { Menu, MenuItem, MenuLabel } from '../../ui/menu';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { AuditDialog } from './audit-dialog';
@@ -29,11 +23,8 @@ import { MembersDialog } from './members-dialog';
 export const WorkspaceMenu = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { user, memberships } = useSession();
-  const { signOut } = useActions();
+  const { memberships } = useSession();
   const { navigate } = useRoute();
-  const { show } = useToast();
-  const describe = useDescribeFailure();
   const [inviting, setInviting] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -109,25 +100,6 @@ export const WorkspaceMenu = (): React.JSX.Element => {
             {t('audit.entry')}
           </MenuItem>
         )}
-        <MenuSeparator />
-        <MenuLabel>{t('sidebar.signedInAs', { name: user.displayName })}</MenuLabel>
-        <MenuItem
-          glyph="sign-out"
-          onSelect={() => {
-            // A refused sign-out leaves the person signed in and says so; going to the sign-in
-            // screen anyway would bounce straight back and look like nothing happened.
-            void signOut().then(
-              () => {
-                navigate(href('signIn'), { replace: true });
-              },
-              (error: unknown) => {
-                show({ message: `${t('failure.signOut')} ${describe(error)}` });
-              },
-            );
-          }}
-        >
-          {t('user.signOut')}
-        </MenuItem>
       </Menu>
       <InviteDialog open={inviting} onOpenChange={setInviting} />
       <GitHubDialog open={connecting} onOpenChange={setConnecting} />

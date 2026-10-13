@@ -76,7 +76,6 @@ export const en = {
 
   // ── Sidebar chrome ──────────────────────────────────────────────────────
   'sidebar.workspaces': 'Workspaces',
-  'sidebar.signedInAs': 'Signed in as {name}',
   'sidebar.browse': 'Browse channels',
   'sidebar.questions.many': '99+',
   'sidebar.unread': 'unread',
@@ -583,6 +582,11 @@ export const en = {
   'user.menu': 'Account',
   'user.signOut': 'Sign out',
   'user.signOutEverywhere': 'Sign out everywhere',
+  'user.signOutEverywhere.entry': 'Sign out everywhere…',
+  'user.signOutEverywhere.title': 'Sign out everywhere?',
+  'user.signOutEverywhere.body':
+    'Every browser and device signed in as you is signed out, this one included. You sign in again with GitHub.',
+  'user.menuFor': 'Account: {name}',
 
   // ── Command palette (D-98) ──────────────────────────────────────────────
   'palette.title': 'Command palette',

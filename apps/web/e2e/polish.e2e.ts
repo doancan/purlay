@@ -184,7 +184,7 @@ test.describe('readable, in whichever theme this project is', () => {
     await page.keyboard.press('Escape');
 
     await reachSidebar();
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: /^Account: / }).click();
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
     await expectNoAxe(menu);

@@ -41,14 +41,14 @@ const root = (n: number): Message =>
   });
 
 describe('the rail', () => {
-  test('holds the switcher, the four places and settings, each named', async () => {
+  test('holds the switcher and the four places, each named, and no gear: preferences are the account menu’s', async () => {
     const view = await open();
     const rail = within(places(view));
     expect(rail.getByRole('button', { name: 'Switch workspace' })).toBeDefined();
     expect(
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
     ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search']);
-    expect(rail.getByRole('button', { name: 'Settings' })).toBeDefined();
+    expect(rail.queryByRole('button', { name: 'Settings' })).toBeNull();
   });
 
   test('the workspace tile shows its initials and opens the switcher', async () => {
@@ -56,7 +56,10 @@ describe('the rail', () => {
     const tile = within(places(view)).getByRole('button', { name: 'Switch workspace' });
     expect(tile.textContent).toBe('AE');
     await person().click(tile);
-    expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toContain('Sign out');
+    const items = view.getAllByRole('menuitem').map((item) => item.textContent);
+    expect(items).toContain('acme-eng');
+    // Signing out is the person's, in the account menu, not the workspace's (D-124).
+    expect(items).not.toContain('Sign out');
   });
 
   test.each([
@@ -175,13 +178,13 @@ describe('the open questions', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab runs the tile, the four places and settings, then the sidebar', async () => {
+  test('Tab runs the tile and the four places, then the sidebar', async () => {
     const view = await open();
     act(() => {
       within(places(view)).getByRole('button', { name: 'Switch workspace' }).focus();
     });
     const names: string[] = [];
-    for (let step = 0; step < 6; step++) {
+    for (let step = 0; step < 5; step++) {
       await person().tab();
       const active = document.activeElement;
       names.push(
@@ -193,7 +196,6 @@ describe('the keyboard', () => {
       'Inbox',
       'Open questions',
       'Search',
-      'Settings',
       expect.stringMatching(/^Jump to…/) as unknown as string,
     ]);
   });

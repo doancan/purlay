@@ -412,6 +412,9 @@ describe('the endpoints', () => {
     const out = harness(null);
     await out.api.signOut();
     expect(out.calls[0]).toMatchObject({ method: 'POST', url: '/auth/logout' });
+    const everywhere = harness(null);
+    await everywhere.api.signOutEverywhere();
+    expect(everywhere.calls[0]).toMatchObject({ method: 'POST', url: '/auth/logout-all' });
   });
 
   test('an abandoned read carries the signal', async () => {

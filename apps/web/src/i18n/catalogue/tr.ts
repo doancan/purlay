@@ -74,7 +74,6 @@ export const tr = {
   },
   // ── Sidebar chrome ──────────────────────────────────────────────────────
   'sidebar.workspaces': 'Çalışma alanları',
-  'sidebar.signedInAs': '{name} olarak giriş yapıldı',
   'sidebar.browse': 'Kanallara göz at',
   'sidebar.questions.many': '99+',
   'sidebar.unread': 'okunmamış',
@@ -567,6 +566,11 @@ export const tr = {
   'user.menu': 'Hesap',
   'user.signOut': 'Çıkış yap',
   'user.signOutEverywhere': 'Her yerden çıkış yap',
+  'user.signOutEverywhere.entry': 'Her yerden çıkış yap…',
+  'user.signOutEverywhere.title': 'Her yerden çıkış yapılsın mı?',
+  'user.signOutEverywhere.body':
+    'Senin adınla giriş yapılmış her tarayıcı ve cihazdan, bu da dahil, çıkış yapılır. Yeniden GitHub ile giriş yaparsın.',
+  'user.menuFor': 'Hesap: {name}',
 
   // ── Komut paleti (D-98) ─────────────────────────────────────────────────
   'palette.title': 'Komut paleti',

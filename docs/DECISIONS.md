@@ -5397,8 +5397,11 @@ permission table, and this paragraph; no data changes shape.
 ### D-124. What is the person's and what is the workspace's — #495
 
 Deep Work started only from `Cmd/Ctrl+Shift+D`, for a fixed hour, though the API takes any instant
-within `DEEP_WORK_MAX_HOURS` (D-108). Decided in the owner's standing instruction to decide and proceed,
-and open to their reversal.
+within `DEEP_WORK_MAX_HOURS` (D-108). The sidebar's foot showed who was signed in and did nothing;
+signing out was an item of the workspace menu, though it is not the workspace's; and *sign out
+everywhere* (`POST /auth/logout-all`, the capability D-11 chose database-backed sessions for) had no
+door at all. The design (`frontend-feed.html`) puts an account control at the sidebar's foot. Decided
+in the owner's standing instruction to decide and proceed, and open to their reversal.
 
 **Decided.**
 
@@ -5408,21 +5411,36 @@ and open to their reversal.
    the next morning in the person's own time — the coming morning when it is chosen before five, as
    the night is not over then — and never later than the server's bound less five minutes, so a clock
    here a little ahead of the server's cannot turn it into a refusal.
-   `Cmd/Ctrl+Shift+D` still starts it for an hour; the command palette offers every while, and while
-   it is on, its end.
+   `Cmd/Ctrl+Shift+D` still starts it for an hour; the command palette and the account menu offer
+   every while, and while it is on, its end — the menu with until when and the minutes left.
 2. **The browser tests that end a person's sessions, or change their Deep Work, act as outsiders.** The
    demo seed makes two people in no workspace, each signed in twice (`demo-seed.ts`); a test makes a
    workspace of its own for one of them. Done as one of the four seeded people, Deep Work would quiet
    the badges other tests photograph, and signing out everywhere would revoke the session every other
    test of the run signs in with.
+3. **The sidebar's foot is the account menu.** The whole row — avatar, name, `@handle`, and a
+   preferences glyph — is one button, and what it opens is everything that is the person's rather than
+   the workspace's: Deep Work, the theme, the language, the shortcut reference, *Sign out* and *Sign out
+   everywhere*.
+4. **Theme, language and the shortcut reference move there; the rail's gear goes.** One home each
+   (`CONTRIBUTING.md` §6.1): mirrored on the rail they would be two doors kept in step by nobody, and a
+   gear left with nothing in it is a door to a door. The command palette keeps offering them, as it
+   offers everything — it is the product's search over its actions, not a second menu. The gallery,
+   which has no account, wraps the *same* items (`PreferenceItems`) in a menu of its own.
+5. **Signing out everywhere asks first.** It ends sessions on devices that are not in front of the
+   person, so it is a dialog with the choice named on its button, and a refusal is a toast with the
+   person still signed in — as signing out here already was.
 
 **Rejected.**
 
 - *A submenu for the durations, or a picker for any time.* Each is a new primitive (D-52) for four
   choices; the server's bound already makes "any time" mean "any time today or tomorrow".
+- *Keeping Sign out in the workspace menu as well.* Two homes for one act.
+- *A Settings page.* Five choices fit in a menu; a page is a route, a layout and a back button for them.
 
-**Cost of reversing:** the choices in `deep-work.tsx`, the palette's Deep Work items, the seed's
-outsiders, and this decision. No contract changes: the endpoint took any instant already.
+**Cost of reversing:** the choices in `deep-work.tsx`, `account-menu.tsx`, the footer and the rail's
+foot, the palette's Deep Work items, the seed's outsiders, and this decision. No contract changes: both
+endpoints existed.
 
 ---
 

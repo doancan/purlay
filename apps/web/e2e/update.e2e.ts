@@ -21,7 +21,7 @@ test.describe('after a deployment', () => {
     await page.route('**/assets/tr-*.js', (route) => route.fulfill({ status: 404, body: '' }));
 
     await openNav(page);
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: /^Account: / }).click();
     await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
 
     // Narrow, the navigation is a modal over the page: the person closes it to reach the page.
@@ -51,7 +51,7 @@ test.describe('after a deployment', () => {
     await shellReady(page);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await openNav(page);
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: /^Account: / }).click();
     await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'tr');
   });

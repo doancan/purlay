@@ -343,9 +343,7 @@ describe('the workspace menu', () => {
       'Members…',
       'GitHub connection…',
       'Audit log…',
-      'Sign out',
     ]);
-    expect(view.getByText('Signed in as Dogancan')).toBeDefined();
   });
 
   test('choosing another goes to it', async () => {
@@ -358,67 +356,6 @@ describe('the workspace menu', () => {
     await person().click(view.getByRole('button', { name: 'Switch workspace' }));
     await person().click(view.getByRole('menuitem', { name: 'side-project' }));
     expect(here(view)).toBe('/w/side');
-  });
-
-  test('signing out asks, forgets the page, and goes to sign-in without a way Back', async () => {
-    let signedOut = false;
-    const api = aSignedInApi({
-      me: () =>
-        signedOut
-          ? Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'))
-          : Promise.resolve(aSession()),
-      signOut: () => {
-        signedOut = true;
-        return Promise.resolve();
-      },
-    });
-    const view = await open(api);
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
-    await settle();
-    expect(signedOut).toBe(true);
-    expect(here(view)).toBe('/sign-in');
-    expect(view.world.history.stack).toEqual(['/sign-in']);
-  });
-});
-
-describe('signing out, when it goes wrong or goes right', () => {
-  test('a refused sign-out says so, in words that fit the cause, and leaves the person where they were', async () => {
-    const api = aSignedInApi({
-      signOut: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
-    });
-    const view = await open(api);
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
-    await settle();
-    expect(
-      view.getByText("Couldn't sign you out. Check your connection and try again."),
-    ).toBeDefined();
-    expect(here(view)).not.toBe('/sign-in');
-  });
-
-  test('forgets what the browser kept for this person — drafts, the last channel, unsent messages — and keeps the theme', async () => {
-    const view = await open(aSignedInApi({ signOut: () => Promise.resolve() }));
-    const { storage } = view.world;
-    storage.setItem('purlay.draft.c1', 'half a thought');
-    storage.setItem('purlay.draft.c1.t9', 'half a reply');
-    storage.setItem('purlay.lastChannel.w1', 'c1');
-    storage.setItem('purlay.pending.u1', '[]');
-    storage.setItem('purlay.theme', 'dark');
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
-    await settle();
-    expect(Object.keys(storage.data)).toEqual(['purlay.theme']);
-  });
-
-  test('a refused sign-out forgets nothing: the person is still signed in with their drafts', async () => {
-    const api = aSignedInApi({ signOut: () => Promise.reject(new ApiError(500, 'INTERNAL', 'x')) });
-    const view = await open(api);
-    view.world.storage.setItem('purlay.draft.c1', 'keep me');
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
-    await settle();
-    expect(view.world.storage.data['purlay.draft.c1']).toBe('keep me');
   });
 });
 
@@ -449,15 +386,15 @@ describe('the jump field', () => {
 });
 
 describe('the footer', () => {
-  test('says who you are, and nothing else: settings live on the rail', async () => {
+  test('says who you are, and is the one button that opens the account menu', async () => {
     const view = await open();
     const footer = view.getByRole('contentinfo');
     expect(footer.textContent).toContain('Dogancan');
     expect(footer.querySelector('[aria-hidden="true"].size-avatar')?.textContent).toBe('DO');
     // The hint moved to the jump field above; the footer no longer carries it.
     expect(footer.querySelector('kbd')).toBeNull();
-    expect(footer.querySelector('button')).toBeNull();
     expect(footer.textContent).toContain('@dogancan');
+    expect(within(footer).getByRole('button').getAttribute('aria-label')).toBe('Account: Dogancan');
   });
 });
 
