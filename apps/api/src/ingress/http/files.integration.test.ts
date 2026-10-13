@@ -198,7 +198,7 @@ describe('integration: a channel’s files', () => {
 
       expect(one.data.map((file) => file.attachment.id)).toEqual([
         ...newer.files.toReversed(),
-        older.files[2],
+        older.files[2] ?? '',
       ]);
       expect(one.nextCursor).toBe(older.files[2] ?? null);
       expect(two.data.map((file) => file.attachment.id)).toEqual(
