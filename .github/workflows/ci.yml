@@ -53,6 +53,16 @@ jobs:
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: bun run check:pr "$PULL_REQUEST"
 
+      # Every outside contribution under the contributor licence agreement (D-24, D-145): its
+      # author has signed, and nobody signs for anybody else. Part of a required job, so an
+      # unsigned pull request cannot be merged.
+      - name: the author has signed the contributor licence agreement
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: bun run check:cla "$PULL_REQUEST"
+
       - name: the branch is named the way CONTRIBUTING.md §8 says
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
