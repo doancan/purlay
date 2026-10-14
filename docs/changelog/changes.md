@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-14: forms are plain controlled fields (D-142, closes #582)
+
+- `CONTRIBUTING.md` §4 now says what the client does: forms are plain controlled fields, validated by
+  the contract at the server, with a refusal shown on the field. It no longer names `react-hook-form`
+  and `zod`, which no form used and which were never dependencies.
+
 ### Fix — 2026-10-14: a thread's panel never leaves focus on nothing (closes #555)
 
 - Opening a thread moves focus to the panel's heading at once, even while its root is still being

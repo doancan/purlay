@@ -158,7 +158,9 @@ Trade-offs we knowingly accepted: `ARCHITECTURE.md` §2.
 - **Headless primitives for dialog, menu, combobox, tooltip and popover** (Radix). Focus
   management and ARIA are where hand-written components fail silently. Everything else is written
   here. (D-52)
-- Forms use `react-hook-form` + `zod`.
+- Forms are plain controlled fields. What a field may hold is the contract's TypeBox schema, checked
+  by the server, and a refusal is said on the field it names (`VALIDATION_FAILED`'s `fields`). There
+  is no client-side copy of a schema: it would be a second copy of each shape (§1.4). (D-142)
 - **Accessibility is not optional:** keyboard navigation, visible focus, WCAG AA contrast,
   labels on interactive controls. This product is keyboard-driven; there is no excuse.
 - **The supported browsers are named once**, as `browserslist` in `apps/web/package.json`. A web
