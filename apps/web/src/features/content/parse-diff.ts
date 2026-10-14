@@ -8,7 +8,7 @@
  * numbers; a line it cannot place is kept as context rather than dropped — nothing pasted is lost.
  */
 
-export type DiffLineKind = 'context' | 'added' | 'removed';
+type DiffLineKind = 'context' | 'added' | 'removed';
 
 export interface DiffLine {
   readonly kind: DiffLineKind;
