@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: the production stack comes up with one command (D-144, closes #76)
+
+- `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait` is now the
+  whole installation. A one-shot `storage-init` service prepares the object store through Garage's
+  admin API on every `up`, doing only what is missing, and checks that the bucket refuses anonymous
+  reads. The API and the scheduler wait for it. One new secret is needed: `GARAGE_ADMIN_TOKEN`.
+  `scripts/production-init.sh` is no longer needed, and is kept for an existing stack. The README has a
+  self-hosting section.
+- Fixed: the production image did not build since #539, because the Dockerfile did not copy the push
+  worker's source.
+
 ### Docs — 2026-10-14: what personal data an instance holds, and the operator's runbooks (D-28, closes #85)
 
 - New `docs/DATA.md`, for the operator who runs an instance:

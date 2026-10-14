@@ -2,7 +2,9 @@
 # behind TLS (#248, D-94, D-73).
 #
 #   docker compose -f docker-compose.production.yml --env-file production.env up -d --wait
-#   scripts/production-init.sh            # once: the storage layout, bucket and key
+#
+# That is the whole of it (#76): the database migrates as the API starts, and the
+# one-shot `storage-init` prepares the object store before it does.
 #
 # **Its only inputs are variables.** The ones the application reads are the
 # tables in docs/CONFIG.md; the few the stack itself needs (the image, the
@@ -87,9 +89,33 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # The store is prepared before the API can be asked to use it.
+      storage-init:
+        condition: service_completed_successfully
+    # The image's own HEALTHCHECK (readiness) applies; compose adds nothing.
+
+  # Prepares the object store on every `up`, then exits (#76, D-144): the node's
+  # place in the layout, the bucket, the application's key and its rights, each only
+  # if missing, through Garage's admin API — and fails, holding the API back, if an
+  # anonymous read of the bucket is not refused. The API image, with only the
+  # variables it needs.
+  storage-init:
+    <<: *application
+    command: ['apps/api/src/cli/storage-init.ts']
+    restart: 'no'
+    environment:
+      GARAGE_ADMIN_URL: http://garage:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?set GARAGE_ADMIN_TOKEN (openssl rand -hex 32)}
+      S3_ENDPOINT: http://garage:3900
+      S3_BUCKET: ${S3_BUCKET:-purlay-attachments}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+    depends_on:
       garage:
         condition: service_healthy
-    # The image's own HEALTHCHECK (readiness) applies; compose adds nothing.
+    # It is no server: the image's check asks a port this container never opens.
+    healthcheck:
+      disable: true
 
   # The scheduled jobs (D-30): one container however many API nodes there are, so a
   # job runs once, and shipped here so it is installed by `up`, not remembered. Each
@@ -141,6 +167,7 @@ services:
     logging: *logging
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?set GARAGE_RPC_SECRET (64 hex characters)}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?set GARAGE_ADMIN_TOKEN (openssl rand -hex 32)}
     volumes:
       - ./docker/garage.production.toml:/etc/garage.toml:ro
       - garage-data:/var/lib/garage

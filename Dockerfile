@@ -61,6 +61,8 @@ COPY packages/types/src ./packages/types/src
 COPY apps/web/index.html apps/web/vite.config.ts apps/web/tsconfig.json ./apps/web/
 COPY apps/web/public ./apps/web/public
 COPY apps/web/src ./apps/web/src
+# The push worker (#539, D-126) is an entry of its own, built beside the client.
+COPY apps/web/worker ./apps/web/worker
 RUN bun run --cwd apps/web build
 
 FROM oven/bun:1.4.2-distroless@sha256:1a0c31c7c5f9d193aedf60fe1cebdeb76ac8f6e29f24be8dd8cbd6df72df26ec AS runtime

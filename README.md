@@ -63,7 +63,20 @@ Where each phase stands is the milestone of the same number on the issue board, 
 wrong the day the next pull request merges — this one said *not started* about a phase whose server
 was nearly built.
 
-Self-hosting instructions land in Phase 2. Until then there is nothing to deploy.
+## Self-hosting
+
+On a server with Docker and the compose plugin, and a public name whose ports 80 and 443 reach it:
+
+1. Make a GitHub OAuth app whose callback is `https://<your name>/auth/github/callback`.
+2. `cp docker/production.env.example production.env`, and fill in every empty value; each says how to
+   make it. Keep the file private.
+3. `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait`
+
+That is all: the database migrates as the API starts, the object store is prepared on the way, and
+the certificate is issued. Sign in, and make the first workspace from the screen you land on; you are
+its owner. Every variable is in [`docs/CONFIG.md`](docs/CONFIG.md), with backups, restores and
+upgrades ("Production deployment"), and what personal data the instance holds, and how to erase it,
+is [`docs/DATA.md`](docs/DATA.md).
 
 ---
 
@@ -75,7 +88,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 143 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 144 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
