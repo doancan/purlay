@@ -33,6 +33,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'smtp-without-a-sender',
+    why: 'email sign-in is said to be on with nowhere for its links to come from',
+    file: 'apps/api/src/platform/config.ts',
+    find: '  (config.SMTP_URL === undefined) !== (config.MAIL_FROM === undefined)\n',
+    replace: "  config.SMTP_URL === 'never'\n",
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
+  {
     id: 'runbook-unparsed',
     why: 'a runbook link no browser can parse is kept, and drawn as a link that goes nowhere',
     file: 'apps/api/src/modules/incidents/incidents.ts',

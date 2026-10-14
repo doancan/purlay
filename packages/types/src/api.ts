@@ -941,3 +941,12 @@ export type IncidentUpdate = Static<typeof IncidentUpdate>;
 /** `GET /api/channels/:channelId/incident/:incidentId/updates` — newest first, keyset on the id. */
 export const IncidentUpdatePage = Page(IncidentUpdate);
 export type IncidentUpdatePage = Static<typeof IncidentUpdatePage>;
+
+// ── Signing in (#81, D-138) ─────────────────────────────────────────────────
+
+/**
+ * `GET /api/auth/methods` — how this server signs people in: GitHub always, and email when it can send
+ * a link (D-138 §6). Asked before anybody is signed in, so the screen offers only what works.
+ */
+export const AuthMethods = Type.Object({ email: Type.Boolean() });
+export type AuthMethods = Static<typeof AuthMethods>;

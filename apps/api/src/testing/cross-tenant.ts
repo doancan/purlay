@@ -502,6 +502,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'PATCH /api/me/profile':
     'sets the caller’s own profile and names no workspace; who reads it is the members list’s (D-131)',
   'GET /api/push/key': 'the server’s public push key, the same for everyone signed in (D-126)',
+  'GET /api/auth/methods':
+    'nobody is signed in yet: which ways in this server offers, the same for every caller (D-138)',
   'POST /api/push/subscriptions':
     'subscribes the caller’s own device and names no workspace (D-126)',
   'POST /api/push/subscriptions/remove':

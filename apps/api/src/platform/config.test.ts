@@ -519,3 +519,31 @@ describe('Web Push keys (#78)', () => {
     );
   });
 });
+
+describe('sign-in mail (D-138 §6)', () => {
+  const mail = {
+    SMTP_URL: 'smtps://purlay:pw@mail.example.com:465',
+    MAIL_FROM: 'purlay@example.com',
+  };
+
+  test('both or neither: neither is email sign-in off, in production too', () => {
+    expect(loadConfig(valid).SMTP_URL).toBeUndefined();
+    expect(() => loadConfig(production)).not.toThrow();
+    expect(loadConfig({ ...valid, ...mail }).MAIL_FROM).toBe('purlay@example.com');
+    expect(refusal({ ...valid, SMTP_URL: mail.SMTP_URL })).toContain(
+      'SMTP_URL, MAIL_FROM: set both, or neither',
+    );
+    expect(refusal({ ...valid, MAIL_FROM: mail.MAIL_FROM })).toContain(
+      'SMTP_URL, MAIL_FROM: set both, or neither',
+    );
+  });
+
+  test('not an SMTP address, or not an address to send from, is refused; the URL is never quoted', () => {
+    expect(refusal({ ...valid, ...mail, SMTP_URL: 'https://mail.example.com' })).toContain(
+      'SMTP_URL',
+    );
+    expect(refusal({ ...valid, ...mail, MAIL_FROM: 'not an address' })).toContain('MAIL_FROM');
+    const message = refusal({ ...valid, SMTP_URL: 'smtps://purlay:secret-pw-x@mail.example.com' });
+    expect(message).not.toContain('secret-pw-x');
+  });
+});
