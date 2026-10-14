@@ -75,6 +75,7 @@ describe('publishing the wedge', () => {
       lastMessageAt: null,
       state,
       notificationLevel: 'mentions',
+      starred: false,
       peer: user,
       peers: [user],
     };

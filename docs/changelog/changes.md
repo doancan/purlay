@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: starred channels (D-132, part of #489)
+
+- **Star this channel** in a channel's header keeps it in a Starred section above Channels, by name;
+  painted at once, put back with Retry when refused, and the person's other tabs follow.
+
 ### Feature — 2026-10-14: profiles (D-131, closes #488)
 
 - **Your profile…** in the account menu sets a title, a status line and your time zone (this

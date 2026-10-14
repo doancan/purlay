@@ -188,6 +188,22 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
   },
   {
+    id: 'star-told-of-nothing',
+    why: 'a star that changed nothing tells the person’s every tab to read their channels again',
+    file: 'apps/api/src/modules/channels/star.ts',
+    find: '  if ((member.starred_at !== null) === starred) return false;\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/star.integration.test.ts'],
+  },
+  {
+    id: 'star-for-anyone-who-sees',
+    why: 'a channel’s star shows for somebody who is not in it',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: '  starred: row.member_user_id !== null && row.starred_at !== null,\n',
+    replace: '  starred: row.starred_at !== null || row.member_user_id === null,\n',
+    tests: ['apps/api/src/ingress/http/star.integration.test.ts'],
+  },
+  {
     id: 'saved-again-finds-anyones',
     why: 'saving a message again moves whoever saved it first, and the caller’s own save is never made',
     file: 'apps/api/src/modules/saved/saved.ts',

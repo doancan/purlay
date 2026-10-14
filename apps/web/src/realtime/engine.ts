@@ -622,6 +622,10 @@ export const createEngine = (options: EngineOptions): Engine => {
         // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
         readAgain(client, keys.pins(frame.data.channelId));
         return;
+      case 'CHANNELS_UPDATED':
+        // No state in the frame (D-132): the person's channels here are read again.
+        void client.invalidateQueries({ queryKey: keys.channels(frame.data.workspaceId) });
+        return;
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.
         void client.invalidateQueries({ queryKey: keys.saved(frame.data.workspaceId) });

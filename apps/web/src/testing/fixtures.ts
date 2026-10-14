@@ -69,6 +69,7 @@ export const aChannel = (
   // A direct message's people agree with its peer unless the test says otherwise.
   peers: over.peer === undefined || over.peer === null ? [] : [over.peer],
   notificationLevel: 'mentions',
+  starred: false,
   ...over,
 });
 

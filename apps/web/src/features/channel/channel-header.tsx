@@ -26,6 +26,7 @@ import { NotificationLevelMenu } from './notification-level-menu';
 import { GroupDetailsDialog } from '../conversations/group-details';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
+import { StarToggle } from './star-toggle';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -168,6 +169,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           )}
         </Link>
       </nav>
+      {!direct && <StarToggle channel={channel} />}
       <PanelControls direct={direct} />
       <NotificationLevelMenu channel={channel} />
       {canAdd && (

@@ -8,6 +8,7 @@ import type { Channel, FilePage, Message, MessagePage, PinList } from '@purlay/t
 import {
   channelAdded,
   channelsRevoked,
+  channelStarred,
   channelStateChanged,
   messageCreated,
   messageRevised,
@@ -56,6 +57,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   lastMessageAt: null,
   state,
   notificationLevel: 'mentions',
+  starred: false,
   peer: null,
   peers: [],
   ...over,
@@ -505,5 +507,23 @@ describe('a channel’s files list (D-129)', () => {
     await settle();
     expect(asked).toBeGreaterThan(2);
     stop();
+  });
+});
+
+describe('a star (D-132)', () => {
+  test('is drawn as asked, and undone only while it is still as that asked', () => {
+    const client = seeded();
+    const starred = (): boolean | undefined =>
+      client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.starred;
+    channelStarred(client, CH, true);
+    expect(starred()).toBe(true);
+    channelStarred(client, CH, true, true);
+    expect(starred()).toBe(false);
+
+    // Starred, then let go elsewhere before the star is refused: the refusal changes nothing.
+    channelStarred(client, CH, true);
+    channelStarred(client, CH, false);
+    channelStarred(client, CH, true, true);
+    expect(starred()).toBe(false);
   });
 });

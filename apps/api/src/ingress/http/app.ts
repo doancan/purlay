@@ -122,6 +122,7 @@ import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
+import { starChannel } from './star';
 import { deletePin, listPins, putPin } from './pins';
 
 export interface Dependencies {
@@ -563,6 +564,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await readUpTo({ ...dependencies, bus: sockets.bus }, request, params.channelId, body),
     )
+    .put('/api/channels/:channelId/star', async ({ request, params, set }) => {
+      await starChannel(sending, request, params.channelId, true);
+      set.status = 204;
+      return null;
+    })
+    .delete('/api/channels/:channelId/star', async ({ request, params, set }) => {
+      await starChannel(sending, request, params.channelId, false);
+      set.status = 204;
+      return null;
+    })
     .put('/api/channels/:channelId/notification-level', async ({ request, params, body, set }) => {
       await setLevel(dependencies, request, params.channelId, body);
       set.status = 204;

@@ -408,6 +408,9 @@ CREATE TABLE channel_members (
     -- Defaults to 'mentions': quiet by default is the product, not a preference. (D-12)
     notification_level notification_level NOT NULL DEFAULT 'mentions',
 
+    -- When the member starred it; NULL while they have not (D-132). Added by 0030.
+    starred_at TIMESTAMPTZ,
+
     joined_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     UNIQUE (channel_id, user_id),
@@ -1159,12 +1162,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0027_attachment_channels.sql attachments.channel_id: a channel's files  (I-1, D-129)
 0028_pinned_messages.sql     pinned_messages  (D-130)
 0029_profiles.sql            users.title, users.time_zone, users.status_text  (D-131)
+0030_starred_channels.sql    channel_members.starred_at  (D-132)
 ```
 
-Phase 2 adds `0030_github_feeds.sql`; Phase 2's magic links add `0031_email_auth.sql`.
+Phase 2 adds `0031_github_feeds.sql`; Phase 2's magic links add `0032_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

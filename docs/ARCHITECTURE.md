@@ -223,7 +223,8 @@ What the shape is for, which the types do not say:
   (D-123). A pin or an unpin is `PINS_UPDATED` on the channel's topic, with nothing but the channel in
   it, and the client reads the pins again (D-130). A change of the person's own Deep Work is `DEEP_WORK_UPDATED` on their `user:` topic, so
   their other tabs draw it (#526); a change of their saved messages is `SAVED_UPDATED` there too, with
-  nothing but the workspace in it, and the client reads what it shows again (D-128). Typing is a `TYPING` frame
+  nothing but the workspace in it, and the client reads what it shows again (D-128); a channel starred or
+  let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. Each frame joined the union
