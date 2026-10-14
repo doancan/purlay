@@ -118,6 +118,12 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PATCH', `/api/workspaces/${world.workspaceId}`, as, {
       name: `renamed by ${as.username}`,
     }),
+  'read how long the history is kept': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/retention`, as),
+  'set how long the history is kept': async (world, as) =>
+    await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/retention`, as, {
+      retentionDays: 90,
+    }),
   'read the audit trail': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit`, as),
   'see whether the GitHub token is set': async (world, as) =>

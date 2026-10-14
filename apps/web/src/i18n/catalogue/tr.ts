@@ -193,6 +193,9 @@ export const tr = {
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
   'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
+  'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
+  'retention.forever': 'süresiz',
+  'retention.days': '{days} gün',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',
   'github.entry': 'GitHub bağlantısı…',

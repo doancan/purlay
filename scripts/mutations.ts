@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'retention-change-off-the-trail',
+    why: 'a team’s memory is shortened and nothing says who did it (D-27 §1)',
+    file: 'apps/api/src/modules/workspaces/retention.ts',
+    find: "    action: 'retention.changed',\n",
+    replace: "    action: 'workspace.renamed',\n",
+    tests: ['apps/api/src/ingress/http/retention.integration.test.ts'],
+  },
+  {
+    id: 'retention-same-window-on-the-trail',
+    why: 'saving the same window fills the trail with changes that changed nothing',
+    file: 'apps/api/src/modules/workspaces/retention.ts',
+    find: '  if (before.retention_days === retentionDays) return { retentionDays };\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/retention.integration.test.ts'],
+  },
+  {
     id: 'retention-waits-on-a-busy-root',
     why: 'the purge holds the memberships and waits on a root a reply holds, while the reply waits on the memberships: a deadlock',
     file: 'apps/api/src/modules/retention/purge.ts',

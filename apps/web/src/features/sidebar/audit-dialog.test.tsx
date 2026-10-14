@@ -124,6 +124,30 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual(['History older than 30 days was cleared: 12 messages, 2 files']);
   });
 
+  test('a window changed is said in the reader’s words, forever or in days (D-139 §4)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'retention.changed',
+              targetType: 'workspace',
+              metadata: { from: '90', to: 'forever' },
+            }),
+            anEntry(1, {
+              action: 'retention.changed',
+              targetType: 'workspace',
+              metadata: { from: 'forever', to: '90' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} changed how long history is kept from 90 days to forever`,
+      `${ME.displayName} changed how long history is kept from forever to 90 days`,
+    ]);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>

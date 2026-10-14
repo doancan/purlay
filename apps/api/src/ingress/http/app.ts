@@ -88,6 +88,8 @@ import {
   readMe,
   readWorkspace,
   updateWorkspace,
+  readRetentionSetting,
+  updateRetentionSetting,
 } from './workspaces';
 import { readPushKey, setMyLocale, subscribeDevice, unsubscribeDevice } from './push';
 import {
@@ -531,6 +533,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .post(
       '/api/invitations/accept',
       async ({ request, body }) => await joinByInvitation(dependencies, request, body),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/retention',
+      async ({ request, params }) =>
+        await readRetentionSetting(dependencies, request, params.workspaceId),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/retention',
+      async ({ request, params, body }) =>
+        await updateRetentionSetting(dependencies, request, params.workspaceId, body),
     )
     .get(
       '/api/workspaces/:workspaceId/audit',
