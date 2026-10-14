@@ -72,6 +72,26 @@ const stringsIn = (node: ts.Node, found: ts.LiteralLikeNode[], dynamic: ts.Node[
   });
 };
 
+/**
+ * The names a class position reads directly, or through a lookup (`sizes[size]`) or a choice. A
+ * property's name (`a.b`'s `b`) is not one, and neither is anything inside a call that is not a class
+ * helper, whose argument is a name, not classes.
+ */
+const namesIn = (node: ts.Node, names: Set<string>): void => {
+  if (ts.isIdentifier(node)) {
+    names.add(node.text);
+    return;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    namesIn(node.expression, names);
+    return;
+  }
+  if (ts.isCallExpression(node) && !isClassHelperCall(node)) return;
+  node.forEachChild((child) => {
+    namesIn(child, names);
+  });
+};
+
 const COMPARISONS = new Set<ts.SyntaxKind>([
   ts.SyntaxKind.EqualsEqualsEqualsToken,
   ts.SyntaxKind.ExclamationEqualsEqualsToken,
@@ -83,10 +103,14 @@ const COMPARISONS = new Set<ts.SyntaxKind>([
 export const classesIn = (file: string, source: string): readonly ClassUse[] => {
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const uses: ClassUse[] = [];
+  // The names a class position reads (`className={link}`, `cn(cell, …)`): whatever they hold is a
+  // class list too, whatever it is called (#572).
+  const named = new Set<string>();
   const take = (root: ts.Node): void => {
     const literals: ts.LiteralLikeNode[] = [];
     const dynamic: ts.Node[] = [];
     stringsIn(root, literals, dynamic);
+    namesIn(root, named);
     for (const hole of dynamic) {
       const { line } = tree.getLineAndCharacterOfPosition(hole.getStart(tree));
       uses.push({ file, line: line + 1, candidate: hole.getText(tree), dynamic: true });
@@ -120,6 +144,20 @@ export const classesIn = (file: string, source: string): readonly ClassUse[] => 
     node.forEachChild(visit);
   };
   visit(tree);
+  // Then every constant one of those names holds, unless its name already had it read.
+  const constants = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      named.has(node.name.text) &&
+      !CLASS_LISTS.test(node.name.text) &&
+      node.initializer !== undefined
+    ) {
+      take(node.initializer);
+    }
+    node.forEachChild(constants);
+  };
+  constants(tree);
   return uses;
 };
 

@@ -157,6 +157,23 @@ const c = <p className={on ? 'text-ink' : "text-ink-muted"} />;`,
     expect(uses.map((use) => use.candidate)).toEqual(['size-icon-sm', 'shrink-0', 'size-icon-md']);
   });
 
+  test('reads a constant a class position names, whatever it is called (#572)', () => {
+    const uses = classesIn(
+      'a.tsx',
+      `const link = 'underline underline-offset-2';
+const sizes = { sm: 'h-4' } as const;
+const label = 'not classes';
+const a = <a className={link} />;
+const b = <span className={cn(sizes[size], open && 'text-ink')} title={label} />;`,
+    );
+    expect(uses.map((use) => [use.candidate, use.line])).toEqual([
+      ['text-ink', 5],
+      ['underline', 1],
+      ['underline-offset-2', 1],
+      ['h-4', 2],
+    ]);
+  });
+
   test('does not take prose for classes: a comment or a string anywhere else is not a class list', () => {
     const uses = classesIn(
       'a.tsx',
@@ -180,6 +197,17 @@ const c = <b className={cn(kind === 'note' && 'italic')} />;`,
       'w-full',
       'italic',
     ]);
+  });
+
+  test('a raw value in a constant a class position names is found, with its line (#572)', async () => {
+    const uses = classesIn(
+      'link.tsx',
+      "const link = 'underline underline-offset-2';\nconst a = <a className={link} />;",
+    );
+    const found = await checkVocabulary({ entry, resolve: resolveStylesheet, classes: uses });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('link.tsx:1');
+    expect(found[0]).toContain('underline-offset-2');
   });
 
   test('flags a class list assembled at runtime, which nothing can judge', async () => {

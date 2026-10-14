@@ -33,6 +33,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'vocabulary-skips-a-named-class-constant',
+    why: 'a class list kept in a constant not called …Classes builds and ships a raw value unchecked',
+    file: 'packages/tokens/src/vocabulary.ts',
+    find: '    namesIn(root, named);\n',
+    replace: '',
+    tests: ['packages/tokens/src/vocabulary.test.ts'],
+  },
+  {
     id: 'rename-by-someone-not-in-the-channel',
     why: 'somebody who can see a public channel but is not in it renames it, or sets its topic',
     file: 'apps/api/src/modules/channels/settings.ts',
