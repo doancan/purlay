@@ -187,6 +187,21 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ name: 'crossing' }),
     visibility: { kind: 'none', reason: 'the workspace itself; no channel is named or listed' },
   },
+  'GET /api/workspaces/:workspaceId/retention': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace’s own setting; no channel is named or listed',
+    },
+  },
+  'PUT /api/workspaces/:workspaceId/retention': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ retentionDays: 90 }),
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace’s own setting; no channel is named or listed',
+    },
+  },
   'GET /api/workspaces/:workspaceId/presence': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: {

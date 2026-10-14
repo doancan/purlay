@@ -32,6 +32,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PATCH /api/workspaces/:workspaceId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'read how long the history is kept': {
+    endpoint: 'GET /api/workspaces/:workspaceId/retention',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'set how long the history is kept': {
+    endpoint: 'PUT /api/workspaces/:workspaceId/retention',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'read the audit trail': {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },

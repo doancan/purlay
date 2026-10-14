@@ -109,6 +109,26 @@ export const UpdateWorkspaceRequest = FromClient({
 });
 export type UpdateWorkspaceRequest = Static<typeof UpdateWorkspaceRequest>;
 
+/** The shortest window an owner may keep history for — the database's `retention_days_sane` (D-27). */
+export const RETENTION_DAYS_MIN = 30;
+/** The longest: a hundred years, past which a number is a typo, not a policy (D-139 §4). */
+export const RETENTION_DAYS_MAX = 36_500;
+
+/** Whole days of history kept, or `null` for everything — the default, and the tenet (D-2, D-27). */
+const RetentionDays = Type.Union([
+  Type.Integer({ minimum: RETENTION_DAYS_MIN, maximum: RETENTION_DAYS_MAX }),
+  Type.Null(),
+]);
+
+/**
+ * `GET` and `PUT /api/workspaces/:workspaceId/retention` — an owner's to read and to set (D-139 §4).
+ * Its own route: the `Workspace` shape is shown to people not yet in it, in an invitation's preview.
+ */
+export const RetentionSetting = Type.Object({ retentionDays: RetentionDays });
+export type RetentionSetting = Static<typeof RetentionSetting>;
+export const SetRetentionRequest = FromClient({ retentionDays: RetentionDays });
+export type SetRetentionRequest = Static<typeof SetRetentionRequest>;
+
 /** A member as the rest of the workspace sees them — never their email address. */
 export const WorkspaceMember = Type.Object({
   user: User,
@@ -416,6 +436,7 @@ export const AUDIT_ACTIONS = [
   'invitation.revoked',
   'message.removed_by_moderator',
   'workspace.renamed',
+  'retention.changed',
   'retention.purged',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

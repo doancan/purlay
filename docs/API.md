@@ -141,7 +141,8 @@ an instance-administrator role this product does not have.
 | ○ | `POST` | `/api/invitations/preview` | signed in — `{ token }` (`InvitationTokenRequest`); the `InvitationPreview`: which workspace, until when, and whether the caller is in it already |
 | ○ | `POST` | `/api/invitations/accept` | signed in — `{ token }`; in as `member`, into no channel, answered with the `Membership`. Already in: the same answer, the role unchanged. A link that does not open — unknown, expired, revoked, its workspace deleted, or the caller removed since it was made — is one `404 INVITATION_NOT_FOUND` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/audit` | admin — `?before=&limit=` (`OlderPageQuery`); an `AuditPage` of `AuditEntry`, newest first, keyset on the id (D-26). Who did what to whom, never anything written; a member is `403 FORBIDDEN` |
-| ② | `PUT` | `/api/workspaces/:workspaceId/retention` | owner — `{ retentionDays: number \| null }`, min 30 (D-27) |
+| ○ | `GET` | `/api/workspaces/:workspaceId/retention` | owner — `RetentionSetting`: how many days of history the workspace keeps, `null` for forever (the default). Its own route, since the `Workspace` shape is shown to people not yet in it (D-139 §4) |
+| ○ | `PUT` | `/api/workspaces/:workspaceId/retention` | owner — `SetRetentionRequest`, whole days from `RETENTION_DAYS_MIN` (the table's own check) to `RETENTION_DAYS_MAX`, or `null` for forever; answers the `RetentionSetting`. A change is on the trail as `retention.changed` with what it was and what it became; the same window again writes nothing. The nightly purge does the rest (D-27, D-139) |
 | ② | `POST` | `/api/workspaces/:workspaceId/export` | owner — NDJSON + blobs (D-27) |
 
 Demoting or removing the last `owner` returns `409` (invariant I-2).

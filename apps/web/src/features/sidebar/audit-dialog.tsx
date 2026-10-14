@@ -47,6 +47,9 @@ export const AuditDialog = ({
 
   const person = (userId: string | undefined): string =>
     members.data?.find((m) => m.user.id === userId)?.user.displayName ?? t('audit.someoneElse');
+  /** A window on the trail: `forever`, or its days — in the reader's words (D-41). */
+  const kept = (word: string | undefined): string =>
+    word === 'forever' ? t('retention.forever') : t('retention.days', { days: word ?? '' });
   const role = (word: string | undefined): string => {
     switch (roleOf(word)) {
       case 'member':
@@ -124,6 +127,12 @@ export const AuditDialog = ({
           actor,
           from: entry.metadata['from'] ?? '',
           to: entry.metadata['to'] ?? '',
+        });
+      case 'retention.changed':
+        return t('audit.action.retention.changed', {
+          actor,
+          from: kept(entry.metadata['from']),
+          to: kept(entry.metadata['to']),
         });
       // Nobody did it: the nightly purge, which names no actor (D-139 §3).
       case 'retention.purged':

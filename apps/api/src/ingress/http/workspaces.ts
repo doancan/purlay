@@ -24,6 +24,8 @@ import {
   type Membership,
   type Workspace,
   type WorkspaceMember,
+  type RetentionSetting,
+  SetRetentionRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
@@ -39,6 +41,7 @@ import {
 import { setDeepWork } from '../../modules/workspaces/deep-work';
 import { changeRole, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
+import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import {
   githubIntegrationOf,
   removeGitHubToken,
@@ -230,6 +233,38 @@ export const readAuditTrail = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await auditTrail(database, context, query);
+};
+
+/** `GET /api/workspaces/:workspaceId/retention` — how long the history is kept; an owner's (D-139 §4). */
+export const readRetentionSetting = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<RetentionSetting> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  return await readRetention(database, context);
+};
+
+/**
+ * `PUT /api/workspaces/:workspaceId/retention` — an owner sets how long the history is kept (D-139 §4).
+ * Nothing is told to anyone's socket: the window changes nothing on a screen until the night's purge,
+ * and the purge itself tells nobody (§3).
+ */
+export const updateRetentionSetting = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<RetentionSetting> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const { retentionDays } = validated(SetRetentionRequest, body);
+  return await atomicallyOn(database)(
+    async (transaction) => await setRetention(transaction, clock, context, retentionDays),
+  );
 };
 
 /** `GET /api/workspaces/:workspaceId/integrations/github` — whether a token is set. Never the token. */

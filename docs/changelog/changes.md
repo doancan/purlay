@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: an owner sets how long history is kept (D-139, part of #83)
+
+- `GET` and `PUT /api/workspaces/:id/retention`, for owners only: whole days from 30 to a hundred
+  years, or forever (the default). Each change goes on the audit trail with the old and the new
+  window; setting the same window again writes nothing. The audit dialog shows the change in the
+  reader's language.
+
 ### Feature — 2026-10-14: the retention purge (D-139, part of #83)
 
 - `purge:retention` runs nightly, before the storage count is checked: in each workspace that keeps
