@@ -33,6 +33,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'rename-by-someone-not-in-the-channel',
+    why: 'somebody who can see a public channel but is not in it renames it, or sets its topic',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "  await requireChannelMember(executor, context, 'Join the channel to change it.');\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
+  },
+  {
     id: 'deletions-not-queued-with-the-rows',
     why: 'a file retention or erasure removed is forgotten when the store refuses it, or the process stops',
     file: 'apps/api/src/modules/messages/tombstone.ts',
@@ -798,8 +806,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'pins-by-anyone-who-sees',
     why: 'a member of the workspace who only sees the channel pins and unpins in it',
     file: 'apps/api/src/modules/pins/pins.ts',
-    find: '  if (member === undefined) {\n',
-    replace: '  if (member === null) {\n',
+    find: "  await requireChannelMember(executor, context, 'Join the channel to pin in it.');\n",
+    replace: '',
     tests: ['apps/api/src/modules/pins/pins.integration.test.ts'],
   },
   {
@@ -1921,8 +1929,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'add-member-by-someone-not-in-the-channel',
     why: 'anybody who can see a public channel brings anybody else into it',
     file: 'apps/api/src/modules/channels/members.ts',
-    find: '  if (caller === undefined) {',
-    replace: '  if (false) {',
+    find: "  await requireChannelMember(executor, context, 'Join the channel to bring people into it.');\n",
+    replace: '',
     tests: ['apps/api/src/modules/channels/members.integration.test.ts'],
   },
   {

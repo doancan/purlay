@@ -4,10 +4,11 @@
  * `/api/me`, and each workspace's members.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { attempt, inSavepoint } from '../../testing/attempt';
 import { aRoom, type Room } from '../../testing/rooms';
 import { meOf, membersIn } from '../workspaces/workspaces';
 import { updateProfile } from './profile';
@@ -19,11 +20,12 @@ afterAll(async () => {
 const clock = fixedClock(new Date('2026-10-14T12:00:00.000Z'));
 const idOf = (room: Room, name: string): string => room.members[name]?.userId ?? '';
 
-const refusal = async (attempt: Promise<unknown>): Promise<unknown> =>
-  await attempt.then(
-    () => 'taken',
-    (error: unknown) => (error instanceof AppError ? error.body : String(error)),
-  );
+/** A refused attempt's body, in a savepoint (`testing/attempt.ts`); `taken` when it went through. */
+const refusal = async (db: Executor, run: () => Promise<unknown>): Promise<unknown> => {
+  const outcome = await inSavepoint(db, run);
+  if (outcome.taken) return 'taken';
+  return outcome.error instanceof AppError ? outcome.error.body : String(outcome.error);
+};
 
 describe('integration: a profile', () => {
   test('is set with its words trimmed, kept where left out, and cleared by null or by blank words', async () => {
@@ -60,13 +62,11 @@ describe('integration: a profile', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const alice = idOf(room, 'alice');
-      await sql`savepoint attempt`.execute(db);
-      const body = (await refusal(
+      const body = (await refusal(db, () =>
         updateProfile(db, alice, { title: 'Lead', timeZone: 'Mars/Olympus_Mons' }),
       )) as { code?: string; details?: { fields?: Record<string, string> } };
       expect(body.code).toBe('VALIDATION_FAILED');
       expect(Object.keys(body.details?.fields ?? {})).toEqual(['timeZone']);
-      await sql`rollback to savepoint attempt`.execute(db);
       expect((await meOf(db, clock, alice)).profile.title).toBeNull();
     });
   });
@@ -79,11 +79,9 @@ describe('integration: a profile', () => {
         (await updateProfile(db, alice, { timeZone: 'europe/istanbul' })).profile.timeZone,
       ).toBe('Europe/Istanbul');
       for (const offset of ['+05', '-0300']) {
-        await sql`savepoint attempt`.execute(db);
-        const body = (await refusal(updateProfile(db, alice, { timeZone: offset }))) as {
+        const body = (await refusal(db, () => updateProfile(db, alice, { timeZone: offset }))) as {
           code?: string;
         };
-        await sql`rollback to savepoint attempt`.execute(db);
         expect({ offset, code: body.code }).toEqual({ offset, code: 'VALIDATION_FAILED' });
       }
     });
@@ -155,17 +153,13 @@ describe('integration: a profile', () => {
   test('the database refuses a blank field written around the service', async () => {
     await withRollback(async (db: Executor) => {
       const room = await aRoom(db, ['alice']);
-      await sql`savepoint attempt`.execute(db);
-      const refused = await db
-        .updateTable('users')
-        .set({ title: '  ' })
-        .where('id', '=', idOf(room, 'alice'))
-        .execute()
-        .then(
-          () => 'taken',
-          (error: unknown) => (error instanceof Error ? error.message : String(error)),
-        );
-      await sql`rollback to savepoint attempt`.execute(db);
+      const refused = await attempt(db, () =>
+        db
+          .updateTable('users')
+          .set({ title: '  ' })
+          .where('id', '=', idOf(room, 'alice'))
+          .execute(),
+      );
       expect(refused).toContain('users_profile_not_blank');
     });
   });

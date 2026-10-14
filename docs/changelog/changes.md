@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Refactor — 2026-10-14: one check that the caller is in the channel, and one way a test tries (closes #575)
+
+- Pins, channel settings and adding a member now ask the shared `requireChannelMember`, with
+  `isChannelMember` beside it, instead of each reading `channel_members` itself. Each keeps its own
+  refusal sentence. The four integration tests that tried a refused write in a hand-written savepoint
+  now use `testing/attempt.ts`, which gained `inSavepoint` for a test that needs the error itself. No
+  test changed what it asserts.
+
 ### Docs — 2026-10-14: how a reporter of a vulnerability is credited (closes #123)
 
 - `SECURITY.md` now states its credit policy: a confirmed report is credited in the advisory and the

@@ -9,7 +9,8 @@ import {
   ATTACHMENT_SIDE_MAX,
   messageId,
 } from '@purlay/types';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { inSavepoint } from '../../testing/attempt';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -45,8 +46,7 @@ const takes = async (
   const { workspaceId, userId } = await owner(db);
   const id = messageId(new Date(Date.UTC(2026, 8, 9, 12, 0, 0) + (tick += 1)));
   // Each attempt in a savepoint: a refused insert must not end the test's transaction.
-  await sql`savepoint attempt`.execute(db);
-  try {
+  const outcome = await inSavepoint(db, async () => {
     await db
       .insertInto('attachments')
       .values({
@@ -61,13 +61,11 @@ const takes = async (
         height: numbers.height ?? null,
       })
       .execute();
-    await sql`release savepoint attempt`.execute(db);
-    return true;
-  } catch (error) {
-    await sql`rollback to savepoint attempt`.execute(db);
-    if (error instanceof Error && error.message.includes('violates check constraint')) return false;
-    throw error;
-  }
+  });
+  if (outcome.taken) return true;
+  const { error } = outcome;
+  if (error instanceof Error && error.message.includes('violates check constraint')) return false;
+  throw error;
 };
 
 describe('integration: the attachment bounds are the database’s', () => {
