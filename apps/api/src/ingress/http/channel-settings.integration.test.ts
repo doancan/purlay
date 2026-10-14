@@ -211,6 +211,8 @@ describe('integration: renaming a channel and setting its topic', () => {
       );
       const otherId = ((await other.json()) as { id: string }).id;
       const path = `/api/channels/${world.channelId}`;
+      // Making it told the maker's devices (#540); what follows is the refusal's, which tells nobody.
+      world.published.length = 0;
 
       const taken = await world.call('PATCH', path, world.owner, { name: 'RANDOM' });
       expect(taken.status).toBe(409);

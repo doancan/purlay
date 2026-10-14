@@ -78,19 +78,27 @@ export const listChannels = async (
   return await channelsVisibleIn(database, context);
 };
 
+/**
+ * `POST /api/workspaces/:workspaceId/channels` — made, and its maker in it. Their other devices are
+ * told, as leaving tells them (#540): without it a channel made on one is missing on the rest.
+ */
 export const createWorkspaceChannel = async (
-  dependencies: ChannelDependencies,
+  dependencies: ChannelWriteDependencies,
   request: Request,
   workspaceId: string,
   body: unknown,
 ): Promise<Channel> => {
-  const { database, clock } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(CreateChannelRequest, body);
-  return await atomicallyOn(database)(
+  const made = await atomicallyOn(database)(
     async (transaction) => await createChannel(transaction, clock, context, input),
   );
+  await publishAfterCommit(log, [
+    [publication('CHANNEL_ADDED', () => publishChannelAdded(bus, clock, userId, made))],
+  ]);
+  return made;
 };
 
 export const readChannel = async (
@@ -104,16 +112,27 @@ export const readChannel = async (
   return await channelIn(database, context);
 };
 
+/**
+ * `POST /api/channels/:channelId/join` — a public channel joined. The person's other devices are
+ * told when this call is what joined it, as leaving tells them (#540): without it the channel, its
+ * unread and its mentions are missing on every other open page until it is reloaded.
+ */
 export const joinPublicChannel = async (
-  dependencies: ChannelDependencies,
+  dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
 ): Promise<Channel> => {
-  const { database, clock } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireChannelById(database, userId, channelId);
-  await joinChannel(database, clock, context);
-  return await channelIn(database, context);
+  const joined = await joinChannel(database, clock, context);
+  const channel = await channelIn(database, context);
+  if (joined) {
+    await publishAfterCommit(log, [
+      [publication('CHANNEL_ADDED', () => publishChannelAdded(bus, clock, userId, channel))],
+    ]);
+  }
+  return channel;
 };
 
 /**

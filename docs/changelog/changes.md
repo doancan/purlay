@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a channel joined or made on one device appears on the others, live (closes #540)
+
+- Joining a public channel, or making a channel, now sends `CHANNEL_ADDED` to the person's own
+  devices, as leaving one already sent them `ACCESS_REVOKED`. Before, every other open page missed
+  the channel until it was reloaded, along with its unread messages and its mentions in the badges and
+  the tab's title. This was the cause of the inbox test that failed only while other tests ran. The
+  test now joins its channel after the page has loaded, so it reproduces the case every time.
+
 ### Fix — 2026-10-14: a write the network never answers is given up after 30 seconds (closes #604)
 
 - The web client now gives every write (POST, PUT, PATCH, DELETE) a 30-second deadline. A write still

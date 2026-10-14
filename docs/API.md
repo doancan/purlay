@@ -160,13 +160,13 @@ carries.
 | | Method | Path | Role |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see |
-| ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member — `{ name, topic?, type? }`; `type` is `public` (the default) or `private`, seen by its members only (D-104) |
+| ○ | `POST` | `/api/workspaces/:workspaceId/channels` | member — `{ name, topic?, type? }`; `type` is `public` (the default) or `private`, seen by its members only (D-104). The maker's other devices are told with `CHANNEL_ADDED` (#540) |
 | ○ | `POST` | `/api/workspaces/:workspaceId/conversations` | member — `{ userIds }` (`OpenConversationRequest`): the people besides the caller, one to nine, or the caller alone for a note to self; returns the existing conversation of that set or creates it, `201`/`200` (I-5, D-127). Somebody not a person of the workspace is `404 USER_NOT_FOUND`; the caller among others, a person twice, or more than `CONVERSATION_PEOPLE_MAX` people is `400` |
 | ○ | `POST` | `/api/workspaces/:workspaceId/dms` | member — `{ userId }`, returns the existing DM or creates it (invariant I-5) |
 | ○ | `GET` | `/api/channels/:channelId` | member |
 | ○ | `PATCH` | `/api/channels/:channelId` | member **of the channel** — `{ name?, topic? }` (`UpdateChannelRequest`; a `null` topic clears it), answered with the `Channel`; the room hears `CHANNEL_UPDATED`. A name another live channel of the workspace has, ignoring case, is `409 CHANNEL_NAME_TAKEN`; not in the channel `403 FORBIDDEN`; a direct message `404 CHANNEL_NOT_FOUND`. A rename is on the audit trail; a topic is not (D-123) |
 | ○ | `DELETE` | `/api/channels/:channelId` | admin — `204`: archived, a soft delete that keeps its messages and memberships and frees its name. Everyone watching it is sent `ACCESS_REVOKED` with `reason: "archived"`; on the audit trail. A member is `403 FORBIDDEN`; a direct message, or archived already, `404 CHANNEL_NOT_FOUND` (D-123) |
-| ○ | `POST` | `/api/channels/:channelId/join` | member — public only |
+| ○ | `POST` | `/api/channels/:channelId/join` | member — public only. The person's other devices are told with `CHANNEL_ADDED` when this call is what joined it, as leaving tells them with `ACCESS_REVOKED`; a second join is told nothing (#540) |
 | ○ | `POST` | `/api/channels/:channelId/members` | a member **of the channel** — `{ userId }`, somebody from the workspace, `204`; they are told with `CHANNEL_ADDED`. Somebody already in it is `204` again, told nothing. Not in the channel, or a direct message: `403 FORBIDDEN`; a person not in the workspace: `404 USER_NOT_FOUND` (D-104) |
 | ○ | `POST` | `/api/channels/:channelId/leave` | member — `204`; the caller's sockets are sent `ACCESS_REVOKED` with `reason: "left"`. Not in it is `204` again, told nothing. The last member of a private channel is `409 LAST_CHANNEL_MEMBER`; a direct message `404 CHANNEL_NOT_FOUND` (D-123) |
 | ○ | `GET` | `/api/channels/:channelId/members` | member — a `ChannelMemberList`, first to join first; anybody who can see the channel (D-123) |
