@@ -105,6 +105,35 @@ describe('the end of a session, on a connection', () => {
   });
 });
 
+describe('the end of a session, heard twice', () => {
+  test('is said once and closed once: the topic and the opening read may both learn it (#577)', () => {
+    const hub = createSocketHub(
+      aDatabaseThatMustNotBeTouched(),
+      fixedClock(new Date('2026-09-09T12:00:00.000Z')),
+      { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
+    );
+    const events: string[] = [];
+    void hub
+      .opened(
+        'socket-1',
+        {
+          send: (payload) => events.push(`send ${payload}`),
+          buffered: () => 0,
+          close: (code) => events.push(`close ${String(code)}`),
+        },
+        new Request('https://purlay.test/ws'),
+      )
+      .catch(() => undefined);
+    const ended = { event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: 0 } as const;
+    hub.deliver('socket-1', ended);
+    hub.deliver('socket-1', { ...ended, data: { reason: 'expired' } });
+    expect(events).toEqual([
+      `send ${JSON.stringify(ended)}`,
+      `close ${String(CLOSE_CODES.SESSION_ENDED)}`,
+    ]);
+  });
+});
+
 describe('a connection that falls behind (#197)', () => {
   const connectionWith = (
     written: number,

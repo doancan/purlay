@@ -5,6 +5,7 @@
  * every socket that ever closed is a leak measured in connections, not requests.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
+import { CLOSE_CODES } from '@purlay/types';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { aSignedInUser } from '../testing/signed-in';
 import { fixedClock } from '../platform/clock';
@@ -122,6 +123,7 @@ describe('integration: a sign-out while a socket is opening', () => {
         },
       });
       const closes: number[] = [];
+      const events: string[] = [];
       const log = createLogger({ level: 'silent' });
       const hub = createSocketHub(racing, clock, {
         log,
@@ -135,10 +137,14 @@ describe('integration: a sign-out while a socket is opening', () => {
       const identity = await hub.opened(
         's',
         {
-          send: (): number => 0,
+          send: (payload): number => {
+            events.push(`send ${payload}`);
+            return payload.length;
+          },
           buffered: (): number => 0,
-          close: (code): void => {
+          close: (code, reason): void => {
             closes.push(code);
+            events.push(`close ${String(code)} ${reason}`);
           },
         },
         new Request('https://purlay.test/ws', { headers: { cookie: alice.cookie } }),
@@ -147,6 +153,11 @@ describe('integration: a sign-out while a socket is opening', () => {
       expect(armed).toBe(false);
       expect(identity).toBeUndefined();
       expect(closes).toEqual([4401]);
+      // Said why, then closed (#194, #577): the client is told, not left to guess from a code.
+      expect(events).toEqual([
+        `send ${JSON.stringify({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: clock.now().getTime() })}`,
+        `close ${String(CLOSE_CODES.SESSION_ENDED)} signed-out`,
+      ]);
       // And nothing on it is answered: the frames queued behind it see no identity.
       expect(await hub.identity('s')).toBeUndefined();
       hub.closed('s');

@@ -170,6 +170,8 @@ interface Held {
   readonly connection: Connection;
   identity: Promise<SocketIdentity | undefined>;
   cancelExpiry?: () => void;
+  /** Told its session ended, and closed: said once, whichever way it was learnt. */
+  ended?: true;
   /** Present while a subscription is being replayed. */
   holding?: ServerFrame[] | undefined;
   /**
@@ -259,11 +261,14 @@ export const createSocketHub = (
   const byUser = new Map<string, number>();
 
   const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
-    const written = socket.connection.send(JSON.stringify(frame));
     if (frame.event === 'SESSION_ENDED') {
+      if (socket.ended === true) return;
+      socket.ended = true;
+      socket.connection.send(JSON.stringify(frame));
       socket.connection.close(CLOSE_CODES.SESSION_ENDED, frame.data.reason);
       return;
     }
+    const written = socket.connection.send(JSON.stringify(frame));
     // A dropped frame, or a queue past the mark: this connection can no longer be
     // trusted to have everything, so it is told to reconnect and replay rather
     // than left open with a gap it cannot see (`ARCHITECTURE.md` §5.5).
@@ -338,10 +343,13 @@ export const createSocketHub = (
 
       // The promise is held, not its result, so two frames racing the resolution
       // share its reads and its one timer.
+      // Whether it had a session that ended while it opened, or never had one at all.
+      const opening = { hadSession: false };
       entry.identity = (async (): Promise<SocketIdentity | undefined> => {
         const first = await resolve(socketId, request);
         // Closed, or no session: subscribe nothing for a connection that is gone.
         if (first === undefined || held.get(socketId) !== entry) return undefined;
+        opening.hadSession = true;
         listen(first);
         // Read again now that the end of this session would reach it: a sign-out
         // before this read is seen here, one after it is heard on the topic.
@@ -355,8 +363,19 @@ export const createSocketHub = (
       if (held.get(socketId) !== entry) return undefined;
       if (identity === undefined) {
         // Admission checked the session before the socket was bound; it ended in
-        // between. Nothing on this connection can be answered.
-        connection.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
+        // between. Nothing on this connection can be answered — and a session that
+        // ended is told why before it is closed, as every end of one is (#194, #577),
+        // unless the topic told it already. One that never had a session has nothing
+        // to be told.
+        if (opening.hadSession) {
+          write(socketId, entry, {
+            event: 'SESSION_ENDED',
+            data: { reason: 'signed-out' },
+            ts: clock.now().getTime(),
+          });
+        } else {
+          connection.close(CLOSE_CODES.SESSION_ENDED, 'signed-out');
+        }
         return undefined;
       }
       entry.userId = identity.userId;
