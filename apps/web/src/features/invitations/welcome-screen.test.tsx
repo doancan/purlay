@@ -52,8 +52,11 @@ const visit = async (api: Partial<Api> = {}): Promise<View> => {
 };
 
 const here = (view: View): string => view.world.history.stack.at(-1) ?? '';
-const box = (view: View, name: string): HTMLInputElement =>
-  view.getByRole('checkbox', { name: `#${name}` });
+const box = (view: View, name: string): HTMLInputElement => {
+  const found = view.getByRole('checkbox', { name: `#${name}` });
+  if (!(found instanceof HTMLInputElement)) throw new Error(`#${name} is not a box`);
+  return found;
+};
 
 describe('the channels to join, after an invitation', () => {
   test('lists the ones to join, the three busiest marked Active and picked', async () => {

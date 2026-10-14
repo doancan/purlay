@@ -113,7 +113,10 @@ window.
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
 - **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link
-  opens, and **Join**. A person already in it is offered **Open** instead. A person not signed in
+  opens, and **Join**. A person already in it is offered **Open** instead. Joined, they are offered
+  the workspace's public channels to join — the three busiest marked **Active** and picked — joined
+  together in one press or skipped; a join that fails part way names the channels it could not join
+  and keeps them picked (D-132). A person not signed in
   signs in first and comes back to the same card. The token leaves the address bar as the page loads,
   so it is not left in the history or a screenshot. A link that does not open says so in one
   sentence — expired, revoked, or never real look the same — and offers the way home.

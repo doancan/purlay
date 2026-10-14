@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: channels to join after accepting an invitation (D-132, closes #489)
+
+- Accepting an invitation leads to the workspace's public channels, the three busiest picked
+  already: join them together, change the pick, or skip. A join that fails part way says which.
+
 ### Feature — 2026-10-14: starred channels (D-132, part of #489)
 
 - **Star this channel** in a channel's header keeps it in a Starred section above Channels, by name;
