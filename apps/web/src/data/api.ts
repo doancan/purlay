@@ -30,6 +30,7 @@ import {
   IncidentUpdatePage,
   type ChangeIncidentRequest,
   type DeclareIncidentRequest,
+  type SavePostmortemRequest,
   InvitationPage,
   InvitationPreview,
   NotificationPage,
@@ -192,6 +193,12 @@ export interface Api {
     incidentId: string,
     userId: string,
     responding: boolean,
+  ) => Promise<Incident>;
+  /** Saves the postmortem from the version it was edited from (D-137 §5). */
+  readonly savePostmortem: (
+    channelId: string,
+    incidentId: string,
+    input: SavePostmortemRequest,
   ) => Promise<Incident>;
   /** An incident's timeline, newest first; older than `before` (D-137 §4). */
   readonly incidentUpdates: (
@@ -485,6 +492,13 @@ export const createApi = (http: Http): Api => {
         `/api/channels/${at(channelId)}/incident/${at(incidentId)}/responders/${at(userId)}`,
         Incident,
         options(),
+      ),
+    savePostmortem: (channelId, incidentId, input) =>
+      http.request(
+        'PUT',
+        `/api/channels/${at(channelId)}/incident/${at(incidentId)}/postmortem`,
+        Incident,
+        options({ body: input }),
       ),
     incidentUpdates: (channelId, incidentId, before, signal) =>
       http.request(

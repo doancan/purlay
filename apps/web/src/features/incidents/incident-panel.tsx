@@ -25,6 +25,7 @@ import { ErrorState } from '../../ui/states';
 import { PanelEmpty, PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
 import { useSidePanel } from '../channel/side-panel';
 import { Responders } from './responders';
+import { WriteUp } from './writeup';
 import { useIncident, useIncidentActions, type IncidentActions } from './use-incident';
 
 export const INCIDENT_PANEL_ID = 'channel-incident';
@@ -390,6 +391,7 @@ const IncidentPanelView = ({
               actions={actions}
               member={member}
             />
+            <WriteUp incident={current} actions={actions} member={member} />
             <Timeline channelId={channel.id} incidentId={current.id} />
           </>
         )}
@@ -406,6 +408,7 @@ const IncidentPanelView = ({
           />
         )}
         <Responders channelId={channel.id} incident={current} actions={actions} member={member} />
+        <WriteUp incident={current} actions={actions} member={member} />
         <Timeline channelId={channel.id} incidentId={current.id} />
       </>
     );

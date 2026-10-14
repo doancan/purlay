@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: an incident's runbook and postmortem, on screen (D-137, closes #487)
+
+- The incident panel links the runbook, opened in a new tab, and holds the postmortem, drawn as a
+  message is and written in place; somebody else's save in between is said and shown, and the
+  person's own words are kept to save again. Incident channels are complete: declared, moved,
+  responded to and written up.
+
 ### Fix — 2026-10-14: every mutation entry still proves its guard, checked on every verify (#584)
 
 - Seven entries of `scripts/mutations.ts` had gone stale as the code they guard moved; they are

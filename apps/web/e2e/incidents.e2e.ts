@@ -59,5 +59,13 @@ test.describe('an incident', () => {
         .getByRole('complementary', { name: /Incident/ })
         .getByText('Alice Chen moved it to Mitigating'),
     ).toBeVisible();
+
+    // Written up: the postmortem saved by one is read by the other, drawn as a message is.
+    const mine = page.getByRole('complementary', { name: /Incident/ });
+    await mine.getByRole('button', { name: 'Write the postmortem' }).click();
+    await mine.getByRole('textbox', { name: 'Postmortem' }).fill('**Root cause:** the cache');
+    await mine.getByRole('button', { name: 'Save' }).click();
+    await expect(mine.getByText('Root cause:')).toBeVisible();
+    await expect(hers.getByText('Root cause:')).toBeVisible();
   });
 });
