@@ -33,6 +33,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import {
   messageId,
   TYPING_TTL_MS,
+  ACTIVE_EVERY_MS,
   type Attachment,
   type Channel,
   type ClientFrame,
@@ -201,6 +202,12 @@ export interface Engine {
    */
   readonly announceTyping: (channelId: string) => void;
   /**
+   * The page is in front of its person in this workspace (D-143): their pushes for it are held. Said
+   * over an open socket and nowhere else, at most once per `ACTIVE_EVERY_MS` per workspace; the first
+   * after a reconnect goes at once — a server that restarted forgot it.
+   */
+  readonly announceActive: (workspaceId: string) => void;
+  /**
    * Channels the person lost without being told — gone from a list read again, as after a time
    * offline: their unsent messages go, as they do on `ACCESS_REVOKED` (#521).
    */
@@ -339,8 +346,10 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
   // The last announcement this person made in each channel: its frame id, and when, by this clock.
   const announced = new Map<string, { readonly id: string; readonly at: number }>();
+  // The last word that the page is in front of its person, by workspace (D-143).
+  const saidActive = new Map<string, { readonly id: string; readonly at: number }>();
   const isAnnouncement = (refId: string): boolean =>
-    [...announced.values()].some((last) => last.id === refId);
+    [...announced.values(), ...saidActive.values()].some((last) => last.id === refId);
   const update = (id: string, patch: Partial<PendingMessage>): void => {
     change((all) => all.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
@@ -434,6 +443,8 @@ export const createEngine = (options: EngineOptions): Engine => {
    * what was missed. A timeout or a refusal stays failed, for the person.
    */
   const resync = (): void => {
+    // A server back from a gap may have forgotten who is in front of a page: the next word goes at once.
+    saidActive.clear();
     for (const pending of store.getState().pending) {
       if (pending.delivery === 'sending') {
         transmit(pending);
@@ -844,6 +855,17 @@ export const createEngine = (options: EngineOptions): Engine => {
       // Only over an open socket: a frame that did not leave is not kept, nor sent over HTTP.
       if (connection.send({ id, op: 'TYPING', payload: { channelId } })) {
         announced.set(channelId, { id, at: now });
+      }
+    },
+    announceActive: (workspaceId): void => {
+      if (connection === null) return;
+      const now = options.clock.now().getTime();
+      const last = saidActive.get(workspaceId);
+      if (last !== undefined && now - last.at < ACTIVE_EVERY_MS) return;
+      const id = messageId(serverClock.now());
+      // Only over an open socket: a word that did not leave is not kept, nor sent over HTTP.
+      if (connection.send({ id, op: 'ACTIVE', payload: { workspaceId } })) {
+        saidActive.set(workspaceId, { id, at: now });
       }
     },
     retryDegraded: (): void => {

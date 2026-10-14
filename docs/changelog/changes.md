@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: the page says when you are in front of it, so your phone stays quiet (D-143, closes #545)
+
+- While a Purlay page is visible and focused, it sends `ACTIVE` for its workspace when you press a key,
+  touch or click, and as it comes to the front, at most once a minute. The server then holds that
+  workspace's Web Push for two minutes. A tab left open behind other windows says nothing, so your
+  phone still buzzes. After a reconnect the next word goes at once, and a refused word is not taken
+  for a broken connection.
+
 ### Feature — 2026-10-14: a push is held while you are looking at that workspace (D-143, part of #545)
 
 - A new client frame, `ACTIVE`, tells the server that a page is in front of its person in a workspace.
