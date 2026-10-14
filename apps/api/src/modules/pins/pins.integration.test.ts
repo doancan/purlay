@@ -4,10 +4,10 @@
  * list is the channel's, newest first, with who pinned each.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, PINS_MAX } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
-import { AppError } from '../../platform/errors';
+import { attempt } from '../../testing/attempt';
 import { aRoom, type Room } from '../../testing/rooms';
 import { channelPins, pinMessage, unpinMessage } from './pins';
 
@@ -37,20 +37,6 @@ const said = async (db: Executor, room: Room, by = 'alice'): Promise<string> => 
     })
     .execute();
   return id;
-};
-
-const codeOf = async (attempt: Promise<unknown>): Promise<string> =>
-  await attempt.then(
-    () => 'taken',
-    (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
-  );
-
-/** One attempt in a savepoint: a refused one must not end the test's transaction. */
-const attempt = async (db: Executor, run: () => Promise<unknown>): Promise<string> => {
-  await sql`savepoint attempt`.execute(db);
-  const code = await codeOf(run());
-  await sql`${sql.raw(code === 'taken' ? 'release' : 'rollback to')} savepoint attempt`.execute(db);
-  return code;
 };
 
 const contextOf = (room: Room, name: string): NonNullable<Room['members'][string]>['context'] => {

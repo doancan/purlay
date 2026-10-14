@@ -4,10 +4,11 @@
  * channel's — paged on the message and then the file, and refused as the channel is.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, PAGE_LIMIT, type FilePage } from '@purlay/types';
 import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
+import { attempt } from '../../testing/attempt';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aMemoryStore } from '../../testing/storage';
@@ -355,21 +356,14 @@ describe('integration: an attachment’s channel is its message’s (0027)', () 
       const world = await aWorld(db);
       const sent = await sendWith(world, world.publicChannel, ['a.txt']);
       const file = sent.files[0] ?? '';
-      const refused = async (channelId: string | null): Promise<string> => {
-        await sql`savepoint attempt`.execute(db);
-        try {
-          await db
+      const refused = async (channelId: string | null): Promise<string> =>
+        await attempt(db, () =>
+          db
             .updateTable('attachments')
             .set({ channel_id: channelId })
             .where('id', '=', file)
-            .execute();
-          await sql`release savepoint attempt`.execute(db);
-          return 'taken';
-        } catch (error) {
-          await sql`rollback to savepoint attempt`.execute(db);
-          return error instanceof Error ? error.message : String(error);
-        }
-      };
+            .execute(),
+        );
 
       expect(await refused(null)).toContain('attachments_channel_iff_message');
       expect(await refused(world.privateChannel)).toContain('attachments_message_channel_fkey');

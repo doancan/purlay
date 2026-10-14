@@ -15,7 +15,12 @@ import type { Executor, Transaction } from '@purlay/db';
 import type { Channel, ChannelMember, UpdateChannelRequest } from '@purlay/types';
 import { recordAudit } from '../audit/audit';
 import type { Clock } from '../../platform/clock';
-import { channelNotFound, type ChannelContext } from '../../platform/channels';
+import {
+  channelNotFound,
+  isChannelMember,
+  requireChannelMember,
+  type ChannelContext,
+} from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { channelFor } from './channels';
@@ -38,14 +43,6 @@ const lockNamed = async (
   if (row?.name == null) throw channelNotFound();
   return { name: row.name, topic: row.topic };
 };
-
-const isMember = async (executor: Executor, context: ChannelContext): Promise<boolean> =>
-  (await executor
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', '=', context.userId)
-    .executeTakeFirst()) !== undefined;
 
 /** What a rename tells the room; null when nothing changed and nobody is told. */
 interface ChannelUpdate {
@@ -75,9 +72,7 @@ export const updateChannel = async (
   input: UpdateChannelRequest,
 ): Promise<Updated> => {
   const current = await lockNamed(executor, context);
-  if (!(await isMember(executor, context))) {
-    throw new AppError({ code: 'FORBIDDEN', message: 'Join the channel to change it.' });
-  }
+  await requireChannelMember(executor, context, 'Join the channel to change it.');
   const name = input.name ?? current.name;
   const topic = input.topic === undefined ? current.topic : input.topic;
   if (name === current.name && topic === current.topic) {
@@ -191,7 +186,7 @@ export const leaveChannel = async (
       .select((eb) => eb.fn.countAll<string>().as('count'))
       .where('channel_id', '=', context.channelId)
       .executeTakeFirstOrThrow();
-    if (Number(members.count) <= 1 && (await isMember(executor, context))) {
+    if (Number(members.count) <= 1 && (await isChannelMember(executor, context))) {
       throw new AppError({
         code: 'LAST_CHANNEL_MEMBER',
         message: 'Nobody else is in this private channel. Bring somebody in first.',

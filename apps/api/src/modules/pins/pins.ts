@@ -17,7 +17,12 @@
 import type { Executor, Transaction } from '@purlay/db';
 import { PINS_MAX, type PinList } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
+import {
+  messageNotFound,
+  requireChannelMember,
+  requireMessageById,
+  type ChannelContext,
+} from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
 
@@ -35,15 +40,7 @@ export interface PinChange {
  * read and the lock, the message is gone with it, as the guard would now say.
  */
 const lockForMember = async (executor: Transaction, context: ChannelContext): Promise<void> => {
-  const member = await executor
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', '=', context.userId)
-    .executeTakeFirst();
-  if (member === undefined) {
-    throw new AppError({ code: 'FORBIDDEN', message: 'Join the channel to pin in it.' });
-  }
+  await requireChannelMember(executor, context, 'Join the channel to pin in it.');
   const row = await executor
     .selectFrom('channels')
     .select('id')

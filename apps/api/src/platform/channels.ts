@@ -144,6 +144,18 @@ const allOrNothing = async (
   });
 };
 
+/** Whether the caller is in the channel, not only able to see it (D-104). */
+export const isChannelMember = async (
+  executor: Executor,
+  context: ChannelContext,
+): Promise<boolean> =>
+  (await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .executeTakeFirst()) !== undefined;
+
 /**
  * The caller is in the channel, not only able to see it: seeing a public channel is not being in it,
  * so a visible non-member is refused `403` with what to do (D-104, D-123 §1).
@@ -153,13 +165,9 @@ export const requireChannelMember = async (
   context: ChannelContext,
   refusal: string,
 ): Promise<void> => {
-  const member = await executor
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', '=', context.userId)
-    .executeTakeFirst();
-  if (member === undefined) throw new AppError({ code: 'FORBIDDEN', message: refusal });
+  if (!(await isChannelMember(executor, context))) {
+    throw new AppError({ code: 'FORBIDDEN', message: refusal });
+  }
 };
 
 /** For a caller that already holds a workspace context — the nested route shape. */

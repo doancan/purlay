@@ -6,7 +6,7 @@
 import type { Executor } from '@purlay/db';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import type { ChannelContext } from '../../platform/channels';
+import { requireChannelMember, type ChannelContext } from '../../platform/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import { channelFor } from './channels';
@@ -80,15 +80,7 @@ export const addMember = async (
       message: 'A direct message is between the two people it was opened for.',
     });
   }
-  const caller = await executor
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', '=', context.userId)
-    .executeTakeFirst();
-  if (caller === undefined) {
-    throw new AppError({ code: 'FORBIDDEN', message: 'Join the channel to bring people into it.' });
-  }
+  await requireChannelMember(executor, context, 'Join the channel to bring people into it.');
   await requireWorkspacePerson(executor, context, userId);
 
   const inserted = await executor
