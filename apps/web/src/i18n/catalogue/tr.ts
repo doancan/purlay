@@ -385,6 +385,7 @@ export const tr = {
   'welcome.heading': '{workspace} çalışma alanına hoş geldin',
   'welcome.lede':
     'Başlamak istediğin kanalları seç. En hareketliler zaten seçili; diğerlerini sonra Göz at ile bulursun.',
+  'welcome.ledeQuiet': 'Başlamak istediğin kanalları seç; diğerlerini sonra Göz at ile bulursun.',
   'welcome.loading': 'Kanallar yükleniyor',
   'welcome.error.title': 'Kanallar yüklenmedi.',
   'welcome.error.body': 'Çalışma alanındasın; yeniden dene ya da atla ve sonra seç.',
@@ -392,7 +393,7 @@ export const tr = {
   'welcome.continue': 'Çalışma alanına git',
   'welcome.active': 'Etkin',
   'welcome.skip': 'Şimdilik atla',
-  'welcome.failed': 'Şu kanallara katılınamadı: {names}.',
+  'welcome.failed': 'Katılınamadı: {names}.',
   'welcome.join': {
     other: '{count} kanala katıl',
   },

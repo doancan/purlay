@@ -4,13 +4,17 @@
  * skipped. A person who joins nothing still lands in the workspace, where Browse finds the rest.
  *
  * **Its states** (`UX.md` §8): the channels loading; failing, with Retry; none to join, with the way
- * on; and a join that fails part way, which says which channels it could not join, keeps them
- * picked, and offers to try those again — those that were joined stay joined.
+ * on; and a join that fails part way, which says which channels it could not join and why — one
+ * sentence for each why — keeps them picked unless they are gone, and offers to try those again;
+ * those that were joined stay joined. Joins go a few at a time (the write budget is the one a first
+ * message spends), and a person who leaves while they are on their way is told where they are.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Channel } from '@purlay/types';
 import { useActions } from '../../data/actions-provider';
-import { useDescribeFailure } from '../../data/failure';
+import { codeOf, useDescribeFailure } from '../../data/failure';
+import { keys } from '../../data/keys';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
@@ -18,6 +22,7 @@ import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
+import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
@@ -25,6 +30,12 @@ import { joinableChannels } from '../sidebar/ordering';
 
 /** How many of the busiest channels are marked and picked to begin with. */
 const RECOMMENDED = 3;
+
+/**
+ * How many joins are on their way at once: each is a write on the person's budget, the same one
+ * their first message spends, so a long pick is joined a few at a time rather than in one burst.
+ */
+const AT_ONCE = 4;
 
 /** The busiest by their last message: where the conversation is. Silent channels are not offered. */
 const recommendedOf = (channels: readonly Channel[]): ReadonlySet<string> =>
@@ -36,22 +47,69 @@ const recommendedOf = (channels: readonly Channel[]): ReadonlySet<string> =>
       .map((c) => c.id),
   );
 
+/** Runs each job, at most `limit` at a time, and answers each one's outcome in order. */
+const settleInTurn = async <T,>(
+  jobs: readonly (() => Promise<T>)[],
+  limit: number,
+): Promise<PromiseSettledResult<T>[]> => {
+  const outcomes: PromiseSettledResult<T>[] = new Array<PromiseSettledResult<T>>(jobs.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let at = next++; at < jobs.length; at = next++) {
+      const job = jobs[at];
+      if (job === undefined) continue;
+      try {
+        outcomes[at] = { status: 'fulfilled', value: await job() };
+      } catch (reason) {
+        outcomes[at] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, jobs.length) }, worker));
+  return outcomes;
+};
+
+/** What a failure to join says: the channels, named, with why — one sentence for each why. */
+interface Refusal {
+  readonly names: string;
+  readonly why: string;
+}
+
 export const WelcomeScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
+  const { show } = useToast();
+  const client = useQueryClient();
   const { workspace } = useWorkspace();
   const { joinChannel } = useActions();
-  const { navigate } = useRoute();
+  const { navigate, match } = useRoute();
   const channels = useChannels(workspace.id);
   const joinable = useMemo(() => joinableChannels(channels.data ?? []), [channels.data]);
-  const recommended = useMemo(() => recommendedOf(joinable), [joinable]);
-  // Null until the person changes it: the recommended ones, whenever the list arrives.
+  // Marked once, when the list first arrives: a list read again does not move the ticks or the
+  // badges under the person (D-132 §4's reason, for this list).
+  const [recommended, setRecommended] = useState<ReadonlySet<string> | null>(null);
+  if (recommended === null && channels.data !== undefined) setRecommended(recommendedOf(joinable));
+  const marked = recommended ?? new Set<string>();
+  // Null until the person changes it: the recommended ones.
   const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null);
-  const picked = chosen ?? recommended;
+  // Only what is still there to join: a channel joined elsewhere, or gone, is not counted.
+  const picked = new Set([...(chosen ?? marked)].filter((id) => joinable.some((c) => c.id === id)));
   const [joining, setJoining] = useState(false);
-  const [failed, setFailed] = useState<{ readonly names: string; readonly why: string } | null>(
-    null,
-  );
+  const [refusals, setRefusals] = useState<readonly Refusal[]>([]);
+  const submit = useRef<HTMLButtonElement>(null);
+  // A join outlives the screen if the person leaves while it is on its way: its answer is then
+  // said where they are, and nothing moves them.
+  const here = useRef(true);
+  const address = useRef(match);
+  address.current = match;
+  useEffect(() => {
+    // Set on every mount, not only declared so: a remount (React's strict check does one) would
+    // otherwise leave it false from the cleanup before.
+    here.current = true;
+    return (): void => {
+      here.current = false;
+    };
+  }, []);
 
   const enter = (): void => {
     navigate(href('workspace', { slug: workspace.slug }), { replace: true });
@@ -66,22 +124,52 @@ export const WelcomeScreen = (): React.JSX.Element => {
 
   const join = async (): Promise<void> => {
     setJoining(true);
-    setFailed(null);
+    setRefusals([]);
     const wanted = joinable.filter((c) => picked.has(c.id));
-    const outcomes = await Promise.allSettled(wanted.map((c) => joinChannel(c.id)));
-    const refused = wanted.filter((_, at) => outcomes[at]?.status === 'rejected');
-    setJoining(false);
-    if (refused.length === 0) {
-      enter();
+    const outcomes = await settleInTurn(
+      wanted.map((c) => (): Promise<Channel> => joinChannel(c.id)),
+      AT_ONCE,
+    );
+    const failed = wanted
+      .map((channel, at) => ({ channel, outcome: outcomes[at] }))
+      .filter(
+        (each): each is { channel: Channel; outcome: PromiseRejectedResult } =>
+          each.outcome?.status === 'rejected',
+      );
+    const stillHere = here.current && address.current.name === 'welcome';
+    if (failed.length === 0) {
+      if (stillHere) enter();
       return;
     }
-    const first = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
-    setChosen(new Set(refused.map((c) => c.id)));
-    setFailed({
-      names: refused.map((c) => `#${c.name ?? ''}`).join(', '),
-      why: describe(first?.reason),
-    });
+    // What is gone is not offered again; the list is read again so the screen says so too.
+    void client.invalidateQueries({ queryKey: keys.channels(workspace.id) });
+    const byWhy = new Map<string, string[]>();
+    for (const { channel, outcome } of failed) {
+      const why = describe(outcome.reason);
+      byWhy.set(why, [...(byWhy.get(why) ?? []), `#${channel.name ?? ''}`]);
+    }
+    const said = [...byWhy].map(([why, names]) => ({ names: names.join(', '), why }));
+    if (!stillHere) {
+      for (const refusal of said) {
+        show({ message: `${t('welcome.failed', { names: refusal.names })} ${refusal.why}` });
+      }
+      return;
+    }
+    setJoining(false);
+    setChosen(
+      new Set(
+        failed
+          .filter(({ outcome }) => codeOf(outcome.reason) !== 'CHANNEL_NOT_FOUND')
+          .map(({ channel }) => channel.id),
+      ),
+    );
+    setRefusals(said);
   };
+
+  // Once a refusal is drawn — the button no longer busy — focus is on what tries again.
+  useEffect(() => {
+    if (refusals.length > 0 && !joining) submit.current?.focus();
+  }, [refusals, joining]);
 
   let body: React.JSX.Element;
   if (channels.isPending) {
@@ -141,29 +229,44 @@ export const WelcomeScreen = (): React.JSX.Element => {
                   toggle(channel.id);
                 }}
               />
-              <span id={`${channel.id}-about`} className="flex min-w-0 flex-col gap-1">
-                <span className="flex items-center gap-2 font-mono text-body text-ink">
-                  {`#${channel.name ?? ''}`}
-                  {recommended.has(channel.id) && (
-                    <span className="rounded-sm bg-accent-subtle px-1 font-sans text-caption text-accent-text">
-                      {t('welcome.active')}
-                    </span>
-                  )}
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-body text-ink">
+                  <span className="min-w-0 break-all">{`#${channel.name ?? ''}`}</span>
+                  {/* What describes the box: whether it is busy, and what it is for — not its name again. */}
+                  <span id={`${channel.id}-about`} className="flex flex-col gap-1">
+                    {marked.has(channel.id) && (
+                      <span className="self-start rounded-sm bg-accent-subtle px-1 font-sans text-caption text-accent-text">
+                        {t('welcome.active')}
+                      </span>
+                    )}
+                    {channel.topic !== null && (
+                      <span className="break-words font-sans text-label text-ink-muted">
+                        {channel.topic}
+                      </span>
+                    )}
+                  </span>
                 </span>
-                {channel.topic !== null && (
-                  <span className="truncate text-label text-ink-muted">{channel.topic}</span>
-                )}
               </span>
             </label>
           ))}
         </fieldset>
-        {failed !== null && (
-          <p role="alert" className="text-label text-danger-text">
-            {`${t('welcome.failed', { names: failed.names })} ${failed.why}`}
-          </p>
+        {refusals.length > 0 && (
+          <div role="alert" className="flex flex-col gap-1 text-label text-danger-text">
+            {refusals.map((refusal) => (
+              <p key={refusal.names}>
+                {`${t('welcome.failed', { names: refusal.names })} ${refusal.why}`}
+              </p>
+            ))}
+          </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" variant="primary" busy={joining} disabled={picked.size === 0}>
+          <Button
+            ref={submit}
+            type="submit"
+            variant="primary"
+            busy={joining}
+            disabled={picked.size === 0}
+          >
             {t('welcome.join', { count: picked.size })}
           </Button>
           <Button variant="ghost" disabled={joining} onClick={enter}>
@@ -182,7 +285,9 @@ export const WelcomeScreen = (): React.JSX.Element => {
           <h1 className="text-display text-ink">
             {t('welcome.heading', { workspace: workspace.name })}
           </h1>
-          <p className="text-body text-ink-muted">{t('welcome.lede')}</p>
+          <p className="text-body text-ink-muted">
+            {t(marked.size > 0 ? 'welcome.lede' : 'welcome.ledeQuiet')}
+          </p>
           {body}
         </section>
       </div>

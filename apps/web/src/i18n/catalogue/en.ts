@@ -387,6 +387,7 @@ export const en = {
   'welcome.heading': 'Welcome to {workspace}',
   'welcome.lede':
     'Pick the channels to start in. The busiest are picked already; Browse finds the rest later.',
+  'welcome.ledeQuiet': 'Pick the channels to start in; Browse finds the rest later.',
   'welcome.loading': 'Loading the channels',
   'welcome.error.title': 'The channels did not load.',
   'welcome.error.body': 'You are in the workspace; try again, or skip and pick them later.',

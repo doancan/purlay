@@ -5780,7 +5780,11 @@ offer a pick of channels to join on accepting an invitation. D-125 put both in P
 5. **Channels to join on arriving**: accepting an invitation leads to `/w/:slug/welcome`, the
    workspace's public channels not yet joined, by name; the three with the latest messages are marked
    Active and picked, a silent channel is never recommended. Joined together with the existing join,
-   or skipped; a join that fails part way says which channels by name and keeps those picked.
+   or skipped; a join that fails part way says which channels by name, and why, and keeps those
+   picked unless they are gone. They are joined four at a time — each is a write on the budget the
+   person's first message spends — and the marks are set once, so a list read again does not move
+   them. A person who leaves while the joins are on their way is not moved, and a failure is said
+   where they are.
 
 **Rejected.** *The star in `ChannelState`* — every frame that carries a read position would have to
 read the star too, and a star changes nothing a read position says. *A frame carrying the star* —
