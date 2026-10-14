@@ -8,7 +8,7 @@
  */
 import { afterEach } from 'bun:test';
 import { act } from '@testing-library/react';
-import type { Channel, Message, MessagePage, User } from '@purlay/types';
+import type { Channel, Message, MessagePage, Profile, User } from '@purlay/types';
 import type { Api } from '../data/api';
 import { ChannelScreen } from '../features/channel/channel-screen';
 import { Toaster } from '../ui/toast';
@@ -41,7 +41,11 @@ export interface ChannelOptions {
   readonly api?: Partial<Api>;
   readonly channels?: Channel[];
   /** The workspace's members, by username, for mentions. */
-  readonly members?: readonly { readonly user: User; readonly role?: 'member' | 'owner' }[];
+  readonly members?: readonly {
+    readonly user: User;
+    readonly role?: 'member' | 'owner';
+    readonly profile?: Profile;
+  }[];
   readonly messages?: MessagePage | (() => Promise<MessagePage>);
   readonly locale?: 'en' | 'tr';
   /** The address the page starts at, for a channel opened by a link (`?thread=`). */
@@ -111,7 +115,7 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
           user: m.user,
           role: m.role ?? 'member',
           joinedAt: WHEN,
-          profile: NO_PROFILE,
+          profile: m.profile ?? NO_PROFILE,
         })),
       ),
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),

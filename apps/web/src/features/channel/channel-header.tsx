@@ -25,6 +25,7 @@ import { ChannelDetailsDialog } from './channel-details';
 import { NotificationLevelMenu } from './notification-level-menu';
 import { GroupDetailsDialog } from '../conversations/group-details';
 import { PanelControls } from './panel-controls';
+import { PeerHeading } from '../profile/peer-heading';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -106,6 +107,8 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
               onOpenChange={setDetails}
             />
           </>
+        ) : direct && channel.peer !== null ? (
+          <PeerHeading peer={channel.peer} title={title} />
         ) : direct ? (
           <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
         ) : (

@@ -4,7 +4,7 @@
  * title, in the header and the tab, being its people.
  */
 import { describe, expect, test } from 'bun:test';
-import { act } from '@testing-library/react';
+import { act, within } from '@testing-library/react';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
 import { Outlet } from '../../app/outlet';
@@ -284,7 +284,7 @@ describe('a group’s details', () => {
     view.unmount();
   });
 
-  test('a conversation of two has none: its title is not a button', async () => {
+  test('a conversation of two has none: its title opens the other person’s profile instead (D-131)', async () => {
     const pair = aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE });
     const view = await renderApp(<Outlet />, {
       path: `/w/acme/c/${IDS.dm}`,
@@ -295,7 +295,11 @@ describe('a group’s details', () => {
     });
     await settle();
     const heading = view.getByRole('heading', { level: 1 });
-    expect(heading.querySelector('button')).toBeNull();
+    const name = within(heading).getByRole('button', { name: /profile$/ });
+    await person().click(name);
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(view.getByRole('complementary', { name: /^Profile/ })).toBeDefined();
     view.unmount();
   });
 });

@@ -19,9 +19,27 @@ import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { useLocalTime } from '../profile/local-time';
+import type { Profile } from '@purlay/types';
 
 /** The people besides the person themselves. */
 const OTHERS_MAX = CONVERSATION_PEOPLE_MAX - 1;
+
+/** What somebody does and the time it is where they are, under their name where people are picked (D-131). */
+const PersonDetail = ({
+  profile,
+}: {
+  readonly profile: Profile | undefined;
+}): React.JSX.Element | null => {
+  const { t } = useI18n();
+  const time = useLocalTime(profile);
+  const parts = [
+    profile?.title ?? null,
+    time === null ? null : t('profile.localTime', { time }),
+  ].filter((part) => part !== null);
+  if (parts.length === 0) return null;
+  return <span className="truncate text-caption text-ink-muted">{parts.join(' · ')}</span>;
+};
 
 export const NewConversationDialog = ({
   open,
@@ -46,6 +64,7 @@ export const NewConversationDialog = ({
   const [failed, setFailed] = useState<string | null>(null);
 
   const everybody = (members.data ?? []).map((member) => member.user);
+  const profiles = new Map((members.data ?? []).map((member) => [member.user.id, member.profile]));
   const others = everybody.filter((person) => person.id !== user.id);
   const wanted = filter.trim().toLowerCase();
   const shown = others.filter(
@@ -115,9 +134,12 @@ export const NewConversationDialog = ({
           return (
             <li key={person.id} className="flex items-center gap-2">
               <Avatar name={person.displayName} username={person.username} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-body text-ink">
-                {person.displayName}
-                <span className="text-ink-muted">{` @${person.username}`}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-body text-ink">
+                  {person.displayName}
+                  <span className="text-ink-muted">{` @${person.username}`}</span>
+                </span>
+                <PersonDetail profile={profiles.get(person.id)} />
               </span>
               <Button
                 variant={chosen ? 'primary' : 'secondary'}

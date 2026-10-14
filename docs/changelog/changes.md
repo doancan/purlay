@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: profiles (D-131, closes #488)
+
+- **Your profile…** in the account menu sets a title, a status line and your time zone (this
+  device's in one press). A conversation with one person shows the time where they are and their
+  status beside their name, which opens their profile; the people picker shows titles and local
+  times. A change reaches everyone who shares a workspace with you at once.
+
 ### Feature — 2026-10-14: profiles, the API (D-131, part of #488)
 
 - A person sets a title, a time zone and a status line with `PATCH /api/me/profile`; `/api/me` and a
