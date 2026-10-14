@@ -34,6 +34,7 @@ const open = (over: Partial<Incident> = {}): Incident =>
     status: 'investigating',
     declaredBy: ALICE,
     declaredAt: DECLARED,
+    responders: [],
     resolvedAt: null,
     ...over,
   }) as Incident;
@@ -540,6 +541,50 @@ describe('a channel’s incident', () => {
       'SEV1',
     );
     view.unmountAll();
+  });
+
+  test('responders on the timeline: themselves, somebody else, and somebody gone (D-137 §3)', async () => {
+    const entries = (locale?: 'tr'): Promise<ChannelView> =>
+      mount(
+        {
+          incident: () => Promise.resolve({ incident: open() }),
+          incidentUpdates: () =>
+            Promise.resolve({
+              data: [
+                {
+                  id: '0199155c-6200-7b7f-8c11-0000000000f6',
+                  at: DECLARED,
+                  actor: ME,
+                  change: { kind: 'responder_removed', user: null },
+                },
+                {
+                  id: '0199155c-6200-7b7f-8c11-0000000000f5',
+                  at: DECLARED,
+                  actor: ME,
+                  change: { kind: 'responder_added', user: ALICE },
+                },
+                {
+                  id: '0199155c-6200-7b7f-8c11-0000000000f4',
+                  at: DECLARED,
+                  actor: ALICE,
+                  change: { kind: 'responder_added', user: ALICE },
+                },
+              ],
+              nextCursor: null,
+            }),
+        },
+        locale === undefined ? {} : { locale },
+      );
+    const view = await entries();
+    const panel = await openPanel(view);
+    expect(within(panel).getByText('Alice is responding')).toBeDefined();
+    expect(within(panel).getByText('Dogancan brought Alice in to respond')).toBeDefined();
+    expect(within(panel).getByText('Dogancan took Someone off responding')).toBeDefined();
+    view.unmountAll();
+    const tr = await entries('tr');
+    const panelTr = await openPanel(tr);
+    expect(within(panelTr).getByText('Alice müdahale ediyor')).toBeDefined();
+    tr.unmountAll();
   });
 
   test('in Turkish, it speaks Turkish', async () => {

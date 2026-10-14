@@ -192,23 +192,44 @@ const Controls = ({
   );
 };
 
+/** What an entry says: who did what, to whom. Exhaustive: a new kind is a compile error here. */
+const sentenceOf = (
+  update: IncidentUpdate,
+  name: string,
+  t: ReturnType<typeof useI18n>['t'],
+): string => {
+  const { change } = update;
+  switch (change.kind) {
+    case 'declared':
+      return t('incident.declared', { name, n: change.severity });
+    case 'status':
+      return change.to === 'resolved'
+        ? t('incident.resolvedBy', { name })
+        : t('incident.moved', { name, status: t(`incident.${change.to}`) });
+    case 'severity':
+      return t(change.to < change.from ? 'incident.worse' : 'incident.better', {
+        name,
+        from: change.from,
+        to: change.to,
+      });
+    case 'responder_added':
+    case 'responder_removed': {
+      const added = change.kind === 'responder_added';
+      // Themselves: "is responding", not "brought themselves in".
+      if (change.user !== null && change.user.id === update.actor?.id) {
+        return t(added ? 'incident.selfIn' : 'incident.selfOff', { name });
+      }
+      const who = change.user?.displayName ?? t('incident.someone');
+      return t(added ? 'incident.broughtIn' : 'incident.tookOff', { name, who });
+    }
+  }
+};
+
 /** One entry of the timeline, said as a sentence: who did what. */
 const Entry = ({ update }: { readonly update: IncidentUpdate }): React.JSX.Element => {
   const { t, format } = useI18n();
   const name = update.actor?.displayName ?? t('incident.someone');
-  const { change } = update;
-  const said =
-    change.kind === 'declared'
-      ? t('incident.declared', { name, n: change.severity })
-      : change.kind === 'status'
-        ? change.to === 'resolved'
-          ? t('incident.resolvedBy', { name })
-          : t('incident.moved', { name, status: t(`incident.${change.to}`) })
-        : t(change.to < change.from ? 'incident.worse' : 'incident.better', {
-            name,
-            from: change.from,
-            to: change.to,
-          });
+  const said = sentenceOf(update, name, t);
   return (
     <li className="flex flex-col gap-1 border-t-hairline border-border-subtle py-2">
       <span className="text-body text-ink">{said}</span>

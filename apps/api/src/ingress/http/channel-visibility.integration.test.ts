@@ -329,7 +329,8 @@ describe('integration: channel visibility', () => {
               messageId: NEVER_EXISTED,
               attachmentId: NEVER_EXISTED,
               unsentAttachmentId: NEVER_EXISTED,
-              memberId: NEVER_EXISTED,
+              // The outsider, who is in the visible channel: the control for a responder.
+              memberId: world.ids.userId,
               invitationId: NEVER_EXISTED,
               feedId: world.feed,
               versionId: NEVER_EXISTED,

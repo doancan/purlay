@@ -14,12 +14,13 @@ import {
   type ClonedDatabase,
   type Transaction,
 } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { INCIDENT_RESPONDERS_MAX, messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { aRoom } from '../../testing/rooms';
 import { changeIncident, declareIncident, incidentUpdates } from './incidents';
+import { addResponder } from './responders';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
 const clock = fixedClock(NOW);
@@ -149,6 +150,35 @@ describe('integration: two at once', () => {
     );
     expect(waited).toBe(true);
     expect(second).toBe('INCIDENT_ID_CONFLICT');
+  });
+
+  test('two brought in at once with one place left: one is taken, the other refused', async () => {
+    const db = cloned.db;
+    const names = Array.from({ length: INCIDENT_RESPONDERS_MAX + 1 }, (_, n) => `r${String(n)}`);
+    const room = await aRoom(db, names);
+    const first = contextOf(room, 'r0');
+    const id = messageId(NOW);
+    await db.transaction().execute(async (transaction) => {
+      await declareIncident(transaction, clock, first, { id, severity: 2 });
+      for (const name of names.slice(0, INCIDENT_RESPONDERS_MAX - 1)) {
+        await addResponder(transaction, clock, first, id, room.members[name]?.userId ?? '');
+      }
+    });
+    const last =
+      (name: string) =>
+      (transaction: Transaction): ReturnType<typeof addResponder> =>
+        addResponder(transaction, clock, first, id, room.members[name]?.userId ?? '');
+    const { waited, second } = await raced(db, last(names[INCIDENT_RESPONDERS_MAX - 1] ?? ''), () =>
+      db
+        .transaction()
+        .execute(last(names[INCIDENT_RESPONDERS_MAX] ?? ''))
+        .then(
+          () => 'taken',
+          (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
+        ),
+    );
+    expect(waited).toBe(true);
+    expect(second).toBe('INCIDENT_RESPONDERS_LIMIT');
   });
 
   test('two changes at once are one after the other, and both are on the timeline', async () => {

@@ -6016,8 +6016,12 @@ choices; they are recorded here.
    channel is gone for everyone (D-123 §2), its incident with it.
 3. **What it holds:** a severity, 1 to 4, SEV1 the worst; a status, `investigating` or `mitigating`
    either way round, then `resolved` once and for good, with its instant (`INCIDENT_RESOLVED` after);
-   responders, members of the channel, at most fifty; a runbook link, `https:` only; a postmortem draft,
-   markdown, as long as a message may be, written while open and after.
+   responders, members of the channel, at most fifty, brought in and taken off by anyone in it —
+   kept, and still changed, after it is resolved, since who worked on it is part of what is written up;
+   nobody outside the channel can be brought in (`404 USER_NOT_FOUND`, one answer for every kind of
+   outsider), and somebody who leaves it afterwards stays on the list — a record of who responded, as a
+   message stays its author's, never a change made silently under everybody else; a runbook link, `https:` only; a postmortem draft, markdown,
+   as long as a message may be, written while open and after.
 4. **Its timeline** is append-only: declared, status, severity — and, as they ship, responders and the
    runbook and postmortem saved — each with who and when, newest first, keyset on a UUIDv7 that is after
    the newest whatever the clock says. The postmortem's words are not copied into it; that it changed is.

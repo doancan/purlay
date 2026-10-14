@@ -204,6 +204,7 @@ describe('the endpoints', () => {
       status: 'investigating',
       declaredBy: null,
       declaredAt: '2026-09-09T11:00:00.000Z',
+      responders: [],
       resolvedAt: null,
     };
     const read = harness({ incident: null });

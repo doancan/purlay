@@ -127,6 +127,14 @@ export interface GithubRepoFeeds {
   workspace_id: string;
 }
 
+export interface IncidentResponders {
+  added_at: Timestamp;
+  added_by: string | null;
+  channel_id: string;
+  incident_id: string;
+  user_id: string;
+}
+
 export interface Incidents {
   channel_id: string;
   declared_at: Timestamp;
@@ -325,6 +333,7 @@ export interface DB {
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
   github_repo_feeds: GithubRepoFeeds;
+  incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
   job_runs: JobRuns;

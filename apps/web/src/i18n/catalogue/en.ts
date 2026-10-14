@@ -370,6 +370,10 @@ export const en = {
   'incident.timeline': 'What happened',
   'incident.timelineFailed': 'The timeline did not load.',
   'incident.older': 'Show older',
+  'incident.selfIn': '{name} is responding',
+  'incident.selfOff': '{name} stopped responding',
+  'incident.broughtIn': '{name} brought {who} in to respond',
+  'incident.tookOff': '{name} took {who} off responding',
   'incident.someone': 'Someone',
   'incident.declared': '{name} declared it at SEV{n}',
   'incident.moved': '{name} moved it to {status}',
@@ -842,6 +846,8 @@ export const en = {
   'failure.incidentOpen':
     'This channel already has an incident open. Change that one, or resolve it first.',
   'failure.incidentResolved': 'This incident is resolved. Declare a new one if it is back.',
+  'failure.incidentRespondersLimit':
+    'That is as many people as an incident has responding. Take somebody off first.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",

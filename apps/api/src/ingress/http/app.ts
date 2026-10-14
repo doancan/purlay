@@ -138,7 +138,13 @@ import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
-import { listIncidentUpdates, patchIncident, postIncident, readIncident } from './incidents';
+import {
+  listIncidentUpdates,
+  patchIncident,
+  postIncident,
+  putResponder,
+  readIncident,
+} from './incidents';
 
 export interface Dependencies {
   readonly config: Config;
@@ -543,6 +549,30 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/incident/:incidentId',
       async ({ request, params, body }) =>
         await patchIncident(sending, request, params.channelId, params.incidentId, body),
+    )
+    .put(
+      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
+      async ({ request, params }) =>
+        await putResponder(
+          sending,
+          request,
+          params.channelId,
+          params.incidentId,
+          params.userId,
+          true,
+        ),
+    )
+    .delete(
+      '/api/channels/:channelId/incident/:incidentId/responders/:userId',
+      async ({ request, params }) =>
+        await putResponder(
+          sending,
+          request,
+          params.channelId,
+          params.incidentId,
+          params.userId,
+          false,
+        ),
     )
     .get(
       '/api/channels/:channelId/incident/:incidentId/updates',
