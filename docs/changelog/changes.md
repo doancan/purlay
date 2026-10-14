@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-14: how a reporter of a vulnerability is credited (closes #123)
+
+- `SECURITY.md` now states its credit policy: a confirmed report is credited in the advisory and the
+  fix's changelog entry, under the name the reporter chooses or anonymously, and there is no bug
+  bounty. The private channel, the response times and the supported versions were already there.
+
 ### Fix — 2026-10-14: a channel joined or made on one device appears on the others, live (closes #540)
 
 - Joining a public channel, or making a channel, now sends `CHANNEL_ADDED` to the person's own
