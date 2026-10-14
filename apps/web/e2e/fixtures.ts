@@ -37,7 +37,7 @@ export type { Persona, Room };
  * person holds, or makes a workspace of its own to change. One test, one outsider — erin's sessions
  * end in the test that signs her out everywhere, so nothing else may lean on them.
  */
-type Outsider = 'erin' | 'frank';
+type Outsider = 'erin' | 'frank' | 'gwen';
 
 /** A workspace as `POST /api/workspaces` answers it. */
 interface OwnWorkspace {

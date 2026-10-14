@@ -105,7 +105,7 @@ const MessageRowView = ({
   const deleted = message.deletedAt !== null;
   // The author's own, sent and not deleted: theirs to edit and delete (D-103). An event is nobody's.
   const mine = isMine(message, meId) && delivery === 'sent' && !deleted;
-  const author = authorOf(message);
+  const author = authorOf(message, t('user.erased'));
   const event = deleted ? null : message.githubEvent;
   const editing = useEditing().editingId === message.id && mine;
   // Whether the pointer or focus is on THIS row and not on a row nested inside it. Replies were

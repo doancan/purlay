@@ -191,10 +191,15 @@ const QuestionRow = ({
         }}
         className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
-        <Avatar name={authorOf(question).displayName} username={authorOf(question).username} />
+        <Avatar
+          name={authorOf(question, t('user.erased')).displayName}
+          username={authorOf(question, t('user.erased')).username}
+        />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="text-body font-semibold text-ink">{authorOf(question).username}</span>
+            <span className="text-body font-semibold text-ink">
+              {authorOf(question, t('user.erased')).username}
+            </span>
             <time dateTime={question.createdAt} className="font-mono text-caption text-ink-subtle">
               {format.time(question.createdAt, now)}
             </time>

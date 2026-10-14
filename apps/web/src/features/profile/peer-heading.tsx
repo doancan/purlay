@@ -3,6 +3,7 @@
  * profile beside the conversation, the time it is where they are, and their status line — so a
  * message is not sent at three in their morning without knowing it.
  */
+import { nameOf } from '../messages/author';
 import type { User } from '@purlay/types';
 import { useId } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -50,7 +51,9 @@ export const PeerHeading = ({
         </button>
       </h1>
       {/* Beside the heading, not in it: the heading's name is the person's, and only that. */}
-      <VisuallyHidden id={hintId}>{t('profile.open', { name: peer.displayName })}</VisuallyHidden>
+      <VisuallyHidden id={hintId}>
+        {t('profile.open', { name: nameOf(peer, t('user.erased')) })}
+      </VisuallyHidden>
       {time !== null && (
         <span className="shrink-0 font-mono text-caption text-ink-muted max-narrow:hidden">
           {t('profile.localTime', { time })}

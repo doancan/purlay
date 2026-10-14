@@ -55,7 +55,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
         id: 'view:feed',
         group: 'views',
         label: t('palette.view.feed'),
-        hint: displayName(current, user.id, t('sidebar.you')),
+        hint: displayName(current, user.id, t('sidebar.you'), t('user.erased')),
         glyph: 'channel',
         recency: '',
         run: () => {

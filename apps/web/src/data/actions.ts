@@ -66,6 +66,8 @@ export interface Actions {
   readonly joinWorkspace: (token: string) => Promise<Membership>;
   /** This session, or — `everywhere` — every session the person holds, this one with them. */
   readonly signOut: (scope?: 'here' | 'everywhere') => Promise<void>;
+  /** Erases the person's own account (D-139 §5), and forgets them here as signing out does. */
+  readonly eraseAccount: (confirm: string) => Promise<void>;
   /** In by a sign-in link (D-138 §4): whoever this page held before is forgotten, as on sign-out. */
   readonly signInByLink: (token: string) => Promise<void>;
 }
@@ -221,6 +223,11 @@ export const createActions = (
       // Nothing cached belongs to the next person to sign in on this page — nor does anything
       // they wrote that the browser kept: a draft is keyed by channel and thread ids alone, so
       // the next person opening the same conversation would otherwise find it.
+      client.clear();
+      forgetPersonalData(storage);
+    },
+    eraseAccount: async (confirm): Promise<void> => {
+      await api.eraseAccount(confirm);
       client.clear();
       forgetPersonalData(storage);
     },

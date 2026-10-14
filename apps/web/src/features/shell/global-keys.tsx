@@ -86,7 +86,9 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
         if (target === null) return;
         navigate(href('channel', { slug, channelId: target.id }));
         setAnnouncement(
-          t('palette.announce.channel', { name: displayName(target, user.id, t('sidebar.you')) }),
+          t('palette.announce.channel', {
+            name: displayName(target, user.id, t('sidebar.you'), t('user.erased')),
+          }),
         );
       }
     };

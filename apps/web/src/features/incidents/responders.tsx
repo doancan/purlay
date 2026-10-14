@@ -5,6 +5,7 @@
  *
  * Somebody who left the channel stays on it: a record of who responded, never a change made silently.
  */
+import { nameOf } from '../messages/author';
 import type { Incident } from '@purlay/types';
 import { useId, useRef } from 'react';
 import { useChannelMembers } from '../../data/queries';
@@ -53,16 +54,20 @@ export const Responders = ({
         <ul className="flex flex-col gap-1">
           {incident.responders.map((person) => (
             <li key={person.id} className="flex min-w-0 items-center gap-2">
-              <Avatar name={person.displayName} username={person.username} size="sm" />
+              <Avatar
+                name={nameOf(person, t('user.erased'))}
+                username={person.username}
+                size="sm"
+              />
               <span className="min-w-0 flex-1 truncate text-body text-ink">
                 {person.id === me.id
-                  ? t('incident.you', { name: person.displayName })
-                  : person.displayName}
+                  ? t('incident.you', { name: nameOf(person, t('user.erased')) })
+                  : nameOf(person, t('user.erased'))}
               </span>
               {member && (
                 <Button
                   variant="ghost"
-                  aria-label={t('incident.takeOff', { name: person.displayName })}
+                  aria-label={t('incident.takeOff', { name: nameOf(person, t('user.erased')) })}
                   onClick={() => {
                     respond(person, false);
                   }}
@@ -109,7 +114,7 @@ export const Responders = ({
                     respond(person, true);
                   }}
                 >
-                  {person.displayName}
+                  {nameOf(person, t('user.erased'))}
                 </MenuItem>
               ))}
             </Menu>

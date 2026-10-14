@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: erasing one's account, on the screen (D-139, part of #83)
+
+- "Erase my account…" in the account menu. It says what goes and what stays, and wants the username
+  typed. A session that is too old is offered a fresh sign-in; the last owner of a workspace is told
+  which workspaces to hand over, by name. Once done, the sign-in screen says the account was erased.
+- An erased person appears as "deleted user" in the reader's language wherever people are named: on
+  messages, in direct messages and their titles, in the palette, on profiles and on incidents.
+
 ### Feature — 2026-10-14: erasing one's own account (D-139, part of #83)
 
 - `POST /api/me/erase` erases the caller's account. It needs their username typed and a sign-in from

@@ -62,10 +62,15 @@ const Found = ({
         }}
         className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
-        <Avatar name={authorOf(message).displayName} username={authorOf(message).username} />
+        <Avatar
+          name={authorOf(message, t('user.erased')).displayName}
+          username={authorOf(message, t('user.erased')).username}
+        />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 text-label text-ink-muted">
-            <span className="text-body font-semibold text-ink">{authorOf(message).username}</span>
+            <span className="text-body font-semibold text-ink">
+              {authorOf(message, t('user.erased')).username}
+            </span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             {message.parentId !== null && <Icon name="reply" size="sm" />}

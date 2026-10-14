@@ -32,6 +32,7 @@ import {
   type OpenIncidentStatus,
   type OlderPageQuery,
   type SavePostmortemRequest,
+  erasedPerson,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import {
@@ -96,7 +97,7 @@ const personOf = (row: {
   row.id === null || row.username === null || row.displayName === null
     ? null
     : row.deletedAt !== null
-      ? { id: row.id, username: 'deleted', displayName: 'Deleted user', avatarUrl: null }
+      ? erasedPerson(row.id)
       : {
           id: row.id,
           username: row.username,

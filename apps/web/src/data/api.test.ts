@@ -691,6 +691,16 @@ describe('the endpoints', () => {
     });
   });
 
+  test('erasing one’s own account sends the username typed (D-139 §5)', async () => {
+    const erased = harness(null);
+    await erased.api.eraseAccount('alice');
+    expect(erased.calls[0]).toEqual({
+      method: 'POST',
+      url: '/api/me/erase',
+      body: { confirm: 'alice' },
+    });
+  });
+
   test('an abandoned read carries the signal', async () => {
     let signal: AbortSignal | undefined;
     const fetchFn = ((_url: string, init: RequestInit) => {

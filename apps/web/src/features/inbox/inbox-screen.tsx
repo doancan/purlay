@@ -56,7 +56,7 @@ const glyphOf = (type: Notification['type']): GlyphName => {
 const useWhy = (): ((notification: Notification, channel: Channel | undefined) => string) => {
   const { t } = useI18n();
   return (notification, channel) => {
-    const name = authorOf(notification.message).username;
+    const name = authorOf(notification.message, t('user.erased')).username;
     switch (notification.type) {
       case 'mention':
         return t('inbox.why.mention', { name });
@@ -134,7 +134,10 @@ const Row = ({
         }}
         className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
-        <Avatar name={authorOf(message).displayName} username={authorOf(message).username} />
+        <Avatar
+          name={authorOf(message, t('user.erased')).displayName}
+          username={authorOf(message, t('user.erased')).username}
+        />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 text-label text-ink-muted">
             <Icon name={glyphOf(notification.type)} size="sm" />

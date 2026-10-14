@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
-import { Channel, CONVERSATION_PEOPLE_MAX, messageId } from '@purlay/types';
+import { Channel, CONVERSATION_PEOPLE_MAX, messageId, erasedPerson } from '@purlay/types';
 import { createApp } from './app';
 import { openConversationWith } from './channels';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
@@ -263,12 +263,7 @@ describe('integration: a group’s people stay its people', () => {
         .where('id', '=', cat.userId)
         .execute();
       const seen = (await channelsOf(db, workspaceId, ann)).find((c) => c.id === group.id);
-      expect(seen?.peers.find((peer) => peer.id === cat.userId)).toEqual({
-        id: cat.userId,
-        username: 'deleted',
-        displayName: 'Deleted user',
-        avatarUrl: null,
-      });
+      expect(seen?.peers.find((peer) => peer.id === cat.userId)).toEqual(erasedPerson(cat.userId));
     });
   });
 

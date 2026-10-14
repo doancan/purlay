@@ -268,6 +268,31 @@ describe('signing out', () => {
   });
 });
 
+describe('erasing one’s own account (D-139 §5)', () => {
+  test('erases, then forgets the person here as signing out does; a refusal forgets nothing', async () => {
+    const { client } = world();
+    client.setQueryData(keys.me, { user, memberships: [] });
+    const storage = memoryStorage({ 'purlay.draft.a': 'mine', 'purlay.theme': 'dark' });
+    const refusal = new ApiError(403, 'REAUTHENTICATION_REQUIRED', 'old');
+    const refused = await createActions(
+      anApi({ eraseAccount: () => Promise.reject(refusal) }),
+      client,
+      storage,
+    )
+      .eraseAccount('alice')
+      .catch((caught: unknown) => caught);
+    expect(refused).toBe(refusal);
+    expect(Object.keys(storage.data).sort()).toEqual(['purlay.draft.a', 'purlay.theme']);
+    await createActions(
+      anApi({ eraseAccount: () => Promise.resolve() }),
+      client,
+      storage,
+    ).eraseAccount('alice');
+    expect(client.getQueryCache().getAll()).toHaveLength(0);
+    expect(Object.keys(storage.data)).toEqual(['purlay.theme']);
+  });
+});
+
 describe('signing in by a link (D-138 §4)', () => {
   test('spends it, then forgets whoever this page held: the cache, and the drafts kept by conversation', async () => {
     const { client } = world();

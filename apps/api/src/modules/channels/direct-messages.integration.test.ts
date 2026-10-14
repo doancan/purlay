@@ -2,6 +2,7 @@
  * Opening a direct message: one channel per pair, whoever opens it and however
  * often (I-5, D-99 §7).
  */
+import { erasedPerson } from '@purlay/types';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
@@ -173,12 +174,7 @@ describe('integration: a direct message with somebody who is gone', () => {
 
       const listed = await channelsVisibleIn(db, context);
       const dm = listed.find((channel) => channel.id === opened.channel.id);
-      expect(dm?.peer).toEqual({
-        id: fay.userId,
-        username: 'deleted',
-        displayName: 'Deleted user',
-        avatarUrl: null,
-      });
+      expect(dm?.peer).toEqual(erasedPerson(fay.userId));
       // Opening it again does not bring the person back, nor fail.
       const again = await openDirectMessage(db, clock, context, eve.userId);
       expect(again.channel.peer?.id).toBe(eve.userId);

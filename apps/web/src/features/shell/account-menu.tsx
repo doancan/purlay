@@ -29,6 +29,7 @@ import { useSession } from '../session/session';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from './deep-work';
 import { PreferenceItems } from './settings-menu';
 import { ProfileDialog } from '../profile/profile-dialog';
+import { EraseAccountDialog } from './erase-account-dialog';
 
 /** Deep Work's part of the menu: the whiles to start it for, or how long is left and its end. */
 const DeepWorkItems = (): React.JSX.Element | null => {
@@ -106,6 +107,7 @@ export const AccountMenu = (): React.JSX.Element => {
   const describe = useDescribeFailure();
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [erasing, setErasing] = useState(false);
 
   const leave = (scope: 'here' | 'everywhere'): void => {
     // A refused sign-out leaves the person signed in and says so; going to the sign-in screen
@@ -176,7 +178,23 @@ export const AccountMenu = (): React.JSX.Element => {
         >
           {t('user.signOutEverywhere.entry')}
         </MenuItem>
+        <MenuItem
+          glyph="delete"
+          tone="danger"
+          onSelect={() => {
+            setErasing(true);
+          }}
+        >
+          {t('erase.entry')}
+        </MenuItem>
       </Menu>
+      <EraseAccountDialog
+        open={erasing}
+        onOpenChange={setErasing}
+        onSignOut={() => {
+          leave('here');
+        }}
+      />
       <ProfileDialog open={editing} onOpenChange={setEditing} />
       <Dialog
         open={confirming}

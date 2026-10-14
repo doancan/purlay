@@ -9,6 +9,7 @@
  * entry the badges read, so the two cannot disagree; and in Deep Work, where the badges are not
  * drawn, the title does not count either.
  */
+import { nameOf } from '../messages/author';
 import { useEffect } from 'react';
 import type { Channel } from '@purlay/types';
 import { useChannels } from '../../data/queries';
@@ -52,10 +53,11 @@ export const TabTitle = (): null => {
     const channel = channels.find((c) => c.id === match.params.channelId);
     const peer = channel?.peer ?? null;
     if (channel?.type === 'direct_message' && peer !== null) {
-      place = peer.id === user.id ? t('feed.selfDm', { name: peer.displayName }) : peer.displayName;
+      const name = nameOf(peer, t('user.erased'));
+      place = peer.id === user.id ? t('feed.selfDm', { name }) : name;
     } else if (channel?.type === 'direct_message' && channel.peers.length > 0) {
       // A group, by its people's names (D-127).
-      place = channel.peers.map((person) => person.displayName).join(', ');
+      place = channel.peers.map((person) => nameOf(person, t('user.erased'))).join(', ');
     } else if (typeof channel?.name === 'string') place = `#${channel.name}`;
   }
   const title = tabTitle(t, {

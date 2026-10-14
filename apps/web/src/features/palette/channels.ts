@@ -6,6 +6,7 @@
  * sidebar that ordered them differently from the key that steps through them would
  * make "next unread" mean something nobody can see.
  */
+import { nameOf } from '../messages/author';
 import type { Channel } from '@purlay/types';
 import { joinedChannels, starredChannels } from '../sidebar/ordering';
 
@@ -61,10 +62,15 @@ export const stepUnread = (
 };
 
 /** The name a person knows a channel by: its own, or — in a direct message — the other person's. */
-export const displayName = (channel: Channel, me: string, youLabel: string): string => {
+export const displayName = (
+  channel: Channel,
+  me: string,
+  youLabel: string,
+  erased: string,
+): string => {
   if (channel.type !== 'direct_message') return channel.name ?? '';
   const peer = channel.peer;
   // A group, by its people (D-127).
-  if (peer === null) return channel.peers.map((person) => person.displayName).join(', ');
-  return peer.id === me ? youLabel : peer.displayName;
+  if (peer === null) return channel.peers.map((person) => nameOf(person, erased)).join(', ');
+  return peer.id === me ? youLabel : nameOf(peer, erased);
 };

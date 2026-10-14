@@ -95,13 +95,15 @@ const Row = ({
     <li className="flex flex-col gap-2 rounded-lg px-3 py-3 hover:bg-surface-100">
       <button type="button" className="flex min-w-0 items-start gap-3 text-left" onClick={onOpen}>
         <Avatar
-          name={authorOf(message).displayName}
-          username={authorOf(message).username}
+          name={authorOf(message, t('user.erased')).displayName}
+          username={authorOf(message, t('user.erased')).username}
           size="sm"
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-center gap-1 text-caption text-ink-muted">
-            <span className="font-semibold text-ink">{authorOf(message).displayName}</span>
+            <span className="font-semibold text-ink">
+              {authorOf(message, t('user.erased')).displayName}
+            </span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             <time dateTime={item.savedAt} className="ml-auto font-mono text-caption">
