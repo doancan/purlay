@@ -1,0 +1,266 @@
+/**
+ * What a workspace export holds, table by table and column by column (D-27 §3, D-140). Typed over the
+ * generated schema (`Database`, D-45): a table or a column a migration adds is a compile error here
+ * until somebody decides whether it leaves the server — a secret added later cannot ride out unseen.
+ *
+ * - **The workspace's own record goes**: its channels, messages and what hangs off them, its incidents,
+ *   its trail, its invitations and feeds — each bounded to the workspace, and to the channels the
+ *   export covers (every channel for the operator; those the asking owner can see, D-34).
+ * - **Each person's own state stays**: saved items, notifications, read positions, stars, notification
+ *   levels, Deep Work — a person's, not the workspace's (as D-139 §5 treats them).
+ * - **Credentials and secrets never go**: sessions, sign-in links, devices, the sealed GitHub token, a
+ *   feed's webhook secret, an invitation's token digest, a storage key.
+ * - **People**: everyone the exported rows name, by the public projection (`User`); the address and
+ *   the profile only for current members — a former member's were set after they left (D-140).
+ * - Operational tables — caches, job records, the migrator's — are nobody's record.
+ */
+import type { Database } from '@purlay/db';
+
+/** A column: in the export, left out, or — for people — only for current members. */
+/**
+ * A column: in the export, left out, only for current members, or — the address — only for current
+ * members and only in the operator's export (D-140 §3).
+ */
+type Column = 'export' | 'omit' | 'members' | 'operator';
+
+/** The tables an export writes, one NDJSON file each. */
+export type ExportedTable =
+  | 'workspaces'
+  | 'workspace_members'
+  | 'channels'
+  | 'channel_members'
+  | 'messages'
+  | 'reactions'
+  | 'mentions'
+  | 'message_versions'
+  | 'pinned_messages'
+  | 'attachments'
+  | 'incidents'
+  | 'incident_updates'
+  | 'incident_responders'
+  | 'audit_log'
+  | 'github_repo_feeds'
+  | 'workspace_invitations'
+  | 'users';
+
+type Columns = { readonly [T in ExportedTable]: { readonly [C in keyof Database[T]]: Column } };
+
+export const COLUMNS: Columns = {
+  workspaces: {
+    id: 'export',
+    name: 'export',
+    slug: 'export',
+    avatar_url: 'export',
+    created_at: 'export',
+    created_by: 'export',
+    updated_at: 'export',
+    deleted_at: 'export',
+    retention_days: 'export',
+    storage_quota_bytes: 'export',
+    storage_used_bytes: 'export',
+  },
+  workspace_members: {
+    id: 'export',
+    workspace_id: 'export',
+    user_id: 'export',
+    role: 'export',
+    joined_at: 'export',
+    // A person's own state.
+    deep_work_until: 'omit',
+    is_deep_work_active: 'omit',
+  },
+  channels: {
+    id: 'export',
+    workspace_id: 'export',
+    name: 'export',
+    topic: 'export',
+    type: 'export',
+    dm_key: 'export',
+    created_by: 'export',
+    created_at: 'export',
+    updated_at: 'export',
+    deleted_at: 'export',
+    last_message_at: 'export',
+    // The realtime layer's ordering, not the record.
+    state_version: 'omit',
+  },
+  channel_members: {
+    id: 'export',
+    channel_id: 'export',
+    user_id: 'export',
+    joined_at: 'export',
+    // Each person's own reading of the channel.
+    last_read_message_id: 'omit',
+    notification_level: 'omit',
+    starred_at: 'omit',
+    unread_count: 'omit',
+    unread_mention_count: 'omit',
+    state_version: 'omit',
+  },
+  messages: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    parent_id: 'export',
+    sender_id: 'export',
+    message_type: 'export',
+    content: 'export',
+    metadata: 'export',
+    created_at: 'export',
+    updated_at: 'export',
+    edited_at: 'export',
+    deleted_at: 'export',
+    thread_reply_count: 'export',
+    thread_last_reply_at: 'export',
+    resolved_at: 'export',
+    resolved_by: 'export',
+    state_version: 'omit',
+  },
+  reactions: {
+    id: 'export',
+    message_id: 'export',
+    user_id: 'export',
+    emoji: 'export',
+    created_at: 'export',
+  },
+  mentions: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    message_id: 'export',
+    mentioned_user_id: 'export',
+    created_at: 'export',
+  },
+  message_versions: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    message_id: 'export',
+    content: 'export',
+    replaced_at: 'export',
+  },
+  pinned_messages: {
+    workspace_id: 'export',
+    channel_id: 'export',
+    message_id: 'export',
+    pinned_by: 'export',
+    pinned_at: 'export',
+  },
+  attachments: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    message_id: 'export',
+    uploader_id: 'export',
+    file_name: 'export',
+    mime_type: 'export',
+    kind: 'export',
+    size_bytes: 'export',
+    width: 'export',
+    height: 'export',
+    created_at: 'export',
+    // Where the object is kept on this server: the export names it by its id instead.
+    storage_key: 'omit',
+    thumbnail_key: 'omit',
+  },
+  incidents: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    severity: 'export',
+    status: 'export',
+    declared_by: 'export',
+    declared_at: 'export',
+    resolved_at: 'export',
+    runbook_url: 'export',
+    postmortem: 'export',
+    postmortem_version: 'export',
+  },
+  incident_updates: {
+    id: 'export',
+    incident_id: 'export',
+    actor_id: 'export',
+    kind: 'export',
+    from_value: 'export',
+    to_value: 'export',
+    at: 'export',
+  },
+  incident_responders: {
+    incident_id: 'export',
+    channel_id: 'export',
+    user_id: 'export',
+    added_by: 'export',
+    added_at: 'export',
+  },
+  audit_log: {
+    id: 'export',
+    workspace_id: 'export',
+    actor_user_id: 'export',
+    action: 'export',
+    target_type: 'export',
+    target_id: 'export',
+    metadata: 'export',
+    created_at: 'export',
+    // A session is a credential's row, not exported: the id would name nothing.
+    session_id: 'omit',
+  },
+  github_repo_feeds: {
+    id: 'export',
+    workspace_id: 'export',
+    channel_id: 'export',
+    repository_id: 'export',
+    repository_full_name: 'export',
+    events: 'export',
+    created_by: 'export',
+    created_at: 'export',
+    last_delivery_at: 'export',
+    last_failure_at: 'export',
+    last_failure: 'export',
+    // The webhook's secret, sealed: a credential never leaves (D-134 §4).
+    secret_encrypted: 'omit',
+  },
+  workspace_invitations: {
+    id: 'export',
+    workspace_id: 'export',
+    created_by: 'export',
+    created_at: 'export',
+    expires_at: 'export',
+    revoked_at: 'export',
+    // The link's secret, digested: it would still open nothing, and says nothing either.
+    token_hash: 'omit',
+  },
+  users: {
+    id: 'export',
+    username: 'export',
+    display_name: 'export',
+    avatar_url: 'export',
+    created_at: 'export',
+    deleted_at: 'export',
+    // The controller's data about their own people — not about those who left (D-140).
+    email: 'operator',
+    title: 'members',
+    time_zone: 'members',
+    status_text: 'members',
+    // Identity with another service, and a person's own settings and traces.
+    github_id: 'omit',
+    locale: 'omit',
+    last_seen_at: 'omit',
+    updated_at: 'omit',
+  },
+};
+
+/** Every other table, and why it is not in an export. Exhaustive: a new table must say. */
+export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, string>> = {
+  sessions: 'a credential, the person’s own',
+  push_subscriptions: 'a device’s keys, the person’s own',
+  email_sign_ins: 'sign-in links, credentials of the person’s own',
+  github_integrations: 'the sealed GitHub token: a credential never leaves',
+  github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
+  notifications: 'each person’s inbox, their own state',
+  saved_messages: 'each person’s saved items, their own state',
+  link_previews: 'a cache of other sites’ pages',
+  job_runs: 'the scheduler’s own record',
+};
+
+/** The migrator's own tables: not in the generated schema at all, and not anybody's record. */
+export const MIGRATOR_TABLES: readonly string[] = ['kysely_migration', 'kysely_migration_lock'];

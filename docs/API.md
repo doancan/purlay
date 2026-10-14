@@ -143,7 +143,7 @@ an instance-administrator role this product does not have.
 | ○ | `GET` | `/api/workspaces/:workspaceId/audit` | admin — `?before=&limit=` (`OlderPageQuery`); an `AuditPage` of `AuditEntry`, newest first, keyset on the id (D-26). Who did what to whom, never anything written; a member is `403 FORBIDDEN` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/retention` | owner — `RetentionSetting`: how many days of history the workspace keeps, `null` for forever (the default). Its own route, since the `Workspace` shape is shown to people not yet in it (D-139 §4) |
 | ○ | `PUT` | `/api/workspaces/:workspaceId/retention` | owner — `SetRetentionRequest`, whole days from `RETENTION_DAYS_MIN` (the table's own check) to `RETENTION_DAYS_MAX`, or `null` for forever; answers the `RetentionSetting`. A change is on the trail as `retention.changed` with what it was and what it became; the same window again writes nothing. The nightly purge does the rest (D-27, D-139) |
-| ② | `POST` | `/api/workspaces/:workspaceId/export` | owner — NDJSON + blobs (D-27) |
+| ② | `POST` | `/api/workspaces/:workspaceId/export` | owner — NDJSON + blobs, the channels the owner can see, downloadable once (D-27, D-140). The operator's command (`export:workspace`) is built; this route follows in #84 |
 
 Demoting or removing the last `owner` returns `409` (invariant I-2).
 

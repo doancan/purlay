@@ -137,6 +137,12 @@ export const AuditDialog = ({
       // The person is gone, so the sentence names nobody (D-139 §5).
       case 'account.erased':
         return t('audit.action.account.erased');
+      // An owner's, or the server operator's when nobody in the workspace asked (D-140).
+      case 'workspace.exported':
+        return t('audit.action.workspace.exported', {
+          actor: entry.actor === null ? t('audit.operator') : actor,
+          messages: entry.metadata['messages'] ?? '0',
+        });
       // The operator's act, on request (D-139 §7): what went, and nobody named.
       case 'content.erased':
         return t('audit.action.content.erased', {

@@ -27,3 +27,19 @@ export const atomicallyOn =
   (executor: Executor): Atomically =>
   async (body) =>
     isTransaction(executor) ? await body(executor) : await executor.transaction().execute(body);
+
+/**
+ * Runs the body in one read-only snapshot (`REPEATABLE READ READ ONLY`): every statement sees the
+ * database as it was at the first, whatever commits meanwhile. Joins the caller's transaction when
+ * there is one — a test's, which is a snapshot of its own rows (D-46).
+ */
+export const snapshotOn =
+  (executor: Executor): Atomically =>
+  async (body) =>
+    isTransaction(executor)
+      ? await body(executor)
+      : await executor
+          .transaction()
+          .setIsolationLevel('repeatable read')
+          .setAccessMode('read only')
+          .execute(body);
