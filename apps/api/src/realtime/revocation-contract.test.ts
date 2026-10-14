@@ -134,9 +134,9 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/messages/edit.ts#countMentions': {
     none: 'raises the mention counters of existing memberships and changes no access (#47)',
   },
-  // A deleted message takes back the unread counters it added. It changes no membership,
-  // so nobody's access moves (D-103 §7, #47).
-  'apps/api/src/modules/messages/delete.ts#uncount': {
+  // A deleted, purged or erased message takes back the unread counters it added. It changes no
+  // membership, so nobody's access moves (D-103 §7, D-139 §2, #47).
+  'apps/api/src/modules/messages/tombstone.ts#takeBack': {
     none: 'lowers the unread counters of existing memberships and changes no access (#47)',
   },
   // The \`sweep:sessions\` job calls it (D-30). It deletes rows that are already revoked

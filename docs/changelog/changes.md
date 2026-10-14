@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Decision — 2026-10-14: retention and erasure, decided before they are built (D-139, part of #83)
+
+- How the retention purge treats a thread across its window, what of a person erasure takes and what
+  it keeps, who may erase, and why an operator's command cannot end a person's sockets — written down
+  first. Removing messages from a channel now goes through one set-based rule, so the purge and content
+  erasure take back exactly what a delete does.
+
 ### Feature — 2026-10-14: signing in by email, on the screen (D-138, closes #81)
 
 - The sign-in card offers a link by email under GitHub where the server sends mail, and says the same
