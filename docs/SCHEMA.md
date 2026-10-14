@@ -696,6 +696,10 @@ CREATE TABLE incidents (
     declared_by   UUID REFERENCES users(id) ON DELETE SET NULL,
     declared_at   TIMESTAMPTZ NOT NULL,
     resolved_at   TIMESTAMPTZ,                      -- set exactly when resolved
+    -- Added by 0037 (D-137 §3, §5): the runbook it follows, and its postmortem, saved by version.
+    runbook_url         TEXT,
+    postmortem          TEXT NOT NULL DEFAULT '',
+    postmortem_version  INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT incidents_severity_known CHECK (severity BETWEEN 1 AND 4),
     CONSTRAINT incidents_status_known
@@ -707,7 +711,17 @@ CREATE TABLE incidents (
         FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
         ON DELETE CASCADE,
     -- Added by 0036: what a responder's key names, so a responder is of this channel's incident.
-    CONSTRAINT incidents_id_channel_key UNIQUE (id, channel_id)
+    CONSTRAINT incidents_id_channel_key UNIQUE (id, channel_id),
+    -- Added by 0037.
+    CONSTRAINT incidents_runbook_url CHECK (
+        runbook_url IS NULL OR (runbook_url LIKE 'https://%' AND char_length(runbook_url) <= 2048)
+    ),
+    CONSTRAINT incidents_postmortem_length CHECK (
+        char_length(postmortem)
+        + char_length(regexp_replace(postmortem, '[^\U00010000-\U0010FFFF]', '', 'g'))
+        <= 16000
+    ),
+    CONSTRAINT incidents_postmortem_version CHECK (postmortem_version >= 0)
 );
 
 -- One open incident a channel: what makes a race lose the same way as the check.
@@ -727,7 +741,10 @@ CREATE TABLE incident_updates (
     at           TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT incident_updates_kind_known CHECK (
-        kind IN ('declared', 'status', 'severity', 'responder_added', 'responder_removed')
+        kind IN (
+            'declared', 'status', 'severity', 'responder_added', 'responder_removed',
+            'runbook', 'postmortem'
+        )
     ),
     CONSTRAINT incident_updates_from
         CHECK ((kind IN ('status', 'severity')) = (from_value IS NOT NULL)),
@@ -762,7 +779,8 @@ CREATE INDEX idx_incident_responders_added_by ON incident_responders (added_by);
 
 0036 also widens the timeline: `incident_updates_kind_known` takes `responder_added` and
 `responder_removed`, whose `to_value` is the person, and `incident_updates_from` becomes
-`(kind IN ('status', 'severity')) = (from_value IS NOT NULL)`.
+`(kind IN ('status', 'severity')) = (from_value IS NOT NULL)`. 0037 adds `runbook` (the link, empty
+when cleared) and `postmortem` (the version saved — never the words, which are the incident's).
 
 > The incident and its timeline entry are written in one transaction, the incident's row locked for a
 > change. The timeline is never updated; it goes with its incident, which goes with its channel. The
@@ -1342,12 +1360,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0034_message_versions.sql    message_versions: what an edit replaced  (D-135)
 0035_incidents.sql           incidents, incident_updates: a channel's incidents and their timeline  (D-137)
 0036_incident_responders.sql incident_responders; the timeline's responder entries  (D-137 §3)
+0037_incident_writeup.sql    incidents.runbook_url, postmortem, postmortem_version  (D-137 §3, §5)
 ```
 
-Phase 2's magic links add `0037_email_auth.sql`.
+Phase 2's magic links add `0038_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions, and again with the incidents, and again with their responders. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions, and again with the incidents, and again with their responders, and again with their write-up. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

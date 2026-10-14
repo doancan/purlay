@@ -103,6 +103,11 @@ const VISIBLE = /[^\s\p{Cf}]/u;
 
 FormatRegistry.Set('name', (value) => !FORBIDDEN_IN_NAME.test(value) && VISIBLE.test(value));
 FormatRegistry.Set('plain-text', isPlainText);
+/**
+ * A link a person will open (D-137 §3): nothing a name may not hold, and no other format character
+ * either — an invisible one makes the link shown differ from the link followed.
+ */
+FormatRegistry.Set('link', (value) => !FORBIDDEN_IN_NAME.test(value) && !/\p{Cf}/u.test(value));
 FormatRegistry.Set('emoji', (value) => EMOJI.test(value));
 
 export const REGISTERED_FORMATS = [
@@ -113,5 +118,6 @@ export const REGISTERED_FORMATS = [
   'message-content',
   'name',
   'plain-text',
+  'link',
   'emoji',
 ] as const;

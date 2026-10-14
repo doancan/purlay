@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: an incident's runbook and postmortem (D-137 §3, §5, part of #487)
+
+- An incident carries the runbook it follows, an https link anyone in the channel sets or clears, and
+  its postmortem, saved from the version it was edited from: somebody else's save in between is said,
+  never written over. Both may be written after it is resolved. The screens follow.
+
 ### Feature — 2026-10-14: who is responding, on screen (D-137 §3, part of #487)
 
 - An incident's panel lists who is responding; a member says "I'm responding", brings somebody else in

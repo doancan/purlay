@@ -223,6 +223,12 @@ const sentenceOf = (
       const who = change.user?.displayName ?? t('incident.someone');
       return t(added ? 'incident.broughtIn' : 'incident.tookOff', { name, who });
     }
+    case 'runbook':
+      return change.url === null
+        ? t('incident.runbookCleared', { name })
+        : t('incident.runbookSet', { name });
+    case 'postmortem':
+      return t('incident.postmortemSaved', { name });
   }
 };
 

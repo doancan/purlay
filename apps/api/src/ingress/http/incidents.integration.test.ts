@@ -5,6 +5,8 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import {
+  MESSAGE_CONTENT_MAX,
+  RUNBOOK_URL_MAX,
   messageId,
   type Incident,
   type IncidentResponse,
@@ -19,7 +21,7 @@ import { issueSession } from '../../modules/auth/sessions';
 import { aRoom } from '../../testing/rooms';
 import { testDependencies } from '../../testing/doubles';
 import { createApp } from './app';
-import { patchIncident, postIncident, putResponder } from './incidents';
+import { patchIncident, postIncident, putPostmortem, putResponder } from './incidents';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -119,7 +121,14 @@ describe('integration: the incident routes', () => {
       }
       const id = messageId(NOW);
       await alice('POST', base, { id, severity: 1 });
-      for (const body of [{}, { status: 'closed' }, { severity: 1, extra: true }]) {
+      for (const body of [
+        {},
+        { status: 'closed' },
+        { severity: 1, extra: true },
+        { runbookUrl: 'http://example.test/' },
+        { runbookUrl: 'https://example.test/a\u0000b' },
+        { runbookUrl: `https://example.test/${'a'.repeat(RUNBOOK_URL_MAX)}` },
+      ]) {
         expect(await codeOf(await alice('PATCH', `${base}/${id}`, body))).toEqual([
           400,
           'VALIDATION_FAILED',
@@ -128,6 +137,16 @@ describe('integration: the incident routes', () => {
       expect(
         await codeOf(await alice('PATCH', `${base}/${messageId(NOW)}`, { severity: 2 })),
       ).toEqual([404, 'INCIDENT_NOT_FOUND']);
+      for (const body of [
+        { content: 'x', version: -1 },
+        { content: 'x' },
+        { content: 'a'.repeat(MESSAGE_CONTENT_MAX + 1), version: 0 },
+      ]) {
+        expect(await codeOf(await alice('PUT', `${base}/${id}/postmortem`, body))).toEqual([
+          400,
+          'VALIDATION_FAILED',
+        ]);
+      }
       // Nothing written by any of them: the declaration alone is on its timeline.
       const timeline = (await (
         await alice('GET', `${base}/${id}/updates`)
@@ -197,6 +216,16 @@ describe('integration: who is told of an incident', () => {
       await putResponder(dependencies, alice(), room.channelId, id, aliceId, true);
       await putResponder(dependencies, alice(), room.channelId, id, aliceId, false);
       await putResponder(dependencies, alice(), room.channelId, id, aliceId, false);
+      // The postmortem saved, and the same words again: once.
+      const saved = await putPostmortem(dependencies, alice(), room.channelId, id, {
+        content: 'what happened',
+        version: 0,
+      });
+      expect(saved.postmortemVersion).toBe(1);
+      await putPostmortem(dependencies, alice(), room.channelId, id, {
+        content: 'what happened',
+        version: 1,
+      });
 
       expect(refused).toBe('FORBIDDEN');
       const frame: ServerFrame = {
@@ -205,6 +234,7 @@ describe('integration: who is told of an incident', () => {
         ts: NOW.getTime(),
       };
       expect(told).toEqual([
+        [channelTopic(room.channelId), frame],
         [channelTopic(room.channelId), frame],
         [channelTopic(room.channelId), frame],
         [channelTopic(room.channelId), frame],

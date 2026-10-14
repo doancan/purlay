@@ -844,6 +844,14 @@ export type PresenceSnapshot = Static<typeof PresenceSnapshot>;
 /** How many may be responding to one incident (D-137 §3). */
 export const INCIDENT_RESPONDERS_MAX = 50;
 
+/** The longest runbook link (D-137 §3); `https:` only, which the server parses as a URL too. */
+export const RUNBOOK_URL_MAX = 2048;
+export const RunbookUrl = Type.String({
+  maxLength: RUNBOOK_URL_MAX,
+  pattern: '^https://[^\\s]+$',
+  format: 'link',
+});
+
 const incidentFields = {
   /** The client's UUIDv7, chosen when it declared: a retry finds the same incident (D-33). */
   id: Uuid,
@@ -854,6 +862,12 @@ const incidentFields = {
   declaredAt: Timestamp,
   /** Who is responding, first brought in first; each a member of the channel (D-137 §3). */
   responders: Type.Array(User, { maxItems: INCIDENT_RESPONDERS_MAX }),
+  /** The runbook it follows; null when none is set. */
+  runbookUrl: Type.Union([RunbookUrl, Type.Null()]),
+  /** The postmortem draft, markdown; empty until written. */
+  postmortem: SendContent,
+  /** How many times the postmortem was saved: what a save says it was edited from. */
+  postmortemVersion: Type.Integer({ minimum: 0 }),
 };
 /** Open, or resolved with its instant — never one without the other (`incidents_resolved_at`). */
 export const Incident = Type.Union([
@@ -881,10 +895,23 @@ export const ChangeIncidentRequest = FromClient(
   {
     status: Type.Optional(IncidentStatus),
     severity: Type.Optional(IncidentSeverity),
+    /** The runbook's link, or null to clear it. */
+    runbookUrl: Type.Optional(Type.Union([RunbookUrl, Type.Null()])),
   },
   { minProperties: 1 },
 );
 export type ChangeIncidentRequest = Static<typeof ChangeIncidentRequest>;
+
+/**
+ * `PUT /api/channels/:channelId/incident/:incidentId/postmortem` — the draft as written, from the
+ * version it was edited from: one saved since is a conflict, never written over (D-137 §5).
+ */
+export const SavePostmortemRequest = FromClient({
+  /** As long as a message may be, and held to what a message's words may hold; empty clears it. */
+  content: SendContent,
+  version: Type.Integer({ minimum: 0 }),
+});
+export type SavePostmortemRequest = Static<typeof SavePostmortemRequest>;
 
 /** What one entry of an incident's timeline says changed. */
 export const IncidentChange = Type.Union([
@@ -895,6 +922,10 @@ export const IncidentChange = Type.Union([
   /** Somebody brought in to respond, or taken off; null once they are gone. */
   Type.Object({ kind: Type.Literal('responder_added'), user: Type.Union([User, Type.Null()]) }),
   Type.Object({ kind: Type.Literal('responder_removed'), user: Type.Union([User, Type.Null()]) }),
+  /** The runbook's link set, or cleared (null). */
+  Type.Object({ kind: Type.Literal('runbook'), url: Type.Union([RunbookUrl, Type.Null()]) }),
+  /** The postmortem saved, at this version; its words are the incident's. */
+  Type.Object({ kind: Type.Literal('postmortem'), version: Type.Integer({ minimum: 1 }) }),
 ]);
 export type IncidentChange = Static<typeof IncidentChange>;
 

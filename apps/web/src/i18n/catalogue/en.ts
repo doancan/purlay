@@ -388,6 +388,9 @@ export const en = {
   'incident.membersFailed': 'The channel’s members did not load.',
   'incident.retryMembers': 'Retry reading the channel’s members',
   'incident.retryTimeline': 'Retry reading the timeline',
+  'incident.runbookSet': '{name} set the runbook',
+  'incident.runbookCleared': '{name} cleared the runbook',
+  'incident.postmortemSaved': '{name} saved the postmortem',
   'incident.someone': 'Someone',
   'incident.declared': '{name} declared it at SEV{n}',
   'incident.moved': '{name} moved it to {status}',
@@ -862,6 +865,8 @@ export const en = {
   'failure.incidentResolved': 'This incident is resolved. Declare a new one if it is back.',
   'failure.incidentRespondersLimit':
     'That is as many people as an incident has responding. Take somebody off first.',
+  'failure.incidentPostmortemChanged':
+    'Somebody else saved the postmortem since you began. Your text is kept: read theirs, then save again.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",

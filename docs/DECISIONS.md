@@ -6020,8 +6020,11 @@ choices; they are recorded here.
    kept, and still changed, after it is resolved, since who worked on it is part of what is written up;
    nobody outside the channel can be brought in (`404 USER_NOT_FOUND`, one answer for every kind of
    outsider), and somebody who leaves it afterwards stays on the list — a record of who responded, as a
-   message stays its author's, never a change made silently under everybody else; a runbook link, `https:` only; a postmortem draft, markdown,
-   as long as a message may be, written while open and after.
+   message stays its author's, never a change made silently under everybody else; a runbook link,
+   `https:` only, with a host, at most 2048 characters, changed and cleared while open and after; a
+   postmortem draft, markdown, as long as a message may be, written while open and after. The
+   postmortem has no author — several people write it — so erasing a person's content (D-27 §2) does
+   not reach it, as it does not reach a channel's topic.
 4. **Its timeline** is append-only: declared, status, severity — and, as they ship, responders and the
    runbook and postmortem saved — each with who and when, newest first, keyset on a UUIDv7 that is after
    the newest whatever the clock says. The postmortem's words are not copied into it; that it changed is.

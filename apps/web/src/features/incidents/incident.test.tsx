@@ -35,6 +35,9 @@ const open = (over: Partial<Incident> = {}): Incident =>
     declaredBy: ALICE,
     declaredAt: DECLARED,
     responders: [],
+    runbookUrl: null,
+    postmortem: '',
+    postmortemVersion: 0,
     resolvedAt: null,
     ...over,
   }) as Incident;

@@ -19,7 +19,7 @@ import { fixedClock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { aRoom } from '../../testing/rooms';
-import { changeIncident, declareIncident, incidentUpdates } from './incidents';
+import { changeIncident, declareIncident, incidentUpdates, savePostmortem } from './incidents';
 import { addResponder } from './responders';
 
 const NOW = new Date('2026-10-14T12:00:00.000Z');
@@ -179,6 +179,45 @@ describe('integration: two at once', () => {
     );
     expect(waited).toBe(true);
     expect(second).toBe('INCIDENT_RESPONDERS_LIMIT');
+  });
+
+  test('two postmortem saves from one version at once: one is written, the other told it changed', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice', 'bob']);
+    const id = messageId(NOW);
+    await db.transaction().execute(async (transaction) => {
+      await declareIncident(transaction, clock, contextOf(room, 'alice'), { id, severity: 2 });
+    });
+    const { waited, second } = await raced(
+      db,
+      (transaction) =>
+        savePostmortem(transaction, clock, contextOf(room, 'alice'), id, {
+          content: 'alice’s',
+          version: 0,
+        }),
+      () =>
+        db
+          .transaction()
+          .execute(
+            async (transaction) =>
+              await savePostmortem(transaction, clock, contextOf(room, 'bob'), id, {
+                content: 'bob’s',
+                version: 0,
+              }),
+          )
+          .then(
+            () => 'taken',
+            (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
+          ),
+    );
+    expect(waited).toBe(true);
+    expect(second).toBe('INCIDENT_POSTMORTEM_CHANGED');
+    const kept = await db
+      .selectFrom('incidents')
+      .select(['postmortem', 'postmortem_version'])
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+    expect(kept).toEqual({ postmortem: 'alice’s', postmortem_version: 1 });
   });
 
   test('two changes at once are one after the other, and both are on the timeline', async () => {

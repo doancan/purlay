@@ -142,6 +142,7 @@ import {
   listIncidentUpdates,
   patchIncident,
   postIncident,
+  putPostmortem,
   putResponder,
   readIncident,
 } from './incidents';
@@ -549,6 +550,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/incident/:incidentId',
       async ({ request, params, body }) =>
         await patchIncident(sending, request, params.channelId, params.incidentId, body),
+    )
+    .put(
+      '/api/channels/:channelId/incident/:incidentId/postmortem',
+      async ({ request, params, body }) =>
+        await putPostmortem(sending, request, params.channelId, params.incidentId, body),
     )
     .put(
       '/api/channels/:channelId/incident/:incidentId/responders/:userId',

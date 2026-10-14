@@ -205,6 +205,9 @@ describe('the endpoints', () => {
       declaredBy: null,
       declaredAt: '2026-09-09T11:00:00.000Z',
       responders: [],
+      runbookUrl: null,
+      postmortem: '',
+      postmortemVersion: 0,
       resolvedAt: null,
     };
     const read = harness({ incident: null });
