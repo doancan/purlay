@@ -849,6 +849,27 @@ describe('a thread asked for by the address', () => {
     view.unmountAll();
   });
 
+  test('takes focus at once while its root is read back, and closed gives it to the main region', async () => {
+    const view = await mount({
+      path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}`,
+      api: {
+        messages: (_c, query) =>
+          query?.before === undefined
+            ? Promise.resolve(page([aMessage(9), aMessage(10)], messageIdAt(9)))
+            : new Promise(() => undefined),
+      },
+    });
+    await settle();
+    const panel = view.container.querySelector<HTMLElement>('[data-thread-root]');
+    // The root is still on its way: the panel has focus all the same, on its heading.
+    expectFocusOn(panel?.querySelector('h2') ?? null);
+    await person().click(within(panel ?? view.container).getByRole('button', { name: /^Close/ }));
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    expectFocusOn(document.getElementById('main'));
+    view.unmountAll();
+  });
+
   test('is read back to if it is older than the first page, and then brought into view', async () => {
     const scrolled: string[] = [];
     const spy = spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (

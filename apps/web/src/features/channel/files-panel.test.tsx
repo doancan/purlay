@@ -267,6 +267,45 @@ describe('a channel’s files panel', () => {
     view.unmountAll();
   });
 
+  test('a thread whose root the feed does not hold takes focus at once, and gives it back on close', async () => {
+    // The root is older than anything the feed holds, and is never read back.
+    const root = aMessage(1, {
+      thread: {
+        replyCount: 1,
+        lastReplyAt: aMessage(4).createdAt,
+        resolvedAt: null,
+        resolvedBy: null,
+      },
+    });
+    const view = await mountChannel({
+      messages: page([aMessage(3)], messageIdAt(3)),
+      api: {
+        files: () => Promise.resolve(filePage([aFile(4, { parentId: root.id })])),
+        messages: (_channel, query) =>
+          query?.before === undefined
+            ? Promise.resolve(page([aMessage(3)], messageIdAt(3)))
+            : new Promise(() => undefined),
+        thread: (): Promise<ThreadPage> => new Promise(() => undefined),
+      },
+    });
+    await openFiles(view);
+    await person().click(
+      within(panelOf(view)).getByRole('button', {
+        name: 'Open the thread report-4.pdf was shared in',
+      }),
+    );
+    await settle();
+    const thread = view.container.querySelector<HTMLElement>(`[data-thread-root="${root.id}"]`);
+    // Into the panel at once, while its root is still being read back.
+    expectFocusOn(thread?.querySelector('h2') ?? null);
+    await person().click(within(thread ?? view.container).getByRole('button', { name: /^Close/ }));
+    await settle();
+    expect(view.container.querySelector('[data-thread-root]')).toBeNull();
+    // No row to go back to, and the files panel that opened it is gone: the main region, never nothing.
+    expectFocusOn(document.getElementById('main'));
+    view.unmountAll();
+  });
+
   test('opening the files closes a thread that was open', async () => {
     const root = aMessage(2, {
       thread: {

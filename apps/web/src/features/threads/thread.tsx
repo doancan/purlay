@@ -108,11 +108,14 @@ const ThreadPanelView = ({
   const items = useMemo(() => buildReplies({ replies, pending, me }), [replies, pending, me]);
 
   // ── Focus moves in when the panel opens, to where the person asked ──────
+  // The heading is there at once, whatever the root's state — loading, failed, gone (#555); the reply
+  // box only once the root is, so a reply waits for it.
   const { clearFocusRequest } = threads;
   const ready = root !== undefined;
   useEffect(() => {
-    if (focusRequest === null || !ready) return;
+    if (focusRequest === null) return;
     if (focusRequest === 'reply') {
+      if (!ready) return;
       panel.current?.querySelector<HTMLElement>('[data-composer]')?.focus();
     } else {
       heading.current?.focus();

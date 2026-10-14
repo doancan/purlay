@@ -11,6 +11,7 @@ import { act } from '@testing-library/react';
 import type { Channel, Message, MessagePage, Profile, User } from '@purlay/types';
 import type { Api } from '../data/api';
 import { ChannelScreen } from '../features/channel/channel-screen';
+import { Main } from '../ui/main';
 import { Toaster } from '../ui/toast';
 import { FeedPortsContext } from '../features/channel/feed-ports';
 import { ContentPortsContext } from '../features/content/content-ports';
@@ -81,11 +82,11 @@ const Region = ({
   readonly capture: (engine: Engine) => void;
 }): React.JSX.Element => {
   return (
-    <main>
+    <Main>
       <EngineProbe capture={capture} />
       <ChannelScreen channelId={channelId} />
       <Toaster dismissLabel="Close" />
-    </main>
+    </Main>
   );
 };
 
