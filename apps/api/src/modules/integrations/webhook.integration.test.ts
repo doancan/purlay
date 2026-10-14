@@ -227,6 +227,49 @@ describe('integration: a delivery to a feed', () => {
     });
   });
 
+  test('a rename onto a name another feed of the channel holds keeps both feeds posting', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const alice = world.room.members['alice']?.context;
+      if (alice === undefined) throw new Error('no alice');
+      await createFeed(db, clock, cipher, alice, { repository: 'acme/old', events: ['push'] });
+      expect(await world.deliver(push())).toBe('posted');
+      // acme/api, repository 42, is renamed to the name the other feed holds.
+      const renamed = push({ repository: { id: 42, full_name: 'acme/old' } });
+      expect(await world.deliver(renamed)).toBe('posted');
+      expect(await world.deliver(renamed, { event: 'ping' })).toBe('pinged');
+      expect((await feedRow(db, world.feedId)).repository_full_name).toBe('acme/api');
+      expect(await eventsIn(db, world.room.channelId)).toBe(2);
+    });
+  });
+
+  test('a deleted workspace’s feeds are not there', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await db
+        .updateTable('workspaces')
+        .set({ deleted_at: NOW })
+        .where('id', '=', world.room.workspaceId)
+        .execute();
+      expect(await world.deliver(push())).toBe('GITHUB_FEED_NOT_FOUND');
+      expect(await eventsIn(db, world.room.channelId)).toBe(0);
+    });
+  });
+
+  test('an organisation’s ping names no repository: received, and nothing failed', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      expect(
+        await world.deliver({ zen: 'Design for failure.', hook_id: 1 }, { event: 'ping' }),
+      ).toBe('pinged');
+      expect(await feedRow(db, world.feedId)).toMatchObject({
+        repository_id: null,
+        last_failure: null,
+        last_delivery_at: NOW,
+      });
+    });
+  });
+
   test('before its number is known, another repository by name is refused and said', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
@@ -331,6 +374,8 @@ describe('integration: a delivery to a feed', () => {
       expect(await world.deliver(push())).toBe('RATE_LIMITED');
       expect(world.charged).toEqual([world.feedId]);
       expect(await eventsIn(db, world.room.channelId)).toBe(0);
+      // GitHub will not send it again on its own: the feed says it was lost.
+      expect((await feedRow(db, world.feedId)).last_failure).toBe('rate_limited');
     });
   });
 

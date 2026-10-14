@@ -10,8 +10,11 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import {
+  GIT_REF_NAME_MAX,
   GITHUB_EVENT_TEXT_MAX,
+  GITHUB_REPOSITORY_PATTERN,
   GitHubEvent,
+  PUSH_COMMITS_LISTED_MAX,
   PUSH_COMMITS_SHOWN_MAX,
   type GitHubFeedEventName,
 } from '@purlay/types';
@@ -22,7 +25,8 @@ const Sha = Type.String({ pattern: '^[0-9a-f]{40}$' });
 const Envelope = Type.Object({
   repository: Type.Object({
     id: Type.Integer({ minimum: 1 }),
-    full_name: Type.String({ minLength: 3, maxLength: 140 }),
+    // The pattern the feed's own name is held to, so a renamed repository's name can be kept.
+    full_name: Type.String({ pattern: GITHUB_REPOSITORY_PATTERN }),
   }),
   sender: Type.Object({ login: Type.String({ minLength: 1, maxLength: 64 }) }),
 });
@@ -31,13 +35,15 @@ type Envelope = Static<typeof Envelope>;
 const PushBody = Type.Composite([
   Envelope,
   Type.Object({
-    ref: Type.String({ minLength: 1, maxLength: 300 }),
+    ref: Type.String({ minLength: 1, maxLength: GIT_REF_NAME_MAX + 'refs/heads/'.length }),
     before: Sha,
     after: Sha,
     created: Type.Boolean(),
     deleted: Type.Boolean(),
     forced: Type.Boolean(),
-    commits: Type.Array(Type.Object({ id: Sha, message: Type.String() })),
+    commits: Type.Array(Type.Object({ id: Sha, message: Type.String() }), {
+      maxItems: PUSH_COMMITS_LISTED_MAX,
+    }),
   }),
 ]);
 
@@ -75,12 +81,12 @@ const pushOf = (body: Static<typeof PushBody>): GitHubEvent | null => {
     change: body.deleted ? 'deleted' : body.created ? 'created' : body.forced ? 'forced' : 'pushed',
     before: body.before,
     after: body.after,
-    // GitHub lists the oldest first, at most twenty: the newest are what a reader wants.
+    // GitHub lists the oldest first, at most 2,048: the newest are what a reader wants.
     commits: body.commits
       .slice(-PUSH_COMMITS_SHOWN_MAX)
       .reverse()
       .map((commit) => ({ sha: commit.id, title: bounded(commit.message) })),
-    commitCount: Math.min(body.commits.length, 20),
+    commitCount: body.commits.length,
   };
 };
 
@@ -94,13 +100,15 @@ export const readDelivery = (
   body: unknown,
   wanted: readonly GitHubFeedEventName[],
 ): Reading => {
-  if (!Value.Check(Envelope, body)) return { kind: 'invalid' };
-  const envelope: Envelope = {
-    repository: { id: body.repository.id, full_name: body.repository.full_name },
-    sender: { login: body.sender.login },
-  };
+  const envelope: Envelope | null = Value.Check(Envelope, body)
+    ? {
+        repository: { id: body.repository.id, full_name: body.repository.full_name },
+        sender: { login: body.sender.login },
+      }
+    : null;
+  // An event no feed posts — an organisation's ping, an installation — may name no repository.
   if (name !== 'push' || !wanted.includes('push')) return { kind: 'ignored', envelope };
-  if (!Value.Check(PushBody, body)) return { kind: 'invalid' };
+  if (envelope === null || !Value.Check(PushBody, body)) return { kind: 'invalid' };
   const event = pushOf(body);
   if (event === null) return { kind: 'ignored', envelope };
   return Value.Check(GitHubEvent, event) ? { kind: 'event', event, envelope } : { kind: 'invalid' };

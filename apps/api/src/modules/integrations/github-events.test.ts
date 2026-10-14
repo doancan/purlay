@@ -4,7 +4,11 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { createHmac } from 'node:crypto';
-import { GITHUB_EVENT_TEXT_MAX, PUSH_COMMITS_SHOWN_MAX } from '@purlay/types';
+import {
+  GITHUB_EVENT_TEXT_MAX,
+  PUSH_COMMITS_LISTED_MAX,
+  PUSH_COMMITS_SHOWN_MAX,
+} from '@purlay/types';
 import { readDelivery, summaryOf } from './github-events';
 import { signedBy } from './webhook';
 
@@ -75,7 +79,7 @@ describe('a push, read', () => {
     );
   });
 
-  test('bounded: the five newest of twenty, and a first line cut with an ellipsis', () => {
+  test('bounded: the five newest of every commit listed, and a first line cut with an ellipsis', () => {
     const commits = Array.from({ length: 25 }, (_, n) => ({
       id: sha(String(n % 10)),
       message: n === 24 ? 'x'.repeat(GITHUB_EVENT_TEXT_MAX + 50) : `commit ${String(n)}`,
@@ -83,11 +87,39 @@ describe('a push, read', () => {
     const reading = readDelivery('push', aPush({ commits }), ['push']);
     if (reading.kind !== 'event' || reading.event.kind !== 'push') throw new Error('not a push');
     expect(reading.event.commits).toHaveLength(PUSH_COMMITS_SHOWN_MAX);
-    expect(reading.event.commitCount).toBe(20);
+    expect(reading.event.commitCount).toBe(25);
     const title = reading.event.commits[0]?.title ?? '';
     expect(Array.from(title)).toHaveLength(GITHUB_EVENT_TEXT_MAX);
     expect(title.endsWith('…')).toBe(true);
     expect(reading.event.commits[1]?.title).toBe('commit 23');
+  });
+
+  test('more commits than GitHub lists is not GitHub’s push', () => {
+    const commits = Array.from({ length: PUSH_COMMITS_LISTED_MAX + 1 }, () => ({
+      id: sha('1'),
+      message: 'x',
+    }));
+    expect(readDelivery('push', aPush({ commits }), ['push']).kind).toBe('invalid');
+  });
+
+  test('an enterprise’s managed login, and a long branch name, are a push like any other', () => {
+    const reading = readDelivery(
+      'push',
+      aPush({ sender: { login: 'alice_acme' }, ref: `refs/heads/${'b'.repeat(1024)}` }),
+      ['push'],
+    );
+    expect(reading.kind).toBe('event');
+  });
+
+  test('an event no feed posts may name no repository: ignored, never a failure', () => {
+    expect(readDelivery('installation', { action: 'created' }, ['push'])).toEqual({
+      kind: 'ignored',
+      envelope: null,
+    });
+    expect(readDelivery('ping', { zen: 'Design for failure.', hook_id: 1 }, ['push'])).toEqual({
+      kind: 'ignored',
+      envelope: null,
+    });
   });
 
   test('an event this feed does not post, or no feed posts, is ignored with what it names', () => {
@@ -115,6 +147,20 @@ describe('a push, read', () => {
         kind: 'invalid',
       });
     }
+  });
+
+  test.each([
+    [
+      { kind: 'pull_request', action: 'merged', number: 7, title: 'Retry' },
+      'octocat merged pull request #7 in acme/api: Retry',
+    ],
+    [
+      { kind: 'issues', action: 'opened', number: 9, title: 'Flaky' },
+      'octocat opened issue #9 in acme/api: Flaky',
+    ],
+    [{ kind: 'release', tag: 'v2', name: 'Two' }, 'octocat published release v2 in acme/api: Two'],
+  ] as const)('the other kinds are found by their words too: %o', (parts, said) => {
+    expect(summaryOf({ repository: 'acme/api', actor: 'octocat', ...parts })).toBe(said);
   });
 
   test('what search finds is its sentence and its commits, in English', () => {

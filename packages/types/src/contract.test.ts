@@ -12,7 +12,9 @@ import {
   ATTACHMENTS_PER_MESSAGE_MAX,
   GITHUB_EVENT_TEXT_MAX,
   GitHubEvent,
+  PUSH_COMMITS_LISTED_MAX,
   PUSH_COMMITS_SHOWN_MAX,
+  GIT_REF_NAME_MAX,
   Channel,
   CurrentUser,
   GitHubLink,
@@ -123,6 +125,15 @@ describe("a repository's event (D-134 §6)", () => {
 
   test('is bounded in every part, so nothing GitHub sends can grow a message past its shape', () => {
     expect(Value.Check(GitHubEvent, push)).toBe(true);
+    // At the bounds: an enterprise's managed login, the longest ref, the most commits GitHub lists.
+    expect(
+      Value.Check(GitHubEvent, {
+        ...push,
+        actor: 'alice_acme',
+        ref: { type: 'tag', name: 'r'.repeat(GIT_REF_NAME_MAX) },
+        commitCount: PUSH_COMMITS_LISTED_MAX,
+      }),
+    ).toBe(true);
     for (const [why, wrong] of [
       [
         'a title one past the bound',
@@ -132,7 +143,8 @@ describe("a repository's event (D-134 §6)", () => {
         'more commits than are shown',
         { commits: Array.from({ length: PUSH_COMMITS_SHOWN_MAX + 1 }, () => ({ sha, title: '' })) },
       ],
-      ['a count past what GitHub lists', { commitCount: 21 }],
+      ['a count past what GitHub lists', { commitCount: PUSH_COMMITS_LISTED_MAX + 1 }],
+      ['a ref name past its bound', { ref: { type: 'branch', name: 'r'.repeat(GIT_REF_NAME_MAX + 1) } }],
       ['a short sha', { before: 'abc' }],
       ['a repository that leaves itself', { repository: 'acme/..' }],
       ['a login that is a path', { actor: 'octo/cat' }],

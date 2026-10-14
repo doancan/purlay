@@ -36,7 +36,7 @@ import {
 } from './auth';
 import { SIGN_IN_CALLBACK } from '../../modules/auth/sign-in';
 import { clearedStateCookie } from '../../platform/cookies';
-import { clientAddress, peerOf } from './client-address';
+import { clientAddress, limitKeyFor, peerOf } from './client-address';
 import {
   GITHUB_CALL_BUDGET,
   httpLimits,
@@ -695,7 +695,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .post(
       '/api/webhooks/github/:feedId',
-      async ({ request, params, set }) => {
+      async ({ request, params, set, server }) => {
         const outcome = await receiveWebhook(
           {
             database: dependencies.database,
@@ -704,11 +704,21 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
             bus: sockets.bus,
             log: dependencies.log,
             mayDeliver: async (feedId) => await feedPosts.consume(feedId),
-            mayKnock: async () => await knocks.consume('all'),
+            mayKnock: async (address) => await knocks.consume(address),
             inFlight: delivering,
+            deadline: async (ms) => {
+              await Bun.sleep(ms);
+            },
           },
           request,
           params.feedId,
+          limitKeyFor(
+            clientAddress(
+              peerOf(server, request),
+              request.headers,
+              dependencies.config.TRUST_PROXY,
+            ),
+          ),
         );
         // What GitHub shows beside the delivery: posted, or why not, all of them received.
         set.status = outcome === 'posted' ? 201 : 200;

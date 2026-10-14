@@ -738,6 +738,8 @@ export const GitHubFeedFailure = Type.Union([
   Type.Literal('repository_mismatch'),
   /** Signed, but not an event of the shape GitHub documents. */
   Type.Literal('payload_invalid'),
+  /** One delivery too many for the feed's bucket: GitHub does not send it again on its own. */
+  Type.Literal('rate_limited'),
 ]);
 export type GitHubFeedFailure = Static<typeof GitHubFeedFailure>;
 

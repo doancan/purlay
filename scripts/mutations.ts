@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'webhook-another-repository-posts',
+    why: 'a feed’s secret pasted into another repository’s hook posts that repository into the channel',
+    file: 'apps/api/src/modules/integrations/webhook.ts',
+    find: '    if (!same) {\n',
+    replace: '    if (same === false && false) {\n',
+    tests: ['apps/api/src/modules/integrations/webhook.integration.test.ts'],
+  },
+  {
+    id: 'webhook-rename-collides',
+    why: 'a repository renamed onto a name another feed of the channel holds fails every delivery',
+    file: 'apps/api/src/modules/integrations/webhook.ts',
+    find: "      .where((eb) =>\n        eb.not(\n          eb.exists(\n            eb\n              .selectFrom('github_repo_feeds as other')\n              .select('other.id')\n              .where('other.channel_id', '=', feed.channel_id)\n              .where('other.repository_full_name', '=', name),\n          ),\n        ),\n      )\n",
+    replace: '',
+    tests: ['apps/api/src/modules/integrations/webhook.integration.test.ts'],
+  },
+  {
     id: 'webhook-signature-unchecked',
     why: 'anybody who knows a feed’s address posts into its channel',
     file: 'apps/api/src/modules/integrations/webhook.ts',

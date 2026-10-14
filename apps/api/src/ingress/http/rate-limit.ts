@@ -54,9 +54,10 @@ export const COSTLY_READ_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
 export const GITHUB_CALL_BUDGET: RateBudget = { perSecond: 1, burst: 100 };
 
 /**
- * Deliveries to the webhook, from anybody, before a signature is checked: two hundred at once, then
- * twenty a second, on this node — so a stranger who knows a feed's address cannot spend the work of
- * checking signatures without end. Provisional (O-4).
+ * Deliveries to the webhook per client address (a /64 for IPv6), before anything is looked up: two
+ * hundred at once, then twenty a second — so one address cannot spend the work of checking signatures
+ * without end, nor take every other address's turn. GitHub's own deliveries come from a few of its
+ * addresses, well inside it. Provisional (O-4).
  */
 export const WEBHOOK_BUDGET: RateBudget = { perSecond: 20, burst: 200 };
 

@@ -2,7 +2,8 @@
  * GitHub's delivery through HTTP (#79, D-134 §4): an admin connects a feed and GitHub posts to the
  * address it was given, with the secret it was given — `201` and a `WebhookAnswer`. The edge judges
  * the body before a byte is read: GitHub's default form type, no length, and one byte past the bound
- * are refused; exactly at the bound is read. Nobody is signed in, and no cookie is needed.
+ * are refused; exactly at the bound is read. Nobody is signed in, and no cookie is needed. What is
+ * refused before a byte is read is `webhooks.test.ts`.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createHmac } from 'node:crypto';
@@ -13,7 +14,8 @@ import { SESSION_COOKIE } from '../../platform/cookies';
 import { fixedClock } from '../../platform/clock';
 import { issueSession } from '../../modules/auth/sessions';
 import { aRoom } from '../../testing/rooms';
-import { testDependencies } from '../../testing/doubles';
+import { testConfig, testDependencies } from '../../testing/doubles';
+import { credentialCipher } from '../../platform/crypto';
 import { createApp } from './app';
 import { WEBHOOK_BODY_MAX_BYTES } from './edge';
 import { DELIVERIES_AT_ONCE, receiveWebhook } from './webhooks';
@@ -164,27 +166,28 @@ describe('integration: a delivery over HTTP', () => {
   });
 });
 
-describe('before a delivery is read', () => {
-  const refused = async (
-    mayKnock: boolean,
-    inFlight: number,
-  ): Promise<{ code: string; read: boolean; count: number }> => {
+describe('integration: reading a delivery', () => {
+  const PATH_FEED = /\/api\/webhooks\/github\/(.+)$/;
+
+  const reading = async (
+    db: Transaction,
+    gate: { count: number },
+    body: () => Promise<ArrayBuffer>,
+  ): Promise<{ code: string; read: boolean }> => {
+    const { path } = await connected(db);
+    const feedId = PATH_FEED.exec(path)?.[1] ?? '';
     let read = false;
-    const gate = { count: inFlight };
     const request = {
       arrayBuffer: () => {
         read = true;
-        return Promise.resolve(new ArrayBuffer(0));
+        return body();
       },
       headers: new Headers(),
     } as unknown as Request;
     const code = await receiveWebhook(
       {
-        ...testDependencies(),
-        cipher: {
-          seal: () => Promise.reject(new Error('unused')),
-          open: () => Promise.reject(new Error('unused')),
-        },
+        ...testDependencies({ database: db, clock }),
+        cipher: credentialCipher(testConfig().ENCRYPTION_KEY),
         bus: {
           publish: () => Promise.resolve(),
           subscribe: () => false,
@@ -192,11 +195,14 @@ describe('before a delivery is read', () => {
           forget: () => undefined,
         },
         mayDeliver: () => Promise.resolve(true),
-        mayKnock: () => Promise.resolve(mayKnock),
+        mayKnock: () => Promise.resolve(true),
         inFlight: gate,
+        // The deadline passes at once: a body not already in is too slow.
+        deadline: () => Promise.resolve(),
       },
       request,
-      'not-a-uuid',
+      feedId,
+      '203.0.113.7',
     ).then(
       () => 'accepted',
       (error: unknown) =>
@@ -204,23 +210,26 @@ describe('before a delivery is read', () => {
           ? (error as { body: { code: string } }).body.code
           : String(error),
     );
-    return { code, read, count: gate.count };
+    return { code, read };
   };
 
-  test('every address spends one bucket: past it, nothing is read', async () => {
-    expect(await refused(false, 0)).toEqual({ code: 'RATE_LIMITED', read: false, count: 0 });
-  });
-
   test('this node reads a few at a time: past them, nothing is read', async () => {
-    expect(await refused(true, DELIVERIES_AT_ONCE)).toEqual({
-      code: 'RATE_LIMITED',
-      read: false,
-      count: DELIVERIES_AT_ONCE,
+    await withRollback(async (db) => {
+      const gate = { count: DELIVERIES_AT_ONCE };
+      expect(await reading(db, gate, () => Promise.resolve(new ArrayBuffer(0)))).toEqual({
+        code: 'RATE_LIMITED',
+        read: false,
+      });
+      expect(gate.count).toBe(DELIVERIES_AT_ONCE);
     });
   });
 
-  test('one read is counted while it is read and given back after, whatever became of it', async () => {
-    // The feed is no id at all: the service refuses it after the body was read.
-    expect(await refused(true, 0)).toEqual({ code: 'GITHUB_FEED_NOT_FOUND', read: true, count: 0 });
+  test('a body that does not arrive by the deadline is refused, and its place given back', async () => {
+    await withRollback(async (db) => {
+      const gate = { count: 0 };
+      const never = (): Promise<ArrayBuffer> => new Promise<ArrayBuffer>(() => undefined);
+      expect(await reading(db, gate, never)).toEqual({ code: 'RATE_LIMITED', read: true });
+      expect(gate.count).toBe(0);
+    });
   });
 });

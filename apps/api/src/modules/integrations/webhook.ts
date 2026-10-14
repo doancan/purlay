@@ -92,6 +92,8 @@ const feedOf = async (executor: Executor, feedId: string): Promise<FeedRow | und
   await executor
     .selectFrom('github_repo_feeds')
     .innerJoin('channels', 'channels.id', 'github_repo_feeds.channel_id')
+    // A workspace deleted is no tenant to post into: its feeds are not there (`tenancy.ts`).
+    .innerJoin('workspaces', 'workspaces.id', 'github_repo_feeds.workspace_id')
     .select([
       'github_repo_feeds.id',
       'github_repo_feeds.workspace_id',
@@ -103,7 +105,18 @@ const feedOf = async (executor: Executor, feedId: string): Promise<FeedRow | und
     ])
     .select('channels.deleted_at as archived_at')
     .where('github_repo_feeds.id', '=', feedId)
+    .where('workspaces.deleted_at', 'is', null)
     .executeTakeFirst();
+
+/**
+ * Whether there is such a feed, asked before a delivery's body is read (D-134 §4): an address that
+ * names none costs a lookup, never a read. Not an id at all is the same as no such feed.
+ */
+export const requireFeed = async (executor: Executor, feedId: string): Promise<void> => {
+  if (!Value.Check(Uuid, feedId) || (await feedOf(executor, feedId)) === undefined) {
+    throw notFound();
+  }
+};
 
 /** Said where the feed was set up, in a statement of its own: it stands whatever the answer is. */
 const failed = async (
@@ -156,16 +169,18 @@ export const receiveDelivery = async (
       details: { fields: { headers: 'X-GitHub-Event and X-GitHub-Delivery are required' } },
     });
   }
-  if (!(await mayDeliver(feed.id))) {
-    log.warn('github delivery', { ...line, outcome: 'rate_limited' });
-    throw new AppError({ code: 'RATE_LIMITED', message: 'Too many deliveries. Slow down.' });
-  }
-
   const refuse = async (reason: GitHubFeedFailure, error: AppError): Promise<never> => {
     await failed(database, clock, feed.id, reason);
     log.warn('github delivery', { ...line, outcome: reason });
     throw error;
   };
+  // GitHub does not send it again on its own: a delivery refused here is said on the feed.
+  if (!(await mayDeliver(feed.id))) {
+    return await refuse(
+      'rate_limited',
+      new AppError({ code: 'RATE_LIMITED', message: 'Too many deliveries. Slow down.' }),
+    );
+  }
   if (feed.archived_at !== null) return await refuse('channel_archived', notFound());
 
   let body: unknown;
@@ -217,16 +232,34 @@ export const receiveDelivery = async (
   const now = clock.now();
   const seen = {
     last_delivery_at: now,
-    // A renamed repository keeps its feed: its number is what is matched, its new name is kept.
-    ...(envelope === null
-      ? {}
-      : {
-          repository_id: String(envelope.repository.id),
-          repository_full_name: envelope.repository.full_name.toLowerCase(),
-        }),
+    ...(envelope === null ? {} : { repository_id: String(envelope.repository.id) }),
+  };
+  // A renamed repository keeps its feed: its number is what is matched, and its new name is kept —
+  // unless another feed of the channel holds that name, which keeps it, and this one its old one.
+  const renamed = async (executor: Executor): Promise<void> => {
+    if (envelope === null) return;
+    const name = envelope.repository.full_name.toLowerCase();
+    if (name === feed.repository_full_name) return;
+    await executor
+      .updateTable('github_repo_feeds')
+      .set({ repository_full_name: name })
+      .where('id', '=', feed.id)
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('github_repo_feeds as other')
+              .select('other.id')
+              .where('other.channel_id', '=', feed.channel_id)
+              .where('other.repository_full_name', '=', name),
+          ),
+        ),
+      )
+      .execute();
   };
   if (reading.kind === 'ignored') {
     await database.updateTable('github_repo_feeds').set(seen).where('id', '=', feed.id).execute();
+    await renamed(database);
     const outcome = delivery.event === 'ping' ? 'pinged' : 'ignored';
     log.info('github delivery', { ...line, outcome });
     return outcome;
@@ -261,6 +294,7 @@ export const receiveDelivery = async (
       .set(seen)
       .where('id', '=', feed.id)
       .execute();
+    await renamed(transaction);
     await transaction
       .updateTable('channels')
       .set({ last_message_at: now })

@@ -5858,9 +5858,12 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
 4. **A delivery is checked before it is read**: a feed that is not there is `404`; a body without a
    length, or longer than `WEBHOOK_BODY_MAX_BYTES` (1 MiB), is refused before it is read; the
    `X-Hub-Signature-256` HMAC over the bytes as sent, compared in constant time, is the only
-   credential — wrong, missing or malformed is `401`. Addresses share one bucket before the signature
-   and each feed has its own after it, so nobody who knows an address can spend a feed's; both are
-   provisional (O-4). A delivery from another repository than the feed's first is refused.
+   credential — wrong, missing or malformed is `401`. Each client address has a bucket before anything
+   is looked up, a node reads a few bodies at once, each within a deadline, and each feed has its own
+   bucket after the signature — so nobody who knows an address can spend a feed's, or hold every read
+   open; all provisional (O-4). A delivery from another repository than the feed's is refused: by its
+   number once a delivery has named it, by its name until then; a renamed repository keeps its feed,
+   and its new name unless another feed of the channel holds it.
 5. **Each delivery is posted once.** Its `X-GitHub-Delivery` id is recorded in the transaction that
    posts it; the same id again is `200` and posts nothing. GitHub does not retry on its own: *retry and
    replay* (D-5) are an admin's Redeliver in GitHub, made safe by this, and a delivery that failed
@@ -5882,8 +5885,10 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
    push — an amendment of D-107's `all`, which is about what people write. Nothing in it is parsed
    for `@`: a pull request titled `@alice` names nobody (D-12).
 8. **A feed that cannot post says so** where it was set up: the last delivery and the last failure,
-   with its reason, are on the feed, and every delivery is one log line — feed, delivery, event,
-   outcome, never the body. An archived channel's feeds refuse their deliveries.
+   with its reason — the channel archived, another repository, a body that is not the event, one too
+   many for its bucket (0033) — are on the feed, and every delivery is one log line — feed, delivery,
+   event, outcome, never the body. An archived channel's feeds, and a deleted workspace's, refuse
+   their deliveries. A refusal before the signature is said in the log alone: anybody can cause one.
 
 **Rejected.** *The creator as the author* — every place that asks "is this mine?" would answer yes
 for an admin's every push: their bubble side, their edit shortcut, their unread count, a thread's
