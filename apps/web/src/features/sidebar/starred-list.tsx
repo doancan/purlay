@@ -33,6 +33,7 @@ export const StarredList = (): React.JSX.Element | null => {
               current={channel.id === currentId}
               unread={(channel.state?.unreadCount ?? 0) > 0}
               mentions={channel.state?.unreadMentionCount ?? 0}
+              incident={channel.incident}
             >
               {channel.name}
             </ChannelRow>

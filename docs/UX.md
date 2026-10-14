@@ -69,7 +69,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   browser blocked them, where that is undone; drawn only where the browser and the server can send
   them; the theme; the language; the shortcut reference; **Sign out**; and **Sign
   out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
-  unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar, and a
+  unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
+  carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
+  to a screen reader (D-137). A person has an avatar, and a
   dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
@@ -99,6 +101,14 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   pinned it; a pinned reply opens its thread, and a member unpins from the row. **Pin** sits beside
   Save on a message for a member of the channel, painted at once and put back with Retry when
   refused; a pinned message says **Pinned** under its words, for everyone who can see it.
+- **Incident** — a channel's, never a conversation's (D-137). While one is open a banner under the
+  header says its severity, its status and since when, and opens the **Incident** panel in the same
+  place, as does the header's **Incident** control (in the Channel menu on a narrow window). In it a
+  member of the channel sets the severity and moves the status between **Investigating** and
+  **Mitigating**, each painted at once and put back, said, when refused; **Resolve…** asks first, since
+  a resolved incident is never reopened. Then what happened, newest first, in words. With none open
+  the panel says so, when the last was resolved, and declares one at a severity. Somebody who sees the
+  channel without being in it reads all of it and is offered none of the controls.
 
 - **Edited** under a message's words is a button (D-135): it opens the message's **Edit history** —
   what it says now, then each earlier version, newest first, with when it was replaced, older ones a
@@ -378,7 +388,7 @@ trade a certain cost for a hypothetical benefit.
 |---|---|
 | `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
 | `Cmd/Ctrl+/` | Shortcut reference |
-| `Esc` | Close the topmost thing — palette, then edit, then the thread, files or pins panel (focus returns to its root, or to the control that opened the panel) |
+| `Esc` | Close the topmost thing — palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
 | `↑` `↓` | Move message focus |
 | `T` | Open the focused message's thread in the panel, and move focus there |
 | `R` | Reply to the focused message |
@@ -404,6 +414,7 @@ missing specified behaviour and does not merge.
 | Search | "No matches for `<query>`" + scope hint | Inline progress in the input | Retry, query preserved |
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
+| Incident (panel) | "No incident" — declare one when something here is on fire; when the last was resolved | Skeleton, in the panel; the banner draws nothing until it knows | Retry in the panel; a timeline that fails says so with Retry, the controls still usable |
 | Pins (panel) | "Nothing pinned yet" — pin a message everyone here should keep at hand | Skeleton rows, in the panel | Retry in the panel; a list that could not be brought up to date says so, with Retry |
 | Channels to join (after an invitation) | "There are no public channels to join yet" + the way into the workspace | Skeleton rows | Retry; a join that fails part way names the channels and why, keeps them picked, focus on the button that tries again |
 | Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |

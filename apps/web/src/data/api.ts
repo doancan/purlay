@@ -25,6 +25,11 @@ import {
   GitHubFeedList,
   GitHubIntegration,
   PinList,
+  Incident,
+  IncidentResponse,
+  IncidentUpdatePage,
+  type ChangeIncidentRequest,
+  type DeclareIncidentRequest,
   InvitationPage,
   InvitationPreview,
   NotificationPage,
@@ -172,6 +177,22 @@ export interface Api {
   readonly removeMessageVersion: (messageId: string, versionId: string) => Promise<void>;
   /** A channel's pins, newest first (D-130). */
   readonly pins: (channelId: string, signal?: AbortSignal) => Promise<PinList>;
+  /** A channel's open incident, or its latest; null when it never had one (D-137). */
+  readonly incident: (channelId: string, signal?: AbortSignal) => Promise<IncidentResponse>;
+  /** Declares one, at the client's id: the same again answers the incident it made (D-137 §5). */
+  readonly declareIncident: (channelId: string, input: DeclareIncidentRequest) => Promise<Incident>;
+  readonly changeIncident: (
+    channelId: string,
+    incidentId: string,
+    input: ChangeIncidentRequest,
+  ) => Promise<Incident>;
+  /** An incident's timeline, newest first; older than `before` (D-137 §4). */
+  readonly incidentUpdates: (
+    channelId: string,
+    incidentId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<IncidentUpdatePage>;
   /** Pins a message for its channel, or lets the pin go (D-130). */
   readonly pin: (messageId: string) => Promise<void>;
   readonly unpin: (messageId: string) => Promise<void>;
@@ -430,6 +451,34 @@ export const createApi = (http: Http): Api => {
       http.send('DELETE', `/api/messages/${at(messageId)}/versions/${at(versionId)}`, options()),
     pins: (channelId, signal) =>
       http.request('GET', `/api/channels/${at(channelId)}/pins`, PinList, options({}, signal)),
+    incident: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/incident`,
+        IncidentResponse,
+        options({}, signal),
+      ),
+    declareIncident: (channelId, input) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/incident`,
+        Incident,
+        options({ body: input }),
+      ),
+    changeIncident: (channelId, incidentId, input) =>
+      http.request(
+        'PATCH',
+        `/api/channels/${at(channelId)}/incident/${at(incidentId)}`,
+        Incident,
+        options({ body: input }),
+      ),
+    incidentUpdates: (channelId, incidentId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/incident/${at(incidentId)}/updates`,
+        IncidentUpdatePage,
+        options(before === undefined ? {} : { query: { before } }, signal),
+      ),
     pin: (messageId) => http.send('PUT', `/api/messages/${at(messageId)}/pin`, options()),
     unpin: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}/pin`, options()),
     updateProfile: (input) =>

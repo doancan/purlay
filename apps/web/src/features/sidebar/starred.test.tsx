@@ -112,6 +112,24 @@ describe('starring a channel', () => {
     view.unmount();
   });
 
+  test('a starred channel with an incident open carries its mark there too (D-137)', async () => {
+    const channels = someChannels().map((c) =>
+      c.id === IDS.deploys
+        ? {
+            ...c,
+            starred: true,
+            incident: { severity: 2 as const, status: 'investigating' as const },
+          }
+        : c,
+    );
+    const view = await open({ channels: () => Promise.resolve(channels) });
+    const row = [...view.getByRole('navigation', { name: 'Starred' }).querySelectorAll('a')].find(
+      (a) => a.textContent.includes('deploys'),
+    );
+    expect(row?.textContent).toContain('Incident, severity 2, Investigating');
+    view.unmount();
+  });
+
   test('every channel starred, Channels is not said to be empty', async () => {
     const server = aServer([IDS.api, IDS.deploys, IDS.incidents]);
     const view = await open(server.api);

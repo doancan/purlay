@@ -447,6 +447,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.thread });
     void client.invalidateQueries({ queryKey: families.unresolved });
     void client.invalidateQueries({ queryKey: families.channels });
+    // An incident moved while away (D-137): its frame went to a socket that was down.
+    void client.invalidateQueries({ queryKey: families.incident });
     // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
     // the person's own topic, which a socket that was down never hears (D-124).
     void client.invalidateQueries({ queryKey: keys.me });

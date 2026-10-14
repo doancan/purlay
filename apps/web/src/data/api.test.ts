@@ -196,6 +196,49 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('a channel’s incident: read, declared, changed, its timeline by cursor (D-137)', async () => {
+    const incident = {
+      id: ID,
+      channelId: ID,
+      severity: 2,
+      status: 'investigating',
+      declaredBy: null,
+      declaredAt: '2026-09-09T11:00:00.000Z',
+      resolvedAt: null,
+    };
+    const read = harness({ incident: null });
+    expect(await read.api.incident(ID)).toEqual({ incident: null });
+    const write = harness(incident);
+    expect((await write.api.declareIncident(ID, { id: ID, severity: 2 })).status).toBe(
+      'investigating',
+    );
+    await write.api.changeIncident(ID, ID, { status: 'mitigating' });
+    const timeline = harness({ data: [], nextCursor: null });
+    await timeline.api.incidentUpdates(ID, ID);
+    await timeline.api.incidentUpdates(ID, ID, 'u1');
+    expect(
+      [...read.calls, ...write.calls, ...timeline.calls].map((call) => [
+        call.method,
+        call.url,
+        call.body,
+      ]),
+    ).toEqual([
+      ['GET', `/api/channels/${ID}/incident`, undefined],
+      ['POST', `/api/channels/${ID}/incident`, { id: ID, severity: 2 }],
+      ['PATCH', `/api/channels/${ID}/incident/${ID}`, { status: 'mitigating' }],
+      ['GET', `/api/channels/${ID}/incident/${ID}/updates`, undefined],
+      ['GET', `/api/channels/${ID}/incident/${ID}/updates?before=u1`, undefined],
+    ]);
+    // What the server answers is parsed against the contract: a resolved one with no instant is not one.
+    const broken = harness({ ...incident, status: 'resolved' });
+    expect(
+      await broken.api.changeIncident(ID, ID, { status: 'resolved' }).then(
+        () => 'parsed',
+        () => 'refused',
+      ),
+    ).toBe('refused');
+  });
+
   test('a channel’s files, a page at a time (D-129)', async () => {
     const list = harness({ data: [], nextCursor: null });
     await list.api.files(ID);

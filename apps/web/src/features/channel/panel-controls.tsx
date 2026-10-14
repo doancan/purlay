@@ -12,6 +12,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuItem } from '../../ui/menu';
 import { PINS_PANEL_ID } from '../pins/pins-panel';
+import { INCIDENT_PANEL_ID } from '../incidents/incident-panel';
 import { FILES_PANEL_ID } from './files-panel';
 import { useSidePanel } from './side-panel';
 import { useStar } from './star-toggle';
@@ -31,12 +32,13 @@ export const PanelControls = ({
   const setStar = direct ? null : star;
   const filesOpen = side.panel === 'files';
   const pinsOpen = side.panel === 'pins';
+  const incidentOpen = side.panel === 'incident';
   const filesLabel = t(direct ? 'files.openConversation' : 'files.open');
   // A panel chosen from the menu opens once the menu has closed, and takes focus itself: opened
   // while the menu still held focus, the menu took it back, then handed it to its trigger — which
   // the panel covers on a narrow window — and Esc reached nothing.
-  const chosen = useRef<'files' | 'pins' | null>(null);
-  const choose = (panel: 'files' | 'pins'): void => {
+  const chosen = useRef<'files' | 'pins' | 'incident' | null>(null);
+  const choose = (panel: 'files' | 'pins' | 'incident'): void => {
     chosen.current = panel;
   };
   return (
@@ -65,6 +67,21 @@ export const PanelControls = ({
           else side.open('pins');
         }}
       />
+      {/* A conversation has no incident (D-137 §1). */}
+      {!direct && (
+        <IconButton
+          label={t('incident.open')}
+          glyph="warning"
+          data-panel-toggle="incident"
+          className="max-narrow:hidden"
+          aria-pressed={incidentOpen}
+          aria-controls={incidentOpen ? INCIDENT_PANEL_ID : undefined}
+          onClick={() => {
+            if (incidentOpen) side.close();
+            else side.open('incident');
+          }}
+        />
+      )}
       <div className="hidden max-narrow:flex">
         <Menu
           align="end"
@@ -76,7 +93,11 @@ export const PanelControls = ({
             return false;
           }}
           trigger={
-            <IconButton label={t('panels.menu')} glyph="more" data-panel-toggle="files pins" />
+            <IconButton
+              label={t('panels.menu')}
+              glyph="more"
+              data-panel-toggle={direct ? 'files pins' : 'files pins incident'}
+            />
           }
         >
           <MenuItem
@@ -95,6 +116,16 @@ export const PanelControls = ({
           >
             {t('pins.open')}
           </MenuItem>
+          {!direct && (
+            <MenuItem
+              glyph="warning"
+              onSelect={() => {
+                choose('incident');
+              }}
+            >
+              {t('incident.open')}
+            </MenuItem>
+          )}
           {setStar !== null && (
             <MenuItem
               glyph="star"

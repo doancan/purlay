@@ -8,6 +8,7 @@
  * survives colour-blindness and a screen reader hears it as the word "unread" before the
  * name rather than as a typographic accident.
  */
+import type { ChannelIncident } from '@purlay/types';
 import { Icon, type GlyphName } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
@@ -18,6 +19,9 @@ import { useDeepWork } from '../shell/deep-work';
 
 const rowClasses =
   'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
+
+const incidentClasses =
+  'inline-flex h-badge shrink-0 items-center rounded-pill bg-danger-subtle px-1 font-mono text-caption font-medium text-danger-text';
 
 const toneClasses = {
   quiet: 'text-nav-ink-muted hover:bg-nav-hover',
@@ -31,6 +35,8 @@ const rowTone = (current: boolean, unread: boolean): keyof typeof toneClasses =>
 
 interface RowContentProps {
   readonly glyph?: GlyphName;
+  /** The channel's open incident (D-137 §8): its severity, marked after the name. */
+  readonly incident?: ChannelIncident | null;
   /** A person's avatar, in the place a channel has its `#`: a row has one or the other. */
   readonly avatar?: React.ReactNode;
   readonly unread: boolean;
@@ -43,6 +49,7 @@ interface RowContentProps {
 const RowContent = ({
   glyph,
   avatar,
+  incident = null,
   unread,
   mentions,
   children,
@@ -57,6 +64,15 @@ const RowContent = ({
         {unread ? <VisuallyHidden>{t('sidebar.unread')} </VisuallyHidden> : null}
         {children}
       </span>
+      {/* A state, not a count: what is on fire here, said in words to a screen reader. */}
+      {incident !== null && (
+        <span className={incidentClasses}>
+          <span aria-hidden="true">{t('incident.sev', { n: incident.severity })}</span>
+          <VisuallyHidden>
+            {`, ${t('incident.mark', { n: incident.severity, status: t(`incident.${incident.status}`) })}`}
+          </VisuallyHidden>
+        </span>
+      )}
       {/* In Deep Work the count is kept and not drawn: nothing in the sidebar asks for attention. */}
       {mentions > 0 && quiet === null ? (
         <Badge count={mentions} label={t('sidebar.mentions', { count: mentions })} />

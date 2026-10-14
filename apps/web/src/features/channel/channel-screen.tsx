@@ -41,6 +41,8 @@ import { cn } from '../../ui/cn';
 import { ThreadPanel } from '../threads/thread';
 import { FilesPanel } from './files-panel';
 import { PinsPanel } from '../pins/pins-panel';
+import { IncidentBanner } from '../incidents/incident-banner';
+import { IncidentPanel } from '../incidents/incident-panel';
 import { ProfilePanel } from '../profile/profile-panel';
 import { PinIntentsProvider } from '../pins/use-pin';
 import { SidePanelProvider, useSidePanel } from './side-panel';
@@ -125,6 +127,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
             <div className="relative flex min-h-0 flex-1">
               <ConversationColumn>
                 <ChannelHeader channel={channel} />
+                {!conversation && <IncidentBanner channel={channel} />}
                 <MessageFeed
                   channelId={channel.id}
                   channelName={title}
@@ -150,6 +153,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
                 channelLabel={conversation ? title : `#${title}`}
               />
               <PinsPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
+              {!conversation && <IncidentPanel channel={channel} channelLabel={`#${title}`} />}
               <ProfilePanel person={conversation ? channel.peer : null} />
             </div>
           </PinIntentsProvider>

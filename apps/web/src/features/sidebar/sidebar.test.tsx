@@ -468,6 +468,20 @@ describe('the people section', () => {
     });
   });
 
+  test('a channel with an incident open carries its severity, said with its status (D-137)', async () => {
+    const channels = someChannels().map((c) =>
+      c.id === IDS.deploys
+        ? { ...c, incident: { severity: 1 as const, status: 'mitigating' as const } }
+        : c,
+    );
+    const view = await open(aSignedInApi({ channels: () => Promise.resolve(channels) }));
+    const deploys = view.getByRole('link', { name: /^deploys/ });
+    expect(deploys.textContent).toContain('SEV1');
+    expect(deploys.textContent).toContain('Incident, severity 1, Mitigating');
+    expect(view.getByRole('link', { name: /^api/ }).textContent).not.toContain('SEV');
+    await expectNoAxeViolations(view.container);
+  });
+
   test('somebody with a conversation is a link to it, named for them, once', async () => {
     const channels = [
       ...someChannels(),
