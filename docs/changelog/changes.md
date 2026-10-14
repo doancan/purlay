@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-14: what personal data an instance holds, and the operator's runbooks (D-28, closes #85)
+
+- New `docs/DATA.md`, for the operator who runs an instance:
+  - who receives what: the project receives nothing, and the instance's own recipients are listed;
+  - a data map of every table, with what it holds about a person, why, and for how long;
+  - a retention runbook;
+  - an erasure runbook, including what backups keep and for how long.
+
+  A test fails the build when a migration adds a table the map does not name.
+
 ### Fix — 2026-10-14: an upload interrupted midway leaves nothing nobody can find (closes #607)
 
 - An upload now writes the keys of its objects to the deletion queue before it writes the objects, due

@@ -21,6 +21,7 @@ a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 | 5 | **`UX.md`** | How it behaves: layout, thread interaction, keyboard, states | Interaction |
 | 6 | **`API.md`** | The HTTP endpoint contract, per phase | Interface |
 | 7 | **`CONFIG.md`** | Every environment variable, validated at boot | Deployment |
+| — | **`DATA.md`** | What personal data an instance holds, why and for how long; the retention and erasure runbooks | An operator's own records (D-28) |
 | 8 | **GitHub Issues & board** | The ordered task list, one issue per task, milestone per version | Execution |
 | — | **`../README.md`** | The public front door for self-hosters | Positioning |
 | — | **`../CONTRIBUTING.md`** | The rules any contributor — human or AI — works under | Practice |
@@ -41,6 +42,7 @@ second file is a number that will eventually disagree with itself.
 | Collation and identifier text handling | `DECISIONS.md` D-40 |
 | Interface languages and the i18n mechanism | `DECISIONS.md` D-41 |
 | Retention, erasure and export semantics | `DECISIONS.md` D-27 |
+| Which tables hold personal data, why and for how long, for an operator | `DATA.md` §2, bound to the generated tables by `scripts/data-map.test.ts` |
 | The list of background jobs and how they are scheduled | `DECISIONS.md` D-30 |
 | Why any choice was made, and what was rejected | `DECISIONS.md` |
 | Stack and accepted costs · required tests · protocol | `ARCHITECTURE.md` §2, §10, §5 |

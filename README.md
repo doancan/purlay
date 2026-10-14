@@ -81,6 +81,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
 | [`docs/API.md`](docs/API.md) | HTTP endpoint contract |
 | [`docs/CONFIG.md`](docs/CONFIG.md) | Environment variables |
+| [`docs/DATA.md`](docs/DATA.md) | For an operator: the personal data an instance holds, and how to keep a retention window and carry out an erasure |
 | [Issues & board](https://github.com/doancan/purlay/issues) | The ordered task list — one issue per task, milestoned by version |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Rules contributors work under |
 
