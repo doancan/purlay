@@ -60,7 +60,7 @@ export const eventSentence = (event: GitHubEvent, t: Translate): string => {
     case 'issues':
       return t(`github.issue.${event.action}`, { actor, number: event.number });
     case 'release':
-      return t('github.release.published', {
+      return t(event.prerelease ? 'github.release.prereleased' : 'github.release.published', {
         actor,
         name: event.name === '' ? event.tag : event.name,
       });

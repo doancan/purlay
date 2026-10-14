@@ -1061,7 +1061,7 @@ require an instance-administrator role that does not exist and that D-3 delibera
 
 ```sql
 CREATE TABLE job_runs (
-    -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions',
+    -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions', 'sweep:github-deliveries',
     -- 'reconcile:storage', 'purge:retention'
     job_name             VARCHAR(64) PRIMARY KEY,
 

@@ -58,11 +58,15 @@ describe('what an event says', () => {
       'octocat reopened issue #9',
     ],
     [
-      { kind: 'release', ...base, tag: 'v2.0.0', name: 'Two' } as const,
+      { kind: 'release', ...base, tag: 'v2.0.0', name: 'Two', prerelease: false } as const,
       'octocat published the release Two',
     ],
     [
-      { kind: 'release', ...base, tag: 'v2.0.0', name: '' } as const,
+      { kind: 'release', ...base, tag: 'v2.0.0-rc1', name: 'RC', prerelease: true } as const,
+      'octocat published the pre-release RC',
+    ],
+    [
+      { kind: 'release', ...base, tag: 'v2.0.0', name: '', prerelease: false } as const,
       'octocat published the release v2.0.0',
     ],
   ] satisfies [GitHubEvent, string][])('%#: %s', (event, said) => {
@@ -128,7 +132,9 @@ describe('an event drawn', () => {
     expect(links(made)[0]?.[1]).toBe('https://github.com/acme/api/tree/feat/retry%20%232');
     made.unmount();
     const release = await renderApp(
-      <GitHubEventCard event={{ kind: 'release', ...base, tag: 'v1/rc#1', name: 'RC' }} />,
+      <GitHubEventCard
+        event={{ kind: 'release', ...base, tag: 'v1/rc#1', name: 'RC', prerelease: true }}
+      />,
     );
     expect(links(release)[0]?.[1]).toBe('https://github.com/acme/api/releases/tag/v1/rc%231');
     expect(release.getByText('RC')).toBeDefined();

@@ -9,7 +9,7 @@
  * the process exits non-zero and the scheduler sees it too.
  */
 import { sql, type Executor } from '@purlay/db';
-import type { Clock } from '../../platform/clock';
+import { DAY_MS, type Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
@@ -178,6 +178,28 @@ export const sweepLinkPreviews = async (dependencies: {
   const result = await dependencies.database
     .deleteFrom('link_previews')
     .where('expires_at', '<=', dependencies.clock.now())
+    .executeTakeFirst();
+  return { removed: Number(result.numDeletedRows) };
+};
+
+/** How long a delivery's id is kept: GitHub redelivers only the last three days, so this is a margin. */
+export const GITHUB_DELIVERIES_KEPT_DAYS = 30;
+
+/**
+ * Forgets the ids of deliveries older than `GITHUB_DELIVERIES_KEPT_DAYS` (D-134 §5): what makes a
+ * redelivery post nothing, needed only while GitHub can still send one again. Bounded by the index on
+ * `received_at`; idempotent, as every job is (D-30).
+ */
+export const sweepGitHubDeliveries = async (dependencies: {
+  readonly database: Executor;
+  readonly clock: Clock;
+}): Promise<{ removed: number }> => {
+  const before = new Date(
+    dependencies.clock.now().getTime() - GITHUB_DELIVERIES_KEPT_DAYS * DAY_MS,
+  );
+  const result = await dependencies.database
+    .deleteFrom('github_deliveries')
+    .where('received_at', '<', before)
     .executeTakeFirst();
   return { removed: Number(result.numDeletedRows) };
 };

@@ -461,6 +461,7 @@ export const tr = {
   'github.issue.closed': '{actor}, #{number} numaralı konuyu kapattı',
   'github.issue.reopened': '{actor}, #{number} numaralı konuyu yeniden açtı',
   'github.release.published': '{actor}, {name} sürümünü yayımladı',
+  'github.release.prereleased': '{actor}, {name} ön sürümünü yayımladı',
 
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',

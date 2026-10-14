@@ -14,7 +14,15 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { sendMessage } from '../messages/messages';
-import { ORPHAN_AGE_MS, reconcileStorage, runJob, sweepLinkPreviews, sweepOrphans } from './jobs';
+import {
+  GITHUB_DELIVERIES_KEPT_DAYS,
+  ORPHAN_AGE_MS,
+  reconcileStorage,
+  runJob,
+  sweepGitHubDeliveries,
+  sweepLinkPreviews,
+  sweepOrphans,
+} from './jobs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -270,6 +278,43 @@ describe('integration: the link-preview sweep (D-23)', () => {
         .where('url_hash', 'like', 'sweep-%')
         .execute();
       expect(left.map((row) => row.url_hash)).toEqual(['sweep-fresh']);
+    });
+  });
+});
+
+describe('integration: the delivery sweep (D-134 §5)', () => {
+  test('forgets the ids older than the days they are kept; the one exactly that old stays', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const feed = crypto.randomUUID();
+      await db
+        .insertInto('github_repo_feeds')
+        .values({
+          id: feed,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          repository_full_name: 'acme/api',
+          events: ['push'],
+          secret_encrypted: 'sealed',
+        })
+        .execute();
+      const kept = NOW.getTime() - GITHUB_DELIVERIES_KEPT_DAYS * 24 * 60 * 60 * 1000;
+      await db
+        .insertInto('github_deliveries')
+        .values([
+          { feed_id: feed, delivery_id: 'older', received_at: new Date(kept - 1) },
+          { feed_id: feed, delivery_id: 'exactly', received_at: new Date(kept) },
+          { feed_id: feed, delivery_id: 'newer', received_at: NOW },
+        ])
+        .execute();
+      expect(await sweepGitHubDeliveries({ database: db, clock })).toEqual({ removed: 1 });
+      const left = await db
+        .selectFrom('github_deliveries')
+        .select('delivery_id')
+        .where('feed_id', '=', feed)
+        .orderBy('delivery_id')
+        .execute();
+      expect(left.map((row) => row.delivery_id)).toEqual(['exactly', 'newer']);
     });
   });
 });

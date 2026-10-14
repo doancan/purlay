@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: pull requests, issues and releases in a repository's channel (D-134, part of #79)
+
+- A feed posts a pull request opened, closed, merged, reopened or ready for review; an issue opened,
+  closed or reopened; a release published — each a sentence with its title, linked to GitHub. Other
+  actions are received and not posted. The ids of deliveries are forgotten after thirty days by a
+  nightly job, `sweep:github-deliveries`.
+
 ### Feature — 2026-10-14: a repository's pushes in its channel (D-134, part of #79)
 
 - GitHub's webhook posts to the address a feed was given: a signed push becomes a message in the

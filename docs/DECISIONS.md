@@ -765,6 +765,7 @@ reconciliation (invariant I-7). D-27 adds a fourth, and session expiry a fifth.
 ```
 purlay sweep:orphans        purlay sweep:link-previews    purlay sweep:sessions
 purlay reconcile:storage    purlay purge:retention        purlay export:workspace
+purlay sweep:github-deliveries   (D-134 §5)
 ```
 
 **Why not an in-process timer**, which would be the simpler answer at one node: under D-25's
@@ -5842,7 +5843,11 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
    channels, never one channel twice (`UNIQUE (channel_id, repository_full_name)`, the name kept in
    lower case as GitHub compares it). Not CI, check or deploy events — D-110 and D-118 left those
    rows out, and this does not bring them back — and not an Integrations section: a feed is set up
-   from its channel.
+   from its channel. What each posts: a push to a branch or a tag; a pull request opened (not as a
+   draft — its being ready for review is the announcement), closed, merged, reopened; an issue opened,
+   closed, reopened — not deleted or moved, which leave the earlier message pointing at GitHub's own
+   answer; a release released or pre-released, said as which, once — GitHub's `published` beside
+   them is not posted, and a pre-release promoted is. Every other action is received and not posted.
 2. **Set up and removed by an owner or an admin** (§7.4's "configure GitHub integration"), from a
    channel they can see — a role is not a way round visibility (D-123 §2): a channel they cannot see
    has no feeds for them, and its feed is `404`. Each is one row of the audit trail
@@ -5867,7 +5872,9 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
 5. **Each delivery is posted once.** Its `X-GitHub-Delivery` id is recorded in the transaction that
    posts it; the same id again is `200` and posts nothing. GitHub does not retry on its own: *retry and
    replay* (D-5) are an admin's Redeliver in GitHub, made safe by this, and a delivery that failed
-   answers `5xx` so GitHub shows it failed. The ids are kept 30 days, a daily job's sweep (D-30).
+   answers `5xx` so GitHub shows it failed. GitHub redelivers only what it received in the last three
+   days; the ids are kept thirty, a margin rather than a mirror, by a daily job (`sweep:github-deliveries`,
+   D-30). A delivery that failed and was not redelivered in those days is lost — said on the feed (§8).
    Accepted: the two headers are not signed, so a signed body sent again with a new id posts again —
    TLS is what stands between them.
 6. **A feed's message has no author.** Its `sender` is null — `message_type = 'system_event'`, held by
@@ -5895,10 +5902,11 @@ for an admin's every push: their bubble side, their edit shortcut, their unread 
 replies notifying them. *A GitHub user row* — a `users` row needs an email and a username that a real
 GitHub account may hold, and it would be a member, a mention and a search result. *One webhook per
 workspace, routed by repository name* — the name is not verified until the secret is known, and a
-repository is in more than one workspace. *Our own retry queue* — GitHub keeps every delivery and
-redelivers it on request; a queue is infrastructure no measurement has asked for (CONTRIBUTING §1.11).
+repository is in more than one workspace. *Our own retry queue* — GitHub keeps each delivery three
+days and redelivers it on request; a queue of our own would be infrastructure no measurement has asked
+for (CONTRIBUTING §1.11).
 
-**Cost of reversing:** migrations 0031 and 0032, the event union on `Message`, three channel routes,
+**Cost of reversing:** migrations 0031, 0032 and 0033, the event union on `Message`, three channel routes,
 the webhook route and its job.
 
 ## Part D — Open, deliberately
