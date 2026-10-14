@@ -186,6 +186,13 @@ export interface Api {
     incidentId: string,
     input: ChangeIncidentRequest,
   ) => Promise<Incident>;
+  /** Brings somebody in the channel in to respond, or takes them off (D-137 §3). */
+  readonly respond: (
+    channelId: string,
+    incidentId: string,
+    userId: string,
+    responding: boolean,
+  ) => Promise<Incident>;
   /** An incident's timeline, newest first; older than `before` (D-137 §4). */
   readonly incidentUpdates: (
     channelId: string,
@@ -471,6 +478,13 @@ export const createApi = (http: Http): Api => {
         `/api/channels/${at(channelId)}/incident/${at(incidentId)}`,
         Incident,
         options({ body: input }),
+      ),
+    respond: (channelId, incidentId, userId, responding) =>
+      http.request(
+        responding ? 'PUT' : 'DELETE',
+        `/api/channels/${at(channelId)}/incident/${at(incidentId)}/responders/${at(userId)}`,
+        Incident,
+        options(),
       ),
     incidentUpdates: (channelId, incidentId, before, signal) =>
       http.request(

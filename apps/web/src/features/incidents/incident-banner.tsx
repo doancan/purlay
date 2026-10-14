@@ -6,7 +6,9 @@
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
+import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useNowMinute } from '../channel/now-minute';
 import { useSidePanel } from '../channel/side-panel';
@@ -58,6 +60,27 @@ export const IncidentBanner = ({
       <time dateTime={incident.declaredAt} className="min-w-0 truncate font-mono">
         {t('incident.since', { when: format.time(incident.declaredAt, now) })}
       </time>
+      {incident.responders.length > 0 && (
+        <span className="flex shrink-0 items-center gap-1">
+          {incident.responders.slice(0, 3).map((person) => (
+            <Avatar
+              key={person.id}
+              name={person.displayName}
+              username={person.username}
+              size="sm"
+            />
+          ))}
+          {incident.responders.length > 3 && (
+            <span
+              aria-hidden="true"
+              className="font-mono"
+            >{`+${String(incident.responders.length - 3)}`}</span>
+          )}
+          <VisuallyHidden>
+            {t('incident.respondingCount', { count: incident.responders.length })}
+          </VisuallyHidden>
+        </span>
+      )}
       <Button
         variant="ghost"
         className="ml-auto"

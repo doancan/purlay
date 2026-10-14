@@ -14,6 +14,7 @@ import {
   type Incident,
   type IncidentResponse,
   type IncidentSeverity,
+  type User,
 } from '@purlay/types';
 import { useCallback, useContext, useRef, useState } from 'react';
 import { useApi } from '../../data/api-provider';
@@ -51,6 +52,8 @@ export interface IncidentActions {
   readonly declaring: boolean;
   /** Changes it, painted at once and put back if refused; true once the server has it. */
   readonly change: (incident: Incident, input: ChangeIncidentRequest) => Promise<boolean>;
+  /** Brings somebody in to respond, or takes them off, the same way. */
+  readonly respond: (incident: Incident, person: User, responding: boolean) => Promise<boolean>;
 }
 
 export const useIncidentActions = (channelId: string): IncidentActions => {
@@ -98,8 +101,16 @@ export const useIncidentActions = (channelId: string): IncidentActions => {
     [api, channelId, client, clock, describe, key, show],
   );
 
-  const change = useCallback(
-    async (incident: Incident, input: ChangeIncidentRequest): Promise<boolean> => {
+  /**
+   * Paints what is asked at once, then asks: the answer replaces the paint, a refusal goes back to what
+   * the server last said — never to another change's paint — and is said.
+   */
+  const apply = useCallback(
+    async (
+      incident: Incident,
+      painted: Incident,
+      ask: () => Promise<Incident>,
+    ): Promise<boolean> => {
       // What the server last said is what a refusal goes back to — never another change's paint.
       if (inFlight.current === 0) confirmed.current = incident;
       inFlight.current += 1;
@@ -107,15 +118,15 @@ export const useIncidentActions = (channelId: string): IncidentActions => {
       const mine = latest.current;
       // A read on its way began before this change: it must not paint over it.
       await client.cancelQueries({ queryKey: key, exact: true });
-      client.setQueryData<IncidentResponse>(key, {
-        incident: asked(incident, input, clock.now()),
-      });
+      client.setQueryData<IncidentResponse>(key, { incident: painted });
       try {
-        const answered = await api.changeIncident(channelId, incident.id, input);
+        const answered = await ask();
         confirmed.current = answered;
-        // A later change is painted already: its own answer, or the read after, says the rest.
-        if (mine === latest.current)
+        // A later change is painted already: its own answer, or the read after, says the rest —
+        // unless this is the last one still on its way, whose answer is then the truth to show.
+        if (mine === latest.current || inFlight.current === 1) {
           client.setQueryData<IncidentResponse>(key, { incident: answered });
+        }
         readAgain(client, [...key, 'updates']);
         return true;
       } catch (failure) {
@@ -129,8 +140,28 @@ export const useIncidentActions = (channelId: string): IncidentActions => {
         inFlight.current -= 1;
       }
     },
-    [api, channelId, client, clock, describe, key, show],
+    [client, describe, key, show],
   );
 
-  return { declare, declaring, change };
+  const change = useCallback(
+    async (incident: Incident, input: ChangeIncidentRequest): Promise<boolean> =>
+      await apply(incident, asked(incident, input, clock.now()), () =>
+        api.changeIncident(channelId, incident.id, input),
+      ),
+    [api, apply, channelId, clock],
+  );
+
+  const respond = useCallback(
+    async (incident: Incident, person: User, responding: boolean): Promise<boolean> => {
+      const others = incident.responders.filter((someone) => someone.id !== person.id);
+      return await apply(
+        incident,
+        { ...incident, responders: responding ? [...others, person] : others },
+        () => api.respond(channelId, incident.id, person.id, responding),
+      );
+    },
+    [api, apply, channelId],
+  );
+
+  return { declare, declaring, change, respond };
 };

@@ -18,7 +18,7 @@ import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
 import { expectFocusOn } from '../../testing/focus';
-import { ALICE, IDS, ME, aChannel, someChannels } from '../../testing/fixtures';
+import { ALICE, BOB, IDS, ME, aChannel, someChannels } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 
 installDom();
@@ -70,7 +70,12 @@ const mount = async (
     channels,
     members: [{ user: ME }, { user: ALICE }],
     messages: page([]),
-    api: { incidentUpdates: timeline, ...api },
+    api: {
+      incidentUpdates: timeline,
+      channelMembers: () =>
+        Promise.resolve([ME, ALICE].map((user) => ({ user, joinedAt: DECLARED }))),
+      ...api,
+    },
     ...(options.locale === undefined ? {} : { locale: options.locale }),
   });
 };
@@ -371,7 +376,7 @@ describe('a channel’s incident', () => {
     expect(within(panel).getByRole('button', { name: 'Mitigating' })).toBeDefined();
     await expectNoAxeViolations(panel);
     failing = false;
-    await person().click(within(panel).getByRole('button', { name: 'Retry' }));
+    await person().click(within(panel).getByRole('button', { name: 'Retry reading the timeline' }));
     await settle();
     expect(within(panel).getByText('Someone moved it to Mitigating')).toBeDefined();
     await person().click(within(panel).getByRole('button', { name: 'Show older' }));
@@ -585,6 +590,180 @@ describe('a channel’s incident', () => {
     const panelTr = await openPanel(tr);
     expect(within(panelTr).getByText('Alice müdahale ediyor')).toBeDefined();
     tr.unmountAll();
+  });
+
+  describe('who is responding (D-137 §3)', () => {
+    const members = (): Promise<{ user: typeof ME; joinedAt: string }[]> =>
+      Promise.resolve([ME, ALICE, BOB].map((user) => ({ user, joinedAt: DECLARED })));
+
+    test('listed with "you", and "I’m responding" paints at once and asks once', async () => {
+      const asked: [string, boolean][] = [];
+      let answer: (incident: Incident) => void = () => undefined;
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: open({ responders: [ALICE] }) }),
+        channelMembers: members,
+        respond: (_channel, _id, userId, responding) => {
+          asked.push([userId, responding]);
+          return new Promise((resolve) => {
+            answer = resolve;
+          });
+        },
+      });
+      const panel = await openPanel(view);
+      const list = within(panel).getByRole('region', { name: '1 responding' });
+      expect(within(list).getByText('Alice')).toBeDefined();
+      await person().click(within(panel).getByRole('button', { name: 'I’m responding' }));
+      // Before the answer: listed, as "you", and the button gone.
+      expect(within(panel).getByText('Dogancan (you)')).toBeDefined();
+      expect(within(panel).queryByRole('button', { name: 'I’m responding' })).toBeNull();
+      expect(view.getByRole('region', { name: 'Incident in progress' }).textContent).toContain(
+        '2 responding',
+      );
+      act(() => {
+        answer(open({ responders: [ALICE, ME] }));
+      });
+      await settle();
+      expect(asked).toEqual([[ME.id, true]]);
+      await expectNoAxeViolations(panel);
+      view.unmountAll();
+    });
+
+    test('somebody else is brought in from the channel’s members, and taken off; a refusal is put back', async () => {
+      const asked: [string, boolean][] = [];
+      let current = open({ responders: [] });
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: current }),
+        channelMembers: members,
+        respond: (_channel, _id, userId, responding) => {
+          asked.push([userId, responding]);
+          if (!responding) return Promise.reject(new ApiError(500, 'INTERNAL', 'boom'));
+          current = open({ responders: [BOB] });
+          return Promise.resolve(current);
+        },
+      });
+      const panel = await openPanel(view);
+      expect(within(panel).getByText('Nobody is responding yet.')).toBeDefined();
+      await person().click(within(panel).getByRole('button', { name: 'Bring someone in…' }));
+      // The channel's members not responding, never the person themselves: they have their own button.
+      expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Alice',
+        'Bob',
+      ]);
+      await person().click(view.getByRole('menuitem', { name: 'Bob' }));
+      await settle();
+      expect(within(panel).getByText('Bob')).toBeDefined();
+      await person().click(within(panel).getByRole('button', { name: 'Take Bob off responding' }));
+      await settle();
+      // Refused: back as the server last said, and said.
+      expect(within(panel).getByText('Bob')).toBeDefined();
+      expect(view.getByText(/went wrong/i)).toBeDefined();
+      expect(asked).toEqual([
+        [BOB.id, true],
+        [BOB.id, false],
+      ]);
+      view.unmountAll();
+    });
+
+    test('after I’m responding, the button is gone and focus is on the list’s heading, never nowhere', async () => {
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: open({ responders: [] }) }),
+        channelMembers: members,
+        respond: () => Promise.resolve(open({ responders: [ME] })),
+      });
+      const panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'I’m responding' }));
+      await settle();
+      expectFocusOn(within(panel).getByRole('heading', { name: '1 responding' }));
+      view.unmountAll();
+    });
+
+    test('when the channel’s members cannot be read, it says so with Retry instead of a missing menu', async () => {
+      let failing = true;
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: open({ responders: [] }) }),
+        channelMembers: () =>
+          failing ? Promise.reject(new ApiError(500, 'INTERNAL', 'boom')) : members(),
+      });
+      const panel = await openPanel(view);
+      expect(within(panel).getByText('The channel’s members did not load.')).toBeDefined();
+      expect(within(panel).queryByRole('button', { name: 'Bring someone in…' })).toBeNull();
+      failing = false;
+      await person().click(
+        within(panel).getByRole('button', { name: 'Retry reading the channel’s members' }),
+      );
+      await settle();
+      expect(within(panel).getByRole('button', { name: 'Bring someone in…' })).toBeDefined();
+      view.unmountAll();
+    });
+
+    test('a later change refused while an earlier one is still on its way: the earlier one’s answer is shown', async () => {
+      let answerRespond: (incident: Incident) => void = () => undefined;
+      let refuseChange: (error: unknown) => void = () => undefined;
+      let reads = 0;
+      const view = await mount({
+        incident: () => {
+          reads += 1;
+          // After the first, reads fail: what is shown is the actions' own doing.
+          return reads === 1
+            ? Promise.resolve({ incident: open({ responders: [] }) })
+            : Promise.reject(new ApiError(500, 'INTERNAL', 'boom'));
+        },
+        channelMembers: members,
+        respond: () =>
+          new Promise((resolve) => {
+            answerRespond = resolve;
+          }),
+        changeIncident: () =>
+          new Promise((_resolve, reject) => {
+            refuseChange = reject;
+          }),
+      });
+      const panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'I’m responding' }));
+      await person().click(within(panel).getByRole('button', { name: 'Mitigating' }));
+      act(() => {
+        refuseChange(new ApiError(500, 'INTERNAL', 'no'));
+      });
+      await settle();
+      act(() => {
+        answerRespond(open({ responders: [ME] }));
+      });
+      await settle();
+      expect(within(panel).getByText('Dogancan (you)')).toBeDefined();
+      view.unmountAll();
+    });
+
+    test('a visitor reads who is responding and is offered nothing', async () => {
+      const view = await mount(
+        {
+          incident: () => Promise.resolve({ incident: open({ responders: [ALICE] }) }),
+        },
+        { member: false },
+      );
+      const panel = await openPanel(view);
+      expect(within(panel).getByText('Alice')).toBeDefined();
+      expect(within(panel).queryByRole('button', { name: 'I’m responding' })).toBeNull();
+      expect(within(panel).queryByRole('button', { name: /Take .* off/ })).toBeNull();
+      expect(within(panel).queryByRole('button', { name: 'Bring someone in…' })).toBeNull();
+      view.unmountAll();
+    });
+
+    test('the banner shows the first three and how many more', async () => {
+      const five = ['a1', 'a2', 'a3', 'a4', 'a5'].map((name, n) => ({
+        id: `0199155c-6200-7b7f-8c11-0000000001${String(n).padStart(2, '0')}`,
+        username: name,
+        displayName: name.toUpperCase(),
+        avatarUrl: null,
+      }));
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: open({ responders: five }) }),
+      });
+      const banner = view.getByRole('region', { name: 'Incident in progress' });
+      expect(banner.querySelectorAll('[data-avatar]')).toHaveLength(3);
+      expect(banner.textContent).toContain('+2');
+      expect(banner.textContent).toContain('5 responding');
+      view.unmountAll();
+    });
   });
 
   test('in Turkish, it speaks Turkish', async () => {
