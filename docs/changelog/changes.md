@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a session that ends while a socket opens says why before closing it (#577)
+
+- A sign-out that landed in the moment a socket was opening closed it with the right code but without
+  the `SESSION_ENDED` frame every other end of a session sends first; it is now said, once, whichever
+  way the hub learnt it.
+
 ### Feature — 2026-10-14: a channel's incident, declared, moved and resolved (D-137, part of #487)
 
 - Anyone in a channel declares an incident in it at a severity, moves it between investigating and
