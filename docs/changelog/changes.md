@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a message's edit history, from its "edited" mark (D-135, closes #82)
+
+- "Edited" opens what the message says now and what it said before each edit. Its author can remove
+  an earlier version, after being asked; the edit box says the old words stay until then.
+
 ### Feature — 2026-10-14: what an edited message said before (D-135, part of #82)
 
 - Every edit keeps the words it replaced. Anybody who can read the message can read its earlier

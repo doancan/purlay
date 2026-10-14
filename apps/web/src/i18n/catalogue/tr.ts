@@ -501,6 +501,21 @@ export const tr = {
     'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse depo bağlantısını kaldırıp yeniden bağlamak gerekir.',
   'feeds.setup.done': 'Tamam',
 
+  // ── Bir mesajın önceki sürümleri (D-135) ────────────────────────────────
+  'history.open': 'Düzenlendi — önceki halini göster',
+  'history.title': 'Düzenleme geçmişi',
+  'history.description': 'Bu mesajın şimdi ne dediği ve her düzenlemeden önce ne dediği.',
+  'history.now': 'Şimdi',
+  'history.earlier': 'Önceki sürümler',
+  'history.replaced': '{when} değiştirildi',
+  'history.none': 'Bu mesajın önceki sürümleri saklanmadı.',
+  'history.more': 'Daha eski sürümleri göster',
+  'history.remove': 'Kaldır',
+  'history.removeOne': '{when} değiştirilen sürümü kaldır',
+  'history.removeAsk': 'Bu sürüm geçmişten kaldırılsın mı? Bir daha kimse okuyamaz.',
+  'history.removeFailed': 'Sürüm kaldırılamadı.',
+  'message.editHistoryHint': 'Önceki hali geçmişinde kalır; oradan kaldırabilirsin.',
+
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',
   'diff.oldLine': 'Eski satır',

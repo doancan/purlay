@@ -506,6 +506,22 @@ export const en = {
     'The secret is shown only now. Lost, it means disconnecting the repository and connecting it again.',
   'feeds.setup.done': 'Done',
 
+  // ── A message's earlier versions (D-135) ────────────────────────────────
+  'history.open': 'Edited — show what it said before',
+  'history.title': 'Edit history',
+  'history.description': 'What this message says now, and what it said before each edit.',
+  'history.now': 'Now',
+  'history.earlier': 'Earlier versions',
+  'history.replaced': 'Replaced {when}',
+  'history.none': 'Earlier versions of this message were not kept.',
+  'history.more': 'Show older versions',
+  'history.remove': 'Remove',
+  'history.removeOne': 'Remove the version replaced {when}',
+  'history.removeAsk':
+    'Remove this version from the history? Nobody will be able to read it again.',
+  'history.removeFailed': 'Couldn’t remove the version.',
+  'message.editHistoryHint': 'What it said before stays in its history, where you can remove it.',
+
   'diff.added': 'added',
   'diff.removed': 'removed',
   'diff.oldLine': 'Old line',

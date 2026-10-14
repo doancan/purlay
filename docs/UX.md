@@ -99,6 +99,12 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   Save on a message for a member of the channel, painted at once and put back with Retry when
   refused; a pinned message says **Pinned** under its words, for everyone who can see it.
 
+- **Edited** under a message's words is a button (D-135): it opens the message's **Edit history** —
+  what it says now, then each earlier version, newest first, with when it was replaced, older ones a
+  page at a time. Its author has **Remove** on each version, asking in place first; the edit box says
+  that what a message said before stays in its history, where it can be removed. A message edited
+  before versions were kept says that earlier versions were not kept.
+
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
   as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). It is the only
@@ -407,6 +413,7 @@ missing specified behaviour and does not merge.
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 | Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
+| Edit history | "Earlier versions of this message were not kept." | Skeleton row | Retry |
 
 **A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
 **Go home**; the rail and the sidebar stay, and going anywhere else draws afresh. A failure outside a

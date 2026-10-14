@@ -475,6 +475,23 @@ describe('a channel’s files list (D-129)', () => {
     expect(pinsStale()).toBe(true);
   });
 
+  test('an edit or a delete reads a message’s history again (D-135 §5)', () => {
+    const client = new QueryClient();
+    client.setQueryData(keys.messageVersions(id(2)), { pages: [], pageParams: [] });
+    client.setQueryData(keys.messageVersions(id(3)), { pages: [], pageParams: [] });
+    messageRevised(client, {
+      channelId: CH,
+      messageId: id(2),
+      parentId: null,
+      content: 'changed',
+      editedAt: '2026-09-09T08:00:00.000Z',
+      deletedAt: null,
+      mentions: [],
+    });
+    expect(client.getQueryState(keys.messageVersions(id(2)))?.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys.messageVersions(id(3)))?.isInvalidated).toBe(false);
+  });
+
   test('a removed event keeps nothing of what it said, as the server reads it (D-134 §6)', () => {
     const client = new QueryClient();
     // Answered, so its tombstone keeps its place (D-103 §7) rather than leaving the list.

@@ -35,6 +35,7 @@ import { GitHubEventCard } from '../content/github-event';
 import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
 import { authorOf, isMine } from './author';
+import { EditedMark } from './edit-history';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
 import { SaveToggle } from '../saved/save-toggle';
@@ -217,14 +218,7 @@ const MessageRowView = ({
             ) : (
               renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
             )}
-            {!deleted && message.editedAt !== null && (
-              <span
-                className="text-caption text-ink-subtle"
-                title={format.absolute(message.editedAt)}
-              >
-                {t('message.edited')}
-              </span>
-            )}
+            {!deleted && <EditedMark message={message} mine={isMine(message, meId)} />}
             {!deleted && <PinnedMark message={message} />}
             {delivery === 'sent' && !deleted && (
               <div
