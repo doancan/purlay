@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'feeds-connect-unlocked',
+    why: 'two admins connecting at once both read before either wrote: past the cap, or a raw unique violation',
+    file: 'apps/api/src/modules/integrations/feeds.ts',
+    find: '    .forNoKeyUpdate()\n',
+    replace: '',
+    tests: ['apps/api/src/modules/integrations/feeds.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'feeds-list-unscoped',
+    why: "a channel's feed list returns other channels' and other workspaces' feeds",
+    file: 'apps/api/src/modules/integrations/feeds.ts',
+    find: "    .where('channel_id', '=', context.channelId)\n    .orderBy('created_at')\n",
+    replace: "    .orderBy('created_at')\n",
+    tests: ['apps/api/src/modules/integrations/feeds.integration.test.ts'],
+  },
+  {
     id: 'pins-by-anyone-who-sees',
     why: 'a member of the workspace who only sees the channel pins and unpins in it',
     file: 'apps/api/src/modules/pins/pins.ts',

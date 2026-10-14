@@ -10,7 +10,8 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 - An owner or an admin connects a GitHub repository to a channel they can see, choosing its events,
   and gets the address and the secret GitHub needs — once; feeds are listed and disconnected the same
-  way, each on the audit trail. Deliveries are posted by the webhook that follows.
+  way, each on the audit trail. The webhook address is not served yet: deliveries are posted by the
+  webhook that follows, in this release.
 
 ### Feature — 2026-10-14: a pasted diff drawn as a diff (D-133, closes #80)
 

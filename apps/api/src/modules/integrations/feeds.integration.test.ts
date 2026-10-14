@@ -159,6 +159,60 @@ describe('integration: a channel’s repository feeds', () => {
     });
   });
 
+  test('a channel lists its own feeds only: not another channel’s, nor another workspace’s', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = contextOf(room, 'alice');
+      const own = await createFeed(db, clock, cipher, alice, PUSH);
+      // Another channel of the same workspace, and another workspace, each with a feed of its own.
+      const sibling = await db
+        .insertInto('channels')
+        .values({ workspace_id: room.workspaceId, name: 'sibling', type: 'public' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('github_repo_feeds')
+        .values({
+          id: crypto.randomUUID(),
+          workspace_id: room.workspaceId,
+          channel_id: sibling.id,
+          repository_full_name: 'acme/sibling',
+          events: ['push'],
+          secret_encrypted: 'sealed',
+        })
+        .execute();
+      const elsewhere = await aRoom(db, ['carol']);
+      await createFeed(db, clock, cipher, contextOf(elsewhere, 'carol'), {
+        repository: 'acme/elsewhere',
+        events: ['push'],
+      });
+      expect(await channelFeeds(db, alice)).toEqual([own.feed]);
+    });
+  });
+
+  test('a row the contract cannot say is said loudly, never listed half-right', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const alice = contextOf(room, 'alice');
+      await db
+        .insertInto('github_repo_feeds')
+        .values({
+          id: crypto.randomUUID(),
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          repository_full_name: 'acme/twice',
+          events: ['push', 'push'],
+          secret_encrypted: 'sealed',
+        })
+        .execute();
+      const outcome = await channelFeeds(db, alice).then(
+        () => 'listed',
+        (error: unknown) => (error instanceof Error ? error.message : 'not an error'),
+      );
+      expect(outcome).toContain('the contract does not know');
+    });
+  });
+
   test('a member is refused every one of the three, and nothing changes', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
@@ -242,11 +296,19 @@ describe('integration: a channel’s repository feeds', () => {
     });
   });
 
-  test('the table refuses what the service never writes: an unknown event, no event, a bad name', async () => {
+  test('the table refuses what the service never writes: an unknown event, no event, a bad name, an unknown or half failure', async () => {
     for (const values of [
       { events: ['deployment'], repository_full_name: 'acme/api' },
       { events: [], repository_full_name: 'acme/api' },
       { events: ['push'], repository_full_name: 'Acme/API' },
+      { events: ['push'], repository_full_name: 'acme/..' },
+      {
+        events: ['push'],
+        repository_full_name: 'acme/api',
+        last_failure: 'signature_invalid',
+        last_failure_at: NOW,
+      },
+      { events: ['push'], repository_full_name: 'acme/api', last_failure: 'payload_invalid' },
     ]) {
       let outcome = 'not tried';
       await withRollback(async (db) => {

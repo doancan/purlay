@@ -36,11 +36,16 @@ const feedNotFound = (): AppError =>
 const mayConfigure = async (executor: Executor, context: ChannelContext): Promise<void> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
   const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
-  if (role === 'member') {
-    throw new AppError({
-      code: 'FORBIDDEN',
-      message: 'Only an owner or an admin connects a repository to a channel.',
-    });
+  // Each role decided, so a role added later is refused until somebody says otherwise.
+  switch (role) {
+    case 'owner':
+    case 'admin':
+      return;
+    case 'member':
+      throw new AppError({
+        code: 'FORBIDDEN',
+        message: 'Only an owner or an admin connects a repository to a channel.',
+      });
   }
 };
 
@@ -63,9 +68,12 @@ const feedOf = (row: FeedRow): GitHubFeed => {
   const reason = row.last_failure;
   if (
     events.length !== row.events.length ||
+    new Set(events).size !== events.length ||
     (reason !== null && !Value.Check(GitHubFeedFailure, reason))
   ) {
-    throw new Error(`github_repo_feeds ${row.id} holds a value the contract does not know`);
+    throw new Error(
+      `github_repo_feeds ${row.id} holds events or a failure the contract does not know`,
+    );
   }
   return {
     id: row.id,
@@ -138,7 +146,10 @@ export const createFeed = async (
   if (existing.some((row) => row.repository_full_name === repository)) {
     throw new AppError({
       code: 'GITHUB_FEED_EXISTS',
-      message: 'This channel already hears from that repository.',
+      // The secret was shown once, when it was connected: a lost one is a feed disconnected and
+      // connected again (D-134 §3) — said here, since a retry after a lost answer lands here.
+      message:
+        'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
     });
   }
   if (existing.length >= GITHUB_FEEDS_PER_CHANNEL_MAX) {

@@ -704,7 +704,8 @@ export const tr = {
   'failure.pinsLimit': 'Bir kanalın tutabileceği pin sınırına ulaşıldı. Önce birini kaldır.',
   'failure.githubFeedsLimit':
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
-  'failure.githubFeedExists': 'Bu kanal o depoya zaten bağlı.',
+  'failure.githubFeedExists':
+    'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için bağlantıyı kaldırıp yeniden bağla.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

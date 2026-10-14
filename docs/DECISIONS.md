@@ -5846,11 +5846,13 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
 2. **Set up and removed by an owner or an admin** (§7.4's "configure GitHub integration"), from a
    channel they can see — a role is not a way round visibility (D-123 §2): a channel they cannot see
    has no feeds for them, and its feed is `404`. Each is one row of the audit trail
-   (`integration.feed_created`, `integration.feed_removed`). A direct message has none.
+   (`integration.feed_created`, `integration.feed_removed`) with the repository's name — accepted: an
+   admin reading the trail learns that a repository was connected somewhere, not where, as an
+   archived private channel's name is on it already (D-123). A direct message has none.
 3. **Each feed has its own secret**: 32 random bytes the server makes, sealed by the one cipher
-   (D-39 §6) with the feed's id bound in, shown once — with the payload address and the content type
-   GitHub must send, `application/json` — and never again. A lost secret is a feed removed and made
-   again. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
+   (D-39 §6) with the feed's id bound in, answered once with the payload address — the screen that
+   shows them says the content type GitHub must send, `application/json` — and never again. A lost
+   secret is a feed removed and made again, which is what connecting it again is told. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
    found before the signature is checked, and a repository's name, unverified, names a feed in every
    workspace that has one.
 4. **A delivery is checked before it is read**: a feed that is not there is `404`; a body without a

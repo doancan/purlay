@@ -10,7 +10,8 @@
 --   * The secret is sealed by the one cipher with the feed's id bound in (D-39 §6): base64 of
 --     version, nonce, ciphertext and tag. Never logged, never returned after the first answer.
 --   * `created_by` outlives its person as NULL: the feed is the channel's, and posts as nobody.
---   * The last failure is a code and its time, both or neither.
+--   * The last failure is one of the contract's `GitHubFeedFailure` codes, with its time: both or
+--     neither.
 --   * A delivery is recorded in the transaction that posts it, once per feed (D-134 §5); a daily
 --     sweep keeps 30 days of them, by `received_at`.
 --
@@ -31,11 +32,14 @@ CREATE TABLE github_repo_feeds (
     last_failure_at      TIMESTAMPTZ,
 
     CONSTRAINT github_repo_feeds_repository_shape CHECK (
-        repository_full_name ~ '^[a-z0-9-]{1,39}/[a-z0-9._-]{1,100}$'
+        repository_full_name ~ '^[a-z0-9][a-z0-9-]{0,38}/(?!\.\.?$)[a-z0-9._-]{1,100}$'
     ),
     CONSTRAINT github_repo_feeds_events_known CHECK (
         cardinality(events) >= 1
         AND events <@ ARRAY['push', 'pull_request', 'issues', 'release']::TEXT[]
+    ),
+    CONSTRAINT github_repo_feeds_failure_known CHECK (
+        last_failure IN ('channel_archived', 'repository_mismatch', 'payload_invalid')
     ),
     CONSTRAINT github_repo_feeds_failure_is_complete CHECK (
         (last_failure IS NULL) = (last_failure_at IS NULL)
