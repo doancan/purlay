@@ -125,6 +125,13 @@ export const AuditDialog = ({
           from: entry.metadata['from'] ?? '',
           to: entry.metadata['to'] ?? '',
         });
+      // Nobody did it: the nightly purge, which names no actor (D-139 §3).
+      case 'retention.purged':
+        return t('audit.action.retention.purged', {
+          days: entry.metadata['days'] ?? '',
+          messages: entry.metadata['messages'] ?? '0',
+          files: entry.metadata['files'] ?? '0',
+        });
       case undefined:
         return t('audit.unknown', { actor, action: entry.action });
     }

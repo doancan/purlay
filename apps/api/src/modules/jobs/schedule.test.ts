@@ -25,6 +25,7 @@ describe('the next run of a slot', () => {
 
   test('the deployment’s plan names every job the runner knows, each once', () => {
     expect(PLAN.map((slot) => slot.job).sort()).toEqual([
+      'purge:retention',
       'reconcile:storage',
       'sweep:email-sign-ins',
       'sweep:github-deliveries',

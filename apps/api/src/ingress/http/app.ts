@@ -21,6 +21,7 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
+import { goneMessageReference } from '../../platform/gone-message';
 import {
   SIGN_IN_REQUEST_BUDGET,
   askForSignInLink,
@@ -336,6 +337,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       }
       // The client is told INTERNAL and nothing else; the cause is written here.
       if (refusal.status === 500) log.error('request failed', { err: error, path });
+      // Said by the name of the reference, so a pairing defect is not hidden by the 404 (D-139 §2).
+      const gone = goneMessageReference(error);
+      if (gone !== undefined)
+        log.warn('a write referred to a message that is not there', { constraint: gone, path });
       set.status = refusal.status;
       return refusal.body;
     })

@@ -6,12 +6,14 @@
  *   reconcile:storage  each workspace's storage count put back to the bytes it holds (I-7)
  *   sweep:link-previews  the unfurl cache past its expiry (D-23)
  *   sweep:email-sign-ins  sign-in links and notes a day old (D-138)
+ *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
  * It reads the deployment's own configuration, as the API does, so it runs in the same image with
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
+import { purgeRetention } from '../modules/retention/purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
   reconcileStorage,
@@ -51,6 +53,8 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
   'sweep:link-previews': async () => await sweepLinkPreviews({ database, clock }),
   'sweep:github-deliveries': async () => await sweepGitHubDeliveries({ database, clock }),
   'sweep:email-sign-ins': async () => await sweepEmailSignIns({ database, clock }),
+  'purge:retention': async () =>
+    await purgeRetention({ database, clock, log, storage: storeFor(config) }),
 };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>

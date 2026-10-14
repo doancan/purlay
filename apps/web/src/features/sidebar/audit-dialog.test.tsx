@@ -107,6 +107,23 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual([`${ME.displayName} archived #general`]);
   });
 
+  test('the nightly purge is said with what it cleared, and no person, since nobody did it (D-139 §3)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(1, {
+              action: 'retention.purged',
+              actor: null,
+              targetType: 'workspace',
+              metadata: { days: '30', messages: '12', files: '2' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual(['History older than 30 days was cleared: 12 messages, 2 files']);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>

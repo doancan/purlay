@@ -790,7 +790,7 @@ layering rule. (D-46)
 | Generated types | Regenerating `packages/db/src/schema.ts` from the applied migrations produces no diff (D-45) | `bun run db:check` |
 | Architecture fitness | No module imports from `ingress`; every endpoint in `API.md` has a cross-tenant test; `OFFSET` never appears in a `messages` query; every cross-document reference resolves (D-47) | Lint and `scripts/`; the rest is #130 |
 | Audit | Every administrative action writes exactly one `audit_log` row; no service issues `UPDATE` or `DELETE` against it (I-9) | With the audit log (#69) |
-| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); erasure never removes a message (I-11) | Phase 2 |
+| Retention | The purge deletes nothing when `retention_days IS NULL` and never a message inside the window (I-10); what a purged message added is taken back, its files' bytes once under two runs at once, and a reply racing it is `404` (D-139 §2); erasure never removes a message (I-11) | `modules/retention/purge*.integration.test.ts`, `ingress/http/retention-race*`; erasure with #83 |
 | **Accessibility** | **`axe` clean on every component and every screen. A violation is fixed, never waived (D-52)** | Before the first screen (#139) |
 | **Keyboard path** | **Every action reachable by mouse is reached by key, per screen (`UX.md` §7)** | With the screens (#139) |
 | **Screen states** | **Loading, error and empty each render, per view. A missing state is missing specified behaviour (`UX.md` §8, D-53)** | With the screens (#139) |

@@ -15,6 +15,7 @@
  * frames meant for this connection. That is the separation the Phase 3 adapter
  * swap depends on (D-7).
  */
+import { MESSAGE_GONE, goneMessageReference } from '../platform/gone-message';
 import { Value } from '@sinclair/typebox/value';
 import {
   ClientFrame,
@@ -126,13 +127,16 @@ const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame =
   const body =
     error instanceof AppError
       ? error.body
-      : error instanceof DatabaseUnavailableError
-        ? // The same body HTTP answers with (`refusalFor`), so a client handles one code (D-87).
-          {
-            code: 'DATABASE_UNAVAILABLE' as const,
-            message: 'The service is busy. Try again shortly.',
-          }
-        : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
+      : goneMessageReference(error) !== undefined
+        ? // A reply to a root the purge took that moment: what HTTP answers too (D-139 §2).
+          MESSAGE_GONE
+        : error instanceof DatabaseUnavailableError
+          ? // The same body HTTP answers with (`refusalFor`), so a client handles one code (D-87).
+            {
+              code: 'DATABASE_UNAVAILABLE' as const,
+              message: 'The service is busy. Try again shortly.',
+            }
+          : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
   return frame({ event: 'ERROR', data: body }, clock, refId);
 };
 
@@ -371,7 +375,14 @@ export const routeFrame = async (
       }
     }
   } catch (error) {
-    if (!(error instanceof AppError)) {
+    const gone = goneMessageReference(error);
+    if (gone !== undefined) {
+      dependencies.log.warn('a write referred to a message that is not there', {
+        constraint: gone,
+        op: parsed.op,
+        socketId: identity.socketId,
+      });
+    } else if (!(error instanceof AppError)) {
       // The client is told only INTERNAL; the cause is written here, once.
       dependencies.log.error('frame failed', {
         err: error,

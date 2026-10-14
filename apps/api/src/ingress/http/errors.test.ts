@@ -78,6 +78,14 @@ describe('what the database says about a request that was wrong', () => {
     expect(refusal.body.error.code).toBe('INTERNAL');
   });
 
+  test('a reference to a message gone from under it is that message not found; any other is a defect', () => {
+    const gone = refusalFor('UNKNOWN', violation('23503', 'messages_parent_channel_fkey'), []);
+    expect([gone.status, gone.body.error.code]).toEqual([404, 'MESSAGE_NOT_FOUND']);
+    expect(JSON.stringify(gone.body)).not.toContain('messages_parent_channel_fkey');
+    const other = refusalFor('UNKNOWN', violation('23503', 'channels_workspace_id_fkey'), []);
+    expect([other.status, other.body.error.code]).toEqual([500, 'INTERNAL']);
+  });
+
   test('other database failures stay INTERNAL', () => {
     expect(refusalFor('UNKNOWN', violation('40001'), []).status).toBe(500);
     expect(refusalFor('UNKNOWN', new Error('boom'), []).status).toBe(500);

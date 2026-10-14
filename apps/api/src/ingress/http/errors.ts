@@ -18,6 +18,7 @@
  * 3. Its `error.message` for a validation failure is the whole JSON blob as a
  *    string. Nothing here reads it.
  */
+import { MESSAGE_GONE, goneMessageReference } from '../../platform/gone-message';
 import type { AppErrorBody, ErrorResponse, HttpStatus } from '@purlay/types';
 import { statusFor } from '@purlay/types';
 import { DatabaseUnavailableError } from '@purlay/db';
@@ -139,6 +140,9 @@ export const refusalFor = (
   issues: readonly FrameworkIssue[],
 ): Refusal => {
   if (error instanceof AppError) return respond(error.body);
+
+  // A message gone from under the write (D-139 §2): the same answer the socket gives.
+  if (goneMessageReference(error) !== undefined) return respond(MESSAGE_GONE);
 
   if (error instanceof DatabaseUnavailableError) {
     return respond({
