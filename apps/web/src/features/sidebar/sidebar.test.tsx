@@ -599,6 +599,7 @@ describe('the workspace menu', () => {
       'Audit log…',
       'Workspace settings…',
       'Keep history…',
+      'Export workspace…',
     ]);
   });
 
@@ -617,6 +618,7 @@ describe('the workspace menu', () => {
       'Audit log…',
       'Workspace settings…',
       'Keep history…',
+      'Export workspace…',
     ]);
   });
 

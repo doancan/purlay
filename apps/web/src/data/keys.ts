@@ -34,6 +34,8 @@ export const keys = {
   audit: (workspaceId: string) => ['audit', workspaceId] as const,
   /** How long a workspace keeps its history, an owner's to read (D-139 §4). */
   retention: (workspaceId: string) => ['retention', workspaceId] as const,
+  /** An owner's own exports of a workspace (D-140). */
+  exports: (workspaceId: string) => ['exports', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
   pushKey: ['push-key'] as const,
   /** Every view of a person's saved messages in a workspace: the ids, and each state's pages. */
