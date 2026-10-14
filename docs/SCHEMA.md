@@ -198,6 +198,36 @@ removes it. The endpoint and both keys are a person's: never logged (`ARCHITECTU
 
 ---
 
+### 3.4. `email_sign_ins`
+
+Every message sent to sign in by email (migration 0038, D-138): a link, or a word that the address signs
+in with GitHub.
+
+```sql
+CREATE TABLE email_sign_ins (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email       TEXT NOT NULL,                     -- lower-cased, as every stored address (D-40)
+    kind        TEXT NOT NULL,                     -- 'link' | 'github'
+    token_hash  TEXT UNIQUE,                       -- SHA-256 of a link's token; never the token
+    created_at  TIMESTAMPTZ NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,              -- fifteen minutes after
+    used_at     TIMESTAMPTZ,                       -- set by the one use
+
+    CONSTRAINT email_sign_ins_email_lower CHECK (email = lower(email) AND char_length(email) <= 254),
+    CONSTRAINT email_sign_ins_kind CHECK (kind IN ('link', 'github')),
+    CONSTRAINT email_sign_ins_token_hash CHECK (
+        (kind = 'link') = (token_hash IS NOT NULL) AND (token_hash IS NULL OR token_hash ~ '^[0-9a-f]{64}$')
+    ),
+    CONSTRAINT email_sign_ins_expiry CHECK (expires_at > created_at)
+);
+
+CREATE INDEX idx_email_sign_ins_email ON email_sign_ins (email, created_at);
+```
+
+> No user id: a link to an address no account has makes the account on its use. Both kinds count
+> toward the address's five an hour, so neither can flood a mailbox. A day after, a row is swept
+> (`sweep:email-sign-ins`); erasure (D-27) deletes a person's as it rewrites their address.
+
 ## 4. Workspaces & Membership
 
 ### 4.1. `workspaces`
@@ -1206,6 +1236,7 @@ require an instance-administrator role that does not exist and that D-3 delibera
 ```sql
 CREATE TABLE job_runs (
     -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions', 'sweep:github-deliveries',
+    -- 'sweep:email-sign-ins',
     -- 'reconcile:storage', 'purge:retention'
     job_name             VARCHAR(64) PRIMARY KEY,
 
@@ -1361,9 +1392,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0035_incidents.sql           incidents, incident_updates: a channel's incidents and their timeline  (D-137)
 0036_incident_responders.sql incident_responders; the timeline's responder entries  (D-137 §3)
 0037_incident_writeup.sql    incidents.runbook_url, postmortem, postmortem_version  (D-137 §3, §5)
+0038_email_auth.sql          email_sign_ins: sign-in links sent by email, and the word to use GitHub  (D-138)
 ```
-
-Phase 2's magic links add `0038_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration

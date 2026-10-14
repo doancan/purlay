@@ -76,6 +76,7 @@ without disclosing it. (D-33)
 |:-:|---|---|---|
 | ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
 | ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL`. **Never answers JSON:** a failure is a 302 to the sign-in screen with a reason (below, D-121) |
+| ○ | `POST` | `/auth/email` | `EmailSignInRequest` (an address and the language to write in) → `202` whatever the address, so whether an account has it is never said; the message is sent after the answer — a link for an address no account has or an email account's, a word to sign in with GitHub for a GitHub account's, nothing past five an hour. Off without mail configured: `503 EMAIL_SIGN_IN_UNAVAILABLE` (D-138) |
 | ○ | `POST` | `/auth/logout` | Revokes the current session, and the devices subscribed in it stop being told (D-126) |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user, their `profile`, and workspace memberships |

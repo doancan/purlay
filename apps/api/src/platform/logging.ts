@@ -46,6 +46,12 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'auth',
   // A person's status line: free words, as a message's are (D-131).
   'status_text',
+  // A mail and what a relay says of it — the recipient and the sign-in link it carries (D-138 §8).
+  'to',
+  'envelope',
+  'html',
+  'text',
+  'token_hash',
 ]);
 
 const REDACTED = '[redacted]';

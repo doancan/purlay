@@ -21,6 +21,7 @@ export const PLAN: readonly Slot[] = [
   { job: 'reconcile:storage', every: 'day', hour: 3, minute: 30 },
   { job: 'sweep:link-previews', every: 'day', hour: 4, minute: 0 },
   { job: 'sweep:github-deliveries', every: 'day', hour: 4, minute: 30 },
+  { job: 'sweep:email-sign-ins', every: 'day', hour: 4, minute: 45 },
 ];
 
 /** The first instant after `after` at which the slot is due. */

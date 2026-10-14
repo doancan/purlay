@@ -765,7 +765,7 @@ reconciliation (invariant I-7). D-27 adds a fourth, and session expiry a fifth.
 ```
 purlay sweep:orphans        purlay sweep:link-previews    purlay sweep:sessions
 purlay reconcile:storage    purlay purge:retention        purlay export:workspace
-purlay sweep:github-deliveries   (D-134 §5)
+purlay sweep:github-deliveries   (D-134 §5)   purlay sweep:email-sign-ins   (D-138)
 ```
 
 **Why not an in-process timer**, which would be the simpler answer at one node: under D-25's
@@ -6101,10 +6101,16 @@ them.
    STARTTLS required on `smtp://`, the usual submission on port 587 — unless `SMTP_ALLOW_PLAINTEXT` says
    the link is private, as the database's does (`docs/spikes/nodemailer.md`: the library refuses a
    server without STARTTLS when told to). The
-   message is sent after the answer, so how long it takes says nothing about the address.
+   message is sent after the answer, so how long it takes says nothing about the address; the envelope
+   names the one recipient. Whether the relay answers is said in the log as the server starts — not a
+   refusal to start, since a relay down for a minute should not take the chat with it — and the shutdown
+   waits two seconds for mail on its way, then says how many it left.
 7. **Limits** (provisional, O-4): five links an hour for an address, twenty requests an hour from a
    client address, and the `auth` budget at the edge; past them the answer is still `202` and nothing is
-   sent, said in the log without the address.
+   sent, said in the log without the address. The count holds under requests at once — one per address
+   at a time, behind a lock in the transaction — and an address is one mailbox written one way: ASCII
+   atoms, `@`, dotted labels. A looser check let `x<a@example.com>` through, which a mail library
+   delivers to `a@example.com` while it counts as an address of its own and matches no account.
 8. **Never logged:** the address, the token, its hash, or the link — the list of ARCHITECTURE §10.
 9. **Erasure** (D-27, #83) deletes the person's pending links as it rewrites their address.
 

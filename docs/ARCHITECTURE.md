@@ -47,6 +47,7 @@
 | Object storage | S3-compatible; Garage locally | `garage` | An extra service locally, set up by a script because its image has no shell; no console. Any S3-compatible store works in production, and a filesystem driver exists for simple self-hosts (D-20; `docs/spikes/object-storage.md`) |
 | Markdown | one engine on both sides — micromark through `mdast-util-from-markdown`, four GFM extensions — narrowed and bounded in `packages/markdown` | `mdast-util-from-markdown`, `micromark-extension-gfm-*`, `mdast-util-gfm-*` | Its browser cost, and superlinear past bounds that are enforced before it runs, so a body past them is shown as typed — both measured in `docs/spikes/markdown.md` (D-101) |
 | Highlighting | Shiki, grammars loaded lazily | `shiki` | Base bundle ships no grammar; first render of an unseen language awaits a dynamic import |
+| Mail | SMTP through `nodemailer`, pinned | `nodemailer` | Sign-in links only (D-138). No runtime dependencies of its own; built from a typed object, never a URL and a loose bag — the spike's first run got its options silently ignored that way; STARTTLS required past this machine — `docs/spikes/nodemailer.md` |
 | Thumbnails | `Bun.Image`, built into the runtime | built in | A young API, and its decoder differs by platform — `docs/spikes/image-pipeline.md`; thumbnails must use `fit: 'inside'`, because the two-dimension form stretches (D-75) |
 
 Full rationale and rejected alternatives: `DECISIONS.md` D-20.
@@ -761,7 +762,8 @@ the response carries it back as `x-request-id` — and every line written inside
 it, however deep the call, without any signature taking it (D-47, D-71). A request writes one line
 when its response has gone; a failure the client is told nothing about is written with its cause.
 Never logged: session tokens, `access_token_encrypted`, a feed's `secret_encrypted` and a delivery's signature (D-134), message content, email addresses, a device's
-push endpoint and keys (D-126), a profile's status line (D-131) — a list
+push endpoint and keys (D-126), a profile's status line (D-131), a sign-in link, its token and its
+digest, and a mail's recipient and words — a relay's error is logged by its code alone (D-138 §8) — a list
 in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
 written. A value interpolated into a message's text cannot be found that way, so a message is a
 constant and variables go in fields.

@@ -5,6 +5,7 @@
  *   sweep:sessions     sessions that expired or were revoked
  *   reconcile:storage  each workspace's storage count put back to the bytes it holds (I-7)
  *   sweep:link-previews  the unfurl cache past its expiry (D-23)
+ *   sweep:email-sign-ins  sign-in links and notes a day old (D-138)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
@@ -15,6 +16,7 @@ import { createDatabase, purgeDeadSessions } from '@purlay/db';
 import {
   reconcileStorage,
   runJob,
+  sweepEmailSignIns,
   sweepGitHubDeliveries,
   sweepLinkPreviews,
   sweepOrphans,
@@ -48,6 +50,7 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
   'reconcile:storage': async () => await reconcileStorage({ database, log }),
   'sweep:link-previews': async () => await sweepLinkPreviews({ database, clock }),
   'sweep:github-deliveries': async () => await sweepGitHubDeliveries({ database, clock }),
+  'sweep:email-sign-ins': async () => await sweepEmailSignIns({ database, clock }),
 };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>

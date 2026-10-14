@@ -950,3 +950,16 @@ export type IncidentUpdatePage = Static<typeof IncidentUpdatePage>;
  */
 export const AuthMethods = Type.Object({ email: Type.Boolean() });
 export type AuthMethods = Static<typeof AuthMethods>;
+
+/** The languages a sign-in message is written in: the interface's (D-41). */
+export const SignInLocale = Type.Union([Type.Literal('en'), Type.Literal('tr')]);
+
+/**
+ * `POST /auth/email` — send a sign-in link to this address, in this language. Answered `202` whatever
+ * the address: whether an account has it is never said (D-138 §1).
+ */
+export const EmailSignInRequest = FromClient({
+  email: Type.String({ format: 'email', maxLength: 254 }),
+  locale: SignInLocale,
+});
+export type EmailSignInRequest = Static<typeof EmailSignInRequest>;
