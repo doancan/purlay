@@ -12,6 +12,7 @@ import { Value } from '@sinclair/typebox/value';
 import {
   GIT_REF_NAME_MAX,
   GITHUB_EVENT_TEXT_MAX,
+  GITHUB_LOGIN_PATTERN,
   GITHUB_REPOSITORY_PATTERN,
   GitHubEvent,
   GitHubFeedEventName as GitHubFeedEventNameSchema,
@@ -29,7 +30,7 @@ const Envelope = Type.Object({
     // The pattern the feed's own name is held to, so a renamed repository's name can be kept.
     full_name: Type.String({ pattern: GITHUB_REPOSITORY_PATTERN }),
   }),
-  sender: Type.Object({ login: Type.String({ minLength: 1, maxLength: 64 }) }),
+  sender: Type.Object({ login: Type.String({ pattern: GITHUB_LOGIN_PATTERN }) }),
 });
 type Envelope = Static<typeof Envelope>;
 
@@ -53,7 +54,12 @@ const PullRequestBody = Type.Composite([
   Type.Object({
     action: Type.String({ maxLength: 64 }),
     number: Type.Integer({ minimum: 1 }),
-    pull_request: Type.Object({ title: Type.String(), merged: Type.Boolean() }),
+    pull_request: Type.Object({
+      title: Type.String(),
+      // Null while GitHub has not worked it out; a closed pull request that is not known merged is closed.
+      merged: Type.Union([Type.Boolean(), Type.Null()]),
+      draft: Type.Optional(Type.Boolean()),
+    }),
   }),
 ]);
 
@@ -70,8 +76,9 @@ const ReleaseBody = Type.Composite([
   Type.Object({
     action: Type.String({ maxLength: 64 }),
     release: Type.Object({
-      tag_name: Type.String({ minLength: 1 }),
+      tag_name: Type.String({ minLength: 1, maxLength: GIT_REF_NAME_MAX }),
       name: Type.Union([Type.String(), Type.Null()]),
+      prerelease: Type.Boolean(),
     }),
   }),
 ]);
@@ -82,19 +89,25 @@ export type Reading =
   | { readonly kind: 'ignored'; readonly envelope: Envelope | null }
   | { readonly kind: 'invalid' };
 
-/** A line of text cut to the contract's bound, with `…` where it was cut. */
-const bounded = (text: string): string => {
+/**
+ * A line of text cut to the contract's bound, with `…` where it was cut. The bound is in UTF-16 units,
+ * as the contract counts a string's length, and a cut never splits a character that takes two.
+ */
+export const bounded = (text: string): string => {
   const line = text.split('\n')[0]?.trim() ?? '';
-  const characters = Array.from(line);
-  return characters.length <= GITHUB_EVENT_TEXT_MAX
-    ? line
-    : `${characters.slice(0, GITHUB_EVENT_TEXT_MAX - 1).join('')}…`;
+  if (line.length <= GITHUB_EVENT_TEXT_MAX) return line;
+  let kept = '';
+  for (const character of line) {
+    if (kept.length + character.length > GITHUB_EVENT_TEXT_MAX - 1) break;
+    kept += character;
+  }
+  return `${kept}…`;
 };
 
 const BRANCH = 'refs/heads/';
 const TAG = 'refs/tags/';
 
-const pushOf = (body: Static<typeof PushBody>): GitHubEvent | null => {
+const pushOf = (body: Static<typeof PushBody>): GitHubEvent | null | 'invalid' => {
   const ref = body.ref.startsWith(BRANCH)
     ? { type: 'branch' as const, name: body.ref.slice(BRANCH.length) }
     : body.ref.startsWith(TAG)
@@ -102,6 +115,7 @@ const pushOf = (body: Static<typeof PushBody>): GitHubEvent | null => {
       : null;
   // A note, a pull request's head, anything not a branch or a tag: not what a channel hears about.
   if (ref === null) return null;
+  if (ref.name.length > GIT_REF_NAME_MAX) return 'invalid';
   return {
     kind: 'push',
     repository: body.repository.full_name,
@@ -142,7 +156,12 @@ export const readDelivery = (
   if (event === 'invalid') return { kind: 'invalid' };
   // An action a channel does not hear about — a label, an edit, a draft — is received and not posted.
   if (event === null) return { kind: 'ignored', envelope };
-  return Value.Check(GitHubEvent, event) ? { kind: 'event', event, envelope } : { kind: 'invalid' };
+  // Every part was checked and cut to its bound above: an event the contract refuses now is this
+  // mapping's defect, not GitHub's body, and is said as one rather than blamed on the payload.
+  if (!Value.Check(GitHubEvent, event)) {
+    throw new Error(`a ${name} delivery was read into an event the contract refuses`);
+  }
+  return { kind: 'event', event, envelope };
 };
 
 const isPosted = (name: string): name is GitHubFeedEventName =>
@@ -160,12 +179,14 @@ const eventOf = (
       return Value.Check(PushBody, body) ? pushOf(body) : 'invalid';
     case 'pull_request': {
       if (!Value.Check(PullRequestBody, body)) return 'invalid';
+      // A draft opened is not yet for the team: its being ready for review is what is announced.
+      const draft = body.pull_request.draft === true;
       const action =
         body.action === 'closed'
-          ? body.pull_request.merged
+          ? body.pull_request.merged === true
             ? 'merged'
             : 'closed'
-          : body.action === 'opened' ||
+          : (body.action === 'opened' && !draft) ||
               body.action === 'reopened' ||
               body.action === 'ready_for_review'
             ? body.action
@@ -196,13 +217,16 @@ const eventOf = (
     }
     case 'release':
       if (!Value.Check(ReleaseBody, body)) return 'invalid';
-      // Published is when the team hears of it: not a draft made, edited or deleted.
-      if (body.action !== 'published') return null;
+      // GitHub says `published` and then `released` or `prereleased` of one release, and only
+      // `released` when a pre-release is promoted: these two, so each is heard of once, and the
+      // promotion too. Not a draft made, edited or deleted.
+      if (body.action !== 'released' && body.action !== 'prereleased') return null;
       return {
         kind: 'release',
         ...who,
         tag: body.release.tag_name,
         name: bounded(body.release.name ?? ''),
+        prerelease: body.action === 'prereleased',
       };
   }
 };
@@ -220,6 +244,6 @@ export const summaryOf = (event: GitHubEvent): string => {
     case 'issues':
       return `${event.actor} ${event.action} issue #${String(event.number)} in ${event.repository}: ${event.title}`;
     case 'release':
-      return `${event.actor} published release ${event.tag} in ${event.repository}: ${event.name}`;
+      return `${event.actor} published ${event.prerelease ? 'pre-release' : 'release'} ${event.name === '' ? event.tag : `${event.name} (${event.tag})`} in ${event.repository}`;
   }
 };

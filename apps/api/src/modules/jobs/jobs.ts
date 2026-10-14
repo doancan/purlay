@@ -182,7 +182,7 @@ export const sweepLinkPreviews = async (dependencies: {
   return { removed: Number(result.numDeletedRows) };
 };
 
-/** How long a delivery's id is kept: GitHub keeps its own for redelivery about as long. */
+/** How long a delivery's id is kept: GitHub redelivers only the last three days, so this is a margin. */
 export const GITHUB_DELIVERIES_KEPT_DAYS = 30;
 
 /**

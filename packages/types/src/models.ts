@@ -246,7 +246,8 @@ const GitHubRepositoryName = Type.String({ pattern: GITHUB_REPOSITORY_PATTERN })
  * A person's or an app's login: `octocat`, `dependabot[bot]`, and an enterprise's managed user,
  * `handle_shortcode`.
  */
-const GitHubLogin = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}(\\[bot\\])?$' });
+export const GITHUB_LOGIN_PATTERN = '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}(\\[bot\\])?$';
+const GitHubLogin = Type.String({ pattern: GITHUB_LOGIN_PATTERN });
 const CommitSha = Type.String({ pattern: '^[0-9a-f]{40}$' });
 const GitHubText = Type.String({ maxLength: GITHUB_EVENT_TEXT_MAX });
 const GitHubNumber = Type.Integer({ minimum: 1, maximum: 9_999_999_999 });
@@ -317,6 +318,8 @@ export const GitHubEvent = Type.Union([
     actor: GitHubLogin,
     tag: GitRefName,
     name: GitHubText,
+    /** A pre-release: said as one, so a candidate is not read as what shipped. */
+    prerelease: Type.Boolean(),
   }),
 ]);
 export type GitHubEvent = Static<typeof GitHubEvent>;

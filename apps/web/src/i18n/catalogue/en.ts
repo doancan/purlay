@@ -466,6 +466,7 @@ export const en = {
   'github.issue.closed': '{actor} closed issue #{number}',
   'github.issue.reopened': '{actor} reopened issue #{number}',
   'github.release.published': '{actor} published the release {name}',
+  'github.release.prereleased': '{actor} published the pre-release {name}',
 
   'diff.added': 'added',
   'diff.removed': 'removed',

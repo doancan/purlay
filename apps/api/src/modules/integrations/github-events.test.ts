@@ -9,7 +9,7 @@ import {
   PUSH_COMMITS_LISTED_MAX,
   PUSH_COMMITS_SHOWN_MAX,
 } from '@purlay/types';
-import { readDelivery, summaryOf } from './github-events';
+import { bounded, readDelivery, summaryOf } from './github-events';
 import { signedBy } from './webhook';
 
 const sha = (c: string): string => c.repeat(40);
@@ -158,7 +158,14 @@ describe('a push, read', () => {
       { kind: 'issues', action: 'opened', number: 9, title: 'Flaky' },
       'octocat opened issue #9 in acme/api: Flaky',
     ],
-    [{ kind: 'release', tag: 'v2', name: 'Two' }, 'octocat published release v2 in acme/api: Two'],
+    [
+      { kind: 'release', tag: 'v2', name: 'Two', prerelease: false },
+      'octocat published release Two (v2) in acme/api',
+    ],
+    [
+      { kind: 'release', tag: 'v3-rc1', name: '', prerelease: true },
+      'octocat published pre-release v3-rc1 in acme/api',
+    ],
   ] as const)('the other kinds are found by their words too: %o', (parts, said) => {
     expect(summaryOf({ repository: 'acme/api', actor: 'octocat', ...parts })).toBe(said);
   });
@@ -200,14 +207,67 @@ describe('a pull request, an issue and a release, read', () => {
     });
   });
 
+  test('a draft opened is not announced; its being ready for review is', () => {
+    const draft = (action: string): Record<string, unknown> => ({
+      ...envelope,
+      action,
+      number: 7,
+      pull_request: { title: 'Retry', merged: false, draft: true },
+    });
+    expect(readDelivery('pull_request', draft('opened'), all).kind).toBe('ignored');
+    expect(readDelivery('pull_request', draft('ready_for_review'), all).kind).toBe('event');
+  });
+
+  test('merged not yet known is null: an action is still read, and a close is a close', () => {
+    const unknown = (action: string): Record<string, unknown> => ({
+      ...envelope,
+      action,
+      number: 7,
+      pull_request: { title: 'Retry', merged: null },
+    });
+    expect(readDelivery('pull_request', unknown('labeled'), all).kind).toBe('ignored');
+    const closed = readDelivery('pull_request', unknown('closed'), all);
+    expect(
+      closed.kind === 'event' && closed.event.kind === 'pull_request' && closed.event.action,
+    ).toBe('closed');
+  });
+
   test('what a channel does not hear about is received and not posted', () => {
     for (const [name, body] of [
       ['pull_request', pr('labeled')],
       ['pull_request', pr('synchronize')],
       ['issues', { ...envelope, action: 'edited', issue: { number: 9, title: 'x' } }],
-      ['release', { ...envelope, action: 'created', release: { tag_name: 'v1', name: null } }],
+      [
+        'release',
+        {
+          ...envelope,
+          action: 'created',
+          release: { tag_name: 'v1', name: null, prerelease: false },
+        },
+      ],
     ] as const) {
       expect({ name, kind: readDelivery(name, body, all).kind }).toEqual({ name, kind: 'ignored' });
+    }
+  });
+
+  test.each(['opened', 'closed', 'reopened'] as const)('an issue %s is posted', (action) => {
+    const reading = readDelivery(
+      'issues',
+      { ...envelope, action, issue: { number: 9, title: 'Flaky' } },
+      all,
+    );
+    expect(
+      reading.kind === 'event' && reading.event.kind === 'issues' && reading.event.action,
+    ).toBe(action);
+  });
+
+  test('an issue deleted or moved elsewhere is not posted (D-134 §1)', () => {
+    for (const action of ['deleted', 'transferred', 'pinned', 'labeled']) {
+      const body = { ...envelope, action, issue: { number: 9, title: 'x' } };
+      expect({ action, kind: readDelivery('issues', body, all).kind }).toEqual({
+        action,
+        kind: 'ignored',
+      });
     }
   });
 
@@ -223,22 +283,25 @@ describe('a pull request, an issue and a release, read', () => {
     expect(Array.from(reading.event.title)).toHaveLength(GITHUB_EVENT_TEXT_MAX);
   });
 
-  test('a release published is named, or by its tag when it has no name', () => {
-    for (const [name, said] of [
-      ['Two', 'Two'],
-      [null, ''],
-    ] as const) {
-      const reading = readDelivery(
-        'release',
-        { ...envelope, action: 'published', release: { tag_name: 'v2.0.0', name } },
-        all,
-      );
-      expect(reading.kind === 'event' && reading.event).toEqual({
-        kind: 'release',
-        repository: 'Acme/API',
-        actor: 'octocat',
-        tag: 'v2.0.0',
-        name: said,
+  const release = (action: string, name: string | null, prerelease = false): unknown => ({
+    ...envelope,
+    action,
+    release: { tag_name: 'v2.0.0', name, prerelease },
+  });
+
+  test('a release is heard of once: released or prereleased, never published beside it', () => {
+    expect(readDelivery('release', release('released', 'Two'), all)).toMatchObject({
+      kind: 'event',
+      event: { kind: 'release', tag: 'v2.0.0', name: 'Two', prerelease: false },
+    });
+    expect(readDelivery('release', release('prereleased', null, true), all)).toMatchObject({
+      kind: 'event',
+      event: { kind: 'release', name: '', prerelease: true },
+    });
+    for (const action of ['published', 'created', 'edited', 'deleted', 'unpublished']) {
+      expect({ action, kind: readDelivery('release', release(action, 'x'), all).kind }).toEqual({
+        action,
+        kind: 'ignored',
       });
     }
   });
@@ -247,7 +310,15 @@ describe('a pull request, an issue and a release, read', () => {
     for (const [name, body] of [
       ['pull_request', { ...envelope, action: 'opened', number: 7 }],
       ['issues', { ...envelope, action: 'opened', issue: { number: 0, title: 'x' } }],
-      ['release', { ...envelope, action: 'published', release: { tag_name: '' } }],
+      [
+        'release',
+        {
+          ...envelope,
+          action: 'released',
+          release: { tag_name: '', name: 'x', prerelease: false },
+        },
+      ],
+      ['release', { ...envelope, action: 'released', release: { tag_name: 'v1', name: 'x' } }],
       [
         'pull_request',
         { action: 'opened', number: 7, pull_request: { title: 'x', merged: false } },
@@ -255,6 +326,30 @@ describe('a pull request, an issue and a release, read', () => {
     ] as const) {
       expect({ name, kind: readDelivery(name, body, all).kind }).toEqual({ name, kind: 'invalid' });
     }
+  });
+});
+
+describe('a line cut to its bound', () => {
+  test('counts as the contract counts, and never splits a character that takes two', () => {
+    const emoji = '😀';
+    const fits = emoji.repeat(GITHUB_EVENT_TEXT_MAX / 2);
+    expect(bounded(fits)).toBe(fits);
+    const cut = bounded(`${fits}${emoji}`);
+    expect(cut.length).toBeLessThanOrEqual(GITHUB_EVENT_TEXT_MAX);
+    expect(cut.endsWith(`${emoji}…`)).toBe(true);
+    // One unit short of a whole emoji at the end: the emoji goes, never half of it.
+    const odd = bounded(`a${fits}`);
+    expect(odd.length).toBeLessThanOrEqual(GITHUB_EVENT_TEXT_MAX);
+    expect(/[\uD800-\uDBFF]…$/.test(odd)).toBe(false);
+  });
+
+  test('an issue titled with emoji past the bound is posted, never refused as GitHub’s fault', () => {
+    const reading = readDelivery(
+      'issues',
+      { ...envelope, action: 'opened', issue: { number: 9, title: '😀'.repeat(200) } },
+      ['issues'],
+    );
+    expect(reading.kind).toBe('event');
   });
 });
 
