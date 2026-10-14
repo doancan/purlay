@@ -27,10 +27,15 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { useRef } from 'react';
 import { IconButton } from './icon-button';
 
-const overlayClasses = 'fixed inset-0 z-palette bg-scrim';
+/**
+ * The scrim, and what scrolls when a dialog is taller than the window (Radix's scrollable overlay): the
+ * dialog sits inside it, a margin from the top and the bottom, so its last button is reached by
+ * scrolling rather than lost below the window. A click on it beside the dialog closes the dialog.
+ */
+const overlayClasses = 'fixed inset-0 z-palette overflow-y-auto bg-scrim px-4 py-8';
 
 const contentClasses =
-  'fixed inset-x-4 top-0 z-palette mx-auto mt-8 flex max-w-dialog flex-col gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float';
+  'relative mx-auto flex max-w-dialog flex-col gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float';
 
 interface DialogProps {
   readonly open: boolean;
@@ -73,35 +78,36 @@ export const Dialog = ({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={overlayClasses} />
-        <RadixDialog.Content
-          className={contentClasses}
-          onOpenAutoFocus={() => {
-            // Fired before Radix moves focus in, so the active element is still the opener.
-            returnTo.current = openerOf(document.activeElement);
-          }}
-          onCloseAutoFocus={(event) => {
-            // Ours when we know where; Radix's own return otherwise, rather than nowhere.
-            if (returnTo.current?.isConnected !== true) return;
-            event.preventDefault();
-            returnTo.current.focus();
-          }}
-        >
-          <div className="flex flex-col gap-1 pr-6">
-            <RadixDialog.Title className="text-title text-ink">{title}</RadixDialog.Title>
-            <RadixDialog.Description className="text-body text-ink-muted">
-              {description}
-            </RadixDialog.Description>
-          </div>
-          {children}
-          {footer === undefined ? null : <div className="flex justify-end gap-2">{footer}</div>}
-          {/* Last in the tree, first in the corner: Radix focuses the first focusable
+        <RadixDialog.Overlay className={overlayClasses}>
+          <RadixDialog.Content
+            className={contentClasses}
+            onOpenAutoFocus={() => {
+              // Fired before Radix moves focus in, so the active element is still the opener.
+              returnTo.current = openerOf(document.activeElement);
+            }}
+            onCloseAutoFocus={(event) => {
+              // Ours when we know where; Radix's own return otherwise, rather than nowhere.
+              if (returnTo.current?.isConnected !== true) return;
+              event.preventDefault();
+              returnTo.current.focus();
+            }}
+          >
+            <div className="flex flex-col gap-1 pr-6">
+              <RadixDialog.Title className="text-title text-ink">{title}</RadixDialog.Title>
+              <RadixDialog.Description className="text-body text-ink-muted">
+                {description}
+              </RadixDialog.Description>
+            </div>
+            {children}
+            {footer === undefined ? null : <div className="flex justify-end gap-2">{footer}</div>}
+            {/* Last in the tree, first in the corner: Radix focuses the first focusable
             thing, and that should be the form, not a close button whose tooltip then
             takes the first Escape. */}
-          <RadixDialog.Close asChild>
-            <IconButton label={closeLabel} glyph="close" className="absolute right-3 top-3" />
-          </RadixDialog.Close>
-        </RadixDialog.Content>
+            <RadixDialog.Close asChild>
+              <IconButton label={closeLabel} glyph="close" className="absolute right-3 top-3" />
+            </RadixDialog.Close>
+          </RadixDialog.Content>
+        </RadixDialog.Overlay>
       </RadixDialog.Portal>
     </RadixDialog.Root>
   );

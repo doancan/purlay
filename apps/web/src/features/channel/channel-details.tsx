@@ -1,8 +1,9 @@
 /**
  * A channel's details (D-123), opened from its name in the header: the Details panel of the
  * Superdesign screens, drawn as the product's dialog — its name and topic, who is in it with Add
- * people, what the person is told about, and at the bottom, in the danger tone, Leave and (for an
- * owner or an admin) Archive. Files and pins are not here (#485).
+ * people, what the person is told about, the repositories it hears from (for an owner or an admin,
+ * D-134), and at the bottom, in the danger tone, Leave and (for an owner or an admin) Archive. Files
+ * and pins are not here (#485).
  *
  * What is offered is what the server would allow: only a member edits the name and topic, only a
  * member leaves, only an owner or an admin archives. The server stays the authority, and what it
@@ -30,6 +31,7 @@ import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { AddPeopleDialog } from './add-people';
+import { GitHubFeeds } from './github-feeds';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
 import { NotificationLevelMenu } from './notification-level-menu';
@@ -354,6 +356,11 @@ export const ChannelDetailsDialog = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  const { memberships } = useSession();
+  // Repository feeds are an owner's or an admin's to see and set up (D-134 §2).
+  const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
+  const configures = role === 'owner' || role === 'admin';
   return (
     <Dialog
       open={open}
@@ -370,6 +377,7 @@ export const ChannelDetailsDialog = ({
           <NotificationLevelMenu channel={channel} />
         </div>
       )}
+      {configures && channel.type !== 'direct_message' && <GitHubFeeds channel={channel} />}
       <Farewell channel={channel} />
     </Dialog>
   );

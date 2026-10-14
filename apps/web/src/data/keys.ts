@@ -21,6 +21,8 @@ export const keys = {
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
+  /** A channel's repository feeds, an owner's or an admin's to read (D-134). */
+  githubFeeds: (channelId: string) => ['github-feeds', channelId] as const,
   audit: (workspaceId: string) => ['audit', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,
   pushKey: ['push-key'] as const,
