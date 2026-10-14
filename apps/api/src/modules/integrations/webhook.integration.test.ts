@@ -17,7 +17,7 @@ import type { ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { credentialCipher } from '../../platform/crypto';
 import { AppError } from '../../platform/errors';
-import type { EventBus } from '../../platform/events';
+import { channelTopic, type EventBus } from '../../platform/events';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms';
 import { createFeed } from './feeds';
@@ -166,7 +166,9 @@ describe('integration: a delivery to a feed', () => {
         'CHANNEL_STATE',
         'CHANNEL_STATE',
       ]);
-      const [, created] = world.frames[0] ?? [];
+      const [topic, created] = world.frames[0] ?? [];
+      // The channel's topic: the room hears it as it hears a person's message, and nobody outside it.
+      expect(topic).toBe(channelTopic(room.channelId));
       expect(created?.event === 'MESSAGE_CREATED' && created.data.githubEvent?.kind).toBe('push');
       expect(created?.event === 'MESSAGE_CREATED' && created.data.sender).toBeNull();
 

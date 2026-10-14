@@ -33,6 +33,33 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'webhook-signature-unchecked',
+    why: 'anybody who knows a feed’s address posts into its channel',
+    file: 'apps/api/src/modules/integrations/webhook.ts',
+    find: '  if (!signedBy(secret, delivery.body, delivery.signature)) throw unsigned();\n',
+    replace: '',
+    tests: ['apps/api/src/modules/integrations/webhook.integration.test.ts'],
+  },
+  {
+    id: 'webhook-redelivery-posts-again',
+    why: 'the same delivery twice at once is a constraint’s 500 or a second message, not a duplicate',
+    file: 'apps/api/src/modules/integrations/webhook.ts',
+    find: "      .onConflict((conflict) => conflict.columns(['feed_id', 'delivery_id']).doNothing())\n",
+    replace: '',
+    tests: [
+      'apps/api/src/modules/integrations/webhook.integration.test.ts',
+      'apps/api/src/modules/integrations/webhook.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'webhook-archived-channel-posts',
+    why: 'a feed keeps posting into a channel nobody can see any more',
+    file: 'apps/api/src/modules/integrations/webhook.ts',
+    find: "  if (feed.archived_at !== null) return await refuse('channel_archived', notFound());\n",
+    replace: '',
+    tests: ['apps/api/src/modules/integrations/webhook.integration.test.ts'],
+  },
+  {
     id: 'feeds-connect-unlocked',
     why: 'two admins connecting at once both read before either wrote: past the cap, or a raw unique violation',
     file: 'apps/api/src/modules/integrations/feeds.ts',

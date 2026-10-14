@@ -26,7 +26,7 @@ const Envelope = Type.Object({
   }),
   sender: Type.Object({ login: Type.String({ minLength: 1, maxLength: 64 }) }),
 });
-export type Envelope = Static<typeof Envelope>;
+type Envelope = Static<typeof Envelope>;
 
 const PushBody = Type.Composite([
   Envelope,

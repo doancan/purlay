@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a repository's pushes in its channel (D-134, part of #79)
+
+- GitHub's webhook posts to the address a feed was given: a signed push becomes a message in the
+  channel — who pushed what, to which branch, the newest commits — unread for everybody and telling
+  nobody. Redelivering the same delivery posts nothing again; a ping confirms the setup; a delivery
+  that cannot be posted says why where the feed was set up.
+
 ### Feature — 2026-10-14: a message nobody wrote, for a repository's events (D-134, part of #79)
 
 - A repository's event is a message of its own: GitHub's, never a person's — not yours to edit, not
