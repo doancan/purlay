@@ -667,7 +667,10 @@ stored representation. (D-36)
 - Syntax highlighting runs synchronously by default. It moves to a Web Worker **only where a
   measurement shows a dropped frame** — for a clamped 12-line block, the `postMessage`
   round-trip costs more than the highlight. (Corrects an earlier blanket rule.)
-- The diff viewer is Phase 2.
+- A fenced `diff` or `patch` block is drawn as a diff (`content/diff-block.tsx`, D-133): read by a
+  pure parser (`parse-diff.ts`) into files, hunks and numbered lines, unified or split by the
+  reader's choice, unified alone on a narrow window; counted, copied raw and clamped as a code block
+  is. No highlighting inside it: the colour is the change.
 
 ### 8.3. GitHub unfurling
 

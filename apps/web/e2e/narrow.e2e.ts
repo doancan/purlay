@@ -16,13 +16,14 @@ const channelPath = (slug: string, id: string): string => `/w/${slug}/c/${id}`;
  * How far the widest thing runs past its box: the document, and every region that scrolls on its own.
  * The feed is one such region, so a row too wide for it scrolls the feed sideways while the document
  * stays exactly the window's width — measuring the document alone passed with a thread's actions off
- * the edge. A code block is the one thing meant to scroll sideways, so it and what is inside it are not counted.
+ * the edge. A code block and a diff are the things meant to scroll sideways, so they and what is inside
+ * them are not counted.
  */
 const horizontalOverflow = async (page: Page): Promise<number> =>
   await page.evaluate(() => {
     let widest = document.documentElement.scrollWidth - window.innerWidth;
     for (const element of document.body.querySelectorAll('*')) {
-      if (element.closest('pre') !== null) continue;
+      if (element.closest('pre, [data-diff]') !== null) continue;
       const { overflowX } = getComputedStyle(element);
       if (overflowX !== 'auto' && overflowX !== 'scroll') continue;
       widest = Math.max(widest, element.scrollWidth - element.clientWidth);
