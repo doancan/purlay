@@ -12,6 +12,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   is shown the payload URL, the content type and the secret to paste into GitHub — the secret only
   then. Each repository says when it was last reached and why it last failed, and is disconnected
   after asking.
+
 ### Feature — 2026-10-14: pull requests, issues and releases in a repository's channel (D-134, part of #79)
 
 - A feed posts a pull request opened, closed, merged, reopened or ready for review; an issue opened,
