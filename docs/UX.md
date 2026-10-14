@@ -58,7 +58,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   shell (D-14).
 - **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the
   workspaces to switch to, **Create workspace…**, and an owner's or an admin's items below), the jump
-  field (the palette's door, `⌘K`), the channels, the **conversations** — groups of up to ten
+  field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
+  rest, by name, there only once one is starred, from **Star this channel** in a channel's header
+  (D-132) — the channels, the **conversations** — groups of up to ten
   people, each named by its people, and **New message** (`+`), which picks people ("To: …") and
   starts the conversation of exactly them (D-127) —
   then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
@@ -84,8 +86,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
-- **On a narrow window** the Files and Pinned messages controls are one menu, **Files and pinned
-  messages**, so the channel's name keeps its room in the header.
+- **On a narrow window** the Files and Pinned messages controls, and the channel's star, are one
+  menu, **Channel menu**, so the channel's name keeps its room in the header.
 - **A conversation with one other person** is headed by them: their name, which opens their
   **profile** in the same place — name, handle, title, status line, the time where they are and its
   zone — and, on a wide window, their local time and status beside the name (D-131). **Your profile…**

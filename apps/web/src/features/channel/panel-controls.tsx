@@ -1,5 +1,6 @@
 /**
- * The header's ways to the panels beside the conversation (D-129, D-130).
+ * The header's ways to the panels beside the conversation (D-129, D-130), and on a narrow window
+ * the channel's star with them (D-132).
  *
  * On a wide window each is its own button, pressed while its panel is open. On a narrow one a
  * phone's width cannot give a button to each and keep the channel's name readable, so they are one
@@ -13,10 +14,21 @@ import { Menu, MenuItem } from '../../ui/menu';
 import { PINS_PANEL_ID } from '../pins/pins-panel';
 import { FILES_PANEL_ID } from './files-panel';
 import { useSidePanel } from './side-panel';
+import { useStar } from './star-toggle';
+import type { Channel } from '@purlay/types';
 
-export const PanelControls = ({ direct }: { readonly direct: boolean }): React.JSX.Element => {
+export const PanelControls = ({
+  direct,
+  channel,
+}: {
+  readonly direct: boolean;
+  readonly channel: Channel;
+}): React.JSX.Element => {
   const { t } = useI18n();
   const side = useSidePanel();
+  // A star is a channel's, never a conversation's (D-132).
+  const star = useStar(channel);
+  const setStar = direct ? null : star;
   const filesOpen = side.panel === 'files';
   const pinsOpen = side.panel === 'pins';
   const filesLabel = t(direct ? 'files.openConversation' : 'files.open');
@@ -83,6 +95,16 @@ export const PanelControls = ({ direct }: { readonly direct: boolean }): React.J
           >
             {t('pins.open')}
           </MenuItem>
+          {setStar !== null && (
+            <MenuItem
+              glyph="star"
+              onSelect={() => {
+                setStar(!channel.starred);
+              }}
+            >
+              {t(channel.starred ? 'star.unstar' : 'star.label')}
+            </MenuItem>
+          )}
         </Menu>
       </div>
     </>

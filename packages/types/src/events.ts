@@ -355,6 +355,17 @@ export const SavedUpdatedFrame = Type.Object({
 });
 
 /**
+ * The caller's own channel list changed in a way no other frame says — a channel starred or let go
+ * (D-132) — in another tab or device. On their own `user:` topic; it carries nothing but the
+ * workspace, and a client reads that workspace's channels again.
+ */
+export const ChannelsUpdatedFrame = Type.Object({
+  event: Type.Literal('CHANNELS_UPDATED'),
+  data: Type.Object({ workspaceId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A channel's pins changed (D-130): a message pinned or let go, by anyone in it. On the channel's
  * topic; it carries no pin, and a client reads the pins again — two changes heard in either order
  * leave the same list.
@@ -430,6 +441,7 @@ export const ServerFrame = Type.Union([
   DeepWorkUpdatedFrame,
   SavedUpdatedFrame,
   PinsUpdatedFrame,
+  ChannelsUpdatedFrame,
   TypingServerFrame,
   WorkspaceUpdatedFrame,
   PongFrame,

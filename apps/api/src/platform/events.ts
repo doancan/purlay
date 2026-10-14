@@ -97,6 +97,20 @@ export const publishSavedUpdated = async (
   });
 };
 
+/** The person's own channel list changed (D-132): their other tabs read their channels again. */
+export const publishChannelsUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  userId: string,
+  workspaceId: string,
+): Promise<void> => {
+  await bus.publish(userTopic(userId), {
+    event: 'CHANNELS_UPDATED',
+    data: { workspaceId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel's pins changed (D-130): everyone watching it reads them again. Nothing of the pin in it. */
 export const publishPinsUpdated = async (
   bus: EventBus,

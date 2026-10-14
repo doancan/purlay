@@ -79,6 +79,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
   notificationLevel: 'mentions',
+  starred: false,
   peer: null,
   peers: [],
   ...over,
@@ -990,6 +991,17 @@ describe('Deep Work changed in another tab (#526)', () => {
       frame({ event: 'DEEP_WORK_UPDATED', data: { workspaceId: WS, until: null }, ts: T0 }),
     );
     expect(me()?.memberships.find((m) => m.workspace.id === WS)?.deepWorkUntil).toBeNull();
+  });
+
+  test('a channel list changed elsewhere is read again, in that workspace only (D-132)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), []);
+    w.client.setQueryData(keys.channels(IDS.browse), []);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'CHANNELS_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.channels(IDS.browse))?.isInvalidated).toBe(false);
   });
 
   test('saved messages changed elsewhere are read again, in that workspace only (D-128)', () => {

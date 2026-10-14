@@ -51,6 +51,7 @@ const channel: Channel = {
   lastMessageAt: null,
   state,
   notificationLevel: 'mentions',
+  starred: false,
   peer: null,
   peers: [],
 };

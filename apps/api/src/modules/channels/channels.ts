@@ -36,6 +36,7 @@ interface ChannelRow {
   readonly unread_count: number | null;
   readonly unread_mention_count: number | null;
   readonly notification_level: Channel['notificationLevel'];
+  readonly starred_at: Date | string | null;
   readonly peer_id: string | null;
   readonly peer_username: string | null;
   readonly peer_display_name: string | null;
@@ -87,6 +88,7 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
           unreadMentionCount: row.unread_mention_count ?? 0,
         },
   notificationLevel: row.member_user_id === null ? null : row.notification_level,
+  starred: row.member_user_id !== null && row.starred_at !== null,
   peer:
     row.peer_id === null
       ? null
@@ -147,6 +149,7 @@ const readChannels = async (
       'channel_members.unread_count as unread_count',
       'channel_members.unread_mention_count as unread_mention_count',
       'channel_members.notification_level as notification_level',
+      'channel_members.starred_at as starred_at',
       'users.id as peer_id',
       'users.username as peer_username',
       'users.display_name as peer_display_name',

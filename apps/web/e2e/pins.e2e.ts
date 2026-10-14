@@ -55,7 +55,7 @@ test.describe('pins', () => {
     // Focus is back on the control that opened it, whichever this width shows.
     await expect(
       watcher.getByRole('button', {
-        name: isNarrow(watcher) ? 'Files and pinned messages' : 'Pinned messages',
+        name: isNarrow(watcher) ? 'Channel menu' : 'Pinned messages',
       }),
     ).toBeFocused();
     await expect(

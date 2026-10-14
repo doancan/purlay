@@ -160,6 +160,8 @@ export const Channel = Type.Object({
   state: Type.Union([ChannelState, Type.Null()]),
   /** The caller's level here (D-107); null when they are not a member, and so are told nothing. */
   notificationLevel: Type.Union([NotificationLevel, Type.Null()]),
+  /** Whether the caller keeps it among their starred (D-132); never for somebody not in it. */
+  starred: Type.Boolean(),
   /**
    * The other person in a direct message between two (the caller themselves, for a note to
    * self). Null for a group conversation and for every other kind, which has a name (D-6, D-127).

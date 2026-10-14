@@ -74,6 +74,7 @@ export interface ChannelMembers {
   joined_at: Generated<Timestamp>;
   last_read_message_id: string | null;
   notification_level: Generated<NotificationLevel>;
+  starred_at: Timestamp | null;
   state_version: Generated<number>;
   unread_count: Generated<number>;
   unread_mention_count: Generated<number>;

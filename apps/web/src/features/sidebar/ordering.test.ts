@@ -4,6 +4,7 @@ import {
   QUESTION_COUNT_CAP,
   joinableChannels,
   joinedChannels,
+  starredChannels,
   people,
   shownQuestionCount,
 } from './ordering';
@@ -106,5 +107,31 @@ describe('the open-questions count as shown', () => {
   test('says "more than that" when there is another page, or past the cap', () => {
     expect(shownQuestionCount(50, true)).toEqual({ count: 99, over: true });
     expect(shownQuestionCount(100, false)).toEqual({ count: 99, over: true });
+  });
+});
+
+describe('starred channels (D-132)', () => {
+  test('are their own list, by name, and out of the channels', () => {
+    const all = [
+      aChannel('1', 'zeta', { starred: true }),
+      aChannel('2', 'alpha', { starred: true }),
+      aChannel('3', 'beta'),
+      aChannel('4', 'gamma', { starred: true, state: null }),
+    ];
+    expect(starredChannels(all).map((c) => c.name)).toEqual(['alpha', 'zeta']);
+    expect(joinedChannels(all).map((c) => c.name)).toEqual(['beta']);
+  });
+});
+
+describe('the order a key steps through (D-132)', () => {
+  test('is the sidebar’s: the starred by name, the other channels by activity, then direct messages', async () => {
+    const { inSidebarOrder } = await import('../palette/channels');
+    const all = [
+      aChannel('1', 'zeta', { starred: true, lastMessageAt: '2026-09-09T08:00:00.000Z' }),
+      aChannel('2', 'alpha', { starred: true }),
+      aChannel('3', 'beta', { lastMessageAt: '2026-09-09T09:00:00.000Z' }),
+      aChannel('4', 'gamma'),
+    ];
+    expect(inSidebarOrder(all).map((c) => c.name)).toEqual(['alpha', 'zeta', 'beta', 'gamma']);
   });
 });

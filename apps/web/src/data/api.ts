@@ -129,6 +129,8 @@ export interface Api {
   ) => Promise<DeepWorkResponse>;
   /** What the caller is told about in this channel (D-107). */
   readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
+  /** Stars a channel the caller is in, or lets the star go (D-132). */
+  readonly star: (channelId: string, starred: boolean) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
   /** The conversation of the caller and these people, opened or made (D-127). */
   readonly openConversation: (workspaceId: string, userIds: readonly string[]) => Promise<Channel>;
@@ -346,6 +348,8 @@ export const createApi = (http: Http): Api => {
         DeepWorkResponse,
         options({ body: input }),
       ),
+    star: (channelId, starred) =>
+      http.send(starred ? 'PUT' : 'DELETE', `/api/channels/${at(channelId)}/star`, options()),
     setNotificationLevel: (channelId, level) =>
       http.send(
         'PUT',

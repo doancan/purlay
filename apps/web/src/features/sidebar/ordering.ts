@@ -24,11 +24,20 @@ const byActivity = (a: Channel, b: Channel): number => {
 const joined = (channels: readonly Channel[]): Channel[] =>
   channels.filter((c) => c.state !== null);
 
-/** Channels the person is in, not DMs, most recently active first. */
+/** Channels the person is in, not DMs and not starred, most recently active first. */
 export const joinedChannels = (channels: readonly Channel[]): Channel[] =>
   joined(channels)
-    .filter((c) => c.type !== 'direct_message')
+    .filter((c) => c.type !== 'direct_message' && !c.starred)
     .sort(byActivity);
+
+/**
+ * The channels the person starred (D-132), kept apart above the rest — by name, not activity: a
+ * place you keep should stay where you put it.
+ */
+export const starredChannels = (channels: readonly Channel[]): Channel[] =>
+  joined(channels)
+    .filter((c) => c.type !== 'direct_message' && c.starred)
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
 /** Public channels the person could join, by name. */
 export const joinableChannels = (channels: readonly Channel[]): Channel[] =>
