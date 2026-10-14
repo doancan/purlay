@@ -287,10 +287,29 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
 
   const notified = await notify(executor, context, messageId, reasons, now);
 
-  // Counted only for a member whose position is before this message. One whose position is
-  // at or past it has read beyond it, and the read recount (`id > position`) would not find it:
-  // counting it here left the stored number above the recount, and a badge `PUT /read` could
-  // not clear because it is a no-op for a position that does not move (H-API 1).
+  return {
+    recipients: await countArrival(executor, context.channelId, messageId, sender, notified),
+    told: notified,
+  };
+};
+
+/**
+ * A message has arrived in the channel: every member's numbers move, under the row lock the update
+ * takes, and the new numbers are returned for the frames. `writer` is not counted — nobody is for a
+ * message nobody wrote (D-134 §6) — and `notified` are the members it needs as well.
+ *
+ * Counted only for a member whose position is before this message. One whose position is at or
+ * past it has read beyond it, and the read recount (`id > position`) would not find it: counting it
+ * here left the stored number above the recount, and a badge `PUT /read` could not clear because it
+ * is a no-op for a position that does not move (H-API 1).
+ */
+export const countArrival = async (
+  executor: Executor,
+  channelId: string,
+  messageId: string,
+  writer: string | null,
+  notified: readonly string[],
+): Promise<readonly ChannelStateUpdate[]> => {
   const ahead = sql<boolean>`(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)`;
   const changed = await executor
     .updateTable('channel_members')
@@ -301,8 +320,8 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
       // takes: the order of versions is the order of commits (0015).
       state_version: sql<number>`state_version + 1`,
     })
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', '<>', sender)
+    .where('channel_id', '=', channelId)
+    .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))
     .returning([
       'user_id',
       'last_read_message_id',
@@ -311,19 +330,15 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
       'state_version',
     ])
     .execute();
-
-  return {
-    recipients: changed.map((row) => ({
-      userId: row.user_id,
-      state: {
-        lastReadMessageId: row.last_read_message_id,
-        unreadCount: row.unread_count,
-        unreadMentionCount: row.unread_mention_count,
-      },
-      version: row.state_version,
-    })),
-    told: notified,
-  };
+  return changed.map((row) => ({
+    userId: row.user_id,
+    state: {
+      lastReadMessageId: row.last_read_message_id,
+      unreadCount: row.unread_count,
+      unreadMentionCount: row.unread_mention_count,
+    },
+    version: row.state_version,
+  }));
 };
 
 /**

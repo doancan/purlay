@@ -779,3 +779,18 @@ export const CreatedGitHubFeed = Type.Object({
   secret: Type.String({ pattern: '^[0-9a-f]{64}$' }),
 });
 export type CreatedGitHubFeed = Static<typeof CreatedGitHubFeed>;
+
+/**
+ * `POST /api/webhooks/github/:feedId` — what became of a delivery GitHub may be told about (D-134 §5):
+ * `posted` (`201`), or received and nothing to post — the same delivery again, an event this feed
+ * does not post, a ping (`200`).
+ */
+export const WebhookAnswer = Type.Object({
+  outcome: Type.Union([
+    Type.Literal('posted'),
+    Type.Literal('duplicate'),
+    Type.Literal('ignored'),
+    Type.Literal('pinged'),
+  ]),
+});
+export type WebhookAnswer = Static<typeof WebhookAnswer>;

@@ -37,7 +37,14 @@ import {
 import { SIGN_IN_CALLBACK } from '../../modules/auth/sign-in';
 import { clearedStateCookie } from '../../platform/cookies';
 import { clientAddress, peerOf } from './client-address';
-import { GITHUB_CALL_BUDGET, httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
+import {
+  GITHUB_CALL_BUDGET,
+  httpLimits,
+  WEBHOOK_BUDGET,
+  WEBHOOK_FEED_BUDGET,
+  WRITE_BUDGET,
+  type HttpBudgets,
+} from './rate-limit';
 import { inProcessRateLimiter } from '../../realtime/rate-limiter';
 import { AppError } from '../../platform/errors';
 import {
@@ -48,7 +55,9 @@ import {
   edgeRefusalResponse,
   hasUnsupportedMediaType,
   isUploadRequest,
+  isWebhookRequest,
   uploadRefusal,
+  webhookRefusal,
   isCrossSiteMutation,
   unsupportedMediaTypeResponse,
   responseHeaders,
@@ -123,6 +132,7 @@ import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { starChannel } from './star';
+import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
 
@@ -226,6 +236,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
   // Uploads being read on this node, against `UPLOADS_AT_ONCE`.
   const uploading = { count: 0 };
+  // GitHub's deliveries: every address before the signature, each feed after it (D-134 §4).
+  const knocks = inProcessRateLimiter(dependencies.clock, WEBHOOK_BUDGET);
+  const feedPosts = inProcessRateLimiter(dependencies.clock, WEBHOOK_FEED_BUDGET);
+  const delivering = { count: 0 };
 
   // Server-wide, because that is the one the framework passes on: the per-route
   // option of the same name is silently ignored — measured, a 100 KB frame reached
@@ -267,6 +281,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       }
       if (isUploadRequest(request)) {
         const refusal = uploadRefusal(request, ATTACHMENT_BYTES_MAX);
+        if (refusal !== null) return edgeRefusalResponse(refusal, headers);
+      } else if (isWebhookRequest(request)) {
+        const refusal = webhookRefusal(request);
         if (refusal !== null) return edgeRefusalResponse(refusal, headers);
       } else {
         if (hasUnsupportedMediaType(request)) return unsupportedMediaTypeResponse(headers);
@@ -674,6 +691,30 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         return attachment;
       },
       // The body is the file, read by the handler after the session and the membership (D-109 §3).
+      { parse: 'none' },
+    )
+    .post(
+      '/api/webhooks/github/:feedId',
+      async ({ request, params, set }) => {
+        const outcome = await receiveWebhook(
+          {
+            database: dependencies.database,
+            clock: dependencies.clock,
+            cipher,
+            bus: sockets.bus,
+            log: dependencies.log,
+            mayDeliver: async (feedId) => await feedPosts.consume(feedId),
+            mayKnock: async () => await knocks.consume('all'),
+            inFlight: delivering,
+          },
+          request,
+          params.feedId,
+        );
+        // What GitHub shows beside the delivery: posted, or why not, all of them received.
+        set.status = outcome === 'posted' ? 201 : 200;
+        return { outcome };
+      },
+      // The signature is over the bytes as sent, so the handler reads them, unparsed (D-134 §4).
       { parse: 'none' },
     )
     .get('/api/images', async ({ request, set }) => {

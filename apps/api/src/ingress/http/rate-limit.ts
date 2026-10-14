@@ -53,6 +53,19 @@ export const COSTLY_READ_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
  */
 export const GITHUB_CALL_BUDGET: RateBudget = { perSecond: 1, burst: 100 };
 
+/**
+ * Deliveries to the webhook, from anybody, before a signature is checked: two hundred at once, then
+ * twenty a second, on this node — so a stranger who knows a feed's address cannot spend the work of
+ * checking signatures without end. Provisional (O-4).
+ */
+export const WEBHOOK_BUDGET: RateBudget = { perSecond: 20, burst: 200 };
+
+/**
+ * Posts per feed, once its signature held: a hundred at once — a merge train, a mass close — then
+ * two a second. Charged after the signature, so nobody but the repository spends it. Provisional (O-4).
+ */
+export const WEBHOOK_FEED_BUDGET: RateBudget = { perSecond: 2, burst: 100 };
+
 /** The routes charged to `COSTLY_READ_BUDGET`: what a screen asks for to draw, whatever the method. */
 const COSTLY_READS: ReadonlySet<string> = new Set([
   '/api/images',

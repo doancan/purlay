@@ -80,6 +80,37 @@ export const isUploadRequest = (request: Request): boolean =>
   request.method === 'POST' && UPLOAD_PATH.test(new URL(request.url).pathname);
 
 /**
+ * A repository's delivery (D-134 §4): `POST /api/webhooks/github/:feedId`, matched as the upload is —
+ * one segment for the id, never wider than the route. Its body is GitHub's JSON, held to its own
+ * bound rather than the client's, since a push of twenty commits is longer than any message.
+ */
+const WEBHOOK_PATH = /^\/api\/webhooks\/github\/[^/]+$/;
+
+/** How long a delivery may be. GitHub's own cap is far larger; a longer push is refused and shown failed there. */
+export const WEBHOOK_BODY_MAX_BYTES = 1024 * 1024;
+
+export const isWebhookRequest = (request: Request): boolean =>
+  request.method === 'POST' && WEBHOOK_PATH.test(new URL(request.url).pathname);
+
+/**
+ * A delivery's body: JSON — GitHub's hook must be set to send `application/json`, not the form it
+ * sends by default, which the setup says — with a `Content-Length`, at most `WEBHOOK_BODY_MAX_BYTES`,
+ * so its size is judged before a byte of it is read.
+ */
+export const webhookRefusal = (request: Request): AppError | null => {
+  if (hasUnsupportedMediaType(request)) {
+    return new AppError({
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      message: 'Set the webhook’s content type to application/json.',
+    });
+  }
+  if (request.headers.get('content-length') === null) {
+    return new AppError({ code: 'LENGTH_REQUIRED', message: 'A delivery needs a Content-Length.' });
+  }
+  return bodyRefusal(request, WEBHOOK_BODY_MAX_BYTES);
+};
+
+/**
  * An upload's body: exactly `application/octet-stream` — a type a cross-site form cannot send, so
  * D-39's defence stands — with a `Content-Length` (required here: an upload is never small enough
  * not to say), at most `limit`.
