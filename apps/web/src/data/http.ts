@@ -110,6 +110,8 @@ const failureOf = (status: number, text: string): ApiError => {
     body.code,
     body.message,
     body.code === 'VALIDATION_FAILED' ? body.details.fields : {},
+    undefined,
+    body.code === 'LAST_OWNER' ? (body.details?.workspaceIds ?? []) : [],
   );
 };
 

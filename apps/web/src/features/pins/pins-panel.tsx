@@ -60,11 +60,11 @@ const PinRow = ({
   const { canPin, toggle } = usePin(pin.message);
   const { message } = pin;
   const parentId = message.parentId;
-  const name = authorOf(message).displayName;
+  const name = authorOf(message, t('user.erased')).displayName;
   return (
     <li className="flex flex-col gap-2 rounded-lg px-2 py-2 hover:bg-surface-200">
       <div className="flex min-w-0 items-start gap-2">
-        <Avatar name={name} username={authorOf(message).username} size="sm" />
+        <Avatar name={name} username={authorOf(message, t('user.erased')).username} size="sm" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-center gap-1 text-caption text-ink-muted">
             <span className="truncate font-semibold text-ink">{name}</span>

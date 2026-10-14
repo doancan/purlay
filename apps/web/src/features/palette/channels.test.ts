@@ -1,6 +1,7 @@
 /**
  * The order channels are listed and stepped through, and the names they go by.
  */
+import { erasedPerson } from '@purlay/types';
 import { describe, expect, test } from 'bun:test';
 import type { Channel } from '@purlay/types';
 import { ALICE, BOB, IDS, ME, aChannel } from '../../testing/fixtures';
@@ -79,12 +80,22 @@ describe('stepping to the next unread channel', () => {
 
 describe('the name a channel goes by', () => {
   test('is its own, or the other person\'s in a direct message, or "you" for a note to self', () => {
-    expect(displayName(aChannel(IDS.api, 'api'), IDS.me, 'you')).toBe('api');
+    expect(displayName(aChannel(IDS.api, 'api'), IDS.me, 'you', 'deleted')).toBe('api');
     expect(
-      displayName(aChannel('x', null, { type: 'direct_message', peer: ALICE }), IDS.me, 'you'),
+      displayName(
+        aChannel('x', null, { type: 'direct_message', peer: ALICE }),
+        IDS.me,
+        'you',
+        'deleted',
+      ),
     ).toBe('Alice');
     expect(
-      displayName(aChannel('x', null, { type: 'direct_message', peer: ME }), IDS.me, 'you'),
+      displayName(
+        aChannel('x', null, { type: 'direct_message', peer: ME }),
+        IDS.me,
+        'you',
+        'deleted',
+      ),
     ).toBe('you');
   });
 
@@ -94,12 +105,26 @@ describe('the name a channel goes by', () => {
         aChannel('x', null, { type: 'direct_message', peers: [ALICE, BOB] }),
         IDS.me,
         'you',
+        'deleted',
       ),
     ).toBe(`${ALICE.displayName}, ${BOB.displayName}`);
   });
 
+  test('names an erased person “deleted user”, in the reader’s words (D-139 §5)', () => {
+    expect(
+      displayName(
+        aChannel('x', null, { type: 'direct_message', peer: erasedPerson(ALICE.id) }),
+        IDS.me,
+        'you',
+        'Silinmiş kullanıcı',
+      ),
+    ).toBe('Silinmiş kullanıcı');
+  });
+
   test('is empty when there is nothing to call it', () => {
-    expect(displayName(aChannel('x', null), IDS.me, 'you')).toBe('');
-    expect(displayName(aChannel('x', null, { type: 'direct_message' }), IDS.me, 'you')).toBe('');
+    expect(displayName(aChannel('x', null), IDS.me, 'you', 'deleted')).toBe('');
+    expect(
+      displayName(aChannel('x', null, { type: 'direct_message' }), IDS.me, 'you', 'deleted'),
+    ).toBe('');
   });
 });

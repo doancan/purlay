@@ -19,6 +19,8 @@ export class ApiError extends Error {
   readonly code: ApiErrorCode;
   /** The field messages of a `VALIDATION_FAILED`, keyed by field; empty for every other code. */
   readonly fields: Readonly<Record<string, string>>;
+  /** The workspaces a refused erasure names, to hand over first (`LAST_OWNER`, D-139 §6); else none. */
+  readonly workspaceIds: readonly string[];
 
   constructor(
     status: number,
@@ -26,12 +28,14 @@ export class ApiError extends Error {
     message: string,
     fields: Readonly<Record<string, string>> = {},
     cause?: unknown,
+    workspaceIds: readonly string[] = [],
   ) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.workspaceIds = workspaceIds;
   }
 }
 

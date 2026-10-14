@@ -14,6 +14,7 @@
  * (null when they can see it and have not joined) and, for a direct message, the
  * other person (D-98, D-99).
  */
+import { erasedPerson } from '@purlay/types';
 import { recordAudit } from '../audit/audit';
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { Channel } from '@purlay/types';
@@ -60,7 +61,7 @@ interface KeyPerson {
 /** Erased (I-11): the conversation stays and so does the id a client keys on, and nothing else. */
 const shown = (person: KeyPerson): Channel['peers'][number] =>
   person.erased
-    ? { id: person.id, username: 'deleted', displayName: 'Deleted user', avatarUrl: null }
+    ? erasedPerson(person.id)
     : {
         id: person.id,
         username: person.username,
@@ -113,7 +114,7 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
       : row.peer_deleted_at !== null
         ? // Erased (I-11): the conversation stays and so does the id a client keys on, and
           // nothing the account held is handed out.
-          { id: row.peer_id, username: 'deleted', displayName: 'Deleted user', avatarUrl: null }
+          erasedPerson(row.peer_id)
         : {
             id: row.peer_id,
             username: row.peer_username ?? '',

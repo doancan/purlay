@@ -4,7 +4,7 @@
  * rule that asks "is this mine?" — the side a bubble sits on, the edit shortcut, grouping, the new
  * divider, following the bottom, typing — asks here, so an event is nobody's and never yours.
  */
-import type { Message } from '@purlay/types';
+import { isErased, type Message } from '@purlay/types';
 
 export interface Author {
   /** What is written beside the message. */
@@ -16,10 +16,27 @@ export interface Author {
 /** A feed's messages are GitHub's: the name GitHub calls itself, in either language. */
 const GITHUB: Author = { displayName: 'GitHub', username: 'github' };
 
-export const authorOf = (message: Pick<Message, 'sender'>): Author =>
+/**
+ * The author, named. A person whose account was erased is `erased` — "deleted user" in the reader's
+ * language — under the name and the handle alike (D-139 §5); the tint still comes from the reserved
+ * name, so each such person keeps a colour of their own.
+ */
+export const authorOf = (message: Pick<Message, 'sender'>, erased: string): Author =>
   message.sender === null
     ? GITHUB
-    : { displayName: message.sender.displayName, username: message.sender.username };
+    : isErased(message.sender)
+      ? { displayName: erased, username: erased }
+      : { displayName: message.sender.displayName, username: message.sender.username };
+
+/** A person's handle, or "deleted user" once their account is erased (D-139 §5). */
+export const handleOf = (person: { readonly username: string }, erased: string): string =>
+  isErased(person) ? erased : person.username;
+
+/** A person, named: their display name, or "deleted user" once their account is erased (D-139 §5). */
+export const nameOf = (
+  person: { readonly username: string; readonly displayName: string },
+  erased: string,
+): string => (isErased(person) ? erased : person.displayName);
 
 /** Whether this person wrote it: never for a message nobody wrote. */
 export const isMine = (message: Pick<Message, 'sender'>, userId: string | undefined): boolean =>

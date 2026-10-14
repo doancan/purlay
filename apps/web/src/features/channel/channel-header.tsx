@@ -8,6 +8,7 @@
  * the same number the sidebar shows and comes from the same cache entry
  * (`use-open-count.ts`), so the two cannot differ.
  */
+import { handleOf, nameOf } from '../messages/author';
 import { useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
@@ -59,10 +60,11 @@ export const useChannelTitle = (channel: Channel): string => {
   // A group is its people, by name (D-127).
   if (peer === null) {
     return channel.peers.length > 0
-      ? channel.peers.map((person) => person.displayName).join(', ')
+      ? channel.peers.map((person) => nameOf(person, t('user.erased'))).join(', ')
       : (channel.name ?? '');
   }
-  return peer.id === user.id ? t('feed.selfDm', { name: peer.username }) : peer.username;
+  const handle = handleOf(peer, t('user.erased'));
+  return peer.id === user.id ? t('feed.selfDm', { name: handle }) : handle;
 };
 
 export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
@@ -84,7 +86,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
         <NavToggle />
         {direct && channel.peer !== null ? (
           <Avatar
-            name={channel.peer.displayName}
+            name={nameOf(channel.peer, t('user.erased'))}
             username={channel.peer.username}
             size="sm"
             online={peerOnline}

@@ -42,12 +42,15 @@ export const SignInScreen = (): React.JSX.Element => {
   const { search, navigate } = useRoute();
   const me = useMe();
   const failure = signInFailureIn(search);
+  const reason = new URLSearchParams(search).get('reason');
   const note =
     failure !== null
       ? t(FAILURE_SENTENCE[failure])
-      : new URLSearchParams(search).get('reason') === 'ended'
+      : reason === 'ended'
         ? t('signIn.ended')
-        : null;
+        : reason === 'erased'
+          ? t('signIn.erased')
+          : null;
 
   useEffect(() => {
     if (me.isSuccess) navigate(href('home'), { replace: true });

@@ -3,6 +3,7 @@
  * and handle, their title, their status line, and the time it is where they are, with the zone.
  * Read from the workspace's members, which carry every profile and are read again when one changes.
  */
+import { nameOf } from '../messages/author';
 import type { User } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Avatar } from '../../ui/avatar';
@@ -36,7 +37,7 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
     <PanelFrame
       id={PROFILE_PANEL_ID}
       title={t('profile.panel')}
-      channelLabel={person.displayName}
+      channelLabel={nameOf(person, t('user.erased'))}
       closeLabel={t('profile.close')}
       focus={focus}
     >
@@ -44,9 +45,14 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
         <StaleBanner message={t('profile.staleFailed')} onRetry={readAgain} />
       )}
       <section className="flex flex-col items-start gap-3 p-4">
-        <Avatar name={person.displayName} username={person.username} size="lg" online={online} />
+        <Avatar
+          name={nameOf(person, t('user.erased'))}
+          username={person.username}
+          size="lg"
+          online={online}
+        />
         <div className="flex flex-col gap-1">
-          <p className="text-title font-semibold text-ink">{person.displayName}</p>
+          <p className="text-title font-semibold text-ink">{nameOf(person, t('user.erased'))}</p>
           <p className="font-mono text-label text-ink-muted">{`@${person.username}`}</p>
           {/* Said in words, beside the dot: never a colour alone (D-136). */}
           {online === true && <p className="text-label text-ink">{t('presence.onlineNow')}</p>}

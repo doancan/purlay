@@ -4,17 +4,28 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { ALICE, ME } from '../../testing/fixtures';
-import { authorOf, isMine, sameAuthor } from './author';
+import { erasedPerson } from '@purlay/types';
+import { authorOf, isMine, nameOf, sameAuthor } from './author';
 
 const event = { sender: null };
 
 describe('who a message is by', () => {
   test('a person’s is theirs; an event is GitHub’s', () => {
-    expect(authorOf({ sender: ALICE })).toEqual({
+    expect(authorOf({ sender: ALICE }, 'Deleted user')).toEqual({
       displayName: ALICE.displayName,
       username: ALICE.username,
     });
-    expect(authorOf(event)).toEqual({ displayName: 'GitHub', username: 'github' });
+    expect(authorOf(event, 'Deleted user')).toEqual({ displayName: 'GitHub', username: 'github' });
+  });
+
+  test('an erased person is “deleted user”, in the reader’s words, by name and by handle (D-139 §5)', () => {
+    const gone = erasedPerson(ALICE.id);
+    expect(authorOf({ sender: gone }, 'Silinmiş kullanıcı')).toEqual({
+      displayName: 'Silinmiş kullanıcı',
+      username: 'Silinmiş kullanıcı',
+    });
+    expect(nameOf(gone, 'Silinmiş kullanıcı')).toBe('Silinmiş kullanıcı');
+    expect(nameOf(ALICE, 'Silinmiş kullanıcı')).toBe(ALICE.displayName);
   });
 
   test('yours only when you wrote it: never an event, whoever asks', () => {

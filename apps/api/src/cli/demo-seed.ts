@@ -20,9 +20,10 @@
  * (invitations are not built, and sign-in is GitHub's), and the one private channel
  * (no endpoint creates one yet). Everything else is the API's.
  *
- * **Two outsiders** are in no workspace and have two sessions each. They are for the browser
- * tests that end every session a person holds, or make workspaces of their own: done as one of
- * the four, either would pull the ground from under every other test of the run (D-124).
+ * **Three outsiders** are in no workspace and have two sessions each. They are for the browser
+ * tests that end every session a person holds, make workspaces of their own, or erase their account
+ * (gwen, D-139 §5): done as one of the four, any would pull the ground from under every other test
+ * of the run (D-124).
  */
 import type { Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
@@ -64,7 +65,7 @@ interface Outsider {
 }
 
 /** The outsiders, by name, and their GitHub ids — past the four people's. */
-const OUTSIDERS = { erin: 9_000_101, frank: 9_000_102 } as const;
+const OUTSIDERS = { erin: 9_000_101, frank: 9_000_102, gwen: 9_000_103 } as const;
 type OutsiderKey = keyof typeof OUTSIDERS;
 
 export interface Manifest {

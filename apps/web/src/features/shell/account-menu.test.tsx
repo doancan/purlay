@@ -71,6 +71,7 @@ describe('the account menu', () => {
       expect.stringMatching(/^Keyboard shortcuts/) as unknown as string,
       'Sign out',
       'Sign out everywhere…',
+      'Erase my account…',
     ]);
     expect(view.getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual([
       'System',
@@ -299,5 +300,122 @@ describe('signing out everywhere', () => {
     expect(await view.findByText(/^Couldn't sign you out\./)).toBeDefined();
     expect(here(view)).not.toBe('/sign-in');
     view.unmount();
+  });
+});
+
+describe('erasing the account (D-139 §5)', () => {
+  const erasing = async (api: Partial<Api>): Promise<{ view: View; dialog: HTMLElement }> => {
+    const view = await open(api);
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Erase my account…' }));
+    return { view, dialog: view.getByRole('dialog', { name: 'Erase your account' }) };
+  };
+  const field = (dialog: HTMLElement): HTMLElement =>
+    within(dialog).getByLabelText('Type your username, dogancan, to confirm');
+
+  test('says what goes and what stays, and does nothing until the username is typed', async () => {
+    const asked: string[] = [];
+    const { view, dialog } = await erasing({
+      // Signed out once erased, as the cookie the answer clears makes it.
+      me: () =>
+        asked.length > 0
+          ? Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'))
+          : Promise.resolve(aSession()),
+      eraseAccount: (confirm) => {
+        asked.push(confirm);
+        return Promise.resolve();
+      },
+    });
+    expect(dialog.textContent).toContain('What you wrote stays for your team');
+    const erase = within(dialog).getByRole('button', { name: 'Erase my account' });
+    expect(erase).toHaveProperty('disabled', true);
+    await person().type(field(dialog), 'dogancaN');
+    expect(erase).toHaveProperty('disabled', true);
+    await person().clear(field(dialog));
+    await person().type(field(dialog), 'dogancan');
+    await expectNoAxeViolations(dialog);
+    await person().click(erase);
+    await settle();
+    expect(asked).toEqual(['dogancan']);
+    expect(here(view)).toBe('/sign-in?reason=erased');
+  });
+
+  test('Enter with another name is told so under the field; Cancel closes and forgets what was typed', async () => {
+    const { view, dialog } = await erasing({
+      eraseAccount: () => {
+        throw new Error('nothing should be erased');
+      },
+    });
+    await person().type(field(dialog), 'somebody{Enter}');
+    expect(field(dialog).getAttribute('aria-invalid')).toBe('true');
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Erase my account…' }));
+    const again = view.getByRole('dialog', { name: 'Erase your account' });
+    expect((field(again) as HTMLInputElement).value).toBe('');
+  });
+
+  test('a session too old is told to sign in again, with the way to it', async () => {
+    const signedOut: string[] = [];
+    const { view, dialog } = await erasing({
+      eraseAccount: () => Promise.reject(new ApiError(403, 'REAUTHENTICATION_REQUIRED', 'old')),
+      signOut: () => {
+        signedOut.push('here');
+        return Promise.resolve();
+      },
+      me: () =>
+        signedOut.length > 0
+          ? Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'))
+          : Promise.resolve(aSession()),
+    });
+    await person().type(field(dialog), 'dogancan');
+    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await settle();
+    expect(within(dialog).getByRole('alert').textContent).toContain('sign in again first');
+    await person().click(within(dialog).getByRole('button', { name: 'Sign out to sign in again' }));
+    await settle();
+    expect(signedOut).toEqual(['here']);
+    expect(here(view)).toBe('/sign-in');
+  });
+
+  test('the last owner is told which workspaces to hand over, by name', async () => {
+    const { dialog } = await erasing({
+      eraseAccount: () =>
+        Promise.reject(
+          new ApiError(409, 'LAST_OWNER', 'hand over', {}, undefined, [
+            aSession().memberships[0]?.workspace.id ?? '',
+          ]),
+        ),
+    });
+    await person().type(field(dialog), 'dogancan');
+    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await settle();
+    const name = aSession().memberships[0]?.workspace.name ?? '';
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      `Hand these workspaces to another owner first: ${name}.`,
+    );
+  });
+
+  test('a username the server does not take is said under the field; any other failure above it', async () => {
+    const failures = [
+      new ApiError(400, 'VALIDATION_FAILED', 'no', { confirm: 'is not' }),
+      new ApiError(0, 'NETWORK', 'offline'),
+    ];
+    const { dialog } = await erasing({
+      eraseAccount: () => Promise.reject(failures.shift() ?? new Error('no more')),
+    });
+    await person().type(field(dialog), 'dogancan');
+    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await settle();
+    expect(field(dialog).getAttribute('aria-invalid')).toBe('true');
+    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await settle();
+    expect(
+      within(dialog)
+        .getAllByRole('alert')
+        .map((alert) => alert.textContent),
+    ).toContainEqual(expect.stringContaining('Your account was not erased.') as unknown as string);
   });
 });

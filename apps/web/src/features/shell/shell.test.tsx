@@ -339,6 +339,7 @@ describe('the sign-in screen', () => {
     // A reason outside the set — an old link — still says it failed.
     ['/sign-in?error=1', 'Sign-in did not finish'],
     ['/sign-in?reason=ended', 'Your session ended'],
+    ['/sign-in?reason=erased', 'Your account was erased.'],
   ])('%s says what happened', async (path, words) => {
     const view = await visit(path, out());
     expect(view.getByRole('status').textContent).toContain(words);

@@ -96,6 +96,18 @@ export const ERASED_USERNAME_PREFIX = 'deleted-user-';
 export const isErased = (user: { readonly username: string }): boolean =>
   user.username.toLowerCase().startsWith(ERASED_USERNAME_PREFIX);
 
+/**
+ * An erased person as every answer shows them, wherever the server hands out a person it knows is
+ * erased: the id a client keys on, the reserved name, nothing the account held. The client says
+ * "deleted user" in the reader's language (D-139 §5); `displayName` is for a client that cannot.
+ */
+export const erasedPerson = (id: string): User => ({
+  id,
+  username: `${ERASED_USERNAME_PREFIX}${id.replace(/-/g, '').slice(0, 8)}`,
+  displayName: 'Deleted user',
+  avatarUrl: null,
+});
+
 /** How long a profile's title and status line may be (D-131). */
 export const PROFILE_TITLE_MAX = 80;
 export const PROFILE_STATUS_MAX = 100;
