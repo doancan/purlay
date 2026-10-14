@@ -463,6 +463,44 @@ export const tr = {
   'github.release.published': '{actor}, {name} sürümünü yayımladı',
   'github.release.prereleased': '{actor}, {name} ön sürümünü yayımladı',
 
+  // ── Bir kanalın depo akışları (D-134) ───────────────────────────────────
+  'feeds.title': 'GitHub depoları',
+  'feeds.empty':
+    'Bağlı depo yok. Bir deponun push, çekme isteği, konu ve sürümleri buraya gelebilir.',
+  'feeds.repository': 'Depo',
+  'feeds.repositoryHint': 'GitHub’daki gibi: sahip/ad.',
+  'feeds.invalidRepository': 'Depoyu sahip/ad olarak yaz.',
+  'feeds.events': 'Paylaşılacaklar',
+  'feeds.event.push': 'Push’lar',
+  'feeds.event.pull_request': 'Çekme istekleri',
+  'feeds.event.issues': 'Konular',
+  'feeds.event.release': 'Sürümler',
+  'feeds.noEvents': 'Paylaşılacak en az bir şey seç.',
+  'feeds.connect': 'Bağla',
+  'feeds.connectFailed': 'Depo bağlanamadı.',
+  'feeds.disconnect': 'Bağlantıyı kaldır',
+  'feeds.disconnectOne': '{repository} bağlantısını kaldır',
+  'feeds.disconnectAsk':
+    '{repository} bağlantısı kaldırılsın mı? Webhook’u çalışmayı bırakır, gizli anahtarı silinir.',
+  'feeds.disconnectFailed': 'Deponun bağlantısı kaldırılamadı.',
+  'feeds.neverDelivered': 'Henüz teslimat yok',
+  'feeds.lastDelivery': 'Son teslimat {when}',
+  'feeds.failure.channel_archived': '{when} reddedildi: bu kanal arşivlendi.',
+  'feeds.failure.repository_mismatch': '{when} reddedildi: teslimat başka bir depodan geldi.',
+  'feeds.failure.payload_invalid':
+    '{when} reddedildi: GitHub olay olmayan bir şey gönderdi. Webhook’un içerik türünü kontrol et.',
+  'feeds.failure.rate_limited':
+    '{when} kaybedildi: aynı anda çok fazla teslimat. GitHub’dan yeniden gönder.',
+  'feeds.setup.title': 'Bu webhook’u GitHub’da {repository} deposuna ekle',
+  'feeds.setup.steps': 'Deponun Settings → Webhooks → Add webhook ekranına bunları yapıştır.',
+  'feeds.setup.address': 'Payload URL',
+  'feeds.setup.contentType': 'Content type',
+  'feeds.setup.secret': 'Secret',
+  'feeds.setup.copy': '{what} değerini kopyala',
+  'feeds.setup.once':
+    'Gizli anahtar yalnızca şimdi gösteriliyor. Kaybedilirse depo bağlantısını kaldırıp yeniden bağlamak gerekir.',
+  'feeds.setup.done': 'Tamam',
+
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',
   'diff.oldLine': 'Eski satır',

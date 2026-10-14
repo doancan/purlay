@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a channel's GitHub repositories, in its details (D-134, closes #79)
+
+- An owner or an admin connects a repository from the channel's details, choosing what it posts, and
+  is shown the payload URL, the content type and the secret to paste into GitHub — the secret only
+  then. Each repository says when it was last reached and why it last failed, and is disconnected
+  after asking.
 ### Feature — 2026-10-14: pull requests, issues and releases in a repository's channel (D-134, part of #79)
 
 - A feed posts a pull request opened, closed, merged, reopened or ready for review; an issue opened,

@@ -48,6 +48,8 @@ export interface ChannelOptions {
   }[];
   readonly messages?: MessagePage | (() => Promise<MessagePage>);
   readonly locale?: 'en' | 'tr';
+  /** What Copy does; resolved by default. */
+  readonly copy?: (text: string) => Promise<void>;
   /** The address the page starts at, for a channel opened by a link (`?thread=`). */
   readonly path?: string;
   readonly dark?: boolean;
@@ -119,6 +121,8 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
         })),
       ),
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),
+    // The details an owner opens list the channel's repository feeds (D-134): none, unless a test says.
+    githubFeeds: () => Promise.resolve([]),
     ...(options.channels === undefined
       ? {}
       : { channels: (): Promise<Channel[]> => Promise.resolve(options.channels ?? []) }),
@@ -127,7 +131,10 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
   const view = await renderApp(
     <FeedPortsContext.Provider value={feed.ports}>
       <ContentPortsContext.Provider
-        value={{ highlight: () => Promise.resolve(null), copy: () => Promise.resolve() }}
+        value={{
+          highlight: () => Promise.resolve(null),
+          copy: options.copy ?? ((): Promise<void> => Promise.resolve()),
+        }}
       >
         <SessionGate>
           <WorkspaceScopeProvider slug="acme" notFound={null}>

@@ -137,7 +137,10 @@ Admin* — and when. An action newer than the client is said by its name, never 
 Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
 with **Save** (somebody who has not joined reads them and is told to join); the **members** with a count
 and **Add people** (the same dialog as the header's); the **notification level** (the header's menu);
-and at the foot, in the danger tone, **Leave channel** for a member and **Archive channel** for an owner
+for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
+posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to
+**Connect** one, which answers with the payload URL, the content type and the secret, each with Copy,
+the secret said to be shown only now, until **Done**; and at the foot, in the danger tone, **Leave channel** for a member and **Archive channel** for an owner
 or an admin. Each of the two asks in place first and says what it costs; done, the person is taken to
 the workspace and told in a toast. The last member of a private channel is told to bring somebody in
 first or ask an admin to archive it. A direct message between two has no details: its title is not a button. A group's title opens its
@@ -403,6 +406,7 @@ missing specified behaviour and does not merge.
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
+| Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
 
 **A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
 **Go home**; the rail and the sidebar stay, and going anywhere else draws afresh. A failure outside a

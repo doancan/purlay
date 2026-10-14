@@ -468,6 +468,44 @@ export const en = {
   'github.release.published': '{actor} published the release {name}',
   'github.release.prereleased': '{actor} published the pre-release {name}',
 
+  // ── A channel's repository feeds (D-134) ────────────────────────────────
+  'feeds.title': 'GitHub repositories',
+  'feeds.empty':
+    'No repository is connected. Its pushes, pull requests, issues and releases can arrive here.',
+  'feeds.repository': 'Repository',
+  'feeds.repositoryHint': 'As GitHub writes it: owner/name.',
+  'feeds.invalidRepository': 'Write the repository as owner/name.',
+  'feeds.events': 'Post',
+  'feeds.event.push': 'Pushes',
+  'feeds.event.pull_request': 'Pull requests',
+  'feeds.event.issues': 'Issues',
+  'feeds.event.release': 'Releases',
+  'feeds.noEvents': 'Choose at least one thing to post.',
+  'feeds.connect': 'Connect',
+  'feeds.connectFailed': 'Couldn’t connect the repository.',
+  'feeds.disconnect': 'Disconnect',
+  'feeds.disconnectOne': 'Disconnect {repository}',
+  'feeds.disconnectAsk':
+    'Disconnect {repository}? Its webhook stops working, and its secret is gone.',
+  'feeds.disconnectFailed': 'Couldn’t disconnect the repository.',
+  'feeds.neverDelivered': 'No delivery yet',
+  'feeds.lastDelivery': 'Last delivery {when}',
+  'feeds.failure.channel_archived': 'Refused {when}: this channel was archived.',
+  'feeds.failure.repository_mismatch': 'Refused {when}: the delivery was from another repository.',
+  'feeds.failure.payload_invalid':
+    'Refused {when}: GitHub sent something that was not the event. Check the webhook’s content type.',
+  'feeds.failure.rate_limited':
+    'Lost {when}: too many deliveries at once. Redeliver it from GitHub.',
+  'feeds.setup.title': 'Add this webhook to {repository} on GitHub',
+  'feeds.setup.steps': 'In the repository’s Settings → Webhooks → Add webhook, paste these.',
+  'feeds.setup.address': 'Payload URL',
+  'feeds.setup.contentType': 'Content type',
+  'feeds.setup.secret': 'Secret',
+  'feeds.setup.copy': 'Copy the {what}',
+  'feeds.setup.once':
+    'The secret is shown only now. Lost, it means disconnecting the repository and connecting it again.',
+  'feeds.setup.done': 'Done',
+
   'diff.added': 'added',
   'diff.removed': 'removed',
   'diff.oldLine': 'Old line',

@@ -21,6 +21,8 @@ import {
   CreatedInvitation,
   DeepWorkResponse,
   FilePage,
+  CreatedGitHubFeed,
+  GitHubFeedList,
   GitHubIntegration,
   PinList,
   InvitationPage,
@@ -51,6 +53,7 @@ import {
   type UpdateProfileRequest,
   type PushSubscribeRequest,
   type SavedState,
+  type CreateGitHubFeedRequest,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
@@ -87,6 +90,14 @@ export interface Api {
     signal?: AbortSignal,
   ) => Promise<GitHubIntegration>;
   readonly setGitHubToken: (workspaceId: string, token: string) => Promise<void>;
+  /** An owner's or an admin's: the repositories a channel hears from, never their secrets (D-134). */
+  readonly githubFeeds: (channelId: string, signal?: AbortSignal) => Promise<GitHubFeedList>;
+  /** Connects a repository: the feed, the address and the secret GitHub needs — once. */
+  readonly connectGitHubFeed: (
+    channelId: string,
+    input: CreateGitHubFeedRequest,
+  ) => Promise<CreatedGitHubFeed>;
+  readonly disconnectGitHubFeed: (channelId: string, feedId: string) => Promise<void>;
   readonly removeGitHubToken: (workspaceId: string) => Promise<void>;
   /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
   readonly unfurl: (
@@ -283,6 +294,22 @@ export const createApi = (http: Http): Api => {
       ),
     removeGitHubToken: (workspaceId) =>
       http.send('DELETE', `/api/workspaces/${at(workspaceId)}/integrations/github`, options()),
+    githubFeeds: (channelId, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/github-feeds`,
+        GitHubFeedList,
+        options({}, signal),
+      ),
+    connectGitHubFeed: (channelId, input) =>
+      http.request(
+        'POST',
+        `/api/channels/${at(channelId)}/github-feeds`,
+        CreatedGitHubFeed,
+        options({ body: input }),
+      ),
+    disconnectGitHubFeed: (channelId, feedId) =>
+      http.send('DELETE', `/api/channels/${at(channelId)}/github-feeds/${at(feedId)}`, options()),
     revokeInvitation: (workspaceId, invitationId) =>
       http.send(
         'DELETE',

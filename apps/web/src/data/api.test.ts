@@ -7,6 +7,7 @@ import { NO_PROFILE } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
 import type { Attachment } from '@purlay/types';
 import { createApi, type Api } from './api';
+import { ApiError } from './errors';
 import { createHttp, type UploadRequest } from './http';
 
 const ID = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
@@ -369,6 +370,44 @@ describe('the endpoints', () => {
       },
       { method: 'DELETE', url: `/api/workspaces/${ID}/integrations/github`, body: undefined },
     ]);
+  });
+
+  test('a channel’s repository feeds: listed, connected with its body, disconnected (D-134)', async () => {
+    const feed = {
+      id: ID,
+      channelId: ID,
+      repository: 'acme/api',
+      events: ['push' as const],
+      createdAt: WHEN,
+      lastDeliveryAt: null,
+      lastFailure: null,
+    };
+    const list = harness([feed]);
+    expect(await list.api.githubFeeds(ID)).toEqual([feed]);
+    const made = { feed, webhookPath: `/api/webhooks/github/${ID}`, secret: 'a'.repeat(64) };
+    const connect = harness(made);
+    expect(
+      await connect.api.connectGitHubFeed(ID, { repository: 'acme/api', events: ['push'] }),
+    ).toEqual(made);
+    const remove = harness(null);
+    await remove.api.disconnectGitHubFeed(ID, ID);
+    expect([...list.calls, ...connect.calls, ...remove.calls]).toEqual([
+      { method: 'GET', url: `/api/channels/${ID}/github-feeds`, body: undefined },
+      {
+        method: 'POST',
+        url: `/api/channels/${ID}/github-feeds`,
+        body: { repository: 'acme/api', events: ['push'] },
+      },
+      { method: 'DELETE', url: `/api/channels/${ID}/github-feeds/${ID}`, body: undefined },
+    ]);
+    // A secret that is not the contract's is never believed.
+    const refused = await harness({ ...made, secret: 'short' })
+      .api.connectGitHubFeed(ID, { repository: 'acme/api', events: ['push'] })
+      .then(
+        () => 'believed',
+        (error: unknown) => (error instanceof ApiError ? error.code : 'not an ApiError'),
+      );
+    expect(refused).toBe('MALFORMED');
   });
 
   test('an unfurl names the workspace and the link in the body, and reads a card or none (D-112)', async () => {
