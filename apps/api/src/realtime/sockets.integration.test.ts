@@ -25,6 +25,7 @@ import {
   MESSAGE_CONTENT_MAX,
   MESSAGE_ID_SKEW,
   messageId,
+  PresenceSnapshot,
   ServerFrame,
   TYPING_TTL_MS,
 } from '@purlay/types';
@@ -32,7 +33,7 @@ import { createApp, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { REPLAY_BYTES_MAX } from '../modules/messages/replay';
 import { createConnection } from 'node:net';
-import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
+import { aManualTimers, aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
 import { requireWorkspaceMembership } from '../platform/tenancy';
@@ -933,18 +934,27 @@ describe('integration: two real sockets', () => {
       // client's side is done, the server's cleanup lands later, and how much later
       // depends on the load — so a `before` read from it is a count that can change
       // between two reads. Nothing else connects here, so every number is this test's.
+      const timers = aManualTimers();
       const own = createApp(
         testDependencies({
           database: db,
           clock,
           config: testConfig({ APP_URL: origin }),
           log: recorded.log,
+          timers,
         }),
       );
       const listening = `http://localhost:${String(own.listen(0))}`;
       try {
         const before = own.held();
-        expect(before).toEqual({ connections: 0, busSockets: 0, busTopics: 0, rateBuckets: 0 });
+        expect(before).toEqual({
+          connections: 0,
+          busSockets: 0,
+          busTopics: 0,
+          rateBuckets: 0,
+          online: 0,
+          leaving: 0,
+        });
 
         const alice = await connect(room.alice, listening);
         await subscribe(alice, room.channelId);
@@ -954,8 +964,15 @@ describe('integration: two real sockets', () => {
         expect(open.busSockets).toBe(1);
         expect(open.busTopics).toBeGreaterThan(0);
         expect(open.rateBuckets).toBe(1);
+        expect(open.online).toBe(1);
 
         await alice.close();
+        // Online until the grace has passed (D-136), and then nothing held for her.
+        const graced = Date.now() + 5_000;
+        while (own.held().leaving !== 1 && Date.now() < graced) await Bun.sleep(10);
+        expect(own.held()).toMatchObject({ online: 1, leaving: 1 });
+        timers.runAll();
+        await own.settled();
         // All four, not the first to reach its old value: the bus and the limiter are
         // released by the same handler, but nothing orders them for the reader.
         const deadline = Date.now() + 5_000;
@@ -963,6 +980,164 @@ describe('integration: two real sockets', () => {
           await Bun.sleep(10);
         }
         expect(own.held()).toEqual(before);
+      } finally {
+        await own.stop(true);
+      }
+    });
+  });
+
+  describe('who is online (D-136)', () => {
+    const ownNode = (): {
+      readonly own: ReturnType<typeof createApp>;
+      readonly timers: ReturnType<typeof aManualTimers>;
+    } => {
+      const timers = aManualTimers();
+      const own = createApp(
+        testDependencies({
+          database: db,
+          clock,
+          config: testConfig({ APP_URL: origin }),
+          timers,
+        }),
+      );
+      return { own, timers };
+    };
+    const until = async (done: () => boolean, what: string): Promise<void> => {
+      const deadline = Date.now() + 5_000;
+      while (!done()) {
+        if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+        await Bun.sleep(10);
+      }
+    };
+    const presenceOf = (frames: readonly ServerFrame[], userId: string): boolean[] =>
+      frames.flatMap((frame) =>
+        frame.event === 'PRESENCE'
+          ? frame.data.changes.filter((c) => c.userId === userId).map((c) => c.online)
+          : [],
+      );
+
+    test('a co-member hears her come online, and offline only once the grace has passed', async () => {
+      const room = await aRoom();
+      const { own, timers } = ownNode();
+      const listening = `http://localhost:${String(own.listen(0))}`;
+      try {
+        const bob = await connect(room.bob, listening);
+        await until(() => own.held().online === 1, 'bob counted');
+        const alice = await connect(room.alice, listening);
+        await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
+        await alice.close();
+        await until(() => own.held().leaving === 1, 'alice inside her grace');
+        // Inside the grace nothing is said.
+        expect(presenceOf(bob.frames, room.aliceId)).toEqual([true]);
+        timers.runAll();
+        await bob.until((f) => presenceOf(f, room.aliceId).includes(false), 'alice offline');
+        expect(presenceOf(bob.frames, room.aliceId)).toEqual([true, false]);
+        await bob.close();
+      } finally {
+        await own.stop(true);
+      }
+    });
+
+    test('a second socket of hers, or one back inside the grace, never shows her offline', async () => {
+      const room = await aRoom();
+      const { own, timers } = ownNode();
+      const listening = `http://localhost:${String(own.listen(0))}`;
+      try {
+        const bob = await connect(room.bob, listening);
+        await until(() => own.held().online === 1, 'bob counted');
+        const first = await connect(room.alice, listening);
+        const second = await connect(room.alice, listening);
+        await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
+        await until(() => own.held().connections === 3, 'all three counted');
+        await first.close();
+        await until(() => own.held().connections === 2, 'her first socket gone');
+        expect(own.held().leaving).toBe(0);
+        await second.close();
+        await until(() => own.held().leaving === 1, 'alice inside her grace');
+        const back = await connect(room.alice, listening);
+        await until(() => own.held().leaving === 0, 'alice back');
+        timers.runAll();
+        await own.settled();
+        expect(presenceOf(bob.frames, room.aliceId)).toEqual([true]);
+        await back.close();
+        await bob.close();
+      } finally {
+        await own.stop(true);
+      }
+    });
+
+    test('a stranger’s socket, and one of somebody removed from her workspace, hear nothing of her', async () => {
+      const room = await aRoom();
+      const { own } = ownNode();
+      const listening = `http://localhost:${String(own.listen(0))}`;
+      const workspaceId = (
+        await db
+          .selectFrom('channels')
+          .select('workspace_id')
+          .where('id', '=', room.channelId)
+          .executeTakeFirstOrThrow()
+      ).workspace_id;
+      // A stranger with a workspace of their own: in one, only not in hers.
+      const stranger = await aUser('stranger');
+      const theirs = aUniqueSlug('rt');
+      expect(
+        (await http('POST', '/api/workspaces', stranger.cookie, { name: theirs, slug: theirs })).ok,
+      ).toBe(true);
+      const removed = await aUser('erin');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: removed.id, role: 'member', joined_at: NOW })
+        .execute();
+      try {
+        const bob = await connect(room.bob, listening);
+        const outsider = await connect(stranger.cookie, listening);
+        const erin = await connect(removed.cookie, listening);
+        await until(() => own.held().online === 3, 'all three counted');
+        await db
+          .deleteFrom('workspace_members')
+          .where('workspace_id', '=', workspaceId)
+          .where('user_id', '=', removed.id)
+          .execute();
+        const alice = await connect(room.alice, listening);
+        // Bob hearing it is the control: it was told, and told to whom it was for.
+        await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
+        await own.settled();
+        expect(outsider.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+        expect(erin.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+        await Promise.all([alice.close(), bob.close(), outsider.close(), erin.close()]);
+      } finally {
+        await own.stop(true);
+      }
+    });
+
+    test('her workspace’s presence lists her for a member, and is not found for anybody else', async () => {
+      const room = await aRoom();
+      const { own } = ownNode();
+      const listening = `http://localhost:${String(own.listen(0))}`;
+      try {
+        const alice = await connect(room.alice, listening);
+        await until(() => own.held().online === 1, 'alice counted');
+        const workspaceId = (
+          await db
+            .selectFrom('channels')
+            .select('workspace_id')
+            .where('id', '=', room.channelId)
+            .executeTakeFirstOrThrow()
+        ).workspace_id;
+        const read = async (cookie: string): Promise<Response> =>
+          await fetch(`${listening}/api/workspaces/${workspaceId}/presence`, {
+            headers: { cookie, origin },
+          });
+        const answer = await read(room.bob);
+        expect(answer.status).toBe(200);
+        const body: unknown = await answer.json();
+        expect(Value.Check(PresenceSnapshot, body)).toBe(true);
+        expect((body as { online: { userId: string }[] }).online.map((o) => o.userId)).toEqual([
+          room.aliceId,
+        ]);
+        const stranger = await aUser('stranger');
+        expect((await read(stranger.cookie)).status).toBe(404);
+        await alice.close();
       } finally {
         await own.stop(true);
       }

@@ -418,6 +418,38 @@ export const TypingServerFrame = Type.Object({
 });
 
 /**
+ * How long after a person's last socket closes they are still online (D-136 §2): a reconnect, a
+ * reload, a tab moved between windows, is not a person leaving. Also how long a client keeps what it
+ * knew through its own reconnect before reading the workspace's presence again (§4).
+ */
+export const PRESENCE_GRACE_MS = 30_000;
+
+/** One person's presence, at a version that only grows on the node that said it. */
+export const PresenceChange = Type.Object(
+  {
+    userId: Uuid,
+    online: Type.Boolean(),
+    /** Later is larger; a client keeps the largest it has heard for a person (D-136 §3). */
+    version: Type.Integer({ minimum: 0 }),
+  },
+  { additionalProperties: false },
+);
+export type PresenceChange = Static<typeof PresenceChange>;
+
+/**
+ * People came online or went offline (D-136): on the `user:` topic of each person who shares a
+ * workspace with them, so a stranger never hears it. A list, so changes can be told together.
+ */
+export const PresenceFrame = Type.Object({
+  event: Type.Literal('PRESENCE'),
+  data: Type.Object(
+    { changes: Type.Array(PresenceChange, { minItems: 1, maxItems: 1000 }) },
+    { additionalProperties: false },
+  ),
+  ...envelope,
+});
+
+/**
  * A workspace the person is in changed — renamed (D-124). On each member's `user:` topic, so a socket
  * hears it only for a workspace its person belongs to as the change commits. It carries no state: the
  * client reads its memberships again, so two renames heard in the wrong order cannot leave the old
@@ -456,6 +488,7 @@ export const ServerFrame = Type.Union([
   ChannelsUpdatedFrame,
   TypingServerFrame,
   WorkspaceUpdatedFrame,
+  PresenceFrame,
   PongFrame,
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;
@@ -522,7 +555,8 @@ export const parseServerMessage = (text: string): ServerMessage => {
  * - `user:` also carries what is true for one person only: their read state
  *   (`CHANNEL_STATE`), a channel that appeared for them (`CHANNEL_ADDED`), and a workspace of theirs
  *   that changed (`WORKSPACE_UPDATED`), told to each member rather than on `workspace:`, so somebody
- *   removed a moment ago is not told.
+ *   removed a moment ago is not told; and who among the people they share a workspace with came
+ *   online or went offline (`PRESENCE`, D-136).
  * - `workspace:` has no publisher yet; it is named for Phase 1.
  */
 export type Topic =

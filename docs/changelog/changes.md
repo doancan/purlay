@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: who is online, told to the people one shares a workspace with (D-136, part of #480)
+
+- The server knows who has Purlay open and tells the people who share a workspace with them —
+  offline only half a minute after their last tab closes, so a reload is not a departure — and answers
+  a workspace's presence for its members. The dot that shows it follows.
+
 ### Feature — 2026-10-14: a message's edit history, from its "edited" mark (D-135, closes #82)
 
 - "Edited" opens what the message says now and what it said before each edit. Its author can remove

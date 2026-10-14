@@ -21,7 +21,9 @@ import { channelTopic, sessionTopic, userTopic, type EventBus } from '../../plat
 import { withinRequest, type Logger } from '../../platform/logging';
 import { atomicallyOn, type Atomically } from '../../platform/transactions';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
-import { createSocketHub } from '../../realtime/hub';
+import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
+import { onlinePresence, type OnlinePresence } from '../../realtime/online';
+import { announcePresence } from '../../modules/presence/presence';
 import {
   inProcessRateLimiter,
   SOCKET_CONNECTION_LIMITS,
@@ -48,6 +50,8 @@ export interface SocketDependencies {
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
   readonly push?: PushSender | undefined;
+  /** The grace's timers (D-136); a test passes its own so a grace passes without waiting. */
+  readonly timers?: Timers | undefined;
 }
 
 export interface ConnectionLimits {
@@ -74,6 +78,9 @@ export interface HeldByConnections {
   readonly busSockets: number;
   readonly busTopics: number;
   readonly rateBuckets: number;
+  /** People online on this node, and those inside their grace (D-136). */
+  readonly online: number;
+  readonly leaving: number;
 }
 
 export interface SocketLifecycle {
@@ -90,6 +97,8 @@ export interface SocketLifecycle {
   readonly closeAll: () => void;
   readonly settled: () => Promise<void>;
   readonly held: () => HeldByConnections;
+  /** Who is online on this node: what a workspace's presence is read from (D-136). */
+  readonly online: OnlinePresence;
 }
 
 /**
@@ -116,8 +125,18 @@ const outboundBufferOf = (raw: object): (() => number) => {
 export const createSocketLifecycle = (dependencies: SocketDependencies): SocketLifecycle => {
   const { log, database, clock } = dependencies;
   const limits = dependencies.connectionLimits ?? SOCKET_CONNECTION_LIMITS;
+  // Who is online on this node (D-136): told by the hub's own count of each person's sockets.
+  const online = onlinePresence({
+    clock,
+    timers: dependencies.timers ?? systemTimers,
+    log,
+    announce: async (change) => {
+      await announcePresence({ database, bus, clock, log }, change);
+    },
+  });
   const hub = createSocketHub(database, clock, {
     log,
+    presence: online,
     // Called from `hub.deliver`, which only runs after `bus` exists.
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);
@@ -279,17 +298,23 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
 
     closeAll: (): void => {
+      // First: the sockets about to close tell nobody they left — they are coming back elsewhere.
+      online.stop();
       hub.closeAll(CLOSE_CODES.RESTARTING, 'restarting');
     },
     settled: async (): Promise<void> => {
       await hub.settled();
+      await online.settled();
     },
+    online,
 
     held: () => ({
       connections: hub.size(),
       busSockets: bus.size().sockets,
       busTopics: bus.size().topics,
       rateBuckets: limiter.held(),
+      online: online.held().online,
+      leaving: online.held().leaving,
     }),
   };
 };

@@ -38,6 +38,7 @@ import {
   type ClientFrame,
   type ErrorCode,
   type RevokedReason,
+  type PresenceChange,
   type ServerFrame,
 } from '@purlay/types';
 import type { Api } from '../data/api';
@@ -130,6 +131,14 @@ export interface RealtimeState {
    */
   readonly typing: Readonly<Record<string, readonly string[]>>;
   /**
+   * Who is online, by person, at the version that said so (D-136): the largest heard wins, so a frame
+   * that arrives late cannot undo a newer one, nor a snapshot read before a change undo the change.
+   * A person not here is unknown — drawn as nothing, never as offline.
+   */
+  readonly presence: Readonly<
+    Record<string, { readonly online: boolean; readonly version: number }>
+  >;
+  /**
    * Channels that went away and why, when the server said (D-123): what a screen still showing one
    * tells the person instead of "not found".
    */
@@ -188,6 +197,8 @@ export interface Engine {
    * offline: their unsent messages go, as they do on `ACCESS_REVOKED` (#521).
    */
   readonly lose: (channelIds: readonly string[]) => void;
+  /** What a frame or a workspace's snapshot says of who is online (D-136); older than known is kept out. */
+  readonly applyPresence: (changes: readonly PresenceChange[]) => void;
 }
 
 const isSendAck = (
@@ -213,6 +224,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     pending: restored,
     degraded: {},
     typing: {},
+    presence: {},
     gone: {},
     lost: null,
   }));
@@ -643,9 +655,23 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'TYPING':
         startTyping(frame.data.channelId, frame.data.userId, frame.data.ttlMs);
         return;
+      case 'PRESENCE':
+        applyPresence(frame.data.changes);
+        return;
       case 'PONG':
         return;
     }
+  };
+
+  const applyPresence = (changes: readonly PresenceChange[]): void => {
+    const now = store.getState().presence;
+    const newer = changes.filter((change) => (now[change.userId]?.version ?? -1) < change.version);
+    if (newer.length === 0) return;
+    const next = { ...now };
+    for (const change of newer) {
+      next[change.userId] = { online: change.online, version: change.version };
+    }
+    store.setState({ presence: next });
   };
 
   const onStatus = (status: ConnectionStatus): void => {
@@ -751,6 +777,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     discard: (id): void => {
       if (find(id)?.delivery === 'failed') forget(id);
     },
+    applyPresence,
     lose: (channelIds): void => {
       dropUnsent(channelIds);
     },

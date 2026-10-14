@@ -11,6 +11,7 @@ import { DEVELOPMENT_ENCRYPTION_KEY, type Config } from '../platform/config';
 import type { GitHubClient, GitHubEmail, GitHubProfile } from '../modules/auth/github';
 import type { Dependencies } from '../ingress/http/app';
 import type { RateBudget } from '../realtime/rate-limiter';
+import type { Timers } from '../realtime/hub';
 import { createLogger, type Logger } from '../platform/logging';
 import type { ObjectStore } from '../platform/storage';
 
@@ -134,3 +135,32 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   storage: aStoreThatMustNotBeTouched(),
   ...overrides,
 });
+
+/**
+ * Timers a test runs by hand (D-136's grace): nothing fires until the test says, and a timer cleared
+ * never fires — so a grace can be passed, or come back inside, without a wait.
+ */
+export const aManualTimers = (): Timers & {
+  /** Fires every timer armed and not cleared, as if their time had come. */
+  readonly runAll: () => void;
+  readonly pending: () => number;
+} => {
+  const armed = new Map<number, () => void>();
+  let next = 0;
+  return {
+    set: (callback: () => void): number => {
+      next += 1;
+      armed.set(next, callback);
+      return next;
+    },
+    clear: (handle: unknown): void => {
+      if (typeof handle === 'number') armed.delete(handle);
+    },
+    runAll: (): void => {
+      const due = [...armed];
+      armed.clear();
+      for (const [, fire] of due) fire();
+    },
+    pending: (): number => armed.size,
+  };
+};

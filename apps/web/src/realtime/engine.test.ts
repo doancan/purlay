@@ -1018,6 +1018,31 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(stale(IDS.browse)).toBe(false);
   });
 
+  test('who is online: the largest version heard wins, whatever order frames come in (D-136)', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const alice = '0199155c-6200-7b7f-8c11-0000000000a1';
+    const say = (online: boolean, version: number): void => {
+      w.deliver(
+        frame({
+          event: 'PRESENCE',
+          data: { changes: [{ userId: alice, online, version }] },
+          ts: T0,
+        }),
+      );
+    };
+    say(false, 20);
+    // An online said before she left, heard after: kept out.
+    say(true, 10);
+    expect(w.engine.store.getState().presence[alice]).toEqual({ online: false, version: 20 });
+    say(true, 30);
+    expect(w.engine.store.getState().presence[alice]).toEqual({ online: true, version: 30 });
+    // A snapshot read before the latest change is kept out too.
+    w.engine.applyPresence([{ userId: alice, online: false, version: 25 }]);
+    expect(w.engine.store.getState().presence[alice]?.online).toBe(true);
+  });
+
   test('a channel’s pins changed are read again, in that channel only (D-130)', () => {
     const w = world();
     w.client.setQueryData(keys.pins(CH), []);

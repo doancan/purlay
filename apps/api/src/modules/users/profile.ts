@@ -94,8 +94,14 @@ export const updateProfile = async (
   return { profile: asProfile(after), told: await workspacesOf(transaction, userId) };
 };
 
-/** Every workspace the person is in, with everyone in each: who sees their profile. */
-const workspacesOf = async (executor: Executor, userId: string): Promise<ProfileChange['told']> => {
+/**
+ * Every workspace the person is in, with everyone in each: who sees their profile, and who hears
+ * that they came online (D-136).
+ */
+export const workspacesOf = async (
+  executor: Executor,
+  userId: string,
+): Promise<ProfileChange['told']> => {
   const rows = await executor
     .selectFrom('workspace_members as mine')
     .innerJoin('workspaces', 'workspaces.id', 'mine.workspace_id')
