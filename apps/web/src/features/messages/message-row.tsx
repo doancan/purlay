@@ -218,7 +218,7 @@ const MessageRowView = ({
             ) : (
               renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
             )}
-            {!deleted && <EditedMark message={message} mine={isMine(message, meId)} />}
+            <EditedMark message={message} mine={isMine(message, meId)} />
             {!deleted && <PinnedMark message={message} />}
             {delivery === 'sent' && !deleted && (
               <div

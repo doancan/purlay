@@ -11,7 +11,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import type { Message, MessageVersion, MessageVersionPage } from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useApi } from '../../data/api-provider';
-import { useDescribeFailure } from '../../data/failure';
+import { codeOf, useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
@@ -111,6 +111,7 @@ const History = ({
   const client = useQueryClient();
   const describe = useDescribeFailure();
   const [problem, setProblem] = useState<string | null>(null);
+  const now = useRef<HTMLHeadingElement>(null);
   const versions = useInfiniteQuery({
     queryKey: keys.messageVersions(message.id),
     initialPageParam: undefined as string | undefined,
@@ -119,24 +120,41 @@ const History = ({
     queryFn: async ({ pageParam, signal }) =>
       await api.messageVersions(message.id, pageParam, signal),
   });
+  const reread = async (): Promise<void> => {
+    await client.invalidateQueries({ queryKey: keys.messageVersions(message.id) });
+  };
+  // What a failed removal said stops being true once the list is read again.
+  const readAt = versions.dataUpdatedAt;
+  useEffect(() => {
+    setProblem(null);
+  }, [readAt]);
 
   const remove = async (version: MessageVersion): Promise<boolean> => {
     setProblem(null);
     try {
       await api.removeMessageVersion(message.id, version.id);
-      await client.invalidateQueries({ queryKey: keys.messageVersions(message.id) });
-      return true;
     } catch (failure) {
-      setProblem(`${t('history.removeFailed')} ${describe(failure)}`);
-      return false;
+      // Gone already is what was asked: removed from another device, or a retry after a lost answer.
+      if (codeOf(failure) !== 'MESSAGE_VERSION_NOT_FOUND') {
+        setProblem(`${t('history.removeFailed')} ${describe(failure)}`);
+        await reread();
+        return false;
+      }
     }
+    await reread();
+    // The row the person was on is gone: their place is the history's top, never the page.
+    now.current?.focus();
+    return true;
   };
 
   const all = versions.data?.pages.flatMap((page) => page.data) ?? [];
+  const failedFirst = versions.isError && versions.data === undefined;
   return (
     <div className="flex flex-col gap-3">
       <section className="flex flex-col gap-1">
-        <h3 className="text-caption text-ink-muted">{t('history.now')}</h3>
+        <h3 ref={now} tabIndex={-1} className="text-caption text-ink-muted">
+          {t('history.now')}
+        </h3>
         <p className={words}>{message.content}</p>
       </section>
       {problem !== null && (
@@ -144,7 +162,7 @@ const History = ({
           {problem}
         </p>
       )}
-      {versions.isError ? (
+      {failedFirst ? (
         <div className="flex items-center gap-3">
           <p className="text-body text-ink-muted">{describe(versions.error)}</p>
           <Button
@@ -168,6 +186,12 @@ const History = ({
           ))}
         </ul>
       )}
+      {/* Older versions that failed to come: said where they would be, and the rest kept. */}
+      {versions.isFetchNextPageError && (
+        <p role="alert" className="text-label text-danger-text">
+          {`${t('history.moreFailed')} ${describe(versions.error)}`}
+        </p>
+      )}
       {versions.hasNextPage && (
         <Button
           busy={versions.isFetchingNextPage}
@@ -182,7 +206,10 @@ const History = ({
   );
 };
 
-/** The "edited" mark of a message, and the history it opens. */
+/**
+ * The "edited" mark of a message, and the history it opens. A message deleted while its history is
+ * open says so there, rather than the dialog vanishing under the person; closed, the mark goes.
+ */
 export const EditedMark = ({
   message,
   mine,
@@ -192,7 +219,8 @@ export const EditedMark = ({
 }): React.JSX.Element | null => {
   const { t, format } = useI18n();
   const [open, setOpen] = useState(false);
-  if (message.editedAt === null) return null;
+  const deleted = message.deletedAt !== null;
+  if (message.editedAt === null || (deleted && !open)) return null;
   return (
     <>
       <button
@@ -214,7 +242,14 @@ export const EditedMark = ({
         description={t('history.description')}
         closeLabel={t('common.close')}
       >
-        {open && <History message={message} mine={mine} />}
+        {open &&
+          (deleted ? (
+            <p role="status" className="text-body text-ink-muted">
+              {t('message.deleted')}
+            </p>
+          ) : (
+            <History message={message} mine={mine} />
+          ))}
       </Dialog>
     </>
   );

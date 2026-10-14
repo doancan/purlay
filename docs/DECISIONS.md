@@ -5937,8 +5937,9 @@ window on that promise.
    edit named). A client's open history is read again when `MESSAGE_REVISED` arrives — an edit adds a
    version, a delete takes them all — and when `MESSAGE_VERSIONS_UPDATED` does: a version removed, on
    the channel's topic, so words taken out leave every screen that shows them.
-6. **Messages edited before this** have no versions: their history says earlier versions were not
-   kept.
+6. **Messages edited before this** have no versions, nor has a message whose author removed every
+   one: its history says there are none — not kept, or removed. A message deleted while its history is
+   open says so there, rather than the dialog vanishing under the person.
 
 **Rejected.** *A version per message state (`state_version`)* — it also counts reactions, threads and
 deletes, so its numbers have gaps and say nothing about words. *Refusing edits past the bound* — a

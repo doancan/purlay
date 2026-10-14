@@ -102,8 +102,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 - **Edited** under a message's words is a button (D-135): it opens the message's **Edit history** —
   what it says now, then each earlier version, newest first, with when it was replaced, older ones a
   page at a time. Its author has **Remove** on each version, asking in place first; the edit box says
-  that what a message said before stays in its history, where it can be removed. A message edited
-  before versions were kept says that earlier versions were not kept.
+  that what a message said before stays in its history, where it can be removed. A message with none
+  says they were not kept, or were removed; one deleted while its history is open says so there.
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
@@ -413,7 +413,7 @@ missing specified behaviour and does not merge.
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 | Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
-| Edit history | "Earlier versions of this message were not kept." | Skeleton row | Retry |
+| Edit history | "No earlier versions: they were not kept, or were removed." | Skeleton row | Retry; older versions that fail to come are said below the ones shown |
 
 **A screen that fails to draw** is replaced by "This screen stopped working" with **Reload** and
 **Go home**; the rail and the sidebar stay, and going anywhere else draws afresh. A failure outside a

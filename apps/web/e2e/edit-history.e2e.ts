@@ -30,7 +30,9 @@ test.describe('a message’s edit history', () => {
       .getByRole('group', { name: /Remove this version/ })
       .getByRole('button', { name: 'Remove' })
       .click();
-    await expect(dialog.getByText('Earlier versions of this message were not kept.')).toBeVisible();
+    await expect(
+      dialog.getByText('No earlier versions: they were not kept, or were removed.'),
+    ).toBeVisible();
     await expect(dialog.getByText('the token is ghp_oops')).toHaveCount(0);
   });
 });

@@ -5,8 +5,9 @@
  * edited before versions were kept says so.
  */
 import { describe, expect, test } from 'bun:test';
-import { within } from '@testing-library/react';
-import type { MessageVersionPage } from '@purlay/types';
+import { act, within } from '@testing-library/react';
+import { useState } from 'react';
+import type { Message, MessageVersionPage } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
@@ -85,7 +86,7 @@ describe('a message’s edit history', () => {
     await person().click(within(dialog).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(
-      within(dialog).getByText('Earlier versions of this message were not kept.'),
+      within(dialog).getByText('No earlier versions: they were not kept, or were removed.'),
     ).toBeDefined();
     view.unmount();
   });
@@ -138,6 +139,9 @@ describe('a message’s edit history', () => {
     expectFocusOn(within(question).getByRole('button', { name: 'Cancel' }));
     await person().click(within(question).getByRole('button', { name: 'Cancel' }));
     expect(removed).toEqual([]);
+    expectFocusOn(
+      within(dialog).getAllByRole('button', { name: /^Remove the version/ })[1] ?? dialog,
+    );
 
     const [, again] = within(dialog).getAllByRole('button', { name: /^Remove the version/ });
     if (again === undefined) throw new Error('no second remove');
@@ -151,13 +155,46 @@ describe('a message’s edit history', () => {
     await settle();
     expect(removed).toEqual([[aMessage(1).id, version(1).id]]);
     expect(within(dialog).queryByText('said 1')).toBeNull();
+    // The row the person was on is gone: their place is the top of the history.
+    expectFocusOn(within(dialog).getByRole('heading', { name: 'Now' }));
     view.unmount();
   });
 
-  test('a refused removal is said, and the version stays', async () => {
+  test('a removal that fails is said, the list is read again, and focus goes back to Remove', async () => {
+    let listed = 0;
     const view = await mount(
       {
-        messageVersions: () => Promise.resolve({ data: [version(1)], nextCursor: null }),
+        messageVersions: () => {
+          listed += 1;
+          return Promise.resolve({ data: [version(1)], nextCursor: null });
+        },
+        removeMessageVersion: () => Promise.reject(new ApiError(500, 'INTERNAL', 'boom')),
+      },
+      true,
+    );
+    const dialog = await opened(view);
+    await person().click(within(dialog).getByRole('button', { name: /^Remove the version/ }));
+    await person().click(
+      within(within(dialog).getByRole('group', { name: /Remove this version/ })).getByRole(
+        'button',
+        { name: 'Remove' },
+      ),
+    );
+    await settle();
+    expect(within(dialog).getByText('said 1')).toBeDefined();
+    expect(listed).toBe(2);
+    expectFocusOn(within(dialog).getByRole('button', { name: /^Remove the version/ }));
+    view.unmount();
+  });
+
+  test('a version already gone is what was asked: no failure, and it leaves the list', async () => {
+    let listed = 0;
+    const view = await mount(
+      {
+        messageVersions: () => {
+          listed += 1;
+          return Promise.resolve({ data: listed === 1 ? [version(1)] : [], nextCursor: null });
+        },
         removeMessageVersion: () =>
           Promise.reject(new ApiError(404, 'MESSAGE_VERSION_NOT_FOUND', 'gone')),
       },
@@ -166,11 +203,55 @@ describe('a message’s edit history', () => {
     const dialog = await opened(view);
     await person().click(within(dialog).getByRole('button', { name: /^Remove the version/ }));
     await person().click(
-      within(within(dialog).getByRole('group')).getByRole('button', { name: 'Remove' }),
+      within(within(dialog).getByRole('group', { name: /Remove this version/ })).getByRole(
+        'button',
+        { name: 'Remove' },
+      ),
     );
     await settle();
-    expect(within(dialog).getByRole('alert').textContent).toContain('Couldn’t remove the version.');
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    expect(within(dialog).queryByText('said 1')).toBeNull();
+    view.unmount();
+  });
+
+  test('older versions that fail to come are said, and the ones shown stay', async () => {
+    const view = await mount({
+      messageVersions: (_message, cursor) =>
+        cursor === undefined
+          ? Promise.resolve({ data: [version(3)], nextCursor: version(3).id })
+          : Promise.reject(new ApiError(500, 'INTERNAL', 'boom')),
+    });
+    const dialog = await opened(view);
+    await person().click(within(dialog).getByRole('button', { name: 'Show older versions' }));
+    await settle();
+    expect(within(dialog).getByText('said 3')).toBeDefined();
+    expect(within(dialog).getByRole('alert').textContent).toContain(
+      'Couldn’t show older versions.',
+    );
+    view.unmount();
+  });
+
+  test('a message deleted while its history is open says so there', async () => {
+    const message = aMessage(1, { sender: ALICE, content: 'said now', editedAt: EDITED });
+    let replace: (next: Message) => void = () => undefined;
+    const Holder = (): React.JSX.Element => {
+      const [held, setHeld] = useState(message);
+      replace = setHeld;
+      return <EditedMark message={held} mine={false} />;
+    };
+    const view = await renderApp(<Holder />, {
+      api: anApi({
+        messageVersions: () => Promise.resolve({ data: [version(1)], nextCursor: null }),
+      }),
+    });
+    const dialog = await opened(view);
     expect(within(dialog).getByText('said 1')).toBeDefined();
+    act(() => {
+      replace({ ...message, content: '', deletedAt: '2026-09-09T10:00:00.000Z' });
+    });
+    const still = view.getByRole('dialog');
+    expect(within(still).getByText('This message was deleted.')).toBeDefined();
+    expect(within(still).queryByText('said 1')).toBeNull();
     view.unmount();
   });
 
@@ -181,7 +262,9 @@ describe('a message’s edit history', () => {
       'tr',
     );
     const dialog = await opened(view);
-    expect(within(dialog).getByText('Bu mesajın önceki sürümleri saklanmadı.')).toBeDefined();
+    expect(
+      within(dialog).getByText('Önceki sürüm yok: saklanmadı ya da kaldırıldı.'),
+    ).toBeDefined();
     view.unmount();
   });
 });
