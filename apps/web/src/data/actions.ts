@@ -66,6 +66,8 @@ export interface Actions {
   readonly joinWorkspace: (token: string) => Promise<Membership>;
   /** This session, or — `everywhere` — every session the person holds, this one with them. */
   readonly signOut: (scope?: 'here' | 'everywhere') => Promise<void>;
+  /** In by a sign-in link (D-138 §4): whoever this page held before is forgotten, as on sign-out. */
+  readonly signInByLink: (token: string) => Promise<void>;
 }
 
 export const createActions = (
@@ -219,6 +221,13 @@ export const createActions = (
       // Nothing cached belongs to the next person to sign in on this page — nor does anything
       // they wrote that the browser kept: a draft is keyed by channel and thread ids alone, so
       // the next person opening the same conversation would otherwise find it.
+      client.clear();
+      forgetPersonalData(storage);
+    },
+    signInByLink: async (token): Promise<void> => {
+      await api.consumeEmailSignIn(token);
+      // The person may not be who was signed in on this page a moment ago: what is cached and what
+      // was kept are theirs, for the same reasons as on sign-out.
       client.clear();
       forgetPersonalData(storage);
     },

@@ -15,6 +15,9 @@ import { Type, type Static } from '@sinclair/typebox';
 /** The sign-in screen's address. The client's route table spells it from here. */
 export const SIGN_IN_PATH = '/sign-in';
 
+/** How long a sign-in link opens (D-138 §4): the server's expiry and every sentence that names it. */
+export const SIGN_IN_LINK_TTL_MINUTES = 15;
+
 /** The query parameter the reason travels in. */
 const FAILURE_PARAM = 'error';
 

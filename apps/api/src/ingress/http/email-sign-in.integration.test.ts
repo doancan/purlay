@@ -128,6 +128,15 @@ describe('integration: asking for a sign-in link over HTTP', () => {
         { email: 'nobody', locale: 'en' },
         { email: 'a@example.test', locale: 'fr' },
         { email: 'a@example.test', locale: 'en', next: '/evil' },
+        // An invitation rides in the mail (D-138 §4): nothing but a token's shape may get there.
+        { email: 'a@example.test', locale: 'en', invitation: 'c'.repeat(63) },
+        { email: 'a@example.test', locale: 'en', invitation: 'c'.repeat(65) },
+        { email: 'a@example.test', locale: 'en', invitation: 'C'.repeat(64) },
+        {
+          email: 'a@example.test',
+          locale: 'en',
+          invitation: `${'c'.repeat(32)}\n\nYour account is locked: https://evil.test`,
+        },
         { email: `${'a'.repeat(250)}@example.test`, locale: 'en' },
       ]) {
         const response = await ask(db, body, mail);

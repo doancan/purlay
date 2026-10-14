@@ -2,6 +2,7 @@
  * What a person does: each action asks the API and teaches the cache the answer — and
  * only the answer. A failure writes nothing.
  */
+import { memoryStorage } from '../testing/fakes';
 import { describe, expect, test } from 'bun:test';
 import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Channel, Message, MessagePage } from '@purlay/types';
@@ -264,6 +265,45 @@ describe('signing out', () => {
     ).signOut('everywhere');
     expect(asked).toEqual(['everywhere']);
     expect(client.getQueryCache().getAll()).toHaveLength(0);
+  });
+});
+
+describe('signing in by a link (D-138 §4)', () => {
+  test('spends it, then forgets whoever this page held: the cache, and the drafts kept by conversation', async () => {
+    const { client } = world();
+    client.setQueryData(keys.me, { user, memberships: [] });
+    const storage = memoryStorage({ 'purlay.draft.a': 'theirs', 'purlay.theme': 'dark' });
+    const spent: string[] = [];
+    await createActions(
+      anApi({
+        consumeEmailSignIn: (token) => {
+          spent.push(token);
+          return Promise.resolve();
+        },
+      }),
+      client,
+      storage,
+    ).signInByLink('a'.repeat(64));
+    expect(spent).toEqual(['a'.repeat(64)]);
+    expect(client.getQueryCache().getAll()).toHaveLength(0);
+    expect(Object.keys(storage.data)).toEqual(['purlay.theme']);
+  });
+
+  test('a refused link forgets nothing', async () => {
+    const { client } = world();
+    client.setQueryData(keys.me, { user, memberships: [] });
+    const storage = memoryStorage({ 'purlay.draft.a': 'mine' });
+    const refusal = new ApiError(404, 'SIGN_IN_LINK_NOT_FOUND', 'no');
+    const thrown = await createActions(
+      anApi({ consumeEmailSignIn: () => Promise.reject(refusal) }),
+      client,
+      storage,
+    )
+      .signInByLink('a'.repeat(64))
+      .catch((caught: unknown) => caught);
+    expect(thrown).toBe(refusal);
+    expect(client.getQueryCache().getAll().length).toBeGreaterThan(0);
+    expect(Object.keys(storage.data)).toEqual(['purlay.draft.a']);
   });
 });
 

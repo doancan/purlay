@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: signing in by email, on the screen (D-138, closes #81)
+
+- The sign-in card offers a link by email under GitHub where the server sends mail, and says the same
+  thing whatever the address. The link opens a page that shows whose it is and signs in only on
+  **Sign in**; an invitation in hand travels in the link, so the new tab still lands on it.
+
 ### Feature — 2026-10-14: using a sign-in link (D-138, part of #81)
 
 - `POST /auth/email/preview` says which address a link was sent to without spending it, and

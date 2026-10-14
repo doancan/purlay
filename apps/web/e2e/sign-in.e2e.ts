@@ -28,6 +28,39 @@ test.describe('the sign-in screen', () => {
     await expect(page).toHaveScreenshot('sign-in.png');
   });
 
+  test('offers no email form where the server sends no mail, as the demo does not', async ({
+    page,
+  }) => {
+    const methods = page.waitForResponse('**/api/auth/methods');
+    await page.goto('/sign-in');
+    expect(await (await methods).json()).toEqual({ email: false });
+    await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
+    await expect(page.getByRole('textbox')).toHaveCount(0);
+  });
+
+  /**
+   * A sign-in link against the real API (D-138 §4): the token leaves the address as the page reads
+   * it, and one the server has never made is the same sentence as a used one, with the way back.
+   */
+  test('a sign-in link that does not open says so, with the token gone from the address', async ({
+    page,
+    expectNoAxe,
+  }) => {
+    const preview = page.waitForResponse('**/auth/email/preview');
+    await page.goto(`/sign-in/email#${'a'.repeat(64)}`);
+    expect((await preview).status()).toBe(404);
+    await expect(
+      page.getByText('This link has been used or has expired — ask for a new one.'),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/sign-in\/email$/);
+    await expectNoAxe();
+    await page.getByRole('button', { name: 'Back to sign in' }).click();
+    await expect(page).toHaveURL(/\/sign-in$/);
+
+    await page.goto('/sign-in/email');
+    await expect(page.getByText(/This link is not complete/)).toBeVisible();
+  });
+
   test('says why they are here when the session ended or the round trip failed', async ({
     page,
   }) => {

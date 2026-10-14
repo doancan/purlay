@@ -14,6 +14,12 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   me: unexpected('me'),
   workspaces: unexpected('workspaces'),
   createWorkspace: unexpected('createWorkspace'),
+  // The sign-in card asks on every visit, so a test of anything that lands there need not say so:
+  // GitHub alone, as a server without mail answers. A test of email sign-in says otherwise.
+  authMethods: () => Promise.resolve({ email: false }),
+  requestEmailSignIn: unexpected('requestEmailSignIn'),
+  previewEmailSignIn: unexpected('previewEmailSignIn'),
+  consumeEmailSignIn: unexpected('consumeEmailSignIn'),
   previewInvitation: unexpected('previewInvitation'),
   acceptInvitation: unexpected('acceptInvitation'),
   createInvitation: unexpected('createInvitation'),

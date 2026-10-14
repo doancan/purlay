@@ -12,7 +12,7 @@
  *   past it nothing is made or sent, and the log says so without the address.
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
-import type { EmailSignInRequest } from '@purlay/types';
+import { SIGN_IN_LINK_TTL_MINUTES, type EmailSignInRequest } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
@@ -22,7 +22,7 @@ import { BROADCAST_NAMES } from '@purlay/markdown';
 import { availableUsername } from './identity';
 
 /** How long a link opens. */
-export const SIGN_IN_LINK_TTL_MS = 15 * 60_000;
+export const SIGN_IN_LINK_TTL_MS = SIGN_IN_LINK_TTL_MINUTES * 60_000;
 /** How many links an address may be sent in an hour (O-4: provisional). */
 export const SIGN_IN_LINKS_PER_HOUR = 5;
 
@@ -54,7 +54,7 @@ const WORDS = {
   en: {
     linkSubject: 'Your sign-in link for Purlay',
     link: (url: string): string =>
-      `Open this link to sign in to Purlay. It works once, for fifteen minutes:\n\n${url}\n\n` +
+      `Open this link to sign in to Purlay. It works once, for ${String(SIGN_IN_LINK_TTL_MINUTES)} minutes:\n\n${url}\n\n` +
       'If you did not ask for it, nobody can use it without this mailbox; you can ignore it.',
     githubSubject: 'Signing in to Purlay',
     github: (url: string): string =>
@@ -65,7 +65,7 @@ const WORDS = {
   tr: {
     linkSubject: 'Purlay giriş bağlantın',
     link: (url: string): string =>
-      `Purlay’a girmek için bu bağlantıyı aç. Bir kez ve on beş dakika boyunca çalışır:\n\n${url}\n\n` +
+      `Purlay’a girmek için bu bağlantıyı aç. Bir kez ve ${String(SIGN_IN_LINK_TTL_MINUTES)} dakika boyunca çalışır:\n\n${url}\n\n` +
       'Sen istemediysen, bu posta kutusu olmadan kimse kullanamaz; görmezden gelebilirsin.',
     githubSubject: 'Purlay’a giriş',
     github: (url: string): string =>
@@ -144,7 +144,8 @@ export const requestSignInLink = async (
       token_hash: await tokenDigest(token),
     })
     .execute();
-  const url = `${appUrl}/sign-in/email#${token}`;
+  // The fragment is `<token>` or `<token>.<invitation>`: neither reaches a server's log (§4).
+  const url = `${appUrl}/sign-in/email#${token}${input.invitation === undefined ? '' : `.${input.invitation}`}`;
   return message(email, words.linkSubject, words.link(url), url);
 };
 

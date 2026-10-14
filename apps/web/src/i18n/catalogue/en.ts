@@ -58,6 +58,23 @@ export const en = {
   'signIn.failed': 'Sign-in did not finish — try again.',
   'signIn.ended': 'Your session ended. Sign in again to carry on.',
   'signIn.scope': 'Purlay asks GitHub for your name, username and email, and nothing else.',
+  'signIn.email.label': 'Email address',
+  'signIn.email.submit': 'Email me a sign-in link',
+  'signIn.email.sent':
+    'If {email} can sign in by email, a link is on its way. It works once, for {minutes} minutes.',
+  'signIn.email.another': 'Use another address',
+  'signIn.email.invalid': 'That is not an email address.',
+  'signIn.email.unavailable': 'This server does not sign in by email — continue with GitHub.',
+  'signIn.email.failed': 'The link could not be asked for.',
+  'signIn.link.as': 'You are signing in as {email}.',
+  'signIn.link.replaces':
+    'You are signed in on this page as {current}; this link signs you in instead.',
+  'signIn.link.submit': 'Sign in',
+  'signIn.link.missing':
+    'This link is not complete — open it again from your email, or ask for a new one.',
+  'signIn.link.notFound': 'This link has been used or has expired — ask for a new one.',
+  'signIn.link.failed': 'Signing in did not finish.',
+  'signIn.link.back': 'Back to sign in',
 
   // ── Workspace and sidebar ───────────────────────────────────────────────
   'sidebar.label': 'Workspace',

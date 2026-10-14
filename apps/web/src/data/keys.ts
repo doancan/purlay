@@ -9,6 +9,10 @@
  */
 export const keys = {
   me: ['me'] as const,
+  /** Which ways in this server offers (D-138 §6). */
+  authMethods: ['auth-methods'] as const,
+  /** A sign-in link's address, read before it is spent (D-138 §4). */
+  emailSignIn: (token: string) => ['email-sign-in', token] as const,
   members: (workspaceId: string) => ['members', workspaceId] as const,
   channelMembers: (channelId: string) => ['channel-members', channelId] as const,
   channels: (workspaceId: string) => ['channels', workspaceId] as const,
