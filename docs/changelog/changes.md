@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: every mutation entry still proves its guard, checked on every verify (#584)
+
+- Seven entries of `scripts/mutations.ts` had gone stale as the code they guard moved; they are
+  repaired, and `scripts/mutations.test.ts` now fails the build the moment an entry stops applying to
+  exactly one place, or names a test that is gone.
+
 ### Feature — 2026-10-14: an incident's runbook and postmortem (D-137 §3, §5, part of #487)
 
 - An incident carries the runbook it follows, an https link anyone in the channel sets or clears, and
