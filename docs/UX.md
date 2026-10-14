@@ -86,8 +86,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
-- **On a narrow window** the Files and Pinned messages controls are one menu, **Files and pinned
-  messages**, so the channel's name keeps its room in the header.
+- **On a narrow window** the Files and Pinned messages controls, and the channel's star, are one
+  menu, **Channel menu**, so the channel's name keeps its room in the header.
 - **A conversation with one other person** is headed by them: their name, which opens their
   **profile** in the same place — name, handle, title, status line, the time where they are and its
   zone — and, on a wide window, their local time and status beside the name (D-131). **Your profile…**

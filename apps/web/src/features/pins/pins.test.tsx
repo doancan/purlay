@@ -540,7 +540,7 @@ describe('the Pins panel', () => {
 
   test('chosen from the header’s menu — the one a narrow window shows — it opens and takes focus', async () => {
     const view = await mountChannel({ messages: page([first]) });
-    await person().click(view.getByRole('button', { name: 'Files and pinned messages' }));
+    await person().click(view.getByRole('button', { name: 'Channel menu' }));
     await person().click(await view.findByRole('menuitem', { name: 'Pinned messages' }));
     await settle();
     expectFocusOn(within(panelOf(view)).getByRole('heading', { name: /Pinned/ }));
@@ -552,7 +552,7 @@ describe('the Pins panel', () => {
       messages: page([first]),
       api: { files: () => Promise.resolve({ data: [], nextCursor: null }) },
     });
-    await person().click(view.getByRole('button', { name: 'Files and pinned messages' }));
+    await person().click(view.getByRole('button', { name: 'Channel menu' }));
     await person().click(await view.findByRole('menuitem', { name: 'Files in this channel' }));
     await settle();
     expectFocusOn(
@@ -565,13 +565,13 @@ describe('the Pins panel', () => {
 
   test('a menu closed without a choice gives focus back to its button', async () => {
     const view = await mountChannel({ messages: page([first]) });
-    const menu = view.getByRole('button', { name: 'Files and pinned messages' });
+    const menu = view.getByRole('button', { name: 'Channel menu' });
     await person().click(menu);
     await view.findByRole('menuitem', { name: 'Pinned messages' });
     await person().keyboard('{Escape}');
     await settle();
     expect(view.queryByRole('complementary', { name: /^Pinned|^Files/ })).toBeNull();
-    expectFocusOn(view.getByRole('button', { name: 'Files and pinned messages' }));
+    expectFocusOn(view.getByRole('button', { name: 'Channel menu' }));
     view.unmountAll();
   });
 

@@ -64,6 +64,7 @@ export const tr = {
   'sidebar.switch': 'Çalışma alanını değiştir',
   'sidebar.questions': 'Açık sorular',
   'sidebar.starred': 'Yıldızlı',
+  'star.unstar': 'Yıldızlılardan çıkar',
   'star.label': 'Bu kanalı yıldızla',
   'star.failed': 'Kanal yıldızlanmadı.',
   'star.unstarFailed': 'Yıldız kaldırılmadı.',
@@ -308,7 +309,7 @@ export const tr = {
   'message.reacted': 'Tepki verildi',
   'message.reply': 'Yanıtla',
   'message.edited': 'düzenlendi',
-  'panels.menu': 'Dosyalar ve pinli mesajlar',
+  'panels.menu': 'Kanal menüsü',
   'profile.menu': 'Profilin…',
   'profile.title': 'Profilin',
   'profile.description':

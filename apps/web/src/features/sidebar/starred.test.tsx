@@ -120,6 +120,26 @@ describe('starring a channel', () => {
     view.unmount();
   });
 
+  test('from the header’s menu — where a narrow window keeps it — it stars and lets go', async () => {
+    const asked: boolean[] = [];
+    const view = await open({
+      star: (_channelId, starred) => {
+        asked.push(starred);
+        return Promise.resolve();
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'Channel menu' }));
+    await person().click(await view.findByRole('menuitem', { name: 'Star this channel' }));
+    await settle();
+    expect(listed(view, 'Starred')).toEqual(['api']);
+    await person().click(view.getByRole('button', { name: 'Channel menu' }));
+    await person().click(await view.findByRole('menuitem', { name: 'Remove from starred' }));
+    await settle();
+    expect(view.queryByRole('navigation', { name: 'Starred' })).toBeNull();
+    expect(asked).toEqual([true, false]);
+    view.unmount();
+  });
+
   test('a channel the person can see and is not in has no star', async () => {
     const view = await open({}, `/w/acme/c/${IDS.browse}`);
     expect(view.queryByRole('button', { name: 'Star this channel' })).toBeNull();

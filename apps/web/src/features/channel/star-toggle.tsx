@@ -17,18 +17,14 @@ import { cn } from '../../ui/cn';
 import { IconButton } from '../../ui/icon-button';
 import { useToast } from '../../ui/toast';
 
-export const StarToggle = ({
-  channel,
-}: {
-  readonly channel: Channel;
-}): React.JSX.Element | null => {
+/** Star or let go of a channel, painted at once and put back when refused; null for a non-member. */
+export const useStar = (channel: Channel): ((starred: boolean) => void) | null => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
   const { show } = useToast();
   const describe = useDescribeFailure();
   if (channel.state === null) return null;
-
   const set = (starred: boolean): void => {
     channelStarred(client, channel.id, starred);
     api.star(channel.id, starred).catch((failure: unknown) => {
@@ -46,13 +42,24 @@ export const StarToggle = ({
       });
     });
   };
+  return set;
+};
 
+/** On a wide window: its own button. On a narrow one it is in the header's menu (`panel-controls.tsx`). */
+export const StarToggle = ({
+  channel,
+}: {
+  readonly channel: Channel;
+}): React.JSX.Element | null => {
+  const { t } = useI18n();
+  const set = useStar(channel);
+  if (set === null) return null;
   return (
     <IconButton
       label={t('star.label')}
       glyph="star"
       aria-pressed={channel.starred}
-      className={cn(channel.starred && 'text-accent-text')}
+      className={cn('max-narrow:hidden', channel.starred && 'text-accent-text')}
       onClick={() => {
         set(!channel.starred);
       }}

@@ -22,6 +22,7 @@ const channel = {
   lastMessageAt: null,
   state,
   notificationLevel: 'mentions',
+  starred: false,
   peer: null,
   peers: [],
 };
@@ -186,6 +187,16 @@ describe('the endpoints', () => {
     expect(list.calls.map((call) => [call.method, call.url])).toEqual([
       ['GET', `/api/channels/${ID}/files`],
       ['GET', `/api/channels/${ID}/files?before=f1`],
+    ]);
+  });
+
+  test('a star on a channel, and letting it go (D-132)', async () => {
+    const call = harness(null);
+    await call.api.star(ID, true);
+    await call.api.star(ID, false);
+    expect(call.calls.map((c) => [c.method, c.url])).toEqual([
+      ['PUT', `/api/channels/${ID}/star`],
+      ['DELETE', `/api/channels/${ID}/star`],
     ]);
   });
 

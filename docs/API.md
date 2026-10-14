@@ -163,7 +163,8 @@ carries.
 | ○ | `POST` | `/api/channels/:channelId/leave` | member — `204`; the caller's sockets are sent `ACCESS_REVOKED` with `reason: "left"`. Not in it is `204` again, told nothing. The last member of a private channel is `409 LAST_CHANNEL_MEMBER`; a direct message `404 CHANNEL_NOT_FOUND` (D-123) |
 | ○ | `GET` | `/api/channels/:channelId/members` | member — a `ChannelMemberList`, first to join first; anybody who can see the channel (D-123) |
 | ○ | `PUT` | `/api/channels/:channelId/read` | member — `{ lastReadMessageId }` (invariants I-3, I-6) |
-| ○ | `PUT` | `/api/channels/:channelId/star` | Member only — stars the channel for the caller; `DELETE` lets the star go. `204`, idempotent. The caller's own row; a channel they are not in, public or not, is `404 CHANNEL_NOT_FOUND`. On the channel as `starred`, false for a non-member. A change sends `CHANNELS_UPDATED` to the caller's own sockets (D-132) |
+| ○ | `PUT` | `/api/channels/:channelId/star` | Member only — stars the channel for the caller. `204`, idempotent. The caller's own row; a channel they are not in, public or not, is `404 CHANNEL_NOT_FOUND`. On the channel as `starred`, false for a non-member. A change sends `CHANNELS_UPDATED` to the caller's own sockets (D-132) |
+| ○ | `DELETE` | `/api/channels/:channelId/star` | Member only — lets the caller's star go. `204`, idempotent; `404 CHANNEL_NOT_FOUND` as for `PUT`; `CHANNELS_UPDATED` on a change (D-132) |
 | ○ | `PUT` | `/api/channels/:channelId/notification-level` | Member only — `{ level }`, `all` \| `mentions` \| `none` (`SetNotificationLevelRequest`); `204`. The caller's own row; a channel they are not in, public or not, is `404 CHANNEL_NOT_FOUND`. From the next message on; the level is on the channel as `notificationLevel`, null for a non-member (D-107) |
 
 Creating a DM is idempotent: the same pair returns the same channel, never a second one — and so it is

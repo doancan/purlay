@@ -113,6 +113,11 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/notification-level.ts#setNotificationLevel': {
     none: 'sets what an existing member is told about; nobody gains or loses sight of a channel (#52)',
   },
+  // A star is a member's own mark on their membership: it changes where the channel is listed for
+  // them, not who may see it (D-132).
+  'apps/api/src/modules/channels/star.ts#setStarred': {
+    none: 'marks an existing member’s own row; nobody gains or loses sight of a channel (#489)',
+  },
   // Reading the inbox recounts the mention badge of the channels it touched. It changes no
   // membership, so nobody's access moves (D-106, #58).
   'apps/api/src/modules/notifications/notifications.ts#readNotifications': {

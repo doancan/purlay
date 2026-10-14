@@ -170,7 +170,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
         </Link>
       </nav>
       {!direct && <StarToggle channel={channel} />}
-      <PanelControls direct={direct} />
+      <PanelControls direct={direct} channel={channel} />
       <NotificationLevelMenu channel={channel} />
       {canAdd && (
         <>

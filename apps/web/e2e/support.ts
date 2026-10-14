@@ -280,7 +280,7 @@ export const openPanel = async (
   name: 'Files in this channel' | 'Pinned messages',
 ): Promise<void> => {
   if (isNarrow(page)) {
-    await page.getByRole('button', { name: 'Files and pinned messages' }).click();
+    await page.getByRole('button', { name: 'Channel menu' }).click();
     await page.getByRole('menuitem', { name }).click();
   } else {
     await page.getByRole('button', { name }).click();
