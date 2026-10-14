@@ -23,6 +23,7 @@
     "check:docs": "python3 scripts/check-docs.py",
     "check:licenses": "bun run scripts/check-licenses.ts",
     "check:pr": "bun run scripts/check-pr.ts",
+    "check:cla": "bun run scripts/check-cla.ts",
     "config:example": "bun run apps/api/src/cli/write-env-example.ts",
     "db:check": "./scripts/check-schema.sh",
     "db:down": "docker compose down",

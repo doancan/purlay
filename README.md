@@ -88,7 +88,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 144 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 145 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |
@@ -133,5 +133,7 @@ AI contributors alike.
 service, publish your changes. Running it inside your own company creates no obligation at all.
 
 Outside contributions require a CLA, so that the project can keep offering a commercial licence to
-teams whose policies do not permit AGPL. Reasoning, and the alternatives rejected, in
-[`docs/DECISIONS.md`](docs/DECISIONS.md) D-24.
+teams whose policies do not permit AGPL: [`CLA.md`](CLA.md) is the agreement, and you sign it by
+adding yourself to `.github/cla-signatures.json` in your first pull request; you keep the copyright
+in what you write. Reasoning, and the alternatives rejected, in [`docs/DECISIONS.md`](docs/DECISIONS.md)
+D-24 and D-145.

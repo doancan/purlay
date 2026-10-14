@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-14: the contributor licence agreement, and the check that holds it (D-145, closes #122)
+
+- `CLA.md` is the agreement, adapted from the Apache Individual CLA. It is a licence grant, so the
+  contributor keeps their copyright. A contributor signs by adding themselves to
+  `.github/cla-signatures.json` in their own pull request. `bun run check:cla` runs in the pipeline
+  and refuses a pull request whose author has not signed, or that signs for somebody else. README and
+  CONTRIBUTING say so.
+
 ### Feature — 2026-10-14: the production stack comes up with one command (D-144, closes #76)
 
 - `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait` is now the

@@ -383,6 +383,11 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 
 ## 8. Git
 
+- **Outside contributions are under the contributor licence agreement** ([`CLA.md`](CLA.md),
+  D-24, D-145): sign it by adding yourself to `.github/cla-signatures.json` in your first pull
+  request, under your own account. `bun run check:cla <number>` runs in the pipeline, and a pull
+  request whose author has not signed, or that signs for somebody else, cannot be merged.
+
 - **Branches:** `feat/`, `fix/`, `chore/`, `refactor/`, `docs/` — the same words as the
   commit type below, so a branch and its commits do not use two vocabularies for one idea.
   Checked by `bun run check:branch`, which runs in `verify` and in the pipeline.
