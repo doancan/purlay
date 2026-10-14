@@ -5,7 +5,8 @@
 import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
 import { ApiError, isApiError, isTransient } from './errors';
-import { createHttp, type Http, type UploadRequest } from './http';
+import { WRITE_DEADLINE_MS, createHttp, type Http, type UploadRequest } from './http';
+import { fakeSchedule } from '../testing/fakes';
 
 const answer = (status: number, body: unknown): Response =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -317,5 +318,80 @@ describe('an upload', () => {
     } finally {
       Object.defineProperty(globalThis, 'XMLHttpRequest', { value: original, configurable: true });
     }
+  });
+});
+
+describe('a write the network never answers (#604)', () => {
+  /** A `fetch` that answers only when told, and gives up as the browser does when aborted. */
+  const hanging = (): {
+    readonly fetchFn: (url: string, init: RequestInit) => Promise<Response>;
+    readonly answer: () => void;
+  } => {
+    let answer: () => void = () => undefined;
+    const fetchFn = (_url: string, init: RequestInit): Promise<Response> =>
+      new Promise<Response>((resolve, reject) => {
+        answer = (): void => {
+          resolve(new Response(JSON.stringify({ id: 'a' }), { status: 200 }));
+        };
+        init.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      });
+    return {
+      fetchFn,
+      answer: (): void => {
+        answer();
+      },
+    };
+  };
+
+  test('is given up at its deadline as NETWORK — the failure every action already retries', async () => {
+    const time = fakeSchedule();
+    const { fetchFn } = hanging();
+    const client = createHttp(fetchFn, undefined, time.schedule);
+    let outcome: unknown = 'pending';
+    void client.request('POST', '/x', Thing).then(
+      () => (outcome = 'answered'),
+      (error: unknown) => (outcome = error),
+    );
+    time.advance(WRITE_DEADLINE_MS - 1);
+    await Promise.resolve();
+    expect(outcome).toBe('pending');
+    time.advance(1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcome).toMatchObject({ status: 0, code: 'NETWORK' });
+    expect(isTransient(outcome)).toBe(true);
+  });
+
+  test('answered in time, its deadline is let go', async () => {
+    const time = fakeSchedule();
+    const { fetchFn, answer } = hanging();
+    const client = createHttp(fetchFn, undefined, time.schedule);
+    const sent = client.request('PUT', '/x', Thing);
+    expect(time.pending()).toBe(1);
+    answer();
+    expect(await sent).toEqual({ id: 'a' });
+    expect(time.pending()).toBe(0);
+  });
+
+  test('a read is not bounded here: its query owns its signal', async () => {
+    const time = fakeSchedule();
+    const { fetchFn, answer } = hanging();
+    const client = createHttp(fetchFn, undefined, time.schedule);
+    const read = client.request('GET', '/x', Thing);
+    expect(time.pending()).toBe(0);
+    answer();
+    expect(await read).toEqual({ id: 'a' });
+  });
+
+  test('the caller’s own signal still stops a write', async () => {
+    const time = fakeSchedule();
+    const { fetchFn } = hanging();
+    const client = createHttp(fetchFn, undefined, time.schedule);
+    const stop = new AbortController();
+    const sent = client.send('DELETE', '/x', { signal: stop.signal }).catch((e: unknown) => e);
+    stop.abort();
+    expect(await sent).toMatchObject({ code: 'NETWORK' });
+    expect(time.pending()).toBe(0);
   });
 });

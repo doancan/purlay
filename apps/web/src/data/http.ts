@@ -14,6 +14,8 @@
 import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody } from '@purlay/types';
 import type { Static, TSchema } from '@sinclair/typebox';
+import type { Schedule } from '../realtime/connection';
+import { browserSchedule } from '../realtime/socket';
 import { ApiError } from './errors';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -132,12 +134,48 @@ const answerOf = <S extends TSchema>(status: number, text: string, schema: S): S
 /** The part of `fetch` this client uses; the browser's satisfies it, and so does a test's. */
 export type FetchPort = (input: string, init: RequestInit) => Promise<Response>;
 
+/**
+ * How long a write may go unanswered before it is given up as `NETWORK` (#604) — the failure every
+ * action already says and offers to retry. Without it a request the network never answers holds an
+ * action that sends one at a time (Save, Pin) until the page is reloaded. A read is not bounded here:
+ * its query owns its signal. An upload neither: it says its progress, and a large one is slow, not lost.
+ */
+export const WRITE_DEADLINE_MS = 30_000;
+
 export const createHttp = (
   fetchFn: FetchPort,
   // Looked up when an upload is made, not when the client is: the build prerenders with no window.
   newUpload: () => UploadRequest = () => new XMLHttpRequest(),
+  // The timers a write's deadline runs on: the browser's, or a test's that moves when told.
+  schedule: Schedule = browserSchedule,
 ): Http => {
-  const call = async (method: Method, path: string, options: RequestOptions): Promise<Response> => {
+  /** The answer, read whole: a deadline holds until the last byte, not only the headers. */
+  const call = async (
+    method: Method,
+    path: string,
+    options: RequestOptions,
+  ): Promise<{ readonly status: number; readonly text: string }> => {
+    if (method === 'GET') return await exchange(method, path, options, options.signal);
+    const deadline = new AbortController();
+    const forward = (): void => {
+      deadline.abort();
+    };
+    options.signal?.addEventListener('abort', forward);
+    const cancel = schedule(forward, WRITE_DEADLINE_MS);
+    try {
+      return await exchange(method, path, options, deadline.signal);
+    } finally {
+      cancel();
+      options.signal?.removeEventListener('abort', forward);
+    }
+  };
+
+  const exchange = async (
+    method: Method,
+    path: string,
+    options: RequestOptions,
+    signal: AbortSignal | undefined,
+  ): Promise<{ readonly status: number; readonly text: string }> => {
     const hasBody = options.body !== undefined;
     const sent: { type: string; body: BodyInit } | null =
       options.bytes !== undefined
@@ -155,13 +193,19 @@ export const createHttp = (
           ...(sent === null ? {} : { 'content-type': sent.type }),
         },
         ...(sent === null ? {} : { body: sent.body }),
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        ...(signal === undefined ? {} : { signal }),
       });
     } catch (cause) {
       throw new ApiError(0, 'NETWORK', 'The request did not reach the server.', {}, cause);
     }
-    if (!response.ok) throw failureOf(response.status, await response.text());
-    return response;
+    let text: string;
+    try {
+      text = await response.text();
+    } catch (cause) {
+      throw new ApiError(0, 'NETWORK', 'The answer stopped before it was whole.', {}, cause);
+    }
+    if (!response.ok) throw failureOf(response.status, text);
+    return { status: response.status, text };
   };
 
   return {
@@ -171,8 +215,8 @@ export const createHttp = (
       schema: S,
       options: RequestOptions = {},
     ): Promise<Static<S>> => {
-      const response = await call(method, path, options);
-      return answerOf(response.status, await response.text(), schema);
+      const { status, text } = await call(method, path, options);
+      return answerOf(status, text, schema);
     },
     send: async (method: Method, path: string, options: RequestOptions = {}): Promise<void> => {
       await call(method, path, options);
