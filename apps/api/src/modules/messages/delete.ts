@@ -103,6 +103,8 @@ export const removeMessage = async (
   await executor.deleteFrom('mentions').where('message_id', '=', messageId).execute();
   // Nor is it kept at hand for the channel: its pin goes with its words (D-130).
   await executor.deleteFrom('pinned_messages').where('message_id', '=', messageId).execute();
+  // Nor what it said before an edit: a tombstone's history would keep its words readable (D-135 §4).
+  await executor.deleteFrom('message_versions').where('message_id', '=', messageId).execute();
   // Somebody else's message removed is moderation, and on the trail: who, which message and whose —
   // never what it said, which is gone from the row as well (D-26).
   if (row.sender_id !== userId) {

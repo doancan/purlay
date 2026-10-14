@@ -69,6 +69,8 @@ export interface Ids {
   readonly invitationId: string;
   /** A repository's feed into the channel: what disconnecting acts on. */
   readonly feedId: string;
+  /** An earlier version of the message: what removing one acts on. */
+  readonly versionId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -90,6 +92,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
     if (name === 'feedId') return ids.feedId;
+    if (name === 'versionId') return ids.versionId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -283,6 +286,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: MESSAGE,
   },
   'DELETE /api/messages/:messageId': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    visibility: MESSAGE_BY_AUTHOR,
+  },
+  'GET /api/messages/:messageId/versions': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'DELETE /api/messages/:messageId/versions/:versionId': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE_BY_AUTHOR,
   },

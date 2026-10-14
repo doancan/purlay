@@ -377,6 +377,17 @@ export const PinsUpdatedFrame = Type.Object({
 });
 
 /**
+ * A message's earlier versions changed without its words changing (D-135 §5): its author removed one.
+ * On the channel's topic; it carries no version, and a client with the history open reads it again,
+ * so words taken out of the history leave every screen that shows it.
+ */
+export const MessageVersionsUpdatedFrame = Type.Object({
+  event: Type.Literal('MESSAGE_VERSIONS_UPDATED'),
+  data: Type.Object({ channelId: Uuid, messageId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A channel's name or topic changed (D-123). The whole of both, so a client replaces what it holds;
  * on the channel's topic, at the channel row's version, and a client drops one older than what it
  * has applied — two renames published from different requests can arrive in either order.
@@ -441,6 +452,7 @@ export const ServerFrame = Type.Union([
   DeepWorkUpdatedFrame,
   SavedUpdatedFrame,
   PinsUpdatedFrame,
+  MessageVersionsUpdatedFrame,
   ChannelsUpdatedFrame,
   TypingServerFrame,
   WorkspaceUpdatedFrame,

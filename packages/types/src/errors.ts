@@ -53,6 +53,8 @@ export const ErrorCode = Type.Union([
    * what the caller must not be able to learn.
    */
   Type.Literal('MESSAGE_NOT_FOUND'),
+  /** An earlier version of a message that is not there, or not this message's (D-135). */
+  Type.Literal('MESSAGE_VERSION_NOT_FOUND'),
   /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
   Type.Literal('USER_NOT_FOUND'),
   // Conflict
@@ -152,6 +154,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WORKSPACE_NOT_FOUND: 404,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
+  MESSAGE_VERSION_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,

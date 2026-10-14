@@ -33,6 +33,30 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'versions-not-kept',
+    why: 'an edit replaces the words and keeps nothing of what they were',
+    file: 'apps/api/src/modules/messages/edit.ts',
+    find: '  await keepVersion(executor, context, messageId, row.content, now);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/messages/versions.integration.test.ts'],
+  },
+  {
+    id: 'versions-outlive-delete',
+    why: 'a deleted message’s earlier words stay readable in its history',
+    file: 'apps/api/src/modules/messages/delete.ts',
+    find: "  await executor.deleteFrom('message_versions').where('message_id', '=', messageId).execute();\n",
+    replace: '',
+    tests: ['apps/api/src/modules/messages/versions.integration.test.ts'],
+  },
+  {
+    id: 'versions-unbounded',
+    why: 'one message edited without end grows its history without end',
+    file: 'apps/api/src/modules/messages/versions.ts',
+    find: '        .limit(MESSAGE_VERSIONS_KEPT),\n',
+    replace: '        .limit(MESSAGE_VERSIONS_KEPT * 2),\n',
+    tests: ['apps/api/src/modules/messages/versions.integration.test.ts'],
+  },
+  {
     id: 'webhook-another-repository-posts',
     why: 'a feed’s secret pasted into another repository’s hook posts that repository into the channel',
     file: 'apps/api/src/modules/integrations/webhook.ts',

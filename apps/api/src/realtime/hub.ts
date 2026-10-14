@@ -221,6 +221,7 @@ const channelOf = (frame: ServerFrame): string | null => {
     case 'CHANNEL_STATE':
     case 'CHANNEL_UPDATED':
     case 'PINS_UPDATED':
+    case 'MESSAGE_VERSIONS_UPDATED':
     case 'TYPING':
       return frame.data.channelId;
     // An invitation into a channel, not news from one: a later revocation follows it in order.

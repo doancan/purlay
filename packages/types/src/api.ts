@@ -796,3 +796,23 @@ export const WebhookAnswer = Type.Object({
   ]),
 });
 export type WebhookAnswer = Static<typeof WebhookAnswer>;
+
+// ── A message's earlier versions (#82, D-135) ───────────────────────────────
+
+/** How many earlier versions of one message are kept: past it, the oldest goes (D-135 §3). */
+export const MESSAGE_VERSIONS_KEPT = 100;
+
+/**
+ * What a message said before an edit, and when that edit replaced it. The message itself is its
+ * current version; this is what came before, the latest first.
+ */
+export const MessageVersion = Type.Object({
+  id: Uuid,
+  content: Type.String(),
+  replacedAt: Timestamp,
+});
+export type MessageVersion = Static<typeof MessageVersion>;
+
+/** `GET /api/messages/:messageId/versions` — newest first, keyset on the version's id. */
+export const MessageVersionPage = Page(MessageVersion);
+export type MessageVersionPage = Static<typeof MessageVersionPage>;
