@@ -1190,7 +1190,8 @@ CREATE TABLE audit_log (
     -- purge that would erase the audit trail fail loudly.
     workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
 
-    -- NULL once the actor is erased (D-27). What was done survives who did it.
+    -- Kept when the actor is erased: their row stays, anonymised (D-139 §5). What was
+    -- done survives who did it.
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
 
     -- Stable machine-readable verb: 'member.role_changed', 'integration.token_set',
@@ -1321,7 +1322,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
-| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry. | `retention.service` |
+| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `retention.service` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the

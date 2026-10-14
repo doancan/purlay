@@ -310,8 +310,8 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'versions-outlive-delete',
     why: 'a deleted message’s earlier words stay readable in its history',
-    file: 'apps/api/src/modules/messages/delete.ts',
-    find: "  await executor.deleteFrom('message_versions').where('message_id', '=', messageId).execute();\n",
+    file: 'apps/api/src/modules/messages/tombstone.ts',
+    find: "    await executor.deleteFrom('message_versions').where('message_id', 'in', removed).execute();\n",
     replace: '',
     tests: ['apps/api/src/modules/messages/versions.integration.test.ts'],
   },
@@ -418,8 +418,8 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'pins-kept-for-deleted-messages',
     why: 'a deleted message keeps its pin, and the rows grow with every deletion',
-    file: 'apps/api/src/modules/messages/delete.ts',
-    find: "  await executor.deleteFrom('pinned_messages').where('message_id', '=', messageId).execute();\n",
+    file: 'apps/api/src/modules/messages/tombstone.ts',
+    find: "    await executor.deleteFrom('pinned_messages').where('message_id', 'in', removed).execute();\n",
     replace: '',
     tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
   },
@@ -1476,17 +1476,17 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'delete-uncounts-the-late-joiner',
     why: 'a member who joined after the message loses an unread they never had for it',
-    file: 'apps/api/src/modules/messages/delete.ts',
-    find: "    .where('joined_at', '<=', writtenAt)\n",
+    file: 'apps/api/src/modules/messages/tombstone.ts',
+    find: '        and counted.joined_at <= message.created_at\n',
     replace: '',
     tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
   },
   {
     id: 'delete-keeps-the-mention-count',
     why: 'the badge of a person a deleted message named stays up with nothing to read',
-    file: 'apps/api/src/modules/messages/delete.ts',
-    find: 'case when user_id = any(${waitedOn}::uuid[]) then 1 else 0 end',
-    replace: 'case when false then 1 else 0 end',
+    file: 'apps/api/src/modules/messages/tombstone.ts',
+    find: 'count(waited.user_id)::int as mentions',
+    replace: '0::int as mentions',
     tests: ['apps/api/src/modules/messages/delete.integration.test.ts'],
   },
   {
@@ -1804,7 +1804,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'delete-takes-notifications-before-memberships',
     why: 'a delete and a read by the person it named each hold what the other waits for, and one of them fails as a deadlock',
-    file: 'apps/api/src/modules/messages/delete.ts',
+    file: 'apps/api/src/modules/messages/tombstone.ts',
     find: "    .orderBy('user_id')\n    .forUpdate()\n",
     replace: "    .orderBy('user_id')\n",
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],

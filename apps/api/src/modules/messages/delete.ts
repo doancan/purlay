@@ -6,11 +6,10 @@
  * `removeMessage` is the rule, inside the caller's transaction; `deleteMessage` is the one way in,
  * which commits and then tells the people whose numbers moved (D-35).
  */
-import { sql, type Executor } from '@purlay/db';
+import type { Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
-import { requireMessageById, type ChannelContext } from '../../platform/channels';
+import { requireMessageById } from '../../platform/channels';
 import type { Clock } from '../../platform/clock';
-import { NEEDS_YOU } from './delivery';
 import {
   NO_LOG,
   publication,
@@ -24,6 +23,7 @@ import type { Logger } from '../../platform/logging';
 import type { Atomically } from '../../platform/transactions';
 import { requireLiveSession } from '../auth/sessions';
 import type { ChannelStateUpdate } from './delivery';
+import { takeBack, tombstoneRows } from './tombstone';
 import { recordAudit } from '../audit/audit';
 
 /** Who may delete somebody else's message: the people who run the workspace (D-103 §7). */
@@ -86,25 +86,8 @@ export const removeMessage = async (
   }
 
   const now = clock.now();
-  const tombstone = await executor
-    .updateTable('messages')
-    .set({
-      deleted_at: now,
-      updated_at: now,
-      // The tombstone: the client draws the words, in the reader's language (D-41).
-      content: '',
-      metadata: {},
-      state_version: sql<number>`state_version + 1`,
-    })
-    .where('id', '=', messageId)
-    .returning(['state_version', 'parent_id', 'edited_at'])
-    .executeTakeFirstOrThrow();
-  // Nobody is named by a message that says nothing.
-  await executor.deleteFrom('mentions').where('message_id', '=', messageId).execute();
-  // Nor is it kept at hand for the channel: its pin goes with its words (D-130).
-  await executor.deleteFrom('pinned_messages').where('message_id', '=', messageId).execute();
-  // Nor what it said before an edit: a tombstone's history would keep its words readable (D-135 §4).
-  await executor.deleteFrom('message_versions').where('message_id', '=', messageId).execute();
+  const [tombstone] = await tombstoneRows(executor, now, [messageId]);
+  if (tombstone === undefined) throw new Error('a locked, live message was not tombstoned');
   // Somebody else's message removed is moderation, and on the trail: who, which message and whose —
   // never what it said, which is gone from the row as well (D-26).
   if (row.sender_id !== userId) {
@@ -119,35 +102,9 @@ export const removeMessage = async (
     });
   }
 
-  // The memberships before the notifications, in one order: reading a channel or the inbox takes
-  // them in that order too, and a delete taking them the other way round deadlocks with a person
-  // reading at that moment (D-106 §3).
-  await executor
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', context.channelId)
-    .orderBy('user_id')
-    .forUpdate()
-    .execute();
-
-  // What needed the person no longer does: kept for the inbox, read, and its count given back.
-  const waiting = await executor
-    .updateTable('notifications')
-    .set({ read_at: now })
-    .where('message_id', '=', messageId)
-    .where('read_at', 'is', null)
-    .where('type', 'in', NEEDS_YOU)
-    .returning('user_id')
-    .execute();
-
-  const recipients = await uncount(
-    executor,
-    context,
-    messageId,
-    row.sender_id,
-    new Date(row.created_at),
-    waiting.map((notification) => notification.user_id),
-  );
+  const recipients = await takeBack(executor, now, context.channelId, [
+    { id: messageId, senderId: row.sender_id, createdAt: new Date(row.created_at) },
+  ]);
   return {
     removed: true,
     channelId: context.channelId,
@@ -155,70 +112,16 @@ export const removeMessage = async (
       revision: {
         channelId: context.channelId,
         messageId,
-        parentId: tombstone.parent_id,
+        parentId: tombstone.parentId,
         content: '',
-        editedAt: tombstone.edited_at === null ? null : new Date(tombstone.edited_at).toISOString(),
+        editedAt: tombstone.editedAt === null ? null : tombstone.editedAt.toISOString(),
         deletedAt: now.toISOString(),
         mentions: [],
       },
-      version: tombstone.state_version,
+      version: tombstone.version,
     },
     recipients,
   };
-};
-
-/**
- * Takes back what the message added: one unread for each member it was counted for — not its
- * author, in the channel when it was written, with their position before it — and one unread
- * mention for each of them it was waiting on. Exactly what the send added, so the stored numbers
- * stay what a read would recount them to.
- *
- * Never below zero, and the mentions never above the unread (I-6): a message written before the
- * counters existed (0013) was never counted, and taking it back would make an author's own
- * delete a refusal by a check. The next read recounts from the rows and is exact again.
- */
-const uncount = async (
-  executor: Executor,
-  context: ChannelContext,
-  messageId: string,
-  /** Null for an event nobody wrote: it was counted for everybody (D-134 §6). */
-  senderId: string | null,
-  writtenAt: Date,
-  waitedOn: readonly string[],
-): Promise<readonly ChannelStateUpdate[]> => {
-  const changed = await executor
-    .updateTable('channel_members')
-    .set({
-      unread_count: sql<number>`greatest(unread_count - 1, 0)`,
-      unread_mention_count: sql<number>`least(
-        greatest(unread_mention_count - case when user_id = any(${waitedOn}::uuid[]) then 1 else 0 end, 0),
-        greatest(unread_count - 1, 0)
-      )`,
-      state_version: sql<number>`state_version + 1`,
-    })
-    .where('channel_id', '=', context.channelId)
-    .where((eb) => (senderId === null ? eb.lit(true) : eb('user_id', '<>', senderId)))
-    .where('joined_at', '<=', writtenAt)
-    .where((eb) =>
-      eb.or([eb('last_read_message_id', 'is', null), eb('last_read_message_id', '<', messageId)]),
-    )
-    .returning([
-      'user_id',
-      'last_read_message_id',
-      'unread_count',
-      'unread_mention_count',
-      'state_version',
-    ])
-    .execute();
-  return changed.map((member) => ({
-    userId: member.user_id,
-    state: {
-      lastReadMessageId: member.last_read_message_id,
-      unreadCount: member.unread_count,
-      unreadMentionCount: member.unread_mention_count,
-    },
-    version: member.state_version,
-  }));
 };
 
 export interface DeleteDependencies {
