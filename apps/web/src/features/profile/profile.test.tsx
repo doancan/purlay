@@ -102,6 +102,31 @@ describe('a conversation with one other person', () => {
     view.unmountAll();
   });
 
+  test('online, they have a dot by their name, said in words in the heading and the profile (D-136)', async () => {
+    const view = await withAlice();
+    const header = view.container.querySelector('header');
+    const dot = (): Element | null | undefined => header?.querySelector('[data-online]');
+    expect(dot()).toBeNull();
+    expect(header?.textContent).not.toContain('online');
+    act(() => {
+      view.engine().applyPresence([{ userId: ALICE.id, online: true, version: 1 }]);
+    });
+    expect(dot()).not.toBeNull();
+    expect(header?.textContent).toContain('online');
+    await person().click(nameOf(view));
+    await settle();
+    const panel = view.getByRole('complementary', { name: /^Profile/ });
+    expect(panel.querySelector('[data-online]')).not.toBeNull();
+    expect(within(panel).getByText('Online now')).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    act(() => {
+      view.engine().applyPresence([{ userId: ALICE.id, online: false, version: 2 }]);
+    });
+    expect(dot()).toBeNull();
+    expect(within(panel).queryByText('Online now')).toBeNull();
+    view.unmountAll();
+  });
+
   test('a zone this browser cannot format in shows no time, and the profile still names it', async () => {
     const view = await withAlice({ title: null, timeZone: 'Mars/Olympus_Mons', status: null });
     expect(view.container.querySelector('header')?.textContent).not.toContain('local time');

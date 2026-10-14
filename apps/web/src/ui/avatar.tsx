@@ -4,7 +4,8 @@
  * The tint is chosen from the username, so one person is one colour everywhere and nothing is
  * stored, fetched or able to fail to load. It is decorative — the name is always beside it — so
  * it is hidden from a screen reader, which would otherwise read the letters before the name.
- * There is no presence dot because there is no presence (`UX.md` §2).
+ * A person online has a dot in its corner (D-136); one offline or unknown has none — the words
+ * beside the name say it to a screen reader, never the dot.
  */
 import { cn } from './cn';
 
@@ -53,6 +54,8 @@ interface AvatarProps {
   readonly username: string;
   readonly size?: keyof typeof SIZES;
   readonly className?: string;
+  /** Online now (D-136): a dot in the corner. Undefined or false draws none. */
+  readonly online?: boolean | undefined;
 }
 
 export const Avatar = ({
@@ -60,17 +63,24 @@ export const Avatar = ({
   username,
   size = 'md',
   className,
+  online,
 }: AvatarProps): React.JSX.Element => (
   <span
     aria-hidden="true"
     data-avatar=""
     className={cn(
-      'inline-flex shrink-0 select-none items-center justify-center font-semibold text-ink',
+      'relative inline-flex shrink-0 select-none items-center justify-center font-semibold text-ink',
       TINTS[tintOf(username)],
       SIZES[size],
       className,
     )}
   >
     {initialsOf(name)}
+    {online === true && (
+      <span
+        data-online=""
+        className="absolute -right-1 -bottom-1 size-dot rounded-pill border-hairline border-surface-100 bg-success"
+      />
+    )}
   </span>
 );

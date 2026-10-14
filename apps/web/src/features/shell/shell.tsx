@@ -24,6 +24,7 @@ import { NotFound } from './not-found';
 import { NavProvider } from './nav';
 import { OverlayProvider } from './overlay';
 import { SidebarSlot } from './sidebar-slot';
+import { PresenceReader } from './presence-reader';
 import { TabTitle } from './tab-title';
 import { WorkspaceScopeProvider } from './workspace';
 
@@ -41,6 +42,7 @@ export const Shell = ({
           <DeepWorkProvider>
             <GlobalKeys />
             <TabTitle />
+            <PresenceReader />
             <LostSends />
             <NavProvider>
               <div className="flex h-screen bg-surface-100 text-ink">

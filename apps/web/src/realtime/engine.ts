@@ -38,6 +38,7 @@ import {
   type ClientFrame,
   type ErrorCode,
   type RevokedReason,
+  PRESENCE_GRACE_MS,
   type PresenceChange,
   type ServerFrame,
 } from '@purlay/types';
@@ -139,6 +140,12 @@ export interface RealtimeState {
     Record<string, { readonly online: boolean; readonly version: number }>
   >;
   /**
+   * Rises when what a workspace's presence was read as may have gone stale: a grace after a
+   * reconnect, when a node that restarted knows its people again (D-136 §4). Until then what was
+   * known is kept — a restart does not show the team offline.
+   */
+  readonly presenceEpoch: number;
+  /**
    * Channels that went away and why, when the server said (D-123): what a screen still showing one
    * tells the person instead of "not found".
    */
@@ -199,6 +206,8 @@ export interface Engine {
   readonly lose: (channelIds: readonly string[]) => void;
   /** What a frame or a workspace's snapshot says of who is online (D-136); older than known is kept out. */
   readonly applyPresence: (changes: readonly PresenceChange[]) => void;
+  /** These people's presence is no longer known: drawn as nothing until something is heard. */
+  readonly forgetPresence: (userIds: readonly string[]) => void;
 }
 
 const isSendAck = (
@@ -225,6 +234,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     degraded: {},
     typing: {},
     presence: {},
+    presenceEpoch: 0,
     gone: {},
     lost: null,
   }));
@@ -674,11 +684,37 @@ export const createEngine = (options: EngineOptions): Engine => {
     store.setState({ presence: next });
   };
 
+  /** The read of who is online a grace after a reconnect, while it waits. */
+  let rereadPresence: (() => void) | null = null;
+  /** Forgetting who is online, a grace into a gap: what was heard before it is no longer known. */
+  let forgetPresence: (() => void) | null = null;
+
   const onStatus = (status: ConnectionStatus): void => {
     store.setState(status === 'open' ? { status, connectedOnce: true } : { status });
-    if (status !== 'open') return;
+    if (status !== 'open') {
+      // A gap longer than the grace has missed whoever left in it: nothing is drawn, rather than the
+      // last thing heard believed for an hour. A short one keeps what it knew (D-136 §4).
+      if (opened && forgetPresence === null) {
+        forgetPresence = schedule(() => {
+          forgetPresence = null;
+          store.setState({ presence: {} });
+        }, PRESENCE_GRACE_MS);
+      }
+      return;
+    }
+    forgetPresence?.();
+    forgetPresence = null;
     // The first open is the page loading; every later one is a return from a gap.
-    if (opened || resumeOnOpen) resync();
+    if (opened || resumeOnOpen) {
+      resync();
+      // Who is online is read again once the people who were on a restarted node are back on it:
+      // once, a grace after the last of several reconnects, and never after the engine stopped.
+      rereadPresence?.();
+      rereadPresence = schedule(() => {
+        rereadPresence = null;
+        store.setState((state) => ({ presenceEpoch: state.presenceEpoch + 1 }));
+      }, PRESENCE_GRACE_MS);
+    }
     resumeOnOpen = false;
     opened = true;
   };
@@ -720,6 +756,10 @@ export const createEngine = (options: EngineOptions): Engine => {
     },
     stop: (): void => {
       connection?.stop();
+      rereadPresence?.();
+      rereadPresence = null;
+      forgetPresence?.();
+      forgetPresence = null;
       for (const cancel of timers.values()) cancel();
       timers.clear();
       // Who was typing is not known while nothing is heard; the next announcement says again.
@@ -778,6 +818,14 @@ export const createEngine = (options: EngineOptions): Engine => {
       if (find(id)?.delivery === 'failed') forget(id);
     },
     applyPresence,
+    forgetPresence: (userIds): void => {
+      const now = store.getState().presence;
+      if (!userIds.some((userId) => userId in now)) return;
+      const gone = new Set(userIds);
+      store.setState({
+        presence: Object.fromEntries(Object.entries(now).filter(([userId]) => !gone.has(userId))),
+      });
+    },
     lose: (channelIds): void => {
       dropUnsent(channelIds);
     },

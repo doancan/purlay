@@ -69,9 +69,10 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   browser blocked them, where that is undone; drawn only where the browser and the server can send
   them; the theme; the language; the shortcut reference; **Sign out**; and **Sign
   out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
-  unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar and no
-  presence dot: there is no presence to show (Phase 2, D-120), and a dot that is always one colour
-  would be a lie.
+  unread **mentions** carry a count badge. Nothing else gets a badge. A person has an avatar, and a
+  dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
+  reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
+  never a team gone offline.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
   carries the two views as a segmented control: the feed, and **open questions** with its live count,
   which is the product's argument and so is always one click away. The channel's **name opens its

@@ -6,8 +6,8 @@
  * person without one is a button that opens it — `POST …/dms` is idempotent, so pressing
  * twice, or from two tabs, lands in the same channel (I-5). The person themselves is in
  * the list, labelled "you": a direct message with yourself is the scratchpad
- * (`PRD.md` §4.3). Each has an avatar and none has a presence dot, because there is no
- * presence — drawing a dot that is always the same colour would be a lie (`UX.md` §2).
+ * (`PRD.md` §4.3). Each has an avatar, with a dot when the person is online (D-136) and "online"
+ * said beside the name to a screen reader; nothing when they are not, or nothing is known.
  *
  * Alone in a workspace, the section says so under the person's own row (`UX.md` §8), and offers an
  * owner or an admin the invite dialog the workspace menu opens; a member is not offered what the
@@ -21,6 +21,9 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
+import { VisuallyHidden } from '../../ui/visually-hidden';
+import { useOnline } from '../../realtime/realtime-provider';
+import type { User } from '@purlay/types';
 import { Button } from '../../ui/button';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
@@ -29,6 +32,36 @@ import { ActionRow, ChannelRow } from './channel-row';
 import { InviteDialog } from './invite-dialog';
 import { people } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
+
+/** A person's avatar, with the dot that says they are online (D-136). */
+const PersonAvatar = ({
+  user,
+  meId,
+}: {
+  readonly user: User;
+  readonly meId: string;
+}): React.JSX.Element => (
+  <Avatar
+    size="sm"
+    name={user.displayName}
+    username={user.username}
+    online={useOnline(user.id, meId)}
+  />
+);
+
+/** What the dot says, said to a screen reader beside the name. */
+const OnlineWords = ({
+  userId,
+  meId,
+}: {
+  readonly userId: string;
+  readonly meId: string;
+}): React.JSX.Element | null => {
+  const { t } = useI18n();
+  return useOnline(userId, meId) === true ? (
+    <VisuallyHidden>{`, ${t('presence.online')}`}</VisuallyHidden>
+  ) : null;
+};
 
 export const PeopleList = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -90,13 +123,14 @@ export const PeopleList = (): React.JSX.Element => {
                 {user.id === me.id ? (
                   <span className="font-normal"> {t('sidebar.you')}</span>
                 ) : null}
+                <OnlineWords userId={user.id} meId={me.id} />
               </>
             );
             return (
               <li key={user.id}>
                 {direct === null ? (
                   <ActionRow
-                    avatar={<Avatar size="sm" name={user.displayName} username={user.username} />}
+                    avatar={<PersonAvatar user={user} meId={me.id} />}
                     unread={false}
                     mentions={0}
                     disabled={opening === user.id}
@@ -111,7 +145,7 @@ export const PeopleList = (): React.JSX.Element => {
                     slug={workspace.slug}
                     channelId={direct.id}
                     current={direct.id === currentId}
-                    avatar={<Avatar size="sm" name={user.displayName} username={user.username} />}
+                    avatar={<PersonAvatar user={user} meId={me.id} />}
                     unread={(direct.state?.unreadCount ?? 0) > 0}
                     mentions={direct.state?.unreadMentionCount ?? 0}
                   >

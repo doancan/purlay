@@ -27,6 +27,8 @@ import { GroupDetailsDialog } from '../conversations/group-details';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
 import { StarToggle } from './star-toggle';
+import { useOnline } from '../../realtime/realtime-provider';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -66,6 +68,7 @@ export const useChannelTitle = (channel: Channel): string => {
 export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t, format } = useI18n();
   const { workspace } = useWorkspace();
+  const { user: me } = useSession();
   const title = useChannelTitle(channel);
   const open = useOpenCount(workspace.id);
   const direct = channel.type === 'direct_message';
@@ -73,13 +76,19 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const canAdd = !direct && channel.state !== null;
   const [adding, setAdding] = useState(false);
   const [details, setDetails] = useState(false);
+  const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
       <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (
-          <Avatar name={channel.peer.displayName} username={channel.peer.username} size="sm" />
+          <Avatar
+            name={channel.peer.displayName}
+            username={channel.peer.username}
+            size="sm"
+            online={peerOnline}
+          />
         ) : (
           <HeaderTile>
             <Icon
@@ -109,7 +118,11 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             />
           </>
         ) : direct && channel.peer !== null ? (
-          <PeerHeading peer={channel.peer} title={title} />
+          <>
+            <PeerHeading peer={channel.peer} title={title} />
+            {/* The dot is the avatar's, which a screen reader skips: said here instead (D-136). */}
+            {peerOnline === true && <VisuallyHidden>{t('presence.online')}</VisuallyHidden>}
+          </>
         ) : direct ? (
           <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
         ) : (

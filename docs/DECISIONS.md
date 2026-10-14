@@ -5973,7 +5973,11 @@ started. Typing (D-114) answers "is anyone in this channel now"; this answers "i
 4. **A workspace's presence** (`GET /api/workspaces/:workspaceId/presence`) is its members online,
    for a member: read when the workspace opens, and again a grace after the client reconnects — a node
    that restarted knows nobody until their sockets return, so the client keeps what it knew through the
-   grace rather than showing the team offline.
+   grace rather than showing the team offline. What the client cannot know it does not draw: a gap in
+   its own connection longer than the grace, a read that failed, or a person who left the workspace
+   forgets what was heard of them — no dot, never a stale one. Online is a dot on the avatar where a
+   person is shown (People, a conversation's heading, their profile), and the word beside it for a
+   screen reader; offline and unknown draw the same: nothing.
 5. **One node** (D-25): each node knows only its sockets, so on two a person online on one is offline
    to the other — wrong, which `ARCHITECTURE.md` §6.1 allows only until the shared adapter over the bus;
    the reads are async so that adapter needs no caller to change. A stopping node tells nobody its

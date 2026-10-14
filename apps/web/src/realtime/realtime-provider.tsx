@@ -157,3 +157,18 @@ export const useTyping = (channelId: string): readonly string[] =>
 /** Every message in flight, across channels; filter with `useMemo` where a screen wants one channel's. */
 export const usePending = (): readonly PendingMessage[] =>
   useStore(useEngine().store, (state) => state.pending);
+
+/**
+ * Whether this person is online, as far as this client has heard (D-136): undefined when nothing has
+ * been heard — drawn as nothing, never as offline. The person themselves is online while connected.
+ */
+export const useOnline = (userId: string, meId: string): boolean | undefined => {
+  const engine = useEngine();
+  const heard = useStore(engine.store, (state) => state.presence[userId]?.online);
+  const connected = useStore(engine.store, (state) => state.status === 'open');
+  return userId === meId ? connected : heard;
+};
+
+/** What a workspace's presence was last read for: a grace after each reconnect, it rises. */
+export const usePresenceEpoch = (): number =>
+  useStore(useEngine().store, (state) => state.presenceEpoch);

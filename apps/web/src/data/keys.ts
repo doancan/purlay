@@ -23,6 +23,8 @@ export const keys = {
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,
   /** A channel's repository feeds, an owner's or an admin's to read (D-134). */
   githubFeeds: (channelId: string) => ['github-feeds', channelId] as const,
+  /** Who among a workspace's members is online, as read at an epoch (D-136). */
+  presence: (workspaceId: string, epoch: number) => ['presence', workspaceId, epoch] as const,
   /** What one message said before each edit (D-135). */
   messageVersions: (messageId: string) => ['message-versions', messageId] as const,
   audit: (workspaceId: string) => ['audit', workspaceId] as const,

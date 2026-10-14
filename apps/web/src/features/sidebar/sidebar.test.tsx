@@ -22,11 +22,14 @@ import {
   someChannels,
   someMembers,
   NO_PROFILE,
+  aUser,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { Toaster } from '../../ui/toast';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
+import { PRESENCE_GRACE_MS, type PresenceSnapshot, type ServerFrame } from '@purlay/types';
+import { keys } from '../../data/keys';
 import { expectFocusOn } from '../../testing/focus';
 
 installDom();
@@ -225,12 +228,244 @@ describe('the people section', () => {
     });
   });
 
-  test('each person has an avatar with their initials, hidden from a screen reader, and none has a presence dot', async () => {
+  test('each person has an avatar with their initials, hidden from a screen reader, and none online has no dot', async () => {
     const view = await open();
     const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));
     const avatars = [...section.querySelectorAll('li [aria-hidden="true"].size-avatar-sm')];
     expect(avatars.map((avatar) => avatar.textContent)).toEqual(['AL', 'BO', 'DO']);
     expect(section.querySelector('.size-dot')).toBeNull();
+  });
+
+  describe('who is online (D-136)', () => {
+    const peopleOf = (view: View): HTMLElement =>
+      some(view.getByRole('heading', { name: 'People' }).closest('section'));
+    /** Whose avatars carry the dot, by their initials. */
+    const dotted = (view: View): string[] =>
+      [...peopleOf(view).querySelectorAll('[data-avatar]')]
+        .filter((avatar) => avatar.querySelector('[data-online]') !== null)
+        .map((avatar) => avatar.textContent);
+    const spoken = (view: View): string[] =>
+      [...peopleOf(view).querySelectorAll('li')].map((li) => {
+        const copy = li.cloneNode(true) as Element;
+        for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+        return copy.textContent.trim();
+      });
+    const told = (userId: string, online: boolean, version: number): ServerFrame => ({
+      event: 'PRESENCE',
+      data: { changes: [{ userId, online, version }] },
+      ts: 0,
+    });
+
+    test('the people the snapshot lists online have a dot, said to a screen reader; nobody else does', async () => {
+      const view = await open(
+        aSignedInApi({
+          presence: () =>
+            Promise.resolve({
+              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              version: 9,
+            }),
+        }),
+      );
+      expect(dotted(view)).toEqual(['AL']);
+      expect(spoken(view)).toEqual(['Alice, online', 'Bob', 'Dogancan you']);
+      // The person themselves is online while connected, whatever a snapshot said.
+      act(() => {
+        view.world.sockets.open();
+      });
+      expect(dotted(view)).toEqual(['AL', 'DO']);
+      await expectNoAxeViolations(peopleOf(view));
+    });
+
+    test('a frame moves the dot; one older than what was heard changes nothing', async () => {
+      const view = await open(
+        aSignedInApi({
+          presence: () =>
+            Promise.resolve({
+              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              version: 9,
+            }),
+        }),
+      );
+      act(() => {
+        view.world.sockets.open();
+        view.world.sockets.deliver(told(BOB.id, true, 10));
+      });
+      expect(dotted(view)).toEqual(['AL', 'BO', 'DO']);
+      act(() => {
+        // Bob was offline at the snapshot's version 9: older than his online at 10.
+        view.world.sockets.deliver(told(ALICE.id, false, 11));
+        view.world.sockets.deliver(told(BOB.id, false, 8));
+      });
+      expect(dotted(view)).toEqual(['BO', 'DO']);
+    });
+
+    test('a snapshot that fails draws no dot and no error: nothing known is not offline', async () => {
+      const view = await open(
+        aSignedInApi({ presence: () => Promise.reject(new ApiError(500, 'INTERNAL', 'boom')) }),
+      );
+      expect(dotted(view)).toEqual([]);
+      expect(spoken(view)).toEqual(['Alice', 'Bob', 'Dogancan you']);
+      expect(within(peopleOf(view)).queryByRole('alert')).toBeNull();
+    });
+
+    /** The connection drops and comes back as soon as it may: a short gap, inside the grace. */
+    const reconnect = (view: View): void => {
+      const before = view.world.sockets.sockets.length;
+      act(() => {
+        view.world.sockets.sockets.at(-1)?.handlers.closed(1006);
+        for (let waited = 0; view.world.sockets.sockets.length === before; waited += 100) {
+          if (waited > PRESENCE_GRACE_MS) throw new Error('no reconnect inside the grace');
+          view.world.timers.advance(100);
+        }
+        view.world.sockets.open();
+      });
+    };
+    /** Everybody else's dots: the person's own is the connection's, and moves with the clock. */
+    const others = (view: View): string[] => dotted(view).filter((who) => who !== 'DO');
+    const reading = (
+      answers: readonly (() => Promise<PresenceSnapshot>)[],
+    ): { readonly api: Api; readonly reads: () => number } => {
+      let reads = 0;
+      return {
+        api: aSignedInApi({
+          presence: () => {
+            const answer = answers[Math.min(reads, answers.length - 1)];
+            reads += 1;
+            if (answer === undefined) throw new Error('no answer');
+            return answer();
+          },
+        }),
+        reads: () => reads,
+      };
+    };
+    const CAROL = aUser('carol', '0199155c-6200-7b7f-8c11-0000000000c7');
+    const aliceOnline = (): Promise<PresenceSnapshot> =>
+      Promise.resolve({ online: [{ userId: ALICE.id, online: true, version: 5 }], version: 9 });
+    const nobody = (): Promise<PresenceSnapshot> => Promise.resolve({ online: [], version: 20 });
+
+    test('read once as the page loads, and not again while nothing happens', async () => {
+      const world = reading([aliceOnline]);
+      const view = await open(world.api);
+      act(() => {
+        view.world.sockets.open();
+      });
+      act(() => {
+        view.world.timers.advance(PRESENCE_GRACE_MS * 2);
+      });
+      await settle();
+      expect(world.reads()).toBe(1);
+    });
+
+    test('a grace after a reconnect it is read again, and somebody gone meanwhile loses the dot', async () => {
+      const world = reading([aliceOnline, nobody]);
+      const view = await open(world.api);
+      act(() => {
+        view.world.sockets.open();
+      });
+      reconnect(view);
+      await settle();
+      // Kept through the grace: a node that restarted knows nobody until their sockets return.
+      expect(others(view)).toEqual(['AL']);
+      expect(world.reads()).toBe(1);
+      act(() => {
+        view.world.timers.advance(PRESENCE_GRACE_MS);
+      });
+      await settle();
+      expect(world.reads()).toBe(2);
+      expect(others(view)).toEqual([]);
+    });
+
+    test('a read after a reconnect that fails forgets what was heard: no dot rather than a stale one', async () => {
+      const world = reading([
+        aliceOnline,
+        (): Promise<PresenceSnapshot> => Promise.reject(new ApiError(500, 'INTERNAL', 'boom')),
+      ]);
+      const view = await open(world.api);
+      act(() => {
+        view.world.sockets.open();
+      });
+      reconnect(view);
+      act(() => {
+        view.world.timers.advance(PRESENCE_GRACE_MS);
+      });
+      await settle();
+      expect(world.reads()).toBeGreaterThanOrEqual(2);
+      expect(others(view)).toEqual([]);
+      expect(within(peopleOf(view)).queryByRole('alert')).toBeNull();
+    });
+
+    test('a gap longer than the grace forgets everybody until something is heard again', async () => {
+      const view = await open(reading([aliceOnline]).api);
+      act(() => {
+        view.world.sockets.open();
+      });
+      expect(others(view)).toEqual(['AL']);
+      act(() => {
+        view.world.sockets.sockets.at(-1)?.handlers.closed(1006);
+      });
+      // Inside the grace, what was known is kept.
+      expect(others(view)).toEqual(['AL']);
+      act(() => {
+        view.world.timers.advance(PRESENCE_GRACE_MS);
+      });
+      expect(others(view)).toEqual([]);
+    });
+
+    test('somebody who joins is read for; somebody who leaves loses what was heard of them', async () => {
+      let members = someMembers();
+      const world = reading([
+        aliceOnline,
+        (): Promise<PresenceSnapshot> =>
+          Promise.resolve({
+            online: [{ userId: CAROL.id, online: true, version: 12 }],
+            version: 13,
+          }),
+      ]);
+      // In a conversation with Alice, whose heading draws her dot whether or not she is a member.
+      const view = await open(
+        {
+          ...world.api,
+          members: () => Promise.resolve(members),
+          channels: () =>
+            Promise.resolve([
+              ...someChannels(),
+              aChannel(IDS.dm, null, { type: 'direct_message', peer: ALICE }),
+            ]),
+        },
+        `/w/acme/c/${IDS.dm}`,
+      );
+      const headed = (): boolean => view.container.querySelector('header [data-online]') !== null;
+      expect(others(view)).toEqual(['AL']);
+      expect(headed()).toBe(true);
+      // Carol joins and Alice leaves; the members are read again, as a frame would have them.
+      members = [
+        ...someMembers().filter((member) => member.user.id !== ALICE.id),
+        { user: CAROL, role: 'member', joinedAt: '2026-09-09T08:00:00.000Z', profile: NO_PROFILE },
+      ];
+      await act(async () => {
+        await view.world.client.invalidateQueries({ queryKey: keys.members(WORKSPACE.id) });
+      });
+      await settle();
+      expect(world.reads()).toBe(2);
+      expect(others(view)).toEqual(['CA']);
+      expect(headed()).toBe(false);
+    });
+
+    test('in Turkish, it says çevrimiçi', async () => {
+      const view = await renderApp(<Outlet />, {
+        path: `/w/acme/c/${IDS.api}`,
+        locale: 'tr',
+        api: aSignedInApi({
+          presence: () =>
+            Promise.resolve({
+              online: [{ userId: ALICE.id, online: true, version: 5 }],
+              version: 9,
+            }),
+        }),
+      });
+      await settle();
+      expect(view.getByText(', çevrimiçi')).toBeDefined();
+    });
   });
 
   test('somebody with a conversation is a link to it, named for them, once', async () => {
