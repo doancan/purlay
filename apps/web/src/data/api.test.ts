@@ -30,6 +30,7 @@ const message = {
   id: ID,
   channelId: ID,
   sender: user,
+  githubEvent: null,
   content: 'hi',
   editedAt: null,
   deletedAt: null,

@@ -87,7 +87,7 @@ export const threadReplies = async (
 
   let statement = executor
     .selectFrom('messages')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.parent_id', '=', root.messageId)
     .orderBy('messages.id', backwards ? 'desc' : 'asc')
@@ -120,7 +120,7 @@ export const unresolvedIn = async (
 
   let statement = executor
     .selectFrom('messages')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.workspace_id', '=', context.workspaceId)
     .where('messages.channel_id', 'in', channelIds)
@@ -205,7 +205,8 @@ export const setResolved = async (
         })
         .where('id', '=', messageId)
         .execute();
-      if (resolved && root.sender_id !== userId) {
+      // An event's thread has no author to tell (D-134 §6).
+      if (resolved && root.sender_id !== null && root.sender_id !== userId) {
         await notifyResolved(transaction, target, root.sender_id, now);
       }
     }

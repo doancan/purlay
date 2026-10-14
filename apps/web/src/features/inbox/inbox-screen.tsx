@@ -34,6 +34,8 @@ import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
+import { authorOf } from '../messages/author';
+import { useMessageText } from '../content/github-event';
 
 const glyphOf = (type: Notification['type']): GlyphName => {
   switch (type) {
@@ -54,7 +56,7 @@ const glyphOf = (type: Notification['type']): GlyphName => {
 const useWhy = (): ((notification: Notification, channel: Channel | undefined) => string) => {
   const { t } = useI18n();
   return (notification, channel) => {
-    const name = notification.message.sender.username;
+    const name = authorOf(notification.message).username;
     switch (notification.type) {
       case 'mention':
         return t('inbox.why.mention', { name });
@@ -119,6 +121,7 @@ const Row = ({
   readonly onOpen: (notification: Notification) => void;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
+  const textOf = useMessageText();
   const { message } = notification;
   const why = useWhy();
   const unread = notification.readAt === null;
@@ -131,7 +134,7 @@ const Row = ({
         }}
         className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
-        <Avatar name={message.sender.displayName} username={message.sender.username} />
+        <Avatar name={authorOf(message).displayName} username={authorOf(message).username} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 text-label text-ink-muted">
             <Icon name={glyphOf(notification.type)} size="sm" />
@@ -147,7 +150,7 @@ const Row = ({
           </span>
           {/* Unread is said as the sidebar says it: in full ink, and read is muted (#58). */}
           <span className={cn('block truncate text-body', unread ? 'text-ink' : 'text-ink-muted')}>
-            {message.content}
+            {textOf(message)}
           </span>
         </span>
       </button>

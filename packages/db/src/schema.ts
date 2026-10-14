@@ -165,7 +165,7 @@ export interface Messages {
   parent_id: string | null;
   resolved_at: Timestamp | null;
   resolved_by: string | null;
-  sender_id: string;
+  sender_id: string | null;
   state_version: Generated<number>;
   thread_last_reply_at: Timestamp | null;
   thread_reply_count: Generated<number>;

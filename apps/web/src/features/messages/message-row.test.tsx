@@ -131,6 +131,44 @@ describe('the two edges (D-119)', () => {
   });
 });
 
+describe("a repository's event (D-134)", () => {
+  const event = aMessage(1, {
+    sender: null,
+    content: 'octocat pushed to acme/api',
+    githubEvent: {
+      kind: 'pull_request',
+      repository: 'acme/api',
+      actor: 'octocat',
+      action: 'merged',
+      number: 42,
+      title: 'Retry with jitter',
+    },
+  });
+
+  test('is GitHub’s, on the left, with the event drawn and linked from its parts', async () => {
+    const view = await mount(props({ message: event }));
+    const row = view.getByRole('article');
+    expect(row.dataset['outgoing']).toBeUndefined();
+    expect(row.dataset['editable']).toBeUndefined();
+    expect(row.getAttribute('aria-label')).toContain('github');
+    expect(view.getByText('GitHub')).toBeDefined();
+    const sentence = view.getByRole('link', { name: 'octocat merged pull request #42' });
+    expect(sentence.getAttribute('href')).toBe('https://github.com/acme/api/pull/42');
+    expect(view.getByText('Retry with jitter')).toBeDefined();
+    // Its words are its summary: they are not drawn beside the event.
+    expect(view.queryByText('octocat pushed to acme/api')).toBeNull();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('removed, it is a tombstone like any other: the event goes with the words', async () => {
+    const view = await mount(
+      props({ message: { ...event, githubEvent: null, deletedAt: '2026-09-09T11:56:00.000Z' } }),
+    );
+    expect(view.getByText('This message was deleted.')).toBeDefined();
+    expect(view.queryByRole('link', { name: /octocat/ })).toBeNull();
+  });
+});
+
 describe('what a row shows', () => {
   test('the name, the time as a real element with the full time on hover, and the body', async () => {
     const view = await mount(props());

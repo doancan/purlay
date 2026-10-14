@@ -101,7 +101,7 @@ const requireRoot = async (
   executor: Executor,
   context: ChannelContext,
   parentId: string,
-): Promise<{ readonly authorId: string }> => {
+): Promise<{ readonly authorId: string | null }> => {
   const parent = await executor
     .selectFrom('messages')
     .select(['channel_id', 'parent_id', 'sender_id'])
@@ -409,7 +409,7 @@ export const messageHistory = async (
 
   let statement = executor
     .selectFrom('messages')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.channel_id', '=', context.channelId)
     .where('messages.parent_id', 'is', null)
@@ -482,7 +482,7 @@ export const missedIn = async (
           .as('messages'),
       (join) => join.onTrue(),
     )
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .orderBy('messages.channel_id')
     .orderBy('messages.id', 'asc')

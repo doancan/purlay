@@ -24,6 +24,7 @@ import {
   CurrentUser,
   Attachment,
   FromClient,
+  GITHUB_REPOSITORY_PATTERN,
   GitHubLink,
   Membership,
   PROFILE_STATUS_MAX,
@@ -756,14 +757,6 @@ export type GitHubFeed = Static<typeof GitHubFeed>;
 /** `GET /api/channels/:channelId/github-feeds` — an owner's or an admin's; oldest first, bounded. */
 export const GitHubFeedList = Type.Array(GitHubFeed, { maxItems: GITHUB_FEEDS_PER_CHANNEL_MAX });
 export type GitHubFeedList = Static<typeof GitHubFeedList>;
-
-/**
- * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
- * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
- * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
- */
-export const GITHUB_REPOSITORY_PATTERN =
-  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
 
 /** `POST /api/channels/:channelId/github-feeds` — a repository as GitHub writes it, either case. */
 export const CreateGitHubFeedRequest = FromClient({

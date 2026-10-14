@@ -49,6 +49,7 @@ export const channelFiles = async (
   let statement = executor
     .selectFrom('attachments')
     .innerJoin('messages', 'messages.id', 'attachments.message_id')
+    // Only a person's message carries files (an event has none), so the join keeps every one.
     .innerJoin('users', 'users.id', 'messages.sender_id')
     .select([
       'attachments.id',
@@ -63,7 +64,7 @@ export const channelFiles = async (
       'messages.id as message_id',
       'messages.parent_id',
       'messages.created_at',
-      'messages.sender_id',
+      'users.id as sender_id',
       'users.username',
       'users.display_name',
       'users.avatar_url',

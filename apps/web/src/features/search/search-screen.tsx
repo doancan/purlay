@@ -26,6 +26,8 @@ import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
+import { authorOf } from '../messages/author';
+import { useMessageText } from '../content/github-event';
 
 /** Where a found message is read: in its thread when it is in one, in its channel otherwise. */
 export const placeOf = (slug: string, message: Message): string => {
@@ -48,6 +50,7 @@ const Found = ({
   readonly now: Date;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
+  const textOf = useMessageText();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   return (
@@ -59,10 +62,10 @@ const Found = ({
         }}
         className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
-        <Avatar name={message.sender.displayName} username={message.sender.username} />
+        <Avatar name={authorOf(message).displayName} username={authorOf(message).username} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 text-label text-ink-muted">
-            <span className="text-body font-semibold text-ink">{message.sender.username}</span>
+            <span className="text-body font-semibold text-ink">{authorOf(message).username}</span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             {message.parentId !== null && <Icon name="reply" size="sm" />}
@@ -70,7 +73,7 @@ const Found = ({
               {format.time(message.createdAt, now)}
             </time>
           </span>
-          <span className="line-clamp-2 block text-body text-ink">{message.content}</span>
+          <span className="line-clamp-2 block text-body text-ink">{textOf(message)}</span>
         </span>
       </button>
     </li>

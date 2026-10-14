@@ -439,6 +439,29 @@ export const tr = {
   },
   'message.addReaction': 'Tepki ekle',
   'message.removeReaction': 'Tepkini kaldır',
+  // ── Bir deponun akışı (D-134) ───────────────────────────────────────────
+  'github.push.pushed': {
+    other: '{actor}, {ref} üzerine {count} commit gönderdi',
+  },
+  'github.push.forced': '{actor}, {ref} üzerine zorla gönderdi',
+  'github.push.createdBranch': '{actor}, {ref} dalını oluşturdu',
+  'github.push.createdTag': '{actor}, {ref} etiketini oluşturdu',
+  'github.push.deletedBranch': '{actor}, {ref} dalını sildi',
+  'github.push.deletedTag': '{actor}, {ref} etiketini sildi',
+  'github.push.more': {
+    other: 've {count} commit daha',
+  },
+  'github.pullRequest.opened': '{actor}, #{number} numaralı çekme isteğini açtı',
+  'github.pullRequest.closed': '{actor}, #{number} numaralı çekme isteğini kapattı',
+  'github.pullRequest.merged': '{actor}, #{number} numaralı çekme isteğini birleştirdi',
+  'github.pullRequest.reopened': '{actor}, #{number} numaralı çekme isteğini yeniden açtı',
+  'github.pullRequest.ready_for_review':
+    '{actor}, #{number} numaralı çekme isteğini incelemeye hazır olarak işaretledi',
+  'github.issue.opened': '{actor}, #{number} numaralı konuyu açtı',
+  'github.issue.closed': '{actor}, #{number} numaralı konuyu kapattı',
+  'github.issue.reopened': '{actor}, #{number} numaralı konuyu yeniden açtı',
+  'github.release.published': '{actor}, {name} sürümünü yayımladı',
+
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',
   'diff.oldLine': 'Eski satır',

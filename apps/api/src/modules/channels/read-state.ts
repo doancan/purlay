@@ -113,7 +113,7 @@ export const markRead = async (
       unread_count: sql<number>`(
         select count(*)::int from messages
         where channel_id = ${context.channelId} and id > ${messageId}
-          and sender_id <> ${context.userId} and deleted_at is null
+          and sender_id is distinct from ${context.userId} and deleted_at is null
       )`,
       // The lesser of the two, because a message that needs you is, first, one you
       // have not read (I-6). The notifications still unread are the ones past the
@@ -122,7 +122,7 @@ export const markRead = async (
         (
           select count(*)::int from messages
           where channel_id = ${context.channelId} and id > ${messageId}
-            and sender_id <> ${context.userId} and deleted_at is null
+            and sender_id is distinct from ${context.userId} and deleted_at is null
         ),
         ${waitingNotifications(context.userId, context.channelId)}
       )`,

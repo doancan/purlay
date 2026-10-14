@@ -183,6 +183,7 @@ const created = (channelId: string, id: string): string => {
       id,
       channelId,
       sender: { id: channel(99), username: 'a', displayName: 'A', avatarUrl: null },
+      githubEvent: null,
       content: 'hi',
       editedAt: null,
       deletedAt: null,

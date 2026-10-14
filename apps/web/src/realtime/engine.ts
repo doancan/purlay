@@ -554,8 +554,8 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'MESSAGE_CREATED': {
         messageCreated(client, frame.data);
         forget(frame.data.id);
-        // What they were typing has arrived.
-        stopTyping(frame.data.channelId, frame.data.sender.id);
+        // What they were typing has arrived; an event was typed by nobody.
+        if (frame.data.sender !== null) stopTyping(frame.data.channelId, frame.data.sender.id);
         return;
       }
       case 'THREAD_UPDATED':

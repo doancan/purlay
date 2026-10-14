@@ -121,7 +121,7 @@ export const channelPins = async (
   const rows = await executor
     .selectFrom('pinned_messages')
     .innerJoin('messages', 'messages.id', 'pinned_messages.message_id')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .leftJoin('users as pinner', 'pinner.id', 'pinned_messages.pinned_by')
     .select(MESSAGE_COLUMNS)
     .select([

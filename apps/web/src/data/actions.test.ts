@@ -31,6 +31,7 @@ const root: Message = {
   id: MSG,
   channelId: CH,
   sender: user,
+  githubEvent: null,
   content: 'why 4s?',
   editedAt: null,
   deletedAt: null,

@@ -225,6 +225,92 @@ export const GitHubLink = Type.String({
 });
 
 /**
+ * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
+ * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
+ * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
+ */
+export const GITHUB_REPOSITORY_PATTERN =
+  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
+
+/** How long a title, a release's name or a commit's first line is kept; longer is cut, with `…`. */
+export const GITHUB_EVENT_TEXT_MAX = 256;
+
+/** How many of a push's commits its message lists; the rest are behind the comparison. */
+export const PUSH_COMMITS_SHOWN_MAX = 5;
+
+const GitHubRepositoryName = Type.String({ pattern: GITHUB_REPOSITORY_PATTERN });
+/** A person's or an app's login: `octocat`, `dependabot[bot]`. */
+const GitHubLogin = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9-]{0,38}(\\[bot\\])?$' });
+const CommitSha = Type.String({ pattern: '^[0-9a-f]{40}$' });
+const GitHubText = Type.String({ maxLength: GITHUB_EVENT_TEXT_MAX });
+const GitHubNumber = Type.Integer({ minimum: 1, maximum: 9_999_999_999 });
+/** A branch's or a tag's name: what git allows, bounded. */
+const GitRefName = Type.String({ minLength: 1, maxLength: 255 });
+
+/**
+ * What happened in a repository, as its feed posted it (D-134 §6): parts only, every one bounded,
+ * so every link the client draws is built from them — never an address taken from GitHub's payload
+ * (D-101). `kind` is GitHub's event; within it, what the client says.
+ */
+export const GitHubEvent = Type.Union([
+  Type.Object({
+    kind: Type.Literal('push'),
+    repository: GitHubRepositoryName,
+    actor: GitHubLogin,
+    ref: Type.Object({
+      type: Type.Union([Type.Literal('branch'), Type.Literal('tag')]),
+      name: GitRefName,
+    }),
+    /** A push to what was there, the ref made, the ref deleted, or history rewritten. */
+    change: Type.Union([
+      Type.Literal('pushed'),
+      Type.Literal('created'),
+      Type.Literal('deleted'),
+      Type.Literal('forced'),
+    ]),
+    before: CommitSha,
+    after: CommitSha,
+    /** The newest first, at most `PUSH_COMMITS_SHOWN_MAX`. */
+    commits: Type.Array(Type.Object({ sha: CommitSha, title: GitHubText }), {
+      maxItems: PUSH_COMMITS_SHOWN_MAX,
+    }),
+    /** As many as GitHub listed, which is at most twenty: a bigger push says twenty. */
+    commitCount: Type.Integer({ minimum: 0, maximum: 20 }),
+  }),
+  Type.Object({
+    kind: Type.Literal('pull_request'),
+    repository: GitHubRepositoryName,
+    actor: GitHubLogin,
+    /** `merged` is GitHub's `closed` with the pull request merged. */
+    action: Type.Union([
+      Type.Literal('opened'),
+      Type.Literal('closed'),
+      Type.Literal('merged'),
+      Type.Literal('reopened'),
+      Type.Literal('ready_for_review'),
+    ]),
+    number: GitHubNumber,
+    title: GitHubText,
+  }),
+  Type.Object({
+    kind: Type.Literal('issues'),
+    repository: GitHubRepositoryName,
+    actor: GitHubLogin,
+    action: Type.Union([Type.Literal('opened'), Type.Literal('closed'), Type.Literal('reopened')]),
+    number: GitHubNumber,
+    title: GitHubText,
+  }),
+  Type.Object({
+    kind: Type.Literal('release'),
+    repository: GitHubRepositoryName,
+    actor: GitHubLogin,
+    tag: GitRefName,
+    name: GitHubText,
+  }),
+]);
+export type GitHubEvent = Static<typeof GitHubEvent>;
+
+/**
  * What the parser records about a text message when it is written: hints for the
  * renderer, derived once (`SCHEMA.md` §6.4, `ARCHITECTURE.md` §8.1). Not on the wire
  * yet: nothing reads it until the code block badge (#44) and unfurling (#66) do.
@@ -314,7 +400,14 @@ export const Message = Type.Object({
   /** A UUIDv7 the client generated. It is also the pagination cursor. (D-8) */
   id: Uuid,
   channelId: Uuid,
-  sender: User,
+  /**
+   * Who wrote it; null for a message nobody wrote — a repository's event (D-134 §6), which carries
+   * `githubEvent` instead. Exactly one of the two is null: the database holds it
+   * (`messages_sender_by_type`) and the one reader builds both from the same row.
+   */
+  sender: Type.Union([User, Type.Null()]),
+  /** What happened in a repository, for a message its feed posted; null for a person's, and a tombstone's. */
+  githubEvent: Type.Union([GitHubEvent, Type.Null()]),
   content: Type.String(),
   /** Set when the message has been edited; the content is the current version. */
   editedAt: Type.Union([Timestamp, Type.Null()]),

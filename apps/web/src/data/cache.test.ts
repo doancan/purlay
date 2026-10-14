@@ -36,6 +36,7 @@ const message = (n: number, over: Partial<Message> = {}): Message => ({
   id: id(n),
   channelId: CH,
   sender: user,
+  githubEvent: null,
   content: `m${String(n)}`,
   editedAt: null,
   deletedAt: null,

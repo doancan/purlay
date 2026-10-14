@@ -134,7 +134,7 @@ export const savedPage = async (
   if (visible.length === 0) return { data: [], nextCursor: null };
   const limit = limitOf(query);
   let statement = shown(executor, context, visible)
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .select([
       'saved_messages.id as save_id',

@@ -39,7 +39,7 @@ export const searchIn = async (
 
   let statement = executor
     .selectFrom('messages')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.workspace_id', '=', context.workspaceId)
     .where('messages.channel_id', 'in', channelIds)

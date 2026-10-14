@@ -29,6 +29,8 @@ import {
 import { useSidePanel } from '../channel/side-panel';
 import { useThreads } from '../threads/thread-context';
 import { usePin, useShownPins } from './use-pin';
+import { authorOf } from '../messages/author';
+import { useMessageText } from '../content/github-event';
 
 export const PINS_PANEL_ID = 'channel-pins';
 
@@ -53,15 +55,16 @@ const PinRow = ({
   readonly focus: PanelFocus;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
+  const textOf = useMessageText();
   const threads = useThreads();
   const { canPin, toggle } = usePin(pin.message);
   const { message } = pin;
   const parentId = message.parentId;
-  const name = message.sender.displayName;
+  const name = authorOf(message).displayName;
   return (
     <li className="flex flex-col gap-2 rounded-lg px-2 py-2 hover:bg-surface-200">
       <div className="flex min-w-0 items-start gap-2">
-        <Avatar name={name} username={message.sender.username} size="sm" />
+        <Avatar name={name} username={authorOf(message).username} size="sm" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-center gap-1 text-caption text-ink-muted">
             <span className="truncate font-semibold text-ink">{name}</span>
@@ -71,7 +74,7 @@ const PinRow = ({
             </time>
           </span>
           <p className="line-clamp-3 whitespace-pre-wrap break-words text-body text-ink">
-            {message.content}
+            {textOf(message)}
           </p>
           <span data-pinned-by="" className="flex items-center gap-1 text-caption text-ink-subtle">
             <Icon name="pin" size="sm" />

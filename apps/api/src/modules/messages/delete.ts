@@ -112,7 +112,8 @@ export const removeMessage = async (
       action: 'message.removed_by_moderator',
       targetType: 'message',
       targetId: messageId,
-      metadata: { authorId: row.sender_id },
+      // An event's has no author to name (D-134 §6).
+      metadata: row.sender_id === null ? {} : { authorId: row.sender_id },
     });
   }
 
@@ -178,7 +179,8 @@ const uncount = async (
   executor: Executor,
   context: ChannelContext,
   messageId: string,
-  senderId: string,
+  /** Null for an event nobody wrote: it was counted for everybody (D-134 §6). */
+  senderId: string | null,
   writtenAt: Date,
   waitedOn: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
@@ -193,7 +195,7 @@ const uncount = async (
       state_version: sql<number>`state_version + 1`,
     })
     .where('channel_id', '=', context.channelId)
-    .where('user_id', '<>', senderId)
+    .where((eb) => (senderId === null ? eb.lit(true) : eb('user_id', '<>', senderId)))
     .where('joined_at', '<=', writtenAt)
     .where((eb) =>
       eb.or([eb('last_read_message_id', 'is', null), eb('last_read_message_id', '<', messageId)]),
