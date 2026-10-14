@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import { QueryClient, type InfiniteData } from '@tanstack/react-query';
 import {
   CLOSE_CODES,
+  PRESENCE_GRACE_MS,
   type Attachment,
   type Channel,
   type MeResponse,
@@ -1041,6 +1042,50 @@ describe('Deep Work changed in another tab (#526)', () => {
     // A snapshot read before the latest change is kept out too.
     w.engine.applyPresence([{ userId: alice, online: false, version: 25 }]);
     expect(w.engine.store.getState().presence[alice]?.online).toBe(true);
+  });
+
+  describe('who is online is read again a grace after a reconnect (D-136 §4)', () => {
+    const epoch = (w: World): number => w.engine.store.getState().presenceEpoch;
+    const reconnect = (w: World): void => {
+      const before = w.sockets.length;
+      w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+      for (let waited = 0; w.sockets.length === before && waited < 60_000; waited += 100) {
+        w.timers.advance(100);
+      }
+      w.open();
+    };
+
+    test('not after the page loads: only a return from a gap', () => {
+      const w = world();
+      w.engine.start();
+      w.open();
+      w.timers.advance(PRESENCE_GRACE_MS * 2);
+      expect(epoch(w)).toBe(0);
+    });
+
+    test('once, a grace after the last of several reconnects inside it', () => {
+      const w = world();
+      w.engine.start();
+      w.open();
+      reconnect(w);
+      reconnect(w);
+      reconnect(w);
+      expect(epoch(w)).toBe(0);
+      w.timers.advance(PRESENCE_GRACE_MS);
+      expect(epoch(w)).toBe(1);
+      w.timers.advance(PRESENCE_GRACE_MS * 2);
+      expect(epoch(w)).toBe(1);
+    });
+
+    test('never after the engine stopped: signed out, nothing is read', () => {
+      const w = world();
+      w.engine.start();
+      w.open();
+      reconnect(w);
+      w.engine.stop();
+      w.timers.advance(PRESENCE_GRACE_MS * 2);
+      expect(epoch(w)).toBe(0);
+    });
   });
 
   test('a channel’s pins changed are read again, in that channel only (D-130)', () => {

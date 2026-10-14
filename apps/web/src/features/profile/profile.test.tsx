@@ -118,6 +118,7 @@ describe('a conversation with one other person', () => {
     const panel = view.getByRole('complementary', { name: /^Profile/ });
     expect(panel.querySelector('[data-online]')).not.toBeNull();
     expect(within(panel).getByText('Online now')).toBeDefined();
+    await expectNoAxeViolations(view.container);
     act(() => {
       view.engine().applyPresence([{ userId: ALICE.id, online: false, version: 2 }]);
     });
