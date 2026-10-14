@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a write the network never answers is given up after 30 seconds (closes #604)
+
+- The web client now gives every write (POST, PUT, PATCH, DELETE) a 30-second deadline. A write still
+  unanswered then fails as the `NETWORK` failure every action already reports with Retry. Before, Save
+  and Pin, which send one request per message at a time, stayed busy until the page was reloaded.
+  Reads keep their query's own signal, and uploads, which report their progress, are not bounded.
+
 ### Fix — 2026-10-14: a pin the server kept stays marked when reading the pins again fails (closes #605)
 
 - When a pin or an unpin is accepted but reading the channel's pins again fails, the change the server
