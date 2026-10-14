@@ -945,13 +945,31 @@ CREATE TABLE github_repo_feeds (
     created_by           UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_delivery_at     TIMESTAMPTZ,
-    last_failure         VARCHAR(64),                    -- a GitHubFeedFailure; with its time
+    last_failure         VARCHAR(64),                    -- a GitHubFeedFailure, with its time
     last_failure_at      TIMESTAMPTZ,
 
-    UNIQUE (channel_id, repository_full_name),
-    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id) ON DELETE CASCADE
-    -- and CHECKs: the repository's shape, the events known and at least one, a failure with its time
+    CONSTRAINT github_repo_feeds_repository_shape CHECK (
+        repository_full_name ~ '^[a-z0-9][a-z0-9-]{0,38}/(?!\.\.?$)[a-z0-9._-]{1,100}$'
+    ),
+    CONSTRAINT github_repo_feeds_events_known CHECK (
+        cardinality(events) >= 1
+        AND events <@ ARRAY['push', 'pull_request', 'issues', 'release']::TEXT[]
+    ),
+    CONSTRAINT github_repo_feeds_failure_known CHECK (
+        last_failure IN ('channel_archived', 'repository_mismatch', 'payload_invalid')
+    ),
+    CONSTRAINT github_repo_feeds_failure_is_complete CHECK (
+        (last_failure IS NULL) = (last_failure_at IS NULL)
+    ),
+    CONSTRAINT github_repo_feeds_channel_repository_key UNIQUE (channel_id, repository_full_name),
+    CONSTRAINT github_repo_feeds_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
 );
+
+CREATE INDEX idx_github_repo_feeds_workspace ON github_repo_feeds (workspace_id);
+CREATE INDEX idx_github_repo_feeds_created_by ON github_repo_feeds (created_by)
+    WHERE created_by IS NOT NULL;
 
 CREATE TABLE github_deliveries (
     feed_id      UUID NOT NULL REFERENCES github_repo_feeds(id) ON DELETE CASCADE,
@@ -959,6 +977,8 @@ CREATE TABLE github_deliveries (
     received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- swept after 30 days
     PRIMARY KEY (feed_id, delivery_id)
 );
+
+CREATE INDEX idx_github_deliveries_received ON github_deliveries (received_at);
 ```
 
 > A feed is its channel's, in its channel's workspace (I-4), and goes with either. The secret is never

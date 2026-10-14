@@ -279,7 +279,13 @@ describe('integration: a channel’s repository feeds', () => {
 
       await removeFeed(db, clock, alice, made.feed.id);
       expect(await channelFeeds(db, alice)).toEqual([]);
-      expect(await db.selectFrom('github_deliveries').select('feed_id').execute()).toEqual([]);
+      expect(
+        await db
+          .selectFrom('github_deliveries')
+          .select('feed_id')
+          .where('feed_id', '=', made.feed.id)
+          .execute(),
+      ).toEqual([]);
       const actions = await db
         .selectFrom('audit_log')
         .select('action')
