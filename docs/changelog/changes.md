@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a channel's incident, on screen (D-137, part of #487)
+
+- A channel's open incident is a banner under its header and a mark in the sidebar, SEV1 to SEV4.
+  Its panel declares one at a severity, moves it, makes it worse or better and resolves it — each
+  painted at once and put back if refused — and says what happened, newest first.
+
 ### Fix — 2026-10-14: a session that ends while a socket opens says why before closing it (#577)
 
 - A sign-out that landed in the moment a socket was opening closed it with the right code but without

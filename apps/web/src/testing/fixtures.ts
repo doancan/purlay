@@ -125,5 +125,6 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     pins: () => Promise.resolve([]),
     // And who is online in the workspace (D-136): nobody, unless a test says.
     presence: () => Promise.resolve({ online: [], version: 0 }),
+    incident: () => Promise.resolve({ incident: null }),
     ...overrides,
   });

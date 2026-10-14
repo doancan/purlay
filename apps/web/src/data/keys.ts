@@ -48,5 +48,6 @@ export const families = {
   unresolved: ['unresolved'] as const,
   notifications: ['notifications'] as const,
   pins: ['pins'] as const,
+  incident: ['incident'] as const,
   members: ['members'] as const,
 } as const;

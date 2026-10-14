@@ -487,6 +487,7 @@ describe('a reconnect', () => {
     w.client.setQueryData(keys.channels(WS), [channel(CH)]);
     w.client.setQueryData(keys.thread('root'), { pageParams: [], pages: [] });
     w.client.setQueryData(keys.unresolved(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.incident(CH), { incident: null });
     w.engine.start();
     w.open();
     const waiting = w.engine.send({ channelId: CH, content: 'a' });
@@ -510,6 +511,8 @@ describe('a reconnect', () => {
     expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.thread('root'))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.unresolved(WS))?.isInvalidated).toBe(true);
+    // An incident moved in the gap told a socket that was down (D-137): read again.
+    expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
     expect(w.engine.store.getState().status).toBe('open');
   });
 
