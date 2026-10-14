@@ -33,6 +33,7 @@ import {
   type SavePostmortemRequest,
   InvitationPage,
   InvitationPreview,
+  RetentionSetting,
   AuthMethods,
   EmailSignInPreview,
   type EmailSignInRequest,
@@ -275,6 +276,12 @@ export interface Api {
   readonly previewEmailSignIn: (token: string, signal?: AbortSignal) => Promise<EmailSignInPreview>;
   /** Spends the link; the answer sets the session cookie. */
   readonly consumeEmailSignIn: (token: string) => Promise<void>;
+  /** How long the workspace keeps its history; an owner's (D-139 §4). */
+  readonly retention: (workspaceId: string, signal?: AbortSignal) => Promise<RetentionSetting>;
+  readonly setRetention: (
+    workspaceId: string,
+    retentionDays: number | null,
+  ) => Promise<RetentionSetting>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -654,6 +661,20 @@ export const createApi = (http: Http): Api => {
       ),
     consumeEmailSignIn: (token) =>
       http.send('POST', '/auth/email/consume', options({ body: { token } })),
+    retention: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/retention`,
+        RetentionSetting,
+        options({}, signal),
+      ),
+    setRetention: (workspaceId, retentionDays) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/retention`,
+        RetentionSetting,
+        options({ body: { retentionDays } }),
+      ),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),

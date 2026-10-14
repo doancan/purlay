@@ -678,6 +678,19 @@ describe('the endpoints', () => {
     expect(spent.calls[0]).toEqual({ method: 'POST', url: '/auth/email/consume', body: { token } });
   });
 
+  test('how long a workspace keeps its history (D-139 §4): read, and set', async () => {
+    const read = harness({ retentionDays: null });
+    expect(await read.api.retention(ID)).toEqual({ retentionDays: null });
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/retention` });
+    const set = harness({ retentionDays: 90 });
+    expect(await set.api.setRetention(ID, 90)).toEqual({ retentionDays: 90 });
+    expect(set.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/workspaces/${ID}/retention`,
+      body: { retentionDays: 90 },
+    });
+  });
+
   test('an abandoned read carries the signal', async () => {
     let signal: AbortSignal | undefined;
     const fetchFn = ((_url: string, init: RequestInit) => {

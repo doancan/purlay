@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: choosing how long history is kept, on the screen (D-139, part of #83)
+
+- Owners have "Keep history…" in the workspace menu: forever (the default), a month, a quarter, a
+  year, two or five. A shorter window shows what will be deleted, and its button is red and names it;
+  a longer window says nothing more. A window set another way appears as itself.
+
 ### Feature — 2026-10-14: an owner sets how long history is kept (D-139, part of #83)
 
 - `GET` and `PUT /api/workspaces/:id/retention`, for owners only: whole days from 30 to a hundred

@@ -199,6 +199,17 @@ export const en = {
   'audit.action.retention.changed': '{actor} changed how long history is kept from {from} to {to}',
   'retention.forever': 'forever',
   'retention.days': '{days} days',
+  'retention.entry': 'Keep history…',
+  'retention.title': 'How long {workspace} keeps its history',
+  'retention.description':
+    'Messages and files older than this are deleted every night, for good. Keeping everything is the default.',
+  'retention.label': 'Keep history',
+  'retention.save': 'Save',
+  'retention.shorten': 'Delete history older than {days} days',
+  'retention.warning':
+    'Every night, messages and files older than {days} days will be deleted for good. This cannot be undone, and the audit trail will say you chose it.',
+  'retention.failed': 'The setting was not saved.',
+  'retention.saved': 'Saved.',
   'audit.action.retention.purged':
     'History older than {days} days was cleared: {messages} messages, {files} files',
   'github.entry': 'GitHub connection…',
