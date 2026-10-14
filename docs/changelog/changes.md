@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: an operator erases what a person wrote (D-139, closes #83)
+
+- `bun run erase:content <who> --workspace <slug>` (or `--all` for a self-hoster) empties every
+  message the person wrote in that workspace, the way a delete does, and removes their files with
+  their objects and their bytes. Everybody else's messages, events and incident write-ups are left as
+  they are. Each workspace gets one line on its audit trail; run again, it finds nothing to erase.
+- With this, retention, account erasure and content erasure, the three pieces of D-27, are all
+  built.
+
 ### Feature — 2026-10-14: erasing one's account, on the screen (D-139, part of #83)
 
 - "Erase my account…" in the account menu. It says what goes and what stays, and wants the username

@@ -559,8 +559,11 @@ describe('the message feed is keyset, never offset', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/gm, '');
 
+  // Every source keeps its imports or exports once its comments are gone. `export` alone was the
+  // first proxy, and a command-line entry point exports nothing: a comment saying "messages" in one
+  // made a correct file fail the check (twice, D-138, D-139).
   test('stripping comments leaves code, so the sweep is not looking at nothing', () => {
-    expect(sources.every((file) => code(file).includes('export'))).toBe(true);
+    expect(sources.filter((file) => !/\b(?:import|export)\b/.test(code(file)))).toEqual([]);
   });
 
   for (const file of sources) {

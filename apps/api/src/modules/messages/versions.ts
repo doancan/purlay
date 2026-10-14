@@ -4,9 +4,9 @@
  * the remedy for a secret pasted and edited out, which would otherwise stay in the history for the
  * whole channel. A message keeps `MESSAGE_VERSIONS_KEPT`; past it, the oldest goes.
  *
- * Deleting a message removes its versions with it (`delete.ts`): a tombstone hides what was said.
- * TODO(#83): erasure tombstones a person's messages rather than deleting the rows, so it must remove
- * their versions as `delete.ts` does — the cascade alone would keep them (D-135 §4).
+ * Making a message a tombstone removes its versions with it (`tombstone.ts`), whoever does it — a
+ * delete, the retention purge, content erasure: a tombstone hides what was said, and the cascade alone
+ * would keep them, since the row stays (D-135 §4, D-139).
  */
 import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';

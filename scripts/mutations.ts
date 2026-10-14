@@ -33,6 +33,39 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'keyset-sweep-strips-everything',
+    why: 'the keyset sweep reads empty files and passes for a reason that is not the code',
+    file: 'scripts/enforcement.test.ts',
+    find: "      .replace(/\\/\\/.*$/gm, '');\n",
+    replace: "      .replace(/[\\s\\S]*/, '');\n",
+    tests: ['scripts/enforcement.test.ts'],
+  },
+  {
+    id: 'content-erasure-crosses-workspaces',
+    why: 'one customer’s request empties the person’s words in another customer’s workspace (D-28)',
+    file: 'apps/api/src/modules/users/content-erasure.ts',
+    find: "    .where('workspace_id', '=', workspaceId)\n    .where('sender_id', '=', userId)\n",
+    replace: "    .where('sender_id', '=', userId)\n",
+    tests: ['apps/api/src/modules/users/content-erasure.integration.test.ts'],
+  },
+  {
+    id: 'content-erasure-keeps-the-files',
+    why: 'the person’s files outlive the erasure of what they wrote',
+    file: 'apps/api/src/modules/users/content-erasure.ts',
+    find: '  const files = await dropFiles(\n',
+    replace:
+      '  const files = await (async (..._: unknown[]) => ({ count: 0, keys: [] as string[] }))(\n',
+    tests: ['apps/api/src/modules/users/content-erasure.integration.test.ts'],
+  },
+  {
+    id: 'content-erasure-keeps-the-counts',
+    why: 'an emptied message stays counted unread, and its mention waits for ever',
+    file: 'apps/api/src/modules/users/content-erasure.ts',
+    find: '  await takeBackLive(transaction, now, rows);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/users/content-erasure.integration.test.ts'],
+  },
+  {
     id: 'erasure-locks-the-person-before-the-sessions',
     why: 'an erasure holds the person and waits on a session a send holds, while the send waits on the person: a deadlock',
     file: 'apps/api/src/modules/users/erasure.ts',
@@ -174,7 +207,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'retention-takes-back-a-deleted-message-twice',
     why: 'a message deleted before the purge is taken back again, and the numbers of the people it was counted for drop below what they hold',
-    file: 'apps/api/src/modules/retention/purge.ts',
+    file: 'apps/api/src/modules/messages/tombstone.ts',
     find: '    if (row.deleted_at !== null) continue;\n',
     replace: '',
     tests: ['apps/api/src/modules/retention/purge.integration.test.ts'],
@@ -252,7 +285,7 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'retention-keeps-the-bytes',
     why: 'the workspace’s storage count keeps the bytes of files that are gone (I-7)',
-    file: 'apps/api/src/modules/retention/purge.ts',
+    file: 'apps/api/src/modules/messages/tombstone.ts',
     find: '        storage_used_bytes: sql<string>`greatest(storage_used_bytes - ${bytes.toString()}::bigint, 0)`,\n',
     replace: '        storage_used_bytes: sql<string>`storage_used_bytes`,\n',
     tests: ['apps/api/src/modules/retention/purge.integration.test.ts'],
@@ -2038,8 +2071,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'delete-takes-notifications-before-memberships',
     why: 'a delete and a read by the person it named each hold what the other waits for, and one of them fails as a deadlock',
     file: 'apps/api/src/modules/messages/tombstone.ts',
-    find: "    .orderBy('user_id')\n    .forUpdate()\n",
-    replace: "    .orderBy('user_id')\n",
+    find: "    .where('channel_id', '=', channelId)\n    .orderBy('user_id')\n    .forUpdate()\n",
+    replace: "    .where('channel_id', '=', channelId)\n    .orderBy('user_id')\n",
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
   {
