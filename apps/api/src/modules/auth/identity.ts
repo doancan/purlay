@@ -9,6 +9,7 @@
  * The executor is an argument, so this runs inside a rolled-back transaction in a
  * test (D-46).
  */
+import { isErased } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -100,6 +101,13 @@ const cleanedName = (value: string): string => value.replace(UNSAFE_IN_NAME, '')
  * so a refresh can collide with a live row. The incoming user takes a suffix;
  * identity is `github_id`, and `username` is display-only (D-38).
  */
+/**
+ * A name a living account may take: none begins as an erased one's does (D-139 §5), so a GitHub login or
+ * an address that happens to is given `user-` before it, and stays a person rather than a tombstone.
+ */
+export const livingName = (wanted: string): string =>
+  isErased({ username: wanted }) ? `user-${wanted}` : wanted;
+
 export const availableUsername = async (
   executor: Executor,
   wanted: string,
@@ -143,8 +151,10 @@ export const resolveIdentity = async (
     .executeTakeFirst();
 
   if (existing !== undefined) {
-    const username = await availableUsername(executor, profile.login, existing.id);
-    await executor
+    const username = await availableUsername(executor, livingName(profile.login), existing.id);
+    // Only while it is live: an erasure that committed after the read above leaves this row a
+    // tombstone, and the person's identity must not be written back onto it (D-139 §5, I-11).
+    const refreshed = await executor
       .updateTable('users')
       .set({
         username,
@@ -153,7 +163,15 @@ export const resolveIdentity = async (
         updated_at: now,
       })
       .where('id', '=', existing.id)
-      .execute();
+      .where('deleted_at', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+    if (refreshed === undefined) {
+      throw new AppError({
+        code: 'UNAUTHENTICATED',
+        message: 'That account is gone. Sign in again.',
+      });
+    }
     return {
       userId: existing.id,
       ...(username === profile.login
@@ -184,7 +202,7 @@ export const resolveIdentity = async (
     });
   }
 
-  const username = await availableUsername(executor, profile.login, undefined);
+  const username = await availableUsername(executor, livingName(profile.login), undefined);
   // The lookups above and this insert race: the same GitHub account completing sign-in
   // twice at once (a double-clicked callback, two tabs) passes them twice. **Any** unique
   // key can be the one that loses — `github_id` when the first row is already visible,

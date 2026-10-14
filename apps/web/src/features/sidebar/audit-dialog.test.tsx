@@ -148,6 +148,16 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('an account erased is said without naming the person who is gone (D-139 §5)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([anEntry(1, { action: 'account.erased', targetType: 'user', targetId: ME.id })]),
+        ),
+    });
+    expect(lines(view)).toEqual(['A member erased their account']);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>

@@ -42,6 +42,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('WEBHOOK_SIGNATURE_INVALID'),
   // Authorization — only ever for a resource the caller can already see
   Type.Literal('FORBIDDEN'),
+  /** The one irreversible act needs a sign-in from the last minutes, not an old session (D-139 §5). */
+  Type.Literal('REAUTHENTICATION_REQUIRED'),
   // Absence, and everything a boundary turns into absence
   /** No such route. Distinct from a resource that does not exist, or is not yours. */
   Type.Literal('ROUTE_NOT_FOUND'),
@@ -167,6 +169,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   WEBHOOK_SIGNATURE_INVALID: 401,
 
   FORBIDDEN: 403,
+  REAUTHENTICATION_REQUIRED: 403,
   EMAIL_REQUIRED: 403,
 
   ROUTE_NOT_FOUND: 404,
@@ -231,6 +234,16 @@ export type ValidationDetails = Static<typeof ValidationDetails>;
  * `API.md` specifies details for. Others gain a member here when a real endpoint
  * needs one — a speculative payload is a shape nobody validates.
  */
+/**
+ * The workspaces a refused erasure names: those the caller is the last live owner of, with somebody
+ * else in them, to hand over first (D-139 §6). A role change refused for the same rule names none —
+ * the workspace is the one in the path.
+ */
+export const LastOwnerDetails = Type.Object({
+  workspaceIds: Type.Array(Type.String({ format: 'uuid' })),
+});
+export type LastOwnerDetails = Static<typeof LastOwnerDetails>;
+
 export const AppErrorBody = Type.Union([
   Type.Object({
     code: Type.Literal('VALIDATION_FAILED'),
@@ -238,9 +251,17 @@ export const AppErrorBody = Type.Union([
     details: ValidationDetails,
   }),
   Type.Object({
+    code: Type.Literal('LAST_OWNER'),
+    message: Type.String(),
+    details: Type.Optional(LastOwnerDetails),
+  }),
+  Type.Object({
     // Derived, so the codes are listed once. A new code lands here automatically
     // rather than in a second list somebody has to remember to update.
-    code: Type.Exclude(ErrorCode, Type.Literal('VALIDATION_FAILED')),
+    code: Type.Exclude(
+      ErrorCode,
+      Type.Union([Type.Literal('VALIDATION_FAILED'), Type.Literal('LAST_OWNER')]),
+    ),
     message: Type.String(),
   }),
 ]);

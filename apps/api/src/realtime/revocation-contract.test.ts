@@ -65,7 +65,10 @@ const visibilityWrites = (sources: readonly Source[]): Site[] => {
         const deleting = verb.startsWith('delete');
         const sets = (column: string): boolean =>
           new RegExp(
-            `\\.set\\(\\s*\\{[^}]*\\b${column}\\b|\\bset\\b[^;]*\\b${column}\\s*=`,
+            // Up to the column without leaving the object — its `})` — rather than `[^}]*`: a
+            // template's `${…}` before the column closed that, and an account's erasure went
+            // unseen (D-139 §5).
+            `\\.set\\(\\s*\\{(?:(?!\\}\\))[\\s\\S])*?\\b${column}\\b|\\bset\\b[^;]*\\b${column}\\s*=`,
             'i',
           ).test(statement);
 
@@ -160,6 +163,12 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/settings.ts#archiveChannel': {
     publishes: 'publishChannelRevoked',
     calledFrom: 'apps/api/src/ingress/http/channels.ts',
+  },
+  // An account erased: its sessions revoked and the row soft-deleted in one transaction; the
+  // ingress publishes after the commit (D-139 §5).
+  'apps/api/src/modules/users/erasure.ts#eraseAccount': {
+    publishes: 'publishUserDeleted',
+    calledFrom: 'apps/api/src/ingress/http/auth.ts',
   },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',

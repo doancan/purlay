@@ -514,6 +514,8 @@ export const WORKSPACE_WIDE_READS: readonly string[] = [
 export const UNSCOPED: Readonly<Record<string, string>> = {
   'GET /api/me': 'answers about the caller; the memberships it lists are their own',
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
+  'POST /api/me/erase':
+    'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
   'PATCH /api/me/profile':
     'sets the caller’s own profile and names no workspace; who reads it is the members list’s (D-131)',
   'GET /api/push/key': 'the server’s public push key, the same for everyone signed in (D-126)',

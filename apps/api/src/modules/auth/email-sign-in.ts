@@ -19,7 +19,7 @@ import type { Logger } from '../../platform/logging';
 import type { MailMessage } from '../../platform/mail';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 import { BROADCAST_NAMES } from '@purlay/markdown';
-import { availableUsername } from './identity';
+import { availableUsername, livingName } from './identity';
 
 /** How long a link opens. */
 export const SIGN_IN_LINK_TTL_MS = SIGN_IN_LINK_TTL_MINUTES * 60_000;
@@ -223,7 +223,7 @@ export const consumeSignInLink = async (
   // Nothing to make a name of: a random one, not `user-1` … `user-99`, which a hundred such
   // addresses would use up for good.
   const wanted = usernameFrom(spent.email) ?? `user-${randomToken().slice(0, 6)}`;
-  const username = await availableUsername(executor, wanted, undefined);
+  const username = await availableUsername(executor, livingName(wanted), undefined);
   // Two links to one new address used at once both reach here, both wanting the same name: the
   // insert does nothing on whichever key it meets first — the address or the name, Postgres decides
   // — and the account is read back by its address: one account, whichever made it (D-78).

@@ -72,12 +72,16 @@ export const updateProfile = async (
       details: { fields: { timeZone: 'is not a known time zone' } },
     });
   }
+  // Live only: a profile saved while the account was being erased must not write it back (D-139 §5).
   const before = await transaction
     .selectFrom('users')
     .select(['title', 'time_zone', 'status_text'])
     .where('id', '=', userId)
+    .where('deleted_at', 'is', null)
     .forNoKeyUpdate()
-    .executeTakeFirstOrThrow();
+    .executeTakeFirst();
+  if (before === undefined)
+    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
   const after: ProfileRow = {
     title: input.title === undefined ? before.title : stored(input.title),
     time_zone: zone === undefined ? before.time_zone : zone,
