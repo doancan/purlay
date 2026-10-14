@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: what an edited message said before (D-135, part of #82)
+
+- Every edit keeps the words it replaced. Anybody who can read the message can read its earlier
+  versions, newest first; its author can remove one; deleting the message removes them all.
+
 ### Feature — 2026-10-14: a channel's GitHub repositories, in its details (D-134, closes #79)
 
 - An owner or an admin connects a repository from the channel's details, choosing what it posts, and

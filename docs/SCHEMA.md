@@ -645,6 +645,43 @@ Free-form column, but only these shapes are written. Each is validated before in
 
 ---
 
+### 6.5. `message_versions`
+
+What an edited message said before each edit (migration 0034, D-135).
+
+```sql
+CREATE TABLE message_versions (
+    id            UUID PRIMARY KEY,                 -- UUIDv7 at the instant it was replaced
+    message_id    UUID NOT NULL,
+    channel_id    UUID NOT NULL,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    content       TEXT NOT NULL,                    -- the words the edit replaced
+    replaced_at   TIMESTAMPTZ NOT NULL,             -- the edit's instant, the message's edited_at then
+
+    CONSTRAINT message_versions_content_length CHECK (
+        char_length(content)
+        + char_length(regexp_replace(content, '[^\U00010000-\U0010FFFF]', '', 'g'))
+        <= 16000
+    ),
+    CONSTRAINT message_versions_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT message_versions_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT message_versions_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_message_versions_message ON message_versions (message_id, id DESC);
+CREATE INDEX idx_message_versions_channel ON message_versions (channel_id, workspace_id);
+CREATE INDEX idx_message_versions_workspace ON message_versions (workspace_id);
+```
+
+> Written in the edit's transaction, under its row lock, at its instant; the latest
+> `MESSAGE_VERSIONS_KEPT` are kept. Removed with the message's words when it is deleted
+> (`messages/delete.ts`), and one at a time by its author. Never searched, never parsed for mentions.
+
 ## 7. Reactions, Attachments, Mentions, Notifications
 
 ### 7.1. `reactions`
@@ -1213,12 +1250,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0031_github_feeds.sql        github_repo_feeds, github_deliveries  (D-134)
 0032_event_messages.sql      messages.sender_id nullable for an event, messages_sender_by_type  (D-134 §6)
 0033_feed_failures.sql       a feed's last failure may be rate_limited  (D-134 §8)
+0034_message_versions.sql    message_versions: what an edit replaced  (D-135)
 ```
 
-Phase 2's magic links add `0034_email_auth.sql`.
+Phase 2's magic links add `0035_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

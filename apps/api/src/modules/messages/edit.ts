@@ -26,6 +26,7 @@ import { notify, resolveMentions, type ChannelStateUpdate } from './delivery';
 import { readBody } from './body';
 import { readBuilt } from './reader';
 import type { PushSender } from '../push/sender';
+import { keepVersion } from './versions';
 
 export interface Revised {
   readonly message: Message;
@@ -101,13 +102,16 @@ export const reviseMessage = async (
   // The reading a send does, or its refusal (D-12, D-101).
   const { names, reading, metadata } = readBody(content, engine);
 
+  // One instant for the edit and the version it keeps (D-135 §1).
+  const now = clock.now();
+  await keepVersion(executor, context, messageId, row.content, now);
   const updated = await executor
     .updateTable('messages')
     .set({
       content,
       metadata,
-      edited_at: clock.now(),
-      updated_at: clock.now(),
+      edited_at: now,
+      updated_at: now,
       state_version: sql<number>`state_version + 1`,
     })
     .where('id', '=', messageId)

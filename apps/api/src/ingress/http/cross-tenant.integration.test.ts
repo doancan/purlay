@@ -109,6 +109,16 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   const invitation = await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie);
   expect(invitation.status).toBe(201);
   const { invitation: made } = (await invitation.json()) as { invitation: { id: string } };
+  // An earlier version of the root, to remove: the root edited once.
+  expect(
+    (await call(db, 'PATCH', `/api/messages/${root}`, cookie, { content: 'an edited question' }))
+      .status,
+  ).toBe(200);
+  const version = await db
+    .selectFrom('message_versions')
+    .select('id')
+    .where('message_id', '=', root)
+    .executeTakeFirstOrThrow();
   // A repository's feed to disconnect.
   const feed = await call(db, 'POST', `/api/channels/${channelId}/github-feeds`, cookie, {
     repository: 'acme/api',
@@ -125,6 +135,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     memberId: member.userId,
     invitationId: made.id,
     feedId: connected.id,
+    versionId: version.id,
   };
 };
 
@@ -137,6 +148,7 @@ const NEVER_EXISTED: Ids = {
   memberId: '00000000-0000-4000-8000-000000000000',
   invitationId: '00000000-0000-4000-8000-000000000000',
   feedId: '00000000-0000-4000-8000-000000000000',
+  versionId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
@@ -148,6 +160,7 @@ const NOT_A_UUID: Ids = {
   memberId: 'not-a-uuid',
   invitationId: 'not-a-uuid',
   feedId: 'not-a-uuid',
+  versionId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {

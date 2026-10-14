@@ -173,6 +173,15 @@ export interface Messages {
   workspace_id: string;
 }
 
+export interface MessageVersions {
+  channel_id: string;
+  content: string;
+  id: string;
+  message_id: string;
+  replaced_at: Timestamp;
+  workspace_id: string;
+}
+
 export interface Notifications {
   channel_id: string;
   created_at: Generated<Timestamp>;
@@ -298,6 +307,7 @@ export interface DB {
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;
+  message_versions: MessageVersions;
   messages: Messages;
   notifications: Notifications;
   pinned_messages: PinnedMessages;

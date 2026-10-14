@@ -54,6 +54,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'WORKSPACE_NOT_FOUND':
     case 'CHANNEL_NOT_FOUND':
     case 'MESSAGE_NOT_FOUND':
+    case 'MESSAGE_VERSION_NOT_FOUND':
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
     case 'INVITATION_NOT_FOUND':

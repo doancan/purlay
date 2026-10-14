@@ -132,6 +132,7 @@ import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { starChannel } from './star';
+import { deleteVersion, listVersions } from './versions';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
@@ -520,6 +521,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/channels/:channelId/pins',
       async ({ request, params }) => await listPins(dependencies, request, params.channelId),
     )
+    .get(
+      '/api/messages/:messageId/versions',
+      async ({ request, params }) => await listVersions(dependencies, request, params.messageId),
+    )
+    .delete('/api/messages/:messageId/versions/:versionId', async ({ request, params, set }) => {
+      await deleteVersion(dependencies, request, params.messageId, params.versionId);
+      set.status = 204;
+      return null;
+    })
     .put('/api/messages/:messageId/pin', async ({ request, params, set }) => {
       await putPin(sending, request, params.messageId);
       set.status = 204;

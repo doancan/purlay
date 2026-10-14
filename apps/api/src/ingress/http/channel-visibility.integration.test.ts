@@ -18,6 +18,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { messageId } from '@purlay/types';
 import { createApp } from './app';
 import {
   CROSS_TENANT,
@@ -59,6 +60,28 @@ const created = async (response: Response): Promise<string> => {
   return ((await response.json()) as { id: string }).id;
 };
 
+/** An earlier version of a message, as a row: what removing one names. */
+const aVersion = async (
+  db: Executor,
+  workspaceId: string,
+  channelId: string,
+  message: string,
+): Promise<string> => {
+  const id = messageId(NOW);
+  await db
+    .insertInto('message_versions')
+    .values({
+      id,
+      message_id: message,
+      channel_id: channelId,
+      workspace_id: workspaceId,
+      content: 'what it said before',
+      replaced_at: NOW,
+    })
+    .execute();
+  return id;
+};
+
 /** A repository's feed into a channel, as a row: what disconnecting one names. */
 const aFeed = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
   const id = crypto.randomUUID();
@@ -86,6 +109,8 @@ interface World {
   readonly visible: string;
   /** A repository's feed into the visible channel: the control for disconnecting one. */
   readonly feed: string;
+  /** An earlier version of the outsider's own visible message: the control for removing one. */
+  readonly version: string;
   /** Each one hidden from the outsider for a different reason. */
   readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
   /** A root with an answer in each channel above: the thing a message endpoint names. */
@@ -235,6 +260,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     workspaceId,
     visible,
     feed: await aFeed(db, workspaceId, visible),
+    version: await aVersion(db, workspaceId, visible, threads.ownVisible),
     hidden,
     threads,
   };
@@ -278,6 +304,7 @@ describe('integration: channel visibility', () => {
               memberId: NEVER_EXISTED,
               invitationId: NEVER_EXISTED,
               feedId: world.feed,
+              versionId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -318,6 +345,8 @@ describe('integration: channel visibility', () => {
               memberId: NEVER_EXISTED,
               invitationId: NEVER_EXISTED,
               feedId: NEVER_EXISTED,
+              // The outsider's own visible message's: the control of removing a version.
+              versionId: world.version,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -378,6 +407,7 @@ describe('integration: channel visibility', () => {
                 memberId: NEVER_EXISTED,
                 invitationId: NEVER_EXISTED,
                 feedId: NEVER_EXISTED,
+                versionId: NEVER_EXISTED,
               }),
               cookie,
             );
