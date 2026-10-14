@@ -7,6 +7,7 @@
  * make "next unread" mean something nobody can see.
  */
 import type { Channel } from '@purlay/types';
+import { joinedChannels, starredChannels } from '../sidebar/ordering';
 
 /** Only channels the person has joined: one they can merely see has nothing to read. */
 const joined = (channels: readonly Channel[]): Channel[] =>
@@ -19,14 +20,17 @@ const byActivity = (a: Channel, b: Channel): number => {
   return (a.name ?? '').localeCompare(b.name ?? '');
 };
 
-/** Channels first, then direct messages, each most recently active first, then by name. */
-export const inSidebarOrder = (channels: readonly Channel[]): Channel[] => {
-  const mine = joined(channels);
-  return [
-    ...mine.filter((c) => c.type !== 'direct_message').sort(byActivity),
-    ...mine.filter((c) => c.type === 'direct_message').sort(byActivity),
-  ];
-};
+/**
+ * The starred channels by name, the other channels most recently active first, then direct
+ * messages — the sidebar's own lists, read from where it reads them (D-132).
+ */
+export const inSidebarOrder = (channels: readonly Channel[]): Channel[] => [
+  ...starredChannels(channels),
+  ...joinedChannels(channels),
+  ...joined(channels)
+    .filter((c) => c.type === 'direct_message')
+    .sort(byActivity),
+];
 
 /**
  * The next channel with something unread after `currentId`, or the previous one, wrapping

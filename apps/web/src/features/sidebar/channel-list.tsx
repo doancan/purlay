@@ -17,7 +17,7 @@ import { useWorkspace } from '../shell/workspace';
 import { BrowseChannelsDialog } from './browse-channels-dialog';
 import { ChannelRow } from './channel-row';
 import { NewChannelDialog } from './new-channel-dialog';
-import { joinedChannels } from './ordering';
+import { joinedChannels, starredChannels } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
 export const ChannelList = (): React.JSX.Element => {
@@ -29,6 +29,8 @@ export const ChannelList = (): React.JSX.Element => {
   const [browsing, setBrowsing] = useState(false);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
   const mine = joinedChannels(channels.data ?? []);
+  // In no channel at all is the empty state; in channels that are all starred is not (D-132).
+  const none = mine.length === 0 && starredChannels(channels.data ?? []).length === 0;
 
   return (
     <nav aria-label={t('sidebar.channels')} className="flex flex-col">
@@ -64,7 +66,7 @@ export const ChannelList = (): React.JSX.Element => {
             void channels.refetch();
           }}
         />
-      ) : mine.length === 0 ? (
+      ) : none ? (
         <SectionEmpty
           title={t('state.channels.empty.title')}
           body={t('state.channels.empty.body')}

@@ -82,6 +82,13 @@ describe('integration: a star', () => {
       );
       expect(response.status).toBe(404);
       expect(await response.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
+      const letGo = await app.handle(
+        new Request(`https://purlay.test/api/channels/${room.channelId}/star`, {
+          method: 'DELETE',
+          headers: { cookie: `${SESSION_COOKIE}=${token}` },
+        }),
+      );
+      expect(letGo.status).toBe(404);
     });
   });
 
@@ -97,6 +104,7 @@ describe('integration: a star', () => {
         }),
       );
       expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({ error: { code: 'CHANNEL_NOT_FOUND' } });
     });
   });
 

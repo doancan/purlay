@@ -5765,13 +5765,17 @@ offer a pick of channels to join on accepting an invitation. D-125 put both in P
    false for anybody not in it.
 2. **Set and let go** with `PUT`/`DELETE /api/channels/:channelId/star`, idempotent; a channel the
    caller is not in is `404`, the notification level's rule (D-107). Not a direct message's: a person
-   is found under People, a group under Conversations.
+   is found under People, a group under Conversations — and one is refused as not found, on purpose,
+   as a channel that is not one to star. One conditional statement decides and writes, so two stars
+   at once change the row once and tell once.
 3. **The other tabs are told** with `CHANNELS_UPDATED` on the person's own topic, carrying the
    workspace only, and read their channels again — only on a change.
 4. **The Starred section** is above Channels and takes its channels out of it; by name, since a
    place you keep should stay where you put it; absent while nothing is starred. Star is in the
-   channel's header, its name constant and `aria-pressed` saying whether it is; painted at once and
-   put back when refused, only while it is still as that asked.
+   channel's header (in the Channel menu on a narrow window), its name constant and `aria-pressed`
+   saying whether it is; painted at once and put back when refused, only while it is still as that
+   asked. A channel's requests go one after another, so the last click is what stays, and once
+   answered the channels are read again. `Alt+↑/↓` and the palette walk the sidebar's own order.
 
 **Rejected.** *The star in `ChannelState`* — every frame that carries a read position would have to
 read the star too, and a star changes nothing a read position says. *A frame carrying the star* —

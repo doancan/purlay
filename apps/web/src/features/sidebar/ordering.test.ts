@@ -122,3 +122,16 @@ describe('starred channels (D-132)', () => {
     expect(joinedChannels(all).map((c) => c.name)).toEqual(['beta']);
   });
 });
+
+describe('the order a key steps through (D-132)', () => {
+  test('is the sidebar’s: the starred by name, the other channels by activity, then direct messages', async () => {
+    const { inSidebarOrder } = await import('../palette/channels');
+    const all = [
+      aChannel('1', 'zeta', { starred: true, lastMessageAt: '2026-09-09T08:00:00.000Z' }),
+      aChannel('2', 'alpha', { starred: true }),
+      aChannel('3', 'beta', { lastMessageAt: '2026-09-09T09:00:00.000Z' }),
+      aChannel('4', 'gamma'),
+    ];
+    expect(inSidebarOrder(all).map((c) => c.name)).toEqual(['alpha', 'zeta', 'beta', 'gamma']);
+  });
+});
