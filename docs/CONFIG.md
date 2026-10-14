@@ -106,7 +106,9 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 | `REDIS_URL` | cloud | — | Shared `EventBus`, `PresenceRegistry` and `RateLimiter` adapters (D-7, D-25). **Never required for self-hosting** |
 | `BILLING_PROVIDER_KEY` | cloud | — | **Secret.** Merchant of record (D-43) |
 | `BILLING_WEBHOOK_SECRET` | cloud | — | **Secret.** Signature verification on subscription events |
-| `SMTP_URL` | cloud | — | **Secret.** Transactional email: receipts and Phase 2 magic links. Invitations are links, not email (D-115) |
+| `SMTP_URL` | — | — | **Secret.** The SMTP server sign-in links are sent through, `smtp://` or `smtps://` with its credentials; with `MAIL_FROM`, or neither — neither is email sign-in off (D-138 §6). Mail to a relay past this machine goes only over TLS — `smtps://`, or STARTTLS required on `smtp://` — unless `SMTP_ALLOW_PLAINTEXT=true`: every message carries a sign-in link. Invitations are links, not email (D-115) |
+| `MAIL_FROM` | — | — | The address sign-in links come from; set with `SMTP_URL`, or neither (D-138) |
+| `SMTP_ALLOW_PLAINTEXT` | — | `false` | Says that the link to a relay past this machine is private, so `smtp://` need not upgrade to TLS — as `DATABASE_ALLOW_PLAINTEXT` does for the database (D-138 §6) |
 
 ## Limits
 

@@ -82,6 +82,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
   SESSION_TTL_DAYS: 30,
   S3_REGION: 'us-east-1',
+  SMTP_ALLOW_PLAINTEXT: false,
   ...overrides,
 });
 

@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: signing in by email, decided first (D-138, part of #81)
+
+- How email sign-in works and how it meets GitHub sign-in is decided before any of it is built: a
+  link proves an address at the moment it is used, email sign-in is for accounts made by email, and
+  nothing is linked silently. The server takes `SMTP_URL` and `MAIL_FROM`, both or neither, and
+  says at `GET /api/auth/methods` whether email sign-in is on.
+
 ### Feature — 2026-10-14: an incident's runbook and postmortem, on screen (D-137, closes #487)
 
 - The incident panel links the runbook, opened in a new tab, and holds the postmortem, drawn as a

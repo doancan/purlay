@@ -21,6 +21,7 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
+import { authMethods } from './auth-methods';
 import { Elysia, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
@@ -357,6 +358,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
+    .get('/api/auth/methods', () => authMethods(dependencies.config))
     // Spelled out, as every route is, for `scripts/enforcement.test.ts` to read against
     // `API.md`. It is `SIGN_IN_CALLBACK`: were they to differ, the error hook's redirect
     // would miss this route and `auth.integration.test.ts` would see JSON (D-121).

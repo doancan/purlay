@@ -103,6 +103,15 @@ export const Environment = Type.Object({
   VAPID_SUBJECT: Type.Optional(
     Type.String({ pattern: '^(mailto:[^\\s@]+@[^\\s@]+|https://\\S+)$' }),
   ),
+
+  /** Where sign-in links are sent from (D-138): an SMTP server, `smtp://` or `smtps://`, with its
+   *  credentials, and the address they come from. Both or neither: neither is email sign-in off — the
+   *  API says so, and GitHub sign-in is all there is. */
+  SMTP_URL: Type.Optional(Type.String({ pattern: '^smtps?://[^\\s]+$' })),
+  MAIL_FROM: Type.Optional(Type.String({ format: 'email' })),
+  /** Mail to a relay past this machine is sent only over TLS — `smtps://`, or STARTTLS on `smtp://` —
+   *  unless this says the link is private (D-138 §6). */
+  SMTP_ALLOW_PLAINTEXT: Type.Boolean({ default: false }),
 });
 
 /**
@@ -125,6 +134,7 @@ const SECRETS: ReadonlySet<string> = new Set([
   'ENCRYPTION_KEY',
   'S3_SECRET_ACCESS_KEY',
   'VAPID_PRIVATE_KEY',
+  'SMTP_URL',
 ]);
 
 /** The variables this application reads. `.env.example` is generated from it. */
@@ -247,6 +257,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   } else if (config.VAPID_PUBLIC_KEY !== undefined && config.VAPID_PRIVATE_KEY !== undefined) {
     problems.push(...vapidProblems(config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY));
   }
+  problems.push(...mailProblems(config));
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {
       problems.push(
@@ -287,6 +298,12 @@ const isSequence = (bytes: Buffer): boolean => {
  * different pairs start, are handed to browsers, and have every delivery refused — so it is found
  * here (D-126). Never quotes either value.
  */
+/** Sign-in mail (D-138 §6): both or neither. How the connection is held to TLS is the sender's. */
+const mailProblems = (config: Config): string[] =>
+  (config.SMTP_URL === undefined) !== (config.MAIL_FROM === undefined)
+    ? ['SMTP_URL, MAIL_FROM: set both, or neither']
+    : [];
+
 const vapidProblems = (publicKey: string, privateKey: string): string[] => {
   // One spelling: the browser hands back the key it was given, and a second spelling of the same
   // bytes would read as a key the operator replaced, re-subscribing every device on every load.
