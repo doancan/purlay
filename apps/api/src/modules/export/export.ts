@@ -21,7 +21,7 @@ import type { Logger } from '../../platform/logging';
 import { atomicallyOn, snapshotOn } from '../../platform/transactions';
 import { recordAudit } from '../audit/audit';
 import { exportDirectory, type ExportDirectory } from './write';
-import type { ObjectStore } from '../../platform/storage';
+import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import { sql, type RawBuilder } from '@purlay/db';
 import { COLUMNS, type ExportedTable } from './tables';
 
@@ -230,9 +230,9 @@ const copyObjects = async (
 ): Promise<ExportManifest['blobs']> => {
   const blobs = { count: 0, bytes: 0, removed: [] as string[], missing: [] as string[] };
   for (const file of objects) {
-    // Defence in depth: a key of this workspace's or none (`storage.ts` names them so).
+    // Defence in depth: a key of this workspace's or none (`workspacePrefix` names them so).
     for (const key of [file.storage_key, file.thumbnail_key]) {
-      if (key !== null && !key.startsWith(`${scope.workspaceId}/`)) {
+      if (key !== null && !key.startsWith(workspacePrefix(scope.workspaceId))) {
         throw new Error(`attachment ${file.id} names a file outside its workspace`);
       }
     }

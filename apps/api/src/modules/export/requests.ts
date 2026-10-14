@@ -30,7 +30,7 @@ import { HOUR_MS } from '../../platform/clock';
 import { visibleChannelIds } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
-import type { ObjectStore } from '../../platform/storage';
+import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
@@ -112,7 +112,7 @@ const shown = (row: Row): WorkspaceExport => ({
 
 /** Where an export's archive is kept: under its workspace, as every key of the store is. */
 const keyOf = (workspaceId: string, exportId: string): string =>
-  `${workspaceId}/exports/${exportId}.tar`;
+  `${workspacePrefix(workspaceId)}exports/${exportId}.tar`;
 
 /** Asks for an export; the caller starts it once this has committed (`exportQueue`). */
 export const requestExport = async (

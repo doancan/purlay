@@ -17,6 +17,7 @@ import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
 import { messageId, type WorkspaceExport } from '@purlay/types';
 import { HOUR_MS, fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
+import { workspacePrefix } from '../../platform/storage';
 import { createLogger } from '../../platform/logging';
 import {
   NOW,
@@ -399,7 +400,7 @@ describe('integration: an owner’s export', () => {
     const sent = messageId(new Date(NOW.getTime() + 5));
     await sendMessage(cloned.db, clock, ada.context, { id: sent, content: 'with a file' });
     const fileId = messageId(new Date(NOW.getTime() + 6));
-    const storageKey = `${room.workspaceId}/${fileId}/plan.pdf`;
+    const storageKey = `${workspacePrefix(room.workspaceId)}${fileId}/plan.pdf`;
     await world.store.put(storageKey, new Uint8Array(10), 'application/pdf');
     await cloned.db
       .insertInto('attachments')
@@ -509,7 +510,7 @@ describe('integration: an owner’s export', () => {
           .updateTable('workspace_exports')
           .set({ status: 'failed', failure: 'EXPORT_ABANDONED' })
           .where('status', '=', 'pending')
-          .where('workspace_id', '=', key.split('/')[0] ?? '')
+          .where('workspace_id', '=', key.split('/')[1] ?? '')
           .execute();
       },
     };
@@ -587,8 +588,8 @@ describe('integration: an owner’s export', () => {
   test('the sweep: expired archives claimed then removed; spent ones finished; silent ones failed', async () => {
     const world = await aWorld();
     const { room, store } = world;
-    const staleKey = `${room.workspaceId}/exports/stale.tar`;
-    const spentKey = `${room.workspaceId}/exports/spent.tar`;
+    const staleKey = `${workspacePrefix(room.workspaceId)}exports/stale.tar`;
+    const spentKey = `${workspacePrefix(room.workspaceId)}exports/spent.tar`;
     for (const key of [staleKey, spentKey]) {
       await store.put(key, new Uint8Array([1]), 'application/x-tar');
     }
@@ -660,7 +661,7 @@ describe('integration: an owner’s export', () => {
   test('the sweep reports an archive the store will not let go, and tries again next time', async () => {
     const world = await aWorld();
     const { room, store } = world;
-    const key = `${room.workspaceId}/exports/stuck.tar`;
+    const key = `${workspacePrefix(room.workspaceId)}exports/stuck.tar`;
     await store.put(key, new Uint8Array([1]), 'application/x-tar');
     await cloned.db
       .insertInto('workspace_exports')

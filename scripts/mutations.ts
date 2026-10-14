@@ -33,6 +33,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'export-expects-a-key-uploads-never-write',
+    why: 'the export’s key check and the uploads’ key disagree, and every export of a workspace with a file fails',
+    file: 'apps/api/src/modules/export/export.ts',
+    find: '      if (key !== null && !key.startsWith(workspacePrefix(scope.workspaceId))) {\n',
+    replace: '      if (key !== null && !key.startsWith(`${scope.workspaceId}/`)) {\n',
+    tests: ['apps/api/src/modules/export/export.integration.test.ts'],
+  },
+  {
     id: 'export-downloaded-twice',
     why: 'an export said to be downloadable once is downloaded again, by whoever has the link next',
     file: 'apps/api/src/modules/export/requests.ts',

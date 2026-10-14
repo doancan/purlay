@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: an export of a workspace with files no longer fails (D-140, part of #84)
+
+- The export's check that every file belongs to the workspace expected a key format uploads never
+  write, so exporting any workspace with an attachment failed. Uploads, exports and the check now
+  take the prefix from one function. The export tests store their file through the real upload
+  path, so a made-up key can no longer hide the mismatch.
+
 ### Feature — 2026-10-14: an owner exports their workspace and downloads it once (D-140, part of #84)
 
 - `POST /api/workspaces/:id/exports` starts an owner's export, made in the background. It covers the
