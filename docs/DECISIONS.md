@@ -6277,7 +6277,11 @@ line. For retention and erasure that is personal data kept past the point the op
 4. **Not queued:** an export's archive, which its own row names until it is gone (`sweep:exports`,
    D-140); and the objects of an upload whose row never committed — nothing names them, and a stop
    between the store's write and the row's insert leaves them. Closing that window means writing the
-   key before the object, on every upload; it is not done here. Nor would a hard delete of a workspace or
+   key before the object, on every upload; it is not done here. *Amended (#607):* it is done. An
+   upload writes its keys to the queue before its objects, due an hour later so an upload still on its
+   way is never deleted under it, and the transaction that inserts its row takes them out again; an
+   upload refused or raced lets them go at once. The cost is two small writes per upload, beside a
+   file of up to 25 MiB. Nor would a hard delete of a workspace or
    a message reach the queue through the cascade from `attachments` — no such delete exists, and one
    added must queue its files as `dropFiles` does.
 

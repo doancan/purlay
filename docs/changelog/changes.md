@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: an upload interrupted midway leaves nothing nobody can find (closes #607)
+
+- An upload now writes the keys of its objects to the deletion queue before it writes the objects, due
+  an hour later, and takes them out in the transaction that inserts its row. A process that stops
+  between the store's write and the row's insert therefore leaves keys that `sweep:deletions` deletes
+  once that hour has passed, never objects no row names. An upload that is refused or raced lets its
+  objects go at once, as before.
+
 ### Feature — 2026-10-14: the page says when you are in front of it, so your phone stays quiet (D-143, closes #545)
 
 - While a Purlay page is visible and focused, it sends `ACTIVE` for its workspace when you press a key,

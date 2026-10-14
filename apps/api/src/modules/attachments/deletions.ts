@@ -15,6 +15,37 @@ import type { Atomically } from '../../platform/transactions';
 /** How many keys the sweep reads at a time. */
 const DELETION_BATCH = 500;
 
+/**
+ * How long an upload's keys, written before its object, wait before the sweep may take them (#607):
+ * far longer than any upload takes from the store's write to the row's insert, so an upload on its
+ * way never has its object deleted under it.
+ */
+const UPLOAD_GRACE = sql<Date>`now() + interval '1 hour'`;
+
+/**
+ * Before an upload writes its objects (#607): their keys, due only after the grace, so a process that
+ * stops before the row is inserted leaves them for the sweep rather than unnamed. The insert takes
+ * them out again (`claimUploadKeys`).
+ */
+export const writeUploadKeysAhead = async (
+  transaction: Transaction,
+  keys: readonly string[],
+): Promise<void> => {
+  await transaction
+    .insertInto('object_deletions')
+    .values(keys.map((key) => ({ storage_key: key, due_at: UPLOAD_GRACE })))
+    .onConflict((conflict) => conflict.column('storage_key').doNothing())
+    .execute();
+};
+
+/** The upload's row names its objects now: their keys leave the queue, in the insert's transaction. */
+export const claimUploadKeys = async (
+  transaction: Transaction,
+  keys: readonly string[],
+): Promise<void> => {
+  await transaction.deleteFrom('object_deletions').where('storage_key', 'in', keys).execute();
+};
+
 /** Writes the keys of objects whose rows this transaction deletes. A key already waiting stays. */
 export const enqueueObjectDeletions = async (
   transaction: Transaction,
@@ -92,6 +123,8 @@ export const sweepObjectDeletions = async (
       .selectFrom('object_deletions')
       .select('storage_key')
       .where('storage_key', '>', after)
+      // An upload's keys only once its grace has passed: it may still be on its way.
+      .where('due_at', '<=', sql<Date>`now()`)
       .orderBy('storage_key')
       .limit(DELETION_BATCH)
       .execute();
