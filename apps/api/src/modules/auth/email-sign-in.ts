@@ -11,13 +11,15 @@
  * - **Five messages an hour for an address** (§7, provisional), a link or a word about GitHub alike:
  *   past it nothing is made or sent, and the log says so without the address.
  */
-import { sql, type Transaction } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { EmailSignInRequest } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
 import type { MailMessage } from '../../platform/mail';
 import { randomToken, tokenDigest } from '../../platform/tokens';
+import { BROADCAST_NAMES } from '@purlay/markdown';
+import { availableUsername } from './identity';
 
 /** How long a link opens. */
 export const SIGN_IN_LINK_TTL_MS = 15 * 60_000;
@@ -145,3 +147,117 @@ export const requestSignInLink = async (
   const url = `${appUrl}/sign-in/email#${token}`;
   return message(email, words.linkSubject, words.link(url), url);
 };
+
+const linkNotFound = (): AppError =>
+  new AppError({
+    code: 'SIGN_IN_LINK_NOT_FOUND',
+    message: 'That sign-in link does not open any more. Ask for another.',
+  });
+
+/**
+ * The address a link was sent to, for the page to show before the person signs in (D-138 §4) — so a
+ * link somebody forwarded from their own mailbox is seen to be theirs. Reads; spends nothing.
+ */
+export const previewSignInLink = async (
+  executor: Executor,
+  clock: Clock,
+  token: string,
+): Promise<{ readonly email: string }> => {
+  const row = await executor
+    .selectFrom('email_sign_ins')
+    .select('email')
+    .where('token_hash', '=', await tokenDigest(token))
+    .where('kind', '=', 'link')
+    .where('used_at', 'is', null)
+    .where('expires_at', '>', clock.now())
+    .executeTakeFirst();
+  if (row === undefined) throw linkNotFound();
+  return { email: row.email };
+};
+
+/**
+ * A username from an address's local part (D-138 §5): what a mention can name — lower-case letters,
+ * digits and single hyphens between them — never a broadcast name; `null` when nothing is left. The
+ * address is ASCII already (`signInAddress`), so there are no marked letters to keep.
+ */
+export const usernameFrom = (email: string): string | null => {
+  const local = email.slice(0, email.lastIndexOf('@'));
+  const shaped = local
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 39)
+    .replace(/-+$/, '');
+  return shaped === '' || BROADCAST_NAMES.has(shaped) ? null : shaped;
+};
+
+/**
+ * Spends a link and answers whose session to open (D-138 §2, §4): once, within its fifteen minutes —
+ * the one statement that checks it is unspent sets it spent. An address no account has is made an
+ * account; an email account's is signed into; a GitHub account's, or an erased one's, never — the
+ * same `SIGN_IN_LINK_NOT_FOUND` as a spent link, and the caller's transaction undoes the spend.
+ * Writes more than once, so it takes the transaction that makes them one (D-77).
+ */
+export const consumeSignInLink = async (
+  executor: Transaction,
+  clock: Clock,
+  token: string,
+): Promise<{ readonly userId: string; readonly created: boolean }> => {
+  const now = clock.now();
+  const spent = await executor
+    .updateTable('email_sign_ins')
+    .set({ used_at: now })
+    .where('token_hash', '=', await tokenDigest(token))
+    .where('kind', '=', 'link')
+    .where('used_at', 'is', null)
+    .where('expires_at', '>', now)
+    .returning('email')
+    .executeTakeFirst();
+  if (spent === undefined) throw linkNotFound();
+  const account = await accountOf(executor, spent.email);
+  if (account !== undefined) {
+    if (account.github_id !== null || account.deleted_at !== null) throw linkNotFound();
+    return { userId: account.id, created: false };
+  }
+  // Nothing to make a name of: a random one, not `user-1` … `user-99`, which a hundred such
+  // addresses would use up for good.
+  const wanted = usernameFrom(spent.email) ?? `user-${randomToken().slice(0, 6)}`;
+  const username = await availableUsername(executor, wanted, undefined);
+  // Two links to one new address used at once both reach here, both wanting the same name: the
+  // insert does nothing on whichever key it meets first — the address or the name, Postgres decides
+  // — and the account is read back by its address: one account, whichever made it (D-78).
+  await executor
+    .insertInto('users')
+    .values({
+      email: spent.email,
+      username,
+      display_name: username,
+      created_at: now,
+      updated_at: now,
+    })
+    .onConflict((conflict) => conflict.doNothing())
+    .execute();
+  const made = await accountOf(executor, spent.email);
+  if (made === undefined) {
+    // No account has the address, so what refused the insert was the name: another new address
+    // took it at the same instant. Loud — a 500, logged with this sentence — and the spend is undone
+    // with the rest, so pressing again makes the account under the next name.
+    throw new Error('sign-in by link: the username was taken at the same instant');
+  }
+  // The other link's account, made a moment ago — by email, or since, by GitHub (§2).
+  if (made.github_id !== null || made.deleted_at !== null) throw linkNotFound();
+  return { userId: made.id, created: true };
+};
+
+const accountOf = async (
+  executor: Executor,
+  email: string,
+): Promise<
+  | { readonly id: string; readonly github_id: string | null; readonly deleted_at: Date | null }
+  | undefined
+> =>
+  await executor
+    .selectFrom('users')
+    .select(['id', 'github_id', 'deleted_at'])
+    .where('email', '=', email)
+    .executeTakeFirst();

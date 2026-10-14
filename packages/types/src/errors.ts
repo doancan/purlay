@@ -116,6 +116,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('ATTACHMENT_NOT_FOUND'),
   /** A link that does not open — unknown, expired, revoked, or its workspace gone: one answer (D-115). */
   Type.Literal('INVITATION_NOT_FOUND'),
+  /** A sign-in link that does not open — unknown, used, expired: one answer (D-138 §4). */
+  Type.Literal('SIGN_IN_LINK_NOT_FOUND'),
   /** A repository's feed that does not exist, or is in a channel the caller cannot see (D-134). */
   Type.Literal('GITHUB_FEED_NOT_FOUND'),
   /** An external image the proxy will not or cannot show — one answer for every reason (#110). */
@@ -202,6 +204,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
   INVITATION_NOT_FOUND: 404,
+  SIGN_IN_LINK_NOT_FOUND: 404,
   GITHUB_FEED_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,

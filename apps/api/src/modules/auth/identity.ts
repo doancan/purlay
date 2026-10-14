@@ -100,7 +100,7 @@ const cleanedName = (value: string): string => value.replace(UNSAFE_IN_NAME, '')
  * so a refresh can collide with a live row. The incoming user takes a suffix;
  * identity is `github_id`, and `username` is display-only (D-38).
  */
-const availableUsername = async (
+export const availableUsername = async (
   executor: Executor,
   wanted: string,
   selfId: string | undefined,

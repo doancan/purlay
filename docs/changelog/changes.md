@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: using a sign-in link (D-138, part of #81)
+
+- `POST /auth/email/preview` says which address a link was sent to without spending it, and
+  `POST /auth/email/consume` spends it and signs in — making the account, the first time, with a
+  username from the address. A link works once, for fifteen minutes, and never into an account that
+  signs in with GitHub; two links used at once make one account. One client may ask for twenty links
+  an hour, whatever the addresses. The screens follow.
+
 ### Feature — 2026-10-14: a sign-in link by email (D-138, part of #81)
 
 - `POST /auth/email` sends a sign-in link to an address — or, for an address of a GitHub account, a

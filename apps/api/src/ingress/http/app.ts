@@ -21,7 +21,12 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
-import { askForSignInLink } from './email-sign-in';
+import {
+  SIGN_IN_REQUEST_BUDGET,
+  askForSignInLink,
+  consumeSignIn,
+  previewSignIn,
+} from './email-sign-in';
 import type { Outbox } from '../../platform/mail';
 import { authMethods } from './auth-methods';
 import { Elysia, type HTTPHeaders } from 'elysia';
@@ -258,6 +263,8 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const uploading = { count: 0 };
   // GitHub's deliveries: every address before the signature, each feed after it (D-134 §4).
   const knocks = inProcessRateLimiter(dependencies.clock, WEBHOOK_BUDGET);
+  // Sign-in links asked for, per client address (D-138 §7).
+  const signInRequests = inProcessRateLimiter(dependencies.clock, SIGN_IN_REQUEST_BUDGET);
   const feedPosts = inProcessRateLimiter(dependencies.clock, WEBHOOK_FEED_BUDGET);
   const delivering = { count: 0 };
 
@@ -363,11 +370,31 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/api/auth/methods', () => authMethods(dependencies.config))
-    .post('/auth/email', async ({ body, set }) => {
-      await askForSignInLink(dependencies, body);
+    .post('/auth/email', async ({ request, body, set, server }) => {
+      await askForSignInLink(dependencies, body, {
+        // Keyed as the edge's budget is: an IPv6 client by its /64 (`limitKeyFor`).
+        address: limitKeyFor(
+          clientAddress(peerOf(server, request), request.headers, dependencies.config.TRUST_PROXY),
+        ),
+        requests: signInRequests,
+      });
       set.status = 202;
       return null;
     })
+    .post('/auth/email/preview', async ({ body }) => await previewSignIn(dependencies, body))
+    .post('/auth/email/consume', async ({ request, body, set, server }) =>
+      respond(
+        set,
+        await consumeSignIn(dependencies, body, {
+          userAgent: request.headers.get('user-agent') ?? undefined,
+          ipAddress: clientAddress(
+            peerOf(server, request),
+            request.headers,
+            dependencies.config.TRUST_PROXY,
+          ),
+        }),
+      ),
+    )
     // Spelled out, as every route is, for `scripts/enforcement.test.ts` to read against
     // `API.md`. It is `SIGN_IN_CALLBACK`: were they to differ, the error hook's redirect
     // would miss this route and `auth.integration.test.ts` would see JSON (D-121).

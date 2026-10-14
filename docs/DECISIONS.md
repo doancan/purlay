@@ -6093,7 +6093,11 @@ them.
    expires, so nobody who knows the address can cancel its owner's link.
 5. **The account a link makes** has a username made from the address's local part, lower-cased, cut to
    what a mention can name, never one of the broadcast names (`here`, `channel`, `everyone`), and made
-   unique as D-38's collision is; its display name is the same. It is a member of nothing until invited.
+   unique as D-38's collision is; its display name is the same. An address with nothing to make a name
+   of — a broadcast name, or punctuation — gets `user-` and six random hex digits, not `user-1` …
+   `user-99`, which a hundred such addresses would use up for good. Two new addresses wanting one name
+   at the same instant: one is made, the other fails loudly and its link is not spent, so pressing
+   **Sign in** again makes it under the next name. It is a member of nothing until invited.
 6. **Delivery is SMTP**, the one transport every self-hoster has: `SMTP_URL` and `MAIL_FROM`, both or
    neither. Neither is email sign-in off — the server starts, `GET /api/auth/methods` says so, and asking
    is `503 EMAIL_SIGN_IN_UNAVAILABLE`, as push is off without its keys (D-126 §7). Every message carries a
