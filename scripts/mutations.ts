@@ -49,6 +49,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/presence/presence.integration.test.ts'],
   },
   {
+    id: 'presence-left-on-any-close',
+    why: 'closing one of two tabs starts the person leaving, and they show offline while still here',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: '          byUser.delete(socket.userId);\n          presence?.left(socket.userId);\n        } else byUser.set(socket.userId, remaining);\n',
+    replace:
+      '          byUser.delete(socket.userId);\n        } else byUser.set(socket.userId, remaining);\n        presence?.left(socket.userId);\n',
+    tests: ['apps/api/src/realtime/sockets.integration.test.ts'],
+  },
+  {
+    id: 'presence-snapshot-unscoped',
+    why: 'a workspace’s presence lists people online in other workspaces',
+    file: 'apps/api/src/modules/presence/presence.ts',
+    find: "    .where('workspace_id', '=', context.workspaceId)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/presence/presence.integration.test.ts'],
+  },
+  {
     id: 'versions-not-kept',
     why: 'an edit replaces the words and keeps nothing of what they were',
     file: 'apps/api/src/modules/messages/edit.ts',

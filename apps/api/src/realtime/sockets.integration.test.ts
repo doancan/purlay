@@ -1066,6 +1066,50 @@ describe('integration: two real sockets', () => {
       }
     });
 
+    test('a stranger’s socket, and one of somebody removed from her workspace, hear nothing of her', async () => {
+      const room = await aRoom();
+      const { own } = ownNode();
+      const listening = `http://localhost:${String(own.listen(0))}`;
+      const workspaceId = (
+        await db
+          .selectFrom('channels')
+          .select('workspace_id')
+          .where('id', '=', room.channelId)
+          .executeTakeFirstOrThrow()
+      ).workspace_id;
+      // A stranger with a workspace of their own: in one, only not in hers.
+      const stranger = await aUser('stranger');
+      const theirs = aUniqueSlug('rt');
+      expect(
+        (await http('POST', '/api/workspaces', stranger.cookie, { name: theirs, slug: theirs })).ok,
+      ).toBe(true);
+      const removed = await aUser('erin');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: removed.id, role: 'member', joined_at: NOW })
+        .execute();
+      try {
+        const bob = await connect(room.bob, listening);
+        const outsider = await connect(stranger.cookie, listening);
+        const erin = await connect(removed.cookie, listening);
+        await until(() => own.held().online === 3, 'all three counted');
+        await db
+          .deleteFrom('workspace_members')
+          .where('workspace_id', '=', workspaceId)
+          .where('user_id', '=', removed.id)
+          .execute();
+        const alice = await connect(room.alice, listening);
+        // Bob hearing it is the control: it was told, and told to whom it was for.
+        await bob.until((f) => presenceOf(f, room.aliceId).includes(true), 'alice online');
+        await own.settled();
+        expect(outsider.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+        expect(erin.frames.filter((f) => f.event === 'PRESENCE')).toEqual([]);
+        await Promise.all([alice.close(), bob.close(), outsider.close(), erin.close()]);
+      } finally {
+        await own.stop(true);
+      }
+    });
+
     test('her workspace’s presence lists her for a member, and is not found for anybody else', async () => {
       const room = await aRoom();
       const { own } = ownNode();

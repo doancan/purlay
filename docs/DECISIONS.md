@@ -5979,6 +5979,10 @@ started. Typing (D-114) answers "is anyone in this channel now"; this answers "i
    the reads are async so that adapter needs no caller to change. A stopping node tells nobody its
    sockets left: they are coming back elsewhere.
 6. **Push while present** (D-126 §5) is not built here: it needs presence and a decision of its own.
+7. **A change that could not be told is tried again**, three times with a doubling wait, and only
+   while it is still the newest change for that person: a co-member would otherwise be wrong about
+   them until their next change, which may be hours away. Each failure is logged; a stopping node
+   cancels the retries waiting.
 
 **Rejected.** *Presence per workspace* — the client would say which workspace is open on every
 switch, a frame per person per switch for a distinction a team of thirty rarely has. *Away after idle*

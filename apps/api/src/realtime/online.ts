@@ -39,6 +39,10 @@ export interface OnlinePresence {
   readonly held: () => { readonly online: number; readonly leaving: number };
 }
 
+/** How many times a change that could not be told is tried again, and the first wait. */
+const PRESENCE_RETRIES = 3;
+const PRESENCE_RETRY_MS = 1_000;
+
 export interface OnlineOptions {
   readonly clock: Clock;
   readonly timers: Timers;
@@ -62,17 +66,46 @@ export const onlinePresence = ({
   const running = new Set<Promise<void>>();
   // Stopping: the sockets the drain closes leave no grace behind them, and tell nobody.
   let stopped = false;
+  /** The largest version a change was given. */
   let last = 0;
+  /** The largest version a snapshot was read at: every later change is larger than it. */
+  let read = 0;
   const next = (): number => {
-    last = Math.max(last + 1, clock.now().getTime());
+    last = Math.max(last + 1, read + 1, clock.now().getTime());
     return last;
   };
+  /** The change last made for each person, until it is told: a retry only tells what is still true. */
+  const latest = new Map<string, number>();
+  /** Retries waiting: cancelled when the node stops. */
+  const retries = new Set<() => void>();
 
-  const tell = (change: PresenceChange): void => {
+  const tell = (change: PresenceChange, attempt = 0): void => {
+    latest.set(change.userId, change.version);
     const told: Promise<void> = announce(change)
-      // The socket that changed it is not to blame, nor anybody else's: said, and the next change tells.
+      .then(() => {
+        if (latest.get(change.userId) === change.version) latest.delete(change.userId);
+      })
       .catch((error: unknown) => {
-        log.error('presence could not be told', { userId: change.userId, err: error });
+        // Not dropped: a co-member would be wrong about this person until their next change, which
+        // may be hours. Tried again, a few times, while it is still what is true (D-136 §7).
+        const again = attempt < PRESENCE_RETRIES && !stopped;
+        log.error(
+          again ? 'presence could not be told; trying again' : 'presence could not be told',
+          {
+            userId: change.userId,
+            attempt,
+            err: error,
+          },
+        );
+        if (!again) {
+          if (latest.get(change.userId) === change.version) latest.delete(change.userId);
+          return;
+        }
+        const cancel = after(timers, PRESENCE_RETRY_MS * 2 ** attempt, () => {
+          retries.delete(cancel);
+          if (latest.get(change.userId) === change.version) tell(change, attempt + 1);
+        });
+        retries.add(cancel);
       })
       .finally(() => {
         running.delete(told);
@@ -114,18 +147,24 @@ export const onlinePresence = ({
         }),
       ),
 
-    version: (): number => next(),
+    // Read, not taken: a snapshot moves no counter, and every change after it is larger (`next`).
+    version: (): number => {
+      read = Math.max(read, last, clock.now().getTime());
+      return read;
+    },
 
     stop: (): void => {
       stopped = true;
       for (const cancel of leaving.values()) cancel();
       leaving.clear();
+      for (const cancel of retries) cancel();
+      retries.clear();
     },
 
     settled: async (): Promise<void> => {
       while (running.size > 0) await Promise.allSettled([...running]);
     },
 
-    held: () => ({ online: online.size, leaving: leaving.size }),
+    held: () => ({ online: online.size, leaving: leaving.size + retries.size }),
   };
 };

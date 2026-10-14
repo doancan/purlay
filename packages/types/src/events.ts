@@ -418,12 +418,6 @@ export const TypingServerFrame = Type.Object({
 });
 
 /**
- * A workspace the person is in changed — renamed (D-124). On each member's `user:` topic, so a socket
- * hears it only for a workspace its person belongs to as the change commits. It carries no state: the
- * client reads its memberships again, so two renames heard in the wrong order cannot leave the old
- * name standing.
- */
-/**
  * How long after a person's last socket closes they are still online (D-136 §2): a reconnect, a
  * reload, a tab moved between windows, is not a person leaving. Also how long a client keeps what it
  * knew through its own reconnect before reading the workspace's presence again (§4).
@@ -455,6 +449,12 @@ export const PresenceFrame = Type.Object({
   ...envelope,
 });
 
+/**
+ * A workspace the person is in changed — renamed (D-124). On each member's `user:` topic, so a socket
+ * hears it only for a workspace its person belongs to as the change commits. It carries no state: the
+ * client reads its memberships again, so two renames heard in the wrong order cannot leave the old
+ * name standing.
+ */
 export const WorkspaceUpdatedFrame = Type.Object({
   event: Type.Literal('WORKSPACE_UPDATED'),
   data: Type.Object({ workspaceId: Uuid }),

@@ -120,7 +120,18 @@ describe('who is online on this node', () => {
     const versions = w.told.map((c) => c.version);
     expect(versions).toEqual([...versions].sort((a, b) => a - b));
     expect(new Set(versions).size).toBe(versions.length);
-    expect(w.online.version()).toBeGreaterThan(versions.at(-1) ?? 0);
+    expect(w.online.version()).toBeGreaterThanOrEqual(versions.at(-1) ?? 0);
+  });
+
+  test('a snapshot moves no counter, and every change after it is larger than its version', async () => {
+    const w = world();
+    w.online.arrived('alice');
+    w.setNow(500);
+    const read = w.online.version();
+    expect(w.online.version()).toBe(read);
+    w.online.arrived('bob');
+    await w.online.settled();
+    expect(w.told.at(-1)?.version).toBeGreaterThan(read);
   });
 
   test('a stopping node tells nobody: its sockets are coming back elsewhere', async () => {
@@ -147,6 +158,74 @@ describe('who is online on this node', () => {
     expect(w.told.map((c) => c.online)).toEqual([true]);
   });
 
+  test('a telling that fails is tried again, after a wait, while it is still true', async () => {
+    let failures = 1;
+    const told: PresenceChange[] = [];
+    const w = world((change) => {
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new Error('no database'));
+      }
+      told.push(change);
+      return Promise.resolve();
+    });
+    w.online.arrived('alice');
+    await w.online.settled();
+    expect(told).toEqual([]);
+    expect(w.online.held().leaving).toBe(1);
+    w.timers.fireAll();
+    await w.online.settled();
+    expect(told.map((c) => [c.userId, c.online])).toEqual([['alice', true]]);
+    expect(w.online.held()).toEqual({ online: 1, leaving: 0 });
+  });
+
+  test('a retry of what is no longer true tells nothing: the newer change told it', async () => {
+    let failures = 1;
+    const told: PresenceChange[] = [];
+    const w = world((change) => {
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new Error('no database'));
+      }
+      told.push(change);
+      return Promise.resolve();
+    });
+    w.online.arrived('alice');
+    await w.online.settled();
+    w.online.left('alice');
+    // The grace runs first and tells the offline; the waiting retry of the online then says nothing.
+    const grace = w.timers.armed.find((t) => t.ms === PRESENCE_GRACE_MS);
+    if (grace === undefined) throw new Error('no grace armed');
+    grace.cleared = true;
+    grace.fire();
+    await w.online.settled();
+    w.timers.fireAll();
+    await w.online.settled();
+    expect(told.map((c) => c.online)).toEqual([false]);
+  });
+
+  test('a telling that fails every time stops after a few tries, said each time', async () => {
+    const w = world(() => Promise.reject(new Error('no database')));
+    w.online.arrived('alice');
+    for (let i = 0; i < 10; i += 1) {
+      await w.online.settled();
+      w.timers.fireAll();
+    }
+    await w.online.settled();
+    const said = w.lines.filter((line) => String(line['msg']).startsWith('presence could not'));
+    expect(said).toHaveLength(4);
+    expect(said.at(-1)?.['msg']).toBe('presence could not be told');
+    expect(w.online.held().leaving).toBe(0);
+  });
+
+  test('a stopping node cancels the retries waiting', async () => {
+    const w = world(() => Promise.reject(new Error('no database')));
+    w.online.arrived('alice');
+    await w.online.settled();
+    w.online.stop();
+    expect(w.online.held().leaving).toBe(0);
+  });
+
   test('a telling that fails is said, and the next still tells', async () => {
     let fail = true;
     const told: string[] = [];
@@ -162,6 +241,8 @@ describe('who is online on this node', () => {
     w.online.arrived('bob');
     await w.online.settled();
     expect(told).toEqual(['bob']);
-    expect(w.lines.some((line) => line['msg'] === 'presence could not be told')).toBe(true);
+    expect(w.lines.some((line) => line['msg'] === 'presence could not be told; trying again')).toBe(
+      true,
+    );
   });
 });
