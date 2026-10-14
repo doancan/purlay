@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a class list in any constant is held to the tokens (closes #572)
+
+- The token vocabulary check now also reads every constant that a `className` or a class helper names,
+  whatever the constant is called. Before, it read only constants named `…Classes`, so a raw value in
+  `const link = '…'` built and shipped unchecked. The constants the issue named (`textCell`, `words`,
+  `sectionTitle`) are read now, and every class in them is a token.
+
 ### Refactor — 2026-10-14: one check that the caller is in the channel, and one way a test tries (closes #575)
 
 - Pins, channel settings and adding a member now ask the shared `requireChannelMember`, with
