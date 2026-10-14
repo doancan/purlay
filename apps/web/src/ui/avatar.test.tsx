@@ -53,6 +53,21 @@ describe('the avatar', () => {
     expect(node.className).toContain('size-avatar-lg');
   });
 
+  test('online draws a dot inside the hidden avatar; offline or unknown draws none (D-136)', () => {
+    for (const [online, dots] of [
+      [true, 1],
+      [false, 0],
+      [undefined, 0],
+    ] as const) {
+      const view = render(<Avatar name="Alice Chen" username="alice" online={online} />);
+      const node = view.container.firstElementChild as HTMLElement;
+      expect(node.querySelectorAll('[data-online]')).toHaveLength(dots);
+      // The dot is inside what a screen reader skips: the words beside the name say it.
+      expect(node.getAttribute('aria-hidden')).toBe('true');
+      view.unmount();
+    }
+  });
+
   test('is a rounded square, not a circle: a person, in a tool (D-110)', () => {
     for (const [size, corner] of [
       ['sm', 'rounded-md'],

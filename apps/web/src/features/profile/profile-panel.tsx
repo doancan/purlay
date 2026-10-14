@@ -10,12 +10,16 @@ import { PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { useSidePanel } from '../channel/side-panel';
 import { useLocalTime, useMember } from './local-time';
+import { useOnline } from '../../realtime/realtime-provider';
+import { useSession } from '../session/session';
 
 export const PROFILE_PANEL_ID = 'conversation-profile';
 
 const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Element => {
   const { t } = useI18n();
   const { member, members } = useMember(person.id);
+  const { user: me } = useSession();
+  const online = useOnline(person.id, me.id);
   const focus = usePanelFocus(
     members.isFetching,
     Math.max(members.dataUpdatedAt, members.errorUpdatedAt),
@@ -40,10 +44,12 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
         <StaleBanner message={t('profile.staleFailed')} onRetry={readAgain} />
       )}
       <section className="flex flex-col items-start gap-3 p-4">
-        <Avatar name={person.displayName} username={person.username} size="lg" />
+        <Avatar name={person.displayName} username={person.username} size="lg" online={online} />
         <div className="flex flex-col gap-1">
           <p className="text-title font-semibold text-ink">{person.displayName}</p>
           <p className="font-mono text-label text-ink-muted">{`@${person.username}`}</p>
+          {/* Said in words, beside the dot: never a colour alone (D-136). */}
+          {online === true && <p className="text-label text-ink">{t('presence.onlineNow')}</p>}
         </div>
         {members.isPending ? (
           <LoadingStatus label={t('profile.loading')} className="flex w-full flex-col gap-2">

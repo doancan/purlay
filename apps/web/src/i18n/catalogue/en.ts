@@ -523,6 +523,8 @@ export const en = {
   'history.removeFailed': 'Couldn’t remove the version.',
   'message.editHistoryHint': 'What it said before stays in its history, where you can remove it.',
 
+  'presence.online': 'online',
+  'presence.onlineNow': 'Online now',
   'diff.added': 'added',
   'diff.removed': 'removed',
   'diff.oldLine': 'Old line',

@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a dot for who is online (D-136, closes #480)
+
+- A person with Purlay open has a dot on their avatar in People, in a conversation's heading and in
+  their profile, said as "online" to a screen reader. Read when the workspace opens and again half a
+  minute after a reconnect; a presence that failed to load draws nothing, never a team gone offline.
+
 ### Feature — 2026-10-14: who is online, told to the people one shares a workspace with (D-136, part of #480)
 
 - The server knows who has Purlay open and tells the people who share a workspace with them —

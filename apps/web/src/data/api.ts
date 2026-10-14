@@ -54,6 +54,7 @@ import {
   type PushSubscribeRequest,
   type SavedState,
   type CreateGitHubFeedRequest,
+  PresenceSnapshot,
   MessageVersionPage,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
@@ -159,6 +160,8 @@ export interface Api {
   /** The caller's own title, time zone and status line (D-131). */
   readonly updateProfile: (input: UpdateProfileRequest) => Promise<Profile>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
+  /** A workspace's members online now, for a member (D-136). */
+  readonly presence: (workspaceId: string, signal?: AbortSignal) => Promise<PresenceSnapshot>;
   /** What a message said before each edit, newest first (D-135). */
   readonly messageVersions: (
     messageId: string,
@@ -407,6 +410,13 @@ export const createApi = (http: Http): Api => {
         'GET',
         `/api/workspaces/${at(workspaceId)}/saved/ids`,
         SavedIds,
+        options({}, signal),
+      ),
+    presence: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/presence`,
+        PresenceSnapshot,
         options({}, signal),
       ),
     messageVersions: (messageId, before, signal) =>

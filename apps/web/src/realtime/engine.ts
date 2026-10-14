@@ -38,6 +38,7 @@ import {
   type ClientFrame,
   type ErrorCode,
   type RevokedReason,
+  PRESENCE_GRACE_MS,
   type PresenceChange,
   type ServerFrame,
 } from '@purlay/types';
@@ -139,6 +140,12 @@ export interface RealtimeState {
     Record<string, { readonly online: boolean; readonly version: number }>
   >;
   /**
+   * Rises when what a workspace's presence was read as may have gone stale: a grace after a
+   * reconnect, when a node that restarted knows its people again (D-136 §4). Until then what was
+   * known is kept — a restart does not show the team offline.
+   */
+  readonly presenceEpoch: number;
+  /**
    * Channels that went away and why, when the server said (D-123): what a screen still showing one
    * tells the person instead of "not found".
    */
@@ -225,6 +232,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     degraded: {},
     typing: {},
     presence: {},
+    presenceEpoch: 0,
     gone: {},
     lost: null,
   }));
@@ -678,7 +686,13 @@ export const createEngine = (options: EngineOptions): Engine => {
     store.setState(status === 'open' ? { status, connectedOnce: true } : { status });
     if (status !== 'open') return;
     // The first open is the page loading; every later one is a return from a gap.
-    if (opened || resumeOnOpen) resync();
+    if (opened || resumeOnOpen) {
+      resync();
+      // Who is online is read again once the people who were on a restarted node are back on it.
+      schedule(() => {
+        store.setState((state) => ({ presenceEpoch: state.presenceEpoch + 1 }));
+      }, PRESENCE_GRACE_MS);
+    }
     resumeOnOpen = false;
     opened = true;
   };

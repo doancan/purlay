@@ -517,6 +517,8 @@ export const tr = {
   'history.removeFailed': 'Sürüm kaldırılamadı.',
   'message.editHistoryHint': 'Önceki hali geçmişinde kalır; oradan kaldırabilirsin.',
 
+  'presence.online': 'çevrimiçi',
+  'presence.onlineNow': 'Şu an çevrimiçi',
   'diff.added': 'eklendi',
   'diff.removed': 'silindi',
   'diff.oldLine': 'Eski satır',
