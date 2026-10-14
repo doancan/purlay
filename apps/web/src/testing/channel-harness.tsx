@@ -15,6 +15,7 @@ import { Toaster } from '../ui/toast';
 import { FeedPortsContext } from '../features/channel/feed-ports';
 import { ContentPortsContext } from '../features/content/content-ports';
 import { SessionGate } from '../features/session/session';
+import { SaveIntentsProvider } from '../features/saved/save-toggle';
 import { WorkspaceScopeProvider } from '../features/shell/workspace';
 import { RealtimeProvider, useEngine } from '../realtime/realtime-provider';
 import type { Engine } from '../realtime/engine';
@@ -139,12 +140,14 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
         <SessionGate>
           <WorkspaceScopeProvider slug="acme" notFound={null}>
             <RealtimeProvider>
-              <Region
-                channelId={options.channelId ?? IDS.api}
-                capture={(found) => {
-                  engine = found;
-                }}
-              />
+              <SaveIntentsProvider>
+                <Region
+                  channelId={options.channelId ?? IDS.api}
+                  capture={(found) => {
+                    engine = found;
+                  }}
+                />
+              </SaveIntentsProvider>
             </RealtimeProvider>
           </WorkspaceScopeProvider>
         </SessionGate>

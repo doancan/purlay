@@ -27,6 +27,7 @@ import { SidebarSlot } from './sidebar-slot';
 import { PresenceReader } from './presence-reader';
 import { TabTitle } from './tab-title';
 import { WorkspaceScopeProvider } from './workspace';
+import { SaveIntentsProvider } from '../saved/save-toggle';
 
 export const Shell = ({
   slug,
@@ -39,25 +40,27 @@ export const Shell = ({
     <WorkspaceScopeProvider slug={slug} notFound={<NotFound />}>
       <RealtimeProvider>
         <OverlayProvider>
-          <DeepWorkProvider>
-            <GlobalKeys />
-            <TabTitle />
-            <PresenceReader />
-            <LostSends />
-            <NavProvider>
-              <div className="flex h-screen bg-surface-100 text-ink">
-                <SidebarSlot />
-                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                  <ConnectionBar />
-                  <UpdateBar />
-                  <DeepWorkBar />
-                  <Main className="flex min-h-0 flex-1 flex-col">
-                    <ScreenBoundary>{children}</ScreenBoundary>
-                  </Main>
+          <SaveIntentsProvider>
+            <DeepWorkProvider>
+              <GlobalKeys />
+              <TabTitle />
+              <PresenceReader />
+              <LostSends />
+              <NavProvider>
+                <div className="flex h-screen bg-surface-100 text-ink">
+                  <SidebarSlot />
+                  <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                    <ConnectionBar />
+                    <UpdateBar />
+                    <DeepWorkBar />
+                    <Main className="flex min-h-0 flex-1 flex-col">
+                      <ScreenBoundary>{children}</ScreenBoundary>
+                    </Main>
+                  </div>
                 </div>
-              </div>
-            </NavProvider>
-          </DeepWorkProvider>
+              </NavProvider>
+            </DeepWorkProvider>
+          </SaveIntentsProvider>
         </OverlayProvider>
       </RealtimeProvider>
     </WorkspaceScopeProvider>

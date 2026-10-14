@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: Save holds what was asked beside the server's list (D-18, D-128, closes #558)
+
+- Save on a message now keeps a pending save or removal beside the server's list of saves, as Pin
+  does, and never writes it into that list. A refused save drops only its own change, so another
+  save or another tab's change stays. A list read while a save is on its way no longer takes the
+  mark back. A press while a request is on its way sends nothing. Retry is offered only for a
+  failure that could pass, not for `SAVED_LIMIT`, and asks again only if the message is still not
+  saved. The button keeps one name, "Save for later"; whether it is saved is `aria-pressed`, and a
+  pending request is `aria-busy`. A save the server accepted stays marked even when reading the
+  list again fails.
+
 ### Feature — 2026-10-14: exporting a workspace from the app (D-140, closes #84)
 
 - An owner's workspace menu has **Export workspace…**. The dialog asks for an export and lists the
