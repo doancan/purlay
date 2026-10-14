@@ -614,9 +614,14 @@ CREATE INDEX idx_messages_unresolved
 -- filters on the column alone, so none of them can answer it. Without these, deleting 100 of
 -- 1,000,000 messages took 4.9 s and deleting a channel did not finish in 60 s. (D-89)
 CREATE INDEX idx_messages_channel     ON messages (channel_id);
-CREATE INDEX idx_messages_workspace   ON messages (workspace_id);
 CREATE INDEX idx_messages_parent      ON messages (parent_id)   WHERE parent_id IS NOT NULL;
 CREATE INDEX idx_messages_resolved_by ON messages (resolved_by) WHERE resolved_by IS NOT NULL;
+
+-- The retention purge's read: one workspace's messages older than its window, from the oldest
+-- (D-139 §1). By workspace alone, a night would walk the workspace's whole history once a batch.
+-- Added by 0039, which dropped `idx_messages_workspace (workspace_id)`: this one leads with the same
+-- column, so it serves the foreign key too.
+CREATE INDEX idx_messages_workspace_age ON messages (workspace_id, created_at);
 ```
 
 **Every foreign key column leads an index the planner can use for it**, and a test reads the catalogue to
@@ -1322,7 +1327,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-7 | `workspaces.storage_used_bytes` equals the sum of the sizes of the attachments messages carry. Kept by the send that links them; reconciled nightly by `bun run job reconcile:storage`. | `messages.ts` `linkAttachments`, `jobs.ts` `reconcileStorage` |
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
-| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `retention.service` |
+| I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
 | I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
@@ -1394,6 +1399,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0036_incident_responders.sql incident_responders; the timeline's responder entries  (D-137 §3)
 0037_incident_writeup.sql    incidents.runbook_url, postmortem, postmortem_version  (D-137 §3, §5)
 0038_email_auth.sql          email_sign_ins: sign-in links sent by email, and the word to use GitHub  (D-138)
+0039_retention_index.sql     idx_messages_workspace_age replaces idx_messages_workspace: the purge's read by age  (D-139)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

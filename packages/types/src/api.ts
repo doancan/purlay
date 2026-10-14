@@ -416,6 +416,7 @@ export const AUDIT_ACTIONS = [
   'invitation.revoked',
   'message.removed_by_moderator',
   'workspace.renamed',
+  'retention.purged',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

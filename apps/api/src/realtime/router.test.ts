@@ -80,6 +80,35 @@ describe('a frame that fails in a way nobody anticipated', () => {
    * (D-87). The socket answers with the same code and the same words, so a client
    * has one thing to handle and may retry; the cause is still written down.
    */
+  /**
+   * A write referring to a message the retention purge took that moment (D-139 §2) is the message
+   * not found on the socket, as on HTTP — never INTERNAL — and the reference refused is logged by name.
+   */
+  test('a reference to a message gone from under it is MESSAGE_NOT_FOUND, the code HTTP answers with', async () => {
+    const { log, lines } = aRecordingLogger();
+    const id = messageId(clock.now());
+    const refused = Object.assign(new Error('insert violates foreign key constraint'), {
+      code: '23503',
+      constraint: 'messages_parent_channel_fkey',
+    });
+    const replies = await subscribeWith(aDatabaseThatMustNotBeTouched(refused), log, id);
+    expect(replies).toEqual([
+      {
+        event: 'ERROR',
+        data: { code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' },
+        ts: clock.now().getTime(),
+        refId: id,
+      },
+    ]);
+    expect(replies[0]).toMatchObject({ data: refusalFor('UNKNOWN', refused, []).body.error });
+    expect(lines.map((line) => [line['level'], line['msg'], line['constraint']])).toContainEqual([
+      'warn',
+      'a write referred to a message that is not there',
+      'messages_parent_channel_fkey',
+    ]);
+    expect(lines.some((line) => line['msg'] === 'frame failed')).toBe(false);
+  });
+
   test('a pool with no connection to give is DATABASE_UNAVAILABLE, the code HTTP answers with', async () => {
     const { log, lines } = aRecordingLogger();
     const id = messageId(clock.now());

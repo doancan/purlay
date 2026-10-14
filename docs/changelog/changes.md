@@ -6,6 +6,22 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: the retention purge (D-139, part of #83)
+
+- `purge:retention` runs nightly, before the storage count is checked: in each workspace that keeps
+  its history for a number of days, older messages are deleted. A reply goes on its own and its
+  thread's summary is counted again; a root still answered within the window stays as a tombstone
+  until its last reply goes. What each message added is taken back first: unread counts, mentions,
+  and its files, with their bytes and their objects. Each workspace gets one line on its audit
+  trail per run. A workspace that keeps everything, which is every workspace until an owner says
+  otherwise, loses nothing.
+- A reference to a message that disappears at that moment (a reply, reaction, pin, save or read) is
+  now `404 MESSAGE_NOT_FOUND` on HTTP and on the socket, not a server error. Each one is logged with
+  the name of the refused reference. A test binds the list to the database's own foreign keys. A
+  workspace whose purge fails still gets a trail line for what was done, the other workspaces are
+  still purged, and the run fails and names the workspace. A file the store would not delete also
+  fails the run.
+
 ### Decision — 2026-10-14: retention and erasure, decided before they are built (D-139, part of #83)
 
 - How the retention purge treats a thread across its window, what of a person erasure takes and what

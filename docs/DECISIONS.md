@@ -6145,8 +6145,8 @@ critique of the first plan found four of its answers wrong; what follows is what
 1. **Retention purges messages, as D-27 says, one by one.** A reply older than the window is
    hard-deleted, and its thread's summary — the reply count and the last reply's time — is recomputed
    from what remains. A top-level message older than the window with no replies left is hard-deleted; one
-   that still has younger replies becomes a tombstone (D-9's row change: its words, mentions, pin and
-   versions go, the row stays to hold the thread) and is deleted the night its last reply goes. I-10's
+   that still has younger replies becomes a tombstone (D-9's row change: its words, mentions, pin,
+   versions and files go, the row stays to hold the thread) and is deleted the night its last reply goes. I-10's
    "never a message newer than the window" holds, and nothing older survives but an empty row. Age is
    `created_at`, never the id (`MESSAGE_ID_SKEW` lets an id run behind its time). *Rejected:* the thread
    as the unit — one reply a month would keep a whole thread's personal data forever, against D-27 §1's
@@ -6156,9 +6156,11 @@ critique of the first plan found four of its answers wrong; what follows is what
    waiting notifications marked read, before the foreign key sets a read position on it to `NULL`.
    Attachments' bytes come off `storage_used_bytes` from the rows the delete returned (I-7 stays exact
    under two runs at once), and their blobs are removed after commit. `channels.last_message_at` is not
-   touched: it only moves forward (SCHEMA §5.1), and if its message went every message went. Roots are
-   locked with the age re-checked under the lock (`SKIP LOCKED`), so a reply arriving at that moment
-   either lands first and keeps its root, or finds the root gone and is told `404`.
+   touched: it only moves forward (SCHEMA §5.1), and if its message went every message went. The
+   memberships of a batch's channels are locked first, as every other writer takes them, then the
+   messages and a reply's root `SKIP LOCKED` — the purge never waits on a message row, so no reader or
+   sender can close a cycle with it — and a reply arriving at that moment either lands first and keeps
+   its root, or finds the root gone and is told `404`, on HTTP and on the socket alike.
 3. **One audit row per workspace with retention set, per run**, `retention.purged`, actor none, counts as
    strings — written when nothing was purged too. A run with no workspace on retention writes none (the
    trail is a workspace's). No frame: a job has no bus, and an open screen keeps a purged message until it

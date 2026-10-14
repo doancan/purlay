@@ -196,6 +196,8 @@ export const en = {
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
   'audit.action.workspace.renamed': '{actor} renamed the workspace from {from} to {to}',
+  'audit.action.retention.purged':
+    'History older than {days} days was cleared: {messages} messages, {files} files',
   'github.entry': 'GitHub connection…',
   'github.title': 'GitHub for {workspace}',
   'github.description':
