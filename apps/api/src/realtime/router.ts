@@ -18,6 +18,7 @@
 import { MESSAGE_GONE, goneMessageReference } from '../platform/gone-message';
 import { Value } from '@sinclair/typebox/value';
 import {
+  ActiveFrame,
   ClientFrame,
   MessageSendFrame,
   PingFrame,
@@ -41,6 +42,8 @@ import { channelTopic, type EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import type { Logger } from '../platform/logging';
 import type { PresenceRegistry } from './presence';
+import type { Attention } from '../platform/attention';
+import { requireWorkspaceMembership } from '../platform/tenancy';
 import type { RateLimiter } from './rate-limiter';
 
 export interface RouterDependencies {
@@ -61,6 +64,8 @@ export interface RouterDependencies {
   readonly push?: PushSender | undefined;
   /** Who is typing where, on this node (§6.1). */
   readonly presence: PresenceRegistry;
+  /** Who is in front of a workspace's page now: what holds their pushes back (D-143). */
+  readonly attention: Attention;
   readonly log: Logger;
   /** What the router needs of the connection it is answering; the hub supplies it. */
   readonly socket: SocketGate;
@@ -150,6 +155,7 @@ const FRAME_BY_OP = {
   UNSUBSCRIBE: UnsubscribeFrame,
   PING: PingFrame,
   TYPING: TypingFrame,
+  ACTIVE: ActiveFrame,
 } as const satisfies Record<ClientOp, unknown>;
 
 const isClientOp = (value: unknown): value is ClientOp =>
@@ -371,6 +377,14 @@ export const routeFrame = async (
           );
         }
         // Nothing to answer: an announcement is not a request, and the room has heard it.
+        return [];
+      }
+
+      case 'ACTIVE': {
+        // A workspace the sender is not in neither holds anything nor takes a place in memory: the
+        // same 404 a stranger gets.
+        await requireWorkspaceMembership(database, identity.userId, parsed.payload.workspaceId);
+        dependencies.attention.heard(identity.userId, parsed.payload.workspaceId);
         return [];
       }
     }

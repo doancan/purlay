@@ -3,6 +3,7 @@
  * test's own: who is pushed and who is not, what the browser can read of it — decrypted here with
  * the browser's own key, as the browser would — and what the service's answer does to the device.
  */
+import { inMemoryAttention, nobodyActive, type Attention } from '../../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createECDH } from 'node:crypto';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
@@ -24,6 +25,8 @@ afterAll(async () => {
 
 const NOW = new Date('2026-10-13T12:00:00.000Z');
 const clock = fixedClock(NOW);
+/** Nobody is in front of a page unless a test says so (D-143). */
+const attention = nobodyActive;
 
 const quietBus: EventBus = {
   publish: () => Promise.resolve(),
@@ -162,6 +165,7 @@ const sending = async (
   db: Executor,
   post: PushPost,
   recording = aRecordingLogger(),
+  heard: Attention = attention,
 ): Promise<{
   readonly say: (room: Room, as: string, content: string, id?: string) => Promise<string>;
   readonly settled: () => Promise<void>;
@@ -171,6 +175,7 @@ const sending = async (
     clock,
     log: recording.log,
     keys: KEYS,
+    attention: heard,
     post,
   });
   let at = 0;
@@ -272,6 +277,7 @@ describe('integration: a device is told', () => {
         clock,
         log: aRecordingLogger().log,
         keys: KEYS,
+        attention,
         post: service.post,
       });
       const { say } = await sending(db, service.post);
@@ -307,6 +313,28 @@ describe('integration: a device is told', () => {
       await say(room, 'alice', `${mention(room, 'bob')} ${mention(room, 'carol')} look`);
       await settled();
       expect(service.sent).toEqual([]);
+    });
+  });
+
+  test('not while its person is in front of that workspace’s page — and never later; another workspace still is (D-143)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob', 'carol']);
+      await subscribeDevice(db, room, 'bob', await aBrowser());
+      await subscribeDevice(db, room, 'carol', await aBrowser());
+      const heard = inMemoryAttention(clock);
+      heard.heard(room.members['bob']?.userId ?? '', room.workspaceId);
+      // Carol is active, but somewhere else.
+      heard.heard(room.members['carol']?.userId ?? '', '0199155c-6200-7b7f-8c11-0000000000ff');
+      const service = aPushService();
+      const recording = aRecordingLogger();
+      const { say, settled } = await sending(db, service.post, recording, heard);
+      await say(room, 'alice', `${mention(room, 'bob')} ${mention(room, 'carol')} look`);
+      await settled();
+      expect(service.sent.map((push) => push.url)).toEqual(['https://push.example.com/send/carol']);
+      expect(recording.lines.map((line) => [line['msg'], line['people']])).toContainEqual([
+        'push held: the person is active',
+        1,
+      ]);
     });
   });
 
@@ -559,6 +587,7 @@ describe('integration: what the push service answers', () => {
       clock,
       log: recording.log,
       keys: KEYS,
+      attention,
       post: () => Promise.reject(new Error('nothing is posted')),
     });
     push.told('m-1', ['u-1']);
@@ -609,6 +638,7 @@ describe('integration: what the push service answers', () => {
         clock,
         log: recording.log,
         keys: KEYS,
+        attention,
         post: () => new Promise(() => undefined),
       });
       const context = room.members['alice']?.context;

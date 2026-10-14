@@ -130,6 +130,7 @@ import type { ObjectStore } from '../../platform/storage';
 import { credentialCipher } from '../../platform/crypto';
 import { githubApi, type GitHubApi } from '../../modules/integrations/unfurl';
 import { externalFetch, type ExternalFetch } from '../../modules/images/proxy';
+import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
 import { serveExternalImage } from './images';
 import {
@@ -195,6 +196,8 @@ export interface Dependencies {
   readonly client?: Client;
   /** Devices told of what needs their person, through both doors; absent where push is off (D-126). */
   readonly push?: PushSender;
+  /** Who is in front of a workspace's page now, shared with the push sender it holds back (D-143). */
+  readonly attention: Attention;
   /** Presence's grace timers (D-136); a test passes its own, to pass a grace without waiting. */
   readonly timers?: Timers;
   /** Where sign-in links are posted; absent where email sign-in is off (D-138 §6). */

@@ -232,7 +232,9 @@ What the shape is for, which the types do not say:
   let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
-  listener forgets a person when that runs out or their message arrives. Each frame joined the union
+  listener forgets a person when that runs out or their message arrives. `ACTIVE` is the client's
+  word that its page is in front of the person in a workspace: answered with nothing, heard only by the
+  push sender, which holds that workspace's pushes for its window (D-143). Each frame joined the union
   with its feature, so an exhaustive switch breaks where a case is unhandled rather than carrying
   stubs for features that do not exist.
 

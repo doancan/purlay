@@ -121,12 +121,27 @@ export const TypingFrame = FromClient({
   payload: FromClient({ channelId: Uuid }),
 });
 
+/**
+ * How often, at most, a page that is in front of the person says so (D-143): while it is visible and
+ * focused, on the person's own input, never more often than this. A push to them for this workspace
+ * is held while one such word is less than two of these old.
+ */
+export const ACTIVE_EVERY_MS = 60_000;
+
+/** The person is here, using this workspace's page. Answered with nothing, unless it is refused. */
+export const ActiveFrame = FromClient({
+  id: Uuid,
+  op: Type.Literal('ACTIVE'),
+  payload: FromClient({ workspaceId: Uuid }),
+});
+
 export const ClientFrame = Type.Union([
   MessageSendFrame,
   SubscribeFrame,
   UnsubscribeFrame,
   PingFrame,
   TypingFrame,
+  ActiveFrame,
 ]);
 export type ClientFrame = Static<typeof ClientFrame>;
 export type ClientOp = ClientFrame['op'];

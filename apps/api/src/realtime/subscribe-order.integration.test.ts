@@ -7,6 +7,7 @@
  * message at the exact point the old order lost one, rather than sleeping and
  * hoping to land there.
  */
+import { nobodyActive } from '../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
@@ -95,6 +96,7 @@ const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
           limiter,
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           presence: inMemoryPresenceRegistry(clock),
+          attention: nobodyActive,
           log: createLogger({ level: 'silent' }),
           socket: hub,
           atomically: atomicallyOn(db),

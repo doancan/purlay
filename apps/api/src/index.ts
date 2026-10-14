@@ -23,6 +23,7 @@ import { installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
+import { inMemoryAttention } from './platform/attention';
 import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 
@@ -60,6 +61,9 @@ const connection = databaseConnection(config, log);
 
 const database = createDatabase({ ...connection, poolSize: config.DATABASE_POOL_MAX });
 
+// Who is in front of a workspace's page now: heard by the sockets, asked by the push sender (D-143).
+const attention = inMemoryAttention(systemClock);
+
 // Web Push (#78, D-126): on with the three keys, which the configuration has checked are one pair.
 const push =
   config.VAPID_PUBLIC_KEY === undefined ||
@@ -70,6 +74,7 @@ const push =
         database,
         clock: systemClock,
         log,
+        attention,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
         post: async (url, headers, body) =>
           await postExternal(url, headers, body, {
@@ -110,6 +115,7 @@ const app = createApp({
   database,
   storage,
   exportRunner: exports.start,
+  attention,
   ...(client === undefined ? {} : { client }),
   ...(push === undefined ? {} : { push }),
   ...(mail === undefined ? {} : { mail }),

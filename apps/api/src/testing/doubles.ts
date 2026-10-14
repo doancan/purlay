@@ -12,6 +12,7 @@ import type { GitHubClient, GitHubEmail, GitHubProfile } from '../modules/auth/g
 import type { Dependencies } from '../ingress/http/app';
 import type { RateBudget } from '../realtime/rate-limiter';
 import type { Timers } from '../realtime/hub';
+import { nobodyActive } from '../platform/attention';
 import { createLogger, type Logger } from '../platform/logging';
 import type { ObjectStore } from '../platform/storage';
 
@@ -141,6 +142,7 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   storage: aStoreThatMustNotBeTouched(),
   // An export asked for is made by nobody, unless the test is about exports and says so.
   exportRunner: (): void => undefined,
+  attention: nobodyActive,
   ...overrides,
 });
 
