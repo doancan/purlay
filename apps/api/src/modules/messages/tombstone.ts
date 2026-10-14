@@ -9,6 +9,7 @@
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { ChannelStateUpdate } from './delivery';
 import { NEEDS_YOU } from './delivery';
+import { enqueueObjectDeletions } from '../attachments/deletions';
 
 /** A message as the counters saw it when it was sent. */
 export interface Counted {
@@ -200,7 +201,10 @@ export const takeBackLive = async (
   }
 };
 
-/** The files of these messages: rows deleted, their bytes off the workspace, their keys returned. */
+/**
+ * The files of these messages: rows deleted, their bytes off the workspace, their keys queued for the
+ * store in the same transaction (D-141) and returned, for the caller to delete once it has committed.
+ */
 export const dropFiles = async (
   transaction: Transaction,
   workspaceId: string,
@@ -222,12 +226,11 @@ export const dropFiles = async (
       .where('id', '=', workspaceId)
       .execute();
   }
-  return {
-    count: gone.length,
-    keys: gone.flatMap((row) =>
-      row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
-    ),
-  };
+  const keys = gone.flatMap((row) =>
+    row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
+  );
+  await enqueueObjectDeletions(transaction, keys);
+  return { count: gone.length, keys };
 };
 
 /** The memberships of these channels, locked in one order: channel, then person (D-106 §3). */

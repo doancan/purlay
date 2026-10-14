@@ -27,7 +27,7 @@ import { sql, type Executor, type Transaction } from '@purlay/db';
 import { DAY_MS } from '../../platform/clock';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
-import { removeLeftovers } from '../attachments/uploads';
+import { drainObjectDeletions } from '../attachments/deletions';
 import { recordAudit } from '../audit/audit';
 import type { JobDependencies } from '../jobs/jobs';
 import {
@@ -268,8 +268,12 @@ export const purgeWorkspace = async (
         done.deleted += batch.deleted;
         done.tombstoned += batch.tombstoned;
         done.attachments += batch.attachments;
-        // The rows are gone for good: only now may their files go.
-        done.leftBehind += await removeLeftovers(storage, log, batch.keys);
+        // The rows are gone for good: only now may their files go. One the store refuses waits, queued
+        // in the same transaction, for `sweep:deletions` (D-141).
+        done.leftBehind += await drainObjectDeletions(
+          { atomically: atomicallyOn(database), storage, log },
+          batch.keys,
+        );
         if (batch.last) break;
       }
     }
@@ -303,7 +307,7 @@ export const purgeWorkspace = async (
 /**
  * `purge:retention`: every live workspace that keeps its history for a number of days. One that fails
  * does not keep the others from theirs; the run fails after them, naming each that did, and fails too
- * when a file the store would not delete was left behind — nothing would try it again.
+ * when a file the store would not delete was left behind — queued for `sweep:deletions`, but said now.
  */
 export const purgeRetention = async (
   dependencies: JobDependencies & { readonly storage: ObjectStore },

@@ -261,6 +261,8 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   link_previews: 'a cache of other sites’ pages',
   job_runs: 'the scheduler’s own record',
   workspace_exports: 'an export’s own record: its archive is the export',
+  object_deletions:
+    'storage keys waiting to be deleted: the store’s housekeeping, and keys never leave',
 };
 
 /** The migrator's own tables: not in the generated schema at all, and not anybody's record. */

@@ -7,6 +7,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
+import { workspacePrefix } from '../../platform/storage';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
@@ -207,7 +208,21 @@ describe('integration: the orphan sweep', () => {
       const { log, lines } = aRecordingLogger();
       const swept = await sweepOrphans({ database: db, clock, storage: store, log });
       expect(swept).toEqual({ removed: 1, leftBehind: 1 });
-      expect(lines.some((l) => l['msg'] === 'an upload’s object was left behind')).toBe(true);
+      const key = String(
+        lines.find(
+          (l) =>
+            l['msg'] === 'an object could not be deleted from storage; it waits to be tried again',
+        )?.['key'],
+      );
+      // Not forgotten: queued with the row's delete, for `sweep:deletions` (D-141).
+      expect(
+        await db
+          .selectFrom('object_deletions')
+          .select(['storage_key', 'attempts'])
+          .where('storage_key', 'like', `${workspacePrefix(room.workspaceId)}%`)
+          .execute(),
+      ).toEqual([{ storage_key: key, attempts: 1 }]);
+      expect(store.keys()).toEqual([key]);
     });
   });
 });

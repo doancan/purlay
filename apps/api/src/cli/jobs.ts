@@ -8,12 +8,14 @@
  *   sweep:email-sign-ins  sign-in links and notes a day old (D-138)
  *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
  *   sweep:exports      exports nobody downloaded in time, and any whose making was cut off (D-140)
+ *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts
  *
  * It reads the deployment's own configuration, as the API does, so it runs in the same image with
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
+import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { purgeRetention } from '../modules/retention/purge';
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
@@ -30,6 +32,7 @@ import { FIRST_RUN } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
+import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
 import { storeFor } from '../platform/storage';
 
@@ -59,6 +62,13 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
     await sweepExports({ database, clock, log, storage: storeFor(config) }),
   'purge:retention': async () =>
     await purgeRetention({ database, clock, log, storage: storeFor(config) }),
+  'sweep:deletions': async () =>
+    await sweepObjectDeletions({
+      database,
+      atomically: atomicallyOn(database),
+      log,
+      storage: storeFor(config),
+    }),
 };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>

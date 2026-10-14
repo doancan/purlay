@@ -4675,7 +4675,9 @@ no length (chunked) with `411`, before it is parsed (D-80's promise, kept by a d
 `storage_used_bytes`, plus what is uploaded and not yet attached, plus this file, would pass
 `storage_quota_bytes` — checked and inserted under a lock on the workspace row, with the object written
 *outside* the transaction so no pool connection waits on the store. A person holds at most 20
-unattached uploads per workspace and may delete their own; the sweeper of the rest is #71's.
+unattached uploads per workspace and may delete their own; the sweeper of the rest is #71's. *Amended
+by D-141:* a discarded or swept upload's objects are queued with its row's delete and tried again until
+the store lets them go.
 
 **6 · Who may read one.** The uploader, while it is unattached; afterwards whoever can see the channel
 of its message (D-34) — and nobody once that message is deleted (D-103 §7: the tombstone hides what was
@@ -6155,7 +6157,8 @@ critique of the first plan found four of its answers wrong; what follows is what
    members it was counted for — the same rule as a delete, set-based and shared with it — and its
    waiting notifications marked read, before the foreign key sets a read position on it to `NULL`.
    Attachments' bytes come off `storage_used_bytes` from the rows the delete returned (I-7 stays exact
-   under two runs at once), and their blobs are removed after commit. `channels.last_message_at` is not
+   under two runs at once), and their blobs are queued in the same transaction and removed after commit
+   — one the store refuses waits for `sweep:deletions` (D-141). `channels.last_message_at` is not
    touched: it only moves forward (SCHEMA §5.1), and if its message went every message went. The
    memberships of a batch's channels are locked first, as every other writer takes them, then the
    messages and a reply's root `SKIP LOCKED` — the purge never waits on a message row, so no reader or
@@ -6250,6 +6253,40 @@ limit ends it. *Every column, filtered by a list of secrets* — a secret added 
 *The download for the cloud only* — PRD §2.5 makes it every owner's.
 
 **Cost of reversing:** none for the data model; the format is versioned by its manifest.
+
+### D-141. An object whose row is gone is queued until the store lets it go — #592
+
+**Context.** Retention, erasure, the orphan sweep and a discarded upload delete attachment rows first
+and their objects after the commit (D-109 §5, D-139 §2). An object the store refused was logged and
+counted, and then forgotten; a process stopped between the commit and the delete lost the key without a
+line. For retention and erasure that is personal data kept past the point the operator chose (D-27).
+
+**Decision.**
+1. **A table of keys waiting to be deleted** (`object_deletions`, SCHEMA §9.4), written in the
+   transaction that deletes the rows naming them. Retention and erasure write it in `dropFiles`, the one
+   place both delete files; the orphan sweep and a discarded upload write it beside their own delete. A
+   delete that fails takes its queue rows with it.
+2. **Drained after the commit**: each key the store accepts leaves the queue in one statement, each it
+   refuses is logged by key and stays with its attempt counted. The callers' counts of what was left —
+   retention's `filesLeft`, its failed run — are as they were.
+3. **`sweep:deletions`, hourly at :50**, tries every waiting key again in key order from where it got to,
+   so keys the store keeps refusing never hold back the ones after them, and fails its run while any is
+   left, which `jobs:status` reports. A key whose object the store had already deleted, when the database
+   then failed before the queue row went, is deleted again — harmless: a store's delete is idempotent.
+4. **Not queued:** an export's archive, which its own row names until it is gone (`sweep:exports`,
+   D-140); and the objects of an upload whose row never committed — nothing names them, and a stop
+   between the store's write and the row's insert leaves them. Closing that window means writing the
+   key before the object, on every upload; it is not done here. Nor would a hard delete of a workspace or
+   a message reach the queue through the cascade from `attachments` — no such delete exists, and one
+   added must queue its files as `dropFiles` does.
+
+**Rejected.** *Retrying inline* — a store down for an hour would hold a purge's batch, and a stop still
+loses the key. *A store lifecycle rule* — the object store is the operator's and of their choosing
+(D-109); the application cannot rely on one being set, and it would not say which keys are owed.
+*Oldest first by `enqueued_at`* — a batch the store keeps refusing is read again on every pass; key
+order with a cursor goes past it.
+
+**Cost of reversing:** drop the table and call the store directly again; nothing else reads it.
 
 ## Part D — Open, deliberately
 

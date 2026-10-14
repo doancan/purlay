@@ -27,6 +27,7 @@ describe('the next run of a slot', () => {
     expect(PLAN.map((slot) => slot.job).sort()).toEqual([
       'purge:retention',
       'reconcile:storage',
+      'sweep:deletions',
       'sweep:email-sign-ins',
       'sweep:exports',
       'sweep:github-deliveries',

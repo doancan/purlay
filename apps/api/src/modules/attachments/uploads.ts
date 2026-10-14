@@ -29,6 +29,7 @@ import {
 import { attachmentNotFound } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
+import { drainObjectDeletions, enqueueObjectDeletions } from './deletions';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
@@ -235,29 +236,30 @@ export const discardUpload = async (
 ): Promise<void> => {
   const { atomically, storage, log } = dependencies;
   if (!isMessageIdShape(attachmentId)) throw attachmentNotFound();
-  const gone = await atomically(
-    async (transaction) =>
-      await transaction
-        .deleteFrom('attachments')
-        .where('id', '=', attachmentId)
-        .where('uploader_id', '=', userId)
-        .where('message_id', 'is', null)
-        .returning(['storage_key', 'thumbnail_key'])
-        .executeTakeFirst(),
-  );
-  if (gone === undefined) throw attachmentNotFound();
-  await removeLeftovers(
-    storage,
-    log,
-    gone.thumbnail_key === null ? [gone.storage_key] : [gone.storage_key, gone.thumbnail_key],
-  );
+  const keys = await atomically(async (transaction) => {
+    const gone = await transaction
+      .deleteFrom('attachments')
+      .where('id', '=', attachmentId)
+      .where('uploader_id', '=', userId)
+      .where('message_id', 'is', null)
+      .returning(['storage_key', 'thumbnail_key'])
+      .executeTakeFirst();
+    if (gone === undefined) throw attachmentNotFound();
+    const named =
+      gone.thumbnail_key === null ? [gone.storage_key] : [gone.storage_key, gone.thumbnail_key];
+    // Queued with the row's delete: one the store refuses is tried again (D-141).
+    await enqueueObjectDeletions(transaction, named);
+    return named;
+  });
+  await drainObjectDeletions({ atomically, storage, log }, keys);
 };
 
 /**
- * Deletes objects no row points at; one that cannot be deleted is reported, never dropped. Answers
- * how many were left behind.
+ * Deletes objects of an upload whose row never committed — nothing names them, so nothing queues them
+ * (D-141 leaves this window open: a stop between the put and this delete leaves them). One that
+ * cannot be deleted is reported, never dropped. Answers how many were left behind.
  */
-export const removeLeftovers = async (
+const removeLeftovers = async (
   storage: ObjectStore,
   log: Logger,
   keys: readonly string[],
