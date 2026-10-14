@@ -176,8 +176,17 @@ export const usePin = (message: Message): PinControl => {
     intents.put({ pinning, message });
     (pinning ? api.pin(message.id) : api.unpin(message.id)).then(
       async () => {
-        // Held until the server's list has been read after the change, so it never flickers back.
-        await client.refetchQueries({ queryKey: key, exact: true });
+        // Held until the server's list has been read after the change, so it never flickers back. A
+        // read that fails is not the pin failing: the change the server confirmed is set on the list
+        // as it is, and the next read brings the rest (#605).
+        try {
+          await client.refetchQueries({ queryKey: key, exact: true }, { throwOnError: true });
+        } catch {
+          client.setQueryData<PinList>(key, (held) => {
+            const without = (held ?? []).filter((pin) => pin.message.id !== message.id);
+            return pinning ? [{ message, pinnedBy: null, pinnedAt: '' }, ...without] : without;
+          });
+        }
         intents.drop(message.id);
       },
       (failure: unknown) => {

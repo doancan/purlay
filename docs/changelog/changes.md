@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a pin the server kept stays marked when reading the pins again fails (closes #605)
+
+- When a pin or an unpin is accepted but reading the channel's pins again fails, the change the server
+  confirmed is set on the list. Before, the mark went back with nothing said, and a second press sent
+  a second request. The same fix was made in Save in #606.
+
 ### Docs — 2026-10-14: forms are plain controlled fields (D-142, closes #582)
 
 - `CONTRIBUTING.md` §4 now says what the client does: forms are plain controlled fields, validated by
