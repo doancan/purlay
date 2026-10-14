@@ -287,6 +287,52 @@ describe('pinning, while other things happen', () => {
     view.unmountAll();
   });
 
+  test('kept, but the list read after it fails: still pinned, and nothing says it was refused', async () => {
+    let reads = 0;
+    const view = await mountChannel({
+      messages: page([first]),
+      api: {
+        pins: () => {
+          reads += 1;
+          return reads === 1
+            ? Promise.resolve([])
+            : Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        },
+        pin: () => Promise.resolve(),
+      },
+    });
+    await person().click(pinButton(view, 1));
+    await settle();
+    expect(reads).toBe(2);
+    expect(pinButton(view, 1).getAttribute('aria-pressed')).toBe('true');
+    expect(pinButton(view, 1).getAttribute('aria-busy')).toBe('false');
+    expect(view.queryByText(/^The message was not pinned\./)).toBeNull();
+    view.unmountAll();
+  });
+
+  test('let go, but the list read after it fails: shown unpinned, the other pins kept', async () => {
+    let reads = 0;
+    const view = await mountChannel({
+      messages: page([first, second]),
+      api: {
+        pins: () => {
+          reads += 1;
+          return reads === 1
+            ? Promise.resolve([aPin(first), aPin(second)])
+            : Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        },
+        unpin: () => Promise.resolve(),
+      },
+    });
+    await settle();
+    await person().click(pinButton(view, 1));
+    await settle();
+    expect(reads).toBe(2);
+    expect(pinButton(view, 1).getAttribute('aria-pressed')).toBe('false');
+    expect(pinButton(view, 2).getAttribute('aria-pressed')).toBe('true');
+    view.unmountAll();
+  });
+
   test('pressed twice while the first is on its way, it is asked once', async () => {
     const asked: string[] = [];
     const view = await mountChannel({
