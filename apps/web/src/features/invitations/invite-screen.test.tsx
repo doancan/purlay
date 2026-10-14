@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe('an invitation, opened', () => {
-  test('names the workspace and until when; Join joins with the token, forgets it and goes there', async () => {
+  test('names the workspace and until when; Join joins with the token, forgets it and offers its channels', async () => {
     window.sessionStorage.setItem(KEY, TOKEN);
     const asked: string[] = [];
     const joined: string[] = [];
@@ -86,7 +86,8 @@ describe('an invitation, opened', () => {
     await settle();
     expect(asked).toEqual([TOKEN]);
     expect(joined).toEqual([TOKEN]);
-    expect(here(view)).toBe('/w/atlas');
+    // Just joined: the channels to join come first (D-132).
+    expect(here(view)).toBe('/w/atlas/welcome');
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 

@@ -46,6 +46,7 @@ export const TabTitle = (): null => {
   if (match.name === 'inbox') place = t('inbox.title');
   else if (match.name === 'search') place = t('search.title');
   else if (match.name === 'saved') place = t('saved.title');
+  else if (match.name === 'welcome') place = t('welcome.title');
   else if (match.name === 'questions') place = t('questions.title');
   else if (match.name === 'channel') {
     const channel = channels.find((c) => c.id === match.params.channelId);

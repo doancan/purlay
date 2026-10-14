@@ -113,7 +113,10 @@ window.
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
 - **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link
-  opens, and **Join**. A person already in it is offered **Open** instead. A person not signed in
+  opens, and **Join**. A person already in it is offered **Open** instead. Joined, they are offered
+  the workspace's public channels to join — the three busiest marked **Active** and picked — joined
+  together in one press or skipped; a join that fails part way names the channels it could not join
+  and keeps them picked (D-132). A person not signed in
   signs in first and comes back to the same card. The token leaves the address bar as the page loads,
   so it is not left in the history or a screenshot. A link that does not open says so in one
   sentence — expired, revoked, or never real look the same — and offers the way home.
@@ -391,6 +394,7 @@ missing specified behaviour and does not merge.
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
 | Pins (panel) | "Nothing pinned yet" — pin a message everyone here should keep at hand | Skeleton rows, in the panel | Retry in the panel; a list that could not be brought up to date says so, with Retry |
+| Channels to join (after an invitation) | "There are no public channels to join yet" + the way into the workspace | Skeleton rows | Retry; a join that fails part way names the channels and why, keeps them picked, focus on the button that tries again |
 | Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |

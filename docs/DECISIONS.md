@@ -5777,12 +5777,24 @@ offer a pick of channels to join on accepting an invitation. D-125 put both in P
    asked. A channel's requests go one after another, so the last click is what stays, and once
    answered the channels are read again. `Alt+↑/↓` and the palette walk the sidebar's own order.
 
+5. **Channels to join on arriving**: accepting an invitation leads to `/w/:slug/welcome`, the
+   workspace's public channels not yet joined, by name; the three with the latest messages are marked
+   Active and picked, a silent channel is never recommended. Joined together with the existing join,
+   or skipped; a join that fails part way says which channels by name, and why, and keeps those
+   picked unless they are gone. They are joined four at a time — each is a write on the budget the
+   person's first message spends — and the marks are set once, so a list read again does not move
+   them. A person who leaves while the joins are on their way is not moved, and a failure is said
+   where they are.
+
 **Rejected.** *The star in `ChannelState`* — every frame that carries a read position would have to
 read the star too, and a star changes nothing a read position says. *A frame carrying the star* —
 two tabs' changes heard out of order would leave the wrong one; read again, order does not matter.
 *Starred by activity* — the section would reorder itself under the pointer.
+*Recommendations by members or by an admin's choice* — the first needs a count on every channel
+row, the second a setting nobody has asked for; the latest message says where the team is talking.
 
-**Cost of reversing:** migration 0030's column, two routes, the frame, and the section.
+**Cost of reversing:** migration 0030's column, two routes, the frame, the section, and the welcome
+step.
 
 ---
 

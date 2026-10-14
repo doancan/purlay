@@ -24,6 +24,12 @@ test.describe('an invitation', () => {
     const { token } = await bob.post<{ token: string }>(
       `/api/workspaces/${workspace.id}/invitations`,
     );
+    // Two channels to join: one where the conversation is, one nobody has written in.
+    const busy = await bob.post<{ id: string }>(`/api/workspaces/${workspace.id}/channels`, {
+      name: 'deploys',
+    });
+    await bob.post(`/api/workspaces/${workspace.id}/channels`, { name: 'quiet' });
+    await bob.say(busy.id, 'shipping now');
 
     await page.goto(`/invite#${token}`);
     // Not signed in: sent to sign in, and the secret is already out of the address.
@@ -37,11 +43,20 @@ test.describe('an invitation', () => {
     expect(page.url()).not.toContain(token);
 
     await page.getByRole('button', { name: 'Join' }).click();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}`));
-    const memberships = await apiAs(tenant, 'alice').get<{ workspace: { id: string } }[]>(
-      '/api/workspaces',
-    );
+    // Joined: the channels to join come first, the busy one picked, the silent one not (D-132).
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/welcome$`));
+    await expect(page.getByRole('checkbox', { name: '#deploys' })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: '#quiet' })).not.toBeChecked();
+    await page.getByRole('button', { name: 'Join 1 channel' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/c/${busy.id}`));
+    const alice = apiAs(tenant, 'alice');
+    const memberships = await alice.get<{ workspace: { id: string } }[]>('/api/workspaces');
     expect(memberships.map((m) => m.workspace.id)).toContain(workspace.id);
+    const channels = await alice.get<{ name: string | null; state: unknown }[]>(
+      `/api/workspaces/${workspace.id}/channels`,
+    );
+    expect(channels.filter((c) => c.state !== null).map((c) => c.name)).toContain('deploys');
+    expect(channels.find((c) => c.name === 'quiet')?.state).toBeNull();
   });
 
   test('made by an owner from the workspace menu, and opened by the person it was sent to', async ({

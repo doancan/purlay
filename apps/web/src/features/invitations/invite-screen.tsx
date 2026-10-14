@@ -118,12 +118,17 @@ export const InviteScreen = (): React.JSX.Element => {
     forgetInvitation(ports);
     navigate(href('workspace', { slug: workspace.slug }), { replace: true });
   };
+  // Just joined: the channels to join come first (D-132); one already in goes straight in.
+  const welcome = (): void => {
+    forgetInvitation(ports);
+    navigate(href('welcome', { slug: workspace.slug }), { replace: true });
+  };
   const join = async (): Promise<void> => {
     setJoining(true);
     setFailed(null);
     try {
       await joinWorkspace(token);
-      enter();
+      welcome();
     } catch (failure) {
       setJoining(false);
       setFailed(failure);
