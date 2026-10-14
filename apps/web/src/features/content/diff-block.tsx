@@ -9,7 +9,8 @@
  *   a screen reader hears "removed" and "added". Each file is a table, its rows the lines.
  * - **What a code block does, it does too** (`code-block.tsx`): the count of what was added and
  *   removed, Copy for the raw text as it was sent, and the clamp above twelve lines.
- * - **Nothing pasted is lost**: what the parser cannot place is shown as context (`parse-diff.ts`).
+ * - **Nothing pasted is lost**: git's notes and prose are rows of their own (`parse-diff.ts`), and a
+ *   paste with nothing to draw as a diff is drawn as a code block.
  */
 import { useMemo, useState } from 'react';
 import { Icon } from '../../components/icon';
@@ -17,7 +18,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
-import { CLAMP_ABOVE_LINES } from './code-block';
+import { CLAMP_ABOVE_LINES, CodeBlock } from './code-block';
 import { useContentPorts } from './content-ports';
 import { parseDiff, splitRows, type DiffFile, type DiffLine } from './parse-diff';
 
@@ -27,19 +28,55 @@ const tone: Readonly<Record<DiffLine['kind'], string>> = {
   added: 'bg-success-subtle',
   removed: 'bg-danger-subtle',
   context: '',
+  note: 'text-ink-muted',
 };
 
-const mark: Readonly<Record<DiffLine['kind'], string>> = { added: '+', removed: '-', context: ' ' };
+const mark: Readonly<Record<DiffLine['kind'], string>> = {
+  added: '+',
+  removed: '-',
+  context: ' ',
+  note: '',
+};
 
 const numberCell = 'w-1 select-none whitespace-nowrap px-2 text-right align-top text-ink-subtle';
 const textCell = 'whitespace-pre px-2 align-top';
 
-/** What a line is, for a screen reader: its mark is a character it would read as "minus". */
+/**
+ * What a line is, for a screen reader: its mark is a character it would read as "minus". Not
+ * selectable, so a reader who copies lines by hand gets the lines, not the words.
+ */
 const Kind = ({ line }: { readonly line: DiffLine }): React.JSX.Element | null => {
   const { t } = useI18n();
-  if (line.kind === 'context') return null;
+  if (line.kind !== 'added' && line.kind !== 'removed') return null;
   return (
-    <VisuallyHidden>{t(line.kind === 'added' ? 'diff.added' : 'diff.removed')}</VisuallyHidden>
+    <VisuallyHidden className="select-none">
+      {t(line.kind === 'added' ? 'diff.added' : 'diff.removed')}
+    </VisuallyHidden>
+  );
+};
+
+/** The columns, named for a screen reader; a sighted reader sees what they are. */
+const Head = ({
+  split,
+  className,
+}: {
+  readonly split: boolean;
+  readonly className?: string;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const columns = split
+    ? [t('diff.oldLine'), t('diff.line'), t('diff.newLine'), t('diff.line')]
+    : [t('diff.oldLine'), t('diff.newLine'), t('diff.line')];
+  return (
+    <thead className={cn(split && 'max-narrow:hidden', className)}>
+      <tr>
+        {columns.map((name, at) => (
+          <th key={at} scope="col" className="p-0">
+            <VisuallyHidden>{name}</VisuallyHidden>
+          </th>
+        ))}
+      </tr>
+    </thead>
   );
 };
 
@@ -80,10 +117,16 @@ const Unified = ({
   </tbody>
 );
 
-const Side = ({ line }: { readonly line: DiffLine | null }): React.JSX.Element => (
+const Side = ({
+  line,
+  side,
+}: {
+  readonly line: DiffLine | null;
+  readonly side: 'old' | 'new';
+}): React.JSX.Element => (
   <>
     <td className={cn(numberCell, line !== null && tone[line.kind])}>
-      {line === null ? '' : ((line.kind === 'added' ? line.newNumber : line.oldNumber) ?? '')}
+      {line === null ? '' : ((side === 'old' ? line.oldNumber : line.newNumber) ?? '')}
     </td>
     <td className={cn(textCell, 'w-1/2', line !== null && tone[line.kind])}>
       {line === null ? null : (
@@ -99,38 +142,65 @@ const Side = ({ line }: { readonly line: DiffLine | null }): React.JSX.Element =
   </>
 );
 
-const Split = ({ file }: { readonly file: DiffFile }): React.JSX.Element => (
-  // A narrow window has room for one column: there it is unified, whatever was chosen.
-  <tbody className="max-narrow:hidden">
-    {file.hunks.flatMap((hunk, at) => [
-      hunk.header === null ? null : (
-        <tr key={`h${String(at)}`} className="bg-surface-050 text-ink-muted">
-          <td colSpan={4} className={textCell}>
-            {hunk.header}
-          </td>
-        </tr>
-      ),
-      ...splitRows(hunk.lines).map((row, index) => (
-        <tr key={`${String(at)}.${String(index)}`}>
-          <Side line={row.old} />
-          <Side line={row.new} />
-        </tr>
-      )),
-    ])}
-  </tbody>
-);
+const Split = ({ file }: { readonly file: DiffFile }): React.JSX.Element => {
+  const rows = useMemo(() => file.hunks.map((hunk) => splitRows(hunk.lines)), [file]);
+  return (
+    // A narrow window has room for one column: there it is unified, whatever was chosen.
+    <tbody className="max-narrow:hidden">
+      {file.hunks.flatMap((hunk, at) => [
+        hunk.header === null ? null : (
+          <tr key={`h${String(at)}`} className="bg-surface-050 text-ink-muted">
+            <td colSpan={4} className={textCell}>
+              {hunk.header}
+            </td>
+          </tr>
+        ),
+        ...(rows[at] ?? []).map((row, index) =>
+          row.kind === 'note' ? (
+            <tr key={`${String(at)}.${String(index)}`} data-diff-line="note">
+              <td colSpan={4} className={cn(textCell, tone.note)}>
+                {row.line.text}
+              </td>
+            </tr>
+          ) : (
+            <tr key={`${String(at)}.${String(index)}`}>
+              <Side line={row.old} side="old" />
+              <Side line={row.new} side="new" />
+            </tr>
+          ),
+        ),
+      ])}
+    </tbody>
+  );
+};
 
-export const DiffBlock = ({ code }: { readonly code: string }): React.JSX.Element => {
+export const DiffBlock = ({
+  code,
+  language,
+}: {
+  readonly code: string;
+  readonly language: string;
+}): React.JSX.Element => {
+  const diff = useMemo(() => parseDiff(code), [code]);
+  // Nothing to draw as a diff (an empty fence): what a code block of the same text would be.
+  if (diff.files.length === 0) return <CodeBlock code={code} language={language} />;
+  return <Diff code={code} diff={diff} />;
+};
+
+const Diff = ({
+  code,
+  diff,
+}: {
+  readonly code: string;
+  readonly diff: ReturnType<typeof parseDiff>;
+}): React.JSX.Element => {
   const { t, format } = useI18n();
   const { show } = useToast();
   const ports = useContentPorts();
-  const diff = useMemo(() => parseDiff(code), [code]);
   const [view, setView] = useState<View>('unified');
   const [open, setOpen] = useState(false);
-  const count = diff.files.reduce(
-    (sum, file) => sum + file.hunks.reduce((lines, hunk) => lines + hunk.lines.length, 0),
-    0,
-  );
+  // The lines as pasted, as a code block counts them, so the two clamp alike.
+  const count = code.split('\n').length;
   const clamped = count > CLAMP_ABOVE_LINES && !open;
 
   const copy = (): void => {
@@ -195,6 +265,11 @@ export const DiffBlock = ({ code }: { readonly code: string }): React.JSX.Elemen
                   {file.newPath ?? file.oldPath}
                 </caption>
               )}
+              <Head
+                split={false}
+                {...(view === 'split' ? { className: 'hidden max-narrow:table-header-group' } : {})}
+              />
+              {view === 'split' && <Head split />}
               <Unified
                 file={file}
                 // Split chosen: the unified lines are for a narrow window only.

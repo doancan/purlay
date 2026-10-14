@@ -83,6 +83,16 @@ describe('a diff in a message', () => {
     expect(cells).toContainEqual(['', '', '12', 'added+const jitter = 0.2;']);
     // Context is on both sides, at its number on each.
     expect(cells).toContainEqual(['10', ' const base = 1000;', '10', ' const base = 1000;']);
+    // Below an addition the two sides part: each at its own number.
+    expect(cells).toContainEqual(['12', ' return n;', '13', ' return n;']);
+    // One set of column names at a time: the split view's four.
+    const heads = view.container.querySelectorAll('thead:not(.hidden) th');
+    expect([...heads].map((head) => head.textContent)).toEqual([
+      'Old line',
+      'Line',
+      'New line',
+      'Line',
+    ]);
     // The unified lines stay for a narrow window, where there is room for one column only.
     expect(view.container.querySelector('tbody.hidden')).not.toBeNull();
     await expectNoAxeViolations(view.container);
@@ -138,6 +148,47 @@ describe('a diff in a message', () => {
     expect(region.className).not.toContain('max-h-code');
     expect(region.getAttribute('tabindex')).toBe('0');
     expect(more.getAttribute('aria-expanded')).toBe('true');
+    view.unmount();
+  });
+
+  test('git says what a hunk cannot: a rename and a missing newline are rows, not lost', async () => {
+    const renamed = [
+      'diff --git a/old.ts b/new.ts',
+      'similarity index 90%',
+      'rename from old.ts',
+      'rename to new.ts',
+      '--- a/old.ts',
+      '+++ b/new.ts',
+      '@@ -1 +1 @@',
+      '-a',
+      '\\ No newline at end of file',
+      '+b',
+    ].join('\n');
+    const view = await mount(`\`\`\`diff\n${renamed}\n\`\`\``);
+    expect(view.getByText('new.ts')).toBeDefined();
+    expect(rows(view, 'note')).toEqual([
+      'similarity index 90%',
+      'rename from old.ts',
+      'rename to new.ts',
+      '\\ No newline at end of file',
+    ]);
+    // The paths are headers, never rows.
+    expect(view.container.textContent).not.toContain('+++ b/new.ts');
+    view.unmount();
+  });
+
+  test('its columns are named, and the words a screen reader hears are never copied', async () => {
+    const view = await mount(`\`\`\`diff\n${DIFF}\n\`\`\``);
+    const heads = [...view.container.querySelectorAll('thead:not(.max-narrow\\:hidden) th')];
+    expect(heads.map((head) => head.textContent)).toEqual(['Old line', 'New line', 'Line']);
+    for (const word of view.getAllByText('added')) expect(word.className).toContain('select-none');
+    view.unmount();
+  });
+
+  test('an empty diff fence is drawn as the code block it would otherwise be', async () => {
+    const view = await mount('```diff\n```');
+    expect(view.queryByRole('button', { name: 'Unified' })).toBeNull();
+    expect(view.getByRole('button', { name: 'Copy code' })).toBeDefined();
     view.unmount();
   });
 

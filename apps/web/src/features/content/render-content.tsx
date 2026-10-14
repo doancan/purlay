@@ -284,7 +284,7 @@ const BlockNode = ({
     case 'code':
       // A diff is drawn as one (D-133); any other language is a code block.
       return ['diff', 'patch'].includes((node.lang ?? '').toLowerCase()) ? (
-        <DiffBlock code={node.value} />
+        <DiffBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
       ) : (
         <CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
       );
