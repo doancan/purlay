@@ -29,8 +29,19 @@ import { IconButton } from './icon-button';
 
 const overlayClasses = 'fixed inset-0 z-palette bg-scrim';
 
+/**
+ * The window's column the dialog sits in: the margins above and below it, and nothing to catch a
+ * pointer, so a click beside the dialog is a click on the scrim, as it was.
+ */
 const contentClasses =
-  'fixed inset-x-4 top-0 z-palette mx-auto mt-8 flex max-w-dialog flex-col gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float';
+  'pointer-events-none fixed inset-x-4 inset-y-8 z-palette mx-auto flex max-w-dialog flex-col';
+
+/**
+ * The dialog itself: as tall as what it holds and never taller than the column, scrolling inside —
+ * a long dialog's last button is never below the window, where nothing could reach it.
+ */
+const panelClasses =
+  'pointer-events-auto relative flex min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float';
 
 interface DialogProps {
   readonly open: boolean;
@@ -87,20 +98,22 @@ export const Dialog = ({
             returnTo.current.focus();
           }}
         >
-          <div className="flex flex-col gap-1 pr-6">
-            <RadixDialog.Title className="text-title text-ink">{title}</RadixDialog.Title>
-            <RadixDialog.Description className="text-body text-ink-muted">
-              {description}
-            </RadixDialog.Description>
-          </div>
-          {children}
-          {footer === undefined ? null : <div className="flex justify-end gap-2">{footer}</div>}
-          {/* Last in the tree, first in the corner: Radix focuses the first focusable
+          <div className={panelClasses}>
+            <div className="flex flex-col gap-1 pr-6">
+              <RadixDialog.Title className="text-title text-ink">{title}</RadixDialog.Title>
+              <RadixDialog.Description className="text-body text-ink-muted">
+                {description}
+              </RadixDialog.Description>
+            </div>
+            {children}
+            {footer === undefined ? null : <div className="flex justify-end gap-2">{footer}</div>}
+            {/* Last in the tree, first in the corner: Radix focuses the first focusable
             thing, and that should be the form, not a close button whose tooltip then
             takes the first Escape. */}
-          <RadixDialog.Close asChild>
-            <IconButton label={closeLabel} glyph="close" className="absolute right-3 top-3" />
-          </RadixDialog.Close>
+            <RadixDialog.Close asChild>
+              <IconButton label={closeLabel} glyph="close" className="absolute right-3 top-3" />
+            </RadixDialog.Close>
+          </div>
         </RadixDialog.Content>
       </RadixDialog.Portal>
     </RadixDialog.Root>
