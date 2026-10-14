@@ -17,7 +17,7 @@ import {
 export const DELIVERIES_AT_ONCE = 8;
 
 /** How long a delivery's body may take to arrive: GitHub sends it at once; a trickle is not GitHub. */
-export const DELIVERY_READ_MS = 10_000;
+const DELIVERY_READ_MS = 10_000;
 
 export interface WebhookRouteDependencies extends WebhookDependencies {
   /** Whether this address may knock once more: its own bucket, before anything is looked up. */
