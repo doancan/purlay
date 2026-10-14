@@ -230,6 +230,13 @@ describe('the endpoints', () => {
       ['GET', `/api/channels/${ID}/incident/${ID}/updates`, undefined],
       ['GET', `/api/channels/${ID}/incident/${ID}/updates?before=u1`, undefined],
     ]);
+    const respond = harness(incident);
+    await respond.api.respond(ID, ID, 'u2', true);
+    await respond.api.respond(ID, ID, 'u2', false);
+    expect(respond.calls.map((call) => [call.method, call.url])).toEqual([
+      ['PUT', `/api/channels/${ID}/incident/${ID}/responders/u2`],
+      ['DELETE', `/api/channels/${ID}/incident/${ID}/responders/u2`],
+    ]);
     // What the server answers is parsed against the contract: a resolved one with no instant is not one.
     const broken = harness({ ...incident, status: 'resolved' });
     expect(

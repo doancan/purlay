@@ -50,6 +50,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   declareIncident: unexpected('declareIncident'),
   changeIncident: unexpected('changeIncident'),
   incidentUpdates: unexpected('incidentUpdates'),
+  respond: unexpected('respond'),
   pin: unexpected('pin'),
   unpin: unexpected('unpin'),
   messages: unexpected('messages'),

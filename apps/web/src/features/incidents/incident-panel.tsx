@@ -24,6 +24,7 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
 import { PanelEmpty, PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
 import { useSidePanel } from '../channel/side-panel';
+import { Responders } from './responders';
 import { useIncident, useIncidentActions, type IncidentActions } from './use-incident';
 
 export const INCIDENT_PANEL_ID = 'channel-incident';
@@ -270,6 +271,7 @@ const Timeline = ({
           {`${t('incident.timelineFailed')} ${describe(updates.error)}`}
           <Button
             variant="ghost"
+            aria-label={t('incident.retryTimeline')}
             onClick={() => {
               void updates.refetch();
             }}
@@ -374,7 +376,17 @@ const IncidentPanelView = ({
         {member && (
           <Declare actions={actions} onDeclared={() => focus.headingRef.current?.focus()} />
         )}
-        {current !== null && <Timeline channelId={channel.id} incidentId={current.id} />}
+        {current !== null && (
+          <>
+            <Responders
+              channelId={channel.id}
+              incident={current}
+              actions={actions}
+              member={member}
+            />
+            <Timeline channelId={channel.id} incidentId={current.id} />
+          </>
+        )}
       </>
     );
   } else {
@@ -387,6 +399,7 @@ const IncidentPanelView = ({
             onResolved={() => focus.headingRef.current?.focus()}
           />
         )}
+        <Responders channelId={channel.id} incident={current} actions={actions} member={member} />
         <Timeline channelId={channel.id} incidentId={current.id} />
       </>
     );

@@ -106,7 +106,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   place, as does the header's **Incident** control (in the Channel menu on a narrow window). In it a
   member of the channel sets the severity and moves the status between **Investigating** and
   **Mitigating**, each painted at once and put back, said, when refused; **Resolve…** asks first, since
-  a resolved incident is never reopened. Then what happened, newest first, in words. With none open
+  a resolved incident is never reopened. Who is responding is listed with their avatars, first brought
+  in first — **I'm responding**, **Bring someone in…** from the channel's members, and **Take off** —
+  and the banner shows the first three; somebody who left the channel stays listed. Then what happened, newest first, in words. With none open
   the panel says so, when the last was resolved, and declares one at a severity. Somebody who sees the
   channel without being in it reads all of it and is offered none of the controls.
 

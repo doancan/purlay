@@ -49,8 +49,10 @@ test.describe('an incident', () => {
     await banner(alice).getByRole('button', { name: 'Details' }).click();
     const hers = alice.getByRole('complementary', { name: /Incident/ });
     await hers.getByRole('button', { name: 'Mitigating' }).click();
+    await hers.getByRole('button', { name: 'I’m responding' }).click();
 
     await expect(banner(page)).toContainText('Mitigating');
+    await expect(banner(page)).toContainText('1 responding');
     await banner(page).getByRole('button', { name: 'Details' }).click();
     await expect(
       page

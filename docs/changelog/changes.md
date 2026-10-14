@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: who is responding, on screen (D-137 §3, part of #487)
+
+- An incident's panel lists who is responding; a member says "I'm responding", brings somebody else in
+  from the channel, or takes somebody off — painted at once and put back if refused — and the banner
+  shows the first three.
+
 ### Feature — 2026-10-14: who is responding to an incident (D-137 §3, part of #487)
 
 - Anyone in a channel brings people in it in to respond to its incident, themselves included, and
