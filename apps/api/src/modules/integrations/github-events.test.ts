@@ -170,6 +170,94 @@ describe('a push, read', () => {
   });
 });
 
+describe('a pull request, an issue and a release, read', () => {
+  const all = ['push', 'pull_request', 'issues', 'release'] as const;
+  const pr = (action: string, merged = false): Record<string, unknown> => ({
+    ...envelope,
+    action,
+    number: 7,
+    pull_request: { title: 'Retry with jitter', merged, body: 'never kept' },
+  });
+
+  test.each([
+    ['opened', false, 'opened'],
+    ['closed', false, 'closed'],
+    ['closed', true, 'merged'],
+    ['reopened', false, 'reopened'],
+    ['ready_for_review', false, 'ready_for_review'],
+  ] as const)('a pull request %s (merged: %s) is %s', (action, merged, said) => {
+    expect(readDelivery('pull_request', pr(action, merged), all)).toEqual({
+      kind: 'event',
+      envelope,
+      event: {
+        kind: 'pull_request',
+        repository: 'Acme/API',
+        actor: 'octocat',
+        action: said,
+        number: 7,
+        title: 'Retry with jitter',
+      },
+    });
+  });
+
+  test('what a channel does not hear about is received and not posted', () => {
+    for (const [name, body] of [
+      ['pull_request', pr('labeled')],
+      ['pull_request', pr('synchronize')],
+      ['issues', { ...envelope, action: 'edited', issue: { number: 9, title: 'x' } }],
+      ['release', { ...envelope, action: 'created', release: { tag_name: 'v1', name: null } }],
+    ] as const) {
+      expect({ name, kind: readDelivery(name, body, all).kind }).toEqual({ name, kind: 'ignored' });
+    }
+  });
+
+  test('an issue opened, closed and reopened; its title cut to its bound', () => {
+    const long = 'y'.repeat(GITHUB_EVENT_TEXT_MAX + 10);
+    const reading = readDelivery(
+      'issues',
+      { ...envelope, action: 'closed', issue: { number: 9, title: long } },
+      all,
+    );
+    if (reading.kind !== 'event' || reading.event.kind !== 'issues') throw new Error('no issue');
+    expect([reading.event.action, reading.event.number]).toEqual(['closed', 9]);
+    expect(Array.from(reading.event.title)).toHaveLength(GITHUB_EVENT_TEXT_MAX);
+  });
+
+  test('a release published is named, or by its tag when it has no name', () => {
+    for (const [name, said] of [
+      ['Two', 'Two'],
+      [null, ''],
+    ] as const) {
+      const reading = readDelivery(
+        'release',
+        { ...envelope, action: 'published', release: { tag_name: 'v2.0.0', name } },
+        all,
+      );
+      expect(reading.kind === 'event' && reading.event).toEqual({
+        kind: 'release',
+        repository: 'Acme/API',
+        actor: 'octocat',
+        tag: 'v2.0.0',
+        name: said,
+      });
+    }
+  });
+
+  test('a body without what its event must hold is invalid', () => {
+    for (const [name, body] of [
+      ['pull_request', { ...envelope, action: 'opened', number: 7 }],
+      ['issues', { ...envelope, action: 'opened', issue: { number: 0, title: 'x' } }],
+      ['release', { ...envelope, action: 'published', release: { tag_name: '' } }],
+      [
+        'pull_request',
+        { action: 'opened', number: 7, pull_request: { title: 'x', merged: false } },
+      ],
+    ] as const) {
+      expect({ name, kind: readDelivery(name, body, all).kind }).toEqual({ name, kind: 'invalid' });
+    }
+  });
+});
+
 describe('a delivery’s signature', () => {
   test('GitHub’s published example holds', () => {
     // docs.github.com, "Validating webhook deliveries".

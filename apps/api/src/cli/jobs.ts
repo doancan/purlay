@@ -12,7 +12,13 @@
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
 import { createDatabase, purgeDeadSessions } from '@purlay/db';
-import { reconcileStorage, runJob, sweepLinkPreviews, sweepOrphans } from '../modules/jobs/jobs';
+import {
+  reconcileStorage,
+  runJob,
+  sweepGitHubDeliveries,
+  sweepLinkPreviews,
+  sweepOrphans,
+} from '../modules/jobs/jobs';
 import { jobReport, neverSucceeded } from '../modules/jobs/report';
 import { FIRST_RUN } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
@@ -41,6 +47,7 @@ const jobs: Readonly<Record<string, () => Promise<Readonly<Record<string, number
   },
   'reconcile:storage': async () => await reconcileStorage({ database, log }),
   'sweep:link-previews': async () => await sweepLinkPreviews({ database, clock }),
+  'sweep:github-deliveries': async () => await sweepGitHubDeliveries({ database, clock }),
 };
 
 const records = async (): Promise<Parameters<typeof jobReport>[1]> =>

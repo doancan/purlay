@@ -765,6 +765,7 @@ reconciliation (invariant I-7). D-27 adds a fourth, and session expiry a fifth.
 ```
 purlay sweep:orphans        purlay sweep:link-previews    purlay sweep:sessions
 purlay reconcile:storage    purlay purge:retention        purlay export:workspace
+purlay sweep:github-deliveries   (D-134 §5)
 ```
 
 **Why not an in-process timer**, which would be the simpler answer at one node: under D-25's

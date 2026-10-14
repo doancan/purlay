@@ -13,7 +13,7 @@ import {
   type Executor,
   type Transaction,
 } from '@purlay/db';
-import type { ServerFrame } from '@purlay/types';
+import type { GitHubFeedEventName, ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { credentialCipher } from '../../platform/crypto';
 import { AppError } from '../../platform/errors';
@@ -58,13 +58,18 @@ interface World {
   ) => Promise<string>;
 }
 
-const aWorld = async (db: Transaction, room?: Room, full = false): Promise<World> => {
+const aWorld = async (
+  db: Transaction,
+  room?: Room,
+  full = false,
+  events: readonly GitHubFeedEventName[] = ['push'],
+): Promise<World> => {
   const here = room ?? (await aRoom(db, ['alice', 'bob']));
   const alice = here.members['alice']?.context;
   if (alice === undefined) throw new Error('no alice');
   const made = await createFeed(db, clock, cipher, alice, {
     repository: 'Acme/API',
-    events: ['push'],
+    events: [...events],
   });
   const frames: [string, ServerFrame][] = [];
   const bus: EventBus = {
@@ -188,6 +193,31 @@ describe('integration: a delivery to a feed', () => {
       const said = world.lines.filter((line) => line['msg'] === 'github delivery');
       expect(said.map((line) => line['outcome'])).toEqual(['posted']);
       expect(JSON.stringify(world.lines)).not.toContain('Retry with jitter');
+    });
+  });
+
+  test('a merged pull request is posted to a feed that hears of them, and a push to it is not', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db, undefined, false, ['pull_request', 'release']);
+      const merged = {
+        repository: { id: 42, full_name: 'acme/api' },
+        sender: { login: 'octocat' },
+        action: 'closed',
+        number: 7,
+        pull_request: { title: 'Retry with jitter', merged: true },
+      };
+      expect(await world.deliver(merged, { event: 'pull_request' })).toBe('posted');
+      expect(await world.deliver(push())).toBe('ignored');
+      const [created] = world.frames.map(([, frame]) => frame);
+      expect(created?.event === 'MESSAGE_CREATED' && created.data.githubEvent).toEqual({
+        kind: 'pull_request',
+        repository: 'acme/api',
+        actor: 'octocat',
+        action: 'merged',
+        number: 7,
+        title: 'Retry with jitter',
+      });
+      expect(await eventsIn(db, world.room.channelId)).toBe(1);
     });
   });
 

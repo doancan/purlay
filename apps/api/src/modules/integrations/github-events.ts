@@ -14,6 +14,7 @@ import {
   GITHUB_EVENT_TEXT_MAX,
   GITHUB_REPOSITORY_PATTERN,
   GitHubEvent,
+  GitHubFeedEventName as GitHubFeedEventNameSchema,
   PUSH_COMMITS_LISTED_MAX,
   PUSH_COMMITS_SHOWN_MAX,
   type GitHubFeedEventName,
@@ -43,6 +44,34 @@ const PushBody = Type.Composite([
     forced: Type.Boolean(),
     commits: Type.Array(Type.Object({ id: Sha, message: Type.String() }), {
       maxItems: PUSH_COMMITS_LISTED_MAX,
+    }),
+  }),
+]);
+
+const PullRequestBody = Type.Composite([
+  Envelope,
+  Type.Object({
+    action: Type.String({ maxLength: 64 }),
+    number: Type.Integer({ minimum: 1 }),
+    pull_request: Type.Object({ title: Type.String(), merged: Type.Boolean() }),
+  }),
+]);
+
+const IssueBody = Type.Composite([
+  Envelope,
+  Type.Object({
+    action: Type.String({ maxLength: 64 }),
+    issue: Type.Object({ number: Type.Integer({ minimum: 1 }), title: Type.String() }),
+  }),
+]);
+
+const ReleaseBody = Type.Composite([
+  Envelope,
+  Type.Object({
+    action: Type.String({ maxLength: 64 }),
+    release: Type.Object({
+      tag_name: Type.String({ minLength: 1 }),
+      name: Type.Union([Type.String(), Type.Null()]),
     }),
   }),
 ]);
@@ -107,11 +136,75 @@ export const readDelivery = (
       }
     : null;
   // An event no feed posts — an organisation's ping, an installation — may name no repository.
-  if (name !== 'push' || !wanted.includes('push')) return { kind: 'ignored', envelope };
-  if (envelope === null || !Value.Check(PushBody, body)) return { kind: 'invalid' };
-  const event = pushOf(body);
+  if (!isPosted(name) || !wanted.includes(name)) return { kind: 'ignored', envelope };
+  if (envelope === null) return { kind: 'invalid' };
+  const event = eventOf(name, body, envelope);
+  if (event === 'invalid') return { kind: 'invalid' };
+  // An action a channel does not hear about — a label, an edit, a draft — is received and not posted.
   if (event === null) return { kind: 'ignored', envelope };
   return Value.Check(GitHubEvent, event) ? { kind: 'event', event, envelope } : { kind: 'invalid' };
+};
+
+const isPosted = (name: string): name is GitHubFeedEventName =>
+  Value.Check(GitHubFeedEventNameSchema, name);
+
+/** One event's body, read: what it posts, nothing (an action not heard about), or `invalid`. */
+const eventOf = (
+  name: GitHubFeedEventName,
+  body: unknown,
+  envelope: Envelope,
+): GitHubEvent | null | 'invalid' => {
+  const who = { repository: envelope.repository.full_name, actor: envelope.sender.login };
+  switch (name) {
+    case 'push':
+      return Value.Check(PushBody, body) ? pushOf(body) : 'invalid';
+    case 'pull_request': {
+      if (!Value.Check(PullRequestBody, body)) return 'invalid';
+      const action =
+        body.action === 'closed'
+          ? body.pull_request.merged
+            ? 'merged'
+            : 'closed'
+          : body.action === 'opened' ||
+              body.action === 'reopened' ||
+              body.action === 'ready_for_review'
+            ? body.action
+            : null;
+      if (action === null) return null;
+      return {
+        kind: 'pull_request',
+        ...who,
+        action,
+        number: body.number,
+        title: bounded(body.pull_request.title),
+      };
+    }
+    case 'issues': {
+      if (!Value.Check(IssueBody, body)) return 'invalid';
+      const action =
+        body.action === 'opened' || body.action === 'closed' || body.action === 'reopened'
+          ? body.action
+          : null;
+      if (action === null) return null;
+      return {
+        kind: 'issues',
+        ...who,
+        action,
+        number: body.issue.number,
+        title: bounded(body.issue.title),
+      };
+    }
+    case 'release':
+      if (!Value.Check(ReleaseBody, body)) return 'invalid';
+      // Published is when the team hears of it: not a draft made, edited or deleted.
+      if (body.action !== 'published') return null;
+      return {
+        kind: 'release',
+        ...who,
+        tag: body.release.tag_name,
+        name: bounded(body.release.name ?? ''),
+      };
+  }
 };
 
 /** What search finds for an event: an English line, never shown (D-134 §6). */
