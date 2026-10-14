@@ -16,6 +16,7 @@ import { Value } from '@sinclair/typebox/value';
 import { fixedClock } from '../../platform/clock';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
+import { aMemoryStore } from '../../testing/storage';
 import { recordAudit } from '../audit/audit';
 import { sendMessage } from '../messages/messages';
 import { everyChannel, exportWorkspace, TABLE_ORDER } from './export';
@@ -37,6 +38,9 @@ const member = (room: Room, name: string): NonNullable<Room['members'][string]> 
 };
 
 /** Every exported table given at least one row in this room's workspace; what to look for after. */
+/** The files the fixture's attachments name, kept as the store would. */
+let store = aMemoryStore();
+
 const fill = async (
   db: Transaction,
   room: Room,
@@ -70,6 +74,7 @@ const fill = async (
     .execute();
   const fileId = messageId(next());
   const storageKey = `${room.workspaceId}/${fileId}/original`;
+  await store.put(storageKey, new Uint8Array(10).fill(7), 'application/pdf');
   await db
     .insertInto('attachments')
     .values({
@@ -196,7 +201,7 @@ describe('integration: exporting a workspace', () => {
         .where('id', '=', a.workspaceId)
         .executeTakeFirstOrThrow();
       const { path, manifest } = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log },
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
         workspace,
         {
           kind: 'all',
@@ -213,7 +218,7 @@ describe('integration: exporting a workspace', () => {
       // Every table written, each count its file's, and — the fixture's own check — none empty.
       const files = (await readdir(target)).sort();
       expect(files).toEqual(
-        [...TABLE_ORDER.map((table) => `${table}.ndjson`), 'manifest.json'].sort(),
+        [...TABLE_ORDER.map((table) => `${table}.ndjson`), 'blobs', 'manifest.json'].sort(),
       );
       for (const table of TABLE_ORDER) {
         const rows = await lines(target, table);
@@ -227,7 +232,11 @@ describe('integration: exporting a workspace', () => {
 
       // Not one byte of the other workspace's, and no secret of either.
       let everything = '';
-      for (const file of files) everything += await readFile(join(target, file), 'utf8');
+      for (const file of files.filter(
+        (name) => name.endsWith('.ndjson') || name.endsWith('.json'),
+      )) {
+        everything += await readFile(join(target, file), 'utf8');
+      }
       for (const id of [...theirs.ids, b.workspaceId, b.channelId, member(b, 'qui').userId]) {
         expect({ id, found: everything.includes(id) }).toEqual({ id, found: false });
       }
@@ -271,7 +280,7 @@ describe('integration: exporting a workspace', () => {
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'out');
       const workspace = { id: a.workspaceId, slug: 'acme', name: 'Acme' };
       await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log },
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
         workspace,
         {
           kind: 'all',
@@ -329,7 +338,7 @@ describe('integration: exporting a workspace', () => {
       const a = await aRoom(db, ['pat']);
       const target = await mkdtemp(join(tmpdir(), 'purlay-export-'));
       const failure = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log },
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
         { kind: 'all', workspaceId: a.workspaceId, channelIds: [] },
         target,
@@ -376,7 +385,7 @@ describe('integration: exporting a workspace', () => {
 
       const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'scoped');
       await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log },
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
         // b's channel passed by mistake: it must select nothing.
         {
@@ -387,8 +396,9 @@ describe('integration: exporting a workspace', () => {
         target,
       );
       let everything = '';
-      for (const file of await readdir(target))
-        everything += await readFile(join(target, file), 'utf8');
+      for (const file of await readdir(target)) {
+        if (file !== 'blobs') everything += await readFile(join(target, file), 'utf8');
+      }
       for (const id of [
         hidden.id,
         secret.message.id,
@@ -410,7 +420,7 @@ describe('integration: exporting a workspace', () => {
     await withRollback(async (db) => {
       const a = await aRoom(db, ['pat']);
       const failure = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log },
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
         { kind: 'all', workspaceId: a.workspaceId, channelIds: [a.channelId] },
         join(tmpdir(), `purlay-no-such-${crypto.randomUUID()}`, 'out'),
@@ -428,7 +438,7 @@ describe('integration: exporting a workspace', () => {
       const shared = await mkdtemp(join(tmpdir(), 'purlay-export-'));
       await chmod(shared, 0o777);
       const failure = await exportWorkspace(
-        { database: db, clock, log: aRecordingLogger().log },
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
         { id: a.workspaceId, slug: 'acme', name: 'Acme' },
         { kind: 'all', workspaceId: a.workspaceId, channelIds: [a.channelId] },
         join(shared, 'out'),
@@ -438,6 +448,89 @@ describe('integration: exporting a workspace', () => {
       );
       expect(failure).toMatchObject({ body: { code: 'VALIDATION_FAILED' } });
       expect(await readdir(shared)).toEqual([]);
+    });
+  });
+
+  describe('the files the attachments name', () => {
+    const exported = async (
+      db: Transaction,
+      prepare: (room: Room) => Promise<void>,
+    ): Promise<{ target: string; result: unknown; room: Room }> => {
+      store = aMemoryStore();
+      const room = await aRoom(db, ['pat', 'ann']);
+      await fill(db, room, 'pat', 'ann');
+      await prepare(room);
+      const target = join(await mkdtemp(join(tmpdir(), 'purlay-export-')), 'out');
+      const result = await exportWorkspace(
+        { database: db, clock, log: aRecordingLogger().log, storage: store },
+        { id: room.workspaceId, slug: 'acme', name: 'Acme' },
+        { kind: 'all', workspaceId: room.workspaceId, channelIds: [room.channelId] },
+        target,
+      ).then(
+        (done) => done,
+        (error: unknown) => error,
+      );
+      return { target, result, room };
+    };
+
+    test('are copied, byte for byte, owner-only, and counted in the manifest', async () => {
+      await withRollback(async (db) => {
+        const { target, result } = await exported(db, () => Promise.resolve());
+        const { manifest } = result as Awaited<ReturnType<typeof exportWorkspace>>;
+        expect(manifest.blobs).toEqual({ count: 1, bytes: 10, removed: [], missing: [] });
+        const [name] = await readdir(join(target, 'blobs'));
+        const bytes = await readFile(join(target, 'blobs', name ?? ''));
+        expect([...bytes]).toEqual(Array.from({ length: 10 }, () => 7));
+        expect((await stat(join(target, 'blobs', name ?? ''))).mode & 0o777).toBe(0o600);
+      });
+    });
+
+    test('one the store has not got, its row still there, is named missing; the export is still written', async () => {
+      await withRollback(async (db) => {
+        const { result } = await exported(db, async () => {
+          for (const key of store.keys()) await store.delete(key);
+        });
+        const { manifest } = result as Awaited<ReturnType<typeof exportWorkspace>>;
+        expect(manifest.blobs.missing).toHaveLength(1);
+        expect(manifest.blobs.count).toBe(0);
+      });
+    });
+
+    test('a store that refuses, a read cut off, or bytes not the row’s: no export, nothing left named as one', async () => {
+      for (const [kind, error] of [
+        ['get', new Error('the store is down')],
+        ['stream', new Error('connection reset')],
+      ] as const) {
+        await withRollback(async (db) => {
+          const { target, result } = await exported(db, () => {
+            store.failing(kind, error);
+            return Promise.resolve();
+          });
+          expect(result).toBe(error);
+          expect(
+            await stat(target).then(
+              () => 'there',
+              () => 'absent',
+            ),
+          ).toBe('absent');
+        });
+      }
+      await withRollback(async (db) => {
+        const { target, result } = await exported(db, async (room) => {
+          await db
+            .updateTable('attachments')
+            .set({ size_bytes: '11' })
+            .where('workspace_id', '=', room.workspaceId)
+            .execute();
+        });
+        expect(String(result)).toContain('not the 11 its row says');
+        expect(
+          await stat(target).then(
+            () => 'there',
+            () => 'absent',
+          ),
+        ).toBe('absent');
+      });
     });
   });
 });

@@ -13,6 +13,7 @@ import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { createLogger } from '../platform/logging';
+import { storeFor } from '../platform/storage';
 
 const config = loadConfig(process.env);
 const log = createLogger({ level: config.LOG_LEVEL });
@@ -34,7 +35,7 @@ try {
       process.exitCode = 2;
     } else {
       const { path, manifest } = await exportWorkspace(
-        { database, clock: systemClock, log },
+        { database, clock: systemClock, log, storage: storeFor(config) },
         workspace,
         {
           kind: 'all',
@@ -43,7 +44,16 @@ try {
         },
         directory,
       );
-      process.stdout.write(`${path}\n${JSON.stringify(manifest.tables)}\n`);
+      process.stdout.write(
+        `${path}\n${JSON.stringify({ ...manifest.tables, files: manifest.blobs.count })}\n`,
+      );
+      // A file the store did not have while its row is there: the export is written, and incomplete.
+      if (manifest.blobs.missing.length > 0) {
+        process.stderr.write(
+          `${String(manifest.blobs.missing.length)} file(s) missing from storage; the manifest names them\n`,
+        );
+        process.exitCode = 1;
+      }
     }
   }
 } finally {

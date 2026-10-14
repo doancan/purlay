@@ -18,5 +18,16 @@ export const ExportManifest = Type.Object({
   scope: Type.Union([Type.Literal('all'), Type.Literal('visible-to-owner')]),
   /** Rows written, by table — one file each, `<table>.ndjson`. */
   tables: Type.Record(Type.String(), Type.Integer({ minimum: 0 })),
+  /**
+   * The files the attachments name, each at `blobs/<attachment id>` (and `<id>.thumbnail`): how many
+   * were copied and their bytes; those gone since the snapshot — removed by retention, an erasure or a
+   * delete — and those the store did not have although the row is still there, which is a fault.
+   */
+  blobs: Type.Object({
+    count: Type.Integer({ minimum: 0 }),
+    bytes: Type.Integer({ minimum: 0 }),
+    removed: Type.Array(Type.String()),
+    missing: Type.Array(Type.String()),
+  }),
 });
 export type ExportManifest = Static<typeof ExportManifest>;

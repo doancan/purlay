@@ -20,7 +20,8 @@ import type { Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
 import { atomicallyOn, snapshotOn } from '../../platform/transactions';
 import { recordAudit } from '../audit/audit';
-import { exportDirectory } from './write';
+import { exportDirectory, type ExportDirectory } from './write';
+import type { ObjectStore } from '../../platform/storage';
 import { sql, type RawBuilder } from '@purlay/db';
 import { COLUMNS, type ExportedTable } from './tables';
 
@@ -196,28 +197,104 @@ export const everyChannel = async (executor: Executor, workspaceId: string): Pro
       .execute()
   ).map((row) => row.id);
 
+/** A file the export names: where the store keeps it, and how many bytes the row says it has. */
+interface StoredFile {
+  readonly id: string;
+  readonly storage_key: string;
+  readonly thumbnail_key: string | null;
+  readonly size_bytes: string;
+}
+
+/** The files the snapshot's attachments name, read inside it. */
+const objectsOf = async (transaction: Transaction, scope: Scope): Promise<StoredFile[]> =>
+  (
+    await sql<StoredFile>`
+      select id, storage_key, thumbnail_key, size_bytes::text as size_bytes from attachments
+      where message_id in (${messagesOf(scope)}) order by id
+    `.execute(transaction)
+  ).rows;
+
+/**
+ * Copies each file the snapshot named, after it committed. A file the store does not have is either
+ * gone since the snapshot — its row is gone too: removed, said and not a fault — or missing while its
+ * row is still there, which is a fault the manifest names and the operator is told of. A store that
+ * refuses to answer is not absence (`storage.ts`): the export stops. A file whose bytes are not the
+ * row's stops it too: a copy that might be partial is no copy.
+ */
+const copyObjects = async (
+  database: Executor,
+  storage: ObjectStore,
+  scope: Scope,
+  objects: readonly StoredFile[],
+  directory: ExportDirectory,
+): Promise<ExportManifest['blobs']> => {
+  const blobs = { count: 0, bytes: 0, removed: [] as string[], missing: [] as string[] };
+  for (const file of objects) {
+    // Defence in depth: a key of this workspace's or none (`storage.ts` names them so).
+    for (const key of [file.storage_key, file.thumbnail_key]) {
+      if (key !== null && !key.startsWith(`${scope.workspaceId}/`)) {
+        throw new Error(`attachment ${file.id} names a file outside its workspace`);
+      }
+    }
+    const original = await storage.get(file.storage_key);
+    if (original === null) {
+      const still = await database
+        .selectFrom('attachments')
+        .select('id')
+        .where('id', '=', file.id)
+        .executeTakeFirst();
+      (still === undefined ? blobs.removed : blobs.missing).push(file.id);
+      continue;
+    }
+    const written = await directory.writeBlob(file.id, original.body);
+    if (written !== Number(file.size_bytes)) {
+      throw new Error(
+        `attachment ${file.id} has ${String(written)} bytes in the store, not the ${file.size_bytes} its row says`,
+      );
+    }
+    blobs.count += 1;
+    blobs.bytes += written;
+    if (file.thumbnail_key !== null) {
+      // A thumbnail is drawn from the original, and a lost one is drawn again: not a fault.
+      const thumbnail = await storage.get(file.thumbnail_key);
+      if (thumbnail !== null) {
+        blobs.bytes += await directory.writeBlob(`${file.id}.thumbnail`, thumbnail.body);
+      }
+    }
+  }
+  return blobs;
+};
+
 /**
  * Exports the workspace into `target` (D-140): the tables in one snapshot, the files written as they
  * come, the manifest last, and one line on the workspace's trail once the export exists.
  */
 export const exportWorkspace = async (
-  dependencies: { readonly database: Executor; readonly clock: Clock; readonly log: Logger },
+  dependencies: {
+    readonly database: Executor;
+    readonly clock: Clock;
+    readonly log: Logger;
+    readonly storage: ObjectStore;
+  },
   workspace: { readonly id: string; readonly slug: string; readonly name: string },
   scope: Scope,
   target: string,
 ): Promise<{ readonly path: string; readonly manifest: ExportManifest }> => {
-  const { database, clock, log } = dependencies;
+  const { database, clock, log, storage } = dependencies;
   const directory = await exportDirectory(target);
   try {
-    const { tables, schema } = await snapshotOn(database)(async (transaction) => {
+    const { tables, schema, objects } = await snapshotOn(database)(async (transaction) => {
       const latest = await sql<{ name: string }>`
         select name from kysely_migration order by name desc limit 1
       `.execute(transaction);
       return {
         schema: latestMigration(latest.rows[0]?.name),
         tables: await readTables(transaction, scope, directory.write),
+        objects: await objectsOf(transaction, scope),
       };
     });
+    // The snapshot has committed: the files are copied outside it, however slow the store.
+    const blobs = await copyObjects(database, storage, scope, objects, directory);
     const manifest: ExportManifest = {
       format: EXPORT_FORMAT,
       exportedAt: clock.now().toISOString(),
@@ -225,6 +302,7 @@ export const exportWorkspace = async (
       schema,
       scope: scope.kind,
       tables,
+      blobs,
     };
     await directory.seal(manifest, TABLE_ORDER);
     // On the trail before it takes its name: an export nobody can find a line for must not exist.
@@ -239,7 +317,12 @@ export const exportWorkspace = async (
       });
     });
     const path = await directory.publish();
-    log.info('workspace exported', { workspaceId: workspace.id, rows: tables });
+    log.info('workspace exported', {
+      workspaceId: workspace.id,
+      rows: tables,
+      files: blobs.count,
+      missing: blobs.missing.length,
+    });
     return { path, manifest };
   } catch (error) {
     await directory.abandon();

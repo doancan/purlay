@@ -8,14 +8,22 @@ import type { ObjectStore, StoredObject } from '../platform/storage';
 export interface MemoryStore extends ObjectStore {
   /** Every key held now, sorted. */
   readonly keys: () => string[];
-  /** Calls of this kind throw this error, after the first `succeeding` of them have worked. */
-  readonly failing: (kind: 'put' | 'delete', error: Error, succeeding?: number) => void;
+  /**
+   * Calls of this kind throw this error, after the first `succeeding` of them have worked. `stream`
+   * fails a read halfway: the object is found, and its body errors after its first byte.
+   */
+  readonly failing: (
+    kind: 'put' | 'delete' | 'get' | 'stream',
+    error: Error,
+    succeeding?: number,
+  ) => void;
 }
 
 export const aMemoryStore = (): MemoryStore => {
   const objects = new Map<string, Blob>();
-  const failures = new Map<'put' | 'delete', { error: Error; succeeding: number }>();
-  const failIf = (kind: 'put' | 'delete'): void => {
+  type Kind = 'put' | 'delete' | 'get' | 'stream';
+  const failures = new Map<Kind, { error: Error; succeeding: number }>();
+  const failIf = (kind: Kind): void => {
     const failure = failures.get(kind);
     if (failure === undefined) return;
     if (failure.succeeding > 0) failure.succeeding -= 1;
@@ -28,8 +36,26 @@ export const aMemoryStore = (): MemoryStore => {
       return Promise.resolve();
     },
     get: (key): Promise<StoredObject | null> => {
+      failIf('get');
       const blob = objects.get(key);
-      return Promise.resolve(blob === undefined ? null : { body: blob.stream(), size: blob.size });
+      if (blob === undefined) return Promise.resolve(null);
+      let broken: Error | null = null;
+      try {
+        failIf('stream');
+      } catch (error) {
+        broken = error as Error;
+      }
+      if (broken === null) return Promise.resolve({ body: blob.stream(), size: blob.size });
+      const failure = broken;
+      // A body that gives its first byte, then fails: a connection lost mid-read.
+      const body = new ReadableStream<Uint8Array>({
+        start: async (controller): Promise<void> => {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          controller.enqueue(bytes.slice(0, 1));
+          controller.error(failure);
+        },
+      });
+      return Promise.resolve({ body, size: blob.size });
     },
     delete: (key): Promise<void> => {
       failIf('delete');
