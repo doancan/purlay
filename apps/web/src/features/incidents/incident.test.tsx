@@ -769,6 +769,259 @@ describe('a channel’s incident', () => {
     });
   });
 
+  describe('the runbook and the postmortem (D-137 §3, §5)', () => {
+    let n = 0;
+    /** Its own incident each: a postmortem draft is kept by incident while the page is. */
+    const fresh = (over: Partial<Incident> = {}): Incident =>
+      open({
+        id: `0199155c-6200-7b7f-8c11-0000000002${String((n += 1)).padStart(2, '0')}`,
+        ...over,
+      });
+
+    test('the runbook is a link opened apart; a member links, changes and removes it, painted at once', async () => {
+      const asked: unknown[] = [];
+      let current = fresh();
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: current }),
+        changeIncident: (_channel, _id, input) => {
+          asked.push(input);
+          current = { ...current, runbookUrl: input.runbookUrl ?? null };
+          return Promise.resolve(current);
+        },
+      });
+      const panel = await openPanel(view);
+      expect(within(panel).getByText('No runbook linked.')).toBeDefined();
+      await person().click(within(panel).getByRole('button', { name: 'Link the runbook' }));
+      const field = within(panel).getByRole('textbox', { name: 'Runbook link' });
+      await person().clear(field);
+      await person().type(field, 'https://runbooks.example.test/db');
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      const link = within(panel).getByRole('link', { name: 'https://runbooks.example.test/db' });
+      expect([link.getAttribute('target'), link.getAttribute('rel')]).toEqual([
+        '_blank',
+        'noopener noreferrer',
+      ]);
+      await settle();
+      await person().click(within(panel).getByRole('button', { name: 'Remove' }));
+      await settle();
+      expect(within(panel).getByText('No runbook linked.')).toBeDefined();
+      expect(asked).toEqual([
+        { runbookUrl: 'https://runbooks.example.test/db' },
+        { runbookUrl: null },
+      ]);
+      view.unmountAll();
+    });
+
+    test('the postmortem is drawn as a message is; written, it is saved from the version it began at', async () => {
+      const saved: unknown[] = [];
+      let current = fresh({ postmortem: '**Root cause** unknown', postmortemVersion: 3 });
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: current }),
+        savePostmortem: (_channel, _id, input) => {
+          saved.push(input);
+          current = { ...current, postmortem: input.content, postmortemVersion: 4 };
+          return Promise.resolve(current);
+        },
+      });
+      const panel = await openPanel(view);
+      expect(within(panel).getByText('Root cause').tagName).toBe('STRONG');
+      await person().click(within(panel).getByRole('button', { name: 'Edit' }));
+      const editor = within(panel).getByRole('textbox', { name: 'Postmortem' });
+      expectFocusOn(editor);
+      await person().type(editor, ': the cache.');
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      await settle();
+      expect(saved).toEqual([{ content: '**Root cause** unknown: the cache.', version: 3 }]);
+      expect(within(panel).queryByRole('textbox', { name: 'Postmortem' })).toBeNull();
+      view.unmountAll();
+    });
+
+    test('saved by somebody else meanwhile: the words stay, theirs is shown above, and saving again is from theirs', async () => {
+      const saved: { content: string; version: number }[] = [];
+      let current = fresh({ postmortem: '', postmortemVersion: 0 });
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: current }),
+        savePostmortem: (_channel, _id, input) => {
+          saved.push(input);
+          if (saved.length === 1) {
+            current = { ...current, postmortem: 'theirs', postmortemVersion: 1 };
+            return Promise.reject(new ApiError(409, 'INCIDENT_POSTMORTEM_CHANGED', 'changed'));
+          }
+          current = { ...current, postmortem: input.content, postmortemVersion: 2 };
+          return Promise.resolve(current);
+        },
+      });
+      const panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'Write the postmortem' }));
+      await person().type(within(panel).getByRole('textbox', { name: 'Postmortem' }), 'mine');
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      await settle();
+      expect(
+        view.getByText(
+          'Somebody else saved the postmortem since you began. Your text is kept: read theirs, then save again.',
+        ),
+      ).toBeDefined();
+      expect(
+        within(panel).getByRole<HTMLTextAreaElement>('textbox', { name: 'Postmortem' }).value,
+      ).toBe('mine');
+      expect(
+        within(panel).getByRole('region', { name: 'Saved by somebody else meanwhile' }).textContent,
+      ).toContain('theirs');
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      await settle();
+      expect(saved).toEqual([
+        { content: 'mine', version: 0 },
+        { content: 'mine', version: 1 },
+      ]);
+      view.unmountAll();
+    });
+
+    test('a save after somebody else’s goes over only what the person was shown; one saved later is refused again', async () => {
+      const saved: { content: string; version: number }[] = [];
+      let current = fresh({ postmortem: '', postmortemVersion: 0 });
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: current }),
+        savePostmortem: (_channel, _id, input) => {
+          saved.push(input);
+          if (input.version !== current.postmortemVersion) {
+            return Promise.reject(new ApiError(409, 'INCIDENT_POSTMORTEM_CHANGED', 'changed'));
+          }
+          current = {
+            ...current,
+            postmortem: input.content,
+            postmortemVersion: current.postmortemVersion + 1,
+          };
+          return Promise.resolve(current);
+        },
+      });
+      const panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'Write the postmortem' }));
+      await person().type(within(panel).getByRole('textbox', { name: 'Postmortem' }), 'mine');
+      // Somebody else saves first.
+      current = { ...current, postmortem: 'theirs', postmortemVersion: 1 };
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      await settle();
+      expect(
+        within(panel).getByRole('region', { name: 'Saved by somebody else meanwhile' }).textContent,
+      ).toContain('theirs');
+      // And again, heard by a frame while the person reads: what they were shown stays what they saw.
+      current = { ...current, postmortem: 'theirs, again', postmortemVersion: 2 };
+      await act(async () => {
+        view.world.sockets.open();
+        view.world.sockets.deliver({
+          event: 'INCIDENT_UPDATED',
+          data: { channelId: IDS.api },
+          ts: 0,
+        });
+        await Promise.resolve();
+      });
+      await settle();
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      await settle();
+      // From the version shown (1), never the one not read (2): refused, and shown what came since.
+      expect(saved.map((input) => input.version)).toEqual([0, 1]);
+      expect(
+        within(panel).getByRole('region', { name: 'Saved by somebody else meanwhile' }).textContent,
+      ).toContain('theirs, again');
+      view.unmountAll();
+    });
+
+    test('fixed while a save is on its way; saved or cancelled, focus is on Edit, never nowhere', async () => {
+      let answer: (incident: Incident) => void = () => undefined;
+      const current = fresh({ postmortem: 'before', postmortemVersion: 0 });
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: current }),
+        savePostmortem: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      });
+      const panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'Edit' }));
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      expect(
+        within(panel).getByRole('textbox', { name: 'Postmortem' }).hasAttribute('readonly'),
+      ).toBe(true);
+      await act(async () => {
+        answer({ ...current, postmortem: 'before', postmortemVersion: 0 });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      await settle();
+      expectFocusOn(within(panel).getByRole('button', { name: 'Edit' }));
+      await person().click(within(panel).getByRole('button', { name: 'Edit' }));
+      await person().click(within(panel).getByRole('button', { name: 'Cancel' }));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expectFocusOn(within(panel).getByRole('button', { name: 'Edit' }));
+      view.unmountAll();
+    });
+
+    test('a refused runbook link brings the form back with what was typed; Cancel gives focus back', async () => {
+      const view = await mount({
+        incident: () => Promise.resolve({ incident: fresh() }),
+        changeIncident: () =>
+          Promise.reject(
+            new ApiError(400, 'VALIDATION_FAILED', 'no', { runbookUrl: 'must be an https link' }),
+          ),
+      });
+      const panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'Link the runbook' }));
+      await person().click(within(panel).getByRole('button', { name: 'Cancel' }));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expectFocusOn(within(panel).getByRole('button', { name: 'Link the runbook' }));
+      await person().click(within(panel).getByRole('button', { name: 'Link the runbook' }));
+      const field = within(panel).getByRole('textbox', { name: 'Runbook link' });
+      await person().clear(field);
+      await person().type(field, 'https://runbooks.example.test/typed');
+      await person().click(within(panel).getByRole('button', { name: 'Save' }));
+      await settle();
+      expect(
+        within(panel).getByRole<HTMLInputElement>('textbox', { name: 'Runbook link' }).value,
+      ).toBe('https://runbooks.example.test/typed');
+      view.unmountAll();
+    });
+
+    test('a draft outlives the panel closing, and a visitor reads both and is offered neither', async () => {
+      const current = fresh({ postmortem: 'kept', runbookUrl: 'https://runbooks.example.test/x' });
+      const view = await mount({ incident: () => Promise.resolve({ incident: current }) });
+      let panel = await openPanel(view);
+      await person().click(within(panel).getByRole('button', { name: 'Edit' }));
+      await person().type(within(panel).getByRole('textbox', { name: 'Postmortem' }), ' and more');
+      await person().keyboard('{Escape}');
+      await settle();
+      panel = await openPanel(view);
+      expect(
+        within(panel).getByRole<HTMLTextAreaElement>('textbox', { name: 'Postmortem' }).value,
+      ).toBe('kept and more');
+      view.unmountAll();
+
+      const visitor = await mount(
+        {
+          incident: () =>
+            Promise.resolve({
+              incident: fresh({
+                postmortem: 'kept',
+                runbookUrl: 'https://runbooks.example.test/x',
+              }),
+            }),
+        },
+        { member: false },
+      );
+      const read = await openPanel(visitor);
+      expect(
+        within(read).getByRole('link', { name: 'https://runbooks.example.test/x' }),
+      ).toBeDefined();
+      expect(within(read).getByText('kept')).toBeDefined();
+      expect(within(read).queryByRole('button', { name: 'Edit' })).toBeNull();
+      expect(within(read).queryByRole('button', { name: 'Change' })).toBeNull();
+      await expectNoAxeViolations(read);
+      visitor.unmountAll();
+    });
+  });
+
   test('in Turkish, it speaks Turkish', async () => {
     const view = await mount(
       { incident: () => Promise.resolve({ incident: open() }) },

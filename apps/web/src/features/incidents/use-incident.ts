@@ -19,7 +19,7 @@ import {
 import { useCallback, useContext, useRef, useState } from 'react';
 import { useApi } from '../../data/api-provider';
 import { readAgain } from '../../data/cache';
-import { useDescribeFailure } from '../../data/failure';
+import { codeOf, useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { RealtimePortsContext } from '../../realtime/realtime-provider';
 import { systemClock } from '../../system-clock';
@@ -39,12 +39,16 @@ export const useIncident = (channelId: string): UseQueryResult<Incident | null> 
 /** The incident as a change asks it to be: what the screen draws until the server answers. */
 const asked = (incident: Incident, input: ChangeIncidentRequest, now: Date): Incident => {
   const severity = input.severity ?? incident.severity;
-  if (incident.status === 'resolved') return { ...incident, severity };
+  const runbookUrl = input.runbookUrl === undefined ? incident.runbookUrl : input.runbookUrl;
+  if (incident.status === 'resolved') return { ...incident, severity, runbookUrl };
   const status = input.status ?? incident.status;
   return status === 'resolved'
-    ? { ...incident, severity, status, resolvedAt: now.toISOString() }
-    : { ...incident, severity, status, resolvedAt: null };
+    ? { ...incident, severity, runbookUrl, status, resolvedAt: now.toISOString() }
+    : { ...incident, severity, runbookUrl, status, resolvedAt: null };
 };
+
+/** What a postmortem save came to: saved, somebody else's save got there first, or it failed. */
+type PostmortemSave = 'saved' | 'changed' | 'failed';
 
 export interface IncidentActions {
   /** Declares one at this severity; true once it is declared. */
@@ -54,6 +58,11 @@ export interface IncidentActions {
   readonly change: (incident: Incident, input: ChangeIncidentRequest) => Promise<boolean>;
   /** Brings somebody in to respond, or takes them off, the same way. */
   readonly respond: (incident: Incident, person: User, responding: boolean) => Promise<boolean>;
+  readonly savePostmortem: (
+    incident: Incident,
+    content: string,
+    from: number,
+  ) => Promise<PostmortemSave>;
 }
 
 export const useIncidentActions = (channelId: string): IncidentActions => {
@@ -163,5 +172,29 @@ export const useIncidentActions = (channelId: string): IncidentActions => {
     [api, apply, channelId],
   );
 
-  return { declare, declaring, change, respond };
+  /**
+   * Saves the postmortem from the version the person began editing at. Saved, it is what is shown;
+   * saved by somebody else meanwhile, it is `changed` — the person's words stay with them, and the
+   * incident is read again so they can see the other's first (D-137 §5).
+   */
+  const savePostmortem = useCallback(
+    async (incident: Incident, content: string, from: number): Promise<PostmortemSave> => {
+      try {
+        const answered = await api.savePostmortem(channelId, incident.id, {
+          content,
+          version: from,
+        });
+        client.setQueryData<IncidentResponse>(key, { incident: answered });
+        readAgain(client, [...key, 'updates']);
+        return 'saved';
+      } catch (failure) {
+        show({ message: describe(failure) });
+        readAgain(client, key);
+        return codeOf(failure) === 'INCIDENT_POSTMORTEM_CHANGED' ? 'changed' : 'failed';
+      }
+    },
+    [api, channelId, client, describe, key, show],
+  );
+
+  return { declare, declaring, change, respond, savePostmortem };
 };

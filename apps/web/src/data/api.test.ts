@@ -240,6 +240,15 @@ describe('the endpoints', () => {
       ['PUT', `/api/channels/${ID}/incident/${ID}/responders/u2`],
       ['DELETE', `/api/channels/${ID}/incident/${ID}/responders/u2`],
     ]);
+    const postmortem = harness(incident);
+    await postmortem.api.savePostmortem(ID, ID, { content: 'what happened', version: 2 });
+    expect(postmortem.calls.map((call) => [call.method, call.url, call.body])).toEqual([
+      [
+        'PUT',
+        `/api/channels/${ID}/incident/${ID}/postmortem`,
+        { content: 'what happened', version: 2 },
+      ],
+    ]);
     // What the server answers is parsed against the contract: a resolved one with no instant is not one.
     const broken = harness({ ...incident, status: 'resolved' });
     expect(
