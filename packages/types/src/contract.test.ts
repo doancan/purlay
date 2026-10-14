@@ -144,7 +144,10 @@ describe("a repository's event (D-134 §6)", () => {
         { commits: Array.from({ length: PUSH_COMMITS_SHOWN_MAX + 1 }, () => ({ sha, title: '' })) },
       ],
       ['a count past what GitHub lists', { commitCount: PUSH_COMMITS_LISTED_MAX + 1 }],
-      ['a ref name past its bound', { ref: { type: 'branch', name: 'r'.repeat(GIT_REF_NAME_MAX + 1) } }],
+      [
+        'a ref name past its bound',
+        { ref: { type: 'branch', name: 'r'.repeat(GIT_REF_NAME_MAX + 1) } },
+      ],
       ['a short sha', { before: 'abc' }],
       ['a repository that leaves itself', { repository: 'acme/..' }],
       ['a login that is a path', { actor: 'octo/cat' }],
