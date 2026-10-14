@@ -34,6 +34,7 @@ import {
   InvitationPage,
   InvitationPreview,
   RetentionSetting,
+  WorkspaceExport,
   AuthMethods,
   EmailSignInPreview,
   type EmailSignInRequest,
@@ -78,6 +79,7 @@ interface PageQuery {
 }
 
 const Memberships = Type.Array(Membership);
+const WorkspaceExports = Type.Array(WorkspaceExport);
 
 export interface Api {
   readonly me: (signal?: AbortSignal) => Promise<MeResponse>;
@@ -282,6 +284,9 @@ export interface Api {
     workspaceId: string,
     retentionDays: number | null,
   ) => Promise<RetentionSetting>;
+  /** An owner's exports of the workspace, newest first; and asking for one, made in the background (D-140). */
+  readonly exports: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceExport[]>;
+  readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
@@ -676,6 +681,20 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/retention`,
         RetentionSetting,
         options({ body: { retentionDays } }),
+      ),
+    exports: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/exports`,
+        WorkspaceExports,
+        options({}, signal),
+      ),
+    requestExport: (workspaceId) =>
+      http.request(
+        'POST',
+        `/api/workspaces/${at(workspaceId)}/exports`,
+        WorkspaceExport,
+        options(),
       ),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
     signOut: () => http.send('POST', '/auth/logout', options()),

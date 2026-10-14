@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: exporting a workspace from the app (D-140, closes #84)
+
+- An owner's workspace menu has **Export workspace…**. The dialog asks for an export and lists the
+  owner's own exports. While one is being made, the dialog reads the list again every few seconds.
+  A ready export is a download link that works once. After it is followed the export reads
+  "Downloaded", with a hint to export again if no file arrived, and the list is read again so a
+  download that never reached the server offers its link again. A failed export says why, by its
+  code: cut off by a restart, the owner no longer an owner, or it could not be made. Strings are in
+  English and Turkish.
+
 ### Fix — 2026-10-14: an export of a workspace with files no longer fails (D-140, part of #84)
 
 - The export's check that every file belongs to the workspace expected a key format uploads never

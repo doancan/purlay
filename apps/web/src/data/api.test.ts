@@ -691,6 +691,24 @@ describe('the endpoints', () => {
     });
   });
 
+  test('an owner’s exports (D-140): listed, and one asked for', async () => {
+    const one = {
+      id: '0199155c-6200-7b7f-8c11-0000000000e1',
+      status: 'pending' as const,
+      createdAt: '2026-10-14T10:00:00.000Z',
+      finishedAt: null,
+      expiresAt: null,
+      sizeBytes: null,
+      failure: null,
+    };
+    const listed = harness([one]);
+    expect(await listed.api.exports(ID)).toEqual([one]);
+    expect(listed.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/exports` });
+    const asked = harness(one);
+    expect(await asked.api.requestExport(ID)).toEqual(one);
+    expect(asked.calls[0]).toMatchObject({ method: 'POST', url: `/api/workspaces/${ID}/exports` });
+  });
+
   test('erasing one’s own account sends the username typed (D-139 §5)', async () => {
     const erased = harness(null);
     await erased.api.eraseAccount('alice');
