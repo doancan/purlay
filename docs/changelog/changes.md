@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: an export carries its files (D-140, part of #84)
+
+- `export:workspace` now copies the file behind every attachment it exports into `blobs/`, after the
+  snapshot has committed (a slow store cannot hold the database open), and checks each file's size
+  against its row. A file purged since the snapshot is listed as removed; one the store lacks while
+  its row is still there is listed as missing, and the command exits 1. A store that refuses, a read
+  cut off halfway, or a file of the wrong size stops the export, leaving nothing that looks complete.
+
 ### Feature — 2026-10-14: exporting a workspace's records (D-140, part of #84)
 
 - `bun run export:workspace <slug> <directory>` writes a workspace's records as NDJSON, one file per

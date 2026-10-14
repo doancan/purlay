@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'export-calls-a-removed-file-missing',
+    why: 'a file purged since the snapshot is reported as a fault, and every export after a purge fails',
+    file: 'apps/api/src/modules/export/export.ts',
+    find: '      (still === undefined ? blobs.removed : blobs.missing).push(file.id);\n',
+    replace: '      blobs.missing.push(file.id);\n',
+    tests: ['apps/api/src/modules/export/export-snapshot.integration.test.ts'],
+  },
+  {
+    id: 'export-keeps-a-partial-file',
+    why: 'a read cut off halfway leaves a file that looks whole',
+    file: 'apps/api/src/modules/export/export.ts',
+    find: '    if (written !== Number(file.size_bytes)) {\n',
+    replace: '    if (written < 0) {\n',
+    tests: ['apps/api/src/modules/export/export.integration.test.ts'],
+  },
+  {
     id: 'export-scope-ignores-channels',
     why: 'an owner’s export carries the private channels and direct messages they cannot see',
     file: 'apps/api/src/modules/export/export.ts',

@@ -5,7 +5,7 @@
  *
  * Owner-only (0700 / 0600): the files hold a workspace's every conversation, direct ones included.
  */
-import { mkdir, open, rename, stat, type FileHandle } from 'node:fs/promises';
+import { mkdir, open, rename, rm, stat, type FileHandle } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ExportManifest } from '@purlay/types';
 import { AppError } from '../../platform/errors';
@@ -22,6 +22,8 @@ export interface ExportDirectory {
   readonly write: (table: ExportedTable, lines: readonly string[]) => Promise<void>;
   /** Every table's file, empty ones too, then the manifest: the export is whole, still `.partial`. */
   readonly seal: (manifest: ExportManifest, tables: readonly ExportedTable[]) => Promise<void>;
+  /** A file the export names, streamed to `blobs/<name>`; its bytes, or a throw with nothing left. */
+  readonly writeBlob: (name: string, body: ReadableStream<Uint8Array>) => Promise<number>;
   /** The directory takes its name: only once the trail has said it exists. */
   readonly publish: () => Promise<string>;
   /** Closes what is open, leaving the `.partial` directory for the operator to look at or remove. */
@@ -70,6 +72,27 @@ export const exportDirectory = async (target: string): Promise<ExportDirectory> 
     write: async (table, lines): Promise<void> => {
       if (lines.length === 0) return;
       await (await fileOf(table)).write(`${lines.join('\n')}\n`);
+    },
+    writeBlob: async (name, body): Promise<number> => {
+      if (!/^[0-9a-f-]+(\.thumbnail)?$/.test(name))
+        throw new Error('a blob is named by its id alone');
+      await mkdir(join(partial, 'blobs'), { recursive: true, mode: 0o700 });
+      const path = join(partial, 'blobs', name);
+      const handle = await open(path, 'wx', 0o600);
+      let bytes = 0;
+      try {
+        for await (const chunk of body) {
+          bytes += chunk.byteLength;
+          await handle.write(chunk);
+        }
+      } catch (error) {
+        // A read cut off halfway leaves no file that looks whole.
+        await handle.close();
+        await rm(path, { force: true });
+        throw error;
+      }
+      await handle.close();
+      return bytes;
     },
     seal: async (manifest, tables): Promise<void> => {
       for (const table of tables) await fileOf(table);
