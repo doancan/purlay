@@ -8,6 +8,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { messageId, type UserRole } from '@purlay/types';
 import { createApp } from './app';
 import { fixedClock } from '../../platform/clock';
+import { workspacePrefix } from '../../platform/storage';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { PERMISSIONS } from '../../testing/permissions';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
@@ -133,7 +134,7 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     // A ready export, its archive in a store of the test's own.
     const store = aMemoryStore();
     const id = messageId(NOW);
-    const key = `${world.workspaceId}/exports/${id}.tar`;
+    const key = `${workspacePrefix(world.workspaceId)}exports/${id}.tar`;
     await store.put(key, new Uint8Array(1024), 'application/x-tar');
     await world.db
       .insertInto('workspace_exports')

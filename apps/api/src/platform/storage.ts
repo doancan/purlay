@@ -19,6 +19,12 @@ import type { Config } from './config';
 import { AppError } from './errors';
 
 /** An object's bytes, to be read once, and how many there are. */
+/**
+ * Every object a workspace owns is kept under this prefix — its uploads and its exports — so one place
+ * says it, and what checks a key belongs to a workspace asks the same function that made the key.
+ */
+export const workspacePrefix = (workspaceId: string): string => `w/${workspaceId}/`;
+
 export interface StoredObject {
   readonly body: ReadableStream<Uint8Array>;
   readonly size: number;

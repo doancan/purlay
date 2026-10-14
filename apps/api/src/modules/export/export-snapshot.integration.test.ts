@@ -16,7 +16,7 @@ import { exportWorkspace, readTables } from './export';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ObjectStore } from '../../platform/storage';
+import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import { aMemoryStore } from '../../testing/storage';
 import { aRecordingLogger } from '../../testing/doubles';
 
@@ -82,7 +82,7 @@ describe('integration: an export’s snapshot', () => {
       content: 'with a file',
     });
     const fileId = messageId(new Date(NOW.getTime() + 2));
-    const key = `${room.workspaceId}/${fileId}/original`;
+    const key = `${workspacePrefix(room.workspaceId)}${fileId}/original`;
     await cloned.db
       .insertInto('attachments')
       .values({

@@ -14,9 +14,12 @@ import { closeIntegrationDatabase, sql, withRollback, type Transaction } from '@
 import { ExportManifest, messageId } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { fixedClock } from '../../platform/clock';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { atomicallyOn } from '../../platform/transactions';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
+import { storeUpload } from '../attachments/uploads';
 import { recordAudit } from '../audit/audit';
 import { sendMessage } from '../messages/messages';
 import { everyChannel, exportWorkspace, TABLE_ORDER } from './export';
@@ -72,22 +75,20 @@ const fill = async (
     .insertInto('pinned_messages')
     .values({ ...where, message_id: id, pinned_by: author.userId })
     .execute();
+  // Stored as an upload is, so its key is the one production writes — not one a test made up (#84).
   const fileId = messageId(next());
-  const storageKey = `${room.workspaceId}/${fileId}/original`;
-  await store.put(storageKey, new Uint8Array(10).fill(7), 'application/pdf');
-  await db
-    .insertInto('attachments')
-    .values({
-      id: fileId,
-      ...where,
-      message_id: id,
-      uploader_id: author.userId,
-      storage_key: storageKey,
-      file_name: 'plan.pdf',
-      mime_type: 'application/pdf',
-      size_bytes: '10',
-    })
-    .execute();
+  await storeUpload(
+    { atomically: atomicallyOn(db), storage: store, log: aRecordingLogger().log },
+    await requireWorkspaceMembership(db, author.userId, room.workspaceId),
+    { id: fileId, name: 'plan.pdf', bytes: new Uint8Array(10).fill(7) },
+  );
+  const { storage_key: storageKey } = await db
+    .updateTable('attachments')
+    .set({ message_id: id, channel_id: room.channelId })
+    .where('id', '=', fileId)
+    .where('workspace_id', '=', room.workspaceId)
+    .returning('storage_key')
+    .executeTakeFirstOrThrow();
   const incident = messageId(next());
   await db
     .insertInto('incidents')

@@ -29,7 +29,7 @@ import {
 import { attachmentNotFound } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
-import type { ObjectStore } from '../../platform/storage';
+import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
 import { readImage } from './images';
@@ -136,7 +136,7 @@ export const storeUpload = async (
     return { attachment: asAttachment(earlier), created: false };
   }
 
-  const key = `w/${context.workspaceId}/${input.id}/${crypto.randomUUID()}`;
+  const key = `${workspacePrefix(context.workspaceId)}${input.id}/${crypto.randomUUID()}`;
   const thumbnailKey = image === null ? null : `${key}.thumb`;
   const keys = thumbnailKey === null ? [key] : [key, thumbnailKey];
   await storage.put(key, stored, image === null ? 'application/octet-stream' : 'image/webp');

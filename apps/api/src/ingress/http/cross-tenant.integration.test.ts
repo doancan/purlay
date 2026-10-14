@@ -24,6 +24,7 @@ import { createApp } from './app';
 import { CROSS_TENANT, pathFor, queryFor, type Ids, requestInit } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
+import { workspacePrefix } from '../../platform/storage';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import { twoColourPng } from '../../testing/png';
@@ -154,7 +155,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     .where('workspace_id', '=', workspaceId)
     .where('role', '=', 'owner')
     .executeTakeFirstOrThrow();
-  const archive = `${workspaceId}/exports/${exportId}.tar`;
+  const archive = `${workspacePrefix(workspaceId)}exports/${exportId}.tar`;
   await STORE.put(archive, new Uint8Array(1024), 'application/x-tar');
   await db
     .insertInto('workspace_exports')
