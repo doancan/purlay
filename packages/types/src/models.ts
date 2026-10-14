@@ -247,17 +247,21 @@ const GitHubNumber = Type.Integer({ minimum: 1, maximum: 9_999_999_999 });
 /** A branch's or a tag's name: what git allows, bounded. */
 const GitRefName = Type.String({ minLength: 1, maxLength: 255 });
 
+/** An object with no field the contract does not name: what is stored is what is shown, nothing more. */
+const Closed = <T extends TProperties>(properties: T): TObject<T> =>
+  Type.Object(properties, { additionalProperties: false });
+
 /**
  * What happened in a repository, as its feed posted it (D-134 §6): parts only, every one bounded,
  * so every link the client draws is built from them — never an address taken from GitHub's payload
  * (D-101). `kind` is GitHub's event; within it, what the client says.
  */
 export const GitHubEvent = Type.Union([
-  Type.Object({
+  Closed({
     kind: Type.Literal('push'),
     repository: GitHubRepositoryName,
     actor: GitHubLogin,
-    ref: Type.Object({
+    ref: Closed({
       type: Type.Union([Type.Literal('branch'), Type.Literal('tag')]),
       name: GitRefName,
     }),
@@ -271,13 +275,13 @@ export const GitHubEvent = Type.Union([
     before: CommitSha,
     after: CommitSha,
     /** The newest first, at most `PUSH_COMMITS_SHOWN_MAX`. */
-    commits: Type.Array(Type.Object({ sha: CommitSha, title: GitHubText }), {
+    commits: Type.Array(Closed({ sha: CommitSha, title: GitHubText }), {
       maxItems: PUSH_COMMITS_SHOWN_MAX,
     }),
     /** As many as GitHub listed, which is at most twenty: a bigger push says twenty. */
     commitCount: Type.Integer({ minimum: 0, maximum: 20 }),
   }),
-  Type.Object({
+  Closed({
     kind: Type.Literal('pull_request'),
     repository: GitHubRepositoryName,
     actor: GitHubLogin,
@@ -292,7 +296,7 @@ export const GitHubEvent = Type.Union([
     number: GitHubNumber,
     title: GitHubText,
   }),
-  Type.Object({
+  Closed({
     kind: Type.Literal('issues'),
     repository: GitHubRepositoryName,
     actor: GitHubLogin,
@@ -300,7 +304,7 @@ export const GitHubEvent = Type.Union([
     number: GitHubNumber,
     title: GitHubText,
   }),
-  Type.Object({
+  Closed({
     kind: Type.Literal('release'),
     repository: GitHubRepositoryName,
     actor: GitHubLogin,
@@ -402,8 +406,8 @@ export const Message = Type.Object({
   channelId: Uuid,
   /**
    * Who wrote it; null for a message nobody wrote — a repository's event (D-134 §6), which carries
-   * `githubEvent` instead. Exactly one of the two is null: the database holds it
-   * (`messages_sender_by_type`) and the one reader builds both from the same row.
+   * `githubEvent` instead. At most one of the two is set — both are null for a removed event: the
+   * database holds it (`messages_sender_by_type`) and the one reader builds both from the same row.
    */
   sender: Type.Union([User, Type.Null()]),
   /** What happened in a repository, for a message its feed posted; null for a person's, and a tombstone's. */

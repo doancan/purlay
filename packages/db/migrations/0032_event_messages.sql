@@ -13,15 +13,26 @@
 --   * A lock wait is bounded, so a long transaction ahead of an ALTER fails this migration rather
 --     than queueing every query on `messages` behind it (D-86, as 0010).
 --
--- It can be run again after a crash at any point: the rule is dropped first, and dropping NOT NULL
--- twice is the same as once.
+-- It can be run again after a crash at any point: the rules are dropped first, and dropping NOT NULL
+-- twice is the same as once. Once events are written it is not undone: their rows have no sender.
 
 SET lock_timeout = '10s';
 
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_sender_by_type;
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_event_known;
 
 ALTER TABLE messages ALTER COLUMN sender_id DROP NOT NULL;
 
 ALTER TABLE messages ADD CONSTRAINT messages_sender_by_type
     CHECK ((message_type = 'text') = (sender_id IS NOT NULL)) NOT VALID;
 ALTER TABLE messages VALIDATE CONSTRAINT messages_sender_by_type;
+
+-- An event's metadata is one the contract names, or '{}' once it is a tombstone: the one reader
+-- refuses anything else, so the writer may not store it (D-134 §6). The shape inside is the
+-- writer's to check against `GitHubEvent`; the kind is held here as well.
+ALTER TABLE messages ADD CONSTRAINT messages_event_known CHECK (
+    message_type = 'text'
+    OR metadata = '{}'::jsonb
+    OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release')
+) NOT VALID;
+ALTER TABLE messages VALIDATE CONSTRAINT messages_event_known;

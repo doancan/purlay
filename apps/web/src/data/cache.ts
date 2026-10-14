@@ -284,6 +284,8 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
                   editedAt: revision.editedAt,
                   deletedAt: revision.deletedAt,
                   mentions: [...revision.mentions],
+                  // A removed event keeps nothing of what it said, as the server reads it (D-134 §6).
+                  ...(revision.deletedAt === null ? {} : { githubEvent: null }),
                 }
               : m,
           ),

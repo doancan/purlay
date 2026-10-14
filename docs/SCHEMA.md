@@ -497,6 +497,12 @@ CREATE TABLE messages (
 
     -- A person's message has its sender; an event has none. Added by 0032. (D-134 §6)
     CONSTRAINT messages_sender_by_type CHECK ((message_type = 'text') = (sender_id IS NOT NULL)),
+    -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032.
+    CONSTRAINT messages_event_known CHECK (
+        message_type = 'text'
+        OR metadata = '{}'::jsonb
+        OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release')
+    ),
 
     -- Only root messages are resolvable; resolving a reply is meaningless.
     CONSTRAINT only_roots_resolve CHECK (parent_id IS NULL OR resolved_at IS NULL),

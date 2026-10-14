@@ -5872,7 +5872,12 @@ where its secret lives, who sets one up, or what a duplicate, a flood or a lost 
    (`githubEvent`) as parts: repository, actor's login, and what happened, every field bounded, each
    link built from its parts as `GitHubLink`'s are (D-101), never taken from the payload. Nobody can
    edit one; an admin may remove it, as any message (D-34). It is no thread's author, so a reply or a
-   resolution under it tells nobody for it; its text, an English summary, is what search finds.
+   resolution under it tells nobody for it; its text, an English summary, is what search finds —
+   accepted: a reader searching in Turkish finds an event by its repository, its title or a login,
+   not by the sentence drawn in their language. Its kind is held by the table
+   (`messages_event_known`) and its shape by its one writer; a row the reader still cannot say is
+   refused loudly rather than drawn as somebody's message or as nothing, so `GitHubEvent` changes
+   only by adding.
 7. **Quiet**: an event counts as unread like any message and never notifies, at any level and by no
    push — an amendment of D-107's `all`, which is about what people write. Nothing in it is parsed
    for `@`: a pull request titled `@alice` names nobody (D-12).

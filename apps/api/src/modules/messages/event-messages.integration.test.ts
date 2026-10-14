@@ -7,7 +7,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import { requireChannelById } from '../../platform/channels';
+import { requireChannelById, requireMessageById } from '../../platform/channels';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { channelPins, pinMessage } from '../pins/pins';
+import { saveMessage, savedPage } from '../saved/saved';
+import { searchIn } from '../search/search';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { EventBus } from '../../platform/events';
@@ -17,9 +21,9 @@ import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms
 import { markRead } from '../channels/read-state';
 import { removeMessage } from './delete';
 import { reviseMessage } from './edit';
-import { messageHistory, sendMessage } from './messages';
+import { messageHistory, missedIn, sendMessage } from './messages';
 import { readBuilt } from './reader';
-import { setResolved } from './threads';
+import { setResolved, threadReplies, unresolvedIn } from './threads';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -86,6 +90,49 @@ describe('integration: a message nobody wrote', () => {
     });
   });
 
+  test('every reader that lists messages lists it: a replay, a thread, the open questions, pins, saved, search', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const alice = idOf(room, 'alice');
+      const context = await requireChannelById(db, alice, room.channelId);
+      const workspace = await requireWorkspaceMembership(db, alice, room.workspaceId);
+      const before = messageId(new Date(NOW.getTime() - 1000));
+      const event = await anEventMessage(db, room, NOW);
+      const answer = await reply(db, room, 'bob', event, later(1000));
+      await pinMessage(db, clock, alice, event);
+      await saveMessage(db, clock, alice, event, {});
+      const target = await requireMessageById(db, alice, event);
+      // Each reader, and the message it must return: the event, or under it, the reply to it.
+      const read: Record<string, [readonly string[] | undefined, string]> = {
+        replay: [
+          (await missedIn(db, [{ context, after: before }], 10))
+            .get(room.channelId)
+            ?.data.map((m) => m.id),
+          event,
+        ],
+        thread: [(await threadReplies(db, target, {})).data.map((m) => m.id), answer],
+        questions: [
+          (await unresolvedIn(db, workspace, [room.channelId])).data.map((m) => m.id),
+          event,
+        ],
+        pins: [(await channelPins(db, context)).map((pin) => pin.message.id), event],
+        saved: [
+          (await savedPage(db, workspace, { state: 'in_progress' })).data.map(
+            (item) => item.message.id,
+          ),
+          event,
+        ],
+        search: [
+          (await searchIn(db, workspace, [room.channelId], { q: 'pushed' })).data.map((m) => m.id),
+          event,
+        ],
+      };
+      for (const [reader, [ids, wanted]] of Object.entries(read)) {
+        expect({ reader, has: ids?.includes(wanted) ?? false }).toEqual({ reader, has: true });
+      }
+    });
+  });
+
   test('the database holds the rule: a person’s message has a sender, an event has none', async () => {
     for (const values of [
       { sender: false, type: 'text' as const },
@@ -147,8 +194,15 @@ describe('integration: a message nobody wrote', () => {
       const room = await aRoom(db, ['alice', 'bob']);
       const event = await anEventMessage(db, room, NOW);
       expect(await refusal(removeMessage(db, clock, idOf(room, 'bob'), event))).toBe('FORBIDDEN');
+      // Counted for everybody when it came, so taken back from everybody when it goes.
+      const unread = async (): Promise<number[]> => [
+        (await counters(db, room, idOf(room, 'alice'))).unread,
+        (await counters(db, room, idOf(room, 'bob'))).unread,
+      ];
+      expect(await unread()).toEqual([1, 1]);
 
       await removeMessage(db, clock, idOf(room, 'alice'), event);
+      expect(await unread()).toEqual([0, 0]);
       const tombstone = await readBuilt(db, event);
       expect([tombstone?.deletedAt, tombstone?.sender, tombstone?.githubEvent]).toEqual([
         NOW.toISOString(),
@@ -190,13 +244,27 @@ describe('integration: a message nobody wrote', () => {
     });
   });
 
-  test('a row that says it is an event and holds none is said loudly, never drawn as nothing', async () => {
+  test('an event the contract cannot say: an unknown kind is refused by the table, a known kind out of shape is said loudly', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const event = await anEventMessage(db, room, NOW);
+      const unknown = await db
+        .updateTable('messages')
+        .set({ metadata: { kind: 'deployment' } })
+        .where('id', '=', event)
+        .execute()
+        .then(
+          () => 'written',
+          (error: unknown) => (error instanceof Error ? error.message : 'not an error'),
+        );
+      expect(unknown).toContain('messages_event_known');
+    });
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const event = await anEventMessage(db, room, NOW);
       await db
         .updateTable('messages')
-        .set({ metadata: { kind: 'deployment' } })
+        .set({ metadata: { kind: 'push', repository: 'acme/api' } })
         .where('id', '=', event)
         .execute();
       const context = await requireChannelById(db, idOf(room, 'alice'), room.channelId);

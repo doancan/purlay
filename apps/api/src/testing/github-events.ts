@@ -1,10 +1,10 @@
 /**
  * A repository's event as a message (D-134 §6), for tests of what one is to everything else: the
  * row a feed's writer makes — a `system_event` with no sender, the event as its metadata and an
- * English summary as its words — written directly, so the readers can be tested before, and apart
- * from, the webhook that writes them.
+ * English summary as its words, counted unread for every member — written directly, so the readers
+ * can be tested before, and apart from, the webhook that writes them.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { messageId, type GitHubEvent } from '@purlay/types';
 
 export const A_PUSH: GitHubEvent = {
@@ -38,6 +38,18 @@ export const anEventMessage = async (
       content: `${event.actor} pushed to ${event.repository}`,
       created_at: at,
     })
+    .execute();
+  // Unread for every member whose position is before it, as the writer must count it: nobody wrote it.
+  await db
+    .updateTable('channel_members')
+    .set({
+      unread_count: sql<number>`unread_count + 1`,
+      state_version: sql<number>`state_version + 1`,
+    })
+    .where('channel_id', '=', where.channelId)
+    .where((eb) =>
+      eb.or([eb('last_read_message_id', 'is', null), eb('last_read_message_id', '<', id)]),
+    )
     .execute();
   return id;
 };

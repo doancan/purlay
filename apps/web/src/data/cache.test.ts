@@ -475,6 +475,41 @@ describe('a channel’s files list (D-129)', () => {
     expect(pinsStale()).toBe(true);
   });
 
+  test('a removed event keeps nothing of what it said, as the server reads it (D-134 §6)', () => {
+    const client = new QueryClient();
+    // Answered, so its tombstone keeps its place (D-103 §7) rather than leaving the list.
+    const event = message(2, {
+      thread: {
+        replyCount: 1,
+        lastReplyAt: '2026-09-09T08:00:00.000Z',
+        resolvedAt: null,
+        resolvedBy: null,
+      },
+      sender: null,
+      githubEvent: {
+        kind: 'issues',
+        repository: 'acme/api',
+        actor: 'octocat',
+        action: 'opened',
+        number: 9,
+        title: 'Flaky retry',
+      },
+    });
+    client.setQueryData(keys.messages(CH), pages([event]));
+    const held = (): Message | undefined =>
+      client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0];
+    messageRevised(client, {
+      channelId: CH,
+      messageId: id(2),
+      parentId: null,
+      content: '',
+      editedAt: null,
+      deletedAt: '2026-09-09T08:00:00.000Z',
+      mentions: [],
+    });
+    expect([held()?.deletedAt, held()?.githubEvent]).toEqual(['2026-09-09T08:00:00.000Z', null]);
+  });
+
   test('a Load more on its way is not cancelled: the list is read again once it is in', async () => {
     const client = new QueryClient();
     let asked = 0;

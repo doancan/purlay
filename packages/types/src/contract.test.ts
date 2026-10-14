@@ -137,6 +137,9 @@ describe("a repository's event (D-134 §6)", () => {
       ['a repository that leaves itself', { repository: 'acme/..' }],
       ['a login that is a path', { actor: 'octo/cat' }],
       ['a change GitHub never makes', { change: 'rebased' }],
+      // Parts only (D-101): an address the payload carried is not one of them.
+      ['a field the contract does not name', { url: 'https://evil.test' }],
+      ['a commit with more than its parts', { commits: [{ sha, title: 'x', author: 'a@b.test' }] }],
     ] as const) {
       expect({ why, valid: Value.Check(GitHubEvent, { ...push, ...wrong }) }).toEqual({
         why,
