@@ -424,10 +424,13 @@ export interface PresenceRegistry {
 }
 ```
 
-The interface grows with its features (D-114): typing now, online presence when it is built. Phase
-0–2: `inMemoryPresenceRegistry` (`realtime/presence.ts`). Phase 3: the same interface over the shared
-bus — on two nodes a person typing on both is announced once by each, a frame too many and never a
-wrong answer.
+The interface grows with its features (D-114): typing (`realtime/presence.ts`), and who is online
+(`realtime/online.ts`, D-136) — told by the hub's own count of each person's sockets, offline only a
+grace after their last closes, every change at a version that only grows; its reads are async. Phase
+0–2: in memory, one node. Phase 3: the same interfaces over the shared bus — for typing, a person on
+two nodes is announced once by each, a frame too many and never a wrong answer; **for online, one node
+alone is wrong on two** (a person online on one is offline to the other), so the shared adapter comes
+before a second node does (D-25, D-136 §5).
 
 ### 6.2. `RateLimiter`
 

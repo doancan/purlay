@@ -205,6 +205,14 @@ export interface HubOptions {
    */
   readonly listen: (identity: SocketIdentity) => void;
   readonly timers?: Timers;
+  /**
+   * Told when a person's first socket on this node opens and when their last closes — from the count
+   * the hub keeps anyway for the per-person cap, so presence never counts sockets twice (D-136).
+   */
+  readonly presence?: {
+    readonly arrived: (userId: string) => void;
+    readonly left: (userId: string) => void;
+  };
 }
 
 /**
@@ -231,6 +239,7 @@ const channelOf = (frame: ServerFrame): string | null => {
     case 'SESSION_ENDED':
     case 'ACCESS_REVOKED':
     case 'WORKSPACE_UPDATED':
+    case 'PRESENCE':
     case 'DEEP_WORK_UPDATED':
     case 'SAVED_UPDATED':
     case 'CHANNELS_UPDATED':
@@ -242,7 +251,7 @@ const channelOf = (frame: ServerFrame): string | null => {
 export const createSocketHub = (
   database: Executor,
   clock: Clock,
-  { log, leave, listen, timers = systemTimers }: HubOptions,
+  { log, leave, listen, timers = systemTimers, presence }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
@@ -350,7 +359,9 @@ export const createSocketHub = (
         return undefined;
       }
       entry.userId = identity.userId;
-      byUser.set(identity.userId, (byUser.get(identity.userId) ?? 0) + 1);
+      const before = byUser.get(identity.userId) ?? 0;
+      byUser.set(identity.userId, before + 1);
+      if (before === 0) presence?.arrived(identity.userId);
       entry.cancelExpiry = after(
         timers,
         identity.expiresAt.getTime() - clock.now().getTime(),
@@ -374,8 +385,10 @@ export const createSocketHub = (
       if (socket?.userId !== undefined) {
         const remaining = (byUser.get(socket.userId) ?? 1) - 1;
         // An empty count is a leak that grows with every user who ever connected.
-        if (remaining <= 0) byUser.delete(socket.userId);
-        else byUser.set(socket.userId, remaining);
+        if (remaining <= 0) {
+          byUser.delete(socket.userId);
+          presence?.left(socket.userId);
+        } else byUser.set(socket.userId, remaining);
       }
       held.delete(socketId);
     },

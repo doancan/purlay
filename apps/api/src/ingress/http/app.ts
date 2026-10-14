@@ -45,6 +45,7 @@ import {
   WRITE_BUDGET,
   type HttpBudgets,
 } from './rate-limit';
+import type { Timers } from '../../realtime/hub';
 import { inProcessRateLimiter } from '../../realtime/rate-limiter';
 import { AppError } from '../../platform/errors';
 import {
@@ -133,6 +134,7 @@ import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { starChannel } from './star';
 import { deleteVersion, listVersions } from './versions';
+import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
@@ -167,6 +169,8 @@ export interface Dependencies {
   readonly client?: Client;
   /** Devices told of what needs their person, through both doors; absent where push is off (D-126). */
   readonly push?: PushSender;
+  /** Presence's grace timers (D-136); a test passes its own, to pass a grace without waiting. */
+  readonly timers?: Timers;
 }
 
 /**
@@ -195,6 +199,8 @@ export interface HttpApplication {
    * test asserts that on the sizes rather than on coverage.
    */
   readonly held: () => HeldByConnections;
+  /** Resolves when the frames being handled, and the presence being told, are done. */
+  readonly settled: () => Promise<void>;
 }
 
 /** Liveness. Deliberately touches nothing. */
@@ -418,6 +424,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
           request,
           body,
         ),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/presence',
+      async ({ request, params }) =>
+        await readPresence(dependencies, request, params.workspaceId, sockets.online),
     )
     .get(
       '/api/workspaces/:workspaceId/integrations/github',
@@ -853,6 +864,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     },
     stop: async (closeActiveConnections) => await app.stop(closeActiveConnections),
     held: sockets.held,
+    settled: sockets.settled,
     drain: async (): Promise<void> => {
       draining = true;
       sockets.closeAll();

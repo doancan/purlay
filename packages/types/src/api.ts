@@ -42,6 +42,7 @@ import {
   UserRole,
   Uuid,
 } from './models';
+import { PresenceChange } from './events';
 
 /**
  * Keyset pagination, always. `nextCursor` is the id to pass back **as whichever
@@ -816,3 +817,17 @@ export type MessageVersion = Static<typeof MessageVersion>;
 /** `GET /api/messages/:messageId/versions` — newest first, keyset on the version's id. */
 export const MessageVersionPage = Page(MessageVersion);
 export type MessageVersionPage = Static<typeof MessageVersionPage>;
+
+// ── Who is online (#480, D-136) ─────────────────────────────────────────────
+
+/**
+ * `GET /api/workspaces/:workspaceId/presence` — the workspace's members online now, each at the
+ * version this node said it; a member not listed is offline. Read when a workspace opens, and again a
+ * grace after a reconnect; `PRESENCE` frames keep it current between.
+ */
+export const PresenceSnapshot = Type.Object({
+  online: Type.Array(PresenceChange),
+  /** The version everyone not listed is offline at. */
+  version: Type.Integer({ minimum: 0 }),
+});
+export type PresenceSnapshot = Static<typeof PresenceSnapshot>;

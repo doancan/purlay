@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'presence-grace-not-cancelled',
+    why: 'a reload or a reconnect inside the grace shows the person offline to everybody',
+    file: 'apps/api/src/realtime/online.ts',
+    find: '        cancel();\n        leaving.delete(userId);\n        return;\n',
+    replace: '        leaving.delete(userId);\n',
+    tests: ['apps/api/src/realtime/online.test.ts'],
+  },
+  {
+    id: 'presence-told-to-themselves',
+    why: 'a person is told of their own presence, as somebody else would be',
+    file: 'apps/api/src/modules/presence/presence.ts',
+    find: '    for (const memberId of workspace.memberIds) if (memberId !== userId) everyone.add(memberId);\n',
+    replace: '    for (const memberId of workspace.memberIds) everyone.add(memberId);\n',
+    tests: ['apps/api/src/modules/presence/presence.integration.test.ts'],
+  },
+  {
     id: 'versions-not-kept',
     why: 'an edit replaces the words and keeps nothing of what they were',
     file: 'apps/api/src/modules/messages/edit.ts',
