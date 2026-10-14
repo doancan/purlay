@@ -7,6 +7,7 @@ import {
   ChangeIncidentRequest,
   DeclareIncidentRequest,
   OlderPageQuery,
+  SavePostmortemRequest,
   type Incident,
   type IncidentResponse,
   type IncidentUpdatePage,
@@ -24,6 +25,7 @@ import {
   channelIncident,
   declareIncident,
   incidentUpdates,
+  savePostmortem,
   type IncidentWrite,
 } from '../../modules/incidents/incidents';
 import { addResponder, removeResponder } from '../../modules/incidents/responders';
@@ -122,6 +124,24 @@ export const putResponder = async (
   const change = responding ? addResponder : removeResponder;
   const write = await atomicallyOn(database)(
     async (transaction) => await change(transaction, clock, context, incidentId, userId),
+  );
+  return await told(dependencies, write);
+};
+
+/** `PUT /api/channels/:channelId/incident/:incidentId/postmortem` — saved from the version it was read at. */
+export const putPostmortem = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  incidentId: string,
+  body: unknown,
+): Promise<Incident> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const input = validated(SavePostmortemRequest, body);
+  const write = await atomicallyOn(database)(
+    async (transaction) => await savePostmortem(transaction, clock, context, incidentId, input),
   );
   return await told(dependencies, write);
 };

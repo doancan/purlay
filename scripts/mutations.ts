@@ -33,6 +33,39 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'runbook-unparsed',
+    why: 'a runbook link no browser can parse is kept, and drawn as a link that goes nowhere',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: "  if (url.protocol !== 'https:' || url.hostname === '') throw refused();\n",
+    replace: '',
+    tests: ['apps/api/src/modules/incidents/writeup.integration.test.ts'],
+  },
+  {
+    id: 'postmortem-save-unlocked',
+    why: 'two saves from one version at once are both written, the second over the first',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: "    .select(['postmortem', 'postmortem_version'])\n    .where('id', '=', incidentId)\n    .where('channel_id', '=', context.channelId)\n    .forNoKeyUpdate()\n",
+    replace:
+      "    .select(['postmortem', 'postmortem_version'])\n    .where('id', '=', incidentId)\n    .where('channel_id', '=', context.channelId)\n",
+    tests: ['apps/api/src/modules/incidents/incidents.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'postmortem-written-over',
+    why: 'a save from an older version writes over the postmortem somebody else saved since',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: '  if (row.postmortem_version !== input.version) {\n',
+    replace: '  if (row.postmortem_version < 0) {\n',
+    tests: ['apps/api/src/modules/incidents/writeup.integration.test.ts'],
+  },
+  {
+    id: 'runbook-any-scheme',
+    why: 'a runbook link of any scheme — javascript: included — is kept and drawn as a link',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: '  if (!Value.Check(RunbookUrl, value)) throw refused();\n',
+    replace: '',
+    tests: ['apps/api/src/modules/incidents/writeup.integration.test.ts'],
+  },
+  {
     id: 'responder-from-outside',
     why: 'somebody outside the channel is brought in, and the refusal is the table’s failure, not a 404',
     file: 'apps/api/src/modules/incidents/responders.ts',
@@ -84,8 +117,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'incident-change-unlocked',
     why: 'two changes at once read the same incident, and one is lost from the timeline',
     file: 'apps/api/src/modules/incidents/incidents.ts',
-    find: '    .forNoKeyUpdate()\n',
-    replace: '',
+    find: "    .select(['severity', 'status', 'runbook_url'])\n    .where('id', '=', incidentId)\n    .where('channel_id', '=', context.channelId)\n    .forNoKeyUpdate()\n",
+    replace:
+      "    .select(['severity', 'status', 'runbook_url'])\n    .where('id', '=', incidentId)\n    .where('channel_id', '=', context.channelId)\n",
     tests: ['apps/api/src/modules/incidents/incidents.concurrency.integration.test.ts'],
   },
   {

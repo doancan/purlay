@@ -140,7 +140,10 @@ export interface Incidents {
   declared_at: Timestamp;
   declared_by: string | null;
   id: string;
+  postmortem: Generated<string>;
+  postmortem_version: Generated<number>;
   resolved_at: Timestamp | null;
+  runbook_url: string | null;
   severity: number;
   status: Generated<string>;
   workspace_id: string;

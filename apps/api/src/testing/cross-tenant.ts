@@ -241,6 +241,12 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ status: 'resolved' }),
     visibility: CHANNEL,
   },
+  'PUT /api/channels/:channelId/incident/:incidentId/postmortem': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    // The version the fixture's incident is at: never saved, so the control's save is taken.
+    body: () => ({ content: 'what happened, and what we change', version: 0 }),
+    visibility: CHANNEL,
+  },
   'PUT /api/channels/:channelId/incident/:incidentId/responders/:userId': {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: CHANNEL,

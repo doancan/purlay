@@ -37,6 +37,7 @@ export type FailureKey =
   | 'failure.incidentOpen'
   | 'failure.incidentResolved'
   | 'failure.incidentRespondersLimit'
+  | 'failure.incidentPostmortemChanged'
   | 'failure.generic';
 
 /** The code of whatever was thrown; anything that is not an `ApiError` is a failure nobody described. */
@@ -88,6 +89,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.incidentResolved';
     case 'INCIDENT_RESPONDERS_LIMIT':
       return 'failure.incidentRespondersLimit';
+    case 'INCIDENT_POSTMORTEM_CHANGED':
+      return 'failure.incidentPostmortemChanged';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':

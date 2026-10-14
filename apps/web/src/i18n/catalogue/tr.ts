@@ -385,6 +385,9 @@ export const tr = {
   'incident.membersFailed': 'Kanal üyeleri yüklenemedi.',
   'incident.retryMembers': 'Kanal üyelerini yeniden oku',
   'incident.retryTimeline': 'Zaman çizelgesini yeniden oku',
+  'incident.runbookSet': '{name} runbook bağlantısını ayarladı',
+  'incident.runbookCleared': '{name} runbook bağlantısını kaldırdı',
+  'incident.postmortemSaved': '{name} postmortemi kaydetti',
   'incident.someone': 'Biri',
   'incident.declared': '{name} olayı SEV{n} olarak bildirdi',
   'incident.moved': '{name} durumu {status} yaptı',
@@ -842,6 +845,8 @@ export const tr = {
   'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',
   'failure.incidentRespondersLimit':
     'Bir olaya müdahale edebilecek kişi sınırına ulaşıldı. Önce birini çıkar.',
+  'failure.incidentPostmortemChanged':
+    'Sen başladığından beri başka biri postmortemi kaydetti. Yazdığın duruyor: önce onunkini oku, sonra yeniden kaydet.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

@@ -16,6 +16,7 @@
 import { Value } from '@sinclair/typebox/value';
 import type { Executor, Transaction } from '@purlay/db';
 import {
+  RunbookUrl,
   Uuid,
   isMessageIdShape,
   messageId,
@@ -30,6 +31,7 @@ import {
   type IncidentUpdatePage,
   type OpenIncidentStatus,
   type OlderPageQuery,
+  type SavePostmortemRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import {
@@ -58,6 +60,9 @@ interface IncidentRow {
   readonly status: string;
   readonly declared_at: Date | string;
   readonly resolved_at: Date | string | null;
+  readonly runbook_url: string | null;
+  readonly postmortem: string;
+  readonly postmortem_version: number;
   readonly declarer_id: string | null;
   readonly declarer_username: string | null;
   readonly declarer_display_name: string | null;
@@ -113,6 +118,9 @@ const asIncident = (row: IncidentRow, responders: readonly User[]): Incident => 
     }),
     declaredAt: at(row.declared_at),
     responders: [...responders],
+    runbookUrl: row.runbook_url,
+    postmortem: row.postmortem,
+    postmortemVersion: row.postmortem_version,
   };
   // One fact, read as one: the table holds status and instant together (`incidents_resolved_at`).
   if (row.status === 'resolved') {
@@ -141,6 +149,9 @@ const findIncident = async (
       'incidents.status as status',
       'incidents.declared_at as declared_at',
       'incidents.resolved_at as resolved_at',
+      'incidents.runbook_url as runbook_url',
+      'incidents.postmortem as postmortem',
+      'incidents.postmortem_version as postmortem_version',
       'users.id as declarer_id',
       'users.username as declarer_username',
       'users.display_name as declarer_display_name',
@@ -199,7 +210,14 @@ export const channelIncident = async (
 
 /** One entry of the timeline as it is stored: what kind, from what (a status's or a severity's), to what. */
 export interface TimelineEntry {
-  readonly kind: 'declared' | 'status' | 'severity' | 'responder_added' | 'responder_removed';
+  readonly kind:
+    | 'declared'
+    | 'status'
+    | 'severity'
+    | 'responder_added'
+    | 'responder_removed'
+    | 'runbook'
+    | 'postmortem';
   readonly from: string | null;
   readonly to: string;
 }
@@ -345,9 +363,33 @@ export const unchanged = async (executor: Executor, incidentId: string): Promise
 };
 
 /**
- * Moves the incident, or changes how bad it is, or both; resolving is a status like the others, once.
- * The row is locked for the change, so two at once are one after the other and both are on the
- * timeline in the order they were made.
+ * A runbook's link as the server will keep it: `https:`, a host, nothing the pattern let through that
+ * a browser would read otherwise. Refused by name, so the person sees which field.
+ */
+const runbookOf = (value: string): string => {
+  const refused = (): AppError =>
+    new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'A runbook is an https link.',
+      details: { fields: { runbookUrl: 'must be an https link' } },
+    });
+  // The contract's own rule first, so a caller inside the server is held to what the route is.
+  if (!Value.Check(RunbookUrl, value)) throw refused();
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    url = new URL('invalid:');
+  }
+  if (url.protocol !== 'https:' || url.hostname === '') throw refused();
+  return value;
+};
+
+/**
+ * Moves the incident, or changes how bad it is, or its runbook; resolving is a status like the others,
+ * once. The row is locked for the change, so two at once are one after the other and both are on the
+ * timeline in the order they were made. A resolved incident keeps its status and severity; its runbook
+ * is part of what is written up, and may still change (D-137 §3).
  */
 export const changeIncident = async (
   executor: Transaction,
@@ -360,7 +402,7 @@ export const changeIncident = async (
   if (!Value.Check(Uuid, incidentId)) throw incidentNotFound();
   const row = await executor
     .selectFrom('incidents')
-    .select(['severity', 'status'])
+    .select(['severity', 'status', 'runbook_url'])
     .where('id', '=', incidentId)
     .where('channel_id', '=', context.channelId)
     .forNoKeyUpdate()
@@ -369,36 +411,89 @@ export const changeIncident = async (
   const was = { severity: severityOf(row.severity), status: statusOf(row.status) };
   const status = input.status ?? was.status;
   const severity = input.severity ?? was.severity;
+  const runbook =
+    input.runbookUrl === undefined
+      ? row.runbook_url
+      : input.runbookUrl === null
+        ? null
+        : runbookOf(input.runbookUrl);
+  const entries: TimelineEntry[] = [];
   if (was.status === 'resolved') {
-    // Asking for what it already is is answered; anything else is a change nothing may make.
+    // Its status and severity are what they were: asking for them again is answered, anything else
+    // is a change nothing may make.
     if (status !== was.status || severity !== was.severity) {
       throw new AppError({
         code: 'INCIDENT_RESOLVED',
         message: 'This incident is resolved. Declare a new one.',
       });
     }
-    return await unchanged(executor, incidentId);
-  }
-  const changes: (IncidentChange & { kind: 'status' | 'severity' })[] = [
-    ...(status === was.status ? [] : [{ kind: 'status', from: was.status, to: status } as const]),
-    ...(severity === was.severity
-      ? []
-      : [{ kind: 'severity', from: was.severity, to: severity } as const]),
-  ];
-  if (changes.length > 0) {
-    const now = clock.now();
-    await executor
-      .updateTable('incidents')
-      .set({ status, severity, resolved_at: status === 'resolved' ? now : null })
-      .where('id', '=', incidentId)
-      .execute();
-    for (const change of changes) {
-      await record(executor, incidentId, context.userId, now, entryOf(change));
+  } else {
+    if (status !== was.status)
+      entries.push(entryOf({ kind: 'status', from: was.status, to: status }));
+    if (severity !== was.severity) {
+      entries.push(entryOf({ kind: 'severity', from: was.severity, to: severity }));
     }
   }
-  const incident = await loadIncident(executor, { id: incidentId });
-  if (incident === undefined) throw incidentNotFound();
-  return { incident, changed: changes.length > 0 };
+  if (runbook !== row.runbook_url) entries.push({ kind: 'runbook', from: null, to: runbook ?? '' });
+  if (entries.length === 0) return await unchanged(executor, incidentId);
+  const now = clock.now();
+  await executor
+    .updateTable('incidents')
+    .set({
+      status,
+      severity,
+      runbook_url: runbook,
+      resolved_at: status === 'resolved' ? (was.status === 'resolved' ? undefined : now) : null,
+    })
+    .where('id', '=', incidentId)
+    .execute();
+  for (const entry of entries) await record(executor, incidentId, context.userId, now, entry);
+  return { ...(await unchanged(executor, incidentId)), changed: true };
+};
+
+/**
+ * Saves the postmortem draft, from the version it was edited from: one saved since is refused, never
+ * written over — the person keeps what they wrote and reads the other first (D-137 §5). The same words
+ * again change nothing. Written while open and after.
+ */
+export const savePostmortem = async (
+  executor: Transaction,
+  clock: Clock,
+  context: ChannelContext,
+  incidentId: string,
+  input: SavePostmortemRequest,
+): Promise<IncidentWrite> => {
+  await requireWriter(executor, context);
+  if (!Value.Check(Uuid, incidentId)) throw incidentNotFound();
+  const row = await executor
+    .selectFrom('incidents')
+    .select(['postmortem', 'postmortem_version'])
+    .where('id', '=', incidentId)
+    .where('channel_id', '=', context.channelId)
+    .forNoKeyUpdate()
+    .executeTakeFirst();
+  if (row === undefined) throw incidentNotFound();
+  // The same words first: a retry of a save that landed is answered as done, whatever version it
+  // was edited from — nothing can be lost when the words are the ones already kept.
+  if (row.postmortem === input.content) return await unchanged(executor, incidentId);
+  if (row.postmortem_version !== input.version) {
+    throw new AppError({
+      code: 'INCIDENT_POSTMORTEM_CHANGED',
+      message: 'The postmortem was saved by somebody else since; read it, then save again.',
+    });
+  }
+  const version = row.postmortem_version + 1;
+  await executor
+    .updateTable('incidents')
+    .set({ postmortem: input.content, postmortem_version: version })
+    .where('id', '=', incidentId)
+    .execute();
+  await record(executor, incidentId, context.userId, clock.now(), {
+    kind: 'postmortem',
+    from: null,
+    to: String(version),
+  });
+  return { ...(await unchanged(executor, incidentId)), changed: true };
 };
 
 /** Reads one timeline value back into the change it was written from. */
@@ -412,6 +507,10 @@ const changeOf = (
     case 'responder_added':
     case 'responder_removed':
       return { kind, user: people.get(to) ?? null };
+    case 'runbook':
+      return { kind, url: to === '' ? null : to };
+    case 'postmortem':
+      return { kind, version: Number(to) };
     case 'declared':
       return { kind, severity: severityOf(to) };
     case 'status':
