@@ -138,6 +138,7 @@ import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
+import { listIncidentUpdates, patchIncident, postIncident, readIncident } from './incidents';
 
 export interface Dependencies {
   readonly config: Config;
@@ -528,6 +529,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    .get(
+      '/api/channels/:channelId/incident',
+      async ({ request, params }) => await readIncident(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/incident', async ({ request, params, body, set }) => {
+      const { incident, changed } = await postIncident(sending, request, params.channelId, body);
+      // Made now is 201; the same declaration again is the incident it made, 200 (D-33).
+      set.status = changed ? 201 : 200;
+      return incident;
+    })
+    .patch(
+      '/api/channels/:channelId/incident/:incidentId',
+      async ({ request, params, body }) =>
+        await patchIncident(sending, request, params.channelId, params.incidentId, body),
+    )
+    .get(
+      '/api/channels/:channelId/incident/:incidentId/updates',
+      async ({ request, params }) =>
+        await listIncidentUpdates(dependencies, request, params.channelId, params.incidentId),
+    )
     .get(
       '/api/channels/:channelId/pins',
       async ({ request, params }) => await listPins(dependencies, request, params.channelId),

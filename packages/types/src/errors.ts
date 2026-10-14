@@ -55,6 +55,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('MESSAGE_NOT_FOUND'),
   /** An earlier version of a message that is not there, or not this message's (D-135). */
   Type.Literal('MESSAGE_VERSION_NOT_FOUND'),
+  /** An incident that is not there, or not this channel's (D-137). */
+  Type.Literal('INCIDENT_NOT_FOUND'),
   /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
   Type.Literal('USER_NOT_FOUND'),
   // Conflict
@@ -70,6 +72,15 @@ export const ErrorCode = Type.Union([
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
   /** The channel already has a feed from this repository (D-134 §1). */
   Type.Literal('GITHUB_FEED_EXISTS'),
+  /** Declaring an incident in a channel that has one open (D-137 §1). */
+  Type.Literal('INCIDENT_OPEN'),
+  /**
+   * An incident id already used for another declaration — another channel's, or this one's at
+   * another severity. A retry of the same declaration answers the incident instead (D-137 §5).
+   */
+  Type.Literal('INCIDENT_ID_CONFLICT'),
+  /** Changing an incident that is resolved: resolved is once and for good (D-137 §3). */
+  Type.Literal('INCIDENT_RESOLVED'),
   /** A delivery from another repository than the feed's (D-134 §4). */
   Type.Literal('GITHUB_REPOSITORY_MISMATCH'),
   // Volume
@@ -155,6 +166,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
   MESSAGE_VERSION_NOT_FOUND: 404,
+  INCIDENT_NOT_FOUND: 404,
   USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,
@@ -175,6 +187,9 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   PINS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
   GITHUB_FEED_EXISTS: 409,
+  INCIDENT_OPEN: 409,
+  INCIDENT_ID_CONFLICT: 409,
+  INCIDENT_RESOLVED: 409,
   GITHUB_REPOSITORY_MISMATCH: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,

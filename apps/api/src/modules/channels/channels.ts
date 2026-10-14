@@ -37,6 +37,9 @@ interface ChannelRow {
   readonly unread_mention_count: number | null;
   readonly notification_level: Channel['notificationLevel'];
   readonly starred_at: Date | string | null;
+  /** Its open incident's, when one is open (D-137): the partial unique index finds it. */
+  readonly incident_severity: number | null;
+  readonly incident_status: string | null;
   readonly peer_id: string | null;
   readonly peer_username: string | null;
   readonly peer_display_name: string | null;
@@ -72,6 +75,21 @@ const peersOf = (row: ChannelRow, userId: string): Channel['peers'] => {
   return people.map(shown);
 };
 
+/** The open incident's mark, read as the contract says it can be, or loudly not. */
+const incidentOf = (row: ChannelRow): Channel['incident'] => {
+  if (row.incident_severity === null) return null;
+  const severity = row.incident_severity;
+  const status = row.incident_status;
+  if (
+    (severity !== 1 && severity !== 2 && severity !== 3 && severity !== 4) ||
+    (status !== 'investigating' && status !== 'mitigating')
+  ) {
+    // The table's CHECKs and the open index say this cannot be: a row that does is a defect.
+    throw new Error(`incident of ${row.id} is ${String(severity)}/${String(status)}`);
+  }
+  return { severity, status };
+};
+
 const asChannel = (row: ChannelRow, userId: string): Channel => ({
   id: row.id,
   workspaceId: row.workspace_id,
@@ -103,6 +121,7 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
             avatarUrl: row.peer_avatar_url,
           },
   peers: peersOf(row, userId),
+  incident: incidentOf(row),
 });
 
 /**
@@ -127,6 +146,12 @@ const readChannels = async (
         .onRef('channel_members.channel_id', '=', 'channels.id')
         .on('channel_members.user_id', '=', userId),
     )
+    // At most one open incident a channel (`idx_incidents_one_open`): a join, never a row more.
+    .leftJoin('incidents', (join) =>
+      join
+        .onRef('incidents.channel_id', '=', 'channels.id')
+        .on('incidents.resolved_at', 'is', null),
+    )
     .leftJoin('users', (join) =>
       join.on(
         // A conversation of two only: a group has no one other person (D-127).
@@ -150,6 +175,8 @@ const readChannels = async (
       'channel_members.unread_mention_count as unread_mention_count',
       'channel_members.notification_level as notification_level',
       'channel_members.starred_at as starred_at',
+      'incidents.severity as incident_severity',
+      'incidents.status as incident_status',
       'users.id as peer_id',
       'users.username as peer_username',
       'users.display_name as peer_display_name',

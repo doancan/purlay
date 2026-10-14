@@ -71,6 +71,7 @@ describe('publishing the wedge', () => {
       workspaceId: OTHER,
       name: null,
       topic: null,
+      incident: null,
       type: 'direct_message',
       lastMessageAt: null,
       state,

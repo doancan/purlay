@@ -127,6 +127,27 @@ export interface GithubRepoFeeds {
   workspace_id: string;
 }
 
+export interface Incidents {
+  channel_id: string;
+  declared_at: Timestamp;
+  declared_by: string | null;
+  id: string;
+  resolved_at: Timestamp | null;
+  severity: number;
+  status: Generated<string>;
+  workspace_id: string;
+}
+
+export interface IncidentUpdates {
+  actor_id: string | null;
+  at: Timestamp;
+  from_value: string | null;
+  id: string;
+  incident_id: string;
+  kind: string;
+  to_value: string;
+}
+
 export interface JobRuns {
   consecutive_failures: Generated<number>;
   job_name: string;
@@ -304,6 +325,8 @@ export interface DB {
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
   github_repo_feeds: GithubRepoFeeds;
+  incident_updates: IncidentUpdates;
+  incidents: Incidents;
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;

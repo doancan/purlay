@@ -82,6 +82,31 @@ const aVersion = async (
   return id;
 };
 
+/**
+ * A resolved incident in a channel, as a row: what changing one, and reading its timeline, name —
+ * resolved, so declaring another there is a control as well.
+ */
+const anIncident = async (
+  db: Executor,
+  workspaceId: string,
+  channelId: string,
+): Promise<string> => {
+  const id = messageId(NOW);
+  await db
+    .insertInto('incidents')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      severity: 2,
+      status: 'resolved',
+      declared_at: NOW,
+      resolved_at: NOW,
+    })
+    .execute();
+  return id;
+};
+
 /** A repository's feed into a channel, as a row: what disconnecting one names. */
 const aFeed = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
   const id = crypto.randomUUID();
@@ -109,6 +134,8 @@ interface World {
   readonly visible: string;
   /** A repository's feed into the visible channel: the control for disconnecting one. */
   readonly feed: string;
+  /** A resolved incident in the visible channel: the control for changing one, and its timeline. */
+  readonly incident: string;
   /** An earlier version of the outsider's own visible message: the control for removing one. */
   readonly version: string;
   /** Each one hidden from the outsider for a different reason. */
@@ -260,6 +287,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     workspaceId,
     visible,
     feed: await aFeed(db, workspaceId, visible),
+    incident: await anIncident(db, workspaceId, visible),
     version: await aVersion(db, workspaceId, visible, threads.ownVisible),
     hidden,
     threads,
@@ -305,6 +333,7 @@ describe('integration: channel visibility', () => {
               invitationId: NEVER_EXISTED,
               feedId: world.feed,
               versionId: NEVER_EXISTED,
+              incidentId: world.incident,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -347,6 +376,7 @@ describe('integration: channel visibility', () => {
               feedId: NEVER_EXISTED,
               // The outsider's own visible message's: the control of removing a version.
               versionId: world.version,
+              incidentId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -408,6 +438,7 @@ describe('integration: channel visibility', () => {
                 invitationId: NEVER_EXISTED,
                 feedId: NEVER_EXISTED,
                 versionId: NEVER_EXISTED,
+                incidentId: NEVER_EXISTED,
               }),
               cookie,
             );

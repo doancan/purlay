@@ -78,6 +78,7 @@ describe('models', () => {
       state: null,
       notificationLevel: null,
       starred: false,
+      incident: null,
       peer: user,
       peers: [user],
     };
@@ -587,6 +588,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
           state,
           notificationLevel: 'mentions',
           starred: false,
+          incident: null,
           peer: user,
           peers: [user],
         },

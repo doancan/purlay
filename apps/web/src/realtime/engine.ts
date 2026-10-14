@@ -46,6 +46,7 @@ import type { Api } from '../data/api';
 import {
   channelAdded,
   channelRenamed,
+  incidentChanged,
   channelStateChanged,
   channelsRevoked,
   deepWorkChanged,
@@ -643,6 +644,9 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'PINS_UPDATED':
         // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
         readAgain(client, keys.pins(frame.data.channelId));
+        return;
+      case 'INCIDENT_UPDATED':
+        incidentChanged(client, frame.data.channelId);
         return;
       case 'MESSAGE_VERSIONS_UPDATED':
         // A version removed (D-135 §5): an open history is read again, and the words leave it.

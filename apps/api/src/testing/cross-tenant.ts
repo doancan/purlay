@@ -71,6 +71,8 @@ export interface Ids {
   readonly feedId: string;
   /** An earlier version of the message: what removing one acts on. */
   readonly versionId: string;
+  /** An incident declared in the channel: what changing one, and its timeline, act on. */
+  readonly incidentId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -93,6 +95,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'invitationId') return ids.invitationId;
     if (name === 'feedId') return ids.feedId;
     if (name === 'versionId') return ids.versionId;
+    if (name === 'incidentId') return ids.incidentId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -226,6 +229,22 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/files': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/pins': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'GET /api/channels/:channelId/incident': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'POST /api/channels/:channelId/incident': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: (now) => ({ id: messageId(now), severity: 2 }),
+    visibility: CHANNEL,
+  },
+  'PATCH /api/channels/:channelId/incident/:incidentId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    // Its fixture is resolved, so a declaration is a control too; resolved again changes nothing.
+    body: () => ({ status: 'resolved' }),
+    visibility: CHANNEL,
+  },
+  'GET /api/channels/:channelId/incident/:incidentId/updates': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
   'PUT /api/channels/:channelId/star': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/github-feeds': {
     refusal: 'CHANNEL_NOT_FOUND',

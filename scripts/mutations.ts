@@ -33,6 +33,46 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'incident-written-by-a-visitor',
+    why: 'somebody who can see a public channel without being in it declares and resolves its incidents',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: "  await requireChannelMember(executor, context, 'Join the channel to change its incident.');\n",
+    replace: '',
+    tests: ['apps/api/src/modules/incidents/incidents.integration.test.ts'],
+  },
+  {
+    id: 'incident-id-of-another-channel',
+    why: "a declaration retried with another channel's incident id is answered with that incident",
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: '  if (row.channel_id !== context.channelId || declared?.to_value !== String(input.severity)) {\n',
+    replace: '  if (declared?.to_value !== String(input.severity)) {\n',
+    tests: ['apps/api/src/modules/incidents/incidents.integration.test.ts'],
+  },
+  {
+    id: 'incident-resolved-reopened',
+    why: 'a resolved incident is moved again, and its resolution stops meaning anything',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: '    if (status !== was.status || severity !== was.severity) {\n',
+    replace: '    if (status !== status) {\n',
+    tests: ['apps/api/src/modules/incidents/incidents.integration.test.ts'],
+  },
+  {
+    id: 'incident-change-unlocked',
+    why: 'two changes at once read the same incident, and one is lost from the timeline',
+    file: 'apps/api/src/modules/incidents/incidents.ts',
+    find: '    .forNoKeyUpdate()\n',
+    replace: '',
+    tests: ['apps/api/src/modules/incidents/incidents.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'incident-mark-of-a-resolved-one',
+    why: 'the sidebar marks a channel whose incident is long resolved',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: "        .onRef('incidents.channel_id', '=', 'channels.id')\n        .on('incidents.resolved_at', 'is', null),\n",
+    replace: "        .onRef('incidents.channel_id', '=', 'channels.id'),\n",
+    tests: ['apps/api/src/modules/incidents/incidents.integration.test.ts'],
+  },
+  {
     id: 'presence-grace-not-cancelled',
     why: 'a reload or a reconnect inside the grace shows the person offline to everybody',
     file: 'apps/api/src/realtime/online.ts',

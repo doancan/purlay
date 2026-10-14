@@ -126,6 +126,21 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   });
   expect(feed.status).toBe(201);
   const { feed: connected } = (await feed.json()) as { feed: { id: string } };
+  // An incident to change, and whose timeline to read.
+  const incident = await call(db, 'POST', `/api/channels/${channelId}/incident`, cookie, {
+    id: messageId(NOW),
+    severity: 2,
+  });
+  expect(incident.status).toBe(201);
+  const { id: incidentId } = (await incident.json()) as { id: string };
+  // Resolved: the channel may declare another, which is the declaration's own control.
+  expect(
+    (
+      await call(db, 'PATCH', `/api/channels/${channelId}/incident/${incidentId}`, cookie, {
+        status: 'resolved',
+      })
+    ).status,
+  ).toBe(200);
   return {
     workspaceId,
     channelId,
@@ -136,6 +151,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     invitationId: made.id,
     feedId: connected.id,
     versionId: version.id,
+    incidentId,
   };
 };
 
@@ -149,6 +165,7 @@ const NEVER_EXISTED: Ids = {
   invitationId: '00000000-0000-4000-8000-000000000000',
   feedId: '00000000-0000-4000-8000-000000000000',
   versionId: '00000000-0000-4000-8000-000000000000',
+  incidentId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
@@ -161,6 +178,7 @@ const NOT_A_UUID: Ids = {
   invitationId: 'not-a-uuid',
   feedId: 'not-a-uuid',
   versionId: 'not-a-uuid',
+  incidentId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {

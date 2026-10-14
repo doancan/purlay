@@ -377,6 +377,17 @@ export const PinsUpdatedFrame = Type.Object({
 });
 
 /**
+ * A channel's incident changed (D-137 §7): declared, moved, resolved — by anyone in it. On the
+ * channel's topic; it carries no incident, and a client reads it again, so two changes heard in either
+ * order leave the same banner.
+ */
+export const IncidentUpdatedFrame = Type.Object({
+  event: Type.Literal('INCIDENT_UPDATED'),
+  data: Type.Object({ channelId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * A message's earlier versions changed without its words changing (D-135 §5): its author removed one.
  * On the channel's topic; it carries no version, and a client with the history open reads it again,
  * so words taken out of the history leave every screen that shows it.
@@ -484,6 +495,7 @@ export const ServerFrame = Type.Union([
   DeepWorkUpdatedFrame,
   SavedUpdatedFrame,
   PinsUpdatedFrame,
+  IncidentUpdatedFrame,
   MessageVersionsUpdatedFrame,
   ChannelsUpdatedFrame,
   TypingServerFrame,

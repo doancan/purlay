@@ -786,6 +786,8 @@ export const tr = {
     'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
   'failure.githubFeedExists':
     'Bu kanal o depoya zaten bağlı. Yeni bir gizli anahtar için bağlantıyı kaldırıp yeniden bağla.',
+  'failure.incidentOpen': 'Bu kanalda zaten açık bir olay var. Onu değiştir ya da önce çöz.',
+  'failure.incidentResolved': 'Bu olay çözüldü. Yeniden başladıysa yeni bir olay bildir.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

@@ -54,6 +54,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   workspaceId: WS,
   name: 'api',
   topic: null,
+  incident: null,
   type: 'public',
   lastMessageAt: null,
   state,

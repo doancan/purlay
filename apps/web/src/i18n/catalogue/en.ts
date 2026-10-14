@@ -803,6 +803,9 @@ export const en = {
     'That is as many repositories as a channel hears from. Disconnect one first.',
   'failure.githubFeedExists':
     'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
+  'failure.incidentOpen':
+    'This channel already has an incident open. Change that one, or resolve it first.',
+  'failure.incidentResolved': 'This incident is resolved. Declare a new one if it is back.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
