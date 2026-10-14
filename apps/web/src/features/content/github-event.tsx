@@ -76,7 +76,7 @@ export const useMessageText = (): ((
     message.githubEvent === null ? message.content : eventSentence(message.githubEvent, t);
 };
 
-const link = 'text-ink underline-offset-2 hover:underline';
+const link = 'text-ink hover:underline';
 
 export const GitHubEventCard = ({ event }: { readonly event: GitHubEvent }): React.JSX.Element => {
   const { t } = useI18n();

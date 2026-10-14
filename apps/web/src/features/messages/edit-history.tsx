@@ -231,7 +231,7 @@ export const EditedMark = ({
         onClick={() => {
           setOpen(true);
         }}
-        className="rounded-sm text-caption text-ink-subtle underline-offset-2 hover:text-ink hover:underline"
+        className="rounded-sm text-caption text-ink-subtle hover:text-ink hover:underline"
       >
         {t('message.edited')}
       </button>
