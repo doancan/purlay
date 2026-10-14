@@ -25,6 +25,7 @@ const ENVIRONMENT: Record<string, string> = {
   APP_URL: 'https://chat.example.test',
   POSTGRES_PASSWORD: 'f'.repeat(32),
   GARAGE_RPC_SECRET: 'c'.repeat(64),
+  GARAGE_ADMIN_TOKEN: 'b'.repeat(64),
   S3_ACCESS_KEY_ID: 'GK' + 'd'.repeat(24),
   S3_SECRET_ACCESS_KEY: 'e'.repeat(64),
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
@@ -101,6 +102,7 @@ describe('integration: the production compose file', () => {
       'postgres',
       'proxy',
       'scheduler',
+      'storage-init',
     ]);
   });
 
@@ -115,9 +117,12 @@ describe('integration: the production compose file', () => {
 
   test('every image but the API is pinned by digest, and the API image is a variable', () => {
     for (const [name, service] of Object.entries(model.services)) {
-      if (name === 'api') continue;
-      expect(service.image).toMatch(/@sha256:[0-9a-f]{64}$/);
+      // The API image runs the API, the scheduler and the store's preparation.
+      if (service.image === ENVIRONMENT['PURLAY_IMAGE']) continue;
+      expect(`${name} ${service.image}`).toMatch(/@sha256:[0-9a-f]{64}$/);
     }
+    expect(model.services['scheduler']?.image).toBe(ENVIRONMENT['PURLAY_IMAGE'] ?? '');
+    expect(model.services['storage-init']?.image).toBe(ENVIRONMENT['PURLAY_IMAGE'] ?? '');
     expect(model.services['api']?.image).toBe(ENVIRONMENT['PURLAY_IMAGE'] ?? '');
   });
 
@@ -225,10 +230,16 @@ describe('integration: the production compose file', () => {
     expect(scheduler?.healthcheck?.disable).toBe(true);
   });
 
-  test('the proxy waits for a ready API, and the API for a healthy database and store', () => {
+  test('the proxy waits for a ready API, and the API for a healthy database and a prepared store', () => {
     expect(model.services['proxy']?.depends_on?.['api']?.condition).toBe('service_healthy');
     expect(model.services['api']?.depends_on?.['postgres']?.condition).toBe('service_healthy');
-    expect(model.services['api']?.depends_on?.['garage']?.condition).toBe('service_healthy');
+    // One command (#76): the store is prepared by `up`, and the API waits for it to have been.
+    expect(model.services['api']?.depends_on?.['storage-init']?.condition).toBe(
+      'service_completed_successfully',
+    );
+    expect(model.services['storage-init']?.depends_on?.['garage']?.condition).toBe(
+      'service_healthy',
+    );
   });
 
   test('nothing assumes this server: the only host paths are read-only files from this repository', () => {
@@ -294,6 +305,7 @@ describe('integration: the production compose file', () => {
       for (const name of [
         'POSTGRES_PASSWORD',
         'GARAGE_RPC_SECRET',
+        'GARAGE_ADMIN_TOKEN',
         'S3_SECRET_ACCESS_KEY',
         'ENCRYPTION_KEY',
       ]) {

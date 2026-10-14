@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Prepare the production object store once: one node in the layout, the
+# Prepare the production object store by hand: one node in the layout, the
 # attachment bucket, and the application's key. Safe to run again — every step
-# checks first. The production counterpart of scripts/storage-init.sh, which is
-# for development and has its credentials written into it.
+# checks first. `docker compose up` does the same on its own now, through the
+# one-shot `storage-init` service (#76, D-144); this is kept for a stack from
+# before it. The production counterpart of scripts/storage-init.sh, which is for
+# development and has its credentials written into it.
 #
 #   scripts/production-init.sh                 # reads ./production.env
 #   ENV_FILE=/etc/purlay/production.env scripts/production-init.sh

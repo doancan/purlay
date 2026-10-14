@@ -172,13 +172,14 @@ this and refuses to report ready if the applied schema disagrees.
 
 `docker-compose.production.yml` brings up the API, PostgreSQL, Garage and a TLS proxy (Caddy) behind
 **one public origin** (D-94, D-73). Its inputs are variables in an env file — the ones in the tables
-above, plus the three the stack itself needs:
+above, plus the four the stack itself needs:
 
 | Variable | Required | Notes |
 |---|---|---|
 | `PURLAY_IMAGE` | ✅ | The API image: `ghcr.io/<owner>/purlay-api@sha256:…` (a digest) or `:sha-<commit>`. Never a moving tag. Published by `image.yml` from main; while the pipeline cannot run, `scripts/release-image.sh` publishes a merged commit from a machine and prints the digest — without the workflow's attestations (D-92) |
 | `POSTGRES_PASSWORD` | ✅ | **Secret.** Used as-is inside `DATABASE_URL`, so it must be URL-safe: `openssl rand -hex 16` |
 | `GARAGE_RPC_SECRET` | ✅ | **Secret.** 64 hex characters: `openssl rand -hex 32` |
+| `GARAGE_ADMIN_TOKEN` | ✅ | **Secret.** Garage's admin API, which the one-shot `storage-init` uses to prepare the store on `up`; reachable inside the stack only: `openssl rand -hex 32` (D-144) |
 
 Production refuses an unsafe configuration at boot (D-79), so the stack sets what that asks of a
 private network and an operator must supply the rest. The stack sets `NODE_ENV=production`, `PORT`,
@@ -202,8 +203,17 @@ compose file in step.
 ```
 cp docker/production.env.example production.env      # fill in the empty values; keep it private
 docker compose -f docker-compose.production.yml --env-file production.env up -d --wait
-scripts/production-init.sh            # once: the storage layout, bucket and key
 ```
+
+That is the whole of it (#76, D-144). As it comes up, the one-shot `storage-init` service prepares
+the object store — the node's place in the layout, the bucket, the application's key and its rights,
+each only if missing — and checks that an anonymous read of the bucket is refused; the API starts only
+once it has, and migrates the database as it starts. Every later `up` runs it again and it finds
+nothing to do. Its output is `docker compose … logs storage-init`. `scripts/production-init.sh` does
+the same by hand, through Garage's CLI, and is kept for a stack from before this service.
+
+**The first person in** signs in with GitHub and makes the first workspace from the screen they land
+on; they are its owner. Who else may join is decided by them, with invitation links (D-115).
 
 **Ports.** The proxy publishes 80 and 443 (and 443/udp for HTTP/3). `HTTP_PORT` and `HTTPS_PORT`
 (optional, defaults 80 and 443) move them on the host. The caveats are real: the HTTPS port is the same

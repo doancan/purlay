@@ -3,8 +3,10 @@
 # A single node. The RPC secret is not in this file: Garage reads it from
 # GARAGE_RPC_SECRET, which the compose file takes from the deployment's variables.
 # The S3 port is bound inside the stack's network and published nowhere; only the
-# API reaches it. The cluster layout, the bucket and the key are created once by
-# scripts/production-init.sh.
+# API reaches it. The cluster layout, the bucket and the key are created on every
+# `up` by the one-shot `storage-init` service, through the admin API below, whose
+# token Garage reads from GARAGE_ADMIN_TOKEN (#76, D-144); it too is published
+# nowhere.
 metadata_dir = "/var/lib/garage/meta"
 data_dir = "/var/lib/garage/data"
 db_engine = "sqlite"
@@ -16,3 +18,6 @@ rpc_public_addr = "127.0.0.1:3901"
 [s3_api]
 s3_region = "us-east-1"
 api_bind_addr = "0.0.0.0:3900"
+
+[admin]
+api_bind_addr = "0.0.0.0:3903"
