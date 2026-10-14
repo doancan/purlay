@@ -11,7 +11,16 @@ import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, ME, WHEN, aChannel, aSignedInApi } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  ME,
+  WHEN,
+  aChannel,
+  aSignedInApi,
+  NO_PROFILE,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { SessionGate } from '../session/session';
@@ -30,9 +39,9 @@ const settle = async (): Promise<void> => {
 };
 
 const members = (): Awaited<ReturnType<Api['members']>> => [
-  { user: ME, role: 'owner', joinedAt: WHEN },
-  { user: ALICE, role: 'member', joinedAt: WHEN },
-  { user: BOB, role: 'member', joinedAt: WHEN },
+  { user: ME, role: 'owner', joinedAt: WHEN, profile: NO_PROFILE },
+  { user: ALICE, role: 'member', joinedAt: WHEN, profile: NO_PROFILE },
+  { user: BOB, role: 'member', joinedAt: WHEN, profile: NO_PROFILE },
 ];
 
 /** A DM with Bob already exists; none with Alice. */

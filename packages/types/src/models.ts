@@ -84,6 +84,21 @@ export const User = Type.Object({
 });
 export type User = Static<typeof User>;
 
+/** How long a profile's title and status line may be (D-131). */
+export const PROFILE_TITLE_MAX = 80;
+export const PROFILE_STATUS_MAX = 100;
+
+/**
+ * What a person says about themselves beyond the name GitHub gives them (D-131): a title, the time
+ * zone their day is in (an IANA name), and a short status line. Each null until they set it.
+ */
+export const Profile = Type.Object({
+  title: Type.Union([Type.String({ minLength: 1, maxLength: PROFILE_TITLE_MAX }), Type.Null()]),
+  timeZone: Type.Union([Type.String({ minLength: 1, maxLength: 64 }), Type.Null()]),
+  status: Type.Union([Type.String({ minLength: 1, maxLength: PROFILE_STATUS_MAX }), Type.Null()]),
+});
+export type Profile = Static<typeof Profile>;
+
 /** Yourself. The only shape that carries the email, and only ever to its owner. */
 export const CurrentUser = Type.Composite([
   User,

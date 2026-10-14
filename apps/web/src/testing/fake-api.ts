@@ -37,6 +37,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   savedIds: unexpected('savedIds'),
   saved: unexpected('saved'),
   markRead: unexpected('markRead'),
+  updateProfile: unexpected('updateProfile'),
   files: unexpected('files'),
   pins: unexpected('pins'),
   pin: unexpected('pin'),

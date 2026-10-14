@@ -26,6 +26,7 @@ import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import type { WorkspaceContext } from '../../platform/tenancy';
+import { asProfile, PROFILE_COLUMNS } from '../users/profile';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -153,7 +154,16 @@ export const meOf = async (
 ): Promise<MeResponse> => {
   const user = await executor
     .selectFrom('users')
-    .select(['id', 'username', 'display_name', 'avatar_url', 'email'])
+    .select([
+      'id',
+      'username',
+      'display_name',
+      'avatar_url',
+      'email',
+      'title',
+      'time_zone',
+      'status_text',
+    ])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
     .executeTakeFirstOrThrow();
@@ -166,6 +176,7 @@ export const meOf = async (
       avatarUrl: user.avatar_url,
       email: user.email,
     },
+    profile: asProfile(user),
     memberships: [...(await membershipsOf(executor, clock, userId))],
   };
 };
@@ -263,6 +274,7 @@ export const membersIn = async (
       'users.username',
       'users.display_name',
       'users.avatar_url',
+      ...PROFILE_COLUMNS,
       'workspace_members.role',
       'workspace_members.joined_at',
     ])
@@ -280,5 +292,6 @@ export const membersIn = async (
     },
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
+    profile: asProfile(row),
   }));
 };

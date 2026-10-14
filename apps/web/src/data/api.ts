@@ -47,6 +47,8 @@ import {
   type ReadNotificationsRequest,
   type SendMessageRequest,
   type PushLocale,
+  Profile,
+  type UpdateProfileRequest,
   type PushSubscribeRequest,
   type SavedState,
 } from '@purlay/types';
@@ -140,6 +142,8 @@ export interface Api {
     before?: string,
     signal?: AbortSignal,
   ) => Promise<SavedPage>;
+  /** The caller's own title, time zone and status line (D-131). */
+  readonly updateProfile: (input: UpdateProfileRequest) => Promise<Profile>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
   /** A channel's pins, newest first (D-130). */
   readonly pins: (channelId: string, signal?: AbortSignal) => Promise<PinList>;
@@ -369,6 +373,8 @@ export const createApi = (http: Http): Api => {
       http.request('GET', `/api/channels/${at(channelId)}/pins`, PinList, options({}, signal)),
     pin: (messageId) => http.send('PUT', `/api/messages/${at(messageId)}/pin`, options()),
     unpin: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}/pin`, options()),
+    updateProfile: (input) =>
+      http.request('PATCH', '/api/me/profile', Profile, options({ body: input })),
     files: (channelId, before, signal) =>
       http.request(
         'GET',

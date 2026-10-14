@@ -19,7 +19,7 @@ import { WorkspaceScopeProvider } from '../features/shell/workspace';
 import { RealtimeProvider, useEngine } from '../realtime/realtime-provider';
 import type { Engine } from '../realtime/engine';
 import { feedWorld, installScrollMetrics, type FeedWorld, type ScrollMetrics } from './feed-world';
-import { IDS, WHEN, aSignedInApi } from './fixtures';
+import { IDS, WHEN, aSignedInApi, NO_PROFILE } from './fixtures';
 import { renderApp } from './render';
 
 export const settle = async (): Promise<void> => {
@@ -111,6 +111,7 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
           user: m.user,
           role: m.role ?? 'member',
           joinedAt: WHEN,
+          profile: NO_PROFILE,
         })),
       ),
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),

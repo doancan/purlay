@@ -3,6 +3,7 @@
  * it should, with the cursor the previous page named, and none ever reaches an endpoint
  * it should not (the fake refuses).
  */
+import { NO_PROFILE } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
 import type { Channel, Message, MessagePage } from '@purlay/types';
@@ -75,7 +76,11 @@ describe('the single-value reads', () => {
     const api = anApi({
       me: () => {
         calls.push('me');
-        return Promise.resolve({ user: { ...user, email: 'a@example.test' }, memberships: [] });
+        return Promise.resolve({
+          user: { ...user, email: 'a@example.test' },
+          profile: NO_PROFILE,
+          memberships: [],
+        });
       },
       channels: (workspaceId) => {
         calls.push(`channels ${workspaceId}`);
@@ -83,7 +88,9 @@ describe('the single-value reads', () => {
       },
       members: (workspaceId) => {
         calls.push(`members ${workspaceId}`);
-        return Promise.resolve([{ user, role: 'member', joinedAt: '2026-09-09T08:00:00.000Z' }]);
+        return Promise.resolve([
+          { user, role: 'member', joinedAt: '2026-09-09T08:00:00.000Z', profile: NO_PROFILE },
+        ]);
       },
     });
     const Reads = (): React.JSX.Element => {

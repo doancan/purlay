@@ -20,6 +20,7 @@ import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import { AppError } from '../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
+import { asProfile, PROFILE_COLUMNS } from '../users/profile';
 
 /** Whether a caller of this role may move a member from one role to another, or remove them (`to` absent). */
 const mayManage = (caller: UserRole, from: UserRole, to?: UserRole): boolean =>
@@ -105,7 +106,7 @@ export const changeRole = async (
     .executeTakeFirstOrThrow();
   const user = await executor
     .selectFrom('users')
-    .select(['id', 'username', 'display_name', 'avatar_url'])
+    .select(['id', 'username', 'display_name', 'avatar_url', ...PROFILE_COLUMNS])
     .where('id', '=', userId)
     .executeTakeFirstOrThrow();
   return {
@@ -117,6 +118,7 @@ export const changeRole = async (
     },
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
+    profile: asProfile(user),
   };
 };
 

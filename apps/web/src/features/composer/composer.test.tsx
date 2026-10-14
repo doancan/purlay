@@ -34,6 +34,7 @@ import {
   messageIdAt,
   someChannels,
   someMembers,
+  NO_PROFILE,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
@@ -714,7 +715,7 @@ describe('@ offers people (UX §5)', () => {
       members: () =>
         Promise.resolve([
           ...someMembers().filter((member) => member.user.id !== IDS.bob),
-          { user: ISIL, role: 'member' as const, joinedAt: WHEN },
+          { user: ISIL, role: 'member' as const, joinedAt: WHEN, profile: NO_PROFILE },
         ]),
     });
   const list = (view: Mounted['view']): HTMLElement | null =>
@@ -776,6 +777,7 @@ describe('@ offers people (UX §5)', () => {
               user: aUser('bea', '00000000-0000-4000-8000-0000000000e4'),
               role: 'member',
               joinedAt: WHEN,
+              profile: NO_PROFILE,
             },
           ]),
       }),
@@ -923,7 +925,9 @@ describe('@ offers people (UX §5)', () => {
           ),
         channelMembers: () => {
           asked += 1;
-          return Promise.resolve([BOB_USER].map((user) => ({ user, joinedAt: WHEN })));
+          return Promise.resolve(
+            [BOB_USER].map((user) => ({ user, joinedAt: WHEN, profile: NO_PROFILE })),
+          );
         },
       }),
     });
@@ -957,7 +961,9 @@ describe('@ offers people (UX §5)', () => {
         channelMembers: () =>
           fails
             ? Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'busy'))
-            : Promise.resolve([BOB_USER].map((user) => ({ user, joinedAt: WHEN }))),
+            : Promise.resolve(
+                [BOB_USER].map((user) => ({ user, joinedAt: WHEN, profile: NO_PROFILE })),
+              ),
       }),
     });
     await user.click(box());

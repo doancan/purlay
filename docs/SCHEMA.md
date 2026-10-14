@@ -106,11 +106,23 @@ CREATE TABLE users (
     -- The language this person's notifications are written in, set by their client (D-41, D-126).
     locale        TEXT NOT NULL DEFAULT 'en' CONSTRAINT users_locale_known CHECK (locale IN ('en', 'tr')),
 
+    -- What a person says about themselves (D-131): each NULL until set, never blank. The time zone
+    -- is an IANA name the service checks against its runtime; the database holds its length only.
+    title         VARCHAR(80),
+    time_zone     VARCHAR(64),
+    status_text   VARCHAR(100),
+
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
 
     -- Soft delete, so authorship on historical messages survives. (D-22)
-    deleted_at    TIMESTAMPTZ
+    deleted_at    TIMESTAMPTZ,
+
+    CONSTRAINT users_profile_not_blank CHECK (
+        (title IS NULL OR btrim(title) <> '')
+        AND (time_zone IS NULL OR btrim(time_zone) <> '')
+        AND (status_text IS NULL OR btrim(status_text) <> '')
+    )
 );
 ```
 
@@ -1146,12 +1158,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0026_saved_messages.sql      saved_messages  (D-128)
 0027_attachment_channels.sql attachments.channel_id: a channel's files  (I-1, D-129)
 0028_pinned_messages.sql     pinned_messages  (D-130)
+0029_profiles.sql            users.title, users.time_zone, users.status_text  (D-131)
 ```
 
-Phase 2 adds `0029_github_feeds.sql`; Phase 2's magic links add `0030_email_auth.sql`.
+Phase 2 adds `0030_github_feeds.sql`; Phase 2's magic links add `0031_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

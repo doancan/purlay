@@ -224,6 +224,9 @@ export interface Users {
   id: Generated<string>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;
+  status_text: string | null;
+  time_zone: string | null;
+  title: string | null;
   updated_at: Generated<Timestamp>;
   username: string;
 }

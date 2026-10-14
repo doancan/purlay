@@ -21,6 +21,7 @@ import {
   aSignedInApi,
   someChannels,
   someMembers,
+  NO_PROFILE,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { Toaster } from '../../ui/toast';
@@ -191,7 +192,10 @@ describe('the people section', () => {
               },
             ],
           }),
-        members: () => Promise.resolve([{ user: ME, role, joinedAt: '2026-09-09T08:00:00.000Z' }]),
+        members: () =>
+          Promise.resolve([
+            { user: ME, role, joinedAt: '2026-09-09T08:00:00.000Z', profile: NO_PROFILE },
+          ]),
         invitations: () => Promise.resolve({ data: [], nextCursor: null }),
       });
     const people = (view: View): HTMLElement =>

@@ -745,7 +745,7 @@ the response carries it back as `x-request-id` — and every line written inside
 it, however deep the call, without any signature taking it (D-47, D-71). A request writes one line
 when its response has gone; a failure the client is told nothing about is written with its cause.
 Never logged: session tokens, `access_token_encrypted`, message content, email addresses, a device's
-push endpoint and keys (D-126) — a list
+push endpoint and keys (D-126), a profile's status line (D-131) — a list
 in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
 written. A value interpolated into a message's text cannot be found that way, so a message is a
 constant and variables go in fields.

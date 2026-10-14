@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: profiles, the API (D-131, part of #488)
+
+- A person sets a title, a time zone and a status line with `PATCH /api/me/profile`; `/api/me` and a
+  workspace's members carry them, and everyone who shares a workspace with them is told to read the
+  members again.
+
 ### Feature — 2026-10-14: pin a message, and a channel's pins in a panel (D-130, closes #485)
 
 - **Pin** beside Save on a message, for a member of the channel: marked at once, put back with Retry

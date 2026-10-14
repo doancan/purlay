@@ -8,7 +8,16 @@ import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, ME, WHEN, aChannel, someChannels } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  ME,
+  WHEN,
+  aChannel,
+  someChannels,
+  NO_PROFILE,
+} from '../../testing/fixtures';
 import { person } from '../../testing/user';
 
 installDom();
@@ -118,7 +127,12 @@ describe('the list', () => {
           fail
             ? Promise.reject(new ApiError(500, 'INTERNAL', 'no'))
             : Promise.resolve(
-                [ME, ALICE].map((user) => ({ user, role: 'member' as const, joinedAt: WHEN })),
+                [ME, ALICE].map((user) => ({
+                  user,
+                  role: 'member' as const,
+                  joinedAt: WHEN,
+                  profile: NO_PROFILE,
+                })),
               ),
       },
     });
