@@ -61,6 +61,13 @@ service by volume alone (the capacity ceiling is documented in `docs/DECISIONS.m
 vulnerabilities in a dependency that have no path into Purlay (report those upstream; the
 dependency audit in CI watches them).
 
+## Credit
+
+A reporter of a confirmed vulnerability is credited in its advisory and in the changelog entry of
+the fix, by the name or handle they choose, or not at all if they prefer. Credit goes to whoever
+reported it first; a later report of the same issue is thanked privately. There is no bug bounty:
+the project has no budget for one, and saying so now is better than disappointing someone later.
+
 ## Safe harbour
 
 Good-faith research that follows this policy, avoids other people's data, and does not degrade a
