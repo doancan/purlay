@@ -6090,7 +6090,13 @@ them.
    into the sender's account unnoticed — and **Sign in** posts the token as JSON, under D-39's origin
    rule; only that use consumes it. The token is the platform's (32 random bytes, hex), kept only as its
    SHA-256, valid fifteen minutes, once. Asking again sends another; an earlier one stays valid until it
-   expires, so nobody who knows the address can cancel its owner's link.
+   expires, so nobody who knows the address can cancel its owner's link. An invitation the asking tab
+   holds (D-115) rides after the token, `#<token>.<invitation>`, because the mail opens in a tab that has
+   none; the page keeps it for that tab once the person is in, and joining is still their click. The
+   field is a token's shape and nothing else, so no words of the asker's reach the mail. *Accepted:* an
+   address typed wrong sends the invitation to a stranger, who could make an account and join — as
+   pasting the invitation into the wrong chat would; and somebody can attach their own workspace's
+   invitation to a link for another's address, which the invite screen names before any join.
 5. **The account a link makes** has a username made from the address's local part, lower-cased, cut to
    what a mention can name, never one of the broadcast names (`here`, `channel`, `everyone`), and made
    unique as D-38's collision is; its display name is the same. An address with nothing to make a name

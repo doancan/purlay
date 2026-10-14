@@ -58,6 +58,22 @@ export const tr = {
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
   'signIn.ended': 'Oturumun sona erdi. Devam etmek için yeniden giriş yap.',
   'signIn.scope': "Purlay GitHub'dan yalnızca adını, kullanıcı adını ve e-postanı ister.",
+  'signIn.email.label': 'E-posta adresi',
+  'signIn.email.submit': 'Bana giriş bağlantısı gönder',
+  'signIn.email.sent':
+    '{email} e-postayla giriş yapabiliyorsa bağlantı yolda. Bir kez ve {minutes} dakika boyunca çalışır.',
+  'signIn.email.another': 'Başka bir adres kullan',
+  'signIn.email.invalid': 'Bu bir e-posta adresi değil.',
+  'signIn.email.unavailable': 'Bu sunucu e-postayla giriş yapmıyor — GitHub ile devam et.',
+  'signIn.email.failed': 'Bağlantı istenemedi.',
+  'signIn.link.as': '{email} olarak giriş yapıyorsun.',
+  'signIn.link.replaces':
+    'Bu sayfada {current} olarak girişlisin; bu bağlantı onun yerine seninle giriş yapar.',
+  'signIn.link.submit': 'Giriş yap',
+  'signIn.link.missing': 'Bu bağlantı eksik — e-postandan yeniden aç ya da yenisini iste.',
+  'signIn.link.notFound': 'Bu bağlantı kullanılmış ya da süresi dolmuş — yenisini iste.',
+  'signIn.link.failed': 'Giriş tamamlanamadı.',
+  'signIn.link.back': 'Girişe dön',
 
   // ── Çalışma alanı ve kenar çubuğu ───────────────────────────────────────
   'sidebar.label': 'Çalışma alanı',

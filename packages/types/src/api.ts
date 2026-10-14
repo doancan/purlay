@@ -956,11 +956,13 @@ export const SignInLocale = Type.Union([Type.Literal('en'), Type.Literal('tr')])
 
 /**
  * `POST /auth/email` — send a sign-in link to this address, in this language. Answered `202` whatever
- * the address: whether an account has it is never said (D-138 §1).
+ * the address: whether an account has it is never said (D-138 §1). An invitation the asker holds rides
+ * in the link's fragment, since the tab that holds it is not the one the mail opens (D-138 §4).
  */
 export const EmailSignInRequest = FromClient({
   email: Type.String({ format: 'email', maxLength: 254 }),
   locale: SignInLocale,
+  invitation: Type.Optional(InvitationToken),
 });
 export type EmailSignInRequest = Static<typeof EmailSignInRequest>;
 

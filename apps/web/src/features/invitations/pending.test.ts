@@ -4,6 +4,7 @@ import {
   browserInvitationPorts,
   captureInvitation,
   forgetInvitation,
+  keepInvitation,
   pendingInvitation,
   type InvitationPorts,
 } from './pending';
@@ -82,5 +83,22 @@ describe('an invitation the page was opened with', () => {
     expect(pendingInvitation(browserInvitationPorts(), window.location)).toBe(TOKEN);
     forgetInvitation(browserInvitationPorts());
     expect(window.sessionStorage.getItem('purlay.invitation')).toBeNull();
+  });
+});
+
+describe('an invitation a sign-in link carried (D-138 §4)', () => {
+  test('is kept as one opened here would be, and found by what reads them', () => {
+    const tab = ports();
+    keepInvitation(TOKEN, tab);
+    expect(pendingInvitation(tab, { hash: '' })).toBe(TOKEN);
+  });
+
+  test('what is not a token is not kept, and storage that refuses is survived', () => {
+    const tab = ports();
+    keepInvitation('not-a-token', tab);
+    expect(tab.kept.size).toBe(0);
+    expect(() => {
+      keepInvitation(TOKEN, ports(true));
+    }).not.toThrow();
   });
 });

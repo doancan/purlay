@@ -651,6 +651,33 @@ describe('the endpoints', () => {
     expect(everywhere.calls[0]).toMatchObject({ method: 'POST', url: '/auth/logout-all' });
   });
 
+  test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
+    const methods = harness({ email: true });
+    expect(await methods.api.authMethods()).toEqual({ email: true });
+    expect(methods.calls[0]).toMatchObject({ method: 'GET', url: '/api/auth/methods' });
+
+    const token = 'a'.repeat(64);
+    const asked = harness(null);
+    await asked.api.requestEmailSignIn({
+      email: 'a@example.test',
+      locale: 'tr',
+      invitation: token,
+    });
+    expect(asked.calls[0]).toEqual({
+      method: 'POST',
+      url: '/auth/email',
+      body: { email: 'a@example.test', locale: 'tr', invitation: token },
+    });
+
+    const shown = harness({ email: 'a@example.test' });
+    expect(await shown.api.previewEmailSignIn(token)).toEqual({ email: 'a@example.test' });
+    expect(shown.calls[0]).toEqual({ method: 'POST', url: '/auth/email/preview', body: { token } });
+
+    const spent = harness(null);
+    await spent.api.consumeEmailSignIn(token);
+    expect(spent.calls[0]).toEqual({ method: 'POST', url: '/auth/email/consume', body: { token } });
+  });
+
   test('an abandoned read carries the signal', async () => {
     let signal: AbortSignal | undefined;
     const fetchFn = ((_url: string, init: RequestInit) => {

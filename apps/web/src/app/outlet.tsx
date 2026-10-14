@@ -27,6 +27,7 @@ import { NotFound } from '../features/shell/not-found';
 import { Shell } from '../features/shell/shell';
 import { WorkspaceHome } from '../features/shell/workspace-home';
 import { SignInScreen } from '../features/sign-in/sign-in-screen';
+import { EmailSignInScreen } from '../features/sign-in/email-sign-in-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
@@ -77,6 +78,8 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
   switch (match.name) {
     case 'signIn':
       return <SignInScreen />;
+    case 'signInEmail':
+      return <EmailSignInScreen />;
     case 'home':
       return (
         <SessionGate>

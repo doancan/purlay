@@ -73,6 +73,20 @@ describe('integration: asking for a sign-in link', () => {
     });
   });
 
+  test('an invitation the asker holds rides in the link’s fragment, after the token', async () => {
+    await withRollback(async (db) => {
+      const invitation = 'c'.repeat(64);
+      const sent = await requestSignInLink(
+        db,
+        { clock: fixedClock(NOW), appUrl: APP, log: aRecordingLogger().log },
+        { email: 'invited@example.test', locale: 'en', invitation },
+      );
+      const token = tokenIn(sent?.text ?? '');
+      expect(sent?.text).toContain(`${APP}/sign-in/email#${token}.${invitation}\n`);
+      expect(sent?.html).toContain(`href="${APP}/sign-in/email#${token}.${invitation}"`);
+    });
+  });
+
   test('an email account’s address gets a link; a GitHub account’s, a word to use GitHub and no link', async () => {
     await withRollback(async (db) => {
       const viaGitHub = await aUserRow(db, 'octo');

@@ -1,6 +1,6 @@
 /**
- * Sign in. One button: GitHub is the only way in (`API.md` §2), and the click is a
- * full navigation — the server answers with a redirect to GitHub and the callback
+ * Sign in. GitHub always, and a link by email where the server can send one (D-138); the GitHub
+ * click is a full navigation — the server answers with a redirect to GitHub and the callback
  * lands back on this origin with a session cookie, none of which a router can do.
  *
  * Already signed in is not a reason to look at this page: the identity is asked for
@@ -24,6 +24,7 @@ import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { Icon } from '../../components/icon';
 import { LogoMark } from '../shell/notice';
+import { EmailSignInForm } from './email-sign-in-form';
 
 /** The sentence for each reason. A `Record`, so a reason added to the contract is a compile error here. */
 const FAILURE_SENTENCE = {
@@ -73,6 +74,7 @@ export const SignInScreen = (): React.JSX.Element => {
           </a>
           <p className="text-caption text-ink-muted">{t('signIn.scope')}</p>
         </div>
+        <EmailSignInForm />
       </section>
     </Main>
   );

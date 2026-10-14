@@ -38,6 +38,19 @@ export const captureInvitation = (
   ports.replace('/invite');
 };
 
+/**
+ * An invitation that arrived another way — in a sign-in link's fragment (D-138 §4) — kept for this tab
+ * as one opened here would be. One that is not a token is not kept.
+ */
+export const keepInvitation = (token: string, ports: InvitationPorts): void => {
+  if (!TOKEN.test(token)) return;
+  try {
+    ports.storage?.setItem(KEY, token);
+  } catch {
+    // Unkept: the person opens the invitation again, which still works until it expires.
+  }
+};
+
 /** The token this tab holds, if any — from storage, or still in the address if storage refused it. */
 export const pendingInvitation = (
   ports: InvitationPorts,

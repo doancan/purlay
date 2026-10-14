@@ -17,6 +17,8 @@ import { SIGN_IN_PATH } from '@purlay/types';
 const ROUTES = {
   // The API sends a failed sign-in back here, so the contract spells it (D-121).
   signIn: SIGN_IN_PATH,
+  // A sign-in link's page; its token is in the fragment, never the path (D-138 §4).
+  signInEmail: `${SIGN_IN_PATH}/email`,
   invite: '/invite',
   home: '/',
   workspace: '/w/:slug',

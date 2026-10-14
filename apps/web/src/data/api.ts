@@ -33,6 +33,9 @@ import {
   type SavePostmortemRequest,
   InvitationPage,
   InvitationPreview,
+  AuthMethods,
+  EmailSignInPreview,
+  type EmailSignInRequest,
   NotificationPage,
   PushKeyResponse,
   SavedIds,
@@ -264,6 +267,14 @@ export interface Api {
   /** Throws away one's own upload that was never sent (D-109 §5). */
   readonly discardAttachment: (attachmentId: string) => Promise<void>;
 
+  /** Which ways in this server offers: GitHub always, email when mail is configured (D-138 §6). */
+  readonly authMethods: (signal?: AbortSignal) => Promise<AuthMethods>;
+  /** Asks for a sign-in link; `202` whatever the address (D-138 §1). */
+  readonly requestEmailSignIn: (input: EmailSignInRequest) => Promise<void>;
+  /** The address a link was sent to, without spending it (D-138 §4). */
+  readonly previewEmailSignIn: (token: string, signal?: AbortSignal) => Promise<EmailSignInPreview>;
+  /** Spends the link; the answer sets the session cookie. */
+  readonly consumeEmailSignIn: (token: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -631,6 +642,18 @@ export const createApi = (http: Http): Api => {
     deleteMessage: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}`, options()),
     discardAttachment: (attachmentId) =>
       http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
+    authMethods: (signal) =>
+      http.request('GET', '/api/auth/methods', AuthMethods, options({}, signal)),
+    requestEmailSignIn: (input) => http.send('POST', '/auth/email', options({ body: input })),
+    previewEmailSignIn: (token, signal) =>
+      http.request(
+        'POST',
+        '/auth/email/preview',
+        EmailSignInPreview,
+        options({ body: { token } }, signal),
+      ),
+    consumeEmailSignIn: (token) =>
+      http.send('POST', '/auth/email/consume', options({ body: { token } })),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),

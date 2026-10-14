@@ -314,13 +314,17 @@ describe('the connection', () => {
 
 describe('the sign-in screen', () => {
   const out = (): Api =>
-    anApi({ me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')) });
+    anApi({
+      me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
+      authMethods: () => Promise.resolve({ email: false }),
+    });
 
-  test('is one button to GitHub, which is a real navigation', async () => {
+  test('without mail, is one button to GitHub, which is a real navigation', async () => {
     const view = await visit('/sign-in', out());
     expect(view.getByRole('link', { name: 'Continue with GitHub' }).getAttribute('href')).toBe(
       '/auth/github',
     );
+    expect(view.queryByRole('textbox')).toBeNull();
   });
 
   // Every reason the API can send a sign-in back with, and the address shapes besides (D-121).
