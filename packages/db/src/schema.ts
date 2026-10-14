@@ -238,6 +238,7 @@ export interface Notifications {
 
 export interface ObjectDeletions {
   attempts: Generated<number>;
+  due_at: Generated<Timestamp>;
   enqueued_at: Generated<Timestamp>;
   last_attempt_at: Timestamp | null;
   storage_key: string;

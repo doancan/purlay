@@ -1326,6 +1326,9 @@ CREATE TABLE object_deletions (
     enqueued_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     attempts         INTEGER NOT NULL DEFAULT 0,
     last_attempt_at  TIMESTAMPTZ,
+    -- When the sweep may take it (0042). An upload writes its keys here before its object, due an
+    -- hour later, and takes them out in the transaction that inserts its row (#607).
+    due_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT object_deletions_key_in_a_workspace CHECK (storage_key LIKE 'w/%'),
     CONSTRAINT object_deletions_attempts CHECK (attempts >= 0)
@@ -1471,6 +1474,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0039_retention_index.sql     idx_messages_workspace_age replaces idx_messages_workspace: the purge's read by age  (D-139)
 0040_workspace_exports.sql   workspace_exports: an owner's export, made in the background, downloaded once  (D-140)
 0041_object_deletions.sql    object_deletions: objects whose rows are gone, until the store lets them go  (D-141)
+0042_object_deletions_due.sql object_deletions.due_at: an upload's keys, written ahead, due after a grace  (D-141 §4)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

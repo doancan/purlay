@@ -182,7 +182,7 @@ describe('integration: when the store refuses', () => {
     });
   });
 
-  test('a refused upload whose object cannot be deleted says so, loudly, naming the key', async () => {
+  test('a refused upload whose object cannot be deleted says so, loudly, naming the key — and it waits to be tried again', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const store = aMemoryStore();
@@ -192,9 +192,20 @@ describe('integration: when the store refuses', () => {
       expect(await refusalOf(upload(db, store, room, 'alice', { bytes: 5 }, log))).toBe(
         'STORAGE_QUOTA_EXCEEDED',
       );
-      const line = lines.find((l) => l['msg'] === 'an upload’s object was left behind');
+      const line = lines.find(
+        (l) =>
+          l['msg'] === 'an object could not be deleted from storage; it waits to be tried again',
+      );
       expect(line?.['level']).toBe('error');
       expect(String(line?.['key'])).toContain(`w/${room.workspaceId}/`);
+      // Not forgotten: still in the queue, its attempt counted, for `sweep:deletions` (#607).
+      expect(
+        await db
+          .selectFrom('object_deletions')
+          .select(['storage_key', 'attempts'])
+          .where('storage_key', '=', String(line?.['key']))
+          .execute(),
+      ).toEqual([{ storage_key: String(line?.['key']), attempts: 1 }]);
     });
   });
 

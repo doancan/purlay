@@ -29,7 +29,12 @@ import {
 import { attachmentNotFound } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
-import { drainObjectDeletions, enqueueObjectDeletions } from './deletions';
+import {
+  claimUploadKeys,
+  drainObjectDeletions,
+  enqueueObjectDeletions,
+  writeUploadKeysAhead,
+} from './deletions';
 import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
@@ -140,14 +145,22 @@ export const storeUpload = async (
   const key = `${workspacePrefix(context.workspaceId)}${input.id}/${crypto.randomUUID()}`;
   const thumbnailKey = image === null ? null : `${key}.thumb`;
   const keys = thumbnailKey === null ? [key] : [key, thumbnailKey];
-  await storage.put(key, stored, image === null ? 'application/octet-stream' : 'image/webp');
-  if (image !== null && thumbnailKey !== null) {
-    try {
+  // Named before they exist (#607): a process that stops before the row is inserted leaves keys the
+  // sweep will take, never objects nothing names.
+  await atomically(async (transaction) => {
+    await writeUploadKeysAhead(transaction, keys);
+  });
+  const letGo = async (): Promise<void> => {
+    await drainObjectDeletions({ atomically, storage, log }, keys);
+  };
+  try {
+    await storage.put(key, stored, image === null ? 'application/octet-stream' : 'image/webp');
+    if (image !== null && thumbnailKey !== null) {
       await storage.put(thumbnailKey, image.thumbnail, 'image/webp');
-    } catch (error) {
-      await removeLeftovers(storage, log, [key]);
-      throw error;
     }
+  } catch (error) {
+    await letGo();
+    throw error;
   }
 
   try {
@@ -213,13 +226,15 @@ export const storeUpload = async (
         })
         .returning(ATTACHMENT_COLUMNS)
         .executeTakeFirstOrThrow();
+      // The row names them now: no longer the queue's.
+      await claimUploadKeys(transaction, keys);
       return { attachment: asAttachment(row), created: true, own: true };
     }).then(async (outcome) => {
-      if (!outcome.own) await removeLeftovers(storage, log, keys);
+      if (!outcome.own) await letGo();
       return { attachment: outcome.attachment, created: outcome.created };
     });
   } catch (error) {
-    await removeLeftovers(storage, log, keys);
+    await letGo();
     throw error;
   }
 };
@@ -252,26 +267,4 @@ export const discardUpload = async (
     return named;
   });
   await drainObjectDeletions({ atomically, storage, log }, keys);
-};
-
-/**
- * Deletes objects of an upload whose row never committed — nothing names them, so nothing queues them
- * (D-141 leaves this window open: a stop between the put and this delete leaves them). One that
- * cannot be deleted is reported, never dropped. Answers how many were left behind.
- */
-const removeLeftovers = async (
-  storage: ObjectStore,
-  log: Logger,
-  keys: readonly string[],
-): Promise<number> => {
-  let left = 0;
-  for (const key of keys) {
-    try {
-      await storage.delete(key);
-    } catch (error) {
-      left += 1;
-      log.error('an upload’s object was left behind', { key, error });
-    }
-  }
-  return left;
 };

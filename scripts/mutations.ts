@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'upload-objects-written-before-they-are-named',
+    why: 'a process that stops between the store’s write and the row’s insert leaves objects nothing names',
+    file: 'apps/api/src/modules/attachments/uploads.ts',
+    find: '    await writeUploadKeysAhead(transaction, keys);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/attachments/deletions.integration.test.ts'],
+  },
+  {
+    id: 'sweep-takes-an-upload-on-its-way',
+    why: 'the sweep deletes the object of an upload still on its way, and the row it then inserts names nothing',
+    file: 'apps/api/src/modules/attachments/deletions.ts',
+    find: "      .where('due_at', '<=', sql<Date>`now()`)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/attachments/deletions.integration.test.ts'],
+  },
+  {
     id: 'push-sent-while-its-person-is-looking',
     why: 'the phone buzzes for what its person is looking at on their desk',
     file: 'apps/api/src/modules/push/sender.ts',
@@ -2553,9 +2569,10 @@ export const MUTATIONS: readonly Mutation[] = [
   {
     id: 'upload-leftover-dropped-quietly',
     why: 'an object no row points at is left in the bucket with nothing said, and the storage is never found',
-    file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: "      log.error('an upload’s object was left behind', { key, error });\n",
-    replace: '',
+    file: 'apps/api/src/modules/attachments/deletions.ts',
+    find: "      log.error('an object could not be deleted from storage; it waits to be tried again', {\n",
+    replace:
+      "      log.debug('an object could not be deleted from storage; it waits to be tried again', {\n",
     tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
   },
   {
@@ -2603,8 +2620,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'image-thumbnail-left-behind',
     why: 'a refused image’s thumbnail stays in the bucket with no row pointing at it',
     file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: '    await removeLeftovers(storage, log, keys);\n    throw error;\n',
-    replace: '    await removeLeftovers(storage, log, [key]);\n    throw error;\n',
+    find: '    await drainObjectDeletions({ atomically, storage, log }, keys);\n  };\n',
+    replace: '    await drainObjectDeletions({ atomically, storage, log }, [key]);\n  };\n',
     tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
   },
   {
