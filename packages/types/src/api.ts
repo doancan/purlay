@@ -405,6 +405,8 @@ export const AUDIT_ACTIONS = [
   'channel.archived',
   'integration.token_set',
   'integration.token_removed',
+  'integration.feed_created',
+  'integration.feed_removed',
   'invitation.created',
   'invitation.revoked',
   'message.removed_by_moderator',
@@ -713,3 +715,74 @@ export const UpdateProfileRequest = FromClient({
   ),
 });
 export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
+
+// ── A repository's feed into a channel (#79, D-134) ────────────────────────
+
+/** The events a feed may post (D-134 §1): not CI, checks or deploys. */
+export const GITHUB_FEED_EVENTS = ['push', 'pull_request', 'issues', 'release'] as const;
+export const GitHubFeedEventName = Type.Union(GITHUB_FEED_EVENTS.map((name) => Type.Literal(name)));
+export type GitHubFeedEventName = Static<typeof GitHubFeedEventName>;
+
+/** How many repositories one channel may hear from. */
+export const GITHUB_FEEDS_PER_CHANNEL_MAX = 10;
+
+/**
+ * Why a feed's last delivery was not posted, said where the feed was set up (D-134 §8). A bad
+ * signature is not one: anybody may send one, and it would bury a real failure.
+ */
+export const GitHubFeedFailure = Type.Union([
+  /** The channel was archived: its feeds post nowhere. */
+  Type.Literal('channel_archived'),
+  /** The delivery was from another repository than the feed's first. */
+  Type.Literal('repository_mismatch'),
+  /** Signed, but not an event of the shape GitHub documents. */
+  Type.Literal('payload_invalid'),
+]);
+export type GitHubFeedFailure = Static<typeof GitHubFeedFailure>;
+
+export const GitHubFeed = Type.Object({
+  id: Uuid,
+  channelId: Uuid,
+  /** `owner/name`, in lower case, as GitHub compares it. */
+  repository: Type.String({ minLength: 3, maxLength: 140 }),
+  events: Type.Array(GitHubFeedEventName, { minItems: 1, uniqueItems: true }),
+  createdAt: Timestamp,
+  /** When GitHub last reached it with a signed delivery; null until it has. */
+  lastDeliveryAt: Type.Union([Timestamp, Type.Null()]),
+  lastFailure: Type.Union([Type.Object({ reason: GitHubFeedFailure, at: Timestamp }), Type.Null()]),
+});
+export type GitHubFeed = Static<typeof GitHubFeed>;
+
+/** `GET /api/channels/:channelId/github-feeds` — an owner's or an admin's; oldest first, bounded. */
+export const GitHubFeedList = Type.Array(GitHubFeed, { maxItems: GITHUB_FEEDS_PER_CHANNEL_MAX });
+export type GitHubFeedList = Static<typeof GitHubFeedList>;
+
+/**
+ * A repository as GitHub names it: an owner of up to 39 letters, digits and hyphens, not starting with
+ * a hyphen; a name of up to 100 letters, digits, `.`, `_` and `-`, never `.` or `..`. Lowered, it is
+ * exactly what `github_repo_feeds_repository_shape` holds (bound by `ingress/http/feeds.integration.test.ts`).
+ */
+export const GITHUB_REPOSITORY_PATTERN =
+  '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.\\.?$)[A-Za-z0-9._-]{1,100}$';
+
+/** `POST /api/channels/:channelId/github-feeds` — a repository as GitHub writes it, either case. */
+export const CreateGitHubFeedRequest = FromClient({
+  repository: Type.String({ pattern: GITHUB_REPOSITORY_PATTERN }),
+  events: Type.Array(GitHubFeedEventName, {
+    minItems: 1,
+    maxItems: GITHUB_FEED_EVENTS.length,
+    uniqueItems: true,
+  }),
+});
+export type CreateGitHubFeedRequest = Static<typeof CreateGitHubFeedRequest>;
+
+/**
+ * The feed made, with what GitHub needs to reach it: the address, on this server's origin, and the
+ * secret — in this answer only, never again (D-134 §3).
+ */
+export const CreatedGitHubFeed = Type.Object({
+  feed: GitHubFeed,
+  webhookPath: Type.String({ pattern: '^/api/webhooks/github/[0-9a-f-]{36}$' }),
+  secret: Type.String({ pattern: '^[0-9a-f]{64}$' }),
+});
+export type CreatedGitHubFeed = Static<typeof CreatedGitHubFeed>;

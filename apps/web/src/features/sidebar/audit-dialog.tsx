@@ -100,6 +100,16 @@ export const AuditDialog = ({
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':
         return t('audit.action.integration.token_removed', { actor });
+      case 'integration.feed_created':
+        return t('audit.action.integration.feed_created', {
+          actor,
+          repository: entry.metadata['repository'] ?? '',
+        });
+      case 'integration.feed_removed':
+        return t('audit.action.integration.feed_removed', {
+          actor,
+          repository: entry.metadata['repository'] ?? '',
+        });
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':

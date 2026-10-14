@@ -173,6 +173,8 @@ export const en = {
   'audit.action.channel.archived': '{actor} archived {channel}',
   'audit.action.integration.token_set': '{actor} set the GitHub token',
   'audit.action.integration.token_removed': '{actor} removed the GitHub token',
+  'audit.action.integration.feed_created': '{actor} connected {repository} to a channel',
+  'audit.action.integration.feed_removed': '{actor} disconnected {repository} from a channel',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
@@ -715,6 +717,10 @@ export const en = {
   'failure.savedLimit':
     'That is as many saved messages as a workspace keeps. Complete or remove some first.',
   'failure.pinsLimit': 'That is as many pins as a channel keeps. Unpin one first.',
+  'failure.githubFeedsLimit':
+    'That is as many repositories as a channel hears from. Disconnect one first.',
+  'failure.githubFeedExists':
+    'This channel already hears from that repository. To get a new secret, disconnect it and connect it again.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",

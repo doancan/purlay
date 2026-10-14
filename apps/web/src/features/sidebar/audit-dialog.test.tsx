@@ -159,6 +159,30 @@ describe('the audit log', () => {
     await expectNoAxeViolations(view.getByRole('dialog'));
   });
 
+  test('a repository connected to a channel and disconnected is said with the repository (D-134)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'integration.feed_removed',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api' },
+            }),
+            anEntry(1, {
+              action: 'integration.feed_created',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} disconnected acme/api from a channel`,
+      `${ME.displayName} connected acme/api to a channel`,
+    ]);
+  });
+
   test('an action this client does not know is said by its name; an erased actor or a gone channel is said as such', async () => {
     const view = await openDialog({
       audit: () =>

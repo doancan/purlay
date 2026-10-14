@@ -60,7 +60,7 @@ describe('every served endpoint has a cross-tenant case', () => {
     // A parser that matched nothing would make every assertion below vacuous.
     expect(keys.has('GET /api/me')).toBe(true);
     expect(keys.has('GET /api/channels/:channelId/messages')).toBe(true);
-    expect(keys.has('POST /api/webhooks/github')).toBe(true);
+    expect(keys.has('POST /api/webhooks/github/:feedId')).toBe(true);
   });
 
   test('the router check can answer no', async () => {

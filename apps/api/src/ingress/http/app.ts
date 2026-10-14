@@ -123,6 +123,7 @@ import { discardAttachment, downloadAttachment } from './attachments';
 import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { starChannel } from './star';
+import { connectFeed, disconnectFeed, listFeeds } from './feeds';
 import { deletePin, listPins, putPin } from './pins';
 
 export interface Dependencies {
@@ -479,6 +480,25 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/saved/ids',
       async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
     )
+    .get(
+      '/api/channels/:channelId/github-feeds',
+      async ({ request, params }) => await listFeeds(dependencies, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/github-feeds', async ({ request, params, body, set }) => {
+      const created = await connectFeed(
+        { ...dependencies, cipher },
+        request,
+        params.channelId,
+        body,
+      );
+      set.status = 201;
+      return created;
+    })
+    .delete('/api/channels/:channelId/github-feeds/:feedId', async ({ request, params, set }) => {
+      await disconnectFeed(dependencies, request, params.channelId, params.feedId);
+      set.status = 204;
+      return null;
+    })
     .get(
       '/api/channels/:channelId/pins',
       async ({ request, params }) => await listPins(dependencies, request, params.channelId),
