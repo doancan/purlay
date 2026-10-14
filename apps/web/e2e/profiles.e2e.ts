@@ -7,7 +7,7 @@
  * In a workspace of the test's own, so the seeded people, which the screenshots draw, keep theirs.
  */
 import { expect, test } from './fixtures';
-import { apiAs, openNav, shellReady } from './support';
+import { apiAs, isNarrow, openNav, shellReady } from './support';
 
 test.describe('profiles', () => {
   test('set by one person, shown to the other in their conversation at once', async ({
@@ -34,9 +34,6 @@ test.describe('profiles', () => {
     const watcher = await asPerson('bob');
     await watcher.goto(path);
     await shellReady(watcher);
-    const heading = watcher.getByRole('banner').or(watcher.locator('header')).first();
-    await expect(heading).not.toContainText('local time');
-
     await signIn('alice');
     await page.goto(`/w/${slug}`);
     await shellReady(page);
@@ -50,14 +47,19 @@ test.describe('profiles', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog.getByRole('status')).toHaveText('Saved.');
 
-    // Told by the socket, read again: no reload on Bob's side.
-    await expect(watcher.locator('header').first()).toContainText('local time');
-    await expect(watcher.locator('header').first()).toContainText('On call this week', {
-      ignoreCase: false,
-    });
-    await watcher.getByRole('button', { name: /profile$/ }).click();
+    // Told by the socket, read again: no reload on Bob's side. On a wide window the time and status
+    // are beside her name; on a narrow one there is no room, and her profile says them.
+    const header = watcher.locator('header').first();
+    if (isNarrow(watcher)) {
+      await expect(header.getByText('local time')).toBeHidden();
+    } else {
+      await expect(header.getByText(/local time$/)).toBeVisible();
+      await expect(header.getByText('On call this week')).toBeVisible();
+    }
+    await watcher.getByRole('heading', { level: 1 }).getByRole('button').click();
     const panel = watcher.getByRole('complementary', { name: /^Profile/ });
-    await expect(panel).toContainText('Platform lead');
-    await expect(panel).toContainText('Asia/Tokyo');
+    await expect(panel.getByText('Platform lead')).toBeVisible();
+    await expect(panel.getByText(/local time$/)).toBeVisible();
+    await expect(panel.getByText('Asia/Tokyo')).toBeVisible();
   });
 });

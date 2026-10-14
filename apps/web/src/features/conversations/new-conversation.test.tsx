@@ -295,7 +295,7 @@ describe('a group’s details', () => {
     });
     await settle();
     const heading = view.getByRole('heading', { level: 1 });
-    const name = within(heading).getByRole('button', { name: /profile$/ });
+    const name = within(heading).getByRole('button');
     await person().click(name);
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();

@@ -6,7 +6,8 @@
 import type { User } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Avatar } from '../../ui/avatar';
-import { PanelFrame, usePanelFocus } from '../channel/panel-frame';
+import { PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
+import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { useSidePanel } from '../channel/side-panel';
 import { useLocalTime, useMember } from './local-time';
 
@@ -14,11 +15,19 @@ export const PROFILE_PANEL_ID = 'conversation-profile';
 
 const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Element => {
   const { t } = useI18n();
-  const focus = usePanelFocus(false, 0);
-  const profile = useMember(person.id)?.profile;
+  const { member, members } = useMember(person.id);
+  const focus = usePanelFocus(
+    members.isFetching,
+    Math.max(members.dataUpdatedAt, members.errorUpdatedAt),
+  );
+  const profile = member?.profile;
   const time = useLocalTime(profile);
   const empty =
-    profile === undefined || (profile.title ?? profile.status ?? profile.timeZone) === null;
+    profile !== undefined && (profile.title ?? profile.status ?? profile.timeZone) === null;
+  const readAgain = (): void => {
+    focus.answering();
+    void members.refetch();
+  };
   return (
     <PanelFrame
       id={PROFILE_PANEL_ID}
@@ -27,28 +36,50 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
       closeLabel={t('profile.close')}
       focus={focus}
     >
+      {members.isRefetchError && (
+        <StaleBanner message={t('profile.staleFailed')} onRetry={readAgain} />
+      )}
       <section className="flex flex-col items-start gap-3 p-4">
         <Avatar name={person.displayName} username={person.username} size="lg" />
         <div className="flex flex-col gap-1">
           <p className="text-title font-semibold text-ink">{person.displayName}</p>
           <p className="font-mono text-label text-ink-muted">{`@${person.username}`}</p>
         </div>
-        {profile?.title != null && <p className="text-body text-ink">{profile.title}</p>}
-        {profile?.status != null && (
-          <p className="whitespace-pre-wrap break-words text-body text-ink-muted">
-            {profile.status}
-          </p>
-        )}
-        {profile?.timeZone != null && (
-          <div className="flex flex-col gap-1 text-label">
-            {time !== null && <p className="text-ink">{t('profile.localTime', { time })}</p>}
-            <p className="text-ink-muted">
-              {`${t('profile.zone')} · `}
-              <span className="font-mono text-ink">{profile.timeZone}</span>
-            </p>
+        {members.isPending ? (
+          <LoadingStatus label={t('profile.loading')} className="flex w-full flex-col gap-2">
+            <Skeleton className="w-members" />
+            <Skeleton className="w-sidebar" />
+          </LoadingStatus>
+        ) : members.isError && members.data === undefined ? (
+          <div role="alert" className="flex items-center gap-2 text-label text-danger-text">
+            {t('profile.failed')}
+            <span aria-hidden="true">·</span>
+            <button type="button" className="underline" onClick={readAgain}>
+              {t('common.retry')}
+            </button>
           </div>
+        ) : (
+          <>
+            {profile?.title != null && <p className="text-body text-ink">{profile.title}</p>}
+            {profile?.status != null && (
+              <p className="whitespace-pre-wrap break-words text-body text-ink-muted">
+                {profile.status}
+              </p>
+            )}
+            {profile?.timeZone != null && (
+              <div className="flex flex-col gap-1 text-label">
+                {time !== null && <p className="text-ink">{t('profile.localTime', { time })}</p>}
+                <p className="text-ink-muted">
+                  {`${t('profile.zone')} · `}
+                  <span className="font-mono text-ink">{profile.timeZone}</span>
+                </p>
+              </div>
+            )}
+            {(empty || member === undefined) && (
+              <p className="text-body text-ink-muted">{t('profile.noProfile')}</p>
+            )}
+          </>
         )}
-        {empty && <p className="text-body text-ink-muted">{t('profile.noProfile')}</p>}
       </section>
     </PanelFrame>
   );

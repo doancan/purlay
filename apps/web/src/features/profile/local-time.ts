@@ -24,17 +24,31 @@ const timeIn = (timeZone: string, at: number, locale: string): string | null => 
   return null;
 };
 
-/** The time where a profile's person is, now; null when they have no zone or it cannot be shown. */
-export const useLocalTime = (profile: Profile | undefined): string | null => {
+/** The current minute, for a list that shows many people's times from one clock, not one each. */
+export const useMinute = (): number => useNowMinute(useFeedPorts());
+
+/** The time where a profile's person is, at a minute; null when they have no zone or it cannot be shown. */
+export const useTimeAt = (profile: Profile | undefined, now: number): string | null => {
   const { locale } = useI18n();
-  const now = useNowMinute(useFeedPorts());
   const zone = profile?.timeZone ?? null;
   return useMemo(() => (zone === null ? null : timeIn(zone, now, locale)), [zone, now, locale]);
 };
 
-/** A workspace member by their user id, from the members the workspace already holds. */
-export const useMember = (userId: string): WorkspaceMember | undefined => {
+/** The time where a profile's person is, now. */
+export const useLocalTime = (profile: Profile | undefined): string | null =>
+  useTimeAt(profile, useMinute());
+
+/**
+ * A workspace member by their user id, from the members the workspace already holds — with the
+ * read's own state, so a list still loading or failed is not taken for a person with no profile.
+ */
+export const useMember = (
+  userId: string,
+): {
+  readonly member: WorkspaceMember | undefined;
+  readonly members: ReturnType<typeof useMembers>;
+} => {
   const { workspace } = useWorkspace();
   const members = useMembers(workspace.id);
-  return members.data?.find((member) => member.user.id === userId);
+  return { member: members.data?.find((one) => one.user.id === userId), members };
 };

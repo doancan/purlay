@@ -5742,7 +5742,7 @@ and an avatar, which stay GitHub's (D-11). D-125 put profiles in Phase 2.
 6. **Shown where people are met**: a conversation with one other person is headed by their local
    time and status and opens their profile beside it; the picker shows each person's title and local
    time; your own is set from the account menu. A zone a browser cannot format in shows no time, and
-   the profile still names it.
+   the profile still names it. A note to yourself shows none of yours beside your name.
 7. **Personal data**: erasing an account clears the three (D-27 §2), and the status line, free words
    as a message's are, is never logged (`ARCHITECTURE.md` §10). A client back from a gap reads the
    members again, since no frame will say what changed meanwhile.

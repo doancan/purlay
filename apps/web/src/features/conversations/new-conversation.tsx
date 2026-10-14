@@ -19,7 +19,7 @@ import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
-import { useLocalTime } from '../profile/local-time';
+import { useMinute, useTimeAt } from '../profile/local-time';
 import type { Profile } from '@purlay/types';
 
 /** The people besides the person themselves. */
@@ -28,11 +28,13 @@ const OTHERS_MAX = CONVERSATION_PEOPLE_MAX - 1;
 /** What somebody does and the time it is where they are, under their name where people are picked (D-131). */
 const PersonDetail = ({
   profile,
+  now,
 }: {
   readonly profile: Profile | undefined;
+  readonly now: number;
 }): React.JSX.Element | null => {
   const { t } = useI18n();
-  const time = useLocalTime(profile);
+  const time = useTimeAt(profile, now);
   const parts = [
     profile?.title ?? null,
     time === null ? null : t('profile.localTime', { time }),
@@ -64,6 +66,8 @@ export const NewConversationDialog = ({
   const [failed, setFailed] = useState<string | null>(null);
 
   const everybody = (members.data ?? []).map((member) => member.user);
+  // One clock for every row's time, not a timer each.
+  const now = useMinute();
   const profiles = new Map((members.data ?? []).map((member) => [member.user.id, member.profile]));
   const others = everybody.filter((person) => person.id !== user.id);
   const wanted = filter.trim().toLowerCase();
@@ -139,7 +143,7 @@ export const NewConversationDialog = ({
                   {person.displayName}
                   <span className="text-ink-muted">{` @${person.username}`}</span>
                 </span>
-                <PersonDetail profile={profiles.get(person.id)} />
+                <PersonDetail profile={profiles.get(person.id)} now={now} />
               </span>
               <Button
                 variant={chosen ? 'primary' : 'secondary'}

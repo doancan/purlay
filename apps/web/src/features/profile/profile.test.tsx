@@ -24,6 +24,8 @@ import {
   someChannels,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
+import { feedWorld } from '../../testing/feed-world';
+import { FeedPortsContext } from '../channel/feed-ports';
 import { expectFocusOn } from '../../testing/focus';
 import { person } from '../../testing/user';
 
@@ -49,6 +51,10 @@ const withAlice = async (profile: Profile = TOKYO): Promise<ChannelView> =>
     messages: page([]),
   });
 
+/** The other person's name, which heads the conversation and opens their profile. */
+const nameOf = (view: ChannelView): HTMLElement =>
+  within(view.getByRole('heading', { level: 1 })).getByRole('button');
+
 /** The time at the feed's minute (12:00 UTC) in a zone, as an English reader reads it. */
 const at = (timeZone: string): string =>
   new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit', timeZone }).format(
@@ -73,7 +79,12 @@ describe('a conversation with one other person', () => {
 
   test('their name opens their profile beside it, and Esc gives focus back to the name', async () => {
     const view = await withAlice();
-    const name = view.getByRole('button', { name: `Open ${ALICE.displayName}’s profile` });
+    const name = nameOf(view);
+    // Its name is the one it shows (WCAG 2.5.3); what it does is said beside it.
+    expect(name.textContent).toBe('alice');
+    expect(document.getElementById(name.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+      `Open ${ALICE.displayName}’s profile`,
+    );
     await person().click(name);
     await settle();
     const panel = view.getByRole('complementary', { name: /^Profile/ });
@@ -81,20 +92,20 @@ describe('a conversation with one other person', () => {
     expect(panel.textContent).toContain('On call');
     expect(panel.textContent).toContain('Asia/Tokyo');
     expect(panel.textContent).toContain(`${at('Asia/Tokyo')} local time`);
-    expect(name.getAttribute('aria-expanded')).toBe('true');
+    expect(name.getAttribute('aria-pressed')).toBe('true');
     await expectNoAxeViolations(view.container);
 
     await person().keyboard('{Escape}');
     await settle();
     expect(view.queryByRole('complementary', { name: /^Profile/ })).toBeNull();
-    expectFocusOn(view.getByRole('button', { name: `Open ${ALICE.displayName}’s profile` }));
+    expectFocusOn(nameOf(view));
     view.unmountAll();
   });
 
   test('a zone this browser cannot format in shows no time, and the profile still names it', async () => {
     const view = await withAlice({ title: null, timeZone: 'Mars/Olympus_Mons', status: null });
     expect(view.container.querySelector('header')?.textContent).not.toContain('local time');
-    await person().click(view.getByRole('button', { name: /profile$/ }));
+    await person().click(nameOf(view));
     await settle();
     const panel = view.getByRole('complementary', { name: /^Profile/ });
     expect(panel.textContent).toContain('Mars/Olympus_Mons');
@@ -102,9 +113,58 @@ describe('a conversation with one other person', () => {
     view.unmountAll();
   });
 
+  test('the profile says it is loading, and that it failed, with Retry', async () => {
+    let refuse = true;
+    let answer: () => void = () => undefined;
+    const view = await mountChannel({
+      channelId: IDS.dm,
+      channels: [...someChannels(), conversation],
+      messages: page([]),
+      api: {
+        members: () =>
+          refuse
+            ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+            : new Promise((resolve) => {
+                answer = (): void => {
+                  resolve([
+                    { user: ME, role: 'owner', joinedAt: WHEN, profile: MINE },
+                    { user: ALICE, role: 'member', joinedAt: WHEN, profile: TOKYO },
+                  ]);
+                };
+              }),
+      },
+    });
+    await person().click(nameOf(view));
+    await settle();
+    const panel = view.getByRole('complementary', { name: /^Profile/ });
+    expect(within(panel).getByRole('alert').textContent).toContain('The profile did not load.');
+    expect(panel.textContent).not.toContain('Nothing here yet.');
+
+    refuse = false;
+    await person().click(within(panel).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(within(panel).getByRole('status').textContent).toContain('Loading the profile');
+    answer();
+    await settle();
+    expect(panel.textContent).toContain('Platform lead');
+    view.unmountAll();
+  });
+
+  test('a note to yourself shows no time or status of yours beside your name', async () => {
+    const view = await mountChannel({
+      channelId: IDS.dm,
+      channels: [...someChannels(), aChannel(IDS.dm, null, { type: 'direct_message', peer: ME })],
+      members: [{ user: ME, profile: TOKYO }],
+      messages: page([]),
+    });
+    expect(view.container.querySelector('header')?.textContent).not.toContain('local time');
+    expect(view.container.querySelector('header')?.textContent).not.toContain('On call');
+    view.unmountAll();
+  });
+
   test('a profile with nothing in it says so', async () => {
     const view = await withAlice({ title: null, timeZone: null, status: null });
-    await person().click(view.getByRole('button', { name: /profile$/ }));
+    await person().click(nameOf(view));
     await settle();
     expect(view.getByRole('complementary', { name: /^Profile/ }).textContent).toContain(
       'Nothing here yet.',
@@ -172,6 +232,46 @@ describe('your profile, from the account menu', () => {
     await person().click(await view.findByRole('menuitem', { name: 'Your profile…' }));
     await settle();
     expect(textbox(view, 'Status').value).toBe('');
+    view.unmount();
+  });
+
+  test('saved, the fields show what was saved at once, and focus goes back to the form', async () => {
+    const view = await openFrame({
+      updateProfile: () => Promise.resolve({ ...MINE, title: 'Staff engineer' }),
+    });
+    await person().clear(textbox(view, 'Title'));
+    await person().type(textbox(view, 'Title'), 'Staff engineer{Enter}');
+    await settle();
+    // The server's answer, not `/api/me` read again — which here still says "Engineer".
+    expect(textbox(view, 'Title').value).toBe('Staff engineer');
+    expectFocusOn(textbox(view, 'Title'));
+    view.unmount();
+  });
+
+  test('while a save is on its way the fields cannot change and the dialog does not close', async () => {
+    const view = await openFrame({ updateProfile: () => new Promise(() => undefined) });
+    await person().type(textbox(view, 'Status'), 'Out today');
+    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    expect(textbox(view, 'Status').readOnly).toBe(true);
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.getByRole('dialog')).toBeDefined();
+    view.unmount();
+  });
+
+  test('every field the server refuses is marked, each with its own words', async () => {
+    const view = await openFrame({
+      updateProfile: () =>
+        Promise.reject(
+          new ApiError(400, 'VALIDATION_FAILED', 'no', { title: 'bad', timeZone: 'unknown' }),
+        ),
+    });
+    await person().type(textbox(view, 'Status'), 'x');
+    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(textbox(view, 'Title').getAttribute('aria-invalid')).toBe('true');
+    expect(field(view, 'Time zone').getAttribute('aria-invalid')).toBe('true');
+    expect(textbox(view, 'Status').getAttribute('aria-invalid')).toBeNull();
     view.unmount();
   });
 
@@ -245,23 +345,28 @@ describe('your profile, from the account menu', () => {
 
 describe('where people are picked', () => {
   test('each says what they do and the time it is where they are', async () => {
-    const view = await renderApp(<Outlet />, {
-      path: `/w/acme/c/${IDS.api}`,
-      api: aSignedInApi({
-        members: () =>
-          Promise.resolve([
-            { user: ME, role: 'owner' as const, joinedAt: WHEN, profile: MINE },
-            { user: ALICE, role: 'member' as const, joinedAt: WHEN, profile: TOKYO },
-          ]),
-      }),
-    });
+    // The feed's fixed minute, not the wall clock's: the time shown is the one asserted.
+    const view = await renderApp(
+      <FeedPortsContext.Provider value={feedWorld().ports}>
+        <Outlet />
+      </FeedPortsContext.Provider>,
+      {
+        path: `/w/acme/c/${IDS.api}`,
+        api: aSignedInApi({
+          members: () =>
+            Promise.resolve([
+              { user: ME, role: 'owner' as const, joinedAt: WHEN, profile: MINE },
+              { user: ALICE, role: 'member' as const, joinedAt: WHEN, profile: TOKYO },
+            ]),
+        }),
+      },
+    );
     await settle();
     await person().click(view.getByRole('button', { name: 'New message' }));
     await settle();
     const dialog = view.getByRole('dialog');
     const row = within(dialog).getByText('@alice', { exact: false }).closest('li');
-    expect(row?.textContent).toContain('Platform lead · ');
-    expect(row?.textContent).toContain('local time');
+    expect(row?.textContent).toContain(`Platform lead · ${at('Asia/Tokyo')} local time`);
     view.unmount();
   });
 });

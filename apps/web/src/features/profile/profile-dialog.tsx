@@ -8,8 +8,14 @@
  * refusal says which field, in words, and keeps what you typed (`UX.md` §8).
  */
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
-import { PROFILE_STATUS_MAX, PROFILE_TITLE_MAX, type UpdateProfileRequest } from '@purlay/types';
+import { useId, useMemo, useRef, useState } from 'react';
+import {
+  PROFILE_STATUS_MAX,
+  PROFILE_TITLE_MAX,
+  type MeResponse,
+  type Profile,
+  type UpdateProfileRequest,
+} from '@purlay/types';
 import { useApi } from '../../data/api-provider';
 import { isApiError } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
@@ -28,6 +34,7 @@ const zonesHere = (): readonly string[] =>
 const deviceZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 type Field = 'title' | 'timeZone' | 'status';
+const FIELDS: readonly Field[] = ['title', 'timeZone', 'status'];
 
 export const ProfileDialog = ({
   open,
@@ -44,7 +51,10 @@ export const ProfileDialog = ({
   const zonesId = useId();
   const { profile } = useSession();
   const [edited, setEdited] = useState<Partial<Record<Field, string>>>({});
-  const [problem, setProblem] = useState<{ field: Field | 'form'; message: string } | null>(null);
+  // Each field the server refused, with what to say; `form` for what names no field.
+  const [problems, setProblems] = useState<Partial<Record<Field | 'form', string>>>({});
+  const zones = useMemo(zonesHere, []);
+  const firstField = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<'idle' | 'busy' | 'saved'>('idle');
 
   const shown = (field: Field): string => edited[field] ?? profile[field] ?? '';
@@ -55,21 +65,25 @@ export const ProfileDialog = ({
     return trimmed === '' ? null : trimmed;
   };
   const wanted: UpdateProfileRequest = Object.fromEntries(
-    (['title', 'timeZone', 'status'] as const)
-      .map((field) => [field, asked(field)] as const)
-      .filter(([field, value]) => value !== undefined && value !== profile[field]),
+    FIELDS.map((field) => [field, asked(field)] as const).filter(
+      ([field, value]) => value !== undefined && value !== profile[field],
+    ),
   );
   const changed = Object.keys(wanted).length > 0;
+
+  const busy = state === 'busy';
 
   const edit = (field: Field, value: string): void => {
     setEdited((now) => ({ ...now, [field]: value }));
     setState('idle');
   };
 
+  // Not closed while a save is on its way: its answer — saved, or refused and why — is said here.
   const close = (next: boolean): void => {
+    if (!next && busy) return;
     if (!next) {
       setEdited({});
-      setProblem(null);
+      setProblems({});
       setState('idle');
     }
     onOpenChange(next);
@@ -78,32 +92,45 @@ export const ProfileDialog = ({
   const submit = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
     setState('busy');
-    setProblem(null);
+    setProblems({});
+    let saved: Profile;
     try {
-      await api.updateProfile(wanted);
-      setEdited({});
-      setState('saved');
-      // Yours, and wherever you are a member: read again, as the frame tells the others to.
-      await Promise.all([
-        client.invalidateQueries({ queryKey: keys.me }),
-        client.invalidateQueries({ queryKey: families.members }),
-      ]);
+      saved = await api.updateProfile(wanted);
     } catch (failure) {
       setState('idle');
       if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
-        const field = (['timeZone', 'title', 'status'] as const).find((f) => f in failure.fields);
-        setProblem({
-          field: field ?? 'form',
-          message: t(field === 'timeZone' ? 'profile.zoneInvalid' : 'profile.wordsInvalid'),
-        });
+        const refused = FIELDS.filter((field) => field in failure.fields);
+        setProblems(
+          refused.length === 0
+            ? { form: `${t('profile.saveFailed')} ${describe(failure)}` }
+            : Object.fromEntries(
+                refused.map((field) => [
+                  field,
+                  t(field === 'timeZone' ? 'profile.zoneInvalid' : 'profile.wordsInvalid'),
+                ]),
+              ),
+        );
       } else {
-        setProblem({ field: 'form', message: `${t('profile.saveFailed')} ${describe(failure)}` });
+        setProblems({ form: `${t('profile.saveFailed')} ${describe(failure)}` });
       }
+      return;
     }
+    // The answer is the profile as it now is: drawn at once, not after `/api/me` is read again.
+    client.setQueryData<MeResponse>(keys.me, (me) =>
+      me === undefined ? me : { ...me, profile: saved },
+    );
+    setEdited({});
+    setState('saved');
+    // Focus leaves the Save that has nothing left to save, for the form it saved.
+    firstField.current?.focus();
+    // Wherever you are a member, your profile is read again — as the frame tells the others to.
+    void client.invalidateQueries({ queryKey: families.members });
   };
 
-  const errorOf = (field: Field): { error: string } | Record<string, never> =>
-    problem?.field === field ? { error: problem.message } : {};
+  const errorOf = (field: Field): { error: string } | Record<string, never> => {
+    const message = problems[field];
+    return message === undefined ? {} : { error: message };
+  };
 
   return (
     <Dialog
@@ -117,13 +144,7 @@ export const ProfileDialog = ({
           <p role="status" className="text-label text-ink-muted">
             {state === 'saved' ? t('profile.saved') : ''}
           </p>
-          <Button
-            type="submit"
-            form={formId}
-            variant="primary"
-            busy={state === 'busy'}
-            disabled={!changed}
-          >
+          <Button type="submit" form={formId} variant="primary" busy={busy} disabled={!changed}>
             {t('profile.save')}
           </Button>
         </>
@@ -137,6 +158,8 @@ export const ProfileDialog = ({
         className="flex flex-col gap-3"
       >
         <TextField
+          ref={firstField}
+          readOnly={busy}
           label={t('profile.titleLabel')}
           hint={t('profile.titleHint')}
           value={shown('title')}
@@ -148,6 +171,7 @@ export const ProfileDialog = ({
           }}
         />
         <TextField
+          readOnly={busy}
           label={t('profile.statusLabel')}
           hint={t('profile.statusHint')}
           value={shown('status')}
@@ -160,6 +184,7 @@ export const ProfileDialog = ({
         />
         <div className="flex flex-col gap-2">
           <TextField
+            readOnly={busy}
             label={t('profile.zoneLabel')}
             hint={t('profile.zoneHint')}
             value={shown('timeZone')}
@@ -172,7 +197,7 @@ export const ProfileDialog = ({
             }}
           />
           <datalist id={zonesId}>
-            {zonesHere().map((zone) => (
+            {zones.map((zone) => (
               <option key={zone} value={zone} />
             ))}
           </datalist>
@@ -187,9 +212,9 @@ export const ProfileDialog = ({
             </Button>
           </div>
         </div>
-        {problem?.field === 'form' && (
+        {problems.form !== undefined && (
           <p role="alert" className="text-label text-danger-text">
-            {problem.message}
+            {problems.form}
           </p>
         )}
       </form>

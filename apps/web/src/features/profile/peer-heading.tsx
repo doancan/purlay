@@ -4,7 +4,10 @@
  * message is not sent at three in their morning without knowing it.
  */
 import type { User } from '@purlay/types';
+import { useId } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
+import { VisuallyHidden } from '../../ui/visually-hidden';
+import { useSession } from '../session/session';
 import { useSidePanel } from '../channel/side-panel';
 import { useLocalTime, useMember } from './local-time';
 import { PROFILE_PANEL_ID } from './profile-panel';
@@ -18,17 +21,24 @@ export const PeerHeading = ({
 }): React.JSX.Element => {
   const { t } = useI18n();
   const side = useSidePanel();
-  const profile = useMember(peer.id)?.profile;
+  const { user } = useSession();
+  // Your own time and status, in a note to yourself, would only tell you what you know.
+  const self = peer.id === user.id;
+  const found = useMember(peer.id).member?.profile;
+  const profile = self ? undefined : found;
   const time = useLocalTime(profile);
   const open = side.panel === 'profile';
+  const hintId = useId();
   return (
     <>
       <h1 className="min-w-0 shrink-0 truncate text-title text-ink">
         <button
           type="button"
           data-panel-toggle="profile"
-          aria-label={t('profile.open', { name: peer.displayName })}
-          aria-expanded={open}
+          // The visible name stays the button's name, as it is the heading's (WCAG 2.5.3); what it
+          // does is said beside it.
+          aria-describedby={hintId}
+          aria-pressed={open}
           aria-controls={open ? PROFILE_PANEL_ID : undefined}
           className="max-w-full truncate rounded-sm hover:text-accent-text"
           onClick={() => {
@@ -39,6 +49,8 @@ export const PeerHeading = ({
           {title}
         </button>
       </h1>
+      {/* Beside the heading, not in it: the heading's name is the person's, and only that. */}
+      <VisuallyHidden id={hintId}>{t('profile.open', { name: peer.displayName })}</VisuallyHidden>
       {time !== null && (
         <span className="shrink-0 font-mono text-caption text-ink-muted max-narrow:hidden">
           {t('profile.localTime', { time })}
