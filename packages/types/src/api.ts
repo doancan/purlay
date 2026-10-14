@@ -963,3 +963,14 @@ export const EmailSignInRequest = FromClient({
   locale: SignInLocale,
 });
 export type EmailSignInRequest = Static<typeof EmailSignInRequest>;
+
+/**
+ * `POST /auth/email/preview` and `POST /auth/email/consume` — the token a link carried in its fragment
+ * (D-138 §4), posted by the page that read it; never in a path, so never in a log.
+ */
+export const EmailSignInToken = FromClient({ token: Type.String({ pattern: '^[0-9a-f]{64}$' }) });
+export type EmailSignInToken = Static<typeof EmailSignInToken>;
+
+/** What the page shows before the person signs in: the address the link was sent to (D-138 §4). */
+export const EmailSignInPreview = Type.Object({ email: Type.String() });
+export type EmailSignInPreview = Static<typeof EmailSignInPreview>;
