@@ -38,6 +38,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('UNAUTHENTICATED'),
   Type.Literal('OAUTH_STATE_INVALID'),
   Type.Literal('EMAIL_REQUIRED'),
+  /** A webhook delivery whose signature is missing, malformed, or not the feed's secret's (D-134 §4). */
+  Type.Literal('WEBHOOK_SIGNATURE_INVALID'),
   // Authorization — only ever for a resource the caller can already see
   Type.Literal('FORBIDDEN'),
   // Absence, and everything a boundary turns into absence
@@ -66,6 +68,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
   /** The channel already has a feed from this repository (D-134 §1). */
   Type.Literal('GITHUB_FEED_EXISTS'),
+  /** A delivery from another repository than the feed's (D-134 §4). */
+  Type.Literal('GITHUB_REPOSITORY_MISMATCH'),
   // Volume
   /**
    * A body larger than the route takes, refused at the edge before it is read: 64 KiB for JSON
@@ -139,6 +143,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   OAUTH_STATE_INVALID: 400,
 
   UNAUTHENTICATED: 401,
+  WEBHOOK_SIGNATURE_INVALID: 401,
 
   FORBIDDEN: 403,
   EMAIL_REQUIRED: 403,
@@ -167,6 +172,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   PINS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
   GITHUB_FEED_EXISTS: 409,
+  GITHUB_REPOSITORY_MISMATCH: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
   INVITATION_NOT_FOUND: 404,

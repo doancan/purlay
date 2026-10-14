@@ -546,6 +546,61 @@ export interface SendDependencies {
  * message that then rolls back; and the caller learns of it only after the room
  * has, so a sender is never ahead of the conversation.
  */
+/**
+ * Tells everybody a message has arrived, once it has committed: the room first, then what moved
+ * under it, then each person's own numbers — a client that hears a reply has already heard the
+ * message, and one that hears a count change has heard what changed it (D-99 §2). A publish that
+ * fails is logged and the rest still go; the write is not an error. A person's send and a feed's
+ * event (D-134) arrive by this one path.
+ */
+export const publishArrival = async (
+  { bus, clock, log }: { readonly bus: EventBus; readonly clock: Clock; readonly log: Logger },
+  channelId: string,
+  message: Message,
+  thread: Sent['thread'],
+  recipients: readonly ChannelStateUpdate[],
+): Promise<void> => {
+  const stages: Publish[][] = [
+    [
+      publication('MESSAGE_CREATED', () =>
+        bus.publish(channelTopic(channelId), {
+          event: 'MESSAGE_CREATED',
+          data: message,
+          ts: clock.now().getTime(),
+        }),
+      ),
+    ],
+  ];
+  if (thread !== null) {
+    const { rootId, summary, version } = thread;
+    stages.push([
+      publication('THREAD_UPDATED', () =>
+        publishThreadUpdated(
+          bus,
+          clock,
+          { channelId, messageId: rootId, thread: summary },
+          version,
+        ),
+      ),
+    ]);
+  }
+  stages.push(
+    recipients.map((recipient) =>
+      publication('CHANNEL_STATE', () =>
+        publishChannelState(
+          bus,
+          clock,
+          recipient.userId,
+          channelId,
+          recipient.state,
+          recipient.version,
+        ),
+      ),
+    ),
+  );
+  await publishAfterCommit(log, stages);
+};
+
 export const send = async (
   dependencies: SendDependencies,
   context: ChannelContext,
@@ -567,49 +622,13 @@ export const send = async (
       err: sent.engineFailure,
     });
   }
-  // The room first, then what moved under it, then each person's own numbers: a
-  // client that hears a reply has already heard the message, and one that hears a
-  // count change has heard what changed it (D-99 §2). Committed already, so a publish that
-  // fails is logged and the rest still go; the write is not an error.
-  const stages: Publish[][] = [
-    [
-      publication('MESSAGE_CREATED', () =>
-        bus.publish(channelTopic(context.channelId), {
-          event: 'MESSAGE_CREATED',
-          data: sent.message,
-          ts: clock.now().getTime(),
-        }),
-      ),
-    ],
-  ];
-  if (sent.thread !== null) {
-    const { rootId, summary, version } = sent.thread;
-    stages.push([
-      publication('THREAD_UPDATED', () =>
-        publishThreadUpdated(
-          bus,
-          clock,
-          { channelId: context.channelId, messageId: rootId, thread: summary },
-          version,
-        ),
-      ),
-    ]);
-  }
-  stages.push(
-    sent.recipients.map((recipient) =>
-      publication('CHANNEL_STATE', () =>
-        publishChannelState(
-          bus,
-          clock,
-          recipient.userId,
-          context.channelId,
-          recipient.state,
-          recipient.version,
-        ),
-      ),
-    ),
+  await publishArrival(
+    { bus, clock, log },
+    context.channelId,
+    sent.message,
+    sent.thread,
+    sent.recipients,
   );
-  await publishAfterCommit(log, stages);
   // Last, and not waited for: the room and the numbers are what a client is owed now.
   push?.told(sent.message.id, sent.told);
   return sent.message;

@@ -963,8 +963,8 @@ CREATE TABLE github_repo_feeds (
         cardinality(events) >= 1
         AND events <@ ARRAY['push', 'pull_request', 'issues', 'release']::TEXT[]
     ),
-    CONSTRAINT github_repo_feeds_failure_known CHECK (
-        last_failure IN ('channel_archived', 'repository_mismatch', 'payload_invalid')
+    CONSTRAINT github_repo_feeds_failure_known CHECK (   -- 'rate_limited' added by 0033
+        last_failure IN ('channel_archived', 'repository_mismatch', 'payload_invalid', 'rate_limited')
     ),
     CONSTRAINT github_repo_feeds_failure_is_complete CHECK (
         (last_failure IS NULL) = (last_failure_at IS NULL)
@@ -1212,12 +1212,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0030_starred_channels.sql    channel_members.starred_at  (D-132)
 0031_github_feeds.sql        github_repo_feeds, github_deliveries  (D-134)
 0032_event_messages.sql      messages.sender_id nullable for an event, messages_sender_by_type  (D-134 §6)
+0033_feed_failures.sql       a feed's last failure may be rate_limited  (D-134 §8)
 ```
 
-Phase 2's magic links add `0033_email_auth.sql`.
+Phase 2's magic links add `0034_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

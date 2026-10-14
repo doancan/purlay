@@ -465,6 +465,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'names no workspace: the token is the capability, and opens only its own (`invitations.integration.test.ts`)',
   'POST /api/invitations/accept':
     'names no workspace: the token is the capability, and admits only to its own, into no channel',
+  'POST /api/webhooks/github/:feedId':
+    'nobody is signed in: the feed’s secret is the capability, and posts only into its own channel (`webhook.integration.test.ts`)',
 };
 
 /**

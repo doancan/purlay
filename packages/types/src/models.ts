@@ -238,14 +238,21 @@ export const GITHUB_EVENT_TEXT_MAX = 256;
 /** How many of a push's commits its message lists; the rest are behind the comparison. */
 export const PUSH_COMMITS_SHOWN_MAX = 5;
 
+/** How many commits GitHub lists in a push's delivery, at most. */
+export const PUSH_COMMITS_LISTED_MAX = 2048;
+
 const GitHubRepositoryName = Type.String({ pattern: GITHUB_REPOSITORY_PATTERN });
-/** A person's or an app's login: `octocat`, `dependabot[bot]`. */
-const GitHubLogin = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9-]{0,38}(\\[bot\\])?$' });
+/**
+ * A person's or an app's login: `octocat`, `dependabot[bot]`, and an enterprise's managed user,
+ * `handle_shortcode`.
+ */
+const GitHubLogin = Type.String({ pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}(\\[bot\\])?$' });
 const CommitSha = Type.String({ pattern: '^[0-9a-f]{40}$' });
 const GitHubText = Type.String({ maxLength: GITHUB_EVENT_TEXT_MAX });
 const GitHubNumber = Type.Integer({ minimum: 1, maximum: 9_999_999_999 });
 /** A branch's or a tag's name: what git allows, bounded. */
-const GitRefName = Type.String({ minLength: 1, maxLength: 255 });
+export const GIT_REF_NAME_MAX = 1024;
+const GitRefName = Type.String({ minLength: 1, maxLength: GIT_REF_NAME_MAX });
 
 /** An object with no field the contract does not name: what is stored is what is shown, nothing more. */
 const Closed = <T extends TProperties>(properties: T): TObject<T> =>
@@ -278,8 +285,8 @@ export const GitHubEvent = Type.Union([
     commits: Type.Array(Closed({ sha: CommitSha, title: GitHubText }), {
       maxItems: PUSH_COMMITS_SHOWN_MAX,
     }),
-    /** As many as GitHub listed, which is at most twenty: a bigger push says twenty. */
-    commitCount: Type.Integer({ minimum: 0, maximum: 20 }),
+    /** As many as GitHub listed, which is at most 2,048: a bigger push says 2,048. */
+    commitCount: Type.Integer({ minimum: 0, maximum: PUSH_COMMITS_LISTED_MAX }),
   }),
   Closed({
     kind: Type.Literal('pull_request'),

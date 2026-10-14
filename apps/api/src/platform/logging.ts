@@ -33,6 +33,8 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'access_token_encrypted',
   // A repository feed's webhook secret, sealed (D-134 §3).
   'secret_encrypted',
+  // A delivery's signature: an HMAC of its body under the secret (D-134 §4).
+  'signature',
   'email',
   'content',
   'password',

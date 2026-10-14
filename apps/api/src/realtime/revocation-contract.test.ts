@@ -125,7 +125,8 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   },
   // A new message raises the unread counters of the channel's existing memberships. It
   // adds, removes and changes no membership, so nobody's access moves (D-99, #58).
-  'apps/api/src/modules/messages/delivery.ts#recordDelivery': {
+  // Where a person's message and a feed's event both count (D-134 §6).
+  'apps/api/src/modules/messages/delivery.ts#countArrival': {
     none: 'raises the unread counters of existing memberships and changes no access (#58)',
   },
   // An edit that names somebody for the first time raises their unread mention count. It
