@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: exporting a workspace's records (D-140, part of #84)
+
+- `bun run export:workspace <slug> <directory>` writes a workspace's records as NDJSON, one file per
+  table, with a manifest: messages, threads, reactions, pins, incidents, the audit trail, members and
+  the people the rows name. They are read in one consistent snapshot, a page at a time, into a new
+  directory only its owner can read. Personal state (saved items, read positions, stars, Deep Work)
+  and every credential or secret stay on the server, as do a former member's address and profile.
+  The audit trail records the export. The files' objects and the owner's download follow.
+
 ### Feature — 2026-10-14: an operator erases what a person wrote (D-139, closes #83)
 
 - `bun run erase:content <who> --workspace <slug>` (or `--all` for a self-hoster) empties every

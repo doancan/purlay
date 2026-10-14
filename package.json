@@ -39,6 +39,7 @@
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore",
     "job": "bun run apps/api/src/cli/jobs.ts",
+    "export:workspace": "bun run apps/api/src/cli/export-workspace.ts",
     "erase:content": "bun run apps/api/src/cli/erase-content.ts",
     "knip": "knip",
     "lint": "eslint .",

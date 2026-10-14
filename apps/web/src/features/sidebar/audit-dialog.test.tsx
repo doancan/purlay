@@ -175,6 +175,31 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual(['A member’s writing was erased on request: 7 messages, 1 files']);
   });
 
+  test('an export is said by who asked — the operator when nobody in the workspace did (D-140)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'workspace.exported',
+              targetType: 'workspace',
+              metadata: { scope: 'visible-to-owner', messages: '40' },
+            }),
+            anEntry(1, {
+              action: 'workspace.exported',
+              actor: null,
+              targetType: 'workspace',
+              metadata: { scope: 'all', messages: '41' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} exported the workspace, with 40 messages`,
+      'The server’s operator exported the workspace, with 41 messages',
+    ]);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>
