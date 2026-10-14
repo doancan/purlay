@@ -85,6 +85,21 @@ describe('integration: a star', () => {
     });
   });
 
+  test('a conversation has no star: refused as a stranger is', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { type: 'direct_message' });
+      const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const app = createApp(testDependencies({ database: db, clock }));
+      const response = await app.handle(
+        new Request(`https://purlay.test/api/channels/${room.channelId}/star`, {
+          method: 'PUT',
+          headers: { cookie: `${SESSION_COOKIE}=${token}` },
+        }),
+      );
+      expect(response.status).toBe(404);
+    });
+  });
+
   test('the member’s own tabs are told, once for each change and never for one that was none', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

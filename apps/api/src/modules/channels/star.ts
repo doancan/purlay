@@ -3,8 +3,12 @@
  *
  * Only the member's own row, and only a member: a public channel the person can see but has not
  * joined has no membership to star, and is refused with the answer a stranger gets — the
- * notification level's rule (D-107), for the same reason. Starring what is starred, or letting go
- * of what is not, changes nothing and says so, so nobody is told.
+ * notification level's rule (D-107), for the same reason. A conversation is not a channel to star:
+ * its people are found under People and Conversations, and it is refused the same way.
+ *
+ * One statement decides and writes: the row changes only when it is not already as asked, so two
+ * tabs starring at once write once and tell once. Starring what is starred, or letting go of what
+ * is not, changes nothing and says so, so nobody is told.
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
@@ -17,19 +21,22 @@ export const setStarred = async (
   context: ChannelContext,
   starred: boolean,
 ): Promise<boolean> => {
-  const member = await executor
-    .selectFrom('channel_members')
-    .select('starred_at')
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', '=', context.userId)
-    .executeTakeFirst();
-  if (member === undefined) throw channelNotFound();
-  if ((member.starred_at !== null) === starred) return false;
-  await executor
+  if (context.channelType === 'direct_message') throw channelNotFound();
+  const changed = await executor
     .updateTable('channel_members')
     .set({ starred_at: starred ? clock.now() : null })
     .where('channel_id', '=', context.channelId)
     .where('user_id', '=', context.userId)
-    .execute();
-  return true;
+    .where('starred_at', starred ? 'is' : 'is not', null)
+    .returning('user_id')
+    .executeTakeFirst();
+  if (changed !== undefined) return true;
+  const member = await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .executeTakeFirst();
+  if (member === undefined) throw channelNotFound();
+  return false;
 };
