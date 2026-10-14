@@ -30,6 +30,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { MAIN_ID } from '../../ui/main';
 import { foldAway } from './collapse';
 
 /** What a root's row lets the keyboard and the panel do to its thread. */
@@ -115,8 +116,14 @@ export const ThreadsProvider = ({
   const controls = useRef(new Map<string, ThreadControls>());
   const body = useRef<HTMLElement>(null);
   const returnTo = useRef<string | null>(null);
+  // What had focus when the panel opened: where it goes back when the root has no row in the feed.
+  const opener = useRef<HTMLElement | null>(null);
 
   const open = useCallback((rootId: string, focus: PanelFocus | 'none' = 'panel'): void => {
+    const active = document.activeElement;
+    if (latest.current === null) {
+      opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    }
     setState({ openId: rootId, focusRequest: focus === 'none' ? null : focus });
   }, []);
 
@@ -130,11 +137,16 @@ export const ThreadsProvider = ({
 
   // Focus goes back to the root once the panel has gone: on a narrow window the conversation is
   // hidden under the panel until then, and a hidden row cannot take focus.
+  // A root with no row there — opened from the files panel, the inbox or an address, older than what
+  // the feed holds — sends it to what opened the panel, if that is still on the page, or else to the
+  // main region: never to nothing (#555).
   useLayoutEffect(() => {
     const id = returnTo.current;
     if (state.openId !== null || id === null) return;
     returnTo.current = null;
-    feedRowOf(id)?.focus();
+    const back = opener.current?.isConnected === true ? opener.current : null;
+    opener.current = null;
+    (feedRowOf(id) ?? back ?? document.getElementById(MAIN_ID))?.focus();
   }, [state.openId]);
 
   const settle = useCallback(

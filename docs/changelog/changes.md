@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a thread's panel never leaves focus on nothing (closes #555)
+
+- Opening a thread moves focus to the panel's heading at once, even while its root is still being
+  read back. Closing a thread whose root has no row in the feed returns focus to the control that
+  opened the panel, if it is still on the page, or else to the main region. This covers a thread
+  opened from the files panel, the inbox, or a `?thread=` address. Before, focus fell to the page
+  body.
+
 ### Fix — 2026-10-14: a file the store refused to delete is tried again until it goes (D-141, closes #592)
 
 - When retention, an erasure, the orphan sweep or a discarded upload deletes a file's row, the file's

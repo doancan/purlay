@@ -298,9 +298,11 @@ the panel, its line is filled and says **Thread open**, so the eye finds where t
   the feed draws them: two edges, grouped by the same rule (§3). The reply box is at the bottom, and
   keeps its draft per thread like the channel's (§5). There is no "also send to the channel": the
   product has no such thing.
-- **Focus**: opening moves it into the panel — the heading, or the reply box after Reply or `R` —
-  and closing puts it back on the root's row in the feed. The panel is a complementary region
-  labelled by its heading.
+- **Focus**: opening moves it into the panel at once, whatever its root's state — the heading, or the
+  reply box after Reply or `R` once the root is there — and closing puts it back on the root's row in
+  the feed. A root with no row there (opened from the files panel, the inbox or an address) gives it
+  to what opened the panel, if that is still on the page, or else to the main region: never to
+  nothing. The panel is a complementary region labelled by its heading.
 - Thread depth is capped at two levels by **invariant I-1** (`SCHEMA.md` §11), which owns the
   rule. The interaction consequence is what belongs here: a reply has no thread affordance of
   its own, so the limit is never something a user can bump into. Unbounded nesting is how a
