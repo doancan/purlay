@@ -710,7 +710,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .post('/api/workspaces/:workspaceId/channels', async ({ request, params, body, set }) => {
       set.status = 201;
-      return await createWorkspaceChannel(dependencies, request, params.workspaceId, body);
+      return await createWorkspaceChannel(
+        { ...dependencies, bus: sockets.bus },
+        request,
+        params.workspaceId,
+        body,
+      );
     })
     .post('/api/workspaces/:workspaceId/conversations', async ({ request, params, body, set }) => {
       const { channel, created } = await openConversationWith(
@@ -792,7 +797,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .post(
       '/api/channels/:channelId/join',
       async ({ request, params }) =>
-        await joinPublicChannel(dependencies, request, params.channelId),
+        await joinPublicChannel({ ...dependencies, bus: sockets.bus }, request, params.channelId),
     )
 
     .get(

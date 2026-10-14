@@ -14,7 +14,7 @@ import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import type { ServerFrame } from '@purlay/types';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
-import { addChannelMember } from './channels';
+import { addChannelMember, createWorkspaceChannel, joinPublicChannel } from './channels';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -299,6 +299,67 @@ describe('integration: private channels over HTTP', () => {
       expect(topics).toEqual([userTopic(bob.userId)]);
       const [frame] = frames;
       expect(frame?.event === 'CHANNEL_ADDED' ? frame.data.id : null).toBe(channelId);
+    });
+  });
+});
+
+describe('integration: the person’s other devices hear of a channel they joined or made (#540)', () => {
+  const recording = (): { bus: EventBus; heard: [string, ServerFrame][] } => {
+    const heard: [string, ServerFrame][] = [];
+    return {
+      heard,
+      bus: {
+        publish: (topic, frame): Promise<void> => {
+          heard.push([topic, frame]);
+          return Promise.resolve();
+        },
+        subscribe: () => false,
+        unsubscribe: () => undefined,
+        forget: () => undefined,
+      },
+    };
+  };
+  const as = (cookie: string): Request => new Request(`${ORIGIN}/`, { headers: { cookie } });
+
+  test('joining a public channel tells their own topic, once — a second join is a no-op', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'own-alice');
+      const bob = await signedIn(db, 'own-bob');
+      const workspaceId = await aWorkspace(db, alice.cookie, 'own-acme');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member' })
+        .execute();
+      const channelId = await aChannel(db, alice.cookie, workspaceId, 'design');
+      const { bus, heard } = recording();
+      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const joined = await joinPublicChannel(dependencies, as(bob.cookie), channelId);
+      await joinPublicChannel(dependencies, as(bob.cookie), channelId);
+      expect(heard.map(([topic, frame]) => [topic, frame.event])).toEqual([
+        [userTopic(bob.userId), 'CHANNEL_ADDED'],
+      ]);
+      const [[, frame] = ['', null]] = heard;
+      // What they are told is the channel as they now see it: theirs to show and to watch.
+      expect(frame?.event === 'CHANNEL_ADDED' ? frame.data : null).toEqual(joined);
+    });
+  });
+
+  test('making a channel tells the maker’s own topic', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'mk-alice');
+      const workspaceId = await aWorkspace(db, alice.cookie, 'mk-acme');
+      const { bus, heard } = recording();
+      const made = await createWorkspaceChannel(
+        { database: db, clock, bus, log: NO_LOG },
+        as(alice.cookie),
+        workspaceId,
+        { name: 'launch' },
+      );
+      expect(heard.map(([topic, frame]) => [topic, frame.event])).toEqual([
+        [userTopic(alice.userId), 'CHANNEL_ADDED'],
+      ]);
+      const [[, frame] = ['', null]] = heard;
+      expect(frame?.event === 'CHANNEL_ADDED' ? frame.data : null).toEqual(made);
     });
   });
 });

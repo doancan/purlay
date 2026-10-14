@@ -8,7 +8,7 @@
  * found.
  */
 import { expect, test } from './fixtures';
-import { railLink, shellReady } from './support';
+import { openNav, railLink, shellReady } from './support';
 
 test.describe('the inbox', () => {
   test('a mention is in it; opening it goes to the channel and reads it', async ({
@@ -61,13 +61,17 @@ test.describe('the inbox', () => {
     world,
   }) => {
     const here = await room({ members: ['dogancan', 'carol'] });
-    const there = await room({ members: ['dogancan', 'carol'] });
     await signIn();
     await page.goto(here.path);
     await shellReady(page);
     const place = `#${here.name} · ${world.workspace.name} · Purlay`;
     await expect(page).toHaveTitle(new RegExp(`^(\\(\\d+\\) )?${place}$`));
 
+    // Joined after the page loaded — by another of the viewer's devices, as other tests' rooms are
+    // too (#540): the page hears of it, shows it, and counts what is said in it.
+    const there = await room({ members: ['dogancan', 'carol'] });
+    const sidebar = await openNav(page);
+    await expect(sidebar.getByRole('link', { name: new RegExp(there.name) })).toBeVisible();
     await api('carol').say(there.id, `@dogancan please look at ${there.name}`);
     // Other tests write to this workspace at the same time, so the count is not known in advance:
     // it is the server's own sum of the badges, and it has to include this mention.

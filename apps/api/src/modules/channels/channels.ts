@@ -311,20 +311,23 @@ export const channelIn = async (executor: Executor, context: ChannelContext): Pr
  * for is already true, and a `409` here would make a retry after a dropped
  * response look like a failure.
  */
+/** Joins a public channel; answers whether this call is what joined it — a second is a no-op. */
 export const joinChannel = async (
   executor: Executor,
   clock: Clock,
   context: ChannelContext,
-): Promise<void> => {
+): Promise<boolean> => {
   if (context.channelType !== 'public') {
     // Reachable: a member of a private channel or a DM is *in* it, so the guard
     // hands them a context. The endpoint is *public only*, so it refuses them with
     // the answer a stranger gets (`channel-visibility.integration.test.ts`).
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   }
-  await executor
+  const joined = await executor
     .insertInto('channel_members')
     .values({ channel_id: context.channelId, user_id: context.userId, joined_at: clock.now() })
     .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
-    .execute();
+    .returning('channel_id')
+    .executeTakeFirst();
+  return joined !== undefined;
 };

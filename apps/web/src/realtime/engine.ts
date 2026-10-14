@@ -656,17 +656,17 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       case 'CHANNELS_UPDATED':
         // No state in the frame (D-132): the person's channels here are read again.
-        void client.invalidateQueries({ queryKey: keys.channels(frame.data.workspaceId) });
+        readAgain(client, keys.channels(frame.data.workspaceId));
         return;
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.
-        void client.invalidateQueries({ queryKey: keys.saved(frame.data.workspaceId) });
+        readAgain(client, keys.saved(frame.data.workspaceId));
         return;
       case 'WORKSPACE_UPDATED':
         // No state in the frame (D-124): the memberships are read again, newest wins — and the
         // workspace's members, whose profiles it also says changed (D-131).
         void client.invalidateQueries({ queryKey: keys.me });
-        void client.invalidateQueries({ queryKey: keys.members(frame.data.workspaceId) });
+        readAgain(client, keys.members(frame.data.workspaceId));
         return;
       case 'TYPING':
         startTyping(frame.data.channelId, frame.data.userId, frame.data.ttlMs);
