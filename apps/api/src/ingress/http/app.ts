@@ -526,7 +526,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       async ({ request, params }) => await listVersions(dependencies, request, params.messageId),
     )
     .delete('/api/messages/:messageId/versions/:versionId', async ({ request, params, set }) => {
-      await deleteVersion(dependencies, request, params.messageId, params.versionId);
+      await deleteVersion(sending, request, params.messageId, params.versionId);
       set.status = 204;
       return null;
     })

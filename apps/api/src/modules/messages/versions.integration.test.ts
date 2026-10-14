@@ -78,6 +78,31 @@ describe('integration: a message’s earlier versions', () => {
     });
   });
 
+  test('edits on one instant, or a clock stepped back, still list in the order they were made', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const message = await written(db, room, 'one');
+      await edit(db, room, message, 'two', at(10));
+      await edit(db, room, message, 'three', at(10));
+      await edit(db, room, message, 'four', at(5));
+      const page = await messageVersions(db, idOf(room, 'alice'), message, {});
+      expect(page.data.map((v) => v.content)).toEqual(['three', 'two', 'one']);
+    });
+  });
+
+  test('an edit refused for what it says keeps nothing', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const message = await written(db, room);
+      expect(
+        await refusal(
+          reviseMessage(db, fixedClock(at(1)), idOf(room, 'alice'), message, '@here look'),
+        ),
+      ).toBe('VALIDATION_FAILED');
+      expect(await stored(db, message)).toBe(0);
+    });
+  });
+
   test('the same words again keep nothing; going back to earlier words keeps both changes', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
@@ -107,6 +132,9 @@ describe('integration: a message’s earlier versions', () => {
       const all = await messageVersions(db, alice, message, { limit: PAGE_LIMIT.max });
       expect(all.data).toHaveLength(5);
       expect(all.nextCursor).toBeNull();
+      // Exactly a page: nothing past it, so no cursor to an empty page.
+      const exact = await messageVersions(db, alice, message, { limit: 5 });
+      expect([exact.data.length, exact.nextCursor]).toEqual([5, null]);
     });
   });
 

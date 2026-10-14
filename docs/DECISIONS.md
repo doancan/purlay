@@ -5924,15 +5924,19 @@ window on that promise.
    newest first, a page at a time (`Page`, `PAGE_LIMIT`), keyset on each version's UUIDv7 id. The
    message itself is the current version. **The author may remove one version**: the remedy for words
    edited out that should never be read — a token pasted and taken back — which would otherwise stay
-   in the history for the whole channel. The edit box says so, in both languages.
+   in the history for the whole channel. The edit box says so, in both languages. Accepted: an author
+   who can no longer see the message — they left the private channel, or the workspace — cannot remove
+   a version of it; an admin can delete the whole message, which removes them all.
 3. **Bounded:** the latest `MESSAGE_VERSIONS_KEPT` (100) of a message are kept; an edit past it lets
    the oldest go. Accepted: a message edited more than a hundred times does not show its first words.
 4. **Deleting a message removes its versions**, with its words, mentions and pin
    (`messages/delete.ts`): a tombstone hides what was said, and its history must not show it. D-9 is
    about the row and its thread surviving, which they do. Erasure (#83) tombstones bodies rather than
    deleting rows, so it removes versions too, and the cascade alone would not.
-5. **Words only**: a version is never searched, never parsed for mentions (D-103 §5 told whom an edit
-   named), and has no frame — a client's open history is read again when `MESSAGE_REVISED` arrives.
+5. **Words only**: a version is never searched and never parsed for mentions (D-103 §5 told whom an
+   edit named). A client's open history is read again when `MESSAGE_REVISED` arrives — an edit adds a
+   version, a delete takes them all — and when `MESSAGE_VERSIONS_UPDATED` does: a version removed, on
+   the channel's topic, so words taken out leave every screen that shows them.
 6. **Messages edited before this** have no versions: their history says earlier versions were not
    kept.
 

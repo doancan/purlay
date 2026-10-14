@@ -622,6 +622,10 @@ export const createEngine = (options: EngineOptions): Engine => {
         // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
         readAgain(client, keys.pins(frame.data.channelId));
         return;
+      case 'MESSAGE_VERSIONS_UPDATED':
+        // A version removed (D-135 §5): an open history is read again, and the words leave it.
+        readAgain(client, keys.messageVersions(frame.data.messageId));
+        return;
       case 'CHANNELS_UPDATED':
         // No state in the frame (D-132): the person's channels here are read again.
         void client.invalidateQueries({ queryKey: keys.channels(frame.data.workspaceId) });

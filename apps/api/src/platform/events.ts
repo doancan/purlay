@@ -124,6 +124,20 @@ export const publishPinsUpdated = async (
   });
 };
 
+/** A message's earlier versions changed (D-135 §5): an open history is read again. */
+export const publishMessageVersionsUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  channelId: string,
+  messageId: string,
+): Promise<void> => {
+  await bus.publish(channelTopic(channelId), {
+    event: 'MESSAGE_VERSIONS_UPDATED',
+    data: { channelId, messageId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A channel was archived: everyone watching it, on any node, stops receiving it, and is told why. */
 export const publishChannelRevoked = async (
   bus: EventBus,

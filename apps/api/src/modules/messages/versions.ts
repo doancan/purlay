@@ -13,11 +13,12 @@ import type { Executor } from '@purlay/db';
 import {
   MESSAGE_VERSIONS_KEPT,
   messageId,
+  messageIdTime,
   Uuid,
   type MessageVersionPage,
   type OlderPageQuery,
 } from '@purlay/types';
-import { requireMessageById, type ChannelContext } from '../../platform/channels';
+import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import { limitOf } from './threads';
 
@@ -35,10 +36,21 @@ export const keepVersion = async (
   replaced: string,
   now: Date,
 ): Promise<void> => {
+  // After the newest, whatever the clock says: two edits in one millisecond, or a clock stepped back,
+  // still list in the order they were made — the id is the order, `replaced_at` the time said.
+  const newest = await executor
+    .selectFrom('message_versions')
+    .select('id')
+    .where('message_id', '=', messageIdOf)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  const at =
+    newest === undefined ? now.getTime() : Math.max(now.getTime(), messageIdTime(newest.id) + 1);
   await executor
     .insertInto('message_versions')
     .values({
-      id: messageId(now),
+      id: messageId(new Date(at)),
       message_id: messageIdOf,
       channel_id: context.channelId,
       workspace_id: context.workspaceId,
@@ -91,20 +103,23 @@ export const messageVersions = async (
 /**
  * `DELETE /api/messages/:messageId/versions/:versionId` — the author's alone: their own words, taken
  * out of the history as an edit took them out of the message. Gone already is the same answer as
- * never there, so a retry after a lost answer is told the truth.
+ * never there, so a retry after a lost answer is told the truth. The channel is answered so the
+ * removal can be told to every open history once it has committed (D-135 §5).
  */
 export const removeVersion = async (
   executor: Executor,
   userId: string,
   messageIdOf: string,
   versionId: string,
-): Promise<void> => {
-  await requireMessageById(executor, userId, messageIdOf);
+): Promise<{ readonly channelId: string }> => {
+  const { context } = await requireMessageById(executor, userId, messageIdOf);
   const author = await executor
     .selectFrom('messages')
     .select('sender_id')
     .where('id', '=', messageIdOf)
-    .executeTakeFirstOrThrow();
+    .executeTakeFirst();
+  // Gone between the guard and here (a retention purge): the guard's answer, given late.
+  if (author === undefined) throw messageNotFound();
   if (author.sender_id !== userId) {
     throw new AppError({
       code: 'FORBIDDEN',
@@ -120,4 +135,5 @@ export const removeVersion = async (
     .returning('id')
     .executeTakeFirst();
   if (removed === undefined) throw versionNotFound();
+  return { channelId: context.channelId };
 };

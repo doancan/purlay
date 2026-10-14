@@ -1028,6 +1028,25 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(w.client.getQueryState(keys.pins(CH))?.isInvalidated).toBe(true);
     expect(w.client.getQueryState(keys.pins(CH2))?.isInvalidated).toBe(false);
   });
+
+  test('a version removed reads that message’s open history again, and no other (D-135 §5)', () => {
+    const w = world();
+    const one = '0199155c-6200-7b7f-8c11-0000000000e1';
+    const other = '0199155c-6200-7b7f-8c11-0000000000e2';
+    w.client.setQueryData(keys.messageVersions(one), { pages: [], pageParams: [] });
+    w.client.setQueryData(keys.messageVersions(other), { pages: [], pageParams: [] });
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({
+        event: 'MESSAGE_VERSIONS_UPDATED',
+        data: { channelId: CH, messageId: one },
+        ts: T0,
+      }),
+    );
+    expect(w.client.getQueryState(keys.messageVersions(one))?.isInvalidated).toBe(true);
+    expect(w.client.getQueryState(keys.messageVersions(other))?.isInvalidated).toBe(false);
+  });
 });
 
 describe('watching channels', () => {
