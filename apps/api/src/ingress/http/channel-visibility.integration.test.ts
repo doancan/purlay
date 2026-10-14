@@ -59,6 +59,23 @@ const created = async (response: Response): Promise<string> => {
   return ((await response.json()) as { id: string }).id;
 };
 
+/** A repository's feed into a channel, as a row: what disconnecting one names. */
+const aFeed = async (db: Executor, workspaceId: string, channelId: string): Promise<string> => {
+  const id = crypto.randomUUID();
+  await db
+    .insertInto('github_repo_feeds')
+    .values({
+      id,
+      workspace_id: workspaceId,
+      channel_id: channelId,
+      repository_full_name: 'acme/visible',
+      events: ['push'],
+      secret_encrypted: 'not opened here',
+    })
+    .execute();
+  return id;
+};
+
 interface World {
   readonly owner: string;
   readonly outsider: string;
@@ -67,6 +84,8 @@ interface World {
   readonly workspaceId: string;
   /** Public, and the outsider has joined it. The control. */
   readonly visible: string;
+  /** A repository's feed into the visible channel: the control for disconnecting one. */
+  readonly feed: string;
   /** Each one hidden from the outsider for a different reason. */
   readonly hidden: Readonly<Record<'private' | 'direct message' | 'deleted', string>>;
   /** A root with an answer in each channel above: the thing a message endpoint names. */
@@ -215,6 +234,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     ids: { userId: outsider.id, messageId: threads.visible, workspaceId },
     workspaceId,
     visible,
+    feed: await aFeed(db, workspaceId, visible),
     hidden,
     threads,
   };
@@ -257,6 +277,7 @@ describe('integration: channel visibility', () => {
               unsentAttachmentId: NEVER_EXISTED,
               memberId: NEVER_EXISTED,
               invitationId: NEVER_EXISTED,
+              feedId: world.feed,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -296,6 +317,7 @@ describe('integration: channel visibility', () => {
               unsentAttachmentId: NEVER_EXISTED,
               memberId: NEVER_EXISTED,
               invitationId: NEVER_EXISTED,
+              feedId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -355,6 +377,7 @@ describe('integration: channel visibility', () => {
                 unsentAttachmentId: NEVER_EXISTED,
                 memberId: NEVER_EXISTED,
                 invitationId: NEVER_EXISTED,
+                feedId: NEVER_EXISTED,
               }),
               cookie,
             );

@@ -1,6 +1,5 @@
 {
   ".github/PULL_REQUEST_TEMPLATE.md": {},
-  "CLAUDE.md": {},
   "CONTRIBUTING.md": {
     "1": "Non-negotiable",
     "1.1": "Scope is the current phase",
@@ -40,6 +39,7 @@
     "9": "Reminders"
   },
   "README.md": {},
+  "SECURITY.md": {},
   "docs/API.md": {
     "1": "Conventions",
     "2": "Authentication",
@@ -60,6 +60,13 @@
     "1.5": "Choose boring where it is not the point",
     "10": "Errors, Observability, Testing",
     "11": "Deployment",
+    "11.1": "Take a backup first, and keep it until the upgrade has proved itself",
+    "11.2": "Upgrade by changing `PURLAY_IMAGE`",
+    "11.3": "Expect `/health/ready` to answer 503 for as long as the migration takes",
+    "11.4": "A migration that fails stops the node, loudly",
+    "11.5": "An older image against a newer schema does the same, by design",
+    "11.6": "To roll back:",
+    "11.7": "Key custody",
     "2": "Stack",
     "3": "Topology",
     "4": "Monorepo Layout",
@@ -127,9 +134,11 @@
     "3": "Identity",
     "3.1": "`users`",
     "3.2": "`sessions`",
+    "3.3": "`push_subscriptions` and `users.locale`",
     "4": "Workspaces & Membership",
     "4.1": "`workspaces`",
     "4.2": "`workspace_members`",
+    "4.3": "`workspace_invitations`",
     "5": "Channels",
     "5.1": "`channels`",
     "5.2": "`channel_members`",
@@ -143,10 +152,12 @@
     "7.2": "`attachments`",
     "7.3": "`mentions`",
     "7.4": "`notifications`",
+    "7.5": "`saved_messages`",
+    "7.6": "`pinned_messages`",
     "8": "GitHub Integration",
     "8.1": "`github_integrations`",
     "8.2": "`link_previews`",
-    "8.3": "`github_repo_feeds` — Phase 2",
+    "8.3": "`github_repo_feeds` and `github_deliveries`",
     "9": "Administration & Operations",
     "9.1": "`audit_log`",
     "9.2": "`job_runs`"
@@ -174,6 +185,19 @@
     "9": "Visual system"
   },
   "docs/spikes/README.md": {},
+  "docs/spikes/backup-restore.md": {},
+  "docs/spikes/capacity.md": {},
+  "docs/spikes/cross-browser.md": {},
+  "docs/spikes/design-tokens.md": {},
   "docs/spikes/elysia.md": {},
-  "docs/spikes/web-client.md": {}
+  "docs/spikes/frontend-budget.md": {},
+  "docs/spikes/image-pipeline.md": {},
+  "docs/spikes/image-proxy.md": {},
+  "docs/spikes/knip.md": {},
+  "docs/spikes/markdown.md": {},
+  "docs/spikes/object-storage.md": {},
+  "docs/spikes/pino.md": {},
+  "docs/spikes/web-client.md": {},
+  "docs/spikes/web-push.md": {},
+  "packages/tokens/README.md": {}
 }

@@ -109,6 +109,13 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   const invitation = await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie);
   expect(invitation.status).toBe(201);
   const { invitation: made } = (await invitation.json()) as { invitation: { id: string } };
+  // A repository's feed to disconnect.
+  const feed = await call(db, 'POST', `/api/channels/${channelId}/github-feeds`, cookie, {
+    repository: 'acme/api',
+    events: ['push'],
+  });
+  expect(feed.status).toBe(201);
+  const { feed: connected } = (await feed.json()) as { feed: { id: string } };
   return {
     workspaceId,
     channelId,
@@ -117,6 +124,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     unsentAttachmentId,
     memberId: member.userId,
     invitationId: made.id,
+    feedId: connected.id,
   };
 };
 
@@ -128,6 +136,7 @@ const NEVER_EXISTED: Ids = {
   unsentAttachmentId: '00000000-0000-4000-8000-000000000000',
   memberId: '00000000-0000-4000-8000-000000000000',
   invitationId: '00000000-0000-4000-8000-000000000000',
+  feedId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
@@ -138,6 +147,7 @@ const NOT_A_UUID: Ids = {
   unsentAttachmentId: 'not-a-uuid',
   memberId: 'not-a-uuid',
   invitationId: 'not-a-uuid',
+  feedId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {

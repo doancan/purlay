@@ -929,22 +929,41 @@ CREATE INDEX idx_link_previews_expiry ON link_previews (expires_at);
 > URL, so a card fetched with one workspace's token — a private repository's included — is that
 > workspace's alone (D-112).
 
-### 8.3. `github_repo_feeds` — Phase 2
+### 8.3. `github_repo_feeds` and `github_deliveries`
 
-Defined here so the shape is settled, but **not created in the Phase 1 migration**. (D-5)
+A repository's feed into a channel, and the deliveries it has posted (migration 0031, D-134).
 
 ```sql
 CREATE TABLE github_repo_feeds (
-    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id                   UUID PRIMARY KEY,               -- given before the seal, bound into it
     workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    channel_id           UUID NOT NULL REFERENCES channels(id)   ON DELETE CASCADE,
-    repository_full_name VARCHAR(255) NOT NULL,          -- 'org/repo'
-    events               TEXT[] NOT NULL DEFAULT '{}',   -- 'push', 'pull_request', …
+    channel_id           UUID NOT NULL,
+    repository_full_name VARCHAR(140) COLLATE "C" NOT NULL,  -- 'org/repo', lower case
+    repository_id        BIGINT,                         -- learnt from the first delivery
+    events               TEXT[] NOT NULL,                -- push, pull_request, issues, release
+    secret_encrypted     TEXT NOT NULL,                  -- the webhook secret, sealed (D-39 §6)
+    created_by           UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_delivery_at     TIMESTAMPTZ,
+    last_failure         VARCHAR(64),                    -- a GitHubFeedFailure; with its time
+    last_failure_at      TIMESTAMPTZ,
 
-    UNIQUE (workspace_id, repository_full_name)
+    UNIQUE (channel_id, repository_full_name),
+    FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id) ON DELETE CASCADE
+    -- and CHECKs: the repository's shape, the events known and at least one, a failure with its time
+);
+
+CREATE TABLE github_deliveries (
+    feed_id      UUID NOT NULL REFERENCES github_repo_feeds(id) ON DELETE CASCADE,
+    delivery_id  VARCHAR(64) COLLATE "C" NOT NULL,       -- X-GitHub-Delivery
+    received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),     -- swept after 30 days
+    PRIMARY KEY (feed_id, delivery_id)
 );
 ```
+
+> A feed is its channel's, in its channel's workspace (I-4), and goes with either. The secret is never
+> returned after the answer that made it and never logged (`ARCHITECTURE.md` §10). A delivery is
+> recorded in the transaction that posts it, so the same delivery again posts nothing.
 
 ---
 
@@ -1163,12 +1182,14 @@ file that leaves its transaction runs statement by statement and must be safe to
 0028_pinned_messages.sql     pinned_messages  (D-130)
 0029_profiles.sql            users.title, users.time_zone, users.status_text  (D-131)
 0030_starred_channels.sql    channel_members.starred_at  (D-132)
+0031_github_feeds.sql        github_repo_feeds, github_deliveries  (D-134)
 ```
 
-Phase 2 adds `0031_github_feeds.sql`; Phase 2's magic links add `0032_email_auth.sql`.
+Phase 2's messages with no author add `0032_event_messages.sql` (D-134 §6); its magic links add
+`0033_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

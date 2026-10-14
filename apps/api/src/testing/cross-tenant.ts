@@ -67,6 +67,8 @@ export interface Ids {
   readonly memberId: string;
   /** A link of the workspace that still opens: what revoking acts on. */
   readonly invitationId: string;
+  /** A repository's feed into the channel: what disconnecting acts on. */
+  readonly feedId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -87,6 +89,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
+    if (name === 'feedId') return ids.feedId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -213,6 +216,19 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/channels/:channelId/files': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/pins': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'PUT /api/channels/:channelId/star': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'GET /api/channels/:channelId/github-feeds': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/github-feeds': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    body: () => ({ repository: 'acme/crossing', events: ['push'] }),
+    visibility: { kind: 'channel', admin: true },
+  },
+  'DELETE /api/channels/:channelId/github-feeds/:feedId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
   'DELETE /api/channels/:channelId/star': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/workspaces/:workspaceId/conversations': {
     refusal: 'WORKSPACE_NOT_FOUND',

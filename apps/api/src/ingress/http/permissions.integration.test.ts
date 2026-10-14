@@ -164,6 +164,30 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'list a channel’s repository feeds': async (world, as) =>
+    await call(world, 'GET', `/api/channels/${world.channelId}/github-feeds`, as),
+  'connect a repository to a channel': async (world, as) =>
+    await call(world, 'POST', `/api/channels/${world.channelId}/github-feeds`, as, {
+      repository: 'acme/permission',
+      events: ['push'],
+    }),
+  'disconnect a repository from a channel': async (world, as) => {
+    // Connected by the owner first, so there is one to disconnect whoever tries.
+    const made = await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/github-feeds`,
+      world.people.owner,
+      { repository: 'acme/permission', events: ['push'] },
+    );
+    const { feed } = (await made.json()) as { feed: { id: string } };
+    return await call(
+      world,
+      'DELETE',
+      `/api/channels/${world.channelId}/github-feeds/${feed.id}`,
+      as,
+    );
+  },
   'archive a channel': async (world, as) =>
     await call(world, 'DELETE', `/api/channels/${world.channelId}`, as),
   'delete somebody else’s message': async (world, as) =>
@@ -218,6 +242,7 @@ describe('integration: every administrative write is on the trail, once', () => 
   const SET_UP_ROWS: Readonly<Record<string, number>> = {
     'revoke an invitation link': 1,
     'remove the GitHub token': 1,
+    'disconnect a repository from a channel': 1,
   };
 
   for (const [name, entry] of Object.entries(PERMISSIONS)) {
