@@ -6,6 +6,7 @@
  * transport adds — the handshake itself — is thin, and this is what it is thin
  * *around*.
  */
+import { inMemoryAttention } from '../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import {
@@ -37,6 +38,7 @@ afterAll(async () => {
 const ORIGIN = 'https://purlay.test';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
+const attention = inMemoryAttention(clock);
 
 const call = async (
   db: Executor,
@@ -152,6 +154,7 @@ describe('integration: the frame router', () => {
         limiter,
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         presence: inMemoryPresenceRegistry(clock),
+        attention,
         log: createLogger({ level: 'silent' }),
         socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
         // The production boundary: inside the harness's transaction it joins it.
@@ -190,6 +193,51 @@ describe('integration: the frame router', () => {
       expect(garbage).toHaveLength(1);
       expect(garbage[0]).toMatchObject({ event: 'ERROR', data: { code: 'RATE_LIMITED' } });
       expect(garbage[0]?.refId).toBeUndefined();
+    });
+  });
+
+  test('ACTIVE is heard for a workspace the sender is in, and answered with nothing (D-143)', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'rt-active');
+      const { workspaceId } = await aChannel(db, alice, 'rt-active-ws');
+      expect(attention.active(alice.userId, workspaceId)).toBe(false);
+      const replies = await route(db, alice, {
+        id: messageId(NOW),
+        op: 'ACTIVE',
+        payload: { workspaceId },
+      });
+      expect(replies).toEqual([]);
+      expect(attention.active(alice.userId, workspaceId)).toBe(true);
+    });
+  });
+
+  test('ACTIVE for a workspace the sender is not in is the stranger’s 404, and holds nothing', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'rt-active-owner');
+      const mallory = await signedIn(db, 'rt-active-stranger');
+      const { workspaceId } = await aChannel(db, alice, 'rt-active-theirs');
+      for (const target of [workspaceId, '0199155c-6200-7b7f-8c11-0000000000aa']) {
+        const id = messageId(NOW);
+        const replies = await route(db, mallory, {
+          id,
+          op: 'ACTIVE',
+          payload: { workspaceId: target },
+        });
+        expect(replies).toMatchObject([
+          { event: 'ERROR', refId: id, data: { code: 'WORKSPACE_NOT_FOUND' } },
+        ]);
+        expect(attention.active(mallory.userId, target)).toBe(false);
+      }
+      // Not an id at all: refused by the contract, naming the field.
+      const id = messageId(NOW);
+      const malformed = await route(db, mallory, {
+        id,
+        op: 'ACTIVE',
+        payload: { workspaceId: 'acme' },
+      });
+      expect(malformed).toMatchObject([
+        { event: 'ERROR', refId: id, data: { code: 'VALIDATION_FAILED' } },
+      ]);
     });
   });
 

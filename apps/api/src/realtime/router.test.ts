@@ -3,6 +3,7 @@
  * frame for the client — nothing about the cause — and the cause in the log,
  * under the frame's request (#127).
  */
+import { nobodyActive } from '../platform/attention';
 import { describe, expect, test } from 'bun:test';
 import { DatabaseUnavailableError, type Executor } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
@@ -37,6 +38,7 @@ const subscribeWith = async (
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           presence: inMemoryPresenceRegistry(clock),
+          attention: nobodyActive,
           log,
           socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
           atomically: async (body) => await body(aTransactionThatMustNotBeTouched()),

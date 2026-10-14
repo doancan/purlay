@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a push is held while you are looking at that workspace (D-143, part of #545)
+
+- A new client frame, `ACTIVE`, tells the server that a page is in front of its person in a workspace.
+  The server keeps that for two minutes. While it holds, a Web Push for that workspace is not sent to
+  any of the person's devices, and it is not sent later either. A workspace the sender is not in is
+  refused as not found. The page that sends the frame is the next slice.
+
 ### Fix — 2026-10-14: a class list in any constant is held to the tokens (closes #572)
 
 - The token vocabulary check now also reads every constant that a `className` or a class helper names,

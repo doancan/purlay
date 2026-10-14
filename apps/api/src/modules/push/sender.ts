@@ -23,6 +23,7 @@
 import { sql, type Executor } from '@purlay/db';
 import type { PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
+import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
@@ -66,6 +67,11 @@ export interface PushSenderDependencies {
   readonly keys: VapidKeys;
   /** How a push reaches its service: `postExternal` on the checked lookup, where the server is composed. */
   readonly post: PushPost;
+  /**
+   * Who is in front of a workspace's page now (D-143): their pushes for it are held, not sent later —
+   * what they are looking at already says it.
+   */
+  readonly attention: Attention;
 }
 
 interface Device {
@@ -82,7 +88,7 @@ interface Device {
 const OUR_REQUEST_REFUSED = new Set([400, 401, 403, 413]);
 
 const devicesFor = async (
-  { database, clock, keys }: PushSenderDependencies,
+  { database, clock, keys, attention, log }: PushSenderDependencies,
   messageId: string,
   userIds: readonly string[],
 ): Promise<Device[]> => {
@@ -104,6 +110,7 @@ const devicesFor = async (
       's.auth',
       'n.type',
       'n.channel_id',
+      'n.workspace_id',
       'person.locale',
       'author.display_name',
       'c.name',
@@ -130,9 +137,15 @@ const devicesFor = async (
     .orderBy('s.created_at')
     .orderBy('s.id')
     .execute();
-  return rows.flatMap((row) => {
+  const held = new Set<string>();
+  const devices = rows.flatMap((row) => {
     const reason = NEEDS_YOU.find((known) => known === row.type);
     if (reason === undefined) return [];
+    // In front of this workspace's page: held, never sent later (D-143, D-12).
+    if (attention.active(row.userId, row.workspace_id)) {
+      held.add(row.userId);
+      return [];
+    }
     return [
       {
         ...row,
@@ -150,6 +163,8 @@ const devicesFor = async (
       },
     ];
   });
+  if (held.size > 0) log.debug('push held: the person is active', { messageId, people: held.size });
+  return devices;
 };
 
 export const createPushSender = async (

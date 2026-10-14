@@ -25,6 +25,7 @@
  * (gwen, D-139 §5): done as one of the four, any would pull the ground from under every other test
  * of the run (D-124).
  */
+import { nobodyActive } from '../platform/attention';
 import type { Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import type { Config } from '../platform/config';
@@ -180,6 +181,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     storage: storeFor(config),
     // The seed asks for no export: nothing for a runner to start.
     exportRunner: (): void => undefined,
+    // Nobody is in front of a page here: the seed pushes nothing either way.
+    attention: nobodyActive,
     rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
   });
 

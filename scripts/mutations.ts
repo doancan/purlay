@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'push-sent-while-its-person-is-looking',
+    why: 'the phone buzzes for what its person is looking at on their desk',
+    file: 'apps/api/src/modules/push/sender.ts',
+    find: '    if (attention.active(row.userId, row.workspace_id)) {\n',
+    replace: '    if (false) {\n',
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+  },
+  {
+    id: 'active-held-for-a-workspace-not-yours',
+    why: 'anybody holds anybody’s pushes, and a stranger’s ids take memory',
+    file: 'apps/api/src/realtime/router.ts',
+    find: '        await requireWorkspaceMembership(database, identity.userId, parsed.payload.workspaceId);\n',
+    replace: '',
+    tests: ['apps/api/src/realtime/realtime.integration.test.ts'],
+  },
+  {
     id: 'vocabulary-skips-a-named-class-constant',
     why: 'a class list kept in a constant not called …Classes builds and ships a raw value unchecked',
     file: 'packages/tokens/src/vocabulary.ts',

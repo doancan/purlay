@@ -36,6 +36,7 @@ import { routeFrame } from '../../realtime/router';
 import { admitSocket } from '../../realtime/upgrade';
 import { AppError } from '../../platform/errors';
 import { refusalFor } from '../http/errors';
+import type { Attention } from '../../platform/attention';
 import type { PushSender } from '../../modules/push/sender';
 
 export interface SocketDependencies {
@@ -49,6 +50,8 @@ export interface SocketDependencies {
   /** Defaults to `SOCKET_CONNECTION_LIMITS`; a test that cannot open two thousand passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
+  /** Who is in front of a workspace's page now (D-143), heard from `ACTIVE`. */
+  readonly attention: Attention;
   readonly push?: PushSender | undefined;
   /** The grace's timers (D-136); a test passes its own so a grace passes without waiting. */
   readonly timers?: Timers | undefined;
@@ -266,6 +269,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
                   limiter,
                   userWrites: dependencies.userWrites,
                   presence,
+                  attention: dependencies.attention,
                   log,
                   push: dependencies.push,
                   // The real boundary. D-35: one transaction, published after it returns.

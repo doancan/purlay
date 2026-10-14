@@ -5,6 +5,7 @@
  * The router is driven directly, as `realtime.integration.test.ts` drives it: authorising the
  * channel is a real query, and what the room hears is what the bus delivered.
  */
+import { nobodyActive } from '../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, TYPING_TTL_MS, type ServerFrame } from '@purlay/types';
@@ -62,6 +63,7 @@ const aNode = (
           clock,
           bus,
           presence,
+          attention: nobodyActive,
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           log: createLogger({ level: 'silent' }),

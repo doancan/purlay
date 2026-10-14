@@ -7,6 +7,7 @@
  * that is not a frame — which the client takes for a malformed one and reconnects
  * into at once.
  */
+import { nobodyActive } from '../../platform/attention';
 import { describe, expect, test } from 'bun:test';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { CLOSE_CODES, ServerFrame } from '@purlay/types';
@@ -29,6 +30,7 @@ const opening = async (
     clock,
     log,
     userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+    attention: nobodyActive,
   });
   const sent: unknown[] = [];
   const closed: { code: number; reason: string }[] = [];
@@ -87,6 +89,7 @@ describe('a socket that closes', () => {
       clock,
       log,
       userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+      attention: nobodyActive,
     });
     lifecycle.close(
       {
