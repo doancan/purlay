@@ -14,6 +14,7 @@ import {
   type MessagePage,
   type ServerFrame,
   TYPING_TTL_MS,
+  ACTIVE_EVERY_MS,
 } from '@purlay/types';
 import { ApiError } from '../data/errors';
 import { keys } from '../data/keys';
@@ -1816,6 +1817,73 @@ describe('announcing typing', () => {
     w.deliver({
       event: 'ERROR',
       data: { code: 'CHANNEL_NOT_FOUND', message: 'That channel does not exist.' },
+      refId: sent.id,
+      ts: T0,
+    });
+    expect(w.engine.store.getState().degraded).toEqual({});
+  });
+});
+
+/**
+ * Saying the page is in front of its person (D-143): over an open socket only, once a minute per
+ * workspace, at once again after a reconnect, and a refusal is no broken connection.
+ */
+describe('announcing that the person is here', () => {
+  const WS = '00000000-0000-4000-8000-0000000000a1';
+  const WS2 = '00000000-0000-4000-8000-0000000000a2';
+  const started = (now: { at: number }): World => {
+    const w = world({}, { clock: { now: () => new Date(now.at) } });
+    w.engine.start();
+    w.open();
+    return w;
+  };
+
+  test('goes out once a minute per workspace, naming the workspace', () => {
+    const now = { at: T0 };
+    const w = started(now);
+    w.engine.announceActive(WS);
+    w.engine.announceActive(WS);
+    w.engine.announceActive(WS2);
+    now.at += ACTIVE_EVERY_MS - 1;
+    w.engine.announceActive(WS);
+    expect(w.sentOps('ACTIVE').map((f) => f.payload)).toEqual([
+      { workspaceId: WS },
+      { workspaceId: WS2 },
+    ]);
+    now.at += 1;
+    w.engine.announceActive(WS);
+    expect(w.sentOps('ACTIVE')).toHaveLength(3);
+  });
+
+  test('says nothing while the socket is not open', () => {
+    const w = world();
+    w.engine.start();
+    w.engine.announceActive(WS);
+    expect(w.sentOps('ACTIVE')).toEqual([]);
+  });
+
+  test('after a reconnect the next word goes at once: a restarted server forgot it', () => {
+    const now = { at: T0 };
+    const w = started(now);
+    w.engine.announceActive(WS);
+    const before = w.sockets.length;
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    for (let waited = 0; w.sockets.length === before && waited < 60_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    w.open();
+    w.engine.announceActive(WS);
+    expect(w.sentOps('ACTIVE')).toHaveLength(2);
+  });
+
+  test('a word refused is not a broken connection', () => {
+    const w = started({ at: T0 });
+    w.engine.announceActive(WS);
+    const [sent] = w.sentOps('ACTIVE');
+    if (sent === undefined) throw new Error('nothing was said');
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found.' },
       refId: sent.id,
       ts: T0,
     });
