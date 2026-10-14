@@ -87,6 +87,15 @@ export const User = Type.Object({
 });
 export type User = Static<typeof User>;
 
+/**
+ * What an erased account is called (D-139 §5): `deleted-user-` and a short, unique tail. No live account
+ * may take a name beginning so — a new one is given another — so the client can say "deleted user" in
+ * the reader's language from the name alone, wherever a person is shown.
+ */
+export const ERASED_USERNAME_PREFIX = 'deleted-user-';
+export const isErased = (user: { readonly username: string }): boolean =>
+  user.username.toLowerCase().startsWith(ERASED_USERNAME_PREFIX);
+
 /** How long a profile's title and status line may be (D-131). */
 export const PROFILE_TITLE_MAX = 80;
 export const PROFILE_STATUS_MAX = 100;

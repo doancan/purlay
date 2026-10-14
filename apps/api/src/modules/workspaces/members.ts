@@ -57,13 +57,18 @@ const rolesUnderLock = async (
   return { caller, target };
 };
 
-/** Refuses a change that would leave the workspace without an owner (I-2). */
+/**
+ * Refuses a change that would leave the workspace without a live owner (I-2): an erased owner's row
+ * stays, and counts for nothing (D-139 §6).
+ */
 const keepAnOwner = async (executor: Executor, context: WorkspaceContext): Promise<void> => {
   const { owners } = await executor
     .selectFrom('workspace_members')
+    .innerJoin('users', 'users.id', 'workspace_members.user_id')
     .select(sql<string>`count(*)`.as('owners'))
-    .where('workspace_id', '=', context.workspaceId)
-    .where('role', '=', 'owner')
+    .where('workspace_members.workspace_id', '=', context.workspaceId)
+    .where('workspace_members.role', '=', 'owner')
+    .where('users.deleted_at', 'is', null)
     .executeTakeFirstOrThrow();
   if (Number(owners) <= 1) {
     throw new AppError({

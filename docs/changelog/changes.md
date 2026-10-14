@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: erasing one's own account (D-139, part of #83)
+
+- `POST /api/me/erase` erases the caller's account. It needs their username typed and a sign-in from
+  the last fifteen minutes. Their address, name, GitHub id and profile are cleared; every session is
+  revoked and its sockets closed; their devices, pending sign-in links, saved items and notifications
+  are deleted. Their messages, reactions and memberships stay, shown under a "deleted user" name. A
+  later sign-in makes a new account.
+- A workspace always keeps a live owner. An erased owner no longer counts toward the last-owner rule,
+  and the last live owner of a workspace that has other people in it must hand it over before
+  erasing. No new account may take a name beginning `deleted-user-`.
+
 ### Feature — 2026-10-14: choosing how long history is kept, on the screen (D-139, part of #83)
 
 - Owners have "Keep history…" in the workspace menu: forever (the default), a month, a quarter, a

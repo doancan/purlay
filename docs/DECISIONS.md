@@ -6177,13 +6177,18 @@ critique of the first plan found four of its answers wrong; what follows is what
    pending sign-in links for the old address (under the address's lock, D-138 §7), saved messages and
    notifications deleted. Messages, reactions, memberships, responders and audit rows stay, under the
    anonymised row; every surface shows the person as one localised "deleted user". After commit their
-   sockets are ended. *Rejected:* an operator's command — the process has no bus, so the person's open
+   sockets are ended. The locks are taken in the order every other writer takes them — the address's
+   links, the sessions, the workspaces in id order, then the person — so a send, a sign-in or a role
+   change at that moment takes turns with it; and a GitHub sign-in that read the account before it was
+   erased writes nothing back onto the tombstone. *Rejected:* an operator's command — the process has no bus, so the person's open
    sockets would keep receiving every message until their session's natural end; erasing for somebody who
    cannot sign in is a separate issue.
 6. **A workspace keeps a live owner.** An erased owner does not count as one — neither for the last-owner
    rule (I-2) nor anywhere else — and the last live owner of a workspace that has another live member
    cannot erase themselves: `409 LAST_OWNER`, naming the workspaces to hand over. Each workspace row is
-   locked in id order first, so two owners erasing at once cannot each count the other.
+   locked in id order first, so two owners erasing at once cannot each count the other. A workspace
+   left with nobody live in it has its open invitation links revoked, or a newcomer holding one would
+   join a workspace nobody could ever own again.
 7. **Content erasure is an operator's command, per workspace** (`bun run erase:content <user>
    --workspace <slug>`; `--all` for a self-hoster who is the controller of every workspace, D-28): every
    message the person wrote there becomes a tombstone through the same set-based rule as a delete, and

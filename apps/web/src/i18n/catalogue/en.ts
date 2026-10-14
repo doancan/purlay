@@ -197,6 +197,7 @@ export const en = {
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
   'audit.action.workspace.renamed': '{actor} renamed the workspace from {from} to {to}',
   'audit.action.retention.changed': '{actor} changed how long history is kept from {from} to {to}',
+  'audit.action.account.erased': 'A member erased their account',
   'retention.forever': 'forever',
   'retention.days': '{days} days',
   'retention.entry': 'Keep history…',
@@ -893,6 +894,8 @@ export const en = {
   // ── Failures: one sentence per cause, shared by every screen ────────────
   'failure.network': 'Check your connection and try again.',
   'failure.session': 'Your session ended. Sign in again to carry on.',
+  'failure.reauthenticate':
+    'Sign out and sign in again, then try once more: this needs a fresh sign-in.',
   'failure.gone':
     'This is no longer available. It may have been removed, or you may have lost access.',
   'failure.slow': 'You are going too fast. Wait a moment and try again.',

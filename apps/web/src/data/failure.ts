@@ -26,6 +26,7 @@ export type FailureCode = ApiErrorCode | 'TIMEOUT' | 'UNKNOWN';
 export type FailureKey =
   | 'failure.network'
   | 'failure.session'
+  | 'failure.reauthenticate'
   | 'failure.gone'
   | 'failure.slow'
   | 'failure.tooLarge'
@@ -53,6 +54,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'OAUTH_STATE_INVALID':
     case 'EMAIL_REQUIRED':
       return 'failure.session';
+    // Erasing an account wants a sign-in from the last minutes (D-139 §5).
+    case 'REAUTHENTICATION_REQUIRED':
+      return 'failure.reauthenticate';
     case 'FORBIDDEN':
     case 'ROUTE_NOT_FOUND':
     case 'WORKSPACE_NOT_FOUND':

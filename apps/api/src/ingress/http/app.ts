@@ -39,6 +39,7 @@ import {
   abandonSignIn,
   completeSignIn,
   signOut,
+  eraseMyAccount,
   signOutEverywhere,
   startSignIn,
   type AuthResponse,
@@ -424,6 +425,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       respond(set, await signOutEverywhere({ ...dependencies, bus: sockets.bus }, request)),
     )
 
+    .post('/api/me/erase', async ({ request, body, set }) =>
+      respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
+    )
     .get('/api/me', async ({ request }) => await readMe(dependencies, request))
     .patch(
       '/api/me/profile',

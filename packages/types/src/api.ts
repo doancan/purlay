@@ -437,6 +437,7 @@ export const AUDIT_ACTIONS = [
   'message.removed_by_moderator',
   'workspace.renamed',
   'retention.changed',
+  'account.erased',
   'retention.purged',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -561,6 +562,16 @@ export const PushSubscribeRequest = FromClient({
   locale: PushLocale,
 });
 export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
+
+/**
+ * `POST /api/me/erase` — the person erases their own account (D-27 §2, D-139 §5): their username, typed,
+ * so a slip of the hand erases nothing. From a session signed in within `ERASURE_SIGN_IN_MINUTES`.
+ */
+export const EraseAccountRequest = FromClient({ confirm: Type.String({ maxLength: 64 }) });
+export type EraseAccountRequest = Static<typeof EraseAccountRequest>;
+
+/** How recent a sign-in erasing an account needs (D-139 §5). */
+export const ERASURE_SIGN_IN_MINUTES = 15;
 
 /** `PUT /api/me/locale` — the language the server writes this person's notifications in (D-41). */
 export const SetLocaleRequest = FromClient({ locale: PushLocale });

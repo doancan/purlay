@@ -194,6 +194,7 @@ export const tr = {
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
   'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
   'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
+  'audit.action.account.erased': 'Bir üye hesabını sildi',
   'retention.forever': 'süresiz',
   'retention.days': '{days} gün',
   'retention.entry': 'Geçmişi sakla…',
@@ -873,6 +874,8 @@ export const tr = {
   // ── Hatalar: her neden için bir cümle, bütün ekranlarda ortak ──────────
   'failure.network': 'Bağlantını kontrol edip tekrar dene.',
   'failure.session': 'Oturumun sona erdi. Devam etmek için tekrar giriş yap.',
+  'failure.reauthenticate':
+    'Çıkış yapıp yeniden giriş yap, sonra tekrar dene: bu işlem yeni bir giriş ister.',
   'failure.gone':
     'Bu artık kullanılamıyor. Kaldırılmış olabilir ya da erişimini kaybetmiş olabilirsin.',
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',

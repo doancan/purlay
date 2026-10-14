@@ -1319,7 +1319,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | # | Invariant | Enforced in |
 |---|---|---|
 | I-1 | Threads are at most two levels deep: a reply's `parent_id` must point at a message whose own `parent_id` is `NULL`. The database enforces that a reply is in its parent's channel (and so workspace); depth is the service's. | `messages.service`, in part `messages_parent_channel_fkey` |
-| I-2 | Every workspace has at least one `owner`. The last owner cannot be demoted or removed. | `workspaces/members.ts`, under the workspace row's lock (D-111) |
+| I-2 | Every workspace has at least one live `owner` — an erased one counts for nothing. The last live owner cannot be demoted, removed, or erase their account while another live member remains. | `workspaces/members.ts`, `users/erasure.ts`, under the workspace row's lock (D-111, D-139 §6) |
 | I-3 | `channel_members.last_read_message_id` must belong to that channel. | the database: `channel_members_last_read_channel_fkey` |
 | I-4 | `messages.workspace_id` must equal the `workspace_id` of its `channel_id`. Denormalized for the tenant guard; must never diverge. | the database: `messages_channel_workspace_fkey` |
 | I-5 | `dm_key` is the UUIDs of the conversation's people — two, or up to ten for a group (D-127) — sorted ascending and joined with `:`; the same set is the same conversation. The database enforces the form and the order; that they are people of the workspace is the service's. | `channels.service`, in part `dm_key_form` |
@@ -1328,7 +1328,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
-| I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38) | `erasure.service` |
+| I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5) | `modules/users/erasure.ts` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
 last with the read-state service, D-99), and I-1 and I-5 are constraints in part (D-90). Four things stay service-level on purpose:

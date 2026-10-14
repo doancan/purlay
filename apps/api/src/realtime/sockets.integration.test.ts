@@ -630,7 +630,7 @@ describe('integration: two real sockets', () => {
   describe('a session’s end reaches its sockets', () => {
     const endedWith = async (
       client: Client,
-      reason: 'signed-out' | 'expired',
+      reason: 'signed-out' | 'expired' | 'account-deleted',
     ): Promise<{ code: number | string; reason: unknown }> => {
       const code = await Promise.race([client.ended, Bun.sleep(5_000).then(() => 'still open')]);
       const announced = client.frames.find((f) => f.event === 'SESSION_ENDED');
@@ -674,6 +674,36 @@ describe('integration: two real sockets', () => {
           code: CLOSE_CODES.SESSION_ENDED,
         });
       }
+      await stillServed(bystander);
+      await bystander.close();
+    });
+
+    test('erasing an account closes every socket it had, and the API no longer knows it (D-139 §5)', async () => {
+      const alice = await aUser('alice');
+      const bob = await aUser('bob');
+      const second = await issueSession(db, clock, alice.id, 30);
+      const phone = await connect(alice.cookie);
+      const laptop = await connect(`${SESSION_COOKIE}=${second.token}`);
+      const bystander = await connect(bob.cookie);
+      await stillServed(phone);
+      const { username } = await db
+        .selectFrom('users')
+        .select('username')
+        .where('id', '=', alice.id)
+        .executeTakeFirstOrThrow();
+
+      const erased = await http('POST', '/api/me/erase', alice.cookie, { confirm: username });
+      expect(erased.status).toBe(204);
+      // The cookie cleared, as signing out clears it.
+      expect(erased.headers.get('set-cookie') ?? '').toMatch(
+        /^__Host-purlay_session=;.*Expires=Thu, 01 Jan 1970/,
+      );
+      for (const client of [phone, laptop]) {
+        expect(await endedWith(client, 'account-deleted')).toMatchObject({
+          code: CLOSE_CODES.SESSION_ENDED,
+        });
+      }
+      expect((await http('GET', '/api/me', alice.cookie)).status).toBe(401);
       await stillServed(bystander);
       await bystander.close();
     });

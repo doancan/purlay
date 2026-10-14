@@ -16,6 +16,16 @@
  * is `APP_URL` itself (D-61), and the way back from a sign-in that did not finish
  * is the sign-in screen with a reason from a closed set (D-121).
  */
+import { EraseAccountRequest } from '@purlay/types';
+import { eraseAccount } from '../../modules/users/erasure';
+import {
+  publication,
+  publishAfterCommit,
+  publishUserDeleted,
+  publishWorkspaceUpdated,
+} from '../../platform/events';
+import { atomicallyOn } from '../../platform/transactions';
+import { validated } from './validate';
 import type { Executor } from '@purlay/db';
 import { signInFailureHref, type ErrorCode, type SignInFailure } from '@purlay/types';
 import type { Config } from '../../platform/config';
@@ -171,5 +181,33 @@ export const signOutEverywhere = async (
 ): Promise<AuthResponse> => {
   const { userId } = await requireSession(dependencies.database, dependencies.clock, request);
   await signOutEverywhereOf(dependencies, userId);
+  return { setCookie: [clearedSessionCookie()] };
+};
+
+/**
+ * `POST /api/me/erase` — the person erases their own account (D-139 §5): `204`, the cookie cleared, and
+ * after the commit their sockets ended and each workspace they were in told to read its members again.
+ */
+export const eraseMyAccount = async (
+  dependencies: SignOutDependencies,
+  request: Request,
+  body: unknown,
+): Promise<AuthResponse> => {
+  const { database, clock, bus } = dependencies;
+  const caller = await requireSession(database, clock, request);
+  const { confirm } = validated(EraseAccountRequest, body);
+  const erased = await atomicallyOn(database)(
+    async (transaction) => await eraseAccount(transaction, clock, caller, confirm),
+  );
+  // Each told on its own: one that fails is logged, and the rest are still told. The person's sockets
+  // first — every one, whatever session it holds — then each workspace's members (D-139 §5).
+  await publishAfterCommit(dependencies.log, [
+    [publication('SESSION_ENDED', () => publishUserDeleted(bus, clock, erased.userId))],
+    erased.workspaces.map((workspace) =>
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, workspace.memberIds, workspace.id),
+      ),
+    ),
+  ]);
   return { setCookie: [clearedSessionCookie()] };
 };

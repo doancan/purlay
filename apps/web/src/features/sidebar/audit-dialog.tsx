@@ -134,6 +134,9 @@ export const AuditDialog = ({
           from: kept(entry.metadata['from']),
           to: kept(entry.metadata['to']),
         });
+      // The person is gone, so the sentence names nobody (D-139 §5).
+      case 'account.erased':
+        return t('audit.action.account.erased');
       // Nobody did it: the nightly purge, which names no actor (D-139 §3).
       case 'retention.purged':
         return t('audit.action.retention.purged', {
