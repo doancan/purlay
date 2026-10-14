@@ -19,9 +19,9 @@ const timeIn = (timeZone: string, at: number, locale: string): string | null => 
       at,
     );
   } catch (error) {
-    if (error instanceof RangeError) return null;
-    throw error;
+    if (!(error instanceof RangeError)) throw error;
   }
+  return null;
 };
 
 /** The time where a profile's person is, now; null when they have no zone or it cannot be shown. */

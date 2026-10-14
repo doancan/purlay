@@ -91,6 +91,17 @@ describe('a conversation with one other person', () => {
     view.unmountAll();
   });
 
+  test('a zone this browser cannot format in shows no time, and the profile still names it', async () => {
+    const view = await withAlice({ title: null, timeZone: 'Mars/Olympus_Mons', status: null });
+    expect(view.container.querySelector('header')?.textContent).not.toContain('local time');
+    await person().click(view.getByRole('button', { name: /profile$/ }));
+    await settle();
+    const panel = view.getByRole('complementary', { name: /^Profile/ });
+    expect(panel.textContent).toContain('Mars/Olympus_Mons');
+    expect(panel.textContent).not.toContain('local time');
+    view.unmountAll();
+  });
+
   test('a profile with nothing in it says so', async () => {
     const view = await withAlice({ title: null, timeZone: null, status: null });
     await person().click(view.getByRole('button', { name: /profile$/ }));
@@ -148,6 +159,19 @@ describe('your profile, from the account menu', () => {
 
     expect(sent).toEqual([{ title: 'Staff engineer' }]);
     expect(within(dialog).getByRole('status').textContent).toBe('Saved.');
+    view.unmount();
+  });
+
+  test('closed without saving, what was typed is let go', async () => {
+    const view = await openFrame();
+    await person().type(textbox(view, 'Status'), 'Out today');
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    await person().click(view.getByRole('button', { name: 'Account: Dogancan' }));
+    await person().click(await view.findByRole('menuitem', { name: 'Your profile…' }));
+    await settle();
+    expect(textbox(view, 'Status').value).toBe('');
     view.unmount();
   });
 
