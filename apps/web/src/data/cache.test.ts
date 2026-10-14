@@ -3,7 +3,12 @@
  * lists the screens read come out. No React, no network.
  */
 import { describe, expect, test } from 'bun:test';
-import { InfiniteQueryObserver, QueryClient, type InfiniteData } from '@tanstack/react-query';
+import {
+  InfiniteQueryObserver,
+  QueryClient,
+  QueryObserver,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import type { Channel, FilePage, Message, MessagePage, PinList } from '@purlay/types';
 import {
   channelAdded,
@@ -15,6 +20,7 @@ import {
   newestMessageId,
   patchMessage,
   reactionsUpdated,
+  readAgain,
   threadUpdated,
 } from './cache';
 import { keys } from './keys';
@@ -579,5 +585,59 @@ describe('a star (D-132)', () => {
     channelStarred(client, CH, false);
     channelStarred(client, CH, true, true);
     expect(starred()).toBe(false);
+  });
+});
+
+describe('reading again what may have changed (#540)', () => {
+  /** A query watched by a screen, whose reads are counted and fail while told to. */
+  const watched = (failing: {
+    now: boolean;
+  }): { readonly client: QueryClient; readonly reads: () => number; readonly stop: () => void } => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: ['thread', 'root'],
+      queryFn: (): Promise<string[]> => {
+        reads += 1;
+        return failing.now ? Promise.reject(new Error('down')) : Promise.resolve(['a reply']);
+      },
+    });
+    const stop = observer.subscribe(() => undefined);
+    return { client, reads: () => reads, stop };
+  };
+  const settle = async (): Promise<void> => {
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  test('one that failed with nothing to show is left with its failure, for the person to retry', async () => {
+    const failing = { now: true };
+    const { client, reads, stop } = watched(failing);
+    await settle();
+    expect(reads()).toBe(1);
+    readAgain(client, ['thread']);
+    await settle();
+    expect(reads()).toBe(1);
+    expect(client.getQueryState(['thread', 'root'])?.status).toBe('error');
+    stop();
+  });
+
+  test('one that holds data is read again', async () => {
+    const { client, reads, stop } = watched({ now: false });
+    await settle();
+    readAgain(client, ['thread']);
+    await settle();
+    expect(reads()).toBe(2);
+    stop();
+  });
+
+  test('one on its way that then fails is not asked again when it lands', async () => {
+    const failing = { now: true };
+    const { client, reads, stop } = watched(failing);
+    // Asked while the first read is still on its way.
+    readAgain(client, ['thread']);
+    await settle();
+    expect(reads()).toBe(1);
+    expect(client.getQueryState(['thread', 'root'])?.status).toBe('error');
+    stop();
   });
 });

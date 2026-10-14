@@ -13,6 +13,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   the channel until it was reloaded, along with its unread messages and its mentions in the badges and
   the tab's title. This was the cause of the inbox test that failed only while other tests ran. The
   test now joins its channel after the page has loaded, so it reproduces the case every time.
+- That fix exposed a second, client-side cause. Each subscription's answer re-read every cached
+  thread, so a thread whose replies had failed was read again before its failure could show, and
+  under a stream of new channels it stayed "Loading replies…" for good. `readAgain` now leaves a
+  query that failed with nothing to show alone, with its Retry, wherever it is used: threads, pins,
+  files and feeds. The frames that read a list again go through it too: a thread resolved or deleted
+  (the open questions), stars (`CHANNELS_UPDATED`), saves (`SAVED_UPDATED`) and a workspace's members.
+  A reconnect still reads everything again, failures included, since what failed may have failed
+  because the connection was down.
 
 ### Fix — 2026-10-14: a write the network never answers is given up after 30 seconds (closes #604)
 

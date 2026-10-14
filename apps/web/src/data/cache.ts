@@ -89,6 +89,15 @@ const settled = (query: { readonly state: { readonly fetchStatus: string } }): b
   query.state.fetchStatus === 'idle';
 
 /**
+ * Whether reading it again could correct anything: it holds data. One that failed with nothing to show
+ * is the screen's failure, with its Retry — read again, the failure is replaced by loading before it
+ * is ever seen, and under a stream of subscriptions it never is (#540: a thread whose replies failed
+ * stayed "Loading replies…" while channels were being added).
+ */
+const holdsData = (query: { readonly state: { readonly data: unknown } }): boolean =>
+  query.state.data !== undefined;
+
+/**
  * Marks what is cached under the key to be read again: what is settled now, and what is being read
  * as soon as that read is done. A read on its way is not cancelled — that stalls the screen driving
  * it — but it may have begun before the change and bring back what has already changed; left
@@ -99,7 +108,10 @@ export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
   // Which are on their way is read before anything is asked again: asked first, a settled list is
   // on its way too by the time it is looked at, and would be read a second time when it lands.
   const onTheirWay = cache.findAll({ queryKey }).filter((query) => !settled(query));
-  void client.invalidateQueries({ queryKey, predicate: settled });
+  void client.invalidateQueries({
+    queryKey,
+    predicate: (query) => settled(query) && holdsData(query),
+  });
   for (const query of onTheirWay) {
     const unsubscribe = cache.subscribe((event) => {
       if (event.query !== query) return;
@@ -110,6 +122,7 @@ export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
       }
       if (!settled(query)) return;
       unsubscribe();
+      if (!holdsData(query)) return;
       void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
     });
   }
@@ -238,8 +251,9 @@ export const threadUpdated = (
 ): void => {
   patchMessage(client, messageId, (m) => ({ ...m, thread }));
   // Whether a thread is open or resolved decides if it belongs in that view at all,
-  // and which page it falls on; asking again is cheaper than reasoning about it.
-  void client.invalidateQueries({ queryKey: families.unresolved });
+  // and which page it falls on; asking again is cheaper than reasoning about it. A view that failed
+  // keeps its failure and its Retry (#540).
+  readAgain(client, families.unresolved);
 };
 
 /** A message's whole reaction set, replacing what was there. */
@@ -305,7 +319,7 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
     );
     askAgainIfOnItsWay(client, key);
   }
-  if (deletedRoot) void client.invalidateQueries({ queryKey: families.unresolved });
+  if (deletedRoot) readAgain(client, families.unresolved);
 };
 
 /** The caller's own position and counters in one channel — the server's numbers, copied. */
