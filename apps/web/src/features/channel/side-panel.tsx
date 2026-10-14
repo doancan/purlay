@@ -22,7 +22,7 @@ import {
 import { useOpenThread, useThreads } from '../threads/thread-context';
 
 /** The panels a channel has besides a thread. */
-type SidePanelName = 'files' | 'pins';
+type SidePanelName = 'files' | 'pins' | 'profile';
 
 interface SidePanelApi {
   readonly panel: SidePanelName | null;

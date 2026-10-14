@@ -86,6 +86,11 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
 - **On a narrow window** the Files and Pinned messages controls are one menu, **Files and pinned
   messages**, so the channel's name keeps its room in the header.
+- **A conversation with one other person** is headed by them: their name, which opens their
+  **profile** in the same place — name, handle, title, status line, the time where they are and its
+  zone — and, on a wide window, their local time and status beside the name (D-131). **Your profile…**
+  in the account menu sets your own title, status and time zone, with this device's zone one press
+  away; a field emptied is cleared. Where people are picked, each says their title and local time.
 - **Pins panel** — the same place again, opened by the header's **Pinned messages** control (D-130):
   the channel's pinned messages, newest pin first, each with who said it and when, its words, and who
   pinned it; a pinned reply opens its thread, and a member unpins from the row. **Pin** sits beside

@@ -41,6 +41,7 @@ import { cn } from '../../ui/cn';
 import { ThreadPanel } from '../threads/thread';
 import { FilesPanel } from './files-panel';
 import { PinsPanel } from '../pins/pins-panel';
+import { ProfilePanel } from '../profile/profile-panel';
 import { PinIntentsProvider } from '../pins/use-pin';
 import { SidePanelProvider, useSidePanel } from './side-panel';
 
@@ -149,6 +150,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
                 channelLabel={conversation ? title : `#${title}`}
               />
               <PinsPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
+              <ProfilePanel person={conversation ? channel.peer : null} />
             </div>
           </PinIntentsProvider>
         </SidePanelProvider>

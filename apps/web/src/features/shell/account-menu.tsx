@@ -28,6 +28,7 @@ import { usePushControls } from '../push/push';
 import { useSession } from '../session/session';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from './deep-work';
 import { PreferenceItems } from './settings-menu';
+import { ProfileDialog } from '../profile/profile-dialog';
 
 /** Deep Work's part of the menu: the whiles to start it for, or how long is left and its end. */
 const DeepWorkItems = (): React.JSX.Element | null => {
@@ -104,6 +105,7 @@ export const AccountMenu = (): React.JSX.Element => {
   const { show } = useToast();
   const describe = useDescribeFailure();
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const leave = (scope: 'here' | 'everywhere'): void => {
     // A refused sign-out leaves the person signed in and says so; going to the sign-in screen
@@ -144,6 +146,15 @@ export const AccountMenu = (): React.JSX.Element => {
           </button>
         }
       >
+        <MenuItem
+          glyph="person"
+          onSelect={() => {
+            setEditing(true);
+          }}
+        >
+          {t('profile.menu')}
+        </MenuItem>
+        <MenuSeparator />
         <DeepWorkItems />
         <PushItems />
         <PreferenceItems />
@@ -166,6 +177,7 @@ export const AccountMenu = (): React.JSX.Element => {
           {t('user.signOutEverywhere.entry')}
         </MenuItem>
       </Menu>
+      <ProfileDialog open={editing} onOpenChange={setEditing} />
       <Dialog
         open={confirming}
         onOpenChange={setConfirming}

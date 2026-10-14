@@ -63,6 +63,7 @@ describe('the account menu', () => {
     const view = await open();
     await menu(view);
     expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Your profile…',
       'For 30 minutes',
       'For 1 hour',
       'For 2 hours',

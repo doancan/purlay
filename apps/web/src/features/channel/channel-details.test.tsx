@@ -64,13 +64,16 @@ describe('opening it', () => {
     view.unmountAll();
   });
 
-  test('a direct message has no details to open: its title is not a button', async () => {
+  test('a direct message has no channel details: its title opens the person’s profile (D-131)', async () => {
     const direct = { ...aChannel(IDS.api, null), type: 'direct_message' as const, peer: BOB };
     const view = await mountChannel({
       messages: page([]),
       channels: [direct, ...someChannels().filter((c) => c.id !== IDS.api)],
     });
-    expect(view.queryByRole('button', { name: BOB.username })).toBeNull();
+    await person().click(view.getByRole('button', { name: BOB.username }));
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(view.getByRole('complementary', { name: /^Profile/ })).toBeDefined();
     view.unmountAll();
   });
 });

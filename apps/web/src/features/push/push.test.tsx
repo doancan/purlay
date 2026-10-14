@@ -302,8 +302,8 @@ describe('notifications on this device', () => {
     const view = await open(aServer().api, browser.device);
     view.getByRole('button', { name: 'Account: Dogancan' }).focus();
     await person().keyboard('{Enter}');
-    // Deep Work's four whiles come first.
-    await person().keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
+    // Your profile, then Deep Work's four whiles, come first.
+    await person().keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
     expect(document.activeElement?.textContent).toBe('Turn on');
     await person().keyboard('{Enter}');
     await settle();
