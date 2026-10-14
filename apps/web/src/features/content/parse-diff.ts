@@ -146,7 +146,11 @@ export const parseDiff = (text: string): ParsedDiff => {
     const tail = last?.lines.at(-1);
     if (last !== undefined && tail?.kind === 'context' && tail.text === '') last.lines.pop();
   }
-  return { files: state.files, added: state.added, removed: state.removed };
+  // A hunk left with no lines, and a file left with no hunks, held nothing that was pasted.
+  const files = state.files
+    .map((file) => ({ ...file, hunks: file.hunks.filter((hunk) => hunk.lines.length > 0) }))
+    .filter((file) => file.hunks.length > 0 || file.oldPath !== null || file.newPath !== null);
+  return { files, added: state.added, removed: state.removed };
 };
 
 /** A row of the split view: the old side and the new side, either empty where there is nothing. */

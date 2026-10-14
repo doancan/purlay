@@ -113,7 +113,7 @@ const Split = ({ file }: { readonly file: DiffFile }): React.JSX.Element => (
       ...splitRows(hunk.lines).map((row, index) => (
         <tr key={`${String(at)}.${String(index)}`}>
           <Side line={row.old} />
-          <Side line={row.new === row.old ? null : row.new} />
+          <Side line={row.new} />
         </tr>
       )),
     ])}

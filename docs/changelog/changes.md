@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a pasted diff drawn as a diff (D-133, closes #80)
+
+- A ` ```diff ` (or ` ```patch `) block shows numbered lines, what was added and removed in colour
+  and in words, the counts, and Unified or Split — copied as it was sent, clamped when long.
+
 ### Feature — 2026-10-14: channels to join after accepting an invitation (D-132, closes #489)
 
 - Accepting an invitation leads to the workspace's public channels, the three busiest picked

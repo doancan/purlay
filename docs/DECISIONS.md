@@ -5796,6 +5796,34 @@ row, the second a setting nobody has asked for; the latest message says where th
 **Cost of reversing:** migration 0030's column, two routes, the frame, the section, and the welcome
 step.
 
+### D-133. A pasted diff is drawn as a diff, for reading — #80
+
+**Context.** People paste `git diff` output into a conversation to say "this is what changed". As a
+code block it is a wall of `+` and `-`. D-125 put the diff viewer in Phase 2; review itself stays where
+the code is (`PRD.md` §6).
+
+**Decision.**
+1. **A fenced block whose language is `diff` or `patch`** is drawn as a diff; every other language
+   stays a code block. Nothing is guessed from the content: the fence says what it is.
+2. **Read by a pure parser** into files (from `diff --git` and `---`/`+++`), hunks (from `@@`, with
+   the numbers each line has on each side) and lines. It forgives a paste: git's notes are skipped,
+   a block of `+`/`-` lines with no headers is one hunk with no numbers, and a line it cannot place
+   is kept as context — nothing pasted is lost.
+3. **Unified or split**, the reader's choice for that block, unified to begin with; split pairs each
+   run of removals with the additions after it, context on both sides. A narrow window has room for
+   one column and is unified whatever was chosen.
+4. **Never colour alone**: a line keeps its `+` or `-`, and a screen reader hears "added" or
+   "removed". Each file is a table, its rows the lines.
+5. **As a code block is**: the counts of what was added and removed, Copy for the raw text as sent,
+   the clamp above twelve lines. No syntax highlighting inside it — the colour is the change.
+
+**Rejected.** *Detecting a diff from its content* — a message about `--flags` or a list of `-` items
+would be drawn as one. *Highlighting each line in its file's language* — a second colour on top of the
+change, and a grammar per file for a paste. *Word-level changes inside a line* — worth it for review,
+which this is not. *A remembered preference for split* — a setting for one block's view.
+
+**Cost of reversing:** two files and a branch in the renderer.
+
 ---
 
 ## Part D — Open, deliberately

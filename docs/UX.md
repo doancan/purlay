@@ -199,7 +199,8 @@ they were.
 - **Two edges, in bubbles** (D-119, amending D-100). Everyone else's messages are on the left in a `surface-200`
   bubble, with an avatar in a fixed column; your own are on the right in an `accent-subtle` bubble,
   with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
-  card inside it. The channel's feed and composer are centred.
+  card inside it, and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
+  colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are centred.
 - **The header line** is over a group's first bubble: the name and the time on the left, the time
   alone on the right, the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
