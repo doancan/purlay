@@ -460,7 +460,8 @@ CREATE TABLE messages (
     channel_id   UUID NOT NULL,
 
     -- RESTRICT, because users are soft-deleted and authorship must survive. (D-22)
-    sender_id    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    -- NULL for a message nobody wrote: a repository's event (`messages_sender_by_type`, 0032, D-134).
+    sender_id    UUID REFERENCES users(id) ON DELETE RESTRICT,
 
     -- Threads are exactly two levels deep: a root message and its replies.
     -- A reply may not itself be a parent. Enforced in the message service.
@@ -484,13 +485,24 @@ CREATE TABLE messages (
     content      TEXT NOT NULL,
     message_type message_type NOT NULL DEFAULT 'text',
 
-    -- Renderer hints and system-event payloads. Never used for tenant filtering.
+    -- Renderer hints and system-event payloads, read by `message_type`, never by their shape: a
+    -- `text` message's `TextMetadata`, a `system_event`'s `GitHubEvent` ('{}' once it is a
+    -- tombstone). Never used for tenant filtering.
     metadata     JSONB NOT NULL DEFAULT '{}'::jsonb,
 
     edited_at    TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at   TIMESTAMPTZ,
+
+    -- A person's message has its sender; an event has none. Added by 0032. (D-134 §6)
+    CONSTRAINT messages_sender_by_type CHECK ((message_type = 'text') = (sender_id IS NOT NULL)),
+    -- An event's metadata names a kind the contract knows, or is '{}' as a tombstone. Added by 0032.
+    CONSTRAINT messages_event_known CHECK (
+        message_type = 'text'
+        OR metadata = '{}'::jsonb
+        OR metadata ->> 'kind' IN ('push', 'pull_request', 'issues', 'release')
+    ),
 
     -- Only root messages are resolvable; resolving a reply is meaningless.
     CONSTRAINT only_roots_resolve CHECK (parent_id IS NULL OR resolved_at IS NULL),
@@ -622,13 +634,9 @@ a live channel is *every* page.
 Free-form column, but only these shapes are written. Each is validated before insert.
 
 ```typescript
-/** message_type = 'system_event' */
-type SystemEventMetadata =
-  | { event: 'member_joined';    userId: string }
-  | { event: 'member_left';      userId: string }
-  | { event: 'channel_renamed';  from: string; to: string; byUserId: string }
-  | { event: 'topic_changed';    topic: string | null; byUserId: string }
-  | { event: 'thread_resolved';  byUserId: string };
+/** message_type = 'system_event' — what a repository's feed posts, with no sender (D-134 §6): the
+ *  shape is `GitHubEvent` in `packages/types/src/models.ts`, and it lives only there; '{}' once the
+ *  message is a tombstone. The one reader refuses a `system_event` whose metadata is neither. */
 
 /** message_type = 'text' — renderer hints produced by the parser at write time: code languages,
  *  GitHub links, whether the body is only code. The shape is `TextMetadata` in
@@ -1203,10 +1211,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0029_profiles.sql            users.title, users.time_zone, users.status_text  (D-131)
 0030_starred_channels.sql    channel_members.starred_at  (D-132)
 0031_github_feeds.sql        github_repo_feeds, github_deliveries  (D-134)
+0032_event_messages.sql      messages.sender_id nullable for an event, messages_sender_by_type  (D-134 §6)
 ```
 
-Phase 2's messages with no author add `0032_event_messages.sql` (D-134 §6); its magic links add
-`0033_email_auth.sql`.
+Phase 2's magic links add `0033_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration

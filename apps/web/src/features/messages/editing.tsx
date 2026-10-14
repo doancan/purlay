@@ -17,6 +17,7 @@ import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 import { Menu, MenuItem } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
+import { isMine } from './author';
 
 interface Editing {
   readonly editingId: string | null;
@@ -64,7 +65,7 @@ export const lastOwnMessage = (
   client
     .getQueryData<InfiniteData<MessagePage>>(keys.messages(channelId))
     ?.pages.flatMap((page) => page.data)
-    .filter((m) => m.sender.id === meId && m.deletedAt === null)
+    .filter((m) => isMine(m, meId) && m.deletedAt === null)
     .reduce<Message | undefined>(
       (newest, m) => (newest === undefined || m.id > newest.id ? m : newest),
       undefined,

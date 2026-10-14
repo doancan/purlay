@@ -26,6 +26,7 @@ import {
   scrollToBottom,
   type Anchor,
 } from './scroll';
+import { isMine } from '../messages/author';
 
 export interface FeedScroll {
   /** Is the reader at the bottom right now? */
@@ -158,8 +159,8 @@ export const useFeedScroll = ({
       holdAnchor(el, previous.anchor);
       settle(el);
     } else if (last !== previous.last) {
-      const own =
-        [...items].reverse().find((item) => item.kind === 'message')?.message.sender.id === meId;
+      const newest = [...items].reverse().find((item) => item.kind === 'message');
+      const own = newest !== undefined && isMine(newest.message, meId);
       if (own || wasAtBottom(el)) {
         scrollToBottom(el);
         settle(el);
@@ -169,7 +170,7 @@ export const useFeedScroll = ({
             item.kind === 'message' &&
             previous.last !== null &&
             item.message.id > previous.last &&
-            item.message.sender.id !== meId,
+            !isMine(item.message, meId),
         ).length;
         setNewBelow((count) => count + arrived);
         // The scroll that put them here may not be reported yet; the pill, and whether this

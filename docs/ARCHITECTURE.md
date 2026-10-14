@@ -672,6 +672,10 @@ stored representation. (D-36)
   pure parser (`parse-diff.ts`) into files, hunks and numbered lines, unified or split by the
   reader's choice, unified alone on a narrow window; counted, copied raw and clamped as a code block
   is. No highlighting inside it: the colour is the change.
+- A message nobody wrote — a repository's event (D-134 §6) — skips this pipeline: it is not parsed,
+  so nothing in a title names anybody, and it is drawn from its `githubEvent`
+  (`content/github-event.tsx`) as a sentence in the reader's language, every link built from the
+  event's parts. Who a message is by is asked of `messages/author.ts` alone.
 
 ### 8.3. GitHub unfurling
 

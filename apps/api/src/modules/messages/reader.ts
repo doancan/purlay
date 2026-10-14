@@ -13,8 +13,15 @@
  * when the page has a resolved thread). A feed of fifty roots is four queries, not
  * two hundred — the rule D-13 states for counters, applied to every page.
  */
+import { Value } from '@sinclair/typebox/value';
 import type { Executor } from '@purlay/db';
-import type { Message, Reaction, ThreadSummary, User } from '@purlay/types';
+import {
+  GitHubEvent,
+  type Message,
+  type Reaction,
+  type ThreadSummary,
+  type User,
+} from '@purlay/types';
 import { attachmentSets, mentionSets, reactionSets } from './sets';
 
 /** What every query that returns messages selects. Kept beside `MessageRow` so they cannot drift. */
@@ -26,6 +33,8 @@ export const MESSAGE_COLUMNS = [
   'messages.deleted_at',
   'messages.created_at',
   'messages.sender_id',
+  'messages.message_type',
+  'messages.metadata',
   'messages.parent_id',
   'messages.thread_reply_count',
   'messages.thread_last_reply_at',
@@ -43,14 +52,18 @@ export interface MessageRow {
   readonly edited_at: Date | string | null;
   readonly deleted_at: Date | string | null;
   readonly created_at: Date | string;
-  readonly sender_id: string;
+  /** Null for a message nobody wrote — a `system_event` (D-134 §6). */
+  readonly sender_id: string | null;
+  readonly message_type: 'text' | 'system_event';
+  readonly metadata: unknown;
   readonly parent_id: string | null;
   readonly thread_reply_count: number;
   readonly thread_last_reply_at: Date | string | null;
   readonly resolved_at: Date | string | null;
   readonly resolved_by: string | null;
-  readonly username: string;
-  readonly display_name: string;
+  /** The sender's, through a left join: null with the sender. */
+  readonly username: string | null;
+  readonly display_name: string | null;
   readonly avatar_url: string | null;
 }
 
@@ -122,10 +135,38 @@ export const readMessage = async (
 ): Promise<MessageRow | undefined> =>
   await executor
     .selectFrom('messages')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.id', '=', messageId)
     .executeTakeFirst();
+
+/**
+ * Who wrote it, and what happened, from one row: a person's message has its sender and no event; an
+ * event has no sender and, unless it is a tombstone, the event its metadata holds. A row that is
+ * neither — which `messages_sender_by_type` and the one writer of events make impossible — is said,
+ * loudly, rather than drawn as somebody's message or as nothing.
+ */
+const authorship = (row: MessageRow): Pick<Message, 'sender' | 'githubEvent'> => {
+  if (row.message_type === 'text') {
+    if (row.sender_id === null || row.username === null || row.display_name === null) {
+      throw new Error(`message ${row.id} is a person's with no person`);
+    }
+    return {
+      sender: {
+        id: row.sender_id,
+        username: row.username,
+        displayName: row.display_name,
+        avatarUrl: row.avatar_url,
+      },
+      githubEvent: null,
+    };
+  }
+  if (row.deleted_at !== null) return { sender: null, githubEvent: null };
+  if (!Value.Check(GitHubEvent, row.metadata)) {
+    throw new Error(`message ${row.id} is an event the contract cannot say`);
+  }
+  return { sender: null, githubEvent: row.metadata };
+};
 
 /** The contract's messages for these rows, in the order the rows came. */
 export const buildMessages = async (
@@ -144,12 +185,7 @@ export const buildMessages = async (
   return rows.map((row) => ({
     id: row.id,
     channelId: row.channel_id,
-    sender: {
-      id: row.sender_id,
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-    },
+    ...authorship(row),
     content: row.content,
     editedAt: atOrNull(row.edited_at),
     deletedAt: atOrNull(row.deleted_at),

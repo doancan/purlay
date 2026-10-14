@@ -39,6 +39,8 @@ import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
 import { lastChannel } from './last-channel';
 import { useOpenCount } from './use-open-count';
+import { authorOf } from '../messages/author';
+import { useMessageText } from '../content/github-event';
 
 interface Group {
   readonly channelId: string;
@@ -175,6 +177,7 @@ const QuestionRow = ({
   readonly now: Date;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
+  const textOf = useMessageText();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   const replies = t('thread.replies', { count: question.thread?.replyCount ?? 0 });
@@ -188,16 +191,16 @@ const QuestionRow = ({
         }}
         className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
       >
-        <Avatar name={question.sender.displayName} username={question.sender.username} />
+        <Avatar name={authorOf(question).displayName} username={authorOf(question).username} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="text-body font-semibold text-ink">{question.sender.username}</span>
+            <span className="text-body font-semibold text-ink">{authorOf(question).username}</span>
             <time dateTime={question.createdAt} className="font-mono text-caption text-ink-subtle">
               {format.time(question.createdAt, now)}
             </time>
           </span>
           <span className="block truncate text-body text-ink max-narrow:line-clamp-2 max-narrow:whitespace-normal">
-            {question.content}
+            {textOf(question)}
           </span>
         </span>
         <span className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">

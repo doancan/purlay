@@ -10,6 +10,9 @@ import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody, ErrorCode } from './errors';
 import {
   ATTACHMENTS_PER_MESSAGE_MAX,
+  GITHUB_EVENT_TEXT_MAX,
+  GitHubEvent,
+  PUSH_COMMITS_SHOWN_MAX,
   Channel,
   CurrentUser,
   GitHubLink,
@@ -88,6 +91,7 @@ describe('models', () => {
       id,
       channelId: id,
       sender: user,
+      githubEvent: null,
       content: 'hi',
       editedAt: null,
       deletedAt: null,
@@ -100,6 +104,70 @@ describe('models', () => {
     };
     expect(Value.Check(Message, message)).toBe(true);
     expect(Value.Check(Message, { ...message, sender: id })).toBe(false);
+  });
+});
+
+describe("a repository's event (D-134 §6)", () => {
+  const sha = 'a'.repeat(40);
+  const push = {
+    kind: 'push',
+    repository: 'acme/api',
+    actor: 'dependabot[bot]',
+    ref: { type: 'branch', name: 'main' },
+    change: 'pushed',
+    before: sha,
+    after: sha,
+    commits: [{ sha, title: 'x'.repeat(GITHUB_EVENT_TEXT_MAX) }],
+    commitCount: 20,
+  };
+
+  test('is bounded in every part, so nothing GitHub sends can grow a message past its shape', () => {
+    expect(Value.Check(GitHubEvent, push)).toBe(true);
+    for (const [why, wrong] of [
+      [
+        'a title one past the bound',
+        { commits: [{ sha, title: 'x'.repeat(GITHUB_EVENT_TEXT_MAX + 1) }] },
+      ],
+      [
+        'more commits than are shown',
+        { commits: Array.from({ length: PUSH_COMMITS_SHOWN_MAX + 1 }, () => ({ sha, title: '' })) },
+      ],
+      ['a count past what GitHub lists', { commitCount: 21 }],
+      ['a short sha', { before: 'abc' }],
+      ['a repository that leaves itself', { repository: 'acme/..' }],
+      ['a login that is a path', { actor: 'octo/cat' }],
+      ['a change GitHub never makes', { change: 'rebased' }],
+      // Parts only (D-101): an address the payload carried is not one of them.
+      ['a field the contract does not name', { url: 'https://evil.test' }],
+      ['a commit with more than its parts', { commits: [{ sha, title: 'x', author: 'a@b.test' }] }],
+    ] as const) {
+      expect({ why, valid: Value.Check(GitHubEvent, { ...push, ...wrong }) }).toEqual({
+        why,
+        valid: false,
+      });
+    }
+  });
+
+  test('a message is a person’s or an event, and says which', () => {
+    const message = {
+      id,
+      channelId: id,
+      sender: null,
+      githubEvent: push,
+      content: 'pushed',
+      editedAt: null,
+      deletedAt: null,
+      createdAt: when,
+      parentId: null,
+      thread: { replyCount: 0, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
+      reactions: [],
+      mentions: [],
+      attachments: [],
+    };
+    expect(Value.Check(Message, message)).toBe(true);
+    expect(Value.Check(Message, { ...message, githubEvent: { ...push, kind: 'deployment' } })).toBe(
+      false,
+    );
   });
 });
 
@@ -378,6 +446,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     id,
     channelId: id,
     sender: user,
+    githubEvent: null,
     content: 'why is the backoff 4s?',
     editedAt: null,
     deletedAt: null,

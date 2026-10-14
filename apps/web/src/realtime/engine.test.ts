@@ -59,6 +59,7 @@ const echo = (id: string, over: Partial<Message> = {}): Message => ({
   id,
   channelId: CH,
   sender: ME,
+  githubEvent: null,
   content: 'hello',
   editedAt: null,
   deletedAt: null,

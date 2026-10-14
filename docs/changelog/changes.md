@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a message nobody wrote, for a repository's events (D-134, part of #79)
+
+- A repository's event is a message of its own: GitHub's, never a person's — not yours to edit, not
+  grouped with anyone's, unread for everybody — drawn as a sentence in your language with links to
+  the push, the pull request, the issue or the release. Nothing posts one yet: the webhook follows.
+
 ### Feature — 2026-10-14: a repository's feed connected to a channel (D-134, part of #79)
 
 - An owner or an admin connects a GitHub repository to a channel they can see, choosing its events,

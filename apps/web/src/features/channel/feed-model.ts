@@ -13,6 +13,7 @@
 import type { FailureCode } from '../../data/failure';
 import type { Message, User } from '@purlay/types';
 import type { PendingMessage } from '../../realtime/engine';
+import { isMine, sameAuthor } from '../messages/author';
 
 /** Same author within this long of the row above: the name is not repeated (`UX.md` §3). */
 export const GROUP_WINDOW_MS = 5 * 60_000;
@@ -50,6 +51,7 @@ const asMessage = (pending: PendingMessage, me: User): Message => ({
   id: pending.id,
   channelId: pending.channelId,
   sender: me,
+  githubEvent: null,
   content: pending.content,
   editedAt: null,
   deletedAt: null,
@@ -96,7 +98,7 @@ export const buildFeed = ({
       : (entries.find(
           (entry) =>
             entry.delivery === 'sent' &&
-            entry.message.sender.id !== me.id &&
+            !isMine(entry.message, me.id) &&
             (markerAfter === null || entry.message.id > markerAfter),
         )?.message.id ?? null);
 
@@ -122,7 +124,7 @@ export const buildFeed = ({
       previous !== null &&
       previous.delivery !== 'failed' &&
       entry.delivery !== 'failed' &&
-      previous.message.sender.id === message.sender.id &&
+      sameAuthor(previous.message, message) &&
       Date.parse(message.createdAt) - Date.parse(previous.message.createdAt) < GROUP_WINDOW_MS &&
       Date.parse(message.createdAt) >= Date.parse(previous.message.createdAt);
 

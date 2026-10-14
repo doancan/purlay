@@ -32,6 +32,8 @@ import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
+import { authorOf } from '../messages/author';
+import { useMessageText } from '../content/github-event';
 
 const STATES = ['in_progress', 'archived', 'completed'] as const satisfies readonly SavedState[];
 
@@ -86,22 +88,27 @@ const Row = ({
   readonly onRemove: () => void;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
+  const textOf = useMessageText();
   const { message } = item;
   const now = useFeedPorts().clock.now();
   return (
     <li className="flex flex-col gap-2 rounded-lg px-3 py-3 hover:bg-surface-100">
       <button type="button" className="flex min-w-0 items-start gap-3 text-left" onClick={onOpen}>
-        <Avatar name={message.sender.displayName} username={message.sender.username} size="sm" />
+        <Avatar
+          name={authorOf(message).displayName}
+          username={authorOf(message).username}
+          size="sm"
+        />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 items-center gap-1 text-caption text-ink-muted">
-            <span className="font-semibold text-ink">{message.sender.displayName}</span>
+            <span className="font-semibold text-ink">{authorOf(message).displayName}</span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             <time dateTime={item.savedAt} className="ml-auto font-mono text-caption">
               {t('saved.when', { when: format.time(item.savedAt, now) })}
             </time>
           </span>
-          <span className="block truncate text-body text-ink">{message.content}</span>
+          <span className="block truncate text-body text-ink">{textOf(message)}</span>
         </span>
       </button>
       <div className="flex flex-wrap gap-2 pl-8">

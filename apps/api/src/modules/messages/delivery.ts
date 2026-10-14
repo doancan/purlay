@@ -136,7 +136,8 @@ export interface Delivery {
   /** Who the message names, already resolved. */
   readonly mentioned: readonly string[];
   /** The root a reply answers, and who wrote it; null for a root. */
-  readonly thread: { readonly rootId: string; readonly rootAuthorId: string } | null;
+  /** The root's author is null for an event's thread: nobody is told for it (D-134 §6). */
+  readonly thread: { readonly rootId: string; readonly rootAuthorId: string | null } | null;
   /** The send's instant, from its clock: whose Deep Work is on is a question about it (D-108). */
   readonly now: Date;
 }
@@ -277,7 +278,9 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
       .orderBy(sql`max(id::text)`, 'desc')
       .limit(THREAD_PARTICIPANTS_MAX)
       .execute();
-    const participants = [thread.rootAuthorId, ...answered.map((row) => row.sender_id)];
+    const participants = [thread.rootAuthorId, ...answered.map((row) => row.sender_id)].filter(
+      (id): id is string => id !== null,
+    );
     const seeing = await stillSeeing(executor, context, participants);
     for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }

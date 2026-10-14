@@ -172,6 +172,19 @@ describe('grouping', () => {
     ).toEqual([false, false]);
   });
 
+  test('a repository’s events stand alone, however close together (D-134)', () => {
+    const items = buildFeed(
+      input({
+        messages: [
+          aMessage(1, { sender: null, createdAt: at(0, 0) }),
+          aMessage(2, { sender: null, createdAt: at(0, 1) }),
+          aMessage(3, { createdAt: at(0, 2) }),
+        ],
+      }),
+    );
+    expect(grouped(items)).toEqual([false, false, false]);
+  });
+
   test('a message that claims to be from before the row above is not grouped under it', () => {
     const items = buildFeed(
       input({
@@ -200,6 +213,16 @@ describe('the unread marker', () => {
       'message 3',
       'message 4',
     ]);
+  });
+
+  test('an event past the read position is unread for everybody, so the marker names it', () => {
+    const items = buildFeed(
+      input({
+        messages: [aMessage(1, { sender: ME }), aMessage(2, { sender: null })],
+        markerAfter: messageIdAt(1),
+      }),
+    );
+    expect(kinds(items)).toEqual(['day', 'message 1', 'marker', 'message 2']);
   });
 
   test('is after the day divider when the unread run begins a day', () => {

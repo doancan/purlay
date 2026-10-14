@@ -31,6 +31,7 @@ const message = (n: number): Message => ({
   id: id(n),
   channelId: ID,
   sender: user,
+  githubEvent: null,
   content: `m${String(n)}`,
   editedAt: null,
   deletedAt: null,

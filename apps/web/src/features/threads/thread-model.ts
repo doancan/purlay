@@ -15,6 +15,7 @@ import type { FailureCode } from '../../data/failure';
 import type { Message, User } from '@purlay/types';
 import type { PendingMessage } from '../../realtime/engine';
 import { GROUP_WINDOW_MS } from '../channel/feed-model';
+import { sameAuthor } from '../messages/author';
 
 export interface ReplyItem {
   readonly key: string;
@@ -36,6 +37,7 @@ const asReply = (pending: PendingMessage, me: User): Message => ({
   id: pending.id,
   channelId: pending.channelId,
   sender: me,
+  githubEvent: null,
   content: pending.content,
   editedAt: null,
   deletedAt: null,
@@ -81,10 +83,7 @@ export const buildReplies = ({ replies, pending, me }: ReplyInput): ReplyItem[] 
         ? Number.NaN
         : Date.parse(message.createdAt) - Date.parse(previous.createdAt);
     const grouped =
-      previous !== null &&
-      previous.sender.id === message.sender.id &&
-      gap >= 0 &&
-      gap < GROUP_WINDOW_MS;
+      previous !== null && sameAuthor(previous, message) && gap >= 0 && gap < GROUP_WINDOW_MS;
     items.push({ key: message.id, ...entry, grouped });
     previous = message;
   }

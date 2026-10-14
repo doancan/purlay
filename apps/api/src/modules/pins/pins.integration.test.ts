@@ -145,7 +145,7 @@ describe('integration: pinning', () => {
         [older, idOf(room, 'alice'), new Date(NOW.getTime() + 10_000).toISOString()],
         [newer, idOf(room, 'bob'), NOW.toISOString()],
       ]);
-      expect(pins[0]?.message.sender.id).toBe(idOf(room, 'bob'));
+      expect(pins[0]?.message.sender?.id).toBe(idOf(room, 'bob'));
       expect(pins[0]?.message.content).toBe('worth keeping');
     });
   });

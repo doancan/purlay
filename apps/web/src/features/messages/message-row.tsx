@@ -31,8 +31,10 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { renderContent } from '../content/render-content';
 import { GitHubCards } from '../content/github-cards';
+import { GitHubEventCard } from '../content/github-event';
 import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
+import { authorOf, isMine } from './author';
 import { ReactMenu, ReactionBar } from './reactions';
 import { MessageEditor, OwnActions, useEditing } from './editing';
 import { SaveToggle } from '../saved/save-toggle';
@@ -100,8 +102,10 @@ const MessageRowView = ({
   const failed = delivery === 'failed';
   // A tombstone (D-103 §7): its words are gone, and so is anything to do with them.
   const deleted = message.deletedAt !== null;
-  // The author's own, sent and not deleted: theirs to edit and delete (D-103).
-  const mine = message.sender.id === meId && delivery === 'sent' && !deleted;
+  // The author's own, sent and not deleted: theirs to edit and delete (D-103). An event is nobody's.
+  const mine = isMine(message, meId) && delivery === 'sent' && !deleted;
+  const author = authorOf(message);
+  const event = deleted ? null : message.githubEvent;
   const editing = useEditing().editingId === message.id && mine;
   // Whether the pointer or focus is on THIS row and not on a row nested inside it. Replies were
   // once rows inside the root's row, where CSS `group-hover` showed every reply's actions whenever
@@ -115,7 +119,7 @@ const MessageRowView = ({
   const on = pointed || focused;
 
   // Which edge the message sits on: the person's own on the right, everyone else's on the left.
-  const outgoing = message.sender.id === meId;
+  const outgoing = isMine(message, meId);
 
   const time = (
     <time
@@ -150,7 +154,7 @@ const MessageRowView = ({
       data-message-row=""
       data-message-id={message.id}
       tabIndex={tabIndex}
-      aria-label={t('feed.row', { name: message.sender.username, when: absolute })}
+      aria-label={t('feed.row', { name: author.username, when: absolute })}
       className={cn(
         'relative flex gap-3 rounded-lg px-2',
         grouped ? 'pt-1' : 'pt-3',
@@ -171,8 +175,8 @@ const MessageRowView = ({
             </>
           ) : (
             <Avatar
-              name={message.sender.displayName}
-              username={message.sender.username}
+              name={author.displayName}
+              username={author.username}
               size={compact ? 'md' : 'lg'}
             />
           )}
@@ -183,9 +187,7 @@ const MessageRowView = ({
         {!grouped && (
           <div className="mb-1 flex items-baseline gap-2 px-1">
             {!outgoing && (
-              <span className="text-label font-semibold text-ink">
-                {message.sender.displayName}
-              </span>
+              <span className="text-label font-semibold text-ink">{author.displayName}</span>
             )}
             {time}
             {sending}
@@ -210,6 +212,8 @@ const MessageRowView = ({
               <MessageEditor message={message} />
             ) : deleted ? (
               <p>{t('message.deleted')}</p>
+            ) : event !== null ? (
+              <GitHubEventCard event={event} />
             ) : (
               renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
             )}
@@ -251,8 +255,9 @@ const MessageRowView = ({
           )}
         </div>
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
-        {!deleted && <GitHubCards content={message.content} />}
-        {!deleted && <ImageLinks content={message.content} />}
+        {/* An event's words are its own summary: nothing in them to unfurl (D-134 §6). */}
+        {!deleted && event === null && <GitHubCards content={message.content} />}
+        {!deleted && event === null && <ImageLinks content={message.content} />}
         {!deleted && <Attachments attachments={message.attachments} />}
         {!deleted && <ReactionBar message={message} meId={meId} />}
         {failed && (

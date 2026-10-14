@@ -84,7 +84,7 @@ export const inboxOf = async (
   let statement = executor
     .selectFrom('notifications')
     .innerJoin('messages', 'messages.id', 'notifications.message_id')
-    .innerJoin('users', 'users.id', 'messages.sender_id')
+    .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .select([
       'notifications.id as notification_id',

@@ -89,6 +89,7 @@ export const aMessage = (n: number, over: Partial<Message> = {}): Message => ({
   id: messageIdAt(n),
   channelId: IDS.api,
   sender: ALICE,
+  githubEvent: null,
   content: `message ${String(n)}`,
   editedAt: null,
   deletedAt: null,
