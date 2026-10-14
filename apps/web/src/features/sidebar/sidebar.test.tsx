@@ -598,6 +598,7 @@ describe('the workspace menu', () => {
       'GitHub connection…',
       'Audit log…',
       'Workspace settings…',
+      'Keep history…',
     ]);
   });
 
@@ -615,6 +616,7 @@ describe('the workspace menu', () => {
       'GitHub connection…',
       'Audit log…',
       'Workspace settings…',
+      'Keep history…',
     ]);
   });
 

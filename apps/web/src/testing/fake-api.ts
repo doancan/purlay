@@ -20,6 +20,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   requestEmailSignIn: unexpected('requestEmailSignIn'),
   previewEmailSignIn: unexpected('previewEmailSignIn'),
   consumeEmailSignIn: unexpected('consumeEmailSignIn'),
+  retention: unexpected('retention'),
+  setRetention: unexpected('setRetention'),
   previewInvitation: unexpected('previewInvitation'),
   acceptInvitation: unexpected('acceptInvitation'),
   createInvitation: unexpected('createInvitation'),

@@ -25,6 +25,7 @@ import { GitHubDialog } from './github-dialog';
 import { InviteDialog } from './invite-dialog';
 import { MembersDialog } from './members-dialog';
 import { WorkspaceSettingsDialog } from './workspace-settings-dialog';
+import { RetentionDialog } from './retention-dialog';
 
 interface WorkspaceMenuProps {
   /** Which door: the rail's tile, or the name at the top of the sidebar. */
@@ -42,6 +43,7 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
   const [auditing, setAuditing] = useState(false);
   const [settling, setSettling] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [keeping, setKeeping] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Making links and the GitHub token are an owner's and an admin's (D-115, D-23); a member is not
   // offered what would be refused.
@@ -145,12 +147,24 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
             {t('workspace.settings.entry')}
           </MenuItem>
         )}
+        {/* How long history is kept is an owner's alone (D-139 §4). */}
+        {role === 'owner' && (
+          <MenuItem
+            glyph="settings"
+            onSelect={() => {
+              setKeeping(true);
+            }}
+          >
+            {t('retention.entry')}
+          </MenuItem>
+        )}
       </Menu>
       <InviteDialog open={inviting} onOpenChange={setInviting} />
       <GitHubDialog open={connecting} onOpenChange={setConnecting} />
       <MembersDialog open={managing} onOpenChange={setManaging} />
       <AuditDialog open={auditing} onOpenChange={setAuditing} />
       <WorkspaceSettingsDialog open={settling} onOpenChange={setSettling} />
+      <RetentionDialog open={keeping} onOpenChange={setKeeping} />
       <Dialog
         open={creating}
         onOpenChange={setCreating}

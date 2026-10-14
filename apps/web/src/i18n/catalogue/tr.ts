@@ -196,6 +196,17 @@ export const tr = {
   'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
   'retention.forever': 'süresiz',
   'retention.days': '{days} gün',
+  'retention.entry': 'Geçmişi sakla…',
+  'retention.title': '{workspace} geçmişini ne kadar saklar',
+  'retention.description':
+    'Bundan eski mesajlar ve dosyalar her gece kalıcı olarak silinir. Varsayılan, her şeyi saklamaktır.',
+  'retention.label': 'Geçmişi sakla',
+  'retention.save': 'Kaydet',
+  'retention.shorten': '{days} günden eski geçmişi sil',
+  'retention.warning':
+    'Her gece {days} günden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterir.',
+  'retention.failed': 'Ayar kaydedilmedi.',
+  'retention.saved': 'Kaydedildi.',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',
   'github.entry': 'GitHub bağlantısı…',
