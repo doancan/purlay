@@ -20,7 +20,7 @@ export interface DiffLine {
   readonly newNumber: number | null;
 }
 
-export interface DiffHunk {
+interface DiffHunk {
   /** The `@@ … @@` line as written, with what follows it; null for a hunk with no header. */
   readonly header: string | null;
   readonly lines: readonly DiffLine[];
