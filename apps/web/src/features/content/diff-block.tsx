@@ -252,6 +252,8 @@ const Diff = ({
           // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it.
           tabIndex={clamped ? undefined : 0}
           role="region"
+          // What scrolls sideways on purpose, as a code block's `pre` does (`e2e/narrow.e2e.ts`).
+          data-diff=""
           aria-label={t('diff.label', { added: diff.added, removed: diff.removed })}
           className={cn(
             'overflow-x-auto text-code text-ink',
