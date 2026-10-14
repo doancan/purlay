@@ -122,7 +122,10 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
         className="w-full resize-none rounded-md border-hairline border-border-strong bg-surface-100 px-2 py-1 text-body text-ink"
       />
       <div className="flex items-center justify-between gap-2 text-caption text-ink-muted">
-        <span>{t('message.editHint')}</span>
+        <span className="flex flex-col">
+          <span>{t('message.editHint')}</span>
+          <span>{t('message.editHistoryHint')}</span>
+        </span>
         <span className="flex gap-2">
           <Button variant="ghost" onClick={stop}>
             {t('common.cancel')}

@@ -3,7 +3,7 @@
  * the reactions, and that it does not re-render for nothing.
  */
 import { describe, expect, spyOn, test } from 'bun:test';
-import { act, fireEvent } from '@testing-library/react';
+import { act, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -128,6 +128,47 @@ describe('the two edges (D-119)', () => {
       fireEvent.pointerOver(row);
     });
     expect(time?.className ?? '').not.toContain('opacity-0');
+  });
+});
+
+describe('an edited message’s history, from its row (D-135)', () => {
+  const edited = { editedAt: '2026-09-09T11:56:00.000Z', content: 'now' };
+  const versions = (): Promise<{
+    data: { id: string; content: string; replacedAt: string }[];
+    nextCursor: null;
+  }> =>
+    Promise.resolve({
+      data: [
+        {
+          id: '0199155c-6200-7b7f-8c11-0000000000c1',
+          content: 'before',
+          replacedAt: '2026-09-09T11:56:00.000Z',
+        },
+      ],
+      nextCursor: null,
+    });
+
+  test('somebody else’s: its history is read, and nothing in it is theirs to remove', async () => {
+    const view = await mount(props({ message: aMessage(1, { ...edited, sender: ALICE }) }), {
+      api: anApi({ messageVersions: versions }),
+    });
+    await person().click(view.getByRole('button', { name: 'Edited — show what it said before' }));
+    const dialog = await view.findByRole('dialog');
+    expect(await within(dialog).findByText('before')).toBeDefined();
+    expect(within(dialog).queryByRole('button', { name: /^Remove the version/ })).toBeNull();
+    view.unmount();
+  });
+
+  test('your own: each earlier version is yours to remove', async () => {
+    const view = await mount(props({ message: aMessage(1, { ...edited, sender: ME }) }), {
+      api: anApi({ messageVersions: versions }),
+    });
+    await person().click(view.getByRole('button', { name: 'Edited — show what it said before' }));
+    const dialog = await view.findByRole('dialog');
+    expect(
+      await within(dialog).findByRole('button', { name: /^Remove the version/ }),
+    ).toBeDefined();
+    view.unmount();
   });
 });
 

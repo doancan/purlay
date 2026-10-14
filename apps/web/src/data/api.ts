@@ -54,6 +54,7 @@ import {
   type PushSubscribeRequest,
   type SavedState,
   type CreateGitHubFeedRequest,
+  MessageVersionPage,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
@@ -158,6 +159,14 @@ export interface Api {
   /** The caller's own title, time zone and status line (D-131). */
   readonly updateProfile: (input: UpdateProfileRequest) => Promise<Profile>;
   readonly markRead: (channelId: string, lastReadMessageId: string) => Promise<ReadChannelResponse>;
+  /** What a message said before each edit, newest first (D-135). */
+  readonly messageVersions: (
+    messageId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<MessageVersionPage>;
+  /** The author takes one earlier version out of the history (D-135 §2). */
+  readonly removeMessageVersion: (messageId: string, versionId: string) => Promise<void>;
   /** A channel's pins, newest first (D-130). */
   readonly pins: (channelId: string, signal?: AbortSignal) => Promise<PinList>;
   /** Pins a message for its channel, or lets the pin go (D-130). */
@@ -400,6 +409,15 @@ export const createApi = (http: Http): Api => {
         SavedIds,
         options({}, signal),
       ),
+    messageVersions: (messageId, before, signal) =>
+      http.request(
+        'GET',
+        `/api/messages/${at(messageId)}/versions`,
+        MessageVersionPage,
+        options(before === undefined ? {} : { query: { before } }, signal),
+      ),
+    removeMessageVersion: (messageId, versionId) =>
+      http.send('DELETE', `/api/messages/${at(messageId)}/versions/${at(versionId)}`, options()),
     pins: (channelId, signal) =>
       http.request('GET', `/api/channels/${at(channelId)}/pins`, PinList, options({}, signal)),
     pin: (messageId) => http.send('PUT', `/api/messages/${at(messageId)}/pin`, options()),

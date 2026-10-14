@@ -248,6 +248,8 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  // An edit adds a version, a delete takes them all: an open history is read again (D-135 §5).
+  readAgain(client, keys.messageVersions(id));
   // A deleted message's files leave the list (D-129), and its pin the pins (D-130); whether it had
   // either, only the lists know.
   if (revision.deletedAt !== null) {

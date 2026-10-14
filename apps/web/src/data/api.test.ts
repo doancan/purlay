@@ -169,6 +169,19 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('a message’s earlier versions: a page by cursor, and one removed (D-135)', async () => {
+    const list = harness({ data: [], nextCursor: null });
+    await list.api.messageVersions(ID);
+    await list.api.messageVersions(ID, 'v1');
+    const remove = harness(null);
+    await remove.api.removeMessageVersion(ID, ID);
+    expect([...list.calls, ...remove.calls].map((call) => [call.method, call.url])).toEqual([
+      ['GET', `/api/messages/${ID}/versions`],
+      ['GET', `/api/messages/${ID}/versions?before=v1`],
+      ['DELETE', `/api/messages/${ID}/versions/${ID}`],
+    ]);
+  });
+
   test('a channel’s pins: the list, pin and let go (D-130)', async () => {
     const list = harness([]);
     await list.api.pins(ID);

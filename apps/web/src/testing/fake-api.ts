@@ -26,6 +26,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   setGitHubToken: unexpected('setGitHubToken'),
   removeGitHubToken: unexpected('removeGitHubToken'),
   githubFeeds: unexpected('githubFeeds'),
+  messageVersions: unexpected('messageVersions'),
+  removeMessageVersion: unexpected('removeMessageVersion'),
   connectGitHubFeed: unexpected('connectGitHubFeed'),
   disconnectGitHubFeed: unexpected('disconnectGitHubFeed'),
   unfurl: unexpected('unfurl'),
