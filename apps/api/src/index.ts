@@ -8,6 +8,7 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
+import { checkRelay, outbox, smtpMailer } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
 import { loadConfig } from './platform/config';
@@ -82,6 +83,21 @@ const push =
       });
 log.info(push === undefined ? 'web push is off: no VAPID keys' : 'web push is on');
 
+// Sign-in by email (#81, D-138 §6): on with both of SMTP_URL and MAIL_FROM, which the configuration
+// has checked come together.
+const mailer =
+  config.SMTP_URL === undefined || config.MAIL_FROM === undefined
+    ? undefined
+    : smtpMailer({
+        SMTP_URL: config.SMTP_URL,
+        MAIL_FROM: config.MAIL_FROM,
+        SMTP_ALLOW_PLAINTEXT: config.SMTP_ALLOW_PLAINTEXT,
+      });
+const mail = mailer === undefined ? undefined : outbox(mailer.send, log);
+log.info(mail === undefined ? 'email sign-in is off: no SMTP_URL' : 'email sign-in is on');
+// Not awaited: the server starts whatever the relay says, and the log says it.
+if (mailer !== undefined) void checkRelay(mailer, log);
+
 const app = createApp({
   config,
   log,
@@ -90,6 +106,7 @@ const app = createApp({
   storage: storeFor(config),
   ...(client === undefined ? {} : { client }),
   ...(push === undefined ? {} : { push }),
+  ...(mail === undefined ? {} : { mail }),
   github: githubClient({
     clientId: config.GITHUB_CLIENT_ID,
     clientSecret: config.GITHUB_CLIENT_SECRET,
@@ -107,6 +124,8 @@ installShutdown({
     // Pushes for writes already committed, within their own bound, then the reports of the
     // shutdown itself: the error tracker still has its time.
     await push?.flush();
+    // Sign-in links answered already: their mail goes before the process does, within its bound.
+    await mail?.flush();
     await errorTracker.flush();
     await database.destroy();
   },

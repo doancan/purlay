@@ -19,6 +19,7 @@ import {
   ORPHAN_AGE_MS,
   reconcileStorage,
   runJob,
+  sweepEmailSignIns,
   sweepGitHubDeliveries,
   sweepLinkPreviews,
   sweepOrphans,
@@ -315,6 +316,36 @@ describe('integration: the delivery sweep (D-134 §5)', () => {
         .orderBy('delivery_id')
         .execute();
       expect(left.map((row) => row.delivery_id)).toEqual(['exactly', 'newer']);
+    });
+  });
+});
+
+describe('integration: the sign-in mail sweep', () => {
+  test('takes what was sent more than a day ago, spent or not; a day and younger stay', async () => {
+    await withRollback(async (db) => {
+      const now = new Date('2026-10-14T12:00:00.000Z');
+      const row = (hoursAgo: number, n: number): Record<string, unknown> => ({
+        email: `s${String(n)}@example.test`,
+        kind: 'link',
+        token_hash: String(n).padStart(64, '0'),
+        created_at: new Date(now.getTime() - hoursAgo * 3_600_000),
+        expires_at: new Date(now.getTime() - hoursAgo * 3_600_000 + 900_000),
+      });
+      for (const [n, hours] of [24.01, 30, 23.99, 0].entries()) {
+        await sql`insert into email_sign_ins (email, kind, token_hash, created_at, expires_at)
+          values (${row(hours, n)['email']}, 'link', ${row(hours, n)['token_hash']},
+                  ${row(hours, n)['created_at']}, ${row(hours, n)['expires_at']})`.execute(db);
+      }
+      expect(await sweepEmailSignIns({ database: db, clock: fixedClock(now) })).toEqual({
+        removed: 2,
+      });
+      const kept = await db
+        .selectFrom('email_sign_ins')
+        .select('email')
+        .where('email', 'like', 's_@example.test')
+        .orderBy('email')
+        .execute();
+      expect(kept.map((r) => r.email)).toEqual(['s2@example.test', 's3@example.test']);
     });
   });
 });

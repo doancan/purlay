@@ -143,6 +143,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('STORAGE_UNAVAILABLE'),
   /** This server has no Web Push keys: push is switched off by its operator (#78). */
   Type.Literal('PUSH_UNAVAILABLE'),
+  /** This server cannot send a sign-in link: no `SMTP_URL` and `MAIL_FROM` (D-138 §6). */
+  Type.Literal('EMAIL_SIGN_IN_UNAVAILABLE'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -209,6 +211,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   INTERNAL: 500,
   STORAGE_UNAVAILABLE: 503,
   PUSH_UNAVAILABLE: 503,
+  EMAIL_SIGN_IN_UNAVAILABLE: 503,
   DATABASE_UNAVAILABLE: 503,
 };
 

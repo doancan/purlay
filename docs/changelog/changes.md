@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a sign-in link by email (D-138, part of #81)
+
+- `POST /auth/email` sends a sign-in link to an address — or, for an address of a GitHub account, a
+  word to sign in with GitHub — answering the same whatever the address, and sending after the answer.
+  Five messages an hour for an address; links live fifteen minutes, are kept only as digests, and a
+  daily job (`sweep:email-sign-ins`) clears them. Mail goes over TLS past the server's own machine;
+  whether the relay answers is said as the server starts. Using the link, and the screens, follow.
+
 ### Feature — 2026-10-14: signing in by email, decided first (D-138, part of #81)
 
 - How email sign-in works and how it meets GitHub sign-in is decided before any of it is built: a

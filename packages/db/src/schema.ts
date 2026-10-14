@@ -96,6 +96,16 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface EmailSignIns {
+  created_at: Timestamp;
+  email: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  kind: string;
+  token_hash: string | null;
+  used_at: Timestamp | null;
+}
+
 export interface GithubDeliveries {
   delivery_id: string;
   feed_id: string;
@@ -333,6 +343,7 @@ export interface DB {
   audit_log: AuditLog;
   channel_members: ChannelMembers;
   channels: Channels;
+  email_sign_ins: EmailSignIns;
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
   github_repo_feeds: GithubRepoFeeds;

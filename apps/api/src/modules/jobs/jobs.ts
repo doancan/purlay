@@ -203,3 +203,19 @@ export const sweepGitHubDeliveries = async (dependencies: {
     .executeTakeFirst();
   return { removed: Number(result.numDeletedRows) };
 };
+
+/**
+ * Sign-in messages a day old (D-138): no link is usable past fifteen minutes, and the per-address limit
+ * counts the last hour — a day is a margin, not a reader. Spent and unspent alike.
+ */
+export const sweepEmailSignIns = async (dependencies: {
+  readonly database: Executor;
+  readonly clock: Clock;
+}): Promise<{ removed: number }> => {
+  const before = new Date(dependencies.clock.now().getTime() - DAY_MS);
+  const result = await dependencies.database
+    .deleteFrom('email_sign_ins')
+    .where('created_at', '<', before)
+    .executeTakeFirst();
+  return { removed: Number(result.numDeletedRows) };
+};

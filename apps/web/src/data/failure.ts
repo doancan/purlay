@@ -109,6 +109,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'DATABASE_UNAVAILABLE':
     case 'STORAGE_UNAVAILABLE':
     case 'PUSH_UNAVAILABLE':
+    case 'EMAIL_SIGN_IN_UNAVAILABLE':
     // GitHub's answers, never a person's: no screen calls the webhook (D-134 §4).
     case 'WEBHOOK_SIGNATURE_INVALID':
     case 'GITHUB_REPOSITORY_MISMATCH':

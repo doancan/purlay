@@ -21,6 +21,8 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
+import { askForSignInLink } from './email-sign-in';
+import type { Outbox } from '../../platform/mail';
 import { authMethods } from './auth-methods';
 import { Elysia, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
@@ -180,6 +182,8 @@ export interface Dependencies {
   readonly push?: PushSender;
   /** Presence's grace timers (D-136); a test passes its own, to pass a grace without waiting. */
   readonly timers?: Timers;
+  /** Where sign-in links are posted; absent where email sign-in is off (D-138 §6). */
+  readonly mail?: Outbox;
 }
 
 /**
@@ -359,6 +363,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
     .get('/api/auth/methods', () => authMethods(dependencies.config))
+    .post('/auth/email', async ({ body, set }) => {
+      await askForSignInLink(dependencies, body);
+      set.status = 202;
+      return null;
+    })
     // Spelled out, as every route is, for `scripts/enforcement.test.ts` to read against
     // `API.md`. It is `SIGN_IN_CALLBACK`: were they to differ, the error hook's redirect
     // would miss this route and `auth.integration.test.ts` would see JSON (D-121).
