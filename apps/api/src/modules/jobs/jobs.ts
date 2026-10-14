@@ -13,7 +13,7 @@ import { DAY_MS, type Clock } from '../../platform/clock';
 import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
-import { removeLeftovers } from '../attachments/uploads';
+import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
 
 /** An upload nobody has sent after a day is not going to be: the composer sends at once (D-109 §5). */
 export const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
@@ -94,31 +94,36 @@ export const sweepOrphans = async (
   let removed = 0;
   let leftBehind = 0;
   for (;;) {
-    const gone = await database
-      .deleteFrom('attachments')
-      .where('message_id', 'is', null)
-      .where(
-        'id',
-        'in',
-        database
-          .selectFrom('attachments')
-          .select('id')
-          .where('message_id', 'is', null)
-          .where('created_at', '<', cutoff)
-          .orderBy('id')
-          .limit(ORPHAN_BATCH),
-      )
-      .returning(['storage_key', 'thumbnail_key'])
-      .execute();
-    removed += gone.length;
-    leftBehind += await removeLeftovers(
-      storage,
-      log,
-      gone.flatMap((row) =>
+    // The rows and their keys' place in the queue, together (D-141).
+    const { count, keys } = await atomicallyOn(database)(async (transaction) => {
+      const gone = await transaction
+        .deleteFrom('attachments')
+        .where('message_id', 'is', null)
+        .where(
+          'id',
+          'in',
+          transaction
+            .selectFrom('attachments')
+            .select('id')
+            .where('message_id', 'is', null)
+            .where('created_at', '<', cutoff)
+            .orderBy('id')
+            .limit(ORPHAN_BATCH),
+        )
+        .returning(['storage_key', 'thumbnail_key'])
+        .execute();
+      const named = gone.flatMap((row) =>
         row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
-      ),
+      );
+      await enqueueObjectDeletions(transaction, named);
+      return { count: gone.length, keys: named };
+    });
+    removed += count;
+    leftBehind += await drainObjectDeletions(
+      { atomically: atomicallyOn(database), storage, log },
+      keys,
     );
-    if (gone.length < ORPHAN_BATCH) return { removed, leftBehind };
+    if (count < ORPHAN_BATCH) return { removed, leftBehind };
   }
 };
 

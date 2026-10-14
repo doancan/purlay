@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-14: a file the store refused to delete is tried again until it goes (D-141, closes #592)
+
+- When retention, an erasure, the orphan sweep or a discarded upload deletes a file's row, the file's
+  key is now queued in the same transaction. The file is deleted after the commit. A file the store
+  refuses, or one left because the process stopped in between, waits for `sweep:deletions`. That job
+  runs hourly at :50 and tries every waiting key again until the store accepts, and its run fails while
+  any key is left.
+
 ### Fix — 2026-10-14: Save holds what was asked beside the server's list (D-18, D-128, closes #558)
 
 - Save on a message now keeps a pending save or removal beside the server's list of saves, as Pin

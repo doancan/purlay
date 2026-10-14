@@ -33,6 +33,22 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'deletions-not-queued-with-the-rows',
+    why: 'a file retention or erasure removed is forgotten when the store refuses it, or the process stops',
+    file: 'apps/api/src/modules/messages/tombstone.ts',
+    find: '  await enqueueObjectDeletions(transaction, keys);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/attachments/deletions.integration.test.ts'],
+  },
+  {
+    id: 'deletions-refusal-not-counted',
+    why: 'a key the store keeps refusing looks untried, and nobody can tell a stuck delete from a new one',
+    file: 'apps/api/src/modules/attachments/deletions.ts',
+    find: '    if (refused.length > 0) {\n',
+    replace: '    if (refused.length < 0) {\n',
+    tests: ['apps/api/src/modules/attachments/deletions.integration.test.ts'],
+  },
+  {
     id: 'export-expects-a-key-uploads-never-write',
     why: 'the export’s key check and the uploads’ key disagree, and every export of a workspace with a file fails',
     file: 'apps/api/src/modules/export/export.ts',
@@ -2686,24 +2702,24 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'discard-somebody-elses-upload',
     why: 'one member throws away another’s upload by its id',
     file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: "        .where('uploader_id', '=', userId)\n        .where('message_id', 'is', null)\n",
-    replace: "        .where('message_id', 'is', null)\n",
+    find: "      .where('uploader_id', '=', userId)\n      .where('message_id', 'is', null)\n",
+    replace: "      .where('message_id', 'is', null)\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {
     id: 'discard-a-sent-attachment',
     why: 'a file is pulled out of a message that was sent with it',
     file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: "        .where('uploader_id', '=', userId)\n        .where('message_id', 'is', null)\n",
-    replace: "        .where('uploader_id', '=', userId)\n",
+    find: "      .where('uploader_id', '=', userId)\n      .where('message_id', 'is', null)\n",
+    replace: "      .where('uploader_id', '=', userId)\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {
     id: 'discard-leaves-the-thumbnail',
     why: 'a discarded image’s thumbnail stays in the bucket with nothing pointing at it',
     file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: 'gone.thumbnail_key === null ? [gone.storage_key] : [gone.storage_key, gone.thumbnail_key],',
-    replace: '[gone.storage_key],',
+    find: '      gone.thumbnail_key === null ? [gone.storage_key] : [gone.storage_key, gone.thumbnail_key];',
+    replace: '      [gone.storage_key];',
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {

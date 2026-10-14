@@ -1242,7 +1242,7 @@ require an instance-administrator role that does not exist and that D-3 delibera
 ```sql
 CREATE TABLE job_runs (
     -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions', 'sweep:github-deliveries',
-    -- 'sweep:email-sign-ins', 'sweep:exports',
+    -- 'sweep:email-sign-ins', 'sweep:exports', 'sweep:deletions',
     -- 'reconcile:storage', 'purge:retention'
     job_name             VARCHAR(64) PRIMARY KEY,
 
@@ -1309,6 +1309,27 @@ CREATE UNIQUE INDEX idx_workspace_exports_one_pending
 CREATE INDEX idx_workspace_exports_workspace ON workspace_exports (workspace_id, id DESC);
 CREATE INDEX idx_workspace_exports_requested_by
     ON workspace_exports (requested_by) WHERE requested_by IS NOT NULL;
+```
+
+### 9.4. `object_deletions`
+
+Objects in the store whose rows are gone, until the store has let them go (D-141). A key is written in
+the transaction that deletes the rows naming it — `dropFiles` for retention and erasure, the orphan
+sweep, a discarded upload — so a refusal, or a process stopping between the commit and the delete, never
+loses it. The row goes once the store has deleted the object; `sweep:deletions` tries what is left
+every hour, in key order from where it got to. Instance-wide, like `job_runs`: an operator's table, read
+by no endpoint, and never exported.
+
+```sql
+CREATE TABLE object_deletions (
+    storage_key      TEXT PRIMARY KEY,
+    enqueued_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    attempts         INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at  TIMESTAMPTZ,
+
+    CONSTRAINT object_deletions_key_in_a_workspace CHECK (storage_key LIKE 'w/%'),
+    CONSTRAINT object_deletions_attempts CHECK (attempts >= 0)
+);
 ```
 
 ---
@@ -1449,6 +1470,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0038_email_auth.sql          email_sign_ins: sign-in links sent by email, and the word to use GitHub  (D-138)
 0039_retention_index.sql     idx_messages_workspace_age replaces idx_messages_workspace: the purge's read by age  (D-139)
 0040_workspace_exports.sql   workspace_exports: an owner's export, made in the background, downloaded once  (D-140)
+0041_object_deletions.sql    object_deletions: objects whose rows are gone, until the store lets them go  (D-141)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

@@ -14,7 +14,7 @@
 import type { Executor, Transaction } from '@purlay/db';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
-import { removeLeftovers } from '../attachments/uploads';
+import { drainObjectDeletions } from '../attachments/deletions';
 import { recordAudit } from '../audit/audit';
 import type { JobDependencies } from '../jobs/jobs';
 import {
@@ -125,8 +125,11 @@ export const eraseContent = async (
       );
       messages += batch.emptied;
       files += batch.files;
-      // The rows are gone for good: only now may their objects go.
-      leftBehind += await removeLeftovers(storage, log, batch.keys);
+      // The rows are gone for good: only now may their objects go; one refused waits (D-141).
+      leftBehind += await drainObjectDeletions(
+        { atomically: atomicallyOn(database), storage, log },
+        batch.keys,
+      );
       if (batch.last) break;
     }
     await atomicallyOn(database)(async (transaction) => {

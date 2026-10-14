@@ -236,6 +236,13 @@ export interface Notifications {
   workspace_id: string;
 }
 
+export interface ObjectDeletions {
+  attempts: Generated<number>;
+  enqueued_at: Generated<Timestamp>;
+  last_attempt_at: Timestamp | null;
+  storage_key: string;
+}
+
 export interface PinnedMessages {
   channel_id: string;
   message_id: string;
@@ -371,6 +378,7 @@ export interface DB {
   message_versions: MessageVersions;
   messages: Messages;
   notifications: Notifications;
+  object_deletions: ObjectDeletions;
   pinned_messages: PinnedMessages;
   push_subscriptions: PushSubscriptions;
   reactions: Reactions;
