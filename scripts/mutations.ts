@@ -33,6 +33,56 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'export-downloaded-twice',
+    why: 'an export said to be downloadable once is downloaded again, by whoever has the link next',
+    file: 'apps/api/src/modules/export/requests.ts',
+    find: "    .where('status', '=', 'ready')\n    .where('expires_at', '>', now)\n",
+    replace: "    .where('expires_at', '>', now)\n",
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
+    id: 'export-downloaded-after-it-expired',
+    why: 'an archive past its expiry is still served until the sweep comes',
+    file: 'apps/api/src/modules/export/requests.ts',
+    find: "    .where('status', '=', 'ready')\n    .where('expires_at', '>', now)\n",
+    replace: "    .where('status', '=', 'ready')\n",
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
+    id: 'export-shows-the-owner-every-channel',
+    why: 'an owner’s export carries private channels and direct messages they are not in',
+    file: 'apps/api/src/modules/export/requests.ts',
+    find: '  const channelIds = await visibleChannelIds(database, context);\n',
+    replace:
+      "  const channelIds = (await database.selectFrom('channels').select('id').where('workspace_id', '=', context.workspaceId).execute()).map((c) => c.id);\n",
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
+    id: 'export-downloaded-by-another-owner',
+    why: 'an export holds what its asker can see; another owner downloads private channels they are not in',
+    file: 'apps/api/src/modules/export/requests.ts',
+    find: "    .where('requested_by', '=', context.userId)\n    .where('status', '=', 'ready')\n",
+    replace: "    .where('status', '=', 'ready')\n",
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
+    id: 'export-made-for-a-demoted-owner',
+    why: 'an owner demoted between asking and the making still receives the whole workspace they can see',
+    file: 'apps/api/src/modules/export/requests.ts',
+    find: "  if (context?.role !== 'owner' || live === undefined) {\n",
+    replace: '  if (context === null || live === undefined) {\n',
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
+    id: 'export-archive-kept-after-download',
+    why: 'a downloaded archive stays in the store, a copy of the whole workspace nobody is watching',
+    file: 'apps/api/src/ingress/http/exports.ts',
+    find: '    try {\n      await storage.delete(key);\n      await forgetArchive(database, key);\n    } catch (error) {\n      // The row keeps its key',
+    replace:
+      '    try {\n      await forgetArchive(database, key);\n    } catch (error) {\n      // The row keeps its key',
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
     id: 'export-calls-a-removed-file-missing',
     why: 'a file purged since the snapshot is reported as a fault, and every export after a purge fails',
     file: 'apps/api/src/modules/export/export.ts',

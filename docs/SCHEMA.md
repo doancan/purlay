@@ -1242,7 +1242,7 @@ require an instance-administrator role that does not exist and that D-3 delibera
 ```sql
 CREATE TABLE job_runs (
     -- 'sweep:orphans', 'sweep:link-previews', 'sweep:sessions', 'sweep:github-deliveries',
-    -- 'sweep:email-sign-ins',
+    -- 'sweep:email-sign-ins', 'sweep:exports',
     -- 'reconcile:storage', 'purge:retention'
     job_name             VARCHAR(64) PRIMARY KEY,
 
@@ -1262,6 +1262,54 @@ CREATE TABLE job_runs (
 Deliberately **not** workspace-scoped: these jobs are instance-wide, and `/health/ready` does not
 consult this table — a stale sweep is an operational warning, not a reason to stop serving
 traffic.
+
+### 9.3. `workspace_exports`
+
+An owner's export of their workspace (D-140): asked for, made in the background, downloaded once. The
+row is the record that it was made; its archive lives in the object store under the workspace's prefix
+until it is downloaded or expires (`sweep:exports`). Never exported itself.
+
+```sql
+CREATE TABLE workspace_exports (
+    id             UUID PRIMARY KEY,
+    workspace_id   UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    requested_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- 'pending' while it is made, 'ready' with its archive, 'failed' with a code,
+    -- 'downloaded' once it has been, 'expired' when nobody did in time.
+    status         TEXT NOT NULL,
+    storage_key    TEXT,
+    size_bytes     BIGINT,
+    failure        TEXT,
+    created_at     TIMESTAMPTZ NOT NULL,
+    finished_at    TIMESTAMPTZ,
+    -- Every minute while it is made: one silent for long was cut off by a restart.
+    heartbeat_at   TIMESTAMPTZ,
+    expires_at     TIMESTAMPTZ,
+    downloaded_at  TIMESTAMPTZ,
+
+    CONSTRAINT workspace_exports_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT workspace_exports_status
+        CHECK (status IN ('pending', 'ready', 'failed', 'downloaded', 'expired')),
+    -- The key stays on a downloaded or expired row until the object is gone.
+    CONSTRAINT workspace_exports_ready
+        CHECK (status <> 'ready'
+               OR (storage_key IS NOT NULL AND size_bytes IS NOT NULL AND expires_at IS NOT NULL)),
+    CONSTRAINT workspace_exports_pending
+        CHECK (status <> 'pending' OR storage_key IS NULL),
+    CONSTRAINT workspace_exports_failure
+        CHECK ((status = 'failed') = (failure IS NOT NULL) AND (failure IS NULL OR failure ~ '^[A-Z_]{1,64}$'))
+);
+
+-- One export of a workspace in the making at a time.
+CREATE UNIQUE INDEX idx_workspace_exports_one_pending
+    ON workspace_exports (workspace_id) WHERE status = 'pending';
+
+-- The owner's list, newest first.
+CREATE INDEX idx_workspace_exports_workspace ON workspace_exports (workspace_id, id DESC);
+CREATE INDEX idx_workspace_exports_requested_by
+    ON workspace_exports (requested_by) WHERE requested_by IS NOT NULL;
+```
 
 ---
 
@@ -1400,6 +1448,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0037_incident_writeup.sql    incidents.runbook_url, postmortem, postmortem_version  (D-137 §3, §5)
 0038_email_auth.sql          email_sign_ins: sign-in links sent by email, and the word to use GitHub  (D-138)
 0039_retention_index.sql     idx_messages_workspace_age replaces idx_messages_workspace: the purge's read by age  (D-139)
+0040_workspace_exports.sql   workspace_exports: an owner's export, made in the background, downloaded once  (D-140)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

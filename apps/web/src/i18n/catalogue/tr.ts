@@ -197,6 +197,7 @@ export const tr = {
   'audit.action.account.erased': 'Bir üye hesabını sildi',
   'audit.action.content.erased':
     'Bir üyenin yazdıkları istek üzerine silindi: {messages} mesaj, {files} dosya',
+  'audit.action.workspace.export_requested': '{actor} çalışma alanının dışa aktarımını istedi',
   'audit.action.workspace.exported': '{actor} çalışma alanını {messages} mesajla dışa aktardı',
   'audit.operator': 'Sunucunun yöneticisi',
   'retention.forever': 'süresiz',

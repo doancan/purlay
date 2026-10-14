@@ -304,6 +304,21 @@ export interface Users {
   username: string;
 }
 
+export interface WorkspaceExports {
+  created_at: Timestamp;
+  downloaded_at: Timestamp | null;
+  expires_at: Timestamp | null;
+  failure: string | null;
+  finished_at: Timestamp | null;
+  heartbeat_at: Timestamp | null;
+  id: string;
+  requested_by: string | null;
+  size_bytes: Int8 | null;
+  status: string;
+  storage_key: string | null;
+  workspace_id: string;
+}
+
 export interface WorkspaceInvitations {
   created_at: Timestamp;
   created_by: string | null;
@@ -362,6 +377,7 @@ export interface DB {
   saved_messages: SavedMessages;
   sessions: Sessions;
   users: Users;
+  workspace_exports: WorkspaceExports;
   workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;
   workspaces: Workspaces;

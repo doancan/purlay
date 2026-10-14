@@ -27,6 +27,8 @@ export interface StoredObject {
 export interface ObjectStore {
   /** Writes the bytes under the key, replacing what was there. */
   readonly put: (key: string, bytes: Uint8Array, type: string) => Promise<void>;
+  /** Writes a file on this machine under the key, streamed: an export is larger than memory (D-140). */
+  readonly putFile: (key: string, path: string, type: string) => Promise<void>;
   /** The object, or null when there is none. Any other failure throws. */
   readonly get: (key: string) => Promise<StoredObject | null>;
   /** Removes the object; removing one that is not there is not an error. */
@@ -47,7 +49,11 @@ const isAbsent = (error: unknown): boolean =>
 
 /** The part of Bun's `S3Client` the adapter uses: what a unit test stands in for. */
 export interface S3Like {
-  readonly write: (key: string, data: Uint8Array, options: { type: string }) => Promise<number>;
+  readonly write: (
+    key: string,
+    data: Uint8Array | Blob,
+    options: { type: string },
+  ) => Promise<number>;
   readonly file: (
     key: string,
   ) => Blob & { readonly stat: () => Promise<{ readonly size: number }> };
@@ -61,6 +67,10 @@ export const s3Store = (
   return {
     put: async (key, bytes, type): Promise<void> => {
       await client.write(key, bytes, { type });
+    },
+    putFile: async (key, path, type): Promise<void> => {
+      // Bun streams a file to S3 in parts, never whole in memory.
+      await client.write(key, Bun.file(path), { type });
     },
     get: async (key): Promise<StoredObject | null> => {
       const file = client.file(key);
@@ -92,7 +102,7 @@ const unconfiguredStore = (): ObjectStore => {
         message: 'File storage is not configured on this server.',
       }),
     );
-  return { put: unavailable, get: unavailable, delete: unavailable };
+  return { put: unavailable, putFile: unavailable, get: unavailable, delete: unavailable };
 };
 
 /** What a storage key is: the store's own names (`workspace/upload-id/variant`), nothing a path could escape by. */
@@ -114,6 +124,11 @@ export const directoryStore = (root: string): ObjectStore => {
       const path = pathOf(key);
       await mkdir(dirname(path), { recursive: true });
       await Bun.write(path, bytes);
+    },
+    putFile: async (key, source): Promise<void> => {
+      const path = pathOf(key);
+      await mkdir(dirname(path), { recursive: true });
+      await Bun.write(path, Bun.file(source));
     },
     get: async (key): Promise<StoredObject | null> => {
       const file = Bun.file(pathOf(key));

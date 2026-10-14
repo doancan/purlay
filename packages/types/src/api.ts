@@ -439,6 +439,7 @@ export const AUDIT_ACTIONS = [
   'retention.changed',
   'account.erased',
   'content.erased',
+  'workspace.export_requested',
   'workspace.exported',
   'retention.purged',
 ] as const;

@@ -180,6 +180,7 @@ describe('the audit log', () => {
       audit: () =>
         Promise.resolve(
           page([
+            anEntry(3, { action: 'workspace.export_requested', targetType: 'workspace' }),
             anEntry(2, {
               action: 'workspace.exported',
               targetType: 'workspace',
@@ -195,6 +196,7 @@ describe('the audit log', () => {
         ),
     });
     expect(lines(view)).toEqual([
+      `${ME.displayName} asked for an export of the workspace`,
       `${ME.displayName} exported the workspace, with 40 messages`,
       'The server’s operator exported the workspace, with 41 messages',
     ]);

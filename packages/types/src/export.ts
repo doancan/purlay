@@ -4,6 +4,7 @@
  * export without one did not finish.
  */
 import { Type, type Static } from '@sinclair/typebox';
+import { ErrorCode } from './errors';
 
 /** Bumped when a reader of the old shape would misread the new. */
 export const EXPORT_FORMAT = 1;
@@ -31,3 +32,44 @@ export const ExportManifest = Type.Object({
   }),
 });
 export type ExportManifest = Static<typeof ExportManifest>;
+
+/** Where an owner's export stands (D-140): being made, ready to download once, or done with. */
+export const ExportStatus = Type.Union([
+  Type.Literal('pending'),
+  Type.Literal('ready'),
+  Type.Literal('failed'),
+  Type.Literal('downloaded'),
+  Type.Literal('expired'),
+]);
+export type ExportStatus = Static<typeof ExportStatus>;
+
+/**
+ * Why an export failed: a refusal the contract already names (a store not configured, say), or one of
+ * the export's own — it could not be made, its making was cut off by a restart, or the owner who asked
+ * is no longer one when it started.
+ */
+export const ExportFailure = Type.Union([
+  ErrorCode,
+  Type.Literal('EXPORT_FAILED'),
+  Type.Literal('EXPORT_ABANDONED'),
+  Type.Literal('EXPORT_REQUESTER_GONE'),
+]);
+export type ExportFailure = Static<typeof ExportFailure>;
+
+/**
+ * `POST` and `GET /api/workspaces/:workspaceId/exports` — an owner's export, as they see it: never where
+ * the archive is kept. `sizeBytes` and `expiresAt` once it is ready; `failure` a code, once it failed.
+ */
+export const WorkspaceExport = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  status: ExportStatus,
+  createdAt: Type.String({ format: 'date-time' }),
+  finishedAt: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+  expiresAt: Type.Union([Type.String({ format: 'date-time' }), Type.Null()]),
+  sizeBytes: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+  failure: Type.Union([ExportFailure, Type.Null()]),
+});
+export type WorkspaceExport = Static<typeof WorkspaceExport>;
+
+/** How long a ready export waits to be downloaded before it is thrown away (D-140). */
+export const EXPORT_KEPT_HOURS = 24;

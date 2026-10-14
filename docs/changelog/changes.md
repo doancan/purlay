@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: an owner exports their workspace and downloads it once (D-140, part of #84)
+
+- `POST /api/workspaces/:id/exports` starts an owner's export, made in the background. It covers the
+  channels that owner can see, carries nobody's address, and comes as one `.tar`. `GET …/exports`
+  lists the workspace's exports, and `GET …/exports/:id/download` serves the archive once and then
+  removes it from storage. Only one export of a workspace can be in progress at a time. A ready
+  export expires after a day: `sweep:exports` runs hourly and removes expired archives, and marks as
+  failed any export cut off by a restart.
+
 ### Feature — 2026-10-14: an export carries its files (D-140, part of #84)
 
 - `export:workspace` now copies the file behind every attachment it exports into `blobs/`, after the

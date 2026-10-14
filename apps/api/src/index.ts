@@ -8,6 +8,7 @@
  * Layering is `ingress → modules → platform`, enforced by lint rather than by
  * convention (`ARCHITECTURE.md` §4).
  */
+import { exportQueue } from './modules/export/requests';
 import { checkRelay, outbox, smtpMailer } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
@@ -98,12 +99,17 @@ log.info(mail === undefined ? 'email sign-in is off: no SMTP_URL' : 'email sign-
 // Not awaited: the server starts whatever the relay says, and the log says it.
 if (mailer !== undefined) void checkRelay(mailer, log);
 
+// An owner's exports, one at a time, made by this process after answering (D-140).
+const storage = storeFor(config);
+const exports = exportQueue({ database, clock: systemClock, log, storage });
+
 const app = createApp({
   config,
   log,
   clock: systemClock,
   database,
-  storage: storeFor(config),
+  storage,
+  exportRunner: exports.start,
   ...(client === undefined ? {} : { client }),
   ...(push === undefined ? {} : { push }),
   ...(mail === undefined ? {} : { mail }),

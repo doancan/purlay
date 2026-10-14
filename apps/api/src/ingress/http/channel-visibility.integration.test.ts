@@ -335,6 +335,7 @@ describe('integration: channel visibility', () => {
               feedId: world.feed,
               versionId: NEVER_EXISTED,
               incidentId: world.incident,
+              exportId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -378,6 +379,7 @@ describe('integration: channel visibility', () => {
               // The outsider's own visible message's: the control of removing a version.
               versionId: world.version,
               incidentId: NEVER_EXISTED,
+              exportId: NEVER_EXISTED,
             });
 
           const absent = await call(db, method, at(NEVER_EXISTED), world.outsider, body);
@@ -440,6 +442,7 @@ describe('integration: channel visibility', () => {
                 feedId: NEVER_EXISTED,
                 versionId: NEVER_EXISTED,
                 incidentId: NEVER_EXISTED,
+                exportId: NEVER_EXISTED,
               }),
               cookie,
             );

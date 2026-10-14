@@ -118,6 +118,10 @@ export const ErrorCode = Type.Union([
   Type.Literal('ATTACHMENT_NOT_FOUND'),
   /** A link that does not open — unknown, expired, revoked, or its workspace gone: one answer (D-115). */
   Type.Literal('INVITATION_NOT_FOUND'),
+  /** An export that is not there to download: unknown, not ready, downloaded already or expired (D-140). */
+  Type.Literal('EXPORT_NOT_FOUND'),
+  /** An export of the workspace is being made already: one at a time (D-140). */
+  Type.Literal('EXPORT_IN_PROGRESS'),
   /** A sign-in link that does not open — unknown, used, expired: one answer (D-138 §4). */
   Type.Literal('SIGN_IN_LINK_NOT_FOUND'),
   /** A repository's feed that does not exist, or is in a channel the caller cannot see (D-134). */
@@ -207,6 +211,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
   INVITATION_NOT_FOUND: 404,
+  EXPORT_NOT_FOUND: 404,
+  EXPORT_IN_PROGRESS: 409,
   SIGN_IN_LINK_NOT_FOUND: 404,
   GITHUB_FEED_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,

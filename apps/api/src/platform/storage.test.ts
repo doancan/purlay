@@ -54,8 +54,9 @@ describe('the S3 adapter’s rules (a stand-in client; `test:storage` runs the r
   };
   const client = (stat: () => Promise<unknown>, calls: string[]): S3Like => ({
     write: (key, data, options): Promise<number> => {
-      calls.push(`write ${key} ${String(data.length)} ${options.type}`);
-      return Promise.resolve(data.length);
+      const size = data instanceof Blob ? data.size : data.length;
+      calls.push(`write ${key} ${String(size)} ${options.type}`);
+      return Promise.resolve(size);
     },
     file: (key) =>
       Object.assign(new Blob(['x']), {
@@ -83,6 +84,18 @@ describe('the S3 adapter’s rules (a stand-in client; `test:storage` runs the r
     expect(new TextDecoder().decode(await new Response(got?.body).arrayBuffer())).toBe('x');
     await store.delete('k');
     expect(calls).toEqual(['write k 2 application/octet-stream', 'stat k', 'delete k']);
+  });
+
+  test('a file is handed to the client as the file, never read whole first', async () => {
+    const calls: string[] = [];
+    const store = s3Store(
+      settings,
+      client(() => Promise.resolve({}), calls),
+    );
+    const path = join(tmpdir(), `purlay-put-${crypto.randomUUID()}`);
+    await Bun.write(path, new Uint8Array([1, 2, 3]));
+    await store.putFile('k', path, 'application/x-tar');
+    expect(calls).toEqual(['write k 3 application/x-tar']);
   });
 
   test('only the store’s own “no such key” is absence; any other failure is thrown', async () => {
@@ -127,6 +140,17 @@ describe('the directory store', () => {
     await store.delete(key);
     expect(await store.get(key)).toBeNull();
     expect(await store.get('never/put')).toBeNull();
+  });
+
+  test('a file put by its path is got back whole', async () => {
+    const store = directoryStore(root());
+    const source = join(tmpdir(), `purlay-put-${crypto.randomUUID()}`);
+    await Bun.write(source, new Uint8Array([4, 5, 6]));
+    await store.putFile('workspace-1/exports/a.tar', source, 'application/x-tar');
+    const got = await store.get('workspace-1/exports/a.tar');
+    expect(new Uint8Array(await new Response(got?.body).arrayBuffer())).toEqual(
+      new Uint8Array([4, 5, 6]),
+    );
   });
 
   test('a key that would leave the directory is refused, never read or written', async () => {

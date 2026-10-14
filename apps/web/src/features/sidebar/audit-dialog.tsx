@@ -138,6 +138,8 @@ export const AuditDialog = ({
       case 'account.erased':
         return t('audit.action.account.erased');
       // An owner's, or the server operator's when nobody in the workspace asked (D-140).
+      case 'workspace.export_requested':
+        return t('audit.action.workspace.export_requested', { actor });
       case 'workspace.exported':
         return t('audit.action.workspace.exported', {
           actor: entry.actor === null ? t('audit.operator') : actor,

@@ -28,6 +28,7 @@ describe('the next run of a slot', () => {
       'purge:retention',
       'reconcile:storage',
       'sweep:email-sign-ins',
+      'sweep:exports',
       'sweep:github-deliveries',
       'sweep:link-previews',
       'sweep:orphans',
@@ -101,7 +102,7 @@ describe('the loop', () => {
       '2026-09-09T03:00:00.000Z sweep:orphans',
       '2026-09-09T03:15:00.000Z sweep:sessions',
       '2026-09-09T03:30:00.000Z reconcile:storage',
-      '2026-09-09T04:00:00.000Z sweep:link-previews',
+      '2026-09-09T03:40:00.000Z sweep:exports',
     ]);
     expect(said.find((s) => s.fields['job'] === 'reconcile:storage')).toMatchObject({
       msg: 'a scheduled job exited with a failure',

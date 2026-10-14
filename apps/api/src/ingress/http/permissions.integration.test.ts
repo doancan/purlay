@@ -12,6 +12,7 @@ import { NOW, testDependencies } from '../../testing/doubles';
 import { PERMISSIONS } from '../../testing/permissions';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
+import { aMemoryStore } from '../../testing/storage';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -124,6 +125,36 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/retention`, as, {
       retentionDays: 90,
     }),
+  'export the workspace': async (world, as) =>
+    await call(world, 'POST', `/api/workspaces/${world.workspaceId}/exports`, as),
+  'read the workspace’s exports': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/exports`, as),
+  'download an export': async (world, as) => {
+    // A ready export, its archive in a store of the test's own.
+    const store = aMemoryStore();
+    const id = messageId(NOW);
+    const key = `${world.workspaceId}/exports/${id}.tar`;
+    await store.put(key, new Uint8Array(1024), 'application/x-tar');
+    await world.db
+      .insertInto('workspace_exports')
+      .values({
+        id,
+        workspace_id: world.workspaceId,
+        requested_by: world.people.owner.userId,
+        status: 'ready',
+        storage_key: key,
+        size_bytes: '1024',
+        created_at: NOW,
+        expires_at: new Date(NOW.getTime() + 60_000),
+      })
+      .execute();
+    return await createApp(testDependencies({ database: world.db, clock, storage: store })).handle(
+      new Request(
+        `https://purlay.test/api/workspaces/${world.workspaceId}/exports/${id}/download`,
+        { headers: { cookie: as.cookie } },
+      ),
+    );
+  },
   'read the audit trail': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/audit`, as),
   'see whether the GitHub token is set': async (world, as) =>
