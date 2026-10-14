@@ -241,6 +241,14 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ status: 'resolved' }),
     visibility: CHANNEL,
   },
+  'PUT /api/channels/:channelId/incident/:incidentId/responders/:userId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
+  'DELETE /api/channels/:channelId/incident/:incidentId/responders/:userId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
   'GET /api/channels/:channelId/incident/:incidentId/updates': {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: CHANNEL,

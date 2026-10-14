@@ -705,7 +705,9 @@ CREATE TABLE incidents (
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
     CONSTRAINT incidents_channel_workspace_fkey
         FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    -- Added by 0036: what a responder's key names, so a responder is of this channel's incident.
+    CONSTRAINT incidents_id_channel_key UNIQUE (id, channel_id)
 );
 
 -- One open incident a channel: what makes a race lose the same way as the check.
@@ -724,15 +726,43 @@ CREATE TABLE incident_updates (
     actor_id     UUID REFERENCES users(id) ON DELETE SET NULL,
     at           TIMESTAMPTZ NOT NULL,
 
-    CONSTRAINT incident_updates_kind_known CHECK (kind IN ('declared', 'status', 'severity')),
-    CONSTRAINT incident_updates_from CHECK ((kind = 'declared') = (from_value IS NULL)),
+    CONSTRAINT incident_updates_kind_known CHECK (
+        kind IN ('declared', 'status', 'severity', 'responder_added', 'responder_removed')
+    ),
+    CONSTRAINT incident_updates_from
+        CHECK ((kind IN ('status', 'severity')) = (from_value IS NOT NULL)),
     CONSTRAINT incident_updates_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 );
 
 CREATE INDEX idx_incident_updates_incident ON incident_updates (incident_id, id DESC);
 CREATE INDEX idx_incident_updates_actor ON incident_updates (actor_id);
+
+-- Added by 0036 (D-137 §3): who is responding.
+CREATE TABLE incident_responders (
+    incident_id  UUID NOT NULL,
+    channel_id   UUID NOT NULL,
+    user_id      UUID NOT NULL,
+    added_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+    added_at     TIMESTAMPTZ NOT NULL,
+
+    PRIMARY KEY (incident_id, user_id),
+    CONSTRAINT incident_responders_incident_fkey
+        FOREIGN KEY (incident_id, channel_id) REFERENCES incidents (id, channel_id)
+        ON DELETE CASCADE,
+    -- A member of the channel when brought in (the service's check); leaving later keeps them.
+    CONSTRAINT incident_responders_user_fkey
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_incident_responders_channel ON incident_responders (incident_id, channel_id);
+CREATE INDEX idx_incident_responders_user ON incident_responders (user_id);
+CREATE INDEX idx_incident_responders_added_by ON incident_responders (added_by);
 ```
+
+0036 also widens the timeline: `incident_updates_kind_known` takes `responder_added` and
+`responder_removed`, whose `to_value` is the person, and `incident_updates_from` becomes
+`(kind IN ('status', 'severity')) = (from_value IS NOT NULL)`.
 
 > The incident and its timeline entry are written in one transaction, the incident's row locked for a
 > change. The timeline is never updated; it goes with its incident, which goes with its channel. The
@@ -1311,12 +1341,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0033_feed_failures.sql       a feed's last failure may be rate_limited  (D-134 §8)
 0034_message_versions.sql    message_versions: what an edit replaced  (D-135)
 0035_incidents.sql           incidents, incident_updates: a channel's incidents and their timeline  (D-137)
+0036_incident_responders.sql incident_responders; the timeline's responder entries  (D-137 §3)
 ```
 
-Phase 2's magic links add `0036_email_auth.sql`.
+Phase 2's magic links add `0037_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions, and again with the incidents. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions, and again with the incidents, and again with their responders. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

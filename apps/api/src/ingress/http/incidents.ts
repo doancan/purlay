@@ -26,6 +26,7 @@ import {
   incidentUpdates,
   type IncidentWrite,
 } from '../../modules/incidents/incidents';
+import { addResponder, removeResponder } from '../../modules/incidents/responders';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
@@ -104,4 +105,23 @@ export const listIncidentUpdates = async (
   const context = await requireChannelById(database, userId, channelId);
   const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await incidentUpdates(database, context, incidentId, query);
+};
+
+/** `PUT` and `DELETE /api/channels/:channelId/incident/:incidentId/responders/:userId` */
+export const putResponder = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  incidentId: string,
+  userId: string,
+  responding: boolean,
+): Promise<Incident> => {
+  const { database, clock } = dependencies;
+  const { userId: callerId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, callerId, channelId);
+  const change = responding ? addResponder : removeResponder;
+  const write = await atomicallyOn(database)(
+    async (transaction) => await change(transaction, clock, context, incidentId, userId),
+  );
+  return await told(dependencies, write);
 };

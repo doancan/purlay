@@ -36,6 +36,7 @@ export type FailureKey =
   | 'failure.githubFeedExists'
   | 'failure.incidentOpen'
   | 'failure.incidentResolved'
+  | 'failure.incidentRespondersLimit'
   | 'failure.generic';
 
 /** The code of whatever was thrown; anything that is not an `ApiError` is a failure nobody described. */
@@ -85,6 +86,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.incidentOpen';
     case 'INCIDENT_RESOLVED':
       return 'failure.incidentResolved';
+    case 'INCIDENT_RESPONDERS_LIMIT':
+      return 'failure.incidentRespondersLimit';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':

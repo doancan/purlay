@@ -841,6 +841,9 @@ export type PresenceSnapshot = Static<typeof PresenceSnapshot>;
  * An incident declared in a channel: how bad, where it is, and who declared it when. The channel's
  * open one, or once none is open the latest — `GET /api/channels/:channelId/incident`.
  */
+/** How many may be responding to one incident (D-137 §3). */
+export const INCIDENT_RESPONDERS_MAX = 50;
+
 const incidentFields = {
   /** The client's UUIDv7, chosen when it declared: a retry finds the same incident (D-33). */
   id: Uuid,
@@ -849,6 +852,8 @@ const incidentFields = {
   /** Null once the person who declared it is gone. */
   declaredBy: Type.Union([User, Type.Null()]),
   declaredAt: Timestamp,
+  /** Who is responding, first brought in first; each a member of the channel (D-137 §3). */
+  responders: Type.Array(User, { maxItems: INCIDENT_RESPONDERS_MAX }),
 };
 /** Open, or resolved with its instant — never one without the other (`incidents_resolved_at`). */
 export const Incident = Type.Union([
@@ -887,6 +892,9 @@ export const IncidentChange = Type.Union([
   // From an open status only: nothing moves a resolved incident (D-137 §3).
   Type.Object({ kind: Type.Literal('status'), from: OpenIncidentStatus, to: IncidentStatus }),
   Type.Object({ kind: Type.Literal('severity'), from: IncidentSeverity, to: IncidentSeverity }),
+  /** Somebody brought in to respond, or taken off; null once they are gone. */
+  Type.Object({ kind: Type.Literal('responder_added'), user: Type.Union([User, Type.Null()]) }),
+  Type.Object({ kind: Type.Literal('responder_removed'), user: Type.Union([User, Type.Null()]) }),
 ]);
 export type IncidentChange = Static<typeof IncidentChange>;
 

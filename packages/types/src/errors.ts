@@ -79,6 +79,8 @@ export const ErrorCode = Type.Union([
    * another severity. A retry of the same declaration answers the incident instead (D-137 §5).
    */
   Type.Literal('INCIDENT_ID_CONFLICT'),
+  /** The incident already has as many responders as it may (D-137 §3). */
+  Type.Literal('INCIDENT_RESPONDERS_LIMIT'),
   /** Changing an incident that is resolved: resolved is once and for good (D-137 §3). */
   Type.Literal('INCIDENT_RESOLVED'),
   /** A delivery from another repository than the feed's (D-134 §4). */
@@ -190,6 +192,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   INCIDENT_OPEN: 409,
   INCIDENT_ID_CONFLICT: 409,
   INCIDENT_RESOLVED: 409,
+  INCIDENT_RESPONDERS_LIMIT: 409,
   GITHUB_REPOSITORY_MISMATCH: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,

@@ -33,6 +33,30 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'responder-from-outside',
+    why: 'somebody outside the channel is brought in, and the refusal is the table’s failure, not a 404',
+    file: 'apps/api/src/modules/incidents/responders.ts',
+    find: '  if (member === undefined) throw personNotFound();\n',
+    replace: '',
+    tests: ['apps/api/src/modules/incidents/responders.integration.test.ts'],
+  },
+  {
+    id: 'responders-unbounded',
+    why: 'an incident takes a fifty-first responder',
+    file: 'apps/api/src/modules/incidents/responders.ts',
+    find: '  if (Number(counted.count) >= INCIDENT_RESPONDERS_MAX) {\n',
+    replace: '  if (Number(counted.count) > INCIDENT_RESPONDERS_MAX) {\n',
+    tests: ['apps/api/src/modules/incidents/responders.integration.test.ts'],
+  },
+  {
+    id: 'responder-change-unlocked',
+    why: 'two brought in at once with one place left are both taken',
+    file: 'apps/api/src/modules/incidents/responders.ts',
+    find: '    .forNoKeyUpdate()\n',
+    replace: '',
+    tests: ['apps/api/src/modules/incidents/incidents.concurrency.integration.test.ts'],
+  },
+  {
     id: 'incident-written-by-a-visitor',
     why: 'somebody who can see a public channel without being in it declares and resolves its incidents',
     file: 'apps/api/src/modules/incidents/incidents.ts',
@@ -44,7 +68,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'incident-id-of-another-channel',
     why: "a declaration retried with another channel's incident id is answered with that incident",
     file: 'apps/api/src/modules/incidents/incidents.ts',
-    find: '  if (row.channel_id !== context.channelId || declared?.to_value !== String(input.severity)) {\n',
+    find: '  if (incident.channelId !== context.channelId || declared?.to_value !== String(input.severity)) {\n',
     replace: '  if (declared?.to_value !== String(input.severity)) {\n',
     tests: ['apps/api/src/modules/incidents/incidents.integration.test.ts'],
   },

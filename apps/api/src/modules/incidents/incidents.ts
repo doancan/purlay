@@ -25,6 +25,7 @@ import {
   type Incident,
   type IncidentChange,
   type IncidentSeverity,
+  type User,
   type IncidentStatus,
   type IncidentUpdatePage,
   type OpenIncidentStatus,
@@ -41,7 +42,7 @@ import { limitOf } from '../messages/threads';
 
 const at = (value: Date | string): string => new Date(value).toISOString();
 
-const incidentNotFound = (): AppError =>
+export const incidentNotFound = (): AppError =>
   new AppError({ code: 'INCIDENT_NOT_FOUND', message: 'Incident not found.' });
 
 /** What a change did: the channel it is in, and whether anything changed there to tell. */
@@ -79,31 +80,39 @@ const openStatusOf = (value: string): OpenIncidentStatus => {
 const statusOf = (value: string): IncidentStatus =>
   value === 'resolved' ? value : openStatusOf(value);
 
-const asIncident = (row: IncidentRow): Incident => {
+/** A person as the contract shows one: null when the row is gone, the id alone once erased (I-11). */
+const personOf = (row: {
+  readonly id: string | null;
+  readonly username: string | null;
+  readonly displayName: string | null;
+  readonly avatarUrl: string | null;
+  readonly deletedAt: Date | string | null;
+}): User | null =>
+  row.id === null || row.username === null || row.displayName === null
+    ? null
+    : row.deletedAt !== null
+      ? { id: row.id, username: 'deleted', displayName: 'Deleted user', avatarUrl: null }
+      : {
+          id: row.id,
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+        };
+
+const asIncident = (row: IncidentRow, responders: readonly User[]): Incident => {
   const fields = {
     id: row.id,
     channelId: row.channel_id,
     severity: severityOf(row.severity),
-    declaredBy:
-      row.declarer_id === null ||
-      row.declarer_username === null ||
-      row.declarer_display_name === null
-        ? null
-        : row.declarer_deleted_at !== null
-          ? // Erased (I-11): the id a client keys on, and nothing the account held.
-            {
-              id: row.declarer_id,
-              username: 'deleted',
-              displayName: 'Deleted user',
-              avatarUrl: null,
-            }
-          : {
-              id: row.declarer_id,
-              username: row.declarer_username,
-              displayName: row.declarer_display_name,
-              avatarUrl: row.declarer_avatar_url,
-            },
+    declaredBy: personOf({
+      id: row.declarer_id,
+      username: row.declarer_username,
+      displayName: row.declarer_display_name,
+      avatarUrl: row.declarer_avatar_url,
+      deletedAt: row.declarer_deleted_at,
+    }),
     declaredAt: at(row.declared_at),
+    responders: [...responders],
   };
   // One fact, read as one: the table holds status and instant together (`incidents_resolved_at`).
   if (row.status === 'resolved') {
@@ -148,23 +157,67 @@ const findIncident = async (
     .executeTakeFirst();
 };
 
+/** Who is responding to it, first brought in first. Bounded by `INCIDENT_RESPONDERS_MAX`. */
+const respondersOf = async (executor: Executor, incidentId: string): Promise<readonly User[]> => {
+  const rows = await executor
+    .selectFrom('incident_responders')
+    .innerJoin('users', 'users.id', 'incident_responders.user_id')
+    .select([
+      'users.id as id',
+      'users.username as username',
+      'users.display_name as displayName',
+      'users.avatar_url as avatarUrl',
+      'users.deleted_at as deletedAt',
+    ])
+    .where('incident_responders.incident_id', '=', incidentId)
+    .orderBy('incident_responders.added_at')
+    .orderBy('incident_responders.user_id')
+    .execute();
+  return rows.flatMap((row) => {
+    const person = personOf(row);
+    return person === null ? [] : [person];
+  });
+};
+
+/** An incident as the contract says it, with its responders; undefined when there is none. */
+const loadIncident = async (
+  executor: Executor,
+  by: { readonly id: string } | { readonly channelId: string },
+): Promise<Incident | undefined> => {
+  const row = await findIncident(executor, by);
+  return row === undefined ? undefined : asIncident(row, await respondersOf(executor, row.id));
+};
+
 /** The channel's open incident, or once none is open its latest; null when it never had one. */
 export const channelIncident = async (
   executor: Executor,
   context: ChannelContext,
 ): Promise<Incident | null> => {
   if (context.channelType === 'direct_message') return null;
-  const row = await findIncident(executor, { channelId: context.channelId });
-  return row === undefined ? null : asIncident(row);
+  return (await loadIncident(executor, { channelId: context.channelId })) ?? null;
 };
 
+/** One entry of the timeline as it is stored: what kind, from what (a status's or a severity's), to what. */
+export interface TimelineEntry {
+  readonly kind: 'declared' | 'status' | 'severity' | 'responder_added' | 'responder_removed';
+  readonly from: string | null;
+  readonly to: string;
+}
+
+const entryOf = (
+  change: IncidentChange & { kind: 'declared' | 'status' | 'severity' },
+): TimelineEntry =>
+  change.kind === 'declared'
+    ? { kind: change.kind, from: null, to: String(change.severity) }
+    : { kind: change.kind, from: String(change.from), to: String(change.to) };
+
 /** Appends one entry to the timeline, after the newest whatever the clock says. */
-const record = async (
+export const record = async (
   executor: Transaction,
   incidentId: string,
   actorId: string,
   now: Date,
-  change: IncidentChange,
+  entry: TimelineEntry,
 ): Promise<void> => {
   const newest = await executor
     .selectFrom('incident_updates')
@@ -180,9 +233,9 @@ const record = async (
     .values({
       id: messageId(new Date(instant)),
       incident_id: incidentId,
-      kind: change.kind,
-      from_value: change.kind === 'declared' ? null : String(change.from),
-      to_value: String(change.kind === 'declared' ? change.severity : change.to),
+      kind: entry.kind,
+      from_value: entry.from,
+      to_value: entry.to,
       actor_id: actorId,
       at: now,
     })
@@ -190,7 +243,10 @@ const record = async (
 };
 
 /** The channel is one an incident may be declared in, and the caller is in it. */
-const requireWriter = async (executor: Transaction, context: ChannelContext): Promise<void> => {
+export const requireWriter = async (
+  executor: Transaction,
+  context: ChannelContext,
+): Promise<void> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
   await requireChannelMember(executor, context, 'Join the channel to change its incident.');
 };
@@ -205,21 +261,21 @@ const sameDeclaration = async (
   context: ChannelContext,
   input: DeclareIncidentRequest,
 ): Promise<IncidentWrite | null> => {
-  const row = await findIncident(executor, { id: input.id });
-  if (row === undefined) return null;
+  const incident = await loadIncident(executor, { id: input.id });
+  if (incident === undefined) return null;
   const declared = await executor
     .selectFrom('incident_updates')
     .select('to_value')
     .where('incident_id', '=', input.id)
     .where('kind', '=', 'declared')
     .executeTakeFirst();
-  if (row.channel_id !== context.channelId || declared?.to_value !== String(input.severity)) {
+  if (incident.channelId !== context.channelId || declared?.to_value !== String(input.severity)) {
     throw new AppError({
       code: 'INCIDENT_ID_CONFLICT',
       message: 'That incident id is already in use.',
     });
   }
-  return { incident: asIncident(row), changed: false };
+  return { incident, changed: false };
 };
 
 /**
@@ -269,20 +325,23 @@ export const declareIncident = async (
       message: 'This channel already has an incident open.',
     });
   }
-  await record(executor, input.id, context.userId, now, {
-    kind: 'declared',
-    severity: input.severity,
-  });
-  const made = await findIncident(executor, { id: input.id });
+  await record(
+    executor,
+    input.id,
+    context.userId,
+    now,
+    entryOf({ kind: 'declared', severity: input.severity }),
+  );
+  const made = await loadIncident(executor, { id: input.id });
   if (made === undefined) throw new Error(`incident ${input.id} is gone as it was declared`);
-  return { incident: asIncident(made), changed: true };
+  return { incident: made, changed: true };
 };
 
 /** The incident as it is, for a change that was none. */
-const unchanged = async (executor: Executor, incidentId: string): Promise<IncidentWrite> => {
-  const row = await findIncident(executor, { id: incidentId });
-  if (row === undefined) throw incidentNotFound();
-  return { incident: asIncident(row), changed: false };
+export const unchanged = async (executor: Executor, incidentId: string): Promise<IncidentWrite> => {
+  const incident = await loadIncident(executor, { id: incidentId });
+  if (incident === undefined) throw incidentNotFound();
+  return { incident, changed: false };
 };
 
 /**
@@ -320,7 +379,7 @@ export const changeIncident = async (
     }
     return await unchanged(executor, incidentId);
   }
-  const changes: IncidentChange[] = [
+  const changes: (IncidentChange & { kind: 'status' | 'severity' })[] = [
     ...(status === was.status ? [] : [{ kind: 'status', from: was.status, to: status } as const]),
     ...(severity === was.severity
       ? []
@@ -333,16 +392,26 @@ export const changeIncident = async (
       .set({ status, severity, resolved_at: status === 'resolved' ? now : null })
       .where('id', '=', incidentId)
       .execute();
-    for (const change of changes) await record(executor, incidentId, context.userId, now, change);
+    for (const change of changes) {
+      await record(executor, incidentId, context.userId, now, entryOf(change));
+    }
   }
-  const incident = await findIncident(executor, { id: incidentId });
+  const incident = await loadIncident(executor, { id: incidentId });
   if (incident === undefined) throw incidentNotFound();
-  return { incident: asIncident(incident), changed: changes.length > 0 };
+  return { incident, changed: changes.length > 0 };
 };
 
 /** Reads one timeline value back into the change it was written from. */
-const changeOf = (kind: string, from: string | null, to: string): IncidentChange => {
+const changeOf = (
+  kind: string,
+  from: string | null,
+  to: string,
+  people: ReadonlyMap<string, User>,
+): IncidentChange => {
   switch (kind) {
+    case 'responder_added':
+    case 'responder_removed':
+      return { kind, user: people.get(to) ?? null };
     case 'declared':
       return { kind, severity: severityOf(to) };
     case 'status':
@@ -392,27 +461,40 @@ export const incidentUpdates = async (
     statement = statement.where('incident_updates.id', '<', query.before);
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
+  // Who each responder entry names, in one read for the page: never a query an entry.
+  const named = page
+    .filter((row) => row.kind === 'responder_added' || row.kind === 'responder_removed')
+    .map((row) => row.to_value);
+  const people = new Map<string, User>();
+  if (named.length > 0) {
+    const found = await executor
+      .selectFrom('users')
+      .select([
+        'id',
+        'username',
+        'display_name as displayName',
+        'avatar_url as avatarUrl',
+        'deleted_at as deletedAt',
+      ])
+      .where('id', 'in', [...new Set(named)])
+      .execute();
+    for (const row of found) {
+      const person = personOf(row);
+      if (person !== null) people.set(row.id, person);
+    }
+  }
   return {
     data: page.map((row) => ({
       id: row.id,
       at: at(row.at),
-      actor:
-        row.actor_id === null || row.actor_username === null || row.actor_display_name === null
-          ? null
-          : row.actor_deleted_at !== null
-            ? {
-                id: row.actor_id,
-                username: 'deleted',
-                displayName: 'Deleted user',
-                avatarUrl: null,
-              }
-            : {
-                id: row.actor_id,
-                username: row.actor_username,
-                displayName: row.actor_display_name,
-                avatarUrl: row.actor_avatar_url,
-              },
-      change: changeOf(row.kind, row.from_value, row.to_value),
+      actor: personOf({
+        id: row.actor_id,
+        username: row.actor_username,
+        displayName: row.actor_display_name,
+        avatarUrl: row.actor_avatar_url,
+        deletedAt: row.actor_deleted_at,
+      }),
+      change: changeOf(row.kind, row.from_value, row.to_value, people),
     })),
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };

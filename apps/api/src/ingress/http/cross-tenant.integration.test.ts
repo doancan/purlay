@@ -105,6 +105,11 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     .insertInto('workspace_members')
     .values({ workspace_id: workspaceId, user_id: member.userId, role: 'member', joined_at: NOW })
     .execute();
+  // In the channel too: somebody to bring in to respond to its incident.
+  await db
+    .insertInto('channel_members')
+    .values({ channel_id: channelId, user_id: member.userId })
+    .execute();
   // A link to revoke.
   const invitation = await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie);
   expect(invitation.status).toBe(201);

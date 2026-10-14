@@ -19,7 +19,7 @@ import { issueSession } from '../../modules/auth/sessions';
 import { aRoom } from '../../testing/rooms';
 import { testDependencies } from '../../testing/doubles';
 import { createApp } from './app';
-import { patchIncident, postIncident } from './incidents';
+import { patchIncident, postIncident, putResponder } from './incidents';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -137,8 +137,34 @@ describe('integration: the incident routes', () => {
   });
 });
 
+describe('integration: a responder, on the person axis', () => {
+  test('somebody from another workspace, in the caller’s own channel, is not found — like nobody', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const elsewhere = await aRoom(db, ['dave']);
+      const alice = await caller(db, room.members['alice']?.userId ?? '');
+      const base = `/api/channels/${room.channelId}/incident`;
+      const id = messageId(NOW);
+      expect((await alice('POST', base, { id, severity: 2 })).status).toBe(201);
+      const responders = `${base}/${id}/responders`;
+      const stranger = await alice(
+        'PUT',
+        `${responders}/${elsewhere.members['dave']?.userId ?? ''}`,
+      );
+      const nobody = await alice('PUT', `${responders}/${messageId(new Date(NOW.getTime() + 1))}`);
+      expect([await codeOf(stranger), await codeOf(nobody)]).toEqual([
+        [404, 'USER_NOT_FOUND'],
+        [404, 'USER_NOT_FOUND'],
+      ]);
+      // Taking off somebody who is not responding is the same answer as for anyone: unchanged.
+      const off = await alice('DELETE', `${responders}/${elsewhere.members['dave']?.userId ?? ''}`);
+      expect([off.status, ((await off.json()) as Incident).responders]).toEqual([200, []]);
+    });
+  });
+});
+
 describe('integration: who is told of an incident', () => {
-  test('the channel, after the commit, once for each change; never a repeat, a no-op or a refusal', async () => {
+  test('the channel, after the commit, once for each change — responders too; never a repeat, a no-op or a refusal', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice'], { outsiders: ['erin'] });
       const { bus, told } = recordingBus();
@@ -164,6 +190,13 @@ describe('integration: who is told of an incident', () => {
       );
       await patchIncident(dependencies, alice(), room.channelId, id, { status: 'mitigating' });
       await patchIncident(dependencies, alice(), room.channelId, id, { status: 'mitigating' });
+      // A responder brought in and taken off: once each; again, nothing.
+      const aliceId = room.members['alice']?.userId ?? '';
+      const brought = await putResponder(dependencies, alice(), room.channelId, id, aliceId, true);
+      expect(brought.responders.map((person) => person.id)).toEqual([aliceId]);
+      await putResponder(dependencies, alice(), room.channelId, id, aliceId, true);
+      await putResponder(dependencies, alice(), room.channelId, id, aliceId, false);
+      await putResponder(dependencies, alice(), room.channelId, id, aliceId, false);
 
       expect(refused).toBe('FORBIDDEN');
       const frame: ServerFrame = {
@@ -172,6 +205,8 @@ describe('integration: who is told of an incident', () => {
         ts: NOW.getTime(),
       };
       expect(told).toEqual([
+        [channelTopic(room.channelId), frame],
+        [channelTopic(room.channelId), frame],
         [channelTopic(room.channelId), frame],
         [channelTopic(room.channelId), frame],
       ]);

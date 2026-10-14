@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: who is responding to an incident (D-137 §3, part of #487)
+
+- Anyone in a channel brings people in it in to respond to its incident, themselves included, and
+  takes them off; at most fifty and nobody outside the channel. Somebody who leaves the channel stays
+  on the list: it records who responded. Each change is on the incident's timeline with who did it. The
+  screens follow.
+
 ### Feature — 2026-10-14: a channel's incident, on screen (D-137, part of #487)
 
 - A channel's open incident is a banner under its header and a mark in the sidebar, SEV1 to SEV4.
