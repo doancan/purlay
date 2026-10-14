@@ -25,6 +25,7 @@ const ROUTES = {
   inbox: '/w/:slug/inbox',
   search: '/w/:slug/search',
   saved: '/w/:slug/saved',
+  welcome: '/w/:slug/welcome',
   gallery: '/__gallery',
 } as const;
 
