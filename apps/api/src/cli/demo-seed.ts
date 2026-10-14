@@ -178,6 +178,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     github: neverSignsIn,
     // The seed writes no attachments; the store is the one the configuration names.
     storage: storeFor(config),
+    // The seed asks for no export: nothing for a runner to start.
+    exportRunner: (): void => undefined,
     rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
   });
 

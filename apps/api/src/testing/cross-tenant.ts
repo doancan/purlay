@@ -73,6 +73,8 @@ export interface Ids {
   readonly versionId: string;
   /** An incident declared in the channel: what changing one, and its timeline, act on. */
   readonly incidentId: string;
+  /** An owner's export of the workspace (D-140). */
+  readonly exportId: string;
 }
 
 /** The one emoji a crossing reacts with, as a path segment: percent-encoded, as a client sends it. */
@@ -96,6 +98,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'feedId') return ids.feedId;
     if (name === 'versionId') return ids.versionId;
     if (name === 'incidentId') return ids.incidentId;
+    if (name === 'exportId') return ids.exportId;
     if (name === 'emoji') return CROSSING_EMOJI;
     throw new Error(`no id for \`:${name}\` in ${path} — teach \`pathFor\` and \`Ids\` about it`);
   });
@@ -186,6 +189,28 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ name: 'crossing' }),
     visibility: { kind: 'none', reason: 'the workspace itself; no channel is named or listed' },
+  },
+  'POST /api/workspaces/:workspaceId/exports': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason:
+        'the workspace’s own export; the channels it holds are the owner’s visible ones (D-140)',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/exports': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace’s own exports; no channel is named or listed',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/exports/:exportId/download': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'an archive of the owner’s visible channels (D-140); no channel is named',
+    },
   },
   'GET /api/workspaces/:workspaceId/retention': {
     refusal: 'WORKSPACE_NOT_FOUND',

@@ -21,6 +21,7 @@
  * tests actually call answers both, and leaves nothing above this file depending
  * on which framework is underneath.
  */
+import { askForExport, downloadExport, readExports } from './exports';
 import { goneMessageReference } from '../../platform/gone-message';
 import {
   SIGN_IN_REQUEST_BUDGET,
@@ -167,6 +168,11 @@ export interface Dependencies {
   readonly github: GitHubClient;
   /** Where attachment bytes live (D-109); the unconfigured store refuses every use, loudly. */
   readonly storage: ObjectStore;
+  /**
+   * Starts making an owner's export once its request has committed (D-140): the process's queue
+   * (`exportQueue`). A test about something else makes none.
+   */
+  readonly exportRunner: (exportId: string) => void;
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
   readonly githubApi?: GitHubApi;
   /** How an external image is fetched (#110); absent, the checked one. A test stands its own in. */
@@ -538,6 +544,26 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/invitations/accept',
       async ({ request, body }) => await joinByInvitation(dependencies, request, body),
     )
+    .post('/api/workspaces/:workspaceId/exports', async ({ request, params, set }) => {
+      const asked = await askForExport(dependencies, request, params.workspaceId);
+      set.status = 202;
+      return asked;
+    })
+    .get(
+      '/api/workspaces/:workspaceId/exports',
+      async ({ request, params }) => await readExports(dependencies, request, params.workspaceId),
+    )
+    .get('/api/workspaces/:workspaceId/exports/:exportId/download', async ({ request, params }) => {
+      const { body, headers } = await downloadExport(
+        dependencies,
+        request,
+        params.workspaceId,
+        params.exportId,
+      );
+      // A Response of our own: a bare stream Elysia would wrap, and a browser that goes away would
+      // cancel the wrapper, never reaching the archive's `cancel` that spends it.
+      return new Response(body, { headers });
+    })
     .get(
       '/api/workspaces/:workspaceId/retention',
       async ({ request, params }) =>

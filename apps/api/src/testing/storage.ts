@@ -35,6 +35,11 @@ export const aMemoryStore = (): MemoryStore => {
       objects.set(key, new Blob([bytes], { type }));
       return Promise.resolve();
     },
+    putFile: async (key, path, type): Promise<void> => {
+      failIf('put');
+      const file = Bun.file(path);
+      objects.set(key, new Blob([await file.arrayBuffer()], { type }));
+    },
     get: (key): Promise<StoredObject | null> => {
       failIf('get');
       const blob = objects.get(key);

@@ -6211,7 +6211,19 @@ and read the rows in a way the database could not serve; this is what replaced i
 1. **Two doors, one export.** An operator runs `bun run export:workspace <slug> <directory>` — every
    channel; and an owner asks from the workspace and downloads it once (built in the same issue, after
    the files) — the channels that owner can see (D-34), so an export never shows an owner a
-   conversation the product would not. Not a scheduled job (D-30, amended): it runs when asked.
+   conversation the product would not. Not a scheduled job (D-30, amended): it runs when asked. The
+   owner's is made by the API process that took the request, after answering it — not a timer (D-30's
+   concern), a piece of work somebody asked for — archived as one `.tar` (written here: a header and
+   padding per file, no dependency), put in the store under the workspace's prefix, and downloadable
+   once: the download claims it in the statement that checks it is ready, and the archive leaves the
+   store when it has been served, whole or cut off. It is the asker's alone: another owner neither lists
+   nor downloads it, since it holds what the asker can see; and an asker demoted or erased before it is
+   made is not exported for. One at a time a workspace and a process; kept `EXPORT_KEPT_HOURS`. A run
+   says it is alive every minute, and one silent for ten — the process stopped or restarted — is marked
+   failed by `sweep:exports`, and the owner asks again; the scratch directory a crash leaves in the
+   system's temporary directory is accepted, the operating system's to clear. The sweep claims an
+   expired archive before it removes it, and retries an archive the store refused, failing loudly
+   while one is left.
 2. **What goes** is decided column by column over the generated schema (`modules/export/tables.ts`),
    so a table or column a migration adds fails to compile until it is classified, and a test binds the
    classification to the catalogue. The workspace's record goes; each person's own state — saved items,

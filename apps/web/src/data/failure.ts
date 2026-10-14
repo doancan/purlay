@@ -66,6 +66,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
     case 'INVITATION_NOT_FOUND':
+    case 'EXPORT_NOT_FOUND':
     case 'SIGN_IN_LINK_NOT_FOUND':
     case 'GITHUB_FEED_NOT_FOUND':
     case 'INCIDENT_NOT_FOUND':
@@ -99,6 +100,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':
+    case 'EXPORT_IN_PROGRESS':
     case 'LAST_CHANNEL_MEMBER':
       return 'failure.refused';
     case 'VALIDATION_FAILED':

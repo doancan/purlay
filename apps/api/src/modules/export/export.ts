@@ -279,6 +279,11 @@ export const exportWorkspace = async (
   workspace: { readonly id: string; readonly slug: string; readonly name: string },
   scope: Scope,
   target: string,
+  /**
+   * The trail's line: written here, by nobody in the workspace (the operator's export), or left to the
+   * caller, who writes it once the export has reached whoever asked (an owner's, `requests.ts`).
+   */
+  trail: 'here' | 'caller' = 'here',
 ): Promise<{ readonly path: string; readonly manifest: ExportManifest }> => {
   const { database, clock, log, storage } = dependencies;
   const directory = await exportDirectory(target);
@@ -306,16 +311,17 @@ export const exportWorkspace = async (
     };
     await directory.seal(manifest, TABLE_ORDER);
     // On the trail before it takes its name: an export nobody can find a line for must not exist.
-    await atomicallyOn(database)(async (transaction) => {
-      await recordAudit(transaction, clock, {
-        workspaceId: workspace.id,
-        actorUserId: null,
-        action: 'workspace.exported',
-        targetType: 'workspace',
-        targetId: workspace.id,
-        metadata: { scope: scope.kind, messages: String(tables.messages) },
+    if (trail === 'here')
+      await atomicallyOn(database)(async (transaction) => {
+        await recordAudit(transaction, clock, {
+          workspaceId: workspace.id,
+          actorUserId: null,
+          action: 'workspace.exported',
+          targetType: 'workspace',
+          targetId: workspace.id,
+          metadata: { scope: scope.kind, messages: String(tables.messages) },
+        });
       });
-    });
     const path = await directory.publish();
     log.info('workspace exported', {
       workspaceId: workspace.id,

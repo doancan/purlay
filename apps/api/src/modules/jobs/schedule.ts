@@ -24,6 +24,8 @@ export const PLAN: readonly Slot[] = [
   { job: 'sweep:link-previews', every: 'day', hour: 4, minute: 0 },
   { job: 'sweep:github-deliveries', every: 'day', hour: 4, minute: 30 },
   { job: 'sweep:email-sign-ins', every: 'day', hour: 4, minute: 45 },
+  // Hourly, so an archive nobody downloaded is gone within an hour of its expiry (D-140).
+  { job: 'sweep:exports', every: 'hour', minute: 40 },
 ];
 
 /** The first instant after `after` at which the slot is due. */

@@ -40,6 +40,18 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PUT /api/workspaces/:workspaceId/retention',
     allowed: { owner: true, admin: false, member: false },
   },
+  'export the workspace': {
+    endpoint: 'POST /api/workspaces/:workspaceId/exports',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'read the workspace’s exports': {
+    endpoint: 'GET /api/workspaces/:workspaceId/exports',
+    allowed: { owner: true, admin: false, member: false },
+  },
+  'download an export': {
+    endpoint: 'GET /api/workspaces/:workspaceId/exports/:exportId/download',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'read the audit trail': {
     endpoint: 'GET /api/workspaces/:workspaceId/audit',
     allowed: { owner: true, admin: true, member: false },

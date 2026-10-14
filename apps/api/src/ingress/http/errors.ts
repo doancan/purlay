@@ -66,6 +66,11 @@ const violationOf = (error: unknown): Violation | undefined => {
  * client's mistake, and stays `INTERNAL`.
  */
 const TAKEN_BY_INDEX: Readonly<Record<string, AppErrorBody>> = {
+  // Two owners asking at once: the second finds the first's (D-140).
+  idx_workspace_exports_one_pending: {
+    code: 'EXPORT_IN_PROGRESS',
+    message: 'An export of this workspace is being made already.',
+  },
   workspaces_slug_key: {
     code: 'WORKSPACE_SLUG_TAKEN',
     message: 'That workspace address is already in use.',

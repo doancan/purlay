@@ -146,6 +146,29 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       })
     ).status,
   ).toBe(200);
+  // A ready export, its archive in the store: the one download its owner may make.
+  const exportId = messageId(new Date(NOW.getTime() + 7));
+  const { user_id: ownerId } = await db
+    .selectFrom('workspace_members')
+    .select('user_id')
+    .where('workspace_id', '=', workspaceId)
+    .where('role', '=', 'owner')
+    .executeTakeFirstOrThrow();
+  const archive = `${workspaceId}/exports/${exportId}.tar`;
+  await STORE.put(archive, new Uint8Array(1024), 'application/x-tar');
+  await db
+    .insertInto('workspace_exports')
+    .values({
+      id: exportId,
+      workspace_id: workspaceId,
+      requested_by: ownerId,
+      status: 'ready',
+      storage_key: archive,
+      size_bytes: '1024',
+      created_at: NOW,
+      expires_at: new Date(NOW.getTime() + 60_000),
+    })
+    .execute();
   return {
     workspaceId,
     channelId,
@@ -157,6 +180,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     feedId: connected.id,
     versionId: version.id,
     incidentId,
+    exportId,
   };
 };
 
@@ -171,6 +195,7 @@ const NEVER_EXISTED: Ids = {
   feedId: '00000000-0000-4000-8000-000000000000',
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
+  exportId: '00000000-0000-4000-8000-000000000000',
 };
 
 const NOT_A_UUID: Ids = {
@@ -184,6 +209,7 @@ const NOT_A_UUID: Ids = {
   feedId: 'not-a-uuid',
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',
+  exportId: 'not-a-uuid',
 };
 
 describe('integration: cross-tenant isolation', () => {

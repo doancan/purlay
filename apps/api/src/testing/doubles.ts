@@ -64,7 +64,12 @@ const aStoreThatMustNotBeTouched = (): ObjectStore => {
   const touched = (what: string) => (): never => {
     throw new Error(`the file store was reached (\`${what}\`) by something that must not touch it`);
   };
-  return { put: touched('put'), get: touched('get'), delete: touched('delete') };
+  return {
+    put: touched('put'),
+    putFile: touched('putFile'),
+    get: touched('get'),
+    delete: touched('delete'),
+  };
 };
 
 export const testConfig = (overrides: Partial<Config> = {}): Config => ({
@@ -134,6 +139,8 @@ export const testDependencies = (overrides: Partial<Dependencies> = {}): Depende
   // explicitly, and `rate-limit.test.ts` pins that the default is the real one.
   rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
   storage: aStoreThatMustNotBeTouched(),
+  // An export asked for is made by nobody, unless the test is about exports and says so.
+  exportRunner: (): void => undefined,
   ...overrides,
 });
 
