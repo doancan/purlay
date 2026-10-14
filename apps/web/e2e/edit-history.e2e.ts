@@ -15,7 +15,7 @@ test.describe('a message’s edit history', () => {
   }) => {
     const made = await room();
     const sent = await api('dogancan').say(made.id, 'the token is ghp_oops');
-    await api('dogancan').patch(`/api/messages/${sent.id}`, { content: 'the token is rotated' });
+    await api('dogancan').edit(sent.id, 'the token is rotated');
     await signIn();
     await page.goto(made.path);
     await page.getByRole('button', { name: 'Edited — show what it said before' }).click();
