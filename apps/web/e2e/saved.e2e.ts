@@ -35,7 +35,7 @@ test.describe('saved items', () => {
     const row = page.locator(`[data-message-id="${message.id}"]`);
     await row.hover();
     await row.getByRole('button', { name: 'Save for later' }).click();
-    await expect(row.getByRole('button', { name: 'Remove from saved' })).toHaveAttribute(
+    await expect(row.getByRole('button', { name: 'Save for later' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
