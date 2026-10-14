@@ -158,6 +158,23 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual(['A member erased their account']);
   });
 
+  test('an operator’s content erasure is said with what went, and nobody named (D-139 §7)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(1, {
+              action: 'content.erased',
+              actor: null,
+              targetType: 'user',
+              metadata: { messages: '7', files: '1' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual(['A member’s writing was erased on request: 7 messages, 1 files']);
+  });
+
   test('says each action in words, with the people and the channel named', async () => {
     const view = await openDialog({
       audit: () =>

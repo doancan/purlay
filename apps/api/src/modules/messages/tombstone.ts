@@ -6,7 +6,7 @@
  * erasure (many). Kept here, set-based, so the purge and the erasure cannot drift from the delete —
  * a copy of `uncount` that missed the notifications would leave a mention counted for ever.
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import type { ChannelStateUpdate } from './delivery';
 import { NEEDS_YOU } from './delivery';
 
@@ -159,3 +159,93 @@ export const takeBack = async (
     version: member.state_version,
   }));
 };
+
+/** A message as removing it needs it: where, by whom, when, and whether it is deleted already. */
+export interface RemovedRow {
+  readonly id: string;
+  readonly channel_id: string;
+  readonly parent_id: string | null;
+  readonly sender_id: string | null;
+  readonly created_at: Date | string;
+  readonly deleted_at: Date | string | null;
+}
+
+/** The columns a `RemovedRow` is read with. */
+export const REMOVED_COLUMNS = [
+  'id',
+  'channel_id',
+  'parent_id',
+  'sender_id',
+  'created_at',
+  'deleted_at',
+] as const;
+
+/** Takes back what the live ones among these added, channel by channel. */
+export const takeBackLive = async (
+  transaction: Transaction,
+  now: Date,
+  rows: readonly RemovedRow[],
+): Promise<void> => {
+  const byChannel = new Map<string, Counted[]>();
+  for (const row of rows) {
+    // A deleted message's count was taken back when it was deleted.
+    if (row.deleted_at !== null) continue;
+    const counted = byChannel.get(row.channel_id) ?? [];
+    counted.push({ id: row.id, senderId: row.sender_id, createdAt: new Date(row.created_at) });
+    byChannel.set(row.channel_id, counted);
+  }
+  // In channel order, so two runs at once lock memberships in the same order.
+  for (const channelId of [...byChannel.keys()].sort()) {
+    await takeBack(transaction, now, channelId, byChannel.get(channelId) ?? []);
+  }
+};
+
+/** The files of these messages: rows deleted, their bytes off the workspace, their keys returned. */
+export const dropFiles = async (
+  transaction: Transaction,
+  workspaceId: string,
+  messageIds: readonly string[],
+): Promise<{ readonly count: number; readonly keys: readonly string[] }> => {
+  if (messageIds.length === 0) return { count: 0, keys: [] };
+  const gone = await transaction
+    .deleteFrom('attachments')
+    .where('message_id', 'in', messageIds)
+    .returning(['size_bytes', 'storage_key', 'thumbnail_key'])
+    .execute();
+  if (gone.length > 0) {
+    const bytes = gone.reduce((sum, row) => sum + BigInt(row.size_bytes), 0n);
+    await transaction
+      .updateTable('workspaces')
+      .set({
+        storage_used_bytes: sql<string>`greatest(storage_used_bytes - ${bytes.toString()}::bigint, 0)`,
+      })
+      .where('id', '=', workspaceId)
+      .execute();
+  }
+  return {
+    count: gone.length,
+    keys: gone.flatMap((row) =>
+      row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
+    ),
+  };
+};
+
+/** The memberships of these channels, locked in one order: channel, then person (D-106 §3). */
+export const lockMemberships = async (
+  transaction: Transaction,
+  channelIds: readonly string[],
+): Promise<void> => {
+  if (channelIds.length === 0) return;
+  await transaction
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', 'in', channelIds)
+    .orderBy('channel_id')
+    .orderBy('user_id')
+    .forUpdate()
+    .execute();
+};
+
+/** The channels these rows are in, in one order. */
+export const channelsOf = (rows: readonly { readonly channel_id: string }[]): string[] =>
+  [...new Set(rows.map((row) => row.channel_id))].sort();

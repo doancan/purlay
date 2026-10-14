@@ -137,6 +137,12 @@ export const AuditDialog = ({
       // The person is gone, so the sentence names nobody (D-139 §5).
       case 'account.erased':
         return t('audit.action.account.erased');
+      // The operator's act, on request (D-139 §7): what went, and nobody named.
+      case 'content.erased':
+        return t('audit.action.content.erased', {
+          messages: entry.metadata['messages'] ?? '0',
+          files: entry.metadata['files'] ?? '0',
+        });
       // Nobody did it: the nightly purge, which names no actor (D-139 §3).
       case 'retention.purged':
         return t('audit.action.retention.purged', {

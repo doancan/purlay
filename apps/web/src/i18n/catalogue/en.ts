@@ -198,6 +198,8 @@ export const en = {
   'audit.action.workspace.renamed': '{actor} renamed the workspace from {from} to {to}',
   'audit.action.retention.changed': '{actor} changed how long history is kept from {from} to {to}',
   'audit.action.account.erased': 'A member erased their account',
+  'audit.action.content.erased':
+    'A member’s writing was erased on request: {messages} messages, {files} files',
   'retention.forever': 'forever',
   'retention.days': '{days} days',
   'retention.entry': 'Keep history…',

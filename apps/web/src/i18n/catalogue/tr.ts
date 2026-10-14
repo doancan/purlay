@@ -195,6 +195,8 @@ export const tr = {
   'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
   'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
   'audit.action.account.erased': 'Bir üye hesabını sildi',
+  'audit.action.content.erased':
+    'Bir üyenin yazdıkları istek üzerine silindi: {messages} mesaj, {files} dosya',
   'retention.forever': 'süresiz',
   'retention.days': '{days} gün',
   'retention.entry': 'Geçmişi sakla…',

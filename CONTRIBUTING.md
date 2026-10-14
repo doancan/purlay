@@ -96,6 +96,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run push:keys` | A Web Push key pair for `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (`docs/CONFIG.md`, D-126) |
 | `bun run audit:gate` | The dependency audit, blocking at high severity; a finding with no fix is allowed only by an expiring entry in `scripts/audit-allowlist.json` (#247) |
 | `bun run db:migrate` | Apply pending migrations. Idempotent |
+| `bun run erase:content <who> --workspace <slug>` | An operator empties every message a person wrote in one workspace, and removes their files, on a request the controller has accepted (D-139 §7); `--all` instead of `--workspace` for a self-hoster who controls every workspace. Prints counts per workspace, never words; exits 2 on a person or workspace it cannot find |
 | `bun run job <name>` | A scheduled job (D-30), which owns the list; an unknown name prints every job. `jobs:status` says what each last did and exits non-zero when one is overdue or never ran; `jobs:first` runs, once, each that never succeeded (what the scheduler does as it starts). Reads the same configuration as the API |
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |

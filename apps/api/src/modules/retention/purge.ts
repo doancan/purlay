@@ -30,19 +30,18 @@ import { atomicallyOn } from '../../platform/transactions';
 import { removeLeftovers } from '../attachments/uploads';
 import { recordAudit } from '../audit/audit';
 import type { JobDependencies } from '../jobs/jobs';
-import { takeBack, tombstoneRows, type Counted } from '../messages/tombstone';
+import {
+  REMOVED_COLUMNS as COLUMNS,
+  channelsOf,
+  dropFiles,
+  lockMemberships,
+  takeBackLive,
+  tombstoneRows,
+  type RemovedRow,
+} from '../messages/tombstone';
 
 /** Messages one transaction takes, so a long history is a loop and not one long lock. */
 export const PURGE_BATCH = 500;
-
-interface Row {
-  readonly id: string;
-  readonly channel_id: string;
-  readonly parent_id: string | null;
-  readonly sender_id: string | null;
-  readonly created_at: Date | string;
-  readonly deleted_at: Date | string | null;
-}
 
 /** What one batch did, and the files to remove once it has committed. */
 interface Batch {
@@ -56,58 +55,6 @@ interface Batch {
   readonly last: boolean;
 }
 
-/** Takes back what the live ones among these added, channel by channel. */
-const takeBackLive = async (
-  transaction: Transaction,
-  now: Date,
-  rows: readonly Row[],
-): Promise<void> => {
-  const byChannel = new Map<string, Counted[]>();
-  for (const row of rows) {
-    // A deleted message's count was taken back when it was deleted.
-    if (row.deleted_at !== null) continue;
-    const counted = byChannel.get(row.channel_id) ?? [];
-    counted.push({ id: row.id, senderId: row.sender_id, createdAt: new Date(row.created_at) });
-    byChannel.set(row.channel_id, counted);
-  }
-  // In channel order, so two runs at once lock memberships in the same order.
-  for (const channelId of [...byChannel.keys()].sort()) {
-    await takeBack(transaction, now, channelId, byChannel.get(channelId) ?? []);
-  }
-};
-
-/** The files of these messages: rows deleted, their bytes off the workspace, their keys returned. */
-const dropFiles = async (
-  transaction: Transaction,
-  workspaceId: string,
-  messageIds: readonly string[],
-): Promise<{ readonly count: number; readonly keys: readonly string[] }> => {
-  if (messageIds.length === 0) return { count: 0, keys: [] };
-  const gone = await transaction
-    .deleteFrom('attachments')
-    .where('message_id', 'in', messageIds)
-    .returning(['size_bytes', 'storage_key', 'thumbnail_key'])
-    .execute();
-  if (gone.length > 0) {
-    const bytes = gone.reduce((sum, row) => sum + BigInt(row.size_bytes), 0n);
-    await transaction
-      .updateTable('workspaces')
-      .set({
-        storage_used_bytes: sql<string>`greatest(storage_used_bytes - ${bytes.toString()}::bigint, 0)`,
-      })
-      .where('id', '=', workspaceId)
-      .execute();
-  }
-  return {
-    count: gone.length,
-    keys: gone.flatMap((row) =>
-      row.thumbnail_key === null ? [row.storage_key] : [row.storage_key, row.thumbnail_key],
-    ),
-  };
-};
-
-const COLUMNS = ['id', 'channel_id', 'parent_id', 'sender_id', 'created_at', 'deleted_at'] as const;
-
 const NOTHING: Batch = {
   cleared: 0,
   deleted: 0,
@@ -116,25 +63,6 @@ const NOTHING: Batch = {
   keys: [],
   last: true,
 };
-
-/** The memberships of these channels, locked in one order: channel, then person (D-106 §3). */
-const lockMemberships = async (
-  transaction: Transaction,
-  channelIds: readonly string[],
-): Promise<void> => {
-  if (channelIds.length === 0) return;
-  await transaction
-    .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', 'in', channelIds)
-    .orderBy('channel_id')
-    .orderBy('user_id')
-    .forUpdate()
-    .execute();
-};
-
-const channelsOf = (rows: readonly { readonly channel_id: string }[]): string[] =>
-  [...new Set(rows.map((row) => row.channel_id))].sort();
 
 /** One batch of replies older than the window: deleted, and their threads summed again. */
 const purgeReplies = async (
@@ -172,7 +100,7 @@ const purgeReplies = async (
     ).map((row) => row.id),
   );
   const wanted = candidates.filter((row) => row.parent_id !== null && held.has(row.parent_id));
-  const rows: readonly Row[] =
+  const rows: readonly RemovedRow[] =
     wanted.length === 0
       ? []
       : await transaction
@@ -264,7 +192,7 @@ const purgeRoots = async (
     .execute();
   if (candidates.length === 0) return NOTHING;
   await lockMemberships(transaction, channelsOf(candidates));
-  const rows: readonly Row[] = await transaction
+  const rows: readonly RemovedRow[] = await transaction
     .selectFrom('messages')
     .select(COLUMNS)
     .where(

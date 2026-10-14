@@ -438,6 +438,7 @@ export const AUDIT_ACTIONS = [
   'workspace.renamed',
   'retention.changed',
   'account.erased',
+  'content.erased',
   'retention.purged',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
