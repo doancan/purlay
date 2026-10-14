@@ -170,6 +170,9 @@ export const tr = {
   'audit.action.channel.archived': '{actor}, {channel} kanalını arşivledi',
   'audit.action.integration.token_set': '{actor} GitHub tokenını ayarladı',
   'audit.action.integration.token_removed': '{actor} GitHub tokenını kaldırdı',
+  'audit.action.integration.feed_created': '{actor}, {repository} deposunu bir kanala bağladı',
+  'audit.action.integration.feed_removed':
+    '{actor}, {repository} deposunun bir kanala bağlantısını kaldırdı',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
@@ -699,6 +702,9 @@ export const tr = {
   'failure.savedLimit':
     'Bir çalışma alanında saklanabilecek kayıtlı mesaj sınırına ulaştın. Önce bazılarını tamamla ya da kaldır.',
   'failure.pinsLimit': 'Bir kanalın tutabileceği pin sınırına ulaşıldı. Önce birini kaldır.',
+  'failure.githubFeedsLimit':
+    'Bir kanalın bağlanabileceği depo sınırına ulaşıldı. Önce birinin bağlantısını kaldır.',
+  'failure.githubFeedExists': 'Bu kanal o depoya zaten bağlı.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',

@@ -5830,6 +5830,65 @@ which this is not. *A remembered preference for split* — a setting for one blo
 
 ---
 
+### D-134. A repository's feed: GitHub's events as messages with no author — #79
+
+**Context.** D-5 put webhook repo feeds in Phase 2 — "signature verification, delivery dedup, retry and
+replay" — and `SCHEMA.md` §8.3 settled a table for them. Nothing said who a feed's messages are by,
+where its secret lives, who sets one up, or what a duplicate, a flood or a lost channel does.
+
+**Decision.**
+1. **A feed connects one repository to one channel**, for `push`, `pull_request`, `issues` and
+   `release`; one channel may have feeds from several repositories and one repository may feed several
+   channels, never one channel twice (`UNIQUE (channel_id, repository_full_name)`, the name kept in
+   lower case as GitHub compares it). Not CI, check or deploy events — D-110 and D-118 left those
+   rows out, and this does not bring them back — and not an Integrations section: a feed is set up
+   from its channel.
+2. **Set up and removed by an owner or an admin** (§7.4's "configure GitHub integration"), from a
+   channel they can see — a role is not a way round visibility (D-123 §2): a channel they cannot see
+   has no feeds for them, and its feed is `404`. Each is one row of the audit trail
+   (`integration.feed_created`, `integration.feed_removed`). A direct message has none.
+3. **Each feed has its own secret**: 32 random bytes the server makes, sealed by the one cipher
+   (D-39 §6) with the feed's id bound in, shown once — with the payload address and the content type
+   GitHub must send, `application/json` — and never again. A lost secret is a feed removed and made
+   again. The address carries the feed, `/api/webhooks/github/:feedId`: a secret per feed must be
+   found before the signature is checked, and a repository's name, unverified, names a feed in every
+   workspace that has one.
+4. **A delivery is checked before it is read**: a feed that is not there is `404`; a body without a
+   length, or longer than `WEBHOOK_BODY_MAX_BYTES` (1 MiB), is refused before it is read; the
+   `X-Hub-Signature-256` HMAC over the bytes as sent, compared in constant time, is the only
+   credential — wrong, missing or malformed is `401`. Addresses share one bucket before the signature
+   and each feed has its own after it, so nobody who knows an address can spend a feed's; both are
+   provisional (O-4). A delivery from another repository than the feed's first is refused.
+5. **Each delivery is posted once.** Its `X-GitHub-Delivery` id is recorded in the transaction that
+   posts it; the same id again is `200` and posts nothing. GitHub does not retry on its own: *retry and
+   replay* (D-5) are an admin's Redeliver in GitHub, made safe by this, and a delivery that failed
+   answers `5xx` so GitHub shows it failed. The ids are kept 30 days, a daily job's sweep (D-30).
+   Accepted: the two headers are not signed, so a signed body sent again with a new id posts again —
+   TLS is what stands between them.
+6. **A feed's message has no author.** Its `sender` is null — `message_type = 'system_event'`, held by
+   a `CHECK` that a person's message has a sender and an event has none — and it carries the event
+   (`githubEvent`) as parts: repository, actor's login, and what happened, every field bounded, each
+   link built from its parts as `GitHubLink`'s are (D-101), never taken from the payload. Nobody can
+   edit one; an admin may remove it, as any message (D-34). It is no thread's author, so a reply or a
+   resolution under it tells nobody for it; its text, an English summary, is what search finds.
+7. **Quiet**: an event counts as unread like any message and never notifies, at any level and by no
+   push — an amendment of D-107's `all`, which is about what people write. Nothing in it is parsed
+   for `@`: a pull request titled `@alice` names nobody (D-12).
+8. **A feed that cannot post says so** where it was set up: the last delivery and the last failure,
+   with its reason, are on the feed, and every delivery is one log line — feed, delivery, event,
+   outcome, never the body. An archived channel's feeds refuse their deliveries.
+
+**Rejected.** *The creator as the author* — every place that asks "is this mine?" would answer yes
+for an admin's every push: their bubble side, their edit shortcut, their unread count, a thread's
+replies notifying them. *A GitHub user row* — a `users` row needs an email and a username that a real
+GitHub account may hold, and it would be a member, a mention and a search result. *One webhook per
+workspace, routed by repository name* — the name is not verified until the secret is known, and a
+repository is in more than one workspace. *Our own retry queue* — GitHub keeps every delivery and
+redelivers it on request; a queue is infrastructure no measurement has asked for (CONTRIBUTING §1.11).
+
+**Cost of reversing:** migrations 0031 and 0032, the event union on `Message`, three channel routes,
+the webhook route and its job.
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

@@ -32,6 +32,8 @@ export type FailureKey =
   | 'failure.refused'
   | 'failure.savedLimit'
   | 'failure.pinsLimit'
+  | 'failure.githubFeedsLimit'
+  | 'failure.githubFeedExists'
   | 'failure.generic';
 
 /** The code of whatever was thrown; anything that is not an `ApiError` is a failure nobody described. */
@@ -55,6 +57,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'USER_NOT_FOUND':
     case 'ATTACHMENT_NOT_FOUND':
     case 'INVITATION_NOT_FOUND':
+    case 'GITHUB_FEED_NOT_FOUND':
     case 'IMAGE_NOT_AVAILABLE':
       return 'failure.gone';
     case 'RATE_LIMITED':
@@ -70,6 +73,10 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.savedLimit';
     case 'PINS_LIMIT':
       return 'failure.pinsLimit';
+    case 'GITHUB_FEEDS_LIMIT':
+      return 'failure.githubFeedsLimit';
+    case 'GITHUB_FEED_EXISTS':
+      return 'failure.githubFeedExists';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':

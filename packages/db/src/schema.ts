@@ -96,6 +96,12 @@ export interface Channels {
   workspace_id: string;
 }
 
+export interface GithubDeliveries {
+  delivery_id: string;
+  feed_id: string;
+  received_at: Generated<Timestamp>;
+}
+
 export interface GithubIntegrations {
   access_token_encrypted: string | null;
   created_at: Generated<Timestamp>;
@@ -103,6 +109,21 @@ export interface GithubIntegrations {
   id: string;
   installation_id: Int8 | null;
   updated_at: Generated<Timestamp>;
+  workspace_id: string;
+}
+
+export interface GithubRepoFeeds {
+  channel_id: string;
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  events: string[];
+  id: string;
+  last_delivery_at: Timestamp | null;
+  last_failure: string | null;
+  last_failure_at: Timestamp | null;
+  repository_full_name: string;
+  repository_id: Int8 | null;
+  secret_encrypted: string;
   workspace_id: string;
 }
 
@@ -271,7 +292,9 @@ export interface DB {
   audit_log: AuditLog;
   channel_members: ChannelMembers;
   channels: Channels;
+  github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
+  github_repo_feeds: GithubRepoFeeds;
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;

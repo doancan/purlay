@@ -260,7 +260,10 @@ An upload not attached to a message within 24 hours is swept (`ARCHITECTURE.md` 
 | ○ | `PUT` | `/api/workspaces/:workspaceId/integrations/github` | admin — `{ token }` (`SetGitHubTokenRequest`), `204`. Sealed at rest with the one cipher (D-39 §6), recorded in the audit trail without the token |
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/integrations/github` | admin — `204`; removing none is `204` too, and records nothing |
 | ○ | `POST` | `/api/integrations/github/unfurl` | member — `{ workspaceId, url }` (`UnfurlRequest`; `url` a `GitHubLink`) → `UnfurlResponse`, the `GitHubCardMetadata` or `null`: no token, nothing there, GitHub not answering, or the workspace's calls to GitHub spent for now (D-81). Fetched with the workspace's token and cached for that workspace (D-112) |
-| ② | `POST` | `/api/webhooks/github` | **Unauthenticated by cookie** — verified by HMAC signature instead |
+| ○ | `GET` | `/api/channels/:channelId/github-feeds` | admin — `GitHubFeedList`: the channel's repository feeds, oldest first, each with its last delivery and last failure; never a secret. Bounded by `GITHUB_FEEDS_PER_CHANNEL_MAX`, not paged. A channel the caller cannot see, or a direct message, is `404 CHANNEL_NOT_FOUND`; a member is `403 FORBIDDEN` (D-134) |
+| ○ | `POST` | `/api/channels/:channelId/github-feeds` | admin — `{ repository, events }` (`CreateGitHubFeedRequest`) → `201 CreatedGitHubFeed`: the feed, its `webhookPath` and its `secret`, in this answer only. The same repository again is `409 GITHUB_FEED_EXISTS`, past the cap `409 GITHUB_FEEDS_LIMIT`; recorded in the audit trail with the repository (D-134) |
+| ○ | `DELETE` | `/api/channels/:channelId/github-feeds/:feedId` | admin — `204`; a feed not in this channel is `404 GITHUB_FEED_NOT_FOUND`; recorded in the audit trail (D-134) |
+| ② | `POST` | `/api/webhooks/github/:feedId` | **Unauthenticated by cookie** — verified by the feed's HMAC signature instead (D-134 §4) |
 
 `GET` on the integration returns configuration status only. The encrypted token is never
 returned by any endpoint, at any role. (D-23)

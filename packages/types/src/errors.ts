@@ -64,6 +64,8 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('THREAD_NOT_RESOLVABLE'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
+  /** The channel already has a feed from this repository (D-134 §1). */
+  Type.Literal('GITHUB_FEED_EXISTS'),
   // Volume
   /**
    * A body larger than the route takes, refused at the edge before it is read: 64 KiB for JSON
@@ -83,6 +85,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('SAVED_LIMIT'),
   /** The channel already has as many pins as it may (D-130). */
   Type.Literal('PINS_LIMIT'),
+  /** The channel already hears from as many repositories as it may (D-134). */
+  Type.Literal('GITHUB_FEEDS_LIMIT'),
   /**
    * An attachment id already used for another upload — somebody else's, another workspace's, or
    * the same person's with other bytes. A retry of the same upload answers the attachment instead.
@@ -91,6 +95,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('ATTACHMENT_NOT_FOUND'),
   /** A link that does not open — unknown, expired, revoked, or its workspace gone: one answer (D-115). */
   Type.Literal('INVITATION_NOT_FOUND'),
+  /** A repository's feed that does not exist, or is in a channel the caller cannot see (D-134). */
+  Type.Literal('GITHUB_FEED_NOT_FOUND'),
   /** An external image the proxy will not or cannot show — one answer for every reason (#110). */
   Type.Literal('IMAGE_NOT_AVAILABLE'),
   Type.Literal('LAST_OWNER'),
@@ -159,9 +165,12 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   TOO_MANY_PENDING_UPLOADS: 409,
   SAVED_LIMIT: 409,
   PINS_LIMIT: 409,
+  GITHUB_FEEDS_LIMIT: 409,
+  GITHUB_FEED_EXISTS: 409,
   ATTACHMENT_ID_CONFLICT: 409,
   ATTACHMENT_NOT_FOUND: 404,
   INVITATION_NOT_FOUND: 404,
+  GITHUB_FEED_NOT_FOUND: 404,
   IMAGE_NOT_AVAILABLE: 404,
   LAST_OWNER: 409,
   LAST_CHANNEL_MEMBER: 409,
