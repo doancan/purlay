@@ -124,6 +124,19 @@ export const publishPinsUpdated = async (
   });
 };
 
+/** A channel's incident changed (D-137 §7): everyone watching it reads it again. Nothing of it in it. */
+export const publishIncidentUpdated = async (
+  bus: EventBus,
+  clock: Clock,
+  channelId: string,
+): Promise<void> => {
+  await bus.publish(channelTopic(channelId), {
+    event: 'INCIDENT_UPDATED',
+    data: { channelId },
+    ts: clock.now().getTime(),
+  });
+};
+
 /** A message's earlier versions changed (D-135 §5): an open history is read again. */
 export const publishMessageVersionsUpdated = async (
   bus: EventBus,

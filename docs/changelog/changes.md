@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-14: a channel's incident, declared, moved and resolved (D-137, part of #487)
+
+- Anyone in a channel declares an incident in it at a severity, moves it between investigating and
+  mitigating, makes it worse or better, and resolves it, once; every change is on its timeline with who
+  and when. A retried declaration finds the incident it made; two racing, one wins. The channel list
+  carries the open incident's severity, and everyone watching the channel is told as it changes. The
+  screens that show it follow.
+
 ### Feature — 2026-10-14: a dot for who is online (D-136, closes #480)
 
 - A person with Purlay open has a dot on their avatar in People, in a conversation's heading and in

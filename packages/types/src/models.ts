@@ -42,8 +42,11 @@ export const Timestamp = Type.String({ format: 'date-time' });
  * Responses deliberately do **not** use this. Adding a field to something we
  * produce must not break a client that has not been rebuilt yet. (D-57)
  */
-export const FromClient = <T extends TProperties>(properties: T): TObject<T> =>
-  Type.Object(properties, { additionalProperties: false });
+export const FromClient = <T extends TProperties>(
+  properties: T,
+  /** What else the shape holds: `minProperties` for a change that must change something. */
+  options: { readonly minProperties?: number } = {},
+): TObject<T> => Type.Object(properties, { ...options, additionalProperties: false });
 
 export const UserRole = Type.Union([
   Type.Literal('owner'),
@@ -143,6 +146,33 @@ export const ChannelState = Type.Object({
 });
 export type ChannelState = Static<typeof ChannelState>;
 
+/** How bad an incident is (D-137): SEV1 is the worst. */
+export const IncidentSeverity = Type.Union([
+  Type.Literal(1),
+  Type.Literal(2),
+  Type.Literal(3),
+  Type.Literal(4),
+]);
+export type IncidentSeverity = Static<typeof IncidentSeverity>;
+
+/** Where an open incident is (D-137): either, either way round. */
+export const OpenIncidentStatus = Type.Union([
+  Type.Literal('investigating'),
+  Type.Literal('mitigating'),
+]);
+export type OpenIncidentStatus = Static<typeof OpenIncidentStatus>;
+
+/** Where an incident is (D-137): open, or resolved once and for good. */
+export const IncidentStatus = Type.Union([OpenIncidentStatus, Type.Literal('resolved')]);
+export type IncidentStatus = Static<typeof IncidentStatus>;
+
+/** A channel's open incident, as its list shows it: enough for the sidebar's mark (D-137). */
+export const ChannelIncident = Type.Object({
+  severity: IncidentSeverity,
+  status: OpenIncidentStatus,
+});
+export type ChannelIncident = Static<typeof ChannelIncident>;
+
 export const Channel = Type.Object({
   id: Uuid,
   workspaceId: Uuid,
@@ -173,6 +203,8 @@ export const Channel = Type.Object({
    * Empty for a channel.
    */
   peers: Type.Array(User, { maxItems: 9 }),
+  /** Its open incident (D-137); null when none is open, and always for a direct message. */
+  incident: Type.Union([ChannelIncident, Type.Null()]),
 });
 export type Channel = Static<typeof Channel>;
 

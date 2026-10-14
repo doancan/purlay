@@ -212,6 +212,17 @@ const editChannels = (
   }
 };
 
+/**
+ * A channel's incident changed (D-137 §7): every list holding the channel is read again, for its mark,
+ * and so is the incident itself. The frame carries no state, so two heard in either order agree.
+ */
+export const incidentChanged = (client: QueryClient, channelId: string): void => {
+  for (const [key, list] of client.getQueriesData<Channel[]>({ queryKey: families.channels })) {
+    if (list?.some((c) => c.id === channelId) === true) readAgain(client, key);
+  }
+  readAgain(client, keys.incident(channelId));
+};
+
 /** Moves the channel's latest activity forward; never back (a late replay must not undo it). */
 const touchChannel = (client: QueryClient, channelId: string, at: string): void => {
   editChannels(client, channelId, (c) =>

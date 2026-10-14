@@ -24,6 +24,7 @@ const channel = {
   state,
   notificationLevel: 'mentions',
   starred: false,
+  incident: null,
   peer: null,
   peers: [],
 };

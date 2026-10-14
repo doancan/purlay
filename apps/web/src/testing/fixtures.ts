@@ -62,6 +62,7 @@ export const aChannel = (
   workspaceId: IDS.workspace,
   name,
   topic: null,
+  incident: null,
   type: 'public',
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },

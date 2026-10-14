@@ -36,6 +36,8 @@ export const keys = {
   files: (channelId: string) => ['files', channelId] as const,
   /** A channel's pins: the list, and the ids that mark them (D-130). */
   pins: (channelId: string) => ['pins', channelId] as const,
+  /** A channel's incident, and its timeline under it (D-137). */
+  incident: (channelId: string) => ['incident', channelId] as const,
 } as const;
 
 /** The families, for the code that addresses one of them whole. */

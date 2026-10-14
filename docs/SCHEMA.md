@@ -682,6 +682,65 @@ CREATE INDEX idx_message_versions_workspace ON message_versions (workspace_id);
 > `MESSAGE_VERSIONS_KEPT` are kept. Removed with the message's words when it is deleted
 > (`messages/delete.ts`), and one at a time by its author. Never searched, never parsed for mentions.
 
+### 6.6. `incidents` and `incident_updates`
+
+A channel's incidents, and what changed in each (migration 0035, D-137).
+
+```sql
+CREATE TABLE incidents (
+    id            UUID PRIMARY KEY,                 -- the client's UUIDv7: a retry finds it (D-33)
+    channel_id    UUID NOT NULL,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    severity      SMALLINT NOT NULL,                -- 1 to 4, SEV1 the worst
+    status        TEXT NOT NULL DEFAULT 'investigating',
+    declared_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    declared_at   TIMESTAMPTZ NOT NULL,
+    resolved_at   TIMESTAMPTZ,                      -- set exactly when resolved
+
+    CONSTRAINT incidents_severity_known CHECK (severity BETWEEN 1 AND 4),
+    CONSTRAINT incidents_status_known
+        CHECK (status IN ('investigating', 'mitigating', 'resolved')),
+    CONSTRAINT incidents_resolved_at CHECK ((status = 'resolved') = (resolved_at IS NOT NULL)),
+    CONSTRAINT incidents_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT incidents_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+-- One open incident a channel: what makes a race lose the same way as the check.
+CREATE UNIQUE INDEX idx_incidents_one_open ON incidents (channel_id) WHERE resolved_at IS NULL;
+CREATE INDEX idx_incidents_channel ON incidents (channel_id, declared_at DESC);
+CREATE INDEX idx_incidents_channel_workspace ON incidents (channel_id, workspace_id);
+CREATE INDEX idx_incidents_workspace ON incidents (workspace_id);
+CREATE INDEX idx_incidents_declared_by ON incidents (declared_by);
+
+CREATE TABLE incident_updates (
+    id           UUID PRIMARY KEY,                  -- UUIDv7, after the incident's newest
+    incident_id  UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL,                     -- declared | status | severity
+    from_value   TEXT,                              -- null exactly for a declaration
+    to_value     TEXT NOT NULL,
+    actor_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    at           TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT incident_updates_kind_known CHECK (kind IN ('declared', 'status', 'severity')),
+    CONSTRAINT incident_updates_from CHECK ((kind = 'declared') = (from_value IS NULL)),
+    CONSTRAINT incident_updates_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+);
+
+CREATE INDEX idx_incident_updates_incident ON incident_updates (incident_id, id DESC);
+CREATE INDEX idx_incident_updates_actor ON incident_updates (actor_id);
+```
+
+> The incident and its timeline entry are written in one transaction, the incident's row locked for a
+> change. The timeline is never updated; it goes with its incident, which goes with its channel. The
+> channel list reads the open one's severity and status through the open index, a join and not a
+> query a channel. Every foreign key is indexed (D-89). A direct message has no incident: the service
+> refuses one (`404`), the table does not — a channel's type is not on this row, and holding it here
+> would take a trigger; accepted, as the service is the one writer.
+
 ## 7. Reactions, Attachments, Mentions, Notifications
 
 ### 7.1. `reactions`
@@ -1251,12 +1310,13 @@ file that leaves its transaction runs statement by statement and must be safe to
 0032_event_messages.sql      messages.sender_id nullable for an event, messages_sender_by_type  (D-134 §6)
 0033_feed_failures.sql       a feed's last failure may be rate_limited  (D-134 §8)
 0034_message_versions.sql    message_versions: what an edit replaced  (D-135)
+0035_incidents.sql           incidents, incident_updates: a channel's incidents and their timeline  (D-137)
 ```
 
-Phase 2's magic links add `0035_email_auth.sql`.
+Phase 2's magic links add `0036_email_auth.sql`.
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,
 again when `0007_message_content_limit.sql` shipped in Phase 0, again with each hardening migration
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
-again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
+again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions, and again with the incidents. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)

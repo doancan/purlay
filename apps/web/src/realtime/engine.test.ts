@@ -77,6 +77,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   workspaceId: WS,
   name: 'api',
   topic: null,
+  incident: null,
   type: 'public',
   lastMessageAt: null,
   state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
@@ -1086,6 +1087,23 @@ describe('Deep Work changed in another tab (#526)', () => {
       w.timers.advance(PRESENCE_GRACE_MS * 2);
       expect(epoch(w)).toBe(0);
     });
+  });
+
+  test('a channel’s incident changed reads it again, and the lists that hold the channel only (D-137)', () => {
+    const w = world();
+    w.client.setQueryData(keys.incident(CH), { incident: null });
+    w.client.setQueryData(keys.incident(CH2), { incident: null });
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.client.setQueryData(keys.channels(IDS.browse), [channel(CH2)]);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'INCIDENT_UPDATED', data: { channelId: CH }, ts: T0 }));
+    const stale = (key: readonly unknown[]): boolean | undefined =>
+      w.client.getQueryState(key)?.isInvalidated;
+    expect(stale(keys.incident(CH))).toBe(true);
+    expect(stale(keys.channels(WS))).toBe(true);
+    expect(stale(keys.incident(CH2))).toBe(false);
+    expect(stale(keys.channels(IDS.browse))).toBe(false);
   });
 
   test('a channel’s pins changed are read again, in that channel only (D-130)', () => {

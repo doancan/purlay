@@ -26,7 +26,10 @@ import {
   FromClient,
   GITHUB_REPOSITORY_PATTERN,
   GitHubLink,
+  IncidentSeverity,
+  IncidentStatus,
   Membership,
+  OpenIncidentStatus,
   PROFILE_STATUS_MAX,
   PROFILE_TITLE_MAX,
   Profile,
@@ -831,3 +834,71 @@ export const PresenceSnapshot = Type.Object({
   version: Type.Integer({ minimum: 0 }),
 });
 export type PresenceSnapshot = Static<typeof PresenceSnapshot>;
+
+// ── Incidents (#487, D-137) ─────────────────────────────────────────────────
+
+/**
+ * An incident declared in a channel: how bad, where it is, and who declared it when. The channel's
+ * open one, or once none is open the latest — `GET /api/channels/:channelId/incident`.
+ */
+const incidentFields = {
+  /** The client's UUIDv7, chosen when it declared: a retry finds the same incident (D-33). */
+  id: Uuid,
+  channelId: Uuid,
+  severity: IncidentSeverity,
+  /** Null once the person who declared it is gone. */
+  declaredBy: Type.Union([User, Type.Null()]),
+  declaredAt: Timestamp,
+};
+/** Open, or resolved with its instant — never one without the other (`incidents_resolved_at`). */
+export const Incident = Type.Union([
+  Type.Object({ ...incidentFields, status: OpenIncidentStatus, resolvedAt: Type.Null() }),
+  Type.Object({ ...incidentFields, status: Type.Literal('resolved'), resolvedAt: Timestamp }),
+]);
+export type Incident = Static<typeof Incident>;
+
+/** `GET /api/channels/:channelId/incident` — null when the channel never had one. */
+export const IncidentResponse = Type.Object({ incident: Type.Union([Incident, Type.Null()]) });
+export type IncidentResponse = Static<typeof IncidentResponse>;
+
+/** `POST /api/channels/:channelId/incident` — declared at this severity, investigating. */
+export const DeclareIncidentRequest = FromClient({
+  id: Uuid,
+  severity: IncidentSeverity,
+});
+export type DeclareIncidentRequest = Static<typeof DeclareIncidentRequest>;
+
+/**
+ * `PATCH /api/channels/:channelId/incident/:incidentId` — what to change, at least one thing. The
+ * last change wins: in an incident speed is worth more than a refusal (D-137 §5).
+ */
+export const ChangeIncidentRequest = FromClient(
+  {
+    status: Type.Optional(IncidentStatus),
+    severity: Type.Optional(IncidentSeverity),
+  },
+  { minProperties: 1 },
+);
+export type ChangeIncidentRequest = Static<typeof ChangeIncidentRequest>;
+
+/** What one entry of an incident's timeline says changed. */
+export const IncidentChange = Type.Union([
+  Type.Object({ kind: Type.Literal('declared'), severity: IncidentSeverity }),
+  // From an open status only: nothing moves a resolved incident (D-137 §3).
+  Type.Object({ kind: Type.Literal('status'), from: OpenIncidentStatus, to: IncidentStatus }),
+  Type.Object({ kind: Type.Literal('severity'), from: IncidentSeverity, to: IncidentSeverity }),
+]);
+export type IncidentChange = Static<typeof IncidentChange>;
+
+/** One entry of an incident's timeline: what changed, by whom (null once they are gone), when. */
+export const IncidentUpdate = Type.Object({
+  id: Uuid,
+  at: Timestamp,
+  actor: Type.Union([User, Type.Null()]),
+  change: IncidentChange,
+});
+export type IncidentUpdate = Static<typeof IncidentUpdate>;
+
+/** `GET /api/channels/:channelId/incident/:incidentId/updates` — newest first, keyset on the id. */
+export const IncidentUpdatePage = Page(IncidentUpdate);
+export type IncidentUpdatePage = Static<typeof IncidentUpdatePage>;
