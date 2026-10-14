@@ -34,6 +34,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { CodeBlock } from './code-block';
+import { DiffBlock } from './diff-block';
 import { readingCache } from './reading-cache';
 
 /**
@@ -281,7 +282,12 @@ const BlockNode = ({
         </p>
       );
     case 'code':
-      return <CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />;
+      // A diff is drawn as one (D-133); any other language is a code block.
+      return ['diff', 'patch'].includes((node.lang ?? '').toLowerCase()) ? (
+        <DiffBlock code={node.value} />
+      ) : (
+        <CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
+      );
     case 'blockquote':
       return (
         // A block of its own rather than an edge: an edge is what marked a mention, and a quote read as one.
