@@ -252,7 +252,8 @@ export const SavedScreen = (): React.JSX.Element => {
 
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
+      {/* On a phone the tabs take a row of their own: beside the title they were drawn over it (#681). */}
+      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5 max-narrow:h-auto max-narrow:flex-wrap max-narrow:py-2">
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
@@ -260,14 +261,14 @@ export const SavedScreen = (): React.JSX.Element => {
           </HeaderTile>
           <h1 className="whitespace-nowrap text-heading text-ink">{t('saved.title')}</h1>
         </div>
-        <div role="group" aria-label={t('saved.tabs')} className="flex gap-1">
+        <div role="group" aria-label={t('saved.tabs')} className="flex gap-1 max-narrow:w-full">
           {STATES.map((tab) => (
             <button
               key={tab}
               type="button"
               aria-pressed={tab === state}
               className={cn(
-                'rounded-md px-3 py-1 text-label',
+                'rounded-md px-3 py-1 text-label max-narrow:h-touch max-narrow:flex-1',
                 tab === state ? 'bg-surface-200 text-ink' : 'text-ink-muted hover:text-ink',
               )}
               onClick={() => {

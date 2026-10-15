@@ -86,6 +86,47 @@ test.describe('at a phone width', () => {
     expect(measured.cut, 'a three-letter name is cut short').toBe(false);
   });
 
+  test("every screen's title has its room in its header, drawn under nothing", async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    // The channel's header above, for each screen with a header of its own: Saved's three tabs were
+    // drawn over its title at this width (#681), a screen the test above does not visit.
+    await signIn('bob');
+    const slug = world.workspace.slug;
+    for (const screen of ['saved', 'inbox', 'questions', 'search']) {
+      await page.goto(`/w/${slug}/${screen}`);
+      const title = page.locator('header h1');
+      await expect(title).toBeVisible();
+      const measured = await title.evaluate((heading) => {
+        const header = heading.closest('header');
+        if (header === null) throw new Error('the title is not in a header');
+        const box = heading.getBoundingClientRect();
+        const overlapping = [...header.querySelectorAll('a, button')]
+          .filter((control) => !heading.contains(control))
+          .map((control) => ({ control, other: control.getBoundingClientRect() }))
+          .filter(({ other }) => other.width > 0)
+          .filter(
+            ({ other }) =>
+              other.left < box.right &&
+              other.right > box.left &&
+              other.top < box.bottom &&
+              other.bottom > box.top,
+          )
+          .map(({ control }) => control.getAttribute('aria-label') ?? control.textContent);
+        return {
+          overlapping,
+          cut: heading.scrollWidth > heading.clientWidth,
+          outside: box.right > header.getBoundingClientRect().right,
+        };
+      });
+      expect(measured.overlapping, `${screen}: controls drawn over the title`).toEqual([]);
+      expect(measured.cut, `${screen}: the title is cut short`).toBe(false);
+      expect(measured.outside, `${screen}: the title runs out of its header`).toBe(false);
+    }
+  });
+
   test('an open thread covers the conversation, runs off no side, and Close is a finger wide and brings it back', async ({
     page,
     signIn,
