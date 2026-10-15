@@ -60,7 +60,7 @@ if has_api; then
     -v "$ROOT/scripts/bucket-copy.ts:/ops/bucket-copy.ts:ro" \
     -v "$ROOT/scripts/bucket-manifest.ts:/ops/bucket-manifest.ts:ro" \
     --entrypoint /usr/local/bin/bun api /ops/bucket-copy.ts export /backup; then
-    die "the bucket could not be copied. On a stack whose object store was never initialised ('Layout not ready'), run scripts/production-init.sh first"
+    die "the bucket could not be copied. On a stack whose object store was never prepared ('Layout not ready'), run 'docker compose … up -d', whose storage-init service prepares it (D-144), or scripts/production-init.sh on a stack from before that service"
   fi
 else
   echo "bucket: skipped — this stack has no API container to run the copy in"

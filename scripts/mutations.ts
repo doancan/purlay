@@ -1878,8 +1878,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'release-trusts-the-registry-tag',
     why: 'a digest the registry holds under the tag is printed although it is not the image that was smoke-tested',
     file: 'scripts/release-image.sh',
-    find: '| grep -qxF "$IMAGE@$DIGEST" ||',
-    replace: '| grep -q . ||',
+    find: '| grep -xF "$IMAGE@$DIGEST" >/dev/null ||',
+    replace: '| grep . >/dev/null ||',
     tests: ['scripts/release-image.test.ts'],
   },
   {

@@ -24,7 +24,7 @@ if [ -z "$files" ]; then
   echo "relevant=true"
   exit 0
 fi
-if printf '%s\n' "$files" | grep -Eq -- "$PATTERN"; then
+if printf '%s\n' "$files" | grep -E -- "$PATTERN" >/dev/null; then
   echo "relevant=true"
 else
   echo "relevant=false"

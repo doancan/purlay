@@ -53,6 +53,24 @@ describe('the shell scripts', () => {
     },
   );
 
+  // Under `pipefail`, `… | grep -q` is a race: grep leaves at its first match, the writer dies of
+  // SIGPIPE if it has more to say, and the pipeline fails though the line was there. `has_api`
+  // answered "no API" on two runs in five that way, and a backup skipped the bucket with exit 0.
+  // `grep … >/dev/null` reads to the end, so the answer is the match's.
+  test.each(scripts)('%s never pipes into grep -q', (name) => {
+    const text = readFileSync(join(directory, name), 'utf8');
+    expect(text.split('\n').filter((line) => /\|\s*grep\s+-\w*q/.test(line))).toEqual([]);
+  });
+
+  test('a pipe into grep -q does fail under pipefail, which is why it is refused', () => {
+    const run = Bun.spawnSync([
+      'bash',
+      '-c',
+      'set -o pipefail; for i in $(seq 20); do yes | head -c 200000 | grep -q y || exit 1; done',
+    ]);
+    expect(run.exitCode).not.toBe(0);
+  });
+
   test('the checker for the parse test does fail on a broken script', () => {
     const run = Bun.spawnSync(['bash', '-n', '-c', 'if then fi'], { stderr: 'pipe' });
     expect(run.exitCode).not.toBe(0);
