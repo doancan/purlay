@@ -311,6 +311,18 @@ export const countArrival = async (
   notified: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
   const ahead = sql<boolean>`(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)`;
+  // The rows are locked first, in one order (#668). An `UPDATE` of several rows locks them in the
+  // order it reaches them, which follows where each row's newest version happens to lie for this
+  // snapshot: two senders could each hold a row the other needed, and one send failed with a
+  // deadlock. Locked by `user_id`, every sender takes them in the same order and the second waits.
+  await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', channelId)
+    .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))
+    .orderBy('user_id')
+    .forNoKeyUpdate()
+    .execute();
   const changed = await executor
     .updateTable('channel_members')
     .set({

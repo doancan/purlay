@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: concurrent sends into one channel no longer deadlock (closes #668)
+
+- Several people writing into one channel at once could each hold a member's counter row the other
+  needed; PostgreSQL ended one send as a deadlock and its sender got `500` (measured: 13 of 418 sends
+  from four writers). A multi-row update locks rows in the order its snapshot reaches them; the arrival
+  counter now locks the members' rows first, by `user_id` — the order a delete already takes them in.
+  Twenty-five sends from each of five people at once now all succeed, and a mutation removing the lock
+  is caught.
+
 ### Security — 2026-10-15: the proxy no longer replays a request the API received and died on (closes #666)
 
 - With `lb_try_duration` (#645), Caddy's default also retried a GET whose exchange failed after it was

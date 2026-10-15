@@ -382,6 +382,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/retention.integration.test.ts'],
   },
   {
+    id: 'arrival-counted-out-of-order',
+    why: 'two senders into one channel each hold a member row the other needs: a deadlock, and a send fails with 500 (#668)',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "    .orderBy('user_id')\n    .forNoKeyUpdate()\n    .execute();\n  const changed = await executor",
+    replace: "    .orderBy('user_id')\n    .execute();\n  const changed = await executor",
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
     id: 'retention-waits-on-a-busy-root',
     why: 'the purge holds the memberships and waits on a root a reply holds, while the reply waits on the memberships: a deadlock',
     file: 'apps/api/src/modules/retention/purge.ts',
