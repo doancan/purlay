@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a search result found across I, ı, İ and i is marked (closes #704)
+
+Since #701 the server finds "ÇAĞRI" for `çağrı` and "İstanbul" for `istanbul`, but a row's excerpt
+marked its match with a case-insensitive regular expression whose folding does not pair İ with i nor I
+with ı, so such a result showed from its start with nothing marked. Each of the four now matches any of
+them there too, as the server folds them.
+
 ### Fix — 2026-10-15: the command palette finds "Doğancan" from "dogancan" (closes #702)
 
 The palette compared names with `toLowerCase` alone, so a name with Turkish letters was not found
