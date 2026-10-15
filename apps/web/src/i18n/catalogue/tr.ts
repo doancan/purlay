@@ -189,6 +189,10 @@ export const tr = {
   'audit.action.integration.feed_created': '{actor}, {repository} deposunu bir kanala bağladı',
   'audit.action.integration.feed_removed':
     '{actor}, {repository} deposunun bir kanala bağlantısını kaldırdı',
+  'audit.action.integration.feed_created_in':
+    '{actor}, {repository} deposunu {channel} kanalına bağladı',
+  'audit.action.integration.feed_removed_from':
+    '{actor}, {repository} deposunun {channel} kanalına bağlantısını kaldırdı',
   'audit.action.invitation.created': '{actor} bir davet bağlantısı oluşturdu',
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',

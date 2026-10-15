@@ -89,7 +89,8 @@ describe('integration: a channel’s repository feeds', () => {
         {
           action: 'integration.feed_created',
           target_id: made.feed.id,
-          metadata: { repository: 'acme/api' },
+          // Where, too: the audit log names the channel to whoever can see it (#691).
+          metadata: { repository: 'acme/api', channelId: room.channelId },
         },
       ]);
       expect(JSON.stringify(trail)).not.toContain(made.secret);
@@ -288,7 +289,7 @@ describe('integration: a channel’s repository feeds', () => {
       ).toEqual([]);
       const actions = await db
         .selectFrom('audit_log')
-        .select('action')
+        .select(['action', 'metadata'])
         .where('workspace_id', '=', room.workspaceId)
         .execute();
       // One clock, so both rows have the same time: which came first is not what is asked.
@@ -296,6 +297,10 @@ describe('integration: a channel’s repository feeds', () => {
         'integration.feed_created',
         'integration.feed_removed',
       ]);
+      expect(actions.find((row) => row.action === 'integration.feed_removed')?.metadata).toEqual({
+        repository: 'acme/api',
+        channelId: room.channelId,
+      });
       expect(await refusal(removeFeed(db, clock, alice, made.feed.id))).toBe(
         'GITHUB_FEED_NOT_FOUND',
       );

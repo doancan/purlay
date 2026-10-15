@@ -192,6 +192,8 @@ export const en = {
   'audit.action.integration.token_removed': '{actor} removed the GitHub token',
   'audit.action.integration.feed_created': '{actor} connected {repository} to a channel',
   'audit.action.integration.feed_removed': '{actor} disconnected {repository} from a channel',
+  'audit.action.integration.feed_created_in': '{actor} connected {repository} to {channel}',
+  'audit.action.integration.feed_removed_from': '{actor} disconnected {repository} from {channel}',
   'audit.action.invitation.created': '{actor} made an invitation link',
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
