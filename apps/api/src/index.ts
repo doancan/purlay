@@ -17,7 +17,7 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { SIGN_IN_CALLBACK } from './modules/auth/sign-in';
 import { createApp } from './ingress/http/app';
-import { createLogger } from './platform/logging';
+import { clean, createLogger, type Fields } from './platform/logging';
 import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
 import { installCrashHandlers, installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
@@ -47,8 +47,18 @@ const errorTracker = createErrorTracker({
   },
 });
 const log = withErrorTracking(plainLog, errorTracker);
-// From here on an error nothing handled is reported and ends the process, never left half-alive (#634).
-installCrashHandlers({ log, flush: errorTracker.flush, process, deadlineMs: 2_000 });
+// From here on an error nothing handled is reported and ends the process, never left half-alive
+// (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
+// tracker full of ordinary reports cannot be the reason it is not sent.
+const crash = installCrashHandlers({
+  log: plainLog,
+  report: (message, fields) => {
+    errorTracker.capture({ message, fields: clean(fields) as Fields }, 'urgent');
+  },
+  flush: errorTracker.flush,
+  process,
+  deadlineMs: 2_000,
+});
 
 // Opened before anything listens: a build without its shell refuses to start (D-61).
 const client = config.CLIENT_DIST === undefined ? undefined : openClient(config.CLIENT_DIST);
@@ -130,6 +140,12 @@ const app = createApp({
 });
 
 log.info('listening', { port: app.listen(config.PORT) });
+// A crash stops new work at once: readiness says no and the sockets are told to come back (#634).
+crash.onCrash(() => {
+  app.drain().catch((failure: unknown) => {
+    plainLog.warn('draining after a crash failed', { err: failure });
+  });
+});
 
 // A restart is a reconnect, not an outage: drain, close the pool, exit (#220).
 installShutdown({
@@ -146,6 +162,7 @@ installShutdown({
   log,
   process,
   deadlineMs: 10_000,
+  crashed: crash.crashed,
 });
 
 // After the listener is open, so liveness answers during a long migration and

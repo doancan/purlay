@@ -100,23 +100,34 @@ describe('an error that escaped every handler (#634)', () => {
     flush: () => Promise<void> = async () => {
       await Promise.resolve();
     },
+    throwing = false,
   ): {
     steps: string[];
     errors: { message: string; fields: Record<string, unknown> | undefined }[];
+    reports: { message: string; fields: Record<string, unknown> }[];
     fire: (event: 'unhandledRejection' | 'uncaughtException', reason: unknown) => void;
     fireDeadline: () => void;
+    crash: ReturnType<typeof installCrashHandlers>;
   } => {
     const steps: string[] = [];
     const errors: { message: string; fields: Record<string, unknown> | undefined }[] = [];
+    const reports: { message: string; fields: Record<string, unknown> }[] = [];
     const handlers = new Map<string, (reason: unknown) => void>();
     let deadline: (() => void) | undefined;
     const silent = createLogger({ level: 'silent' });
-    installCrashHandlers({
+    const crash = installCrashHandlers({
       log: {
         ...silent,
         error: (message, fields) => {
+          // Only when walking the reason, as the real logger does with a getter that throws.
+          if (throwing && fields !== undefined && 'err' in fields) {
+            throw new TypeError('a getter on the reason threw');
+          }
           errors.push({ message, fields });
         },
+      },
+      report: (message, fields) => {
+        reports.push({ message, fields });
       },
       flush: async () => {
         steps.push('flush');
@@ -141,9 +152,14 @@ describe('an error that escaped every handler (#634)', () => {
         },
       },
     });
+    crash.onCrash(() => {
+      steps.push('stop taking work');
+    });
     return {
       steps,
       errors,
+      reports,
+      crash,
       fire: (event, reason) => handlers.get(event)?.(reason),
       fireDeadline: () => deadline?.(),
     };
@@ -160,7 +176,15 @@ describe('an error that escaped every handler (#634)', () => {
         fields: { err: reason, kind: 'unhandledRejection' },
       },
     ]);
-    expect(run.steps).toEqual(['flush', 'exit 1']);
+    // Reported as urgent, past a tracker full of ordinary reports; then no more work, then out.
+    expect(run.reports).toEqual([
+      {
+        message: 'an error escaped every handler; exiting',
+        fields: { err: reason, kind: 'unhandledRejection' },
+      },
+    ]);
+    expect(run.steps).toEqual(['stop taking work', 'flush', 'exit 1']);
+    expect(run.crash.crashed()).toBe(true);
   });
 
   test('an uncaught exception is the same, named as such', async () => {
@@ -168,7 +192,7 @@ describe('an error that escaped every handler (#634)', () => {
     run.fire('uncaughtException', new Error('boom'));
     await Bun.sleep(0);
     expect(run.errors[0]?.fields?.['kind']).toBe('uncaughtException');
-    expect(run.steps).toEqual(['flush', 'exit 1']);
+    expect(run.steps).toEqual(['stop taking work', 'flush', 'exit 1']);
   });
 
   test('a tracker that will not flush does not keep a broken process alive', () => {
@@ -177,7 +201,7 @@ describe('an error that escaped every handler (#634)', () => {
     });
     run.fire('uncaughtException', new Error('boom'));
     run.fireDeadline();
-    expect(run.steps).toEqual(['flush', 'exit 1']);
+    expect(run.steps).toEqual(['stop taking work', 'flush', 'exit 1']);
   });
 
   test('a flush that fails still exits 1', async () => {
@@ -186,7 +210,7 @@ describe('an error that escaped every handler (#634)', () => {
     });
     run.fire('unhandledRejection', 'not even an Error');
     await Bun.sleep(0);
-    expect(run.steps).toEqual(['flush', 'exit 1']);
+    expect(run.steps).toEqual(['stop taking work', 'flush', 'exit 1']);
   });
 
   test('in a real process, both kinds are heard and end it with 1, the error logged', async () => {
@@ -203,7 +227,7 @@ describe('an error that escaped every handler (#634)', () => {
           '-e',
           `import { installCrashHandlers } from ${JSON.stringify(lifecycle)};
            import { createLogger } from ${JSON.stringify(logging)};
-           installCrashHandlers({ log: createLogger({ level: 'error' }), flush: () => Promise.resolve(), process, deadlineMs: 2000 });
+           installCrashHandlers({ log: createLogger({ level: 'error' }), report: () => undefined, flush: () => Promise.resolve(), process, deadlineMs: 2000 });
            ${fault}
            setTimeout(() => { console.log('still alive'); process.exit(0); }, 1000);`,
         ],
@@ -215,6 +239,43 @@ describe('an error that escaped every handler (#634)', () => {
       expect(out).toContain('an error escaped every handler; exiting');
       expect(out).not.toContain('still alive');
     }
+  });
+
+  test('a reason the logger cannot describe still ends the process, said without it', async () => {
+    // A reason with a getter that throws, or a Proxy: the logger walks it and throws (#634 review).
+    const run = crashHarness(undefined, true);
+    run.fire('uncaughtException', new Error('boom'));
+    await Bun.sleep(0);
+    expect(run.steps).toEqual(['stop taking work', 'flush', 'exit 1']);
+    expect(run.reports.map((r) => r.fields['kind'])).toEqual(['uncaughtException']);
+  });
+
+  test('a shutdown that was draining when it crashed exits 1, not 0', async () => {
+    const run = crashHarness(async () => {
+      await Bun.sleep(5);
+    });
+    const exits: number[] = [];
+    const start = installShutdown({
+      drain: async () => {
+        run.fire('unhandledRejection', new Error('while draining'));
+        await Promise.resolve();
+      },
+      closeDatabase: async () => {
+        await Promise.resolve();
+      },
+      log: createLogger({ level: 'silent' }),
+      process: {
+        on: () => undefined,
+        exit: (code) => {
+          exits.push(code);
+        },
+      },
+      deadlineMs: 10_000,
+      timers: { set: () => 1, clear: () => undefined },
+      crashed: run.crash.crashed,
+    });
+    await start('SIGTERM');
+    expect(exits).toEqual([1]);
   });
 
   test('a second error while exiting is logged, and exits once', async () => {
