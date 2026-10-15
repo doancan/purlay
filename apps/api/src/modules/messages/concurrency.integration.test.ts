@@ -505,3 +505,104 @@ describe('integration: leaving a channel while somebody writes in it (#669)', ()
     }
   }, 30_000);
 });
+
+describe('integration: an edit naming two people while somebody writes (#669)', () => {
+  const waitingOnLocks = async (db: ClonedDatabase['db'], count: number): Promise<void> => {
+    for (let tries = 0; tries < 200; tries += 1) {
+      const { rows } = await sql<{ waiting: number }>`
+        select count(*)::int as waiting from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock'
+      `.execute(db);
+      if ((rows[0]?.waiting ?? 0) >= count) return;
+      await Bun.sleep(10);
+    }
+    throw new Error(`never saw ${String(count)} sessions waiting on a lock`);
+  };
+
+  test('both finish, whatever plan the edit gets: it locks the people it names in the order a send does', async () => {
+    const db = cloned.db;
+    // After the room is made: an edit counts a mention only for who was in the channel when the
+    // message was written (`joined_at <= written`), and a message dated before they joined counts
+    // nobody — a test that passes by locking nothing.
+    const later = fixedClock(new Date(Date.now() + 60_000));
+    // Found by a chaos soak (one 500 in 3,098 requests): on a small table the planner reads the
+    // edit's `user_id in (…)` with a sequential scan, in the rows' physical order. The edit's
+    // transaction turns the index scans off so the test does not depend on the plan: touching the
+    // lower-id row first puts its newest version after the other's. A third transaction holds the
+    // higher row; the edit waits for it first, then the send takes the lower and waits for it too.
+    // Released, the first waiter — the edit — takes it, and then needs the lower row the send holds.
+    for (let round = 0; round < 10; round += 1) {
+      const room = await aRoom(db, ['erin', 'walt', 'tess', 'troy']);
+      const erin = room.members['erin'];
+      const walt = room.members['walt'];
+      if (erin === undefined || walt === undefined) throw new Error('room');
+      const [low, high] = ['tess', 'troy']
+        .map((name) => room.members[name])
+        .filter((m): m is NonNullable<typeof m> => m !== undefined)
+        .sort((a, b) => (a.userId < b.userId ? -1 : 1));
+      if (low === undefined || high === undefined) throw new Error('room');
+      const own = (
+        await sendMessage(db, later, erin.context, {
+          id: messageId(new Date(Date.now() + 1_000 + round)),
+          content: 'draft',
+        })
+      ).message.id;
+      await db
+        .updateTable('channel_members')
+        .set({ state_version: sql<number>`state_version + 1` })
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', low.userId)
+        .execute();
+
+      const blocker = holdOpen(atomicallyOn(db));
+      const blocking = blocker.atomically(
+        async (transaction) =>
+          await transaction
+            .selectFrom('channel_members')
+            .select('user_id')
+            .where('channel_id', '=', room.channelId)
+            .where('user_id', '=', high.userId)
+            .forNoKeyUpdate()
+            .execute(),
+      );
+      await blocker.holding;
+      const editing = atomicallyOn(db)(async (transaction) => {
+        await sql`set local enable_indexscan = off`.execute(transaction);
+        await sql`set local enable_bitmapscan = off`.execute(transaction);
+        await sql`set local enable_indexonlyscan = off`.execute(transaction);
+        return await reviseMessage(
+          transaction,
+          later,
+          erin.userId,
+          own,
+          `@${low.username} @${high.username}`,
+        );
+      });
+      await waitingOnLocks(db, 1);
+      const sending = atomicallyOn(db)(
+        async (transaction) =>
+          await sendMessage(transaction, later, walt.context, {
+            id: messageId(new Date(Date.now() + 2_000 + round)),
+            content: 'hi',
+          }),
+      );
+      await waitingOnLocks(db, 2);
+      blocker.release();
+      await blocking;
+      const outcomes = await Promise.allSettled([sending, editing]);
+      expect(
+        outcomes
+          .filter((outcome) => outcome.status === 'rejected')
+          .map((outcome) => String(outcome.reason)),
+      ).toEqual([]);
+      // Not vacuous: the edit did count both people it named.
+      const counted = await db
+        .selectFrom('channel_members')
+        .select('unread_mention_count')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', 'in', [low.userId, high.userId])
+        .execute();
+      expect(counted.map((row) => row.unread_mention_count)).toEqual([1, 1]);
+    }
+  }, 30_000);
+});

@@ -391,6 +391,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
   {
+    id: 'edit-mentions-counted-out-of-order',
+    why: 'an edit naming two people locks them in its scan order beside a send that locks them in user order: a deadlock, and a 500 (#669)',
+    file: 'apps/api/src/modules/messages/edit.ts',
+    find: "      .where('user_id', 'in', told)\n      .orderBy('user_id')\n      .forNoKeyUpdate()\n",
+    replace: "      .where('user_id', 'in', told)\n      .orderBy('user_id')\n",
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
     id: 'arrival-counted-out-of-order',
     why: 'two senders into one channel each hold a member row the other needs: a deadlock, and a send fails with 500 (#668)',
     file: 'apps/api/src/modules/messages/delivery.ts',

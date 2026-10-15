@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an edit naming several people no longer deadlocks with a send (closes #669)
+
+- Found by a chaos soak — four people doing everything at once in one channel, one `500` in 3,098
+  requests: an edit that newly names people counted them with `user_id in (…)`, which on a small table
+  the planner reads in the rows' physical order, beside a send locking the same rows in `user_id` order.
+  The edit now locks the people it names in that order first, and counts exactly those. A test turns the
+  index scans off so the order no longer depends on the plan: before, a deadlock in each of three runs.
+
 ### Fix — 2026-10-15: leaving a channel no longer deadlocks with a message being sent in it (part of #669)
 
 - A leave took the channel's row and then its membership; a send holds the memberships it counts and
