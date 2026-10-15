@@ -60,6 +60,48 @@ test.describe('the command palette', () => {
     await expect(dialog).toHaveCount(0);
   });
 
+  // Keyboard first: where the palette takes a person, they can write at once (#697). An empty channel
+  // is a rule of its own — "No messages yet" with the composer focused (`UX.md` §8). On a narrow
+  // window focus goes to the page instead: a field there opens the on-screen keyboard.
+  test('leaves focus in the composer of the channel it opens, empty or not — on the page, on a narrow window', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const narrow = test.info().project.name.includes('narrow');
+    const busy = await room({
+      members: ['dogancan', 'alice'],
+      messages: [{ by: 'alice', text: 'something to read first' }],
+    });
+    const empty = await room({ members: ['dogancan'], messages: [] });
+    await signIn();
+    await page.goto('/w/acme-eng/questions');
+    await ready(page);
+    for (const target of [busy, empty]) {
+      await page.keyboard.press(`${modifier}+K`);
+      await page
+        .getByRole('dialog', { name: 'Command palette' })
+        .getByRole('combobox')
+        .fill(target.name);
+      await expect(
+        page.getByRole('dialog', { name: 'Command palette' }).getByRole('option').first(),
+      ).toContainText(target.name);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(new RegExp(`/c/${target.id}$`));
+      await expect(
+        narrow
+          ? page.getByRole('main')
+          : page.getByRole('textbox', { name: `Message ${target.name}` }),
+      ).toBeFocused();
+    }
+    if (narrow) return;
+    // And what is typed next is written there.
+    await page.keyboard.type('written straight away');
+    await expect(page.getByRole('textbox', { name: `Message ${empty.name}` })).toHaveValue(
+      'written straight away',
+    );
+  });
+
   test('finds a person who has no conversation yet and opens one, by keyboard alone', async ({
     page,
     signIn,
