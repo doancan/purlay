@@ -24,7 +24,7 @@ compose() {
 # the server's and nothing needs installing on the host.
 in_postgres() { compose exec -T postgres "$@"; }
 
-has_api() { compose config --services | grep -qx api; }
+has_api() { compose config --services | grep -x api >/dev/null; }
 
 # A checksum tool that exists on both macOS and Linux.
 if command -v sha256sum >/dev/null 2>&1; then

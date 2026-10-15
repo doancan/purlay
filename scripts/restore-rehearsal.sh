@@ -40,6 +40,7 @@ PURLAY_IMAGE=$IMAGE
 APP_URL=https://rehearsal.example.test
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 GARAGE_RPC_SECRET=$(openssl rand -hex 32)
+GARAGE_ADMIN_TOKEN=$(openssl rand -hex 32)
 S3_ACCESS_KEY_ID=GK$(openssl rand -hex 12)
 S3_SECRET_ACCESS_KEY=$(openssl rand -hex 32)
 ENCRYPTION_KEY=$(openssl rand -base64 32)
@@ -50,23 +51,29 @@ EOF
 # shellcheck source=scripts/ops-common.sh
 . scripts/ops-common.sh
 
-echo "== stack: api, postgres, garage (no proxy)"
-compose up -d --wait api
+# The API alone, without the one-shot that prepares the object store (D-144): the state a
+# stack from before that service is in, or one whose storage-init was skipped. It reports
+# ready, and a backup of it must fail, say what to do, and leave nothing that looks like one.
+echo "== stack: postgres, garage, and the api without storage-init (no proxy)"
+compose up -d --wait postgres garage
+compose up -d --wait --no-deps api
 
-# A stack whose object store was never initialised reports ready, and a backup of it
-# must fail, say what to do, and leave nothing that looks like a backup.
-echo "== a backup before the object store is initialised fails cleanly"
+echo "== a backup before the object store is prepared fails cleanly"
 if scripts/backup.sh "$WORK/early" >"$WORK/early.out" 2>&1; then
-  echo "backup.sh succeeded on a stack whose object store was never initialised" >&2
+  echo "backup.sh succeeded on a stack whose object store was never prepared" >&2
   exit 1
 fi
-grep -q 'production-init.sh' "$WORK/early.out" || { echo "the failure does not point at production-init.sh" >&2; cat "$WORK/early.out" >&2; exit 1; }
+grep -q 'storage-init' "$WORK/early.out" || { echo "the failure does not point at storage-init" >&2; cat "$WORK/early.out" >&2; exit 1; }
 if [ -n "$(ls -A "$WORK/early")" ]; then
   echo "a failed backup left something behind: $(ls "$WORK/early")" >&2
   exit 1
 fi
 
-scripts/production-init.sh
+# What an operator does: the ordinary `up`, which runs storage-init before the API.
+echo "== up prepares the object store"
+compose up -d --wait api
+[ "$(docker inspect -f '{{.State.ExitCode}}' "$(compose ps -a -q storage-init)")" = 0 ] \
+  || { echo "storage-init did not complete" >&2; compose logs storage-init >&2; exit 1; }
 
 echo "== data: a database and a bucket worth restoring"
 compose exec -T postgres psql -U purlay -d purlay -v ON_ERROR_STOP=1 -q <docs/spikes/backup-restore.seed.sql >/dev/null
@@ -77,6 +84,8 @@ compose run --rm --no-deps -T \
 echo "== backup"
 OUT="$WORK/backups"
 BACKUP="$(scripts/backup.sh "$OUT" | tail -n 1)"
+# The bucket is in it: a backup that skipped it would still exit 0 (#677).
+[ -f "$BACKUP/bucket/manifest.json" ] || { echo "the backup has no bucket" >&2; ls -R "$BACKUP" >&2; exit 1; }
 
 # Every message is in it, in the clear: nobody but the user who ran it may read it, whatever
 # that user's umask. Single permission bits, so the test is the same on macOS and Linux.
@@ -156,7 +165,7 @@ echo "== total loss: destroy every volume, rebuild from the backup alone"
 scripts/compare-databases.sh purlay purlay >"$WORK/before.txt"
 compose down --volumes
 compose up -d --wait postgres garage
-scripts/production-init.sh
+compose run --rm --no-deps -T storage-init
 scripts/restore.sh "$BACKUP" --database purlay --replace --bucket live
 compose up -d --wait api
 scripts/compare-databases.sh purlay purlay >"$WORK/after.txt"

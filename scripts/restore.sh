@@ -88,7 +88,7 @@ if [ -n "$exists" ]; then
   if [ "$tables" != "0" ] && [ "$REPLACE" != 1 ]; then
     die "$TARGET_DB already has $tables tables; pass --replace to swap it out (it is kept, renamed)"
   fi
-  if [ "$TARGET_DB" = "$LIVE_DB" ] && compose ps --status running --services | grep -qx api; then
+  if [ "$TARGET_DB" = "$LIVE_DB" ] && compose ps --status running --services | grep -x api >/dev/null; then
     die "refusing to replace $LIVE_DB while the api is running; stop it first"
   fi
 fi

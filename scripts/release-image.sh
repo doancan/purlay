@@ -68,7 +68,7 @@ docker push "$TAG"
 # image that was smoke-tested. Captures end in `|| true` so the check below says why.
 DIGEST="$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}' || true)"
 [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "the registry reports no digest for $TAG"
-docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$TAG" | grep -qxF "$IMAGE@$DIGEST" ||
+docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$TAG" | grep -xF "$IMAGE@$DIGEST" >/dev/null ||
   fail "the registry's $TAG is not the image that was smoke-tested"
 echo
 echo "PURLAY_IMAGE=$IMAGE@$DIGEST"

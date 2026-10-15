@@ -6,6 +6,17 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a backup no longer skips the attachments by chance; the restore rehearsal runs again (closes #677)
+
+`has_api` in `scripts/ops-common.sh` piped `docker compose config --services` into `grep -q` under
+`pipefail`: grep left at the first match, compose died of SIGPIPE when it still had services to list,
+and the pipeline failed though `api` was there — two runs in five once the stack had six services.
+`backup.sh` then said the stack had no API, **left out the bucket and exited 0**; `restore.sh` could
+miss a running API before replacing the live database. Every script now reads grep's input to the end
+(`grep … >/dev/null`), and `scripts/shell-scripts.test.ts` refuses a pipe into `grep -q`. The
+rehearsal, broken since D-144, now writes `GARAGE_ADMIN_TOKEN`, lets `storage-init` prepare the store,
+checks a backup holds the bucket, and passes end to end; `backup.sh`'s hint names `storage-init`.
+
 ### Fix — 2026-10-15: the licence check judges what the lockfile resolves (closes #675)
 
 - `bun install --frozen-lockfile` does not prune `node_modules/.bun`, and the check read every manifest

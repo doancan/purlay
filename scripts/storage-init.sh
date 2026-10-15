@@ -25,7 +25,7 @@ PORT="${STORAGE_PORT:-9000}"
 garage() { docker compose exec -T -e RUST_LOG=warn garage /garage "$@"; }
 
 # A node with no role cannot store anything; give it one the first time only.
-if garage status | grep -q 'NO ROLE ASSIGNED'; then
+if garage status | grep 'NO ROLE ASSIGNED' >/dev/null; then
   node="$(garage node id -q | cut -d@ -f1)"
   garage layout assign -z local -c 1G "$node" >/dev/null
   garage layout apply --version 1 >/dev/null
