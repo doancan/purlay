@@ -753,6 +753,15 @@ describe('integration: two real sockets', () => {
    * and, never disconnected, never replayed them.
    */
   describe('a connection that falls behind', () => {
+    /**
+     * What each test below may take. Both post megabytes over loopback until the kernel's buffers
+     * fill, which on an idle machine is under a second and on a loaded one was more than Bun's
+     * default of five (#632). The bound on whether the server works is not this: the loop throws
+     * after `MOST_BATCHES` and the close is awaited for three seconds. This only keeps a slow
+     * machine from failing a correct server.
+     */
+    const FILLING_TEST_MS = 60_000;
+
     /** A WebSocket client frame: text, masked, as RFC 6455 requires of a client. */
     const maskedText = (text: string): Buffer => {
       const payload = Buffer.from(text, 'utf8');
@@ -775,103 +784,107 @@ describe('integration: two real sockets', () => {
       return undefined;
     };
 
-    test('is closed to resync, rather than left open with frames dropped', async () => {
-      const room = await aRoom();
-      const { port } = new URL(server);
-      const received: Buffer[] = [];
-      const socket = createConnection({ host: '127.0.0.1', port: Number(port) });
-      const closed = new Promise<void>((resolve) =>
-        socket.on('close', () => {
-          resolve();
-        }),
-      );
-      socket.on('data', (chunk: Buffer) => received.push(chunk));
-      await new Promise<void>((resolve) =>
-        socket.on('connect', () => {
-          resolve();
-        }),
-      );
-      socket.write(
-        [
-          'GET /ws HTTP/1.1',
-          `Host: 127.0.0.1:${port}`,
-          'Upgrade: websocket',
-          'Connection: Upgrade',
-          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
-          'Sec-WebSocket-Version: 13',
-          `Origin: ${origin}`,
-          `Cookie: ${room.bob}`,
-          '',
-          '',
-        ].join('\r\n'),
-      );
-      const subscribeId = messageId(NOW);
-      const seen = async (needle: string): Promise<void> => {
-        const deadline = Date.now() + 5_000;
-        while (!Buffer.concat(received).includes(needle)) {
-          if (Date.now() > deadline) throw new Error(`never saw ${needle}`);
-          await Bun.sleep(10);
-        }
-      };
-      await seen('101 Switching Protocols');
-      socket.write(
-        maskedText(
-          JSON.stringify({
-            id: subscribeId,
-            op: 'SUBSCRIBE',
-            payload: { channels: [{ channelId: room.channelId, afterMessageId: null }] },
+    test(
+      'is closed to resync, rather than left open with frames dropped',
+      async () => {
+        const room = await aRoom();
+        const { port } = new URL(server);
+        const received: Buffer[] = [];
+        const socket = createConnection({ host: '127.0.0.1', port: Number(port) });
+        const closed = new Promise<void>((resolve) =>
+          socket.on('close', () => {
+            resolve();
           }),
-        ),
-      );
-      await seen(subscribeId);
-
-      // Stop reading, then send until the server gives up on the socket. How many
-      // messages that takes is the machine's business — the kernel's buffers on
-      // loopback are not a constant — so the loop watches for the event itself,
-      // instead of sending a fixed number that is slow where the buffers are
-      // large and too few where they are larger still. Posted in batches: the
-      // sequence is not what is under test, the buffer filling is.
-      socket.pause();
-      const long = 'x'.repeat(MESSAGE_CONTENT_MAX);
-      const logged = (): number =>
-        recorded.lines.filter(
-          (line) => line['msg'] === 'socket fell behind and was closed to resync',
-        ).length;
-      const alreadyLogged = logged();
-      const fellBehind = (): boolean => logged() > alreadyLogged;
-      const BATCH = 20;
-      const MOST_BATCHES = 100;
-      let sent = 0;
-      while (!fellBehind()) {
-        if (sent >= BATCH * MOST_BATCHES) {
-          throw new Error(
-            `${String(sent)} messages of ${String(long.length)} bytes and the socket never fell behind`,
-          );
-        }
-        const responses = await Promise.all(
-          Array.from(
-            { length: BATCH },
-            async (_, i) =>
-              await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
-                id: messageId(at(sent + i)),
-                content: long,
-              }),
+        );
+        socket.on('data', (chunk: Buffer) => received.push(chunk));
+        await new Promise<void>((resolve) =>
+          socket.on('connect', () => {
+            resolve();
+          }),
+        );
+        socket.write(
+          [
+            'GET /ws HTTP/1.1',
+            `Host: 127.0.0.1:${port}`,
+            'Upgrade: websocket',
+            'Connection: Upgrade',
+            'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+            'Sec-WebSocket-Version: 13',
+            `Origin: ${origin}`,
+            `Cookie: ${room.bob}`,
+            '',
+            '',
+          ].join('\r\n'),
+        );
+        const subscribeId = messageId(NOW);
+        const seen = async (needle: string): Promise<void> => {
+          const deadline = Date.now() + 5_000;
+          while (!Buffer.concat(received).includes(needle)) {
+            if (Date.now() > deadline) throw new Error(`never saw ${needle}`);
+            await Bun.sleep(10);
+          }
+        };
+        await seen('101 Switching Protocols');
+        socket.write(
+          maskedText(
+            JSON.stringify({
+              id: subscribeId,
+              op: 'SUBSCRIBE',
+              payload: { channels: [{ channelId: room.channelId, afterMessageId: null }] },
+            }),
           ),
         );
-        for (const response of responses) expect(response.status).toBe(201);
-        sent += BATCH;
-      }
+        await seen(subscribeId);
 
-      // Read again: what was queued drains, and then the server's close arrives.
-      socket.resume();
-      const outcome = await Promise.race([
-        closed.then(() => 'closed'),
-        Bun.sleep(3_000).then(() => 'still open'),
-      ]);
-      expect(outcome).toBe('closed');
-      expect(closeCodeIn(Buffer.concat(received))).toBe(CLOSE_CODES.RESYNC);
-      expect(fellBehind()).toBe(true);
-    });
+        // Stop reading, then send until the server gives up on the socket. How many
+        // messages that takes is the machine's business — the kernel's buffers on
+        // loopback are not a constant — so the loop watches for the event itself,
+        // instead of sending a fixed number that is slow where the buffers are
+        // large and too few where they are larger still. Posted in batches: the
+        // sequence is not what is under test, the buffer filling is.
+        socket.pause();
+        const long = 'x'.repeat(MESSAGE_CONTENT_MAX);
+        const logged = (): number =>
+          recorded.lines.filter(
+            (line) => line['msg'] === 'socket fell behind and was closed to resync',
+          ).length;
+        const alreadyLogged = logged();
+        const fellBehind = (): boolean => logged() > alreadyLogged;
+        const BATCH = 20;
+        const MOST_BATCHES = 100;
+        let sent = 0;
+        while (!fellBehind()) {
+          if (sent >= BATCH * MOST_BATCHES) {
+            throw new Error(
+              `${String(sent)} messages of ${String(long.length)} bytes and the socket never fell behind`,
+            );
+          }
+          const responses = await Promise.all(
+            Array.from(
+              { length: BATCH },
+              async (_, i) =>
+                await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+                  id: messageId(at(sent + i)),
+                  content: long,
+                }),
+            ),
+          );
+          for (const response of responses) expect(response.status).toBe(201);
+          sent += BATCH;
+        }
+
+        // Read again: what was queued drains, and then the server's close arrives.
+        socket.resume();
+        const outcome = await Promise.race([
+          closed.then(() => 'closed'),
+          Bun.sleep(3_000).then(() => 'still open'),
+        ]);
+        expect(outcome).toBe('closed');
+        expect(closeCodeIn(Buffer.concat(received))).toBe(CLOSE_CODES.RESYNC);
+        expect(fellBehind()).toBe(true);
+      },
+      FILLING_TEST_MS,
+    );
 
     /**
      * What a loopback reader can show: the replay stays inside its byte budget and
@@ -879,39 +892,46 @@ describe('integration: two real sockets', () => {
      * property that keeps a slow but healthy reader out of a resync loop — cannot
      * be shown over loopback, which drains too fast; `hub.test.ts` binds it.
      */
-    test('the largest replay stays inside its budget, and the reader is served after it', async () => {
-      const room = await aRoom();
-      const seenFirst = messageId(at(0));
-      expect(
-        (
+    test(
+      'the largest replay stays inside its budget, and the reader is served after it',
+      async () => {
+        const room = await aRoom();
+        const seenFirst = messageId(at(0));
+        expect(
+          (
+            await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
+              id: seenFirst,
+              content: 'before',
+            })
+          ).status,
+        ).toBe(201);
+        // More than the replay's byte budget, so the replay is as large as it gets.
+        const long = 'y'.repeat(MESSAGE_CONTENT_MAX);
+        for (let i = 1; i <= 120; i += 1) {
           await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
-            id: seenFirst,
-            content: 'before',
-          })
-        ).status,
-      ).toBe(201);
-      // More than the replay's byte budget, so the replay is as large as it gets.
-      const long = 'y'.repeat(MESSAGE_CONTENT_MAX);
-      for (let i = 1; i <= 120; i += 1) {
-        await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
-          id: messageId(at(i)),
-          content: long,
-        });
-      }
-      const bob = await connect(room.bob);
-      const nextCursor = await subscribe(bob, room.channelId, seenFirst);
-      expect(nextCursor).not.toBeNull();
-      // It stays open and served after the burst.
-      const after = messageId(at(500));
-      bob.send({ id: after, op: 'PING', payload: {} });
-      await bob.until((frames) => frames.some((f) => f.refId === after), 'a pong after the replay');
-      const replayedBytes = bob.frames
-        .filter((f) => f.event === 'MESSAGE_CREATED')
-        .reduce((sum, f) => sum + Buffer.byteLength(JSON.stringify(f), 'utf8'), 0);
-      expect(replayedBytes).toBeLessThanOrEqual(REPLAY_BYTES_MAX);
-      expect(replayedBytes).toBeGreaterThan(REPLAY_BYTES_MAX / 2);
-      await bob.close();
-    });
+            id: messageId(at(i)),
+            content: long,
+          });
+        }
+        const bob = await connect(room.bob);
+        const nextCursor = await subscribe(bob, room.channelId, seenFirst);
+        expect(nextCursor).not.toBeNull();
+        // It stays open and served after the burst.
+        const after = messageId(at(500));
+        bob.send({ id: after, op: 'PING', payload: {} });
+        await bob.until(
+          (frames) => frames.some((f) => f.refId === after),
+          'a pong after the replay',
+        );
+        const replayedBytes = bob.frames
+          .filter((f) => f.event === 'MESSAGE_CREATED')
+          .reduce((sum, f) => sum + Buffer.byteLength(JSON.stringify(f), 'utf8'), 0);
+        expect(replayedBytes).toBeLessThanOrEqual(REPLAY_BYTES_MAX);
+        expect(replayedBytes).toBeGreaterThan(REPLAY_BYTES_MAX / 2);
+        await bob.close();
+      },
+      FILLING_TEST_MS,
+    );
   });
 
   /**

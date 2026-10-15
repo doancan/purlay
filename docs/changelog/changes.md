@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: two tests no longer fail on a loaded machine with no code change (closes #632)
+
+- The socket tests that post megabytes until the kernel's buffers fill now state their own budget
+  instead of Bun's default five seconds; what decides whether the server works is still their own
+  bound and the three-second wait for the close.
+- The silent-collector test gave a request 150 ms, which on a loaded machine could abort it before the
+  loopback server had accepted it; it now gives it a second.
+
 ### Fix — 2026-10-15: a restart is held by the proxy, not answered 503; readiness is bounded (closes #636)
 
 - While the API restarted, the proxy answered at once that no upstream was there. It now holds a
