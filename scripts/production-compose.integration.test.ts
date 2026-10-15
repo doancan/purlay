@@ -231,6 +231,10 @@ describe('integration: the production compose file', () => {
     const balancing = proxies[0]?.['load_balancing'] as Record<string, unknown> | undefined;
     // Caddy's durations are nanoseconds in its JSON: 30 s, long enough for a drained restart.
     expect(balancing?.['try_duration']).toBe(30_000_000_000);
+    // And only a request it never handed over is tried again (#666). Caddy's default also retries a
+    // GET whose exchange failed after it was sent — the OAuth callback's one-time code among them —
+    // so the retry condition matches nothing; a request that never reached the API needs none.
+    expect(balancing?.['retry_match']).toEqual([{ expression: 'false' }]);
   });
 
   test('every long-running service is bounded in memory and processes, from a measurement (#639)', () => {

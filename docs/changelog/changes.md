@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-15: the proxy no longer replays a request the API received and died on (closes #666)
+
+- With `lb_try_duration` (#645), Caddy's default also retried a GET whose exchange failed after it was
+  sent — measured: one GET to an upstream that accepts and drops it was sent **119 times** in 30 s. The
+  OAuth callback is such a GET, spending a one-time code. The proxy now retries only a request that never
+  reached the API (`lb_retry_match` matches nothing); measured since: once. A request that arrives while
+  the API restarts is still held until it is back.
+
 ### Feature — 2026-10-15: a search result shows where its words were found (closes #664)
 
 - Each result marks the words searched for, and a long message's excerpt starts a little before the
