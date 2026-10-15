@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a socket whose session ends as it opens is always told why (part of #632)
+
+The hub tells every socket whose session ended why before closing it (#194, #577) — except when the
+sign-out landed between admission letting the socket in and the hub's first read of the session. Then
+it took the socket for one that never had a session and closed it with the code alone. Seen once in a
+full run under load (`revocation.integration.test.ts`: a 4401 close, no frame) and reproduced on demand
+by ending the session before the hub reads it. A socket that carries a session cookie had a session —
+admission let it in only with a live one — and is told.
+
 ### Fix — 2026-10-15: a search result found across I, ı, İ and i is marked (closes #704)
 
 Since #701 the server finds "ÇAĞRI" for `çağrı` and "İstanbul" for `istanbul`, but a row's excerpt

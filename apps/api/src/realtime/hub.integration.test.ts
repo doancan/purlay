@@ -164,6 +164,46 @@ describe('integration: a sign-out while a socket is opening', () => {
     });
   });
 
+  // The other side of the window: the sign-out lands after admission let the socket in and before
+  // the hub's first read — what a client that signs out the moment its socket opens can meet under
+  // load. It had a session, and is told why, like every end of one (#194, #577). Seen in a full run:
+  // a 4401 close with no frame before it (#632).
+  test('a session gone before the hub first reads it is still told why before the close', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'open-race-before');
+      await revokeAllSessions(db, clock, alice.userId);
+      const events: string[] = [];
+      const log = createLogger({ level: 'silent' });
+      const hub = createSocketHub(db, clock, {
+        log,
+        leave: () => undefined,
+        listen: () => undefined,
+      });
+
+      const identity = await hub.opened(
+        's',
+        {
+          send: (payload): number => {
+            events.push(`send ${payload}`);
+            return payload.length;
+          },
+          buffered: (): number => 0,
+          close: (code, reason): void => {
+            events.push(`close ${String(code)} ${reason}`);
+          },
+        },
+        new Request('https://purlay.test/ws', { headers: { cookie: alice.cookie } }),
+      );
+
+      expect(identity).toBeUndefined();
+      expect(events).toEqual([
+        `send ${JSON.stringify({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: clock.now().getTime() })}`,
+        `close ${String(CLOSE_CODES.SESSION_ENDED)} signed-out`,
+      ]);
+      hub.closed('s');
+    });
+  });
+
   test('a sign-out after the socket is listening is heard on the topic instead', async () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'open-race-after');

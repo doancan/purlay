@@ -21,6 +21,7 @@
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
+import { readCookie, SESSION_COOKIE } from '../platform/cookies';
 import type { Logger } from '../platform/logging';
 import { sessionFromCookie } from '../modules/auth/sessions';
 import type { SocketIdentity } from './router';
@@ -343,13 +344,17 @@ export const createSocketHub = (
 
       // The promise is held, not its result, so two frames racing the resolution
       // share its reads and its one timer.
-      // Whether it had a session that ended while it opened, or never had one at all.
-      const opening = { hadSession: false };
+      // Whether it had a session that ended while it opened, or never had one at all. Carrying a
+      // session cookie is having had one: admission let the socket in only with a live session
+      // (`upgrade.ts`), so a cookie that no longer resolves — even at the first read below, when a
+      // sign-out landed between admission and it — is a session that ended, and is told so (#632).
+      const opening = {
+        hadSession: readCookie(request.headers.get('cookie'), SESSION_COOKIE) !== undefined,
+      };
       entry.identity = (async (): Promise<SocketIdentity | undefined> => {
         const first = await resolve(socketId, request);
         // Closed, or no session: subscribe nothing for a connection that is gone.
         if (first === undefined || held.get(socketId) !== entry) return undefined;
-        opening.hadSession = true;
         listen(first);
         // Read again now that the end of this session would reach it: a sign-out
         // before this read is seen here, one after it is heard on the topic.
