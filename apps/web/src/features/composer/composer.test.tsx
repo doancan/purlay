@@ -28,6 +28,7 @@ import {
   aChannel,
   aMessage,
   aSignedInApi,
+  aSession,
   ALICE as ALICE_USER,
   BOB as BOB_USER,
   aUser,
@@ -41,13 +42,19 @@ import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
 import { Composer, DRAFT_DEBOUNCE_MS, type ComposerProps } from './composer';
 import { ComposerPortsContext } from './composer-ports';
-import type { DraftStorage } from './drafts';
+import { draftKey, type DraftStorage } from './drafts';
+import { PERSON_KEY } from '../../data/browser-storage';
 import { expectFocusOn } from '../../testing/focus';
 
 installDom();
 
+/** Who is signed in, in every mount here; the page is theirs (#694). */
+const ME = aSession().user.id;
+/** Where this person's draft for a place lives. */
+const mine = (channelId: string, parentId?: string): string => draftKey(ME, channelId, parentId);
+
 const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
-  const items = new Map<string, string>();
+  const items = new Map<string, string>([[PERSON_KEY, ME]]);
   return {
     items,
     getItem: (key): string | null => items.get(key) ?? null,
@@ -171,7 +178,7 @@ const drafted = (
   channelId: string = IDS.api,
 ): DraftStorage & { readonly items: Map<string, string> } => {
   const storage = memory();
-  storage.setItem(`purlay.draft.${channelId}`, text);
+  storage.setItem(mine(channelId), text);
   return storage;
 };
 
@@ -550,15 +557,15 @@ describe('drafts', () => {
   test('are written a moment after typing stops, and not before', async () => {
     const { box, storage, timers, user } = await mount();
     await user.type(box(), 'half');
-    expect(storage?.getItem(`purlay.draft.${IDS.api}`)).toBeNull();
+    expect(storage?.getItem(mine(IDS.api))).toBeNull();
     act(() => {
       timers.advance(DRAFT_DEBOUNCE_MS - 1);
     });
-    expect(storage?.getItem(`purlay.draft.${IDS.api}`)).toBeNull();
+    expect(storage?.getItem(mine(IDS.api))).toBeNull();
     act(() => {
       timers.advance(1);
     });
-    expect(storage?.getItem(`purlay.draft.${IDS.api}`)).toBe('half');
+    expect(storage?.getItem(mine(IDS.api))).toBe('half');
   });
 
   test('come back when the composer does, even if the timer never fired', async () => {
@@ -576,11 +583,11 @@ describe('drafts', () => {
     await user.type(box(), 'for api');
     rerender({ channelId: IDS.deploys, channelName: 'deploys' });
     expect(box().value).toBe('');
-    expect(storage.getItem(`purlay.draft.${IDS.api}`)).toBe('for api');
+    expect(storage.getItem(mine(IDS.api))).toBe('for api');
     await user.type(box(), 'for deploys');
     rerender({ channelId: IDS.api, channelName: 'api' });
     expect(box().value).toBe('for api');
-    expect(storage.getItem(`purlay.draft.${IDS.deploys}`)).toBe('for deploys');
+    expect(storage.getItem(mine(IDS.deploys))).toBe('for deploys');
   });
 
   test('a thread has a draft of its own, apart from its channel', async () => {
@@ -593,7 +600,25 @@ describe('drafts', () => {
     await user.type(box(), 'thread text');
     rerender({}, ['parentId']);
     expect(box().value).toBe('channel text');
-    expect(storage.getItem(`purlay.draft.${IDS.api}.${root}`)).toBe('thread text');
+    expect(storage.getItem(mine(IDS.api, root))).toBe('thread text');
+  });
+
+  // A sign-out forgets the page's record before the composer goes; its last write must not put the
+  // words back for the next person to sign in here (#694).
+  test('keep nothing once the page is no longer this person’s: not as the composer goes, not on its timer', async () => {
+    const storage = memory();
+    const { view, box, timers, user } = await mount({ storage });
+    await user.type(box(), 'words to forget');
+    storage.removeItem(PERSON_KEY);
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    view.unmount();
+    expect([...storage.items.keys()].filter((key) => key.startsWith('purlay.draft.'))).toEqual([]);
+  });
+
+  test('are one person’s: another signed in here reads none of them', () => {
+    expect(draftKey('alice', IDS.api, undefined)).not.toBe(draftKey('bob', IDS.api, undefined));
   });
 
   test('are gone the moment they are sent, so a reload does not bring them back', async () => {
@@ -603,13 +628,13 @@ describe('drafts', () => {
     act(() => {
       timers.advance(DRAFT_DEBOUNCE_MS);
     });
-    expect(storage.items.size).toBe(1);
+    expect(storage.getItem(mine(IDS.api))).toBe('sent soon');
     await press(user, '{Enter}');
-    expect(storage.items.size).toBe(0);
+    expect(storage.getItem(mine(IDS.api))).toBeNull();
     act(() => {
       timers.advance(DRAFT_DEBOUNCE_MS);
     });
-    expect(storage.items.size).toBe(0);
+    expect(storage.getItem(mine(IDS.api))).toBeNull();
   });
 
   test('storage that throws, or none at all, leaves a composer that works', async () => {

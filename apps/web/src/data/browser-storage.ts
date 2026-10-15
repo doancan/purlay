@@ -8,7 +8,9 @@
  * is keyed by channel and thread ids alone — user B opening the same direct message would
  * see user A's unsent words. Signing out therefore removes every key that carries
  * personal text (`forgetPersonalData`), and the theme and language, which are the
- * *device's*, stay.
+ * *device's*, stay. A session can also end without this page signing out — on another
+ * device, by expiry, by revocation — so the page records whose the keys are, and a
+ * different person signing in here forgets them first (`claimFor`, #694).
  *
  * Absent, the browser's is looked up when asked for and not when this file loads, because
  * the build prerenders the shell with no `window` (D-50), and reading the property can
@@ -27,6 +29,7 @@ export interface ClientStorage {
  * Anything else on the page is the device's.
  */
 const PERSONAL_PREFIXES = [
+  'purlay.person',
   'purlay.draft.',
   'purlay.lastChannel.',
   'purlay.pending.',
@@ -72,10 +75,53 @@ export const browserStorage = (): ClientStorage | null => {
   }
 };
 
-/** Removes every personal key. Collected first, removed after: removing while counting skips keys. */
-export const forgetPersonalData = (storage: ClientStorage | null): void => {
+/** Whose the personal keys on this page are: the person who holds a session here now (#694). */
+export const PERSON_KEY = 'purlay.person';
+
+/**
+ * Says whose the page's personal keys are, the moment the page learns who is signed in and before
+ * anything reads a draft (#694). Anybody but the person recorded — someone else, or nobody known,
+ * as on a page from before the record existed — means what is kept may not be theirs, and it is
+ * forgotten first: the last session may have ended without this page signing out (elsewhere, by
+ * expiry, by revocation). The same person keeps everything. It fails closed: a forget that did not
+ * finish leaves the record as it was, so the next claim tries again rather than handing over what
+ * is left.
+ */
+/**
+ * Whether the page is still this person's: what they write is kept only while it is. A sign-out
+ * forgets the record, and another person signing in elsewhere in the browser replaces it, so a
+ * composer's last write after either — its timer, or its flush as the screen goes — keeps nothing.
+ */
+export const isClaimedBy = (
+  storage: Pick<ClientStorage, 'getItem'> | null,
+  userId: string,
+): boolean => {
+  try {
+    return storage?.getItem(PERSON_KEY) === userId;
+  } catch {
+    return false;
+  }
+};
+
+export const claimFor = (storage: ClientStorage | null, userId: string): void => {
   try {
     if (storage === null) return;
+    if (storage.getItem(PERSON_KEY) === userId) return;
+    if (!forgetPersonalData(storage)) return;
+    storage.setItem(PERSON_KEY, userId);
+  } catch {
+    // Unreadable storage cannot be read from either; a record that cannot be written is tried again.
+    noteStorageFailure('claim');
+  }
+};
+
+/**
+ * Removes every personal key, and says whether it finished. Collected first, removed after:
+ * removing while counting skips keys.
+ */
+export const forgetPersonalData = (storage: ClientStorage | null): boolean => {
+  try {
+    if (storage === null) return true;
     const found: string[] = [];
     for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index);
@@ -84,8 +130,10 @@ export const forgetPersonalData = (storage: ClientStorage | null): void => {
       }
     }
     for (const key of found) storage.removeItem(key);
+    return true;
   } catch {
     // Storage that cannot be read cannot be leaked from either.
     noteStorageFailure('forget');
+    return false;
   }
 };

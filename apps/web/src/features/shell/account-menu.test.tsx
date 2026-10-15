@@ -190,7 +190,18 @@ describe('signing out', () => {
   });
 
   test('forgets what the browser kept for this person — drafts, the last channel, unsent messages — and keeps the theme', async () => {
-    const view = await open({ signOut: () => Promise.resolve() });
+    // As the server answers: once signed out, nobody is (the sign-in screen asks, #694).
+    let signedIn = true;
+    const view = await open({
+      me: () =>
+        signedIn
+          ? Promise.resolve(session(null))
+          : Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'signed out')),
+      signOut: () => {
+        signedIn = false;
+        return Promise.resolve();
+      },
+    });
     const { storage } = view.world;
     storage.setItem('purlay.draft.c1', 'half a thought');
     storage.setItem('purlay.draft.c1.t9', 'half a reply');
