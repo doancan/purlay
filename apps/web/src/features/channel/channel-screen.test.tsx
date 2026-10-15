@@ -93,8 +93,25 @@ describe('an empty channel', () => {
   test('is an invitation, not a blank', async () => {
     const view = await mountChannel({ messages: page([]) });
     expect(view.getByRole('heading', { name: 'No messages yet' })).toBeDefined();
+    expect(view.getByText(/Say what it is for/)).toBeDefined();
     await expectNoAxeViolations(view.container);
     view.unmountAll();
+  });
+
+  test('an empty conversation is a conversation, not a channel to describe (#662)', async () => {
+    for (const peer of [BOB, ME]) {
+      const view = await mountChannel({
+        channelId: IDS.dm,
+        channels: [aChannel(IDS.dm, null, { type: 'direct_message', peer })],
+        messages: page([]),
+      });
+      expect(view.getByRole('heading', { name: 'No messages yet' })).toBeDefined();
+      expect(view.queryByText(/channel/i)).toBeNull();
+      expect(
+        view.getByText(/Only the people in this conversation see what is written here/),
+      ).toBeDefined();
+      view.unmountAll();
+    }
   });
 });
 

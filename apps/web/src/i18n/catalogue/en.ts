@@ -820,6 +820,8 @@ export const en = {
   'state.feed.empty.title': 'No messages yet',
   'state.feed.empty.body':
     'This channel is new. Say what it is for in the first message; the composer below is ready.',
+  'state.feed.empty.conversation':
+    'Only the people in this conversation see what is written here. The composer below is ready.',
   'state.feed.loading': 'Loading messages',
   'state.feed.error.title': "Couldn't load messages",
   'state.feed.error.body': 'The server did not answer. Your draft is safe.',

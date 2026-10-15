@@ -804,6 +804,8 @@ export const tr = {
   'state.feed.empty.title': 'Henüz mesaj yok',
   'state.feed.empty.body':
     'Bu kanal yeni. İlk mesajda ne için olduğunu yaz; mesaj kutusu aşağıda hazır.',
+  'state.feed.empty.conversation':
+    'Burada yazılanları yalnızca bu konuşmadaki kişiler görür. Aşağıdaki yazma alanı hazır.',
   'state.feed.loading': 'Mesajlar yükleniyor',
   'state.feed.error.title': 'Mesajlar yüklenemedi',
   'state.feed.error.body': 'Sunucu yanıt vermedi. Taslağın güvende.',

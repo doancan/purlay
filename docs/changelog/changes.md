@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an empty conversation no longer asks what the channel is for (closes #662)
+
+- A conversation nobody had written in yet showed a channel's invitation — "Say what it is for in the
+  first message". It now says that only the people in the conversation see what is written there, in
+  both languages, for a conversation with one person, a group, or yourself.
+
 ### Infra — 2026-10-15: every production container is bounded, and Garage writes to the disk before it says yes (closes #639)
 
 - Each service in `docker-compose.production.yml` has a memory and a process bound, several times what

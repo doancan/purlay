@@ -446,7 +446,11 @@ export const MessageFeed = ({
   if (items.length === 0 && !feed.hasNextPage) {
     return (
       <div className="flex-1">
-        <EmptyState title={t('state.feed.empty.title')} body={t('state.feed.empty.body')} />
+        {/* A conversation has nothing to describe, only its people (#662). */}
+        <EmptyState
+          title={t('state.feed.empty.title')}
+          body={t(conversation ? 'state.feed.empty.conversation' : 'state.feed.empty.body')}
+        />
       </div>
     );
   }
