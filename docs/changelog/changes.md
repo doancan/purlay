@@ -6,6 +6,26 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-15: the next person signed in on a browser no longer finds the last one's draft (closes #694)
+
+A draft was kept in the browser by channel and thread alone, and forgotten only when this page signed
+out. A session that ended any other way — **Sign out everywhere** on another device, expiry,
+revocation — left it, and whoever signed in next on the same browser found it in the composer, ready to
+send as theirs (reproduced live). An independent review then found the same words written back *after*
+an ordinary sign-out, by the composer's last write as the screen closed. Now:
+
+- a draft's key carries its person (`purlay.draft.<user>.<channel>[.<thread>]`), as unsent messages'
+  already did;
+- the page records whose its personal keys are, and the moment it learns who is signed in — before a
+  composer reads a draft — anybody else, or nobody recorded, makes it forget them first; the same
+  person keeps theirs; a forget that does not finish leaves the record, so the next claim tries again;
+- the composer writes a draft only while the page is still its person's, so nothing lands after a
+  sign-out or after somebody else signed in in another tab — whose arrival also empties the page's
+  cache.
+
+Drafts written before this release are forgotten once, on the first load after it: nothing recorded
+whose they were.
+
 ### Feature — 2026-10-15: the audit log says which channel a repository was connected to (closes #691)
 
 `integration.feed_created` and `integration.feed_removed` now record the channel's id beside the

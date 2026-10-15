@@ -11,6 +11,7 @@
 import {
   useInfiniteQuery,
   useQuery,
+  useQueryClient,
   type InfiniteData,
   type UseInfiniteQueryResult,
   type UseQueryResult,
@@ -27,13 +28,31 @@ import type {
 } from '@purlay/types';
 import { SEARCH_QUERY_MIN } from '@purlay/types';
 import { useApi } from './api-provider';
+import { claimFor } from './browser-storage';
+import { useClientStorage } from './storage-provider';
 import { keys } from './keys';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
 export const useMe = (): UseQueryResult<MeResponse> => {
   const api = useApi();
-  return useQuery({ queryKey: keys.me, queryFn: ({ signal }) => api.me(signal) });
+  const storage = useClientStorage();
+  const client = useQueryClient();
+  return useQuery({
+    queryKey: keys.me,
+    queryFn: async ({ signal }) => {
+      const me = await api.me(signal);
+      // The cookie is the browser's, so a page that held one person can read back another — they
+      // signed in in another tab. Nothing this page cached was theirs (#694).
+      const before = client.getQueryData<MeResponse>(keys.me);
+      if (before !== undefined && before.user.id !== me.user.id) {
+        client.removeQueries({ predicate: (query) => query.queryKey[0] !== keys.me[0] });
+      }
+      // Before the answer reaches a screen, so no composer reads somebody else's draft (#694).
+      claimFor(storage, me.user.id);
+      return me;
+    },
+  });
 };
 
 export const useChannels = (workspaceId: string): UseQueryResult<Channel[]> => {

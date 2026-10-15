@@ -56,6 +56,8 @@ import {
   type Selection,
 } from './composer-text';
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
+import { useClientStorage } from '../../data/storage-provider';
+import { isClaimedBy } from '../../data/browser-storage';
 import { draftKey, readDraft, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
@@ -88,9 +90,9 @@ const Inner = ({
   const { t } = useI18n();
   const engine = useEngine();
   const toast = useToast();
-  const key = draftKey(channelId, parentId);
   const client = useQueryClient();
   const session = useSession();
+  const key = draftKey(session.user.id, channelId, parentId);
   const editing = useEditing();
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
@@ -116,21 +118,23 @@ const Inner = ({
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
-  // Debounced: written a moment after typing stops.
+  const userId = session.user.id;
+  // Debounced: written a moment after typing stops — while the page is still this person's.
   useEffect(() => {
     const cancel = ports.schedule(() => {
-      writeDraft(ports.storage, key, text);
+      if (isClaimedBy(ports.storage, userId)) writeDraft(ports.storage, key, text);
     }, DRAFT_DEBOUNCE_MS);
     return cancel;
-  }, [text, key, ports]);
+  }, [text, key, ports, userId]);
 
   // Written for certain as the composer goes — a channel switch or a closed screen —
-  // so the last keystrokes are never inside a timer that never fires.
+  // so the last keystrokes are never inside a timer that never fires. Not after a sign-out, or
+  // after somebody else signed in in another tab: that would put the words back for them (#694).
   useEffect(
     () => (): void => {
-      writeDraft(ports.storage, key, latest.current);
+      if (isClaimedBy(ports.storage, userId)) writeDraft(ports.storage, key, latest.current);
     },
-    [key, ports],
+    [key, ports, userId],
   );
 
   useEffect(() => {
@@ -653,9 +657,17 @@ const Inner = ({
 
 export const Composer = (props: ComposerProps): React.JSX.Element => {
   const given = useContext(ComposerPortsContext);
+  // The page's own storage, the one sign-out and a change of person forget (#694) — not a second
+  // look-up of the same `localStorage` that a test could not see forgotten.
+  const storage = useClientStorage();
   // Resolved on first render, not at import: there is no window when the shell is prerendered.
-  const [fallback] = useState(() => given ?? browserPorts());
+  const [fallback] = useState(() => given ?? { ...browserPorts(), storage });
+  const { user } = useSession();
   return (
-    <Inner key={draftKey(props.channelId, props.parentId)} {...props} ports={given ?? fallback} />
+    <Inner
+      key={draftKey(user.id, props.channelId, props.parentId)}
+      {...props}
+      ports={given ?? fallback}
+    />
   );
 };

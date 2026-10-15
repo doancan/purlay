@@ -15,6 +15,8 @@ import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
 import { signInFailureHref } from '@purlay/types';
+import { PERSON_KEY } from '../../data/browser-storage';
+import { page as aPage } from '../../testing/channel-harness';
 
 installDom();
 
@@ -69,6 +71,84 @@ describe('the session gate', () => {
     await settle();
     expect(view.queryByRole('alert')).toBeNull();
     expect(view.getByText('acme-eng')).toBeDefined();
+  });
+});
+
+describe('the browser this page is in, when somebody else signed in here last (#694)', () => {
+  /** Opens #api with the person's identity held back until the browser holds `kept`. */
+  const openWith = async (kept: Record<string, string>): ReturnType<typeof renderApp> => {
+    let answer: (session: ReturnType<typeof aSession>) => void = () => undefined;
+    const view = await renderApp(<Outlet />, {
+      path: `/w/acme/c/${IDS.api}`,
+      api: aSignedInApi({
+        me: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+        messages: () => Promise.resolve(aPage([])),
+      }),
+    });
+    for (const [key, value] of Object.entries(kept)) view.world.storage.setItem(key, value);
+    await act(async () => {
+      answer(aSession());
+      await Promise.resolve();
+    });
+    await settle();
+    return view;
+  };
+
+  test("the last person's draft is not in the composer, and is gone", async () => {
+    const view = await openWith({
+      [PERSON_KEY]: 'somebody-else',
+      [`purlay.draft.somebody-else.${IDS.api}`]: 'words somebody else did not send',
+    });
+    expect(view.getByRole('textbox', { name: 'Message api' })).toHaveProperty('value', '');
+    expect(
+      Object.keys(view.world.storage.data).filter((key) => key.startsWith('purlay.draft.')),
+    ).toEqual([]);
+  });
+
+  test('the same person signing in again finds their draft where they left it', async () => {
+    const view = await openWith({
+      [PERSON_KEY]: aSession().user.id,
+      [`purlay.draft.${aSession().user.id}.${IDS.api}`]: 'my own words',
+    });
+    expect(view.getByRole('textbox', { name: 'Message api' })).toHaveProperty(
+      'value',
+      'my own words',
+    );
+  });
+});
+
+describe('a page whose person changes under it (#694)', () => {
+  test('somebody else signing in in another tab gets a page of their own: no composer text, no cache', async () => {
+    const me = aSession();
+    const other = { ...me, user: { ...me.user, id: 'another-person', username: 'another' } };
+    let who = me;
+    const view = await renderApp(<Outlet />, {
+      path: `/w/acme/c/${IDS.api}`,
+      api: aSignedInApi({
+        me: () => Promise.resolve(who),
+        messages: () => Promise.resolve(aPage([])),
+      }),
+    });
+    await settle();
+    const box = (): HTMLElement => view.getByRole('textbox', { name: 'Message api' });
+    await person().type(box(), 'what the first person was writing');
+    // Anything the page cached for the first person.
+    view.world.client.setQueryData(['what-the-first-person-saw'], 'theirs');
+    // The cookie is the browser's: the next read of the person answers with whoever signed in last.
+    who = other;
+    await act(async () => {
+      await view.world.client.invalidateQueries({ queryKey: keys.me });
+    });
+    await settle();
+    expect(box()).toHaveProperty('value', '');
+    expect(view.world.client.getQueryData<string>(['what-the-first-person-saw'])).toBeUndefined();
+    expect(view.world.storage.getItem(PERSON_KEY)).toBe('another-person');
+    expect(
+      Object.keys(view.world.storage.data).filter((key) => key.startsWith('purlay.draft.')),
+    ).toEqual([]);
   });
 });
 

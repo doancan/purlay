@@ -10,7 +10,10 @@ import { installDom } from '../testing/dom';
 import { memoryStorage } from '../testing/fakes';
 import {
   browserStorage,
+  claimFor,
   forgetPersonalData,
+  isClaimedBy,
+  PERSON_KEY,
   noteStorageFailure,
   resetStorageNotes,
   type ClientStorage,
@@ -55,6 +58,71 @@ describe('forgetting a person', () => {
     });
     forgetPersonalData(storage);
     expect(Object.keys(storage.data).sort()).toEqual(['purlay.locale', 'purlay.theme']);
+  });
+
+  // A session can end without this page signing out — elsewhere, by expiry, by revocation — and
+  // then the next person to sign in here would find the last one's drafts (#694).
+  test('a different person claiming the page forgets the last one first; the same person keeps theirs', () => {
+    const storage = memoryStorage({
+      [PERSON_KEY]: 'bob',
+      'purlay.draft.c': "bob's words",
+      'purlay.lastChannel.w': 'c',
+      'purlay.theme': 'dark',
+    });
+    claimFor(storage, 'bob');
+    expect(storage.data['purlay.draft.c']).toBe("bob's words");
+
+    claimFor(storage, 'alice');
+    expect(storage.data).toEqual({ [PERSON_KEY]: 'alice', 'purlay.theme': 'dark' });
+  });
+
+  test('a page nobody is recorded on hands nothing over: what it holds is forgotten first', () => {
+    // A page from before the record, or one a sign-out forgot: what is there cannot be vouched for.
+    const storage = memoryStorage({ 'purlay.draft.u0.c': 'words', 'purlay.theme': 'dark' });
+    claimFor(storage, 'alice');
+    expect(storage.data).toEqual({ [PERSON_KEY]: 'alice', 'purlay.theme': 'dark' });
+  });
+
+  test('signing out forgets whose the page was, so nothing written after it is kept', () => {
+    const storage = memoryStorage({ [PERSON_KEY]: 'alice', 'purlay.draft.alice.c': 'words' });
+    forgetPersonalData(storage);
+    expect(storage.data).toEqual({});
+    expect(isClaimedBy(storage, 'alice')).toBe(false);
+  });
+
+  test('a forget that does not finish leaves the record as it was, and the next claim tries again', () => {
+    const data = new Map<string, string>([
+      [PERSON_KEY, 'bob'],
+      ['purlay.draft.bob.c', "bob's"],
+    ]);
+    let refuse = true;
+    const storage: ClientStorage = {
+      getItem: (key) => data.get(key) ?? null,
+      setItem: (key, value): void => {
+        data.set(key, value);
+      },
+      removeItem: (key): void => {
+        if (refuse) throw new Error('blocked');
+        data.delete(key);
+      },
+      key: (index) => [...data.keys()][index] ?? null,
+      get length(): number {
+        return data.size;
+      },
+    };
+    claimFor(storage, 'alice');
+    expect(data.get(PERSON_KEY)).toBe('bob');
+    expect(isClaimedBy(storage, 'alice')).toBe(false);
+    refuse = false;
+    claimFor(storage, 'alice');
+    expect(Object.fromEntries(data)).toEqual({ [PERSON_KEY]: 'alice' });
+  });
+
+  test('a claim on storage that refuses does not throw, and leaves a note', () => {
+    expect(() => {
+      claimFor(refusing(), 'alice');
+    }).not.toThrow();
+    expect(note()).toContain('claim');
   });
 
   test('is not stopped by storage that refuses, and leaves a note', () => {

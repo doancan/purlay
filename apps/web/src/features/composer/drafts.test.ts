@@ -32,10 +32,12 @@ const broken: DraftStorage = {
 
 describe('where a draft lives', () => {
   test('a channel and a thread in it never share one', () => {
-    expect(draftKey('c1', undefined)).toBe('purlay.draft.c1');
-    expect(draftKey('c1', 'm1')).toBe('purlay.draft.c1.m1');
-    expect(draftKey('c1', 'm1')).not.toBe(draftKey('c1', 'm2'));
-    expect(draftKey('c1', undefined)).not.toBe(draftKey('c2', undefined));
+    expect(draftKey('u1', 'c1', undefined)).toBe('purlay.draft.u1.c1');
+    expect(draftKey('u1', 'c1', 'm1')).toBe('purlay.draft.u1.c1.m1');
+    expect(draftKey('u1', 'c1', 'm1')).not.toBe(draftKey('u1', 'c1', 'm2'));
+    expect(draftKey('u1', 'c1', undefined)).not.toBe(draftKey('u1', 'c2', undefined));
+    // Nor do two people (#694).
+    expect(draftKey('u1', 'c1', undefined)).not.toBe(draftKey('u2', 'c1', undefined));
   });
 });
 

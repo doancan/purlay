@@ -15,9 +15,19 @@ export interface DraftStorage extends KeyValueStorage {
   removeItem(key: string): void;
 }
 
-/** The entry for one place to write. A channel and a thread in it never share one. */
-export const draftKey = (channelId: string, parentId: string | undefined): string =>
-  parentId === undefined ? `purlay.draft.${channelId}` : `purlay.draft.${channelId}.${parentId}`;
+/**
+ * The entry for one person in one place to write. A channel and a thread in it never share one,
+ * and nor do two people: whoever signs in next on this browser cannot read a draft that is not
+ * theirs, whatever order a sign-out and the composer's last write happen in (#694).
+ */
+export const draftKey = (
+  userId: string,
+  channelId: string,
+  parentId: string | undefined,
+): string =>
+  parentId === undefined
+    ? `purlay.draft.${userId}.${channelId}`
+    : `purlay.draft.${userId}.${channelId}.${parentId}`;
 
 export const readDraft = (storage: DraftStorage | null, key: string): string => {
   try {
