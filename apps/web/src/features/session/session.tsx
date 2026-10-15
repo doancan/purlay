@@ -38,10 +38,14 @@ export const SessionGate = ({
   const { navigate } = useRoute();
   const { t } = useI18n();
   const signedOut = me.isError && isApiError(me.error) && me.error.status === 401;
+  // A session the page held, now refused, ended — and the sign-in screen says so (#693). A first
+  // visit with none did not end anything, and is the plain screen.
+  const ended = signedOut && me.data !== undefined;
 
   useEffect(() => {
-    if (signedOut) navigate(href('signIn'), { replace: true });
-  }, [signedOut, navigate]);
+    if (signedOut)
+      navigate(ended ? `${href('signIn')}?reason=ended` : href('signIn'), { replace: true });
+  }, [signedOut, ended, navigate]);
 
   if (me.isPending) return <AppSkeleton />;
   if (signedOut) return null;

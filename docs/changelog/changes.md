@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a session that ends in an open tab says so on the sign-in screen (closes #693)
+
+The sign-in screen had a sentence for a session that ended — *Your session ended* — reached by
+`?reason=ended`, but nothing in the client sent it: a page whose session was revoked (signed out
+everywhere from another device, expired) landed on the plain card. A page that held a session and is
+then refused now goes to `/sign-in?reason=ended`; a first visit with no session, and a person who signed
+out themselves, still land on the plain screen. `account.e2e.ts` holds the real path.
+
 ### Security — 2026-10-15: the next person signed in on a browser no longer finds the last one's draft (closes #694)
 
 A draft was kept in the browser by channel and thread alone, and forgotten only when this page signed
