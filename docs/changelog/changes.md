@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a channel's name is no longer drawn under its header's views on a phone (closes #624)
+
+- At 390 px the header's controls were wider than the window, and the channel's name was drawn over
+  "Open questions". On a narrow window the link is now its glyph and its count, and its name still
+  says "Open questions" to a screen reader. `narrow.e2e.ts` measures that nothing in the header
+  overlaps the name.
+
 ### Docs — 2026-10-14: the contributor licence agreement, and the check that holds it (D-145, closes #122)
 
 - `CLA.md` is the agreement, adapted from the Apache Individual CLA. It is a licence grant, so the

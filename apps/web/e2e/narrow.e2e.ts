@@ -57,6 +57,35 @@ test.describe('at a phone width', () => {
     }
   });
 
+  test("a channel's name has its room in the header, drawn under nothing", async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    // Found by hand (#624): "api" drawn over "Open questions 3". The document did not overflow, so
+    // the test above could not see it — the header's own controls overlapped inside it.
+    await signIn('bob');
+    await page.goto(channelPath(world.workspace.slug, world.channels.api));
+    const header = page.locator('header').filter({ has: page.getByRole('heading', { level: 1 }) });
+    const name = header.getByRole('heading', { level: 1 }).getByRole('button');
+    await expect(name).toBeVisible();
+    const measured = await header.evaluate((element) => {
+      const title = element.querySelector('h1 button');
+      if (title === null) throw new Error('no channel name in the header');
+      const box = title.getBoundingClientRect();
+      const overlapping = [...element.querySelectorAll('a, button')]
+        .filter((control) => !control.closest('h1') && control.getBoundingClientRect().width > 0)
+        .filter((control) => {
+          const other = control.getBoundingClientRect();
+          return other.left < box.right && other.right > box.left;
+        })
+        .map((control) => control.getAttribute('aria-label') ?? control.textContent);
+      return { overlapping, cut: title.scrollWidth > title.clientWidth };
+    });
+    expect(measured.overlapping, 'controls drawn over the name').toEqual([]);
+    expect(measured.cut, 'a three-letter name is cut short').toBe(false);
+  });
+
   test('an open thread covers the conversation, runs off no side, and Close is a finger wide and brings it back', async ({
     page,
     signIn,
