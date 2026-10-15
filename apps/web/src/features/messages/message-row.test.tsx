@@ -434,6 +434,20 @@ describe('delivery', () => {
     await expectNoAxeViolations(view.container);
   });
 
+  // The engine sends these again on the reconnect, unasked: the row says so rather than asking the
+  // person to (#685). A timeout is theirs to retry, and keeps its sentence.
+  test('failed for want of a server says it goes on its own when the connection is back', async () => {
+    const unreached = await mount(props({ delivery: 'failed', failure: 'NETWORK' }));
+    expect(unreached.getByText('Failed to send')).toBeDefined();
+    expect(unreached.getByText('It goes on its own when you are back online.')).toBeDefined();
+    expect(unreached.container.textContent).not.toContain('Check your connection');
+    expect(unreached.getByRole('button', { name: 'Retry' })).toBeDefined();
+    unreached.unmount();
+
+    const timedOut = await mount(props({ delivery: 'failed', failure: 'TIMEOUT' }));
+    expect(timedOut.getByText('Check your connection and try again.')).toBeDefined();
+  });
+
   test('failed with no reason says only what it knows', async () => {
     const view = await mount(props({ delivery: 'failed' }));
     expect(view.getByText('Failed to send')).toBeDefined();

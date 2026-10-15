@@ -720,6 +720,7 @@ export const en = {
   'delivery.sending': 'Sending',
   'delivery.sent': 'Sent',
   'delivery.failed': 'Failed to send',
+  'delivery.unreached': 'It goes on its own when you are back online.',
   'delivery.retry': 'Retry',
   'delivery.lostWithChannel': {
     one: 'A message not yet delivered was removed: you no longer have access to its channel.',

@@ -709,6 +709,7 @@ export const tr = {
   'delivery.sending': 'Gönderiliyor',
   'delivery.sent': 'Gönderildi',
   'delivery.failed': 'Gönderilemedi',
+  'delivery.unreached': 'Bağlantı gelince kendiliğinden gidecek.',
   'delivery.retry': 'Yeniden dene',
   'delivery.lostWithChannel': {
     one: 'Teslim edilmemiş bir mesaj kaldırıldı: kanalına artık erişimin yok.',

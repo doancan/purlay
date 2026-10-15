@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an offline send says it will go on its own (closes #685)
+
+A send written while the network was gone said "Failed to send · Check your connection and try again"
+after its three seconds, under a bar promising messages will send when the connection is back — and
+the engine does send it on the reconnect. Such a row now says it goes on its own when you are back
+online (in both languages), still with Retry and Delete; a timeout or a server's refusal keeps its
+sentence. The reasons the engine resends and the reasons the row describes this way are one constant,
+`UNREACHED` in `data/failure.ts`.
+
 ### Fix — 2026-10-15: a missing setting is named once (closes #683)
 
 The API and every command that loads the configuration listed each missing variable twice — "Expected
