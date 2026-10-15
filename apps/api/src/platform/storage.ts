@@ -53,6 +53,43 @@ export interface S3Settings {
 const isAbsent = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && Reflect.get(error, 'code') === 'NoSuchKey';
 
+/**
+ * A store that cannot be reached, or says it cannot serve now: an outage, not a fault of this code
+ * (#708). Bun's codes for the transport (a refused connection was measured as `ConnectionRefused`)
+ * and S3's own for a store that is busy or failing. Anything else — a refusal, a bad key — escapes.
+ */
+const OUTAGE = new Set([
+  'ConnectionRefused',
+  'ConnectionClosed',
+  'ConnectionReset',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'Timeout',
+  'FailedToOpenSocket',
+  'ServiceUnavailable',
+  'SlowDown',
+  'InternalError',
+  'RequestTimeout',
+]);
+
+/** An outage said as one: `503 STORAGE_UNAVAILABLE`, as the database's is `DATABASE_UNAVAILABLE`. */
+const reached = async <T>(operation: () => Promise<T>): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error) {
+    const code: unknown =
+      typeof error === 'object' && error !== null ? Reflect.get(error, 'code') : undefined;
+    if (typeof code === 'string' && OUTAGE.has(code)) {
+      throw new AppError({
+        code: 'STORAGE_UNAVAILABLE',
+        message: 'File storage cannot be reached. Try again shortly.',
+      });
+    }
+    throw error;
+  }
+};
+
 /** The part of Bun's `S3Client` the adapter uses: what a unit test stands in for. */
 export interface S3Like {
   readonly write: (
@@ -72,17 +109,17 @@ export const s3Store = (
 ): ObjectStore => {
   return {
     put: async (key, bytes, type): Promise<void> => {
-      await client.write(key, bytes, { type });
+      await reached(() => client.write(key, bytes, { type }));
     },
     putFile: async (key, path, type): Promise<void> => {
       // Bun streams a file to S3 in parts, never whole in memory.
-      await client.write(key, Bun.file(path), { type });
+      await reached(() => client.write(key, Bun.file(path), { type }));
     },
     get: async (key): Promise<StoredObject | null> => {
       const file = client.file(key);
       let size: number;
       try {
-        ({ size } = await file.stat());
+        ({ size } = await reached(() => file.stat()));
       } catch (error) {
         if (isAbsent(error)) return null;
         throw error;
@@ -90,7 +127,7 @@ export const s3Store = (
       return { body: file.stream(), size };
     },
     delete: async (key): Promise<void> => {
-      await client.delete(key);
+      await reached(() => client.delete(key));
     },
   };
 };

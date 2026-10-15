@@ -117,6 +117,29 @@ describe('the S3 adapter’s rules (a stand-in client; `test:storage` runs the r
     });
     expect(thrown).toBe('denied');
   });
+
+  // A store that cannot be reached is an outage, said as one — not an INTERNAL that reads as a bug
+  // (#708; Bun's code for a refused connection, measured: `ConnectionRefused`).
+  test('a store that cannot be reached is 503 STORAGE_UNAVAILABLE, on every operation', async () => {
+    const down = (): Promise<never> =>
+      Promise.reject(
+        Object.assign(new Error('an unexpected error has occurred'), { code: 'ConnectionRefused' }),
+      );
+    const unreachable: S3Like = {
+      write: down,
+      file: (key) => Object.assign(new Blob([key]), { stat: down }),
+      delete: down,
+    };
+    const store = s3Store(settings, unreachable);
+    expect(await refusal(store.put('k', new Uint8Array([1]), 'application/octet-stream'))).toBe(
+      'STORAGE_UNAVAILABLE',
+    );
+    expect(await refusal(store.putFile('k', '/nonexistent', 'application/x-tar'))).toBe(
+      'STORAGE_UNAVAILABLE',
+    );
+    expect(await refusal(store.get('k'))).toBe('STORAGE_UNAVAILABLE');
+    expect(await refusal(store.delete('k'))).toBe('STORAGE_UNAVAILABLE');
+  });
 });
 
 /**
