@@ -2183,8 +2183,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'search-case-sensitive',
     why: 'DEPLOY does not find deploy, which is not how a person searches',
     file: SEARCH,
-    find: "    .where('messages.content', 'ilike', literalPattern(query.q))\n",
-    replace: "    .where('messages.content', 'like', literalPattern(query.q))\n",
+    find: '`purlay_fold(messages.content)`',
+    replace: '`messages.content`',
     tests: SEARCH_TESTS,
   },
   {
