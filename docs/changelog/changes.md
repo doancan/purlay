@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: `db:check` reads only the application's schema (closes #673)
+
+- The migrator's integration test makes a schema per case and drops them when it ends; a run killed
+  first left them behind, and `db:generate` wrote their tables into `schema.ts`, so `db:check` failed on
+  types that were right. The types are now generated from `public` alone; `db:check` passes with such
+  schemas still in the database.
+
 ### Fix — 2026-10-15: an edit naming several people no longer deadlocks with a send (closes #669)
 
 - Found by a chaos soak — four people doing everything at once in one channel, one `500` in 3,098
