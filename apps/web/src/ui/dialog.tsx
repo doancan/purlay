@@ -35,7 +35,7 @@ import { IconButton } from './icon-button';
 const overlayClasses = 'fixed inset-0 z-palette overflow-y-auto bg-scrim px-4 py-8';
 
 const contentClasses =
-  'relative mx-auto flex max-w-dialog flex-col gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float';
+  'relative mx-auto flex max-w-dialog flex-col gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float outline-none';
 
 interface DialogProps {
   readonly open: boolean;
@@ -65,6 +65,15 @@ const openerOf = (active: Element | null): HTMLElement | null => {
   return opener.isConnected ? opener : null;
 };
 
+/** What Radix would focus first: the first control a Tab would reach, in the tree's order. */
+const firstControl = (root: HTMLElement): Element | null =>
+  [...root.querySelectorAll(CONTROLS)].find(
+    (element) => element instanceof HTMLElement && element.tabIndex >= 0,
+  ) ?? null;
+
+const CONTROLS =
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]';
+
 export const Dialog = ({
   open,
   onOpenChange,
@@ -75,15 +84,25 @@ export const Dialog = ({
   footer,
 }: DialogProps): React.JSX.Element => {
   const returnTo = useRef<HTMLElement | null>(null);
+  const close = useRef<HTMLButtonElement>(null);
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className={overlayClasses}>
           <RadixDialog.Content
             className={contentClasses}
-            onOpenAutoFocus={() => {
+            onOpenAutoFocus={(event) => {
               // Fired before Radix moves focus in, so the active element is still the opener.
               returnTo.current = openerOf(document.activeElement);
+              // A dialog with nothing to fill in (a list to read) would give its first focus to
+              // the close button, whose tooltip then takes the first Escape (#623): the dialog
+              // itself takes it instead, and Tab still reaches Close.
+              const content = event.currentTarget;
+              if (!(content instanceof HTMLElement) || firstControl(content) !== close.current) {
+                return;
+              }
+              event.preventDefault();
+              content.focus();
             }}
             onCloseAutoFocus={(event) => {
               // Ours when we know where; Radix's own return otherwise, rather than nowhere.
@@ -104,7 +123,12 @@ export const Dialog = ({
             thing, and that should be the form, not a close button whose tooltip then
             takes the first Escape. */}
             <RadixDialog.Close asChild>
-              <IconButton label={closeLabel} glyph="close" className="absolute right-3 top-3" />
+              <IconButton
+                ref={close}
+                label={closeLabel}
+                glyph="close"
+                className="absolute right-3 top-3"
+              />
             </RadixDialog.Close>
           </RadixDialog.Content>
         </RadixDialog.Overlay>

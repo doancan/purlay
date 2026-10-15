@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: one Escape closes a dialog that has only a list to read (closes #623)
+
+- The audit log and the workspace export opened with focus on their close button, whose tooltip
+  then took the first Escape, so the dialog needed two. A dialog whose first control would be its
+  close button now takes focus itself; Tab still reaches Close.
+
 ### Fix — 2026-10-15: a channel's name is no longer drawn under its header's views on a phone (closes #624)
 
 - At 390 px the header's controls were wider than the window, and the channel's name was drawn over
