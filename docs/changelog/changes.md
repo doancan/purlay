@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: focusing the composer on a narrow window no longer moves the page (closes #654)
+
+- #643 gave the composer's hints a row of their own on a narrow window, so focusing the composer made it
+  taller. Pressing the "new messages" pill took focus from the composer, the composer shrank, the pill
+  moved between the press and the release, and the click missed it. On a narrow window the hints are no
+  longer drawn — a phone's keyboard has no Shift+Enter — and are still the field's description for a
+  screen reader. `narrow.e2e.ts` measures that the feed is as tall with the composer focused as not.
+
 ### Fix — 2026-10-15: a list shows a message as it reads, not as it was typed (closes #651)
 
 - Search results, the inbox, saved messages, the pins and the open questions drew a message's markdown
