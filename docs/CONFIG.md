@@ -242,6 +242,12 @@ report:frames` needs (O-4) is exported with `docker compose … logs api` before
 **The proxy's access log** records the path and never the query string: an OAuth callback carries a
 one-time `code` and the signed `state` there, and a search carries what was searched for.
 
+**A restart is not an outage.** A request that arrives while the API restarts is held by the proxy for
+up to 30 s until a ready node answers, rather than failing (`lb_try_duration`, #636); the proxy only
+retries a request it could not hand over, so nothing is sent twice. `/health/ready` stays public — an
+uptime monitor may point at it — and answers from a check at most a second old, however often it is
+asked.
+
 `APP_URL` is also the proxy's site address, so the origin Caddy answers for and the one the API checks
 sockets against cannot differ; with a public name and ports 80 and 443 reachable, the certificate is
 issued and renewed automatically. Only the proxy publishes ports.

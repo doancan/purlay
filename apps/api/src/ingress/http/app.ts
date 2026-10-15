@@ -122,7 +122,7 @@ import {
   removeMessage,
 } from './messages';
 import { changeReaction } from './reactions';
-import { readiness } from '../../platform/readiness';
+import { readiness, recentReadiness, type Readiness } from '../../platform/readiness';
 import { currentRequest, enterRequest, type Logger } from '../../platform/logging';
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import type { Backplane } from '../../realtime/bus';
@@ -261,6 +261,13 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
   /** Set once, by `drain`; readiness reads it before anything else. */
   let draining = false;
+  // One check at a time, reused for a second, however often the outside asks (#636).
+  const askReadiness = recentReadiness(
+    async () => await readiness(dependencies.database),
+    dependencies.clock,
+  );
+  // The reason a node is not ready is written once per check, not once per probe that hears it.
+  let saidNotReady: Readiness | null = null;
   // One bucket per user for writes, charged by both doors to `send()`.
   const userWrites = inProcessRateLimiter(
     dependencies.clock,
@@ -378,9 +385,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get('/health/ready', async ({ set }) => {
       const answer = draining
         ? ({ ready: false, reason: 'draining for shutdown' } as const)
-        : await readiness(dependencies.database);
+        : await askReadiness();
       if (answer.ready) return { status: 'ready' } as const;
-      log.warn('not ready', { reason: answer.reason });
+      if (answer !== saidNotReady) log.warn('not ready', { reason: answer.reason });
+      saidNotReady = answer;
       set.status = 503;
       return { status: 'not ready' } as const;
     })

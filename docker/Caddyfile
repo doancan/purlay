@@ -16,6 +16,11 @@
 		# or while migrations are pending).
 		health_uri /health/ready
 		health_interval 5s
+		# A request that arrives while the API restarts waits up to 30 s for a
+		# ready one instead of failing 502 (#636). Caddy retries only a request it
+		# could not hand to the upstream, so nothing is sent twice.
+		lb_try_duration 30s
+		lb_try_interval 250ms
 	}
 
 	# Passed to the client unchanged; the API sets its own security headers (D-39).

@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a restart is held by the proxy, not answered 503; readiness is bounded (closes #636)
+
+- While the API restarted, the proxy answered at once that no upstream was there. It now holds a
+  request up to 30 s for a ready node (measured: 503 in 4 ms before, 200 once the API was back after).
+  It retries only what it could not hand over, so nothing is sent twice.
+- `/health/ready` ran several queries on every call from anywhere. It now answers from a check at
+  most a second old, one check at a time; it stays public for an uptime monitor (`PRD.md` §5).
+- A stale comment in the production compose file now names `storage-init`.
+
 ### Fix — 2026-10-15: an error nothing handled is reported, and ends the process (closes #634)
 
 - An unhandled rejection or an uncaught exception in the API or the scheduler was left to the

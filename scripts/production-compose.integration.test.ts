@@ -185,6 +185,47 @@ describe('integration: the production compose file', () => {
     expect(filtering?.fields?.['request>uri']).toEqual({ filter: 'regexp', regexp: '\\?.*' });
   });
 
+  /** The proxy's configuration as Caddy itself reads it: what is asserted is what it will do. */
+  const adaptedProxy = (): unknown => {
+    const caddy = Bun.spawnSync(
+      [
+        'docker',
+        'run',
+        '--rm',
+        '-e',
+        'APP_URL=https://localhost',
+        '-v',
+        `${join(repo, 'docker/Caddyfile')}:/etc/caddy/Caddyfile:ro`,
+        PROXY_IMAGE,
+        'caddy',
+        'adapt',
+        '--config',
+        '/etc/caddy/Caddyfile',
+      ],
+      { stdout: 'pipe', stderr: 'pipe' },
+    );
+    expect(caddy.exitCode).toBe(0);
+    return JSON.parse(caddy.stdout.toString());
+  };
+
+  /** Every object in a JSON tree, so a test finds a handler wherever Caddy nested it. */
+  const objectsIn = (value: unknown): Record<string, unknown>[] => {
+    if (Array.isArray(value)) return value.flatMap(objectsIn);
+    if (typeof value !== 'object' || value === null) return [];
+    const object = value as Record<string, unknown>;
+    return [object, ...Object.values(object).flatMap(objectsIn)];
+  };
+
+  test('a request that arrives while the API restarts waits for it, rather than failing 502 (#636)', () => {
+    const proxies = objectsIn(adaptedProxy()).filter(
+      (handler) => handler['handler'] === 'reverse_proxy',
+    );
+    expect(proxies).toHaveLength(1);
+    const balancing = proxies[0]?.['load_balancing'] as Record<string, unknown> | undefined;
+    // Caddy's durations are nanoseconds in its JSON: 30 s, long enough for a drained restart.
+    expect(balancing?.['try_duration']).toBe(30_000_000_000);
+  });
+
   test('the API runs read-only, without capabilities or privilege escalation, and migrates itself', () => {
     const api = model.services['api'];
     expect(api?.read_only).toBe(true);
