@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkExpression, installedPackages, judgeLicenses } from './licenses';
+import { checkExpression, installedPackages, judgeLicenses, resolvedByLockfile } from './licenses';
 
 describe('checkExpression', () => {
   test.each([
@@ -141,5 +141,39 @@ describe('the workspace manifests', () => {
   test.each(manifests)('%s declares it', (path) => {
     const manifest: unknown = JSON.parse(readFileSync(join(repo, path), 'utf8'));
     expect(manifest).toMatchObject({ license: expected });
+  });
+});
+
+describe('the packages judged are the ones the lockfile resolves (#675)', () => {
+  const lock = `{
+  "lockfileVersion": 2,
+  "workspaces": { "": { "name": "purlay" } },
+  "packages": {
+    "@purlay/types": ["@purlay/types@workspace:packages/types"],
+    "left-pad": ["left-pad@1.3.0", "", {}, "sha512-x"],
+    "@scope/thing": ["@scope/thing@2.0.0", "", {}, "sha512-y"],
+    "@typescript/native": ["typescript@7.0.2", "", {}, "sha512-z"],
+  }
+}`;
+  test('a package left in node_modules that the lockfile no longer has is not judged', () => {
+    const installed = [
+      { name: 'left-pad', version: '1.3.0', license: 'MIT' },
+      { name: '@scope/thing', version: '2.0.0', license: 'ISC' },
+      { name: 'typescript', version: '7.0.2', license: 'Apache-2.0' },
+      { name: '@purlay/types', version: '0.0.0', license: 'AGPL-3.0-only' },
+      // A leftover: an older version, and a package nothing depends on now.
+      { name: 'left-pad', version: '1.2.0', license: 'WTFPL' },
+      { name: '@fontsource/ibm-plex-sans', version: '5.3.0', license: 'OFL-1.1' },
+    ];
+    expect(resolvedByLockfile(installed, lock).map((p) => `${p.name}@${p.version}`)).toEqual([
+      'left-pad@1.3.0',
+      '@scope/thing@2.0.0',
+      'typescript@7.0.2',
+      '@purlay/types@0.0.0',
+    ]);
+  });
+
+  test('a lockfile that resolves nothing is refused, not read as "nothing to judge"', () => {
+    expect(() => resolvedByLockfile([], '{ "packages": {} }')).toThrow();
   });
 });
