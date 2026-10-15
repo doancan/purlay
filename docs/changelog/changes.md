@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the inbox names a direct message's sender once (closes #631)
+
+- A message from one other person read "alice wrote to you · alice": the place after the dot was the
+  conversation, which for one other person is that person. Such a row now names no place; a group
+  conversation and a channel still name theirs.
+
 ### Feature — 2026-10-15: the page says at once that the network is gone, and reconnects the moment it is back (closes #626)
 
 - A socket is not closed when the network goes, so the "Reconnecting…" bar waited for a `PING` to

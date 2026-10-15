@@ -107,6 +107,19 @@ describe('the list', () => {
     }
   });
 
+  test('a message from one other person names them once: the conversation is them (#631)', async () => {
+    const direct = aChannel(IDS.api, null, { type: 'direct_message', peer: BOB });
+    const view = await visit({
+      channels: () => Promise.resolve([direct]),
+      notifications: () => Promise.resolve(page([told(3, 'direct_message')])),
+    });
+    const [row] = view.getAllByRole('button', { name: /words/ });
+    expect(row?.textContent).toContain('bob wrote to you');
+    expect(row?.textContent.match(/bob/g)).toHaveLength(1);
+    expect(row?.textContent).not.toContain('·');
+    view.unmount();
+  });
+
   test('each row says why, who, where and what, and which are unread', async () => {
     const view = await visit({
       notifications: () =>

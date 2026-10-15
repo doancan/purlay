@@ -125,6 +125,8 @@ const Row = ({
   const { message } = notification;
   const why = useWhy();
   const unread = notification.readAt === null;
+  const withOne =
+    channel?.type === 'direct_message' && channel.peer !== null && channel.peers.length < 2;
   return (
     <li>
       <button
@@ -145,8 +147,13 @@ const Row = ({
               {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
               {why(notification, channel)}
             </span>
-            <span aria-hidden="true">·</span>
-            {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
+            {/* A conversation with one other person is that person, already named (#631). */}
+            {!withOne && (
+              <>
+                <span aria-hidden="true">·</span>
+                {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
+              </>
+            )}
             <time dateTime={notification.createdAt} className="ml-auto font-mono text-caption">
               {format.time(notification.createdAt, now)}
             </time>
