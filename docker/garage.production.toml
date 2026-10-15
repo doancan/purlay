@@ -11,6 +11,11 @@ metadata_dir = "/var/lib/garage/meta"
 data_dir = "/var/lib/garage/data"
 db_engine = "sqlite"
 replication_factor = 1
+# Each write is on the disk before it is acknowledged (#639): without these a power cut can lose the
+# metadata of files the API was told were stored. Measured: p95 of a 256 KiB write 3.1 -> 5.6 ms,
+# p50 unchanged (docs/spikes/resources.md).
+metadata_fsync = true
+data_fsync = true
 
 rpc_bind_addr = "0.0.0.0:3901"
 rpc_public_addr = "127.0.0.1:3901"

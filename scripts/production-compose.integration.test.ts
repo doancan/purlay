@@ -53,6 +53,8 @@ interface Resolved {
         start_period?: string;
       };
       logging?: { driver?: string; options?: Record<string, string> };
+      mem_limit?: string | number;
+      pids_limit?: number;
     }
   >;
 }
@@ -229,6 +231,46 @@ describe('integration: the production compose file', () => {
     const balancing = proxies[0]?.['load_balancing'] as Record<string, unknown> | undefined;
     // Caddy's durations are nanoseconds in its JSON: 30 s, long enough for a drained restart.
     expect(balancing?.['try_duration']).toBe(30_000_000_000);
+  });
+
+  test('every long-running service is bounded in memory and processes, from a measurement (#639)', () => {
+    // A runaway takes its own container down, not the host. The numbers are the spike's
+    // (docs/spikes/resources.md): several times what each was measured to use, so a normal day
+    // never meets them.
+    const MiB = 1024 * 1024;
+    const bounds: Record<string, readonly [memoryMiB: number, pids: number]> = {
+      api: [768, 256],
+      'storage-init': [256, 64],
+      scheduler: [512, 128],
+      postgres: [1536, 256],
+      garage: [512, 128],
+      proxy: [256, 128],
+    };
+    expect(Object.keys(model.services).sort()).toEqual(Object.keys(bounds).sort());
+    for (const [name, [memory, pids]] of Object.entries(bounds)) {
+      const service = model.services[name];
+      expect({ name, memory: Number(service?.mem_limit) / MiB, pids: service?.pids_limit }).toEqual(
+        {
+          name,
+          memory,
+          pids,
+        },
+      );
+    }
+  });
+
+  test('an operator raises a bound with its variable, and nothing else moves', () => {
+    const raised = resolve({ ...ENVIRONMENT, API_MEMORY_LIMIT: '2g' });
+    expect(raised.code).toBe(0);
+    const services = (JSON.parse(raised.stdout) as typeof model).services;
+    expect(Number(services['api']?.mem_limit)).toBe(2 * 1024 * 1024 * 1024);
+    expect(Number(services['postgres']?.mem_limit)).toBe(1536 * 1024 * 1024);
+  });
+
+  test('Garage acknowledges a write only once it is on the disk (#639)', () => {
+    const toml = readFileSync(join(repo, 'docker/garage.production.toml'), 'utf8');
+    expect(toml).toMatch(/^metadata_fsync = true$/m);
+    expect(toml).toMatch(/^data_fsync = true$/m);
   });
 
   test('the API runs read-only, without capabilities or privilege escalation, and migrates itself', () => {
