@@ -215,6 +215,15 @@ the same by hand, through Garage's CLI, and is kept for a stack from before this
 **The first person in** signs in with GitHub and makes the first workspace from the screen they land
 on; they are its owner. Who else may join is decided by them, with invitation links (D-115).
 
+**Memory and processes are bounded per container** (#639): `API_MEMORY_LIMIT` (default `768m`),
+`SCHEDULER_MEMORY_LIMIT` (`512m`), `STORAGE_INIT_MEMORY_LIMIT` (`256m`), `POSTGRES_MEMORY_LIMIT`
+(`1536m`), `GARAGE_MEMORY_LIMIT` (`512m`) and `PROXY_MEMORY_LIMIT` (`256m`), each with a process limit.
+Each default is several times what that container was measured to use — the API at 136 MiB under
+the build target's load, 166 MiB at twice it — so a normal day never meets them, and a runaway takes its
+own container down, which `restart` brings back, rather than the host (`docs/spikes/resources.md`).
+Raise one on a larger server. No CPU limit is set: a throttled API answers late, which is worse
+than one that shares.
+
 **Ports.** The proxy publishes 80 and 443 (and 443/udp for HTTP/3). `HTTP_PORT` and `HTTPS_PORT`
 (optional, defaults 80 and 443) move them on the host. The caveats are real: the HTTPS port is the same
 inside and outside the container, because Caddy listens on the port in its site address, which is

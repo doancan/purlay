@@ -34,3 +34,4 @@ A spike that only reports "it works" has not been written down. (D-57)
 | [`capacity.md`](capacity.md) | 2026-10-13 | One process at 300 sockets and 20 msg/s: ACK p95 19–21 ms, fan-out 14–16 ms, all delivered — and 128–136 MiB under load, past the idle budget |
 | [`cross-browser.md`](cross-browser.md) | 2026-10-13 | WebKit passes 124 of 132 and Firefox (on Linux) 126 of 132; every failure is the engine's or the harness's — Tab past the last element, no `first-paint`, a synthetic paste, offline emulation, CDP — no product defect |
 | [`nodemailer.md`](nodemailer.md) | 2026-10-14 | Sends in order and UTF-8, honours its timeout, refuses a server without STARTTLS when told to — and the first run said otherwise because its script was never type-checked |
+| [`resources.md`](resources.md) | 2026-10-15 | Every container bounded at several times its measured memory; Garage's fsync costs 2.5 ms at p95 and is on |

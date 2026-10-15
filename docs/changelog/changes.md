@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Infra — 2026-10-15: every production container is bounded, and Garage writes to the disk before it says yes (closes #639)
+
+- Each service in `docker-compose.production.yml` has a memory and a process bound, several times what
+  it was measured to use (`docs/spikes/resources.md`): a runaway takes its own container down and is
+  restarted, not the host. Each memory bound is a variable for a larger server; CPU is not bounded.
+- Garage's production configuration sets `metadata_fsync` and `data_fsync`: without them a power cut can
+  lose files the API was told were stored. Measured cost: 2.5 ms at the 95th percentile of a 256 KiB
+  write, the median unchanged.
+
 ### Fix — 2026-10-15: a message's hover controls no longer cover it (closes #653)
 
 - The controls hung over the first line of every message — on your own short one they hid its words —
