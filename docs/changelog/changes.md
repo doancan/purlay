@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the channel-list error spec no longer fails when another spec moves bob (part of #632)
+
+`states.e2e.ts` *the channel list … offers Retry, and recovers* failed in three of four full browser runs
+on a loaded machine (light-narrow): a parallel spec put bob — the spec's person — in a room, the frame
+for it read his channel list again on its own, the front door moved him there and the overlay closed
+over **Retry**. Reproduced on demand by adding bob to a room before the click. The spec now runs its page
+without a socket: the list's failure and recovery are what it tests.
+
 ### Fix — 2026-10-15: moving to a channel leaves focus in its composer on a wide window (closes #697)
 
 After **Cmd+K → a channel**, or a click in the sidebar, focus was on the page's `<main>` and the

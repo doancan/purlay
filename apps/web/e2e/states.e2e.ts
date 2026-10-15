@@ -178,6 +178,11 @@ test.describe('the channel list', () => {
     world,
   }) => {
     await signIn('bob');
+    // No socket for this page. Specs run in parallel and share bob: one that puts him in a room sends
+    // a frame that reads his channel list again on its own, the list comes back before Retry is
+    // pressed, the front door moves him to that room and the overlay closes over the button — seen in
+    // a failing run's snapshot (#632). The list's failure and its recovery are what this tests.
+    await page.routeWebSocket(/\/ws$/, () => undefined);
     let failing = true;
     await page.route('**/api/workspaces/*/channels', async (route) => {
       if (route.request().method() === 'GET' && failing) await fail(route);
