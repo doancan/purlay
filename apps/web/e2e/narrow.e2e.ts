@@ -117,50 +117,41 @@ test.describe('at a phone width', () => {
     await expect(page.getByRole('feed')).toBeVisible();
   });
 
-  test('the composer, focused, keeps its hints inside it', async ({ page, signIn, world }) => {
-    // The hints appear only on focus, and an overflow inside the composer's own box is not the
-    // document's: found by hand at 400 px, `Shift+Enter` running off the composer's right edge.
+  test('the composer is as tall focused as not: its hints are not drawn on a phone, and are still said', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    // #643 gave the hints a row of their own here, so focusing the composer made it taller, the feed
+    // above shrank, and a reader at the bottom was no longer there (#654). A phone's keyboard has no
+    // Shift+Enter; a screen reader still hears the hints as the field's description.
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     const box = page.getByRole('textbox', { name: /^Message/ });
-    await box.focus();
-    const hints = page.locator('kbd').first();
-    await expect(hints).toBeVisible();
-    const composer = await page
-      .locator('[data-composer-card]')
-      .first()
-      .evaluate((card) => card.getBoundingClientRect().right);
-    for (const key of await page.locator('kbd').all()) {
-      const right = await key.evaluate((element) => element.getBoundingClientRect().right);
-      expect(right, `${(await key.textContent()) ?? ''} runs off the composer`).toBeLessThanOrEqual(
-        composer,
+    // What a reader loses when the composer grows is the feed's height, so that is what is measured.
+    // The composer is focused as the channel opens; the measurement starts from it unfocused. Shifted
+    // on blur, the pill above it moved between a press and its release, and the click missed it.
+    const feed = page.getByRole('feed').locator('..');
+    await expect(feed).toBeVisible();
+    await page.getByRole('main').focus();
+    await expect(box).not.toBeFocused();
+    const frames = async (): Promise<void> => {
+      await page.evaluate(
+        async () =>
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+          }),
       );
-    }
-    // Inside it is not enough: found by hand at 390 px (#627), the hints wrapped over Send.
-    const drawnOver = await page
-      .locator('[data-composer-card]')
-      .first()
-      .evaluate((card) => {
-        const hints = [...card.querySelectorAll('kbd')].map((key) =>
-          (key.parentElement ?? key).getBoundingClientRect(),
-        );
-        return [...card.querySelectorAll('button')]
-          .filter((control) => {
-            const box = control.getBoundingClientRect();
-            return (
-              box.width > 0 &&
-              hints.some(
-                (hint) =>
-                  hint.left < box.right &&
-                  hint.right > box.left &&
-                  hint.top < box.bottom &&
-                  hint.bottom > box.top,
-              )
-            );
-          })
-          .map((control) => control.getAttribute('aria-label') ?? control.textContent);
-      });
-    expect(drawnOver, 'controls the hints are drawn over').toEqual([]);
+    };
+    await frames();
+    const before = await feed.evaluate((element) => element.clientHeight);
+    await box.focus();
+    await expect(box).toBeFocused();
+    // The focused state is React's to draw: measured after two frames, not in the same one.
+    await frames();
+    expect(await feed.evaluate((element) => element.clientHeight)).toBe(before);
+    await expect(page.locator('kbd').filter({ hasText: 'Shift+Enter' })).toBeHidden();
+    await expect(box).toHaveAccessibleDescription(/Enter sends/);
   });
 
   test('the sign-in screen fits too', async ({ page }) => {

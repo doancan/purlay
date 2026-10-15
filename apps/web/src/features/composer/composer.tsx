@@ -388,12 +388,13 @@ const Inner = ({
     </>
   );
   const hintsBlock = focused ? (
-    // Each hint whole, and the three wrapping onto lines of their own when the window is narrow —
-    // there on a row of their own under the controls, since squeezed between them they were drawn
-    // over Send (#627).
+    // Each hint whole. Not drawn on a narrow window: a phone's keyboard has no Shift+Enter, and drawn
+    // there they took a row of their own, so focusing the composer made it taller and moved what was
+    // above it — a pill moved between a press and its release, and the click missed (#654). They are
+    // still the field's description, which a screen reader reads.
     <span
       id={hintsId}
-      className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:order-last max-narrow:basis-full"
+      className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden"
     >
       {hints}
     </span>
@@ -586,7 +587,7 @@ const Inner = ({
           ) : (
             <div
               className={cn(
-                'flex items-center gap-3 px-4 max-narrow:flex-wrap',
+                'flex items-center gap-3 px-4',
                 compact ? 'pb-2' : 'pb-2 pl-2 pr-2 pt-1',
               )}
             >
