@@ -5,3 +5,4 @@ export * from './parse';
 export * from './metadata';
 export * from './mentions';
 export * from './prose';
+export * from './plain';

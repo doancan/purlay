@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a list shows a message as it reads, not as it was typed (closes #651)
+
+- Search results, the inbox, saved messages, the pins and the open questions drew a message's markdown
+  as typed — ``Deployed `api` `06f1700` `` with its backticks, a fence with its three. Their one-line
+  excerpt is now the text a reader sees, from the same parsed tree the feed draws (`excerptOf` in
+  `@purlay/markdown`): a code span by its contents, a link by its label, emphasis without its marks.
+  Past the parser's bounds a message is shown as typed, as the feed shows it.
+
 ### Fix — 2026-10-15: a scheduled job that stops working is seen (closes #635)
 
 - The `scheduler` container's healthcheck is now `jobs:status`: a job overdue, or failing since it last
