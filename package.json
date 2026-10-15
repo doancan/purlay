@@ -27,7 +27,7 @@
     "config:example": "bun run apps/api/src/cli/write-env-example.ts",
     "db:check": "./scripts/check-schema.sh",
     "db:down": "docker compose down",
-    "db:generate": "bun x kysely-codegen --dialect postgres --out-file packages/db/src/schema.ts --exclude-pattern 'kysely_migration*'",
+    "db:generate": "bun x kysely-codegen --dialect postgres --out-file packages/db/src/schema.ts --include-pattern 'public.*' --exclude-pattern 'public.kysely_migration*'",
     "db:logs": "docker compose logs -f",
     "db:migrate": "bun run packages/db/src/cli/migrate.ts",
     "db:reset": "docker compose down -v && docker compose up -d --wait postgres garage && ./scripts/storage-init.sh",
