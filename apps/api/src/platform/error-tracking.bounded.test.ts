@@ -24,17 +24,13 @@ afterAll(() => {
 });
 
 /** A collector that accepts the connection, reads the request, and never answers. */
-const silentCollector = (): { dsn: string; received: () => number } => {
-  let received = 0;
+const silentCollector = (): { dsn: string } => {
   const server = Bun.serve({
     port: 0,
-    fetch: () => {
-      received += 1;
-      return new Promise<Response>(() => undefined);
-    },
+    fetch: () => new Promise<Response>(() => undefined),
   });
   servers.push(server);
-  return { dsn: `http://key@127.0.0.1:${String(server.port)}/1`, received: () => received };
+  return { dsn: `http://key@127.0.0.1:${String(server.port)}/1` };
 };
 
 /**
@@ -52,6 +48,21 @@ const until = async (condition: () => boolean, what: string): Promise<void> => {
     await Bun.sleep(20);
   }
   if (!condition()) throw new Error(`gave up waiting for ${what}`);
+};
+
+/**
+ * The process's own delivery, counting what the reporter sends. What is asserted is what the reporter
+ * did — a request made — not that the loopback server ran its handler before the request's timeout
+ * aborted it: in one process under load the handler can be scheduled after the abort, and a request
+ * that was sent then never "arrives" (#632, reproduced 1 run in 48 beside CPU load).
+ */
+const counted = (): { send: Delivery; sent: () => number } => {
+  let sent = 0;
+  const send: Delivery = (url, init) => {
+    sent += 1;
+    return fetchDelivery(url, init);
+  };
+  return { send, sent: (): number => sent };
 };
 
 const movingClock = (): { clock: Clock; advance: (ms: number) => void } => {
@@ -73,19 +84,20 @@ describe('an urgent report (#634)', () => {
     'is sent when the ordinary ones fill every slot: a crashing process has one thing left to say',
     async () => {
       const collector = silentCollector();
+      const delivery = counted();
       const tracker = createErrorTracker({
         dsn: collector.dsn,
         environment: 'development',
         clock: { now: () => NOW },
-        send: fetchDelivery,
+        send: delivery.send,
         maxInFlight: 2,
         timeoutMs: 5_000,
       });
       for (let i = 0; i < 4; i += 1) report(tracker, `ordinary ${String(i)}`);
-      await until(() => collector.received() === 2, 'the two ordinary slots to fill');
+      await until(() => delivery.sent() === 2, 'the two ordinary slots to fill');
       expect(tracker.dropped()).toBe(2);
       tracker.capture({ message: 'an error escaped every handler; exiting', fields: {} }, 'urgent');
-      await until(() => collector.received() === 3, 'the urgent report to arrive');
+      await until(() => delivery.sent() === 3, 'the urgent report to be sent');
       // One reserved slot, not a way around the bound: a second urgent report is dropped.
       tracker.capture({ message: 'and another', fields: {} }, 'urgent');
       expect(tracker.dropped()).toBe(3);
@@ -99,26 +111,27 @@ describe('a collector that never answers', () => {
     'does not stop later errors being reported: each request is given up on after the timeout',
     async () => {
       const collector = silentCollector();
+      const delivery = counted();
       const failures: unknown[] = [];
       const tracker = createErrorTracker({
         dsn: collector.dsn,
         environment: 'development',
         clock: { now: () => NOW },
-        send: fetchDelivery,
+        send: delivery.send,
         maxInFlight: 3,
         timeoutMs: 150,
         onFailure: (error) => failures.push(error),
       });
 
       for (let i = 0; i < 8; i += 1) report(tracker, `first burst ${String(i)}`);
-      await until(() => collector.received() === 3, 'the first three requests to arrive');
+      await until(() => delivery.sent() === 3, 'the first three requests to be sent');
       expect(tracker.dropped()).toBe(5);
 
       // Without a timeout the three slots stay taken for ever and nothing below is ever sent.
       await until(() => failures.length === 3, 'the three requests to time out');
       for (let i = 0; i < 3; i += 1) report(tracker, `second burst ${String(i)}`);
-      await until(() => collector.received() === 6, 'the second burst to reach the collector');
-      expect(collector.received()).toBe(6);
+      await until(() => delivery.sent() === 6, 'the second burst to be sent');
+      expect(delivery.sent()).toBe(6);
     },
     WAITING_TEST_MS,
   );
@@ -127,18 +140,19 @@ describe('a collector that never answers', () => {
     'is not waited on at shutdown beyond a short bound, and what is left is abandoned',
     async () => {
       const collector = silentCollector();
+      const delivery = counted();
       const failures: unknown[] = [];
       const tracker = createErrorTracker({
         dsn: collector.dsn,
         environment: 'development',
         clock: { now: () => NOW },
-        send: fetchDelivery,
+        send: delivery.send,
         timeoutMs: 60_000,
         onFailure: (error) => failures.push(error),
       });
       report(tracker, 'one');
       report(tracker, 'two');
-      await until(() => collector.received() === 2, 'both requests to arrive');
+      await until(() => delivery.sent() === 2, 'both requests to be sent');
 
       const started = performance.now();
       await tracker.flush(150);
