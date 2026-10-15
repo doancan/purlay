@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: Saved's tabs no longer cover its title on a phone (closes #681)
+
+At 390 px the three tabs were drawn over the `h1` ("Save" under "In progress"). On a phone the header
+now wraps and the tabs take a row of their own, each a finger tall. `apps/web/e2e/narrow.e2e.ts` checks
+every screen with a header of its own — Saved, the inbox, the open questions, search — for a title
+covered, cut or run out of its header.
+
 ### Fix — 2026-10-15: an inbox row's first line stays one line on a phone (closes #679)
 
 At 390 px the line naming why a notification is there wrapped: `4m` and `ago` on two lines, `thread`
