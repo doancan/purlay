@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-15: a search result shows where its words were found (closes #664)
+
+- Each result marks the words searched for, and a long message's excerpt starts a little before the
+  first of them, at a word, with an ellipsis — so a match past the first two lines is seen without
+  opening the message. Matched as the server matches (D-105 §1), on the excerpt a reader sees (#651).
+
 ### Fix — 2026-10-15: an empty conversation no longer asks what the channel is for (closes #662)
 
 - A conversation nobody had written in yet showed a channel's invitation — "Say what it is for in the
