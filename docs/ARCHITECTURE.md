@@ -868,7 +868,9 @@ was run, and the failure in the last-but-one paragraph was reproduced, not reaso
    15 s migration with two replicas starting together. The proxy sends no traffic to a node that is not
    ready, and `--wait` returns when the API reports healthy, which is when to look at the site. A migration
    longer than the container's 30 s `start-period` shows the container as `unhealthy` while it runs; that is
-   a number to raise in the compose file for a big one, not a failure.
+   a number to raise in the compose file for a big one, not a failure. If `--wait` gives up on it, what
+   waits for a healthy API — the proxy, the scheduler — may not have been started: once `/health/ready`
+   answers, run the same `up -d --wait` again, which starts them and changes nothing else (#637).
 4. **A migration that fails stops the node, loudly.** The API logs `migrating on start failed` with the
    cause and exits 1; compose restarts it, and it fails the same way until someone acts. It does not serve
    half a schema.
