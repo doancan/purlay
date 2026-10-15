@@ -181,6 +181,21 @@ describe('Dialog', () => {
     });
   });
 
+  test('with only a link before Close, Close still does not take the first focus', async () => {
+    // Radix never gives first focus to a link, so a dialog whose one other control is a link (an
+    // export ready to download, its request button busy) would still focus Close.
+    const { getByRole, queryByRole } = await renderApp(
+      <Dialog open onOpenChange={() => undefined} title="Export" description="D" closeLabel="Close">
+        <a href="/export.zip">export.zip</a>
+      </Dialog>,
+    );
+    await waitFor(() => {
+      expect(getByRole('dialog').contains(document.activeElement)).toBe(true);
+    });
+    expect(document.activeElement === getByRole('button', { name: 'Close' })).toBe(false);
+    expect(queryByRole('tooltip')).toBeNull();
+  });
+
   test('passes the accessibility audit', async () => {
     const { getByRole } = await renderApp(<Harness />);
     await person().click(getByRole('button', { name: 'Open' }));

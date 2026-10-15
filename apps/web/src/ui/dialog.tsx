@@ -65,14 +65,17 @@ const openerOf = (active: Element | null): HTMLElement | null => {
   return opener.isConnected ? opener : null;
 };
 
-/** What Radix would focus first: the first control a Tab would reach, in the tree's order. */
+/**
+ * What Radix would focus first: the first control a Tab would reach, in the tree's order — never a
+ * link, which Radix's first focus skips (`removeLinks` in its focus scope).
+ */
 const firstControl = (root: HTMLElement): Element | null =>
   [...root.querySelectorAll(CONTROLS)].find(
-    (element) => element instanceof HTMLElement && element.tabIndex >= 0,
+    (element) => element instanceof HTMLElement && element.tabIndex >= 0 && !element.hidden,
   ) ?? null;
 
 const CONTROLS =
-  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]';
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not(a)';
 
 export const Dialog = ({
   open,
