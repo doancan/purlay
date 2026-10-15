@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the silent-collector spec counts what the reporter sends, not what a loaded server got to (closes #632)
+
+`error-tracking.bounded.test.ts` waited for requests to *arrive* at a loopback server that never
+answers, while the reporter aborts each after 150 ms. In one process under load the server's handler
+could run after the abort, so a request that was sent never arrived and the spec gave up waiting —
+reproduced 1 run in 48 beside CPU load. It now counts the requests the reporter makes through the real
+`fetch` adapter: what the reporter did, which is what it tests. 48 runs in 48 green under the same load.
+With #646, #699 and #706, every failure recorded on #632 has its cause found and fixed.
+
 ### Fix — 2026-10-15: a socket whose session ends as it opens is always told why (part of #632)
 
 The hub tells every socket whose session ended why before closing it (#194, #577) — except when the
