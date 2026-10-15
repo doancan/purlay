@@ -127,6 +127,42 @@ test.describe('at a phone width', () => {
     }
   });
 
+  test("an open question's excerpt has the row's width: its reply pill is on the author's line", async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    // At this width the pill was a column of its own, leaving the question two words a line (#688).
+    await signIn('bob');
+    await page.goto(`/w/${world.workspace.slug}/questions`);
+    const row = page.getByRole('main').getByRole('listitem').first();
+    await expect(row).toBeVisible();
+    const measured = await row.evaluate((item) => {
+      const button = item.querySelector('button');
+      if (button === null) throw new Error('no question in the row');
+      const pill = [...button.querySelectorAll('span')].find((span) =>
+        /^\d+ repl/.test(span.textContent),
+      );
+      // The question's words: the row's one block-level line.
+      const excerpt = button.querySelector('span.block');
+      if (pill === undefined || excerpt === null) {
+        throw new Error('the row has no pill or no excerpt');
+      }
+      return {
+        pillBottom: pill.getBoundingClientRect().bottom,
+        excerptTop: excerpt.getBoundingClientRect().top,
+        excerptRight: excerpt.getBoundingClientRect().right,
+        pillLeft: pill.getBoundingClientRect().left,
+      };
+    });
+    expect(measured.excerptRight, 'the excerpt stops short of the pill').toBeGreaterThan(
+      measured.pillLeft,
+    );
+    expect(measured.pillBottom, 'the pill is beside the excerpt').toBeLessThanOrEqual(
+      measured.excerptTop + 1,
+    );
+  });
+
   test('an open thread covers the conversation, runs off no side, and Close is a finger wide and brings it back', async ({
     page,
     signIn,
