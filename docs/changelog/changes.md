@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: each place in the workspace menu has a glyph of its own (closes #642)
+
+- Audit log was drawn with the keyboard of Keyboard shortcuts, and Members, Workspace settings and Keep
+  history shared one cog. They are now people, a log, the cog and history; Export is a download. A test
+  holds that no two places in the menu share a glyph.
+
 ### Security — 2026-10-15: the page sends a Permissions-Policy (D-102 amended, closes #638)
 
 - Camera, microphone, geolocation, payment, USB, serial, HID, MIDI, display capture and the Topics

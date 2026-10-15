@@ -111,7 +111,7 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
         )}
         {mayInvite && (
           <MenuItem
-            glyph="settings"
+            glyph="people"
             onSelect={() => {
               setManaging(true);
             }}
@@ -131,7 +131,7 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
         )}
         {mayInvite && (
           <MenuItem
-            glyph="shortcuts"
+            glyph="audit"
             onSelect={() => {
               setAuditing(true);
             }}
@@ -152,7 +152,7 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
         {/* How long history is kept is an owner's alone (D-139 §4). */}
         {role === 'owner' && (
           <MenuItem
-            glyph="settings"
+            glyph="history"
             onSelect={() => {
               setKeeping(true);
             }}
@@ -163,7 +163,7 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
         {/* An export is an owner's to ask for (D-140). */}
         {role === 'owner' && (
           <MenuItem
-            glyph="file"
+            glyph="download"
             onSelect={() => {
               setExporting(true);
             }}
