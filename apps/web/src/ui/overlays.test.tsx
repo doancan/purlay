@@ -143,6 +143,59 @@ describe('Dialog', () => {
     expect(queryByRole('button', { name: 'Create' })).toBeNull();
   });
 
+  test('with nothing but Close to focus, the first Escape closes it', async () => {
+    // A read-only dialog (the audit log): Radix's first focus would be the close button, whose
+    // tooltip opens on that focus and is the layer the first Escape closes (#623).
+    const Reader = (): React.JSX.Element => {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <Button
+            onClick={() => {
+              setOpen(true);
+            }}
+          >
+            Open
+          </Button>
+          <Dialog
+            open={open}
+            onOpenChange={setOpen}
+            title="Audit log"
+            description="Newest first."
+            closeLabel="Close"
+          >
+            <p>Alice created #api</p>
+          </Dialog>
+        </div>
+      );
+    };
+    const { getByRole, queryByRole } = await renderApp(<Reader />);
+    await person().click(getByRole('button', { name: 'Open' }));
+    const dialog = getByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement === getByRole('button', { name: 'Close' })).toBe(false);
+    expect(queryByRole('tooltip')).toBeNull();
+    await person().keyboard('{Escape}');
+    await waitFor(() => {
+      expect(queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  test('with only a link before Close, Close still does not take the first focus', async () => {
+    // Radix never gives first focus to a link, so a dialog whose one other control is a link (an
+    // export ready to download, its request button busy) would still focus Close.
+    const { getByRole, queryByRole } = await renderApp(
+      <Dialog open onOpenChange={() => undefined} title="Export" description="D" closeLabel="Close">
+        <a href="/export.zip">export.zip</a>
+      </Dialog>,
+    );
+    await waitFor(() => {
+      expect(getByRole('dialog').contains(document.activeElement)).toBe(true);
+    });
+    expect(document.activeElement === getByRole('button', { name: 'Close' })).toBe(false);
+    expect(queryByRole('tooltip')).toBeNull();
+  });
+
   test('passes the accessibility audit', async () => {
     const { getByRole } = await renderApp(<Harness />);
     await person().click(getByRole('button', { name: 'Open' }));
