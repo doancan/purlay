@@ -106,10 +106,7 @@ describe('a collector that never answers', () => {
         clock: { now: () => NOW },
         send: fetchDelivery,
         maxInFlight: 3,
-        // Long enough that a request reaches the loopback server before it is given up on, even on
-        // a loaded machine: at 150 ms the timeout raced the server's accept, a request was aborted
-        // before it was received, and the count below never reached three (#632).
-        timeoutMs: 1_000,
+        timeoutMs: 150,
         onFailure: (error) => failures.push(error),
       });
 
