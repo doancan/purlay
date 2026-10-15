@@ -388,10 +388,12 @@ const Inner = ({
     </>
   );
   const hintsBlock = focused ? (
-    // Each hint whole, and the three wrapping onto lines of their own when the window is narrow.
+    // Each hint whole, and the three wrapping onto lines of their own when the window is narrow —
+    // there on a row of their own under the controls, since squeezed between them they were drawn
+    // over Send (#627).
     <span
       id={hintsId}
-      className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted"
+      className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:order-last max-narrow:basis-full"
     >
       {hints}
     </span>
@@ -584,7 +586,7 @@ const Inner = ({
           ) : (
             <div
               className={cn(
-                'flex items-center gap-3 px-4',
+                'flex items-center gap-3 px-4 max-narrow:flex-wrap',
                 compact ? 'pb-2' : 'pb-2 pl-2 pr-2 pt-1',
               )}
             >
