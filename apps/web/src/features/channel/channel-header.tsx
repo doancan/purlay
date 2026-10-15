@@ -79,6 +79,10 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const [adding, setAdding] = useState(false);
   const [details, setDetails] = useState(false);
   const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
+  const openText =
+    open !== null && open.count > 0 ? `${format.number(open.count)}${open.more ? '+' : ''}` : null;
+  const questionsName =
+    openText === null ? t('header.questions') : `${t('header.questions')} ${openText}`;
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
@@ -173,14 +177,17 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
         <Link
           to="questions"
           params={{ slug: workspace.slug }}
+          aria-label={questionsName}
           className={cn(segmentClasses, 'text-ink-muted')}
         >
-          {t('header.questions')}
-          {open !== null && open.count > 0 && (
-            <span className="font-mono text-caption text-warning-text">
-              {format.number(open.count)}
-              {open.more && '+'}
-            </span>
+          {/* On a narrow window the glyph stands for the words, which the link's name still says:
+          a phone's width cannot give them room and keep the channel's name readable (#624). */}
+          <span aria-hidden="true" className="hidden max-narrow:inline-flex">
+            <Icon name="open-question" />
+          </span>
+          <span className="max-narrow:hidden">{t('header.questions')}</span>
+          {openText !== null && (
+            <span className="font-mono text-caption text-warning-text">{openText}</span>
           )}
         </Link>
       </nav>
