@@ -85,6 +85,21 @@ describe('asking', () => {
     view.unmount();
   });
 
+  test('a found message is shown as it reads, not as it was typed (#651)', async () => {
+    const view = await visit({
+      search: () =>
+        Promise.resolve(
+          page([aMessage(4, { sender: BOB, content: 'Deployed `api` `06f1700` to **staging**.' })]),
+        ),
+    });
+    await person().type(field(view), 'deploy');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(view.getByText('Deployed api 06f1700 to staging.')).toBeDefined();
+    expect(view.container.textContent).not.toContain('`');
+    view.unmount();
+  });
+
   test('below the minimum it says so in the field and asks nothing; at the minimum it asks', async () => {
     const asked: string[] = [];
     const view = await visit({

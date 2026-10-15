@@ -4,6 +4,7 @@
  * parts (D-101): the repository, a number, a sha, a branch's or a tag's name, each segment encoded —
  * never one taken from GitHub's payload.
  */
+import { excerptOf } from '@purlay/markdown';
 import type { GitHubEvent, Message } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Translate } from '../../i18n/types';
@@ -72,8 +73,11 @@ export const useMessageText = (): ((
   message: Pick<Message, 'content' | 'githubEvent'>,
 ) => string) => {
   const { t } = useI18n();
+  // The words a reader sees, not the marks typed to make them (#651).
   return (message) =>
-    message.githubEvent === null ? message.content : eventSentence(message.githubEvent, t);
+    message.githubEvent === null
+      ? excerptOf(message.content)
+      : eventSentence(message.githubEvent, t);
 };
 
 const link = 'text-ink hover:underline';
