@@ -4,7 +4,8 @@
  * Four tiers, strongest first, because what a person expects at the top is what they
  * were *aiming* at and not what merely contains their letters: the name starts with
  * what they typed; a word of it does (`ops` in `team-ops`); it contains it
- * contiguously; its letters appear in order (`dpl` in `deploys`). Case never matters.
+ * contiguously; its letters appear in order (`dpl` in `deploys`). Case, marks and the dotless
+ * `ı` never matter: `dogancan` finds Doğancan (#702).
  * A shorter name beats a longer one inside a tier — `api` over `api-gateway` for `api`
  * — and the matched positions come back so the list can emphasise them.
  *
@@ -12,6 +13,7 @@
  * tier but the last, which is one pass: filtering two thousand names is a few
  * thousand character comparisons, not a search.
  */
+import { fold } from '../composer/mention-suggest';
 
 export interface Match {
   /** Higher is better; comparable only between matches of the same query. */
@@ -39,10 +41,20 @@ const wordStart = (text: string, query: string): number => {
   return -1;
 };
 
+/**
+ * A name as it is compared: no case, no marks, `ı` as `i` — the `@` list's own folding, so a name is
+ * found the same way in both (#702). Only where that keeps every letter where it was, since the
+ * positions found in it mark the name as written; otherwise its lower case.
+ */
+const comparable = (text: string): string => {
+  const folded = fold(text);
+  return folded.length === text.length ? folded : text.toLowerCase();
+};
+
 export const matchText = (query: string, text: string): Match | null => {
-  const q = query.toLowerCase();
+  const q = fold(query);
   if (q === '') return { score: 0, positions: [] };
-  const t = text.toLowerCase();
+  const t = comparable(text);
   // A shorter name is closer to what was typed; the penalty never crosses a tier.
   const closeness = Math.max(0, 999 - (t.length - q.length));
 

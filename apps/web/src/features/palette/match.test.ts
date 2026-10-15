@@ -87,3 +87,21 @@ describe('case and unusual text', () => {
     expect(performance.now() - started).toBeLessThan(500);
   });
 });
+
+// Typed without Turkish letters, or with them: the name is found either way, as the `@` list finds
+// it (#702) — and what is marked is the name as written.
+describe('letters beyond ASCII', () => {
+  test('case, marks and the dotless ı do not keep a name from being found', () => {
+    expect(matchText('dogancan', 'Doğancan Kılıç')?.positions).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(matchText('kilic', 'Doğancan Kılıç')?.positions).toEqual([9, 10, 11, 12, 13]);
+    expect(matchText('cagri', 'Çağrı Yılmaz')?.positions).toEqual([0, 1, 2, 3, 4]);
+    expect(matchText('ÇAĞ', 'çağrı yılmaz')?.positions).toEqual([0, 1, 2]);
+  });
+
+  test('a capital İ starts a name like any other first letter', () => {
+    const istanbul = matchText('ist', 'İstanbul ekibi');
+    const plain = matchText('ist', 'Istanbul ekibi');
+    expect(istanbul?.positions).toEqual([0, 1, 2]);
+    expect(istanbul?.score).toBe(plain?.score);
+  });
+});

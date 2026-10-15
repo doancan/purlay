@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the command palette finds "Doğancan" from "dogancan" (closes #702)
+
+The palette compared names with `toLowerCase` alone, so a name with Turkish letters was not found
+typed without them — `dogancan`, `kilic`, `cagri` found nobody — while the `@` list, which folds case,
+marks and the dotless `ı`, found the same people. The palette now compares through the same `fold`, and
+still marks the letters of the name as written.
+
 ### Fix — 2026-10-15: search ignores case in every language, and I ı İ i are one letter (closes #700)
 
 The database is C, under which `ILIKE` folds ASCII letters only: "çağrı" did not find "ÇAĞRI",
