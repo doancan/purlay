@@ -846,7 +846,11 @@ external scheduling is the cron nobody installed, and every run records its outc
 **Error tracking.** Off unless `ERROR_TRACKING_DSN` is set. When it is, whatever the logger writes at
 `error` is also posted, cleaned as the log is, to a Sentry-compatible endpoint, with no vendor library;
 it is bounded, drops under a storm and can never throw into the caller
-(`apps/api/src/platform/error-tracking.ts`, D-96, D-44).
+(`apps/api/src/platform/error-tracking.ts`, D-96, D-44). An error that escaped every handler — a
+rejection nobody awaited, an exception from a timer or a callback — is logged at `error` once, so it
+is reported, the tracker is flushed within two seconds, and the process exits 1 for its container to
+restart; the API and the scheduler both (`installCrashHandlers` in `lifecycle.ts`, #634). Nothing is
+left running half-alive.
 
 **Upgrading and rolling back** (the one home of this runbook; `CONFIG.md` points here). Every step below
 was run, and the failure in the last-but-one paragraph was reproduced, not reasoned out.

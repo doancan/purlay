@@ -80,3 +80,63 @@ export const installShutdown = ({
   }
   return shutdown;
 };
+
+export interface CrashProcess {
+  readonly on: (
+    event: 'unhandledRejection' | 'uncaughtException',
+    handler: (reason: unknown) => void,
+  ) => void;
+  readonly exit: (code: number) => void;
+}
+
+export interface Crash {
+  /** The logger whose `error` reaches the error tracker. */
+  readonly log: Logger;
+  /** Sends what the tracker holds, so the report of this crash leaves before the process does. */
+  readonly flush: () => Promise<void>;
+  readonly process: CrashProcess;
+  /** How long the flush may take: a collector that does not answer must not keep a broken process up. */
+  readonly deadlineMs: number;
+  readonly timers?: Timers;
+}
+
+/**
+ * An error that escaped every handler — a rejected promise nobody awaited, an exception thrown from a
+ * timer or a socket callback — leaves the process in a state nothing was written for (#634). It is
+ * logged once as an error, so the error tracker hears it (the tracker is reached only through
+ * `log.error`), the tracker is flushed within a deadline, and the process exits 1 for its supervisor
+ * to start a clean one. Carrying on half-alive is the silent failure this exists to prevent; a drain
+ * is not attempted, since the code that would drain is the code whose state is now unknown.
+ */
+export const installCrashHandlers = ({
+  log,
+  flush,
+  process,
+  deadlineMs,
+  timers = systemTimers,
+}: Crash): void => {
+  let exiting = false;
+  const crashed = (kind: 'unhandledRejection' | 'uncaughtException', reason: unknown): void => {
+    log.error('an error escaped every handler; exiting', { err: reason, kind });
+    if (exiting) return;
+    exiting = true;
+    const deadline = timers.set(() => {
+      process.exit(1);
+    }, deadlineMs);
+    void flush()
+      .catch((failure: unknown) => {
+        // At `warn`: a report that failed must not be reported in turn. The exit still follows.
+        log.warn('the error tracker could not be flushed while exiting', { err: failure });
+      })
+      .finally(() => {
+        timers.clear(deadline);
+        process.exit(1);
+      });
+  };
+  process.on('unhandledRejection', (reason) => {
+    crashed('unhandledRejection', reason);
+  });
+  process.on('uncaughtException', (error) => {
+    crashed('uncaughtException', error);
+  });
+};

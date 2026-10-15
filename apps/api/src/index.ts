@@ -19,7 +19,7 @@ import { SIGN_IN_CALLBACK } from './modules/auth/sign-in';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
 import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
-import { installShutdown } from './lifecycle';
+import { installCrashHandlers, installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
@@ -47,6 +47,8 @@ const errorTracker = createErrorTracker({
   },
 });
 const log = withErrorTracking(plainLog, errorTracker);
+// From here on an error nothing handled is reported and ends the process, never left half-alive (#634).
+installCrashHandlers({ log, flush: errorTracker.flush, process, deadlineMs: 2_000 });
 
 // Opened before anything listens: a build without its shell refuses to start (D-61).
 const client = config.CLIENT_DIST === undefined ? undefined : openClient(config.CLIENT_DIST);
