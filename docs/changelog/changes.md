@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Security — 2026-10-15: the page sends a Permissions-Policy (D-102 amended, closes #638)
+
+- Camera, microphone, geolocation, payment, USB, serial, HID, MIDI, display capture and the Topics
+  API are off for anything that ever runs in the page; the clipboard (Copy code) and fullscreen stay
+  the origin's own. A browser test fails if Chromium rejects an entry or Copy code stops reaching
+  the clipboard.
+
 ### Docs — 2026-10-15: the backup runbook keeps clear of the nightly purge, leaves the host, and says when it fails (closes #637)
 
 - The documented backup started at 02:30 host time, the minute the retention purge starts in UTC; it now

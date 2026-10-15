@@ -69,6 +69,13 @@ describe('the shell', () => {
       'frame-ancestors': ["'none'"],
     });
     expect(response.headers.get('cross-origin-opener-policy')).toBe('same-origin');
+    // The powerful features the page never uses are off, for anything that ever runs in it (#638);
+    // the clipboard (Copy code) and fullscreen (a video's own control) stay this origin's. Whole, so
+    // a feature allowed later is a decision.
+    expect(response.headers.get('permissions-policy')).toBe(
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), ' +
+        'display-capture=(), browsing-topics=(), clipboard-write=(self), fullscreen=(self)',
+    );
   });
 
   test('and the headers every response carries', async () => {
