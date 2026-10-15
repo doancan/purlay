@@ -688,15 +688,40 @@ describe('the browser says the network went or came back (#626)', () => {
     expect(h.connection.status()).toBe('waiting');
   });
 
-  test('back while waiting: it connects now, and the wait it was in is cancelled', () => {
+  test('back while waiting: the wait it was in is cut to the first rung, jittered', () => {
     const h = harness();
     const socket = openOne(h);
-    socket.handlers.closed(1006);
-    expect(h.live()).toHaveLength(1);
+    // A long outage: the backoff has climbed to its cap.
+    for (let i = 0; i < 12; i += 1) {
+      h.last().handlers.closed(1006);
+      h.fireNext();
+    }
+    h.last().handlers.closed(1006);
+    expect(waits(h)).toEqual([reconnectDelay(13, () => 0)]);
+    expect(waits(h)[0]).toBeGreaterThan(reconnectDelay(0, () => 1));
     h.connection.networkBack();
-    expect(h.sockets).toHaveLength(2);
+    // Not at once: a network back for every page on it at the same moment is a herd, so each
+    // waits the first rung's jittered half-second to a second (D-76).
+    expect(waits(h)).toEqual([reconnectDelay(0, () => 0)]);
+    expect(h.connection.status()).toBe('waiting');
+    h.fireNext();
     expect(h.connection.status()).toBe('connecting');
-    expect(h.live()).toHaveLength(0);
+    expect(socket.closedByClient).toBe(false);
+  });
+
+  test('back, and the first attempt fails: the next wait is the second rung, not the cap', () => {
+    const h = harness();
+    openOne(h);
+    for (let i = 0; i < 12; i += 1) {
+      h.last().handlers.closed(1006);
+      h.fireNext();
+    }
+    h.last().handlers.closed(1006);
+    h.connection.networkBack();
+    h.fireNext();
+    // The browser often says online before the route works: that attempt fails.
+    h.last().handlers.closed(1006);
+    expect(waits(h)).toEqual([reconnectDelay(1, () => 0)]);
   });
 
   test('back while open: a PING asks at once whether the socket lived through it', () => {
@@ -719,11 +744,18 @@ describe('the browser says the network went or came back (#626)', () => {
     expect(h.pings(socket)).toHaveLength(1);
   });
 
-  test('back while connecting opens no second socket', () => {
+  test('back while an attempt hangs: it is given up, and tried again from the first rung', () => {
     const h = harness();
     h.connection.start();
+    const hung = h.last();
     h.connection.networkBack();
-    expect(h.sockets).toHaveLength(1);
+    expect(hung.closedByClient).toBe(true);
+    expect(waits(h)).toEqual([reconnectDelay(0, () => 0)]);
+    // Its answer, if it ever comes, changes nothing.
+    hung.handlers.opened();
+    expect(h.connection.status()).toBe('waiting');
+    h.fireNext();
+    expect(h.sockets).toHaveLength(2);
   });
 
   test('neither starts a connection that was never started, was stopped, or ended', () => {

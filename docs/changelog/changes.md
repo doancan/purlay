@@ -11,8 +11,9 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - A socket is not closed when the network goes, so the "Reconnecting…" bar waited for a `PING` to
   go unanswered — up to forty seconds of a page that looked connected and was not. The connection
   now hears the browser's `offline` and `online` events: offline declares the socket dead at once,
-  and online reconnects without waiting out the backoff, or checks an open socket with a `PING`.
-  A message written meanwhile waits, and is sent on the reconnect. `ARCHITECTURE.md` §5.4 says so.
+  and online starts the backoff over (within a jittered second, not after the wait earned offline),
+  or checks an open socket with a `PING`. A message written meanwhile, or still waiting for its
+  answer when the network went, is sent on the reconnect. `ARCHITECTURE.md` §5.4 says so.
 
 ### Fix — 2026-10-15: the empty Saved, Inbox and Open questions screens have room under the header (closes #625)
 

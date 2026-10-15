@@ -767,6 +767,10 @@ export const createEngine = (options: EngineOptions): Engine => {
   return {
     store,
     networkLost: (): void => {
+      // The socket is known gone, so no ACK can come: a send waiting for one is not failed on its
+      // deadline but stays `sending`, and the reconnect sends it again with the same id (D-33).
+      for (const cancel of timers.values()) cancel();
+      timers.clear();
       connection?.networkLost();
     },
     networkBack: (): void => {

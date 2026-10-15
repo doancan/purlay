@@ -297,13 +297,13 @@ test.describe('the connection', () => {
     // The bar alone: what is under it is the feed, which depends on the day the seed ran.
     await expect(bar).toHaveScreenshot('connection-lost.png');
 
-    // The network is back in one step: sockets go where they should before the browser says
-    // `online`, which now reconnects at once (#626) — the other order sent that reconnect nowhere.
+    // The browser says online a moment before sockets get anywhere, as it often does before the route
+    // works. The next attempt comes on the first rung, not after the backoff earned offline (#626).
+    await context.setOffline(false);
     await page.evaluate(() => {
       (window as unknown as { __refuse: boolean }).__refuse = false;
     });
-    await context.setOffline(false);
-    await expect(bar).toBeHidden({ timeout: 30_000 });
+    await expect(bar).toBeHidden({ timeout: 5_000 });
   });
 
   test('a network that dies says so at once, and what was written meanwhile is sent when it is back', async ({

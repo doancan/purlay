@@ -189,9 +189,10 @@ export interface Connection {
    */
   readonly networkLost: () => void;
   /**
-   * The browser says the network is back (`online`): a wait for the next attempt is cut short, and
-   * an open socket is asked at once whether it lived through the gap. Never starts a connection
-   * that was not running.
+   * The browser says the network is back (`online`): the backoff starts over, so the next attempt
+   * comes within a jittered second — an attempt hanging on the dead network is given up for it — and
+   * an open socket is asked at once whether it lived through the gap. Never starts a connection that
+   * was not running.
    */
   readonly networkBack: () => void;
 }
@@ -528,12 +529,26 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       if (status === 'open' || status === 'connecting') dead();
     },
     networkBack: (): void => {
-      if (status === 'waiting') {
-        cancelRetry?.();
-        connect();
-      } else if (status === 'open' && pingSent === null) {
-        ping();
+      if (status === 'open') {
+        if (pingSent === null) ping();
+        return;
       }
+      if (status !== 'waiting' && status !== 'connecting') return;
+      // An attempt begun on the dead network may hang until the system gives up on it: let it go.
+      if (status === 'connecting') {
+        generation += 1;
+        socket?.close();
+        socket = null;
+      }
+      // What was earned while offline says nothing about the network now back: the ladder starts
+      // over, at its first rung's jittered wait rather than at once, so the pages on a network that
+      // came back together do not all arrive in the same instant (D-76). `neverOpened` is kept: a
+      // session that ended is still found after the attempts that never open.
+      cancelRetry?.();
+      setStatus('waiting');
+      cancelRetry = options.schedule(connect, reconnectDelay(0, options.random));
+      // The first rung is this wait; an attempt after it that fails climbs from there.
+      failures = 1;
     },
   };
 };

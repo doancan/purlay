@@ -88,14 +88,21 @@ describe('the connection as a screen sees it', () => {
     act(() => {
       window.dispatchEvent(new Event('online'));
     });
+    // Within the first rung's jittered second, not at the end of whatever wait it was in.
+    act(() => {
+      view.world.timers.advance(1_000);
+    });
     expect(status).toBe('connecting');
     expect(view.world.sockets.sockets.length).toBe(before + 1);
+    act(() => {
+      view.world.sockets.open();
+    });
     view.unmount();
     // Gone with the provider: an event after it is nobody's business.
     act(() => {
       window.dispatchEvent(new Event('offline'));
     });
-    expect(status).toBe('connecting');
+    expect(status).toBe('open');
   });
 
   test('asking without a connection above says what is missing', () => {
