@@ -68,7 +68,7 @@
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "10.12.0",
     "eslint-plugin-compat": "7.0.2",
-    "knip": "6.39.0",
+    "knip": "6.41.0",
     "kysely-codegen": "0.20.0",
     "prettier": "3.9.9",
     "typescript": "npm:@typescript/typescript6@6.0.2",
