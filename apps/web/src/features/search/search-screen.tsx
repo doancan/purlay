@@ -28,6 +28,7 @@ import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
+import { markedExcerpt } from './excerpt';
 
 /** Where a found message is read: in its thread when it is in one, in its channel otherwise. */
 export const placeOf = (slug: string, message: Message): string => {
@@ -40,14 +41,41 @@ const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
   <span>{useChannelTitle(channel)}</span>
 );
 
+/** The excerpt, from a little before the words found, with them marked; as it is when they are not in it. */
+const Excerpt = ({
+  text,
+  words,
+}: {
+  readonly text: string;
+  readonly words: string;
+}): React.JSX.Element => {
+  const marked = markedExcerpt(text, words);
+  return (
+    <span className="line-clamp-2 block text-body text-ink">
+      {marked === null ? (
+        text
+      ) : (
+        <>
+          {marked.before}
+          <mark className="rounded-sm bg-warning-subtle text-ink">{marked.match}</mark>
+          {marked.after}
+        </>
+      )}
+    </span>
+  );
+};
+
 const Found = ({
   message,
   channel,
   now,
+  words,
 }: {
   readonly message: Message;
   readonly channel: Channel | undefined;
   readonly now: Date;
+  /** What was searched for: marked where it is in the excerpt (#664). */
+  readonly words: string;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
   const textOf = useMessageText();
@@ -78,7 +106,7 @@ const Found = ({
               {format.time(message.createdAt, now)}
             </time>
           </span>
-          <span className="line-clamp-2 block text-body text-ink">{textOf(message)}</span>
+          <Excerpt text={textOf(message)} words={words} />
         </span>
       </button>
     </li>
@@ -167,6 +195,7 @@ const SearchView = ({
               message={message}
               channel={byId.get(message.channelId)}
               now={now}
+              words={asked}
             />
           ))}
         </ul>

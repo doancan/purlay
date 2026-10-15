@@ -78,7 +78,7 @@ describe('asking', () => {
     await settle();
     expect(asked).toEqual(['deploy']);
     expect(view.world.history.stack.at(-1)).toBe('/w/acme/search?q=deploy');
-    expect(view.getByText('the deploy is at noon')).toBeDefined();
+    expect(view.getByRole('button', { name: /the deploy is at noon/ })).toBeDefined();
     await expectNoAxeViolations(view.container);
     await person().click(view.getByRole('button', { name: /the deploy is at noon/ }));
     expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
@@ -95,8 +95,32 @@ describe('asking', () => {
     await person().type(field(view), 'deploy');
     await person().keyboard('{Enter}');
     await settle();
-    expect(view.getByText('Deployed api 06f1700 to staging.')).toBeDefined();
+    // Read as text: the words are split by the mark of what was searched for (#664).
+    expect(view.container.textContent).toContain('Deployed api 06f1700 to staging.');
     expect(view.container.textContent).not.toContain('`');
+    view.unmount();
+  });
+
+  test('each result marks where the words were found, even past the first lines of a long message (#664)', async () => {
+    const long = `${'Context that goes on and on. '.repeat(12)}Then the Deploy window moved to Friday.`;
+    const view = await visit({
+      search: () =>
+        Promise.resolve(
+          page([
+            aMessage(4, { sender: BOB, content: 'deploy at noon' }),
+            aMessage(3, { sender: BOB, content: long }),
+          ]),
+        ),
+    });
+    await person().type(field(view), 'deploy');
+    await person().keyboard('{Enter}');
+    await settle();
+    const marks = [...view.container.querySelectorAll('mark')].map((mark) => mark.textContent);
+    expect(marks).toEqual(['deploy', 'Deploy']);
+    const second = view.container.querySelectorAll('mark')[1]?.parentElement?.textContent ?? '';
+    expect(second.startsWith('…')).toBe(true);
+    expect(second).toContain('Then the Deploy window moved');
+    await expectNoAxeViolations(view.container);
     view.unmount();
   });
 
@@ -162,7 +186,7 @@ describe('asking', () => {
     await person().click(view.getByRole('button', { name: 'Load more' }));
     await settle();
     expect(asked).toEqual([undefined, messageIdAt(4)]);
-    expect(view.getByText('deploy two')).toBeDefined();
+    expect(view.getByRole('button', { name: /deploy two/ })).toBeDefined();
     view.unmount();
   });
 });
