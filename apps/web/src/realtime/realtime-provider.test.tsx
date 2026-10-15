@@ -59,6 +59,45 @@ describe('the connection as a screen sees it', () => {
     });
   });
 
+  test("the browser's offline and online reach the connection at once (#626)", async () => {
+    let status = '';
+    const Probe = (): null => {
+      status = useConnectionStatus();
+      return null;
+    };
+    const view = await renderApp(
+      <SessionGate>
+        <WorkspaceScopeProvider slug="acme" notFound={null}>
+          <RealtimeProvider>
+            <Probe />
+          </RealtimeProvider>
+        </WorkspaceScopeProvider>
+      </SessionGate>,
+      { api: aSignedInApi() },
+    );
+    await settle();
+    act(() => {
+      view.world.sockets.open();
+    });
+    expect(status).toBe('open');
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(status).toBe('waiting');
+    const before = view.world.sockets.sockets.length;
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(status).toBe('connecting');
+    expect(view.world.sockets.sockets.length).toBe(before + 1);
+    view.unmount();
+    // Gone with the provider: an event after it is nobody's business.
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(status).toBe('connecting');
+  });
+
   test('asking without a connection above says what is missing', () => {
     const Probe = (): null => {
       useEngine();

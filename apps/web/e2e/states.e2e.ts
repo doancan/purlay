@@ -7,7 +7,7 @@
  * both themes. The snapshots are of states whose content does not depend on the day the seed
  * ran, so a baseline stays a baseline.
  */
-import type { Page, Route } from '@playwright/test';
+import type { Locator, Page, Route } from '@playwright/test';
 import { expect, test } from './fixtures';
 
 const channelPath = (slug: string, id: string): string => `/w/${slug}/c/${id}`;
@@ -297,11 +297,53 @@ test.describe('the connection', () => {
     // The bar alone: what is under it is the feed, which depends on the day the seed ran.
     await expect(bar).toHaveScreenshot('connection-lost.png');
 
-    await context.setOffline(false);
+    // The network is back in one step: sockets go where they should before the browser says
+    // `online`, which now reconnects at once (#626) — the other order sent that reconnect nowhere.
     await page.evaluate(() => {
       (window as unknown as { __refuse: boolean }).__refuse = false;
     });
+    await context.setOffline(false);
     await expect(bar).toBeHidden({ timeout: 30_000 });
+  });
+
+  test('a network that dies says so at once, and what was written meanwhile is sent when it is back', async ({
+    page,
+    context,
+    signIn,
+    room,
+    api,
+  }) => {
+    // #626: the socket stays "open" when the network goes, so before the browser's own word was
+    // heard the bar waited for a PING to go unanswered — up to forty seconds of a page that looked
+    // connected and was not.
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = page.getByRole('textbox', { name: `Message ${made.name}` });
+    const row = (text: string): Locator => page.locator('[data-message-row]', { hasText: text });
+    // A message the server answered: the socket is open, and the bar has something to be the loss of.
+    await box.fill('before the network went');
+    await box.press('Enter');
+    await expect(row('before the network went').getByRole('img', { name: 'Sending' })).toHaveCount(
+      0,
+    );
+
+    await context.setOffline(true);
+    const bar = page.getByRole('status').filter({ hasText: 'Reconnecting' });
+    await expect(bar).toBeVisible({ timeout: 5_000 });
+    await box.fill('written while it was gone');
+    await box.press('Enter');
+    await expect(row('written while it was gone')).toBeVisible();
+
+    await context.setOffline(false);
+    await expect(bar).toBeHidden({ timeout: 10_000 });
+    const sent = row('written while it was gone');
+    await expect(sent.getByRole('img', { name: 'Sending' })).toHaveCount(0);
+    await expect(sent.getByText('Failed to send')).toHaveCount(0);
+    const stored = await api('dogancan').get<{ data: { content: string }[] }>(
+      `/api/channels/${made.id}/messages?limit=100`,
+    );
+    expect(stored.data.filter((m) => m.content === 'written while it was gone')).toHaveLength(1);
   });
 });
 

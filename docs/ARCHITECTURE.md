@@ -313,8 +313,11 @@ reconnects before it finishes. (D-82)
 **The connection checks that it is alive, and that it may retry.** While open it sends a `PING`
 after 25 s of silence and treats 15 s without *any* frame — a `PONG`, a message, an event it does
 not know — as a dead socket: it closes and reconnects without waiting for the operating system's
-own timeout, which for a half-open socket is minutes. The first `PONG` also measures the server's
-clock (D-33). A handshake the server refuses is indistinguishable in the browser from an outage, so
+own timeout, which for a half-open socket is minutes. The browser's own word comes first: an
+`offline` event declares an open or opening socket dead at once, since a socket is not closed when
+the network goes; `online` cuts a wait for the next attempt short, or, with a socket open, sends a
+`PING` at once to ask whether it lived through the gap. Neither starts a connection that was not
+running (#626). The first `PONG` also measures the server's clock (D-33). A handshake the server refuses is indistinguishable in the browser from an outage, so
 after three consecutive attempts that never reached `open` the client asks the API whether the
 session still exists and stops on a 401; a network error or a 5xx keeps it retrying. An event the
 client does not know is ignored (a newer server is not a fault); a frame that is not JSON, or has

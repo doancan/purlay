@@ -665,6 +665,98 @@ describe('the heartbeat', () => {
   });
 });
 
+describe('the browser says the network went or came back (#626)', () => {
+  test('gone while open: the socket is dead at once, not after a PING goes unanswered', () => {
+    const h = harness();
+    const socket = openOne(h);
+    h.connection.networkLost();
+    expect(socket.closedByClient).toBe(true);
+    expect(h.connection.status()).toBe('waiting');
+    // Its own close, when it comes, changes nothing.
+    socket.handlers.closed(1006);
+    expect(h.live()).toHaveLength(1);
+  });
+
+  test('gone while connecting: the attempt is given up and waits like any failed one', () => {
+    const h = harness();
+    h.connection.start();
+    const attempt = h.last();
+    h.connection.networkLost();
+    expect(attempt.closedByClient).toBe(true);
+    expect(h.connection.status()).toBe('waiting');
+    attempt.handlers.opened();
+    expect(h.connection.status()).toBe('waiting');
+  });
+
+  test('back while waiting: it connects now, and the wait it was in is cancelled', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.closed(1006);
+    expect(h.live()).toHaveLength(1);
+    h.connection.networkBack();
+    expect(h.sockets).toHaveLength(2);
+    expect(h.connection.status()).toBe('connecting');
+    expect(h.live()).toHaveLength(0);
+  });
+
+  test('back while open: a PING asks at once whether the socket lived through it', () => {
+    const h = harness();
+    const socket = openOne(h);
+    socket.handlers.message(pong(h.pings(socket)[0]?.id));
+    expect(waits(h)).not.toContain(PONG_DEADLINE_MS);
+    h.connection.networkBack();
+    expect(h.pings(socket)).toHaveLength(2);
+    expect(waits(h)).toContain(PONG_DEADLINE_MS);
+    // A socket that did not live through it is found dead by the usual deadline.
+    h.fireWaiting(PONG_DEADLINE_MS);
+    expect(socket.closedByClient).toBe(true);
+  });
+
+  test('back while open with a PING already out sends no second one', () => {
+    const h = harness();
+    const socket = openOne(h);
+    h.connection.networkBack();
+    expect(h.pings(socket)).toHaveLength(1);
+  });
+
+  test('back while connecting opens no second socket', () => {
+    const h = harness();
+    h.connection.start();
+    h.connection.networkBack();
+    expect(h.sockets).toHaveLength(1);
+  });
+
+  test('neither starts a connection that was never started, was stopped, or ended', () => {
+    const idle = harness();
+    idle.connection.networkLost();
+    idle.connection.networkBack();
+    expect(idle.sockets).toHaveLength(0);
+    expect(idle.connection.status()).toBe('idle');
+
+    const stopped = harness();
+    openOne(stopped);
+    stopped.connection.stop();
+    stopped.connection.networkBack();
+    expect(stopped.sockets).toHaveLength(1);
+    expect(stopped.connection.status()).toBe('idle');
+
+    const ended = harness();
+    openOne(ended).handlers.closed(CLOSE_CODES.SESSION_ENDED);
+    ended.connection.networkLost();
+    ended.connection.networkBack();
+    expect(ended.sockets).toHaveLength(1);
+    expect(ended.connection.status()).toBe('ended');
+  });
+
+  test('gone while already waiting does not count another failure', () => {
+    const h = harness();
+    openOne(h).handlers.closed(1006);
+    const before = waits(h);
+    h.connection.networkLost();
+    expect(waits(h)).toEqual(before);
+  });
+});
+
 describe('the first PONG sets the server clock', () => {
   test('its midpoint against the local clock becomes the offset', () => {
     const h = harness();

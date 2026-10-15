@@ -181,6 +181,19 @@ export interface Connection {
   readonly continuationDone: (channelId: string, from: string) => void;
   /** `false` when the frame did not leave, so the caller keeps it to send again. */
   readonly send: (frame: ClientFrame) => boolean;
+  /**
+   * The browser says the network is gone (`offline`). A socket does not close when the network
+   * goes, so without this it would read `open` until a `PING` went unanswered — up to
+   * `PING_AFTER_IDLE_MS` + `PONG_DEADLINE_MS` of a page that looks connected and is not (#626).
+   * An open or opening socket is declared dead at once; anything else is left as it is.
+   */
+  readonly networkLost: () => void;
+  /**
+   * The browser says the network is back (`online`): a wait for the next attempt is cut short, and
+   * an open socket is asked at once whether it lived through the gap. Never starts a connection
+   * that was not running.
+   */
+  readonly networkBack: () => void;
 }
 
 export const createConnection = (options: ConnectionOptions): Connection => {
@@ -511,5 +524,16 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       if (pending.get(channelId) === from.toLowerCase()) pending.delete(channelId);
     },
     send: write,
+    networkLost: (): void => {
+      if (status === 'open' || status === 'connecting') dead();
+    },
+    networkBack: (): void => {
+      if (status === 'waiting') {
+        cancelRetry?.();
+        connect();
+      } else if (status === 'open' && pingSent === null) {
+        ping();
+      }
+    },
   };
 };
