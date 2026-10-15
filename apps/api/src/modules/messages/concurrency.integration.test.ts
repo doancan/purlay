@@ -500,7 +500,7 @@ describe('integration: leaving a channel while somebody writes in it (#669)', ()
       expect(
         outcomes
           .filter((outcome) => outcome.status === 'rejected')
-          .map((outcome) => String((outcome as PromiseRejectedResult).reason)),
+          .map((outcome) => String((outcome).reason)),
       ).toEqual([]);
     }
   }, 30_000);
