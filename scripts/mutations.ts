@@ -385,8 +385,19 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'arrival-counted-out-of-order',
     why: 'two senders into one channel each hold a member row the other needs: a deadlock, and a send fails with 500 (#668)',
     file: 'apps/api/src/modules/messages/delivery.ts',
-    find: "    .orderBy('user_id')\n    .forNoKeyUpdate()\n    .execute();\n  const changed = await executor",
-    replace: "    .orderBy('user_id')\n    .execute();\n  const changed = await executor",
+    find: "      .orderBy('user_id')\n      .forNoKeyUpdate()\n      .execute()\n",
+    replace: "      .orderBy('user_id')\n      .execute()\n",
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+    equivalent:
+      "at the test's size the update's `user_id in (…)` is an index scan in key order, which keeps the order on its own; the explicit lock is what keeps it when the planner picks a bitmap scan over a large channel",
+  },
+  {
+    id: 'arrival-counted-as-it-is-reached',
+    why: 'the fix of #668 undone: the members counted by one update over the channel, locked in the order its snapshot reaches them — a deadlock',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "      .forNoKeyUpdate()\n      .execute()\n  ).map((row) => row.user_id);\n  if (locked.length === 0) return [];\n  // Exactly the rows locked above: somebody who joins between the two statements is not reached here\n  // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.\n  const changed = await executor\n    .updateTable('channel_members')\n    .set({\n      unread_count: sql<number>`unread_count + case when ${ahead} then 1 else 0 end`,\n      unread_mention_count: sql<number>`unread_mention_count + case when ${ahead} and user_id = any(${notified}::uuid[]) then 1 else 0 end`,\n      // Counted with the numbers it describes, in the one statement, under the row lock it\n      // takes: the order of versions is the order of commits (0015).\n      state_version: sql<number>`state_version + 1`,\n    })\n    .where('channel_id', '=', channelId)\n    .where('user_id', 'in', locked)\n",
+    replace:
+      "      .execute()\n  ).map((row) => row.user_id);\n  if (locked.length === 0) return [];\n  // Exactly the rows locked above: somebody who joins between the two statements is not reached here\n  // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.\n  const changed = await executor\n    .updateTable('channel_members')\n    .set({\n      unread_count: sql<number>`unread_count + case when ${ahead} then 1 else 0 end`,\n      unread_mention_count: sql<number>`unread_mention_count + case when ${ahead} and user_id = any(${notified}::uuid[]) then 1 else 0 end`,\n      // Counted with the numbers it describes, in the one statement, under the row lock it\n      // takes: the order of versions is the order of commits (0015).\n      state_version: sql<number>`state_version + 1`,\n    })\n    .where('channel_id', '=', channelId)\n    .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))\n",
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
   {
