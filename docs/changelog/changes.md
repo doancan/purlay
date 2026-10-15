@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an error nothing handled is reported, and ends the process (closes #634)
+
+- An unhandled rejection or an uncaught exception in the API or the scheduler was left to the
+  runtime: printed, and never sent to the error tracker. Each is now logged once and reported as urgent
+  (past a tracker full of ordinary reports), new work stops, the tracker is flushed within two
+  seconds, and the process exits 1 for its container to restart — also when it happened during a
+  shutdown's drain. A test runs a real process to show the runtime emits both.
+
 ### Fix — 2026-10-15: on a phone the focused composer's hints no longer cover Send (closes #627)
 
 - Squeezed between the controls, the three hints wrapped and were drawn over the send button. On a

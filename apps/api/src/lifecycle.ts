@@ -32,6 +32,8 @@ export interface Shutdown {
    */
   readonly deadlineMs: number;
   readonly timers?: Timers;
+  /** Whether an error escaped every handler meanwhile: then a drain that finishes still exits 1. */
+  readonly crashed?: () => boolean;
 }
 
 /**
@@ -46,6 +48,7 @@ export const installShutdown = ({
   process,
   deadlineMs,
   timers = systemTimers,
+  crashed = (): boolean => false,
 }: Shutdown): ((signal: string) => Promise<void>) => {
   let started = false;
 
@@ -65,7 +68,7 @@ export const installShutdown = ({
       await closeDatabase();
       log.info('database pool closed');
       timers.clear(deadline);
-      process.exit(0);
+      process.exit(crashed() ? 1 : 0);
     } catch (error) {
       timers.clear(deadline);
       log.error('shutdown failed', { err: error });
@@ -79,4 +82,104 @@ export const installShutdown = ({
     });
   }
   return shutdown;
+};
+
+export interface CrashProcess {
+  readonly on: (
+    event: 'unhandledRejection' | 'uncaughtException',
+    handler: (reason: unknown) => void,
+  ) => void;
+  readonly exit: (code: number) => void;
+}
+
+export interface Crash {
+  /** The log line. Not the tracked logger: the report goes through `report`, which may jump the queue. */
+  readonly log: Logger;
+  /** Sends the report to the error tracker as urgent, past a tracker full of ordinary reports. */
+  readonly report: (message: string, fields: Record<string, unknown>) => void;
+  /** Sends what the tracker holds, so the report of this crash leaves before the process does. */
+  readonly flush: () => Promise<void>;
+  readonly process: CrashProcess;
+  /** How long the flush may take: a collector that does not answer must not keep a broken process up. */
+  readonly deadlineMs: number;
+  readonly timers?: Timers;
+}
+
+export interface CrashHandle {
+  /** Whether an error escaped every handler: a shutdown that ends after one ends with 1, not 0. */
+  readonly crashed: () => boolean;
+  /**
+   * What stops new work the moment it happens — for the API, readiness says no and the sockets are
+   * told to come back — registered once there is an application to stop.
+   */
+  readonly onCrash: (stop: () => void) => void;
+}
+
+const CRASHED = 'an error escaped every handler; exiting';
+
+/**
+ * An error that escaped every handler — a rejected promise nobody awaited, an exception thrown from a
+ * timer or a socket callback — leaves the process in a state nothing was written for (#634). It is
+ * logged once, reported to the error tracker as urgent, new work is refused, the tracker is flushed
+ * within a deadline, and the process exits 1 for its supervisor to start a clean one. Carrying on
+ * half-alive is the silent failure this exists to prevent; what stops new work is asked to, and is not
+ * waited for, since it is the code whose state is now unknown.
+ */
+export const installCrashHandlers = ({
+  log,
+  report,
+  flush,
+  process,
+  deadlineMs,
+  timers = systemTimers,
+}: Crash): CrashHandle => {
+  let exiting = false;
+  let stop: (() => void) | null = null;
+
+  /** Said, whatever the reason is: a reason the logger cannot walk is said without it. */
+  const say = (kind: string, reason: unknown): void => {
+    try {
+      log.error(CRASHED, { err: reason, kind });
+      report(CRASHED, { err: reason, kind });
+    } catch {
+      log.error(CRASHED, { kind, describing: 'the reason could not be described' });
+      report(CRASHED, { kind, describing: 'the reason could not be described' });
+    }
+  };
+
+  const crashed = (kind: 'unhandledRejection' | 'uncaughtException', reason: unknown): void => {
+    const first = !exiting;
+    exiting = true;
+    say(kind, reason);
+    if (!first) return;
+    try {
+      stop?.();
+    } catch (failure) {
+      log.warn('new work could not be stopped while exiting', { err: failure });
+    }
+    const deadline = timers.set(() => {
+      process.exit(1);
+    }, deadlineMs);
+    void flush()
+      .catch((failure: unknown) => {
+        // At `warn`: a report that failed must not be reported in turn. The exit still follows.
+        log.warn('the error tracker could not be flushed while exiting', { err: failure });
+      })
+      .finally(() => {
+        timers.clear(deadline);
+        process.exit(1);
+      });
+  };
+  process.on('unhandledRejection', (reason) => {
+    crashed('unhandledRejection', reason);
+  });
+  process.on('uncaughtException', (error) => {
+    crashed('uncaughtException', error);
+  });
+  return {
+    crashed: (): boolean => exiting,
+    onCrash: (next): void => {
+      stop = next;
+    },
+  };
 };

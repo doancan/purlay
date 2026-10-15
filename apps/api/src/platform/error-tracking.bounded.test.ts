@@ -68,6 +68,32 @@ const report = (tracker: ErrorTracker, label: string): void => {
   tracker.capture({ message: label, fields: {} });
 };
 
+describe('an urgent report (#634)', () => {
+  test(
+    'is sent when the ordinary ones fill every slot: a crashing process has one thing left to say',
+    async () => {
+      const collector = silentCollector();
+      const tracker = createErrorTracker({
+        dsn: collector.dsn,
+        environment: 'development',
+        clock: { now: () => NOW },
+        send: fetchDelivery,
+        maxInFlight: 2,
+        timeoutMs: 5_000,
+      });
+      for (let i = 0; i < 4; i += 1) report(tracker, `ordinary ${String(i)}`);
+      await until(() => collector.received() === 2, 'the two ordinary slots to fill');
+      expect(tracker.dropped()).toBe(2);
+      tracker.capture({ message: 'an error escaped every handler; exiting', fields: {} }, 'urgent');
+      await until(() => collector.received() === 3, 'the urgent report to arrive');
+      // One reserved slot, not a way around the bound: a second urgent report is dropped.
+      tracker.capture({ message: 'and another', fields: {} }, 'urgent');
+      expect(tracker.dropped()).toBe(3);
+    },
+    WAITING_TEST_MS,
+  );
+});
+
 describe('a collector that never answers', () => {
   test(
     'does not stop later errors being reported: each request is given up on after the timeout',

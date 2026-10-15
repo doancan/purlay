@@ -10,9 +10,19 @@ import { PLAN, runSchedule } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { createLogger } from '../platform/logging';
+import { installCrashHandlers } from '../lifecycle';
 
 const config = loadConfig(process.env);
 const log = createLogger({ level: config.LOG_LEVEL });
+// An error nothing handled ends the scheduler, logged, for its container to restart (#634).
+installCrashHandlers({
+  log,
+  // The scheduler reports nothing to a tracker yet (#635): the log line is the report.
+  report: () => undefined,
+  flush: () => Promise.resolve(),
+  process,
+  deadlineMs: 2_000,
+});
 const runner = join(import.meta.dir, 'jobs.ts');
 
 let stopping = false;

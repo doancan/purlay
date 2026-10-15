@@ -77,8 +77,12 @@ interface TrackedError {
 }
 
 export interface ErrorTracker {
-  /** Fire and forget; never throws. */
-  readonly capture: (error: TrackedError) => void;
+  /**
+   * Fire and forget; never throws. `'urgent'` may take one slot beyond the bound: a process about to
+   * exit has one thing left to say, and a storm of ordinary reports must not be the reason it is not
+   * said (#634). One slot, so it is not a way around the bound.
+   */
+  readonly capture: (error: TrackedError, priority?: 'urgent') => void;
   /**
    * For shutdown: waits for the reports in flight, but no longer than `boundMs`, then
    * abandons what is left. A collector that never answers must not hold a restart.
@@ -239,8 +243,8 @@ export const createErrorTracker = (options: ErrorTrackerOptions): ErrorTracker =
   };
 
   return {
-    capture: (error): void => {
-      if (inFlight.size >= maxInFlight) {
+    capture: (error, priority): void => {
+      if (inFlight.size >= maxInFlight + (priority === 'urgent' ? 1 : 0)) {
         dropped += 1;
         const now = options.clock.now().getTime();
         if (lastNotice === undefined || now - lastNotice >= DROP_NOTICE_INTERVAL_MS) {
