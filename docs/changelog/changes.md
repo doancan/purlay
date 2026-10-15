@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
+
+With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the
+log wrote `request failed` at error with the store's stack — an outage read as a bug, and "Something went
+wrong on our side" to the person. The S3 adapter now says a store that refuses or drops the connection,
+times out, or answers that it cannot serve now as `503 STORAGE_UNAVAILABLE` on every operation, as the
+database's outage is `DATABASE_UNAVAILABLE`; an absent key is still nothing, and any other failure still
+escapes. Live: down → 503 in 20 ms, back → 201 and 200 at once.
+
 ### Fix — 2026-10-15: the silent-collector spec counts what the reporter sends, not what a loaded server got to (closes #632)
 
 `error-tracking.bounded.test.ts` waited for requests to *arrive* at a loopback server that never
