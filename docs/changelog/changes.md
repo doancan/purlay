@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an inbox row's first line stays one line on a phone (closes #679)
+
+At 390 px the line naming why a notification is there wrapped: `4m` and `ago` on two lines, `thread`
+on its own. It is one line now — the reason and the channel truncate, the time never breaks — and
+`apps/web/e2e/narrow.e2e.ts` measures it in both themes.
+
 ### Fix — 2026-10-15: a backup no longer skips the attachments by chance; the restore rehearsal runs again (closes #677)
 
 `has_api` in `scripts/ops-common.sh` piped `docker compose config --services` into `grep -q` under
