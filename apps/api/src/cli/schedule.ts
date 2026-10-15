@@ -11,15 +11,17 @@ import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { createLogger } from '../platform/logging';
 import { installCrashHandlers } from '../lifecycle';
+import { errorTrackingFor, reportUrgently } from '../platform/error-tracking';
 
 const config = loadConfig(process.env);
-const log = createLogger({ level: config.LOG_LEVEL });
-// An error nothing handled ends the scheduler, logged, for its container to restart (#634).
+const plainLog = createLogger({ level: config.LOG_LEVEL });
+// What the scheduler logs at `error` is reported as the API's errors are (#635).
+const { tracker, log } = errorTrackingFor(config, plainLog, systemClock);
+// An error nothing handled ends the scheduler, reported, for its container to restart (#634).
 installCrashHandlers({
-  log,
-  // The scheduler reports nothing to a tracker yet (#635): the log line is the report.
-  report: () => undefined,
-  flush: () => Promise.resolve(),
+  log: plainLog,
+  report: reportUrgently(tracker),
+  flush: tracker.flush,
   process,
   deadlineMs: 2_000,
 });
@@ -55,3 +57,4 @@ await runSchedule({
   log,
 });
 log.info('the scheduler stopped');
+await tracker.flush();

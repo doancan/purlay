@@ -34,13 +34,19 @@ import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { atomicallyOn } from '../platform/transactions';
 import { createLogger } from '../platform/logging';
+import { errorTrackingFor } from '../platform/error-tracking';
 import { storeFor } from '../platform/storage';
 
 /** Sessions one statement of the sweep removes. */
 const SESSION_BATCH = 1_000;
 
 const config = loadConfig(process.env);
-const log = createLogger({ level: config.LOG_LEVEL });
+// A job's failure is logged at `error`, and so reported as the API's errors are (#635).
+const { tracker, log } = errorTrackingFor(
+  config,
+  createLogger({ level: config.LOG_LEVEL }),
+  systemClock,
+);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 const clock = systemClock;
 
@@ -114,4 +120,6 @@ try {
   }
 } finally {
   await database.destroy();
+  // The report of a failure leaves before the process does, within the tracker's own bound.
+  await tracker.flush();
 }

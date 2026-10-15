@@ -852,7 +852,8 @@ urgent (one slot past the tracker's bound, so a storm of ordinary reports cannot
 work stops at once (readiness says no, sockets are told to come back), the tracker is flushed within
 two seconds, and the process exits 1 for its container to restart; a shutdown that was draining when
 it happened exits 1 too. The API and the scheduler both (`installCrashHandlers` in `lifecycle.ts`,
-#634). Nothing is left running half-alive.
+#634). Nothing is left running half-alive. The scheduler and each job process are tracked
+the same way, through the same `errorTrackingFor` (#635).
 
 **Upgrading and rolling back** (the one home of this runbook; `CONFIG.md` points here). Every step below
 was run, and the failure in the last-but-one paragraph was reproduced, not reasoned out.

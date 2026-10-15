@@ -233,7 +233,11 @@ docker compose -f docker-compose.production.yml --env-file production.env \
   exec scheduler bun apps/api/src/cli/jobs.ts jobs:status
 ```
 
-It exits non-zero when a job is overdue, so a monitor can run it.
+It exits non-zero when a job is overdue or has failed since it last succeeded, and it is the
+`scheduler` container's healthcheck, every minute after a ten-minute start (#635): such a job shows the
+container as `unhealthy` in `docker ps` and to anything that watches container health. Unhealthy is a
+signal, not a restart — the jobs are tried again on their own schedule. A job that fails is also logged
+at `error`, and so reported to `ERROR_TRACKING_DSN` like the API's errors.
 
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
 never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run
