@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: on a phone the focused composer's hints no longer cover Send (closes #627)
+
+- Squeezed between the controls, the three hints wrapped and were drawn over the send button. On a
+  narrow window they now take a row of their own under the controls. `narrow.e2e.ts` checks that no
+  hint overlaps a control in the composer.
+
 ### Fix — 2026-10-15: the inbox names a direct message's sender once (closes #631)
 
 - A message from one other person read "alice wrote to you · alice": the place after the dot was the

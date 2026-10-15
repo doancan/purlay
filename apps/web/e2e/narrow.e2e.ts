@@ -136,6 +136,31 @@ test.describe('at a phone width', () => {
         composer,
       );
     }
+    // Inside it is not enough: found by hand at 390 px (#627), the hints wrapped over Send.
+    const drawnOver = await page
+      .locator('[data-composer-card]')
+      .first()
+      .evaluate((card) => {
+        const hints = [...card.querySelectorAll('kbd')].map((key) =>
+          (key.parentElement ?? key).getBoundingClientRect(),
+        );
+        return [...card.querySelectorAll('button')]
+          .filter((control) => {
+            const box = control.getBoundingClientRect();
+            return (
+              box.width > 0 &&
+              hints.some(
+                (hint) =>
+                  hint.left < box.right &&
+                  hint.right > box.left &&
+                  hint.top < box.bottom &&
+                  hint.bottom > box.top,
+              )
+            );
+          })
+          .map((control) => control.getAttribute('aria-label') ?? control.textContent);
+      });
+    expect(drawnOver, 'controls the hints are drawn over').toEqual([]);
   });
 
   test('the sign-in screen fits too', async ({ page }) => {
