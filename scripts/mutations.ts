@@ -382,6 +382,15 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/retention.integration.test.ts'],
   },
   {
+    id: 'leave-takes-the-channel-first',
+    why: 'a leave takes the channel row before its membership, the opposite of a send beside it: a deadlock (#669)',
+    file: 'apps/api/src/modules/channels/settings.ts',
+    find: "    .where('user_id', '=', context.userId)\n    .forUpdate()\n    .execute();\n  await lockNamed(executor, context);",
+    replace:
+      "    .where('user_id', '=', context.userId)\n    .execute();\n  await lockNamed(executor, context);",
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
     id: 'arrival-counted-out-of-order',
     why: 'two senders into one channel each hold a member row the other needs: a deadlock, and a send fails with 500 (#668)',
     file: 'apps/api/src/modules/messages/delivery.ts',

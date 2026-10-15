@@ -179,6 +179,15 @@ export const leaveChannel = async (
   executor: Transaction,
   context: ChannelContext,
 ): Promise<boolean> => {
+  // The membership before the channel row (#669): a send holds the memberships it counts and then
+  // takes the channel row, so a leave that took them the other way round deadlocked beside it.
+  await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .forUpdate()
+    .execute();
   await lockNamed(executor, context);
   if (context.channelType === 'private') {
     const members = await executor

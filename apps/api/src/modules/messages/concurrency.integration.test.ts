@@ -20,9 +20,11 @@ import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
+import { sql } from '@purlay/db';
 import { BLOCKED_FOR_MS, holdOpen } from '../../testing/gates';
 import { aRoom, notificationsOf, type Room } from '../../testing/rooms';
 import { markRead } from '../channels/read-state';
+import { leaveChannel } from '../channels/settings';
 import { REACTION_KINDS_MAX, setReaction } from '../reactions/reactions';
 import { sendMessage } from './messages';
 import { setResolved } from './threads';
@@ -441,4 +443,65 @@ describe('integration: several people writing into one channel at once (#668)', 
       names.map(() => EACH * (names.length - 1)),
     );
   }, 60_000);
+});
+
+describe('integration: leaving a channel while somebody writes in it (#669)', () => {
+  /** Resolves once this many of the database's sessions are waiting on a lock. */
+  const waitingOnLocks = async (db: ClonedDatabase['db'], count: number): Promise<void> => {
+    for (let tries = 0; tries < 200; tries += 1) {
+      const { rows } = await sql<{ waiting: number }>`
+        select count(*)::int as waiting from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock'
+      `.execute(db);
+      if ((rows[0]?.waiting ?? 0) >= count) return;
+      await Bun.sleep(10);
+    }
+    throw new Error(`never saw ${String(count)} sessions waiting on a lock`);
+  };
+
+  test('both finish: the leave takes its membership before the channel row, the order a send takes them in', async () => {
+    const db = cloned.db;
+    const later = fixedClock(new Date(NOW.getTime() + 60_000));
+    // Released, either may take the channel row first — PostgreSQL wakes row-lock waiters in no
+    // fixed order — so the interleaving is set up ten times; it deadlocked when the leave won.
+    for (let round = 0; round < 10; round += 1) {
+      const room = await aRoom(db, ['alice', 'frank']);
+      const alice = room.members['alice'];
+      const frank = room.members['frank'];
+      if (alice === undefined || frank === undefined) throw new Error('room');
+
+      // The channel row is held, so each of the two stops at it — the leave first, then the send,
+      // which by then holds the memberships it counts, frank's among them. Taken in opposite orders
+      // (the leave: channel, then its membership; the send: memberships, then the channel) that is
+      // a deadlock whenever the leave is woken first.
+      const blocker = holdOpen(atomicallyOn(db));
+      const blocking = blocker.atomically(
+        async (transaction) =>
+          await transaction
+            .selectFrom('channels')
+            .select('id')
+            .where('id', '=', room.channelId)
+            .forNoKeyUpdate()
+            .execute(),
+      );
+      await blocker.holding;
+      const leaving = atomicallyOn(db)(
+        async (transaction) => await leaveChannel(transaction, frank.context),
+      );
+      await waitingOnLocks(db, 1);
+      const sending = atomicallyOn(db)(
+        async (transaction) =>
+          await sendMessage(transaction, later, alice.context, { id: nextId(), content: 'here?' }),
+      );
+      await waitingOnLocks(db, 2);
+      blocker.release();
+      await blocking;
+      const outcomes = await Promise.allSettled([leaving, sending]);
+      expect(
+        outcomes
+          .filter((outcome) => outcome.status === 'rejected')
+          .map((outcome) => String(outcome.reason)),
+      ).toEqual([]);
+    }
+  }, 30_000);
 });
