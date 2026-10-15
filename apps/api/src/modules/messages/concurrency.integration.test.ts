@@ -403,3 +403,42 @@ describe('integration: a delete while the person it named reads the channel', ()
     ).toEqual(['committed', 'committed']);
   });
 });
+
+describe('integration: several people writing into one channel at once (#668)', () => {
+  test('every send succeeds — the members are counted in one lock order — and every count is right', async () => {
+    const db = cloned.db;
+    const names = ['alice', 'bob', 'carol', 'dave', 'erin'];
+    const room = await aRoom(db, names);
+    const atomically = atomicallyOn(db);
+    const EACH = 25;
+    // Before the members' rows were locked in one order, a multi-row update reached them in the
+    // order of each snapshot's row versions, and two senders could each hold a row the other
+    // needed: measured, 13 of 418 sends from four writers failed with a deadlock.
+    const outcomes = await Promise.allSettled(
+      names.flatMap((name) =>
+        Array.from({ length: EACH }, async () => {
+          const member = room.members[name];
+          if (member === undefined) throw new Error(`no member ${name}`);
+          return await atomically(
+            async (transaction) =>
+              await sendMessage(transaction, clock, member.context, {
+                id: nextId(),
+                content: `from ${name}`,
+              }),
+          );
+        }),
+      ),
+    );
+    const failed = outcomes.filter((outcome) => outcome.status === 'rejected');
+    expect(failed.map((outcome) => String(outcome.reason))).toEqual([]);
+    const counts = await db
+      .selectFrom('channel_members')
+      .select(['user_id', 'unread_count'])
+      .where('channel_id', '=', room.channelId)
+      .execute();
+    // Each has read nothing: every message the others wrote is waiting for them.
+    expect(counts.map((row) => row.unread_count)).toEqual(
+      names.map(() => EACH * (names.length - 1)),
+    );
+  }, 60_000);
+});
