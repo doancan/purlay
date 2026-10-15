@@ -388,7 +388,10 @@ describe('the connection', () => {
       await Promise.resolve();
     });
     await settle();
-    expect(here(view)).toBe('/sign-in');
+    // Said, not only done: a session the page held has ended (#693). A first visit with none is the
+    // plain sign-in, in the session gate's own test.
+    expect(here(view)).toBe('/sign-in?reason=ended');
+    expect(view.getByText(/Your session ended/)).toBeDefined();
   });
 });
 

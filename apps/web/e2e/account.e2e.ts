@@ -32,11 +32,14 @@ test.describe('the account menu', () => {
     await here.getByRole('menuitem', { name: 'Sign out everywhere…' }).click();
     const dialog = here.getByRole('dialog', { name: 'Sign out everywhere?' });
     await dialog.getByRole('button', { name: 'Sign out everywhere' }).click();
-    await expect(here).toHaveURL(/\/sign-in/);
+    // The one who chose to sign out is not told their session ended: they ended it.
+    await expect(here).toHaveURL(/\/sign-in$/);
 
-    // The other browser was told over its socket, and its session is gone on the server too.
-    await expect(there).toHaveURL(/\/sign-in/);
+    // The other browser was told over its socket, and its session is gone on the server too —
+    // and it says why it is on the sign-in screen (#693).
+    await expect(there).toHaveURL(/\/sign-in\?reason=ended$/);
     await expect(there.getByRole('heading', { level: 1, name: 'Sign in to Purlay' })).toBeVisible();
+    await expect(there.getByText('Your session ended')).toBeVisible();
     await there.goto(`/w/${workspace.slug}`);
     await expect(there).toHaveURL(/\/sign-in/);
   });
