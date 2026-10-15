@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a message's hover controls no longer cover it (closes #653)
+
+- The controls hung over the first line of every message — on your own short one they hid its words —
+  and stayed over the edit box while a message was edited. They now stand above the first line (on a
+  wide window clear of the row above too; on a narrow one, where they are a finger tall, over that row's
+  corner rather than their own words), and are not drawn while editing. Measured in a browser.
+
 ### Testing — 2026-10-15: the screenshots three changes left stale (closes #658)
 
 - The gallery (four new glyphs, #649) and, on a narrow window, the conversation screenshots (the header's
