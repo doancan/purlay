@@ -1470,8 +1470,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'sender-counts-their-own-message-unread',
     why: 'the person who wrote a message sees it as unread, and the badge never clears for the most active member',
     file: 'apps/api/src/modules/messages/delivery.ts',
-    find: "    .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))\n    .returning([",
-    replace: '    .returning([',
+    // The writer is left out where the members are locked (#668); the update counts those it locked.
+    find: "      .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))\n      .orderBy('user_id')",
+    replace: "      .orderBy('user_id')",
     tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
   },
   {
