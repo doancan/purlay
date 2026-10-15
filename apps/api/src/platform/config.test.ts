@@ -140,6 +140,19 @@ describe('loading configuration', () => {
     }
   });
 
+  /** Two lines for one missing variable read as two problems in `docker compose logs api` (#683). */
+  test('each variable is named once, with the first reason', () => {
+    try {
+      loadConfig({});
+      throw new Error('should have refused');
+    } catch (error) {
+      const { problems } = error as ConfigurationError;
+      const named = problems.map((problem) => problem.slice(0, problem.indexOf(':')));
+      expect(named).toEqual([...new Set(named)]);
+      expect(problems).toContain('APP_URL: Expected required property');
+    }
+  });
+
   /** A bad DATABASE_URL is still a credential. (`ARCHITECTURE.md` §10) */
   test('a secret is never quoted back in the failure', () => {
     try {

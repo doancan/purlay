@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a missing setting is named once (closes #683)
+
+The API and every command that loads the configuration listed each missing variable twice — "Expected
+required property" and then "Expected string" — because TypeBox reports every rule a path breaks. Each
+variable is now named once, with the first reason, so the list an operator reads in the logs is the
+list of things to set.
+
 ### Fix — 2026-10-15: Saved's tabs no longer cover its title on a phone (closes #681)
 
 At 390 px the three tabs were drawn over the `h1` ("Save" under "In progress"). On a phone the header

@@ -189,13 +189,17 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   const coerced = Value.Default(Environment, converted);
 
   if (!Value.Check(Environment, coerced)) {
-    const problems = [...Value.Errors(Environment, coerced)].map((error) => {
+    // TypeBox yields every rule a path broke — a missing variable is "required" and then "not a
+    // string" — so each is named once, with its first reason (#683).
+    const first = new Map<string, string>();
+    for (const error of Value.Errors(Environment, coerced)) {
       const key = error.path.replace(/^\//, '');
+      if (!first.has(key)) first.set(key, error.message);
+    }
+    const problems = [...first].map(([key, message]) =>
       // The value is never quoted back: a bad DATABASE_URL is still a credential.
-      return SECRETS.has(key)
-        ? `${key}: ${error.message} (value withheld)`
-        : `${key}: ${error.message}`;
-    });
+      SECRETS.has(key) ? `${key}: ${message} (value withheld)` : `${key}: ${message}`,
+    );
     throw new ConfigurationError(problems);
   }
 
