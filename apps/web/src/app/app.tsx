@@ -13,10 +13,11 @@
  * minimum that makes a route change perceivable, and it is skipped on first render,
  * where the browser has already done it.
  */
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
-import { MAIN_ID, MainFocus } from '../ui/main';
+import { NarrowPortContext, useNarrow } from '../features/shell/narrow';
+import { MAIN_ID, MainFocus, takeFocus } from '../ui/main';
 import { SkipLink } from '../ui/skip-link';
 import { Toaster } from '../ui/toast';
 import { Outlet } from './outlet';
@@ -31,18 +32,22 @@ const Frame = (): React.JSX.Element => {
   // effect, its cleanup, and the effect again).
   const settled = useRef(pathname);
   const navigated = useRef(false);
+  // Read as focus moves, not a reason to move it: a window resized later changes nothing (#697).
+  const keepsField = useRef(false);
+  keepsField.current = !useNarrow(useContext(NarrowPortContext));
+  const focus = useMemo(() => ({ navigated, keepsField }), []);
 
   useEffect(() => {
     if (settled.current === pathname) return;
     settled.current = pathname;
     navigated.current = true;
-    document.getElementById(MAIN_ID)?.focus();
+    takeFocus(document.getElementById(MAIN_ID), keepsField.current);
   }, [pathname]);
 
   return (
     <>
       <SkipLink target={MAIN_ID}>{t('app.skip')}</SkipLink>
-      <MainFocus.Provider value={navigated}>
+      <MainFocus.Provider value={focus}>
         <Outlet />
       </MainFocus.Provider>
       <Toaster dismissLabel={t('common.close')} />

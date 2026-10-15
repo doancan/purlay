@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: moving to a channel leaves focus in its composer on a wide window (closes #697)
+
+After **Cmd+K → a channel**, or a click in the sidebar, focus was on the page's `<main>` and the
+composer was more than sixty Tab presses away — what a keyboard-first person typed next went nowhere,
+and an empty channel broke `UX.md` §8 (*"No messages yet" + composer focused*). The composer focused
+itself as it appeared, and the frame then took focus back for `<main>`. On a wide window a field the new
+page focused inside `<main>` now keeps it; elsewhere, and on a narrow window — where a focused field
+opens the on-screen keyboard over the page — `<main>` still takes it.
+
 ### Fix — 2026-10-15: a session that ends in an open tab says so on the sign-in screen (closes #693)
 
 The sign-in screen had a sentence for a session that ended — *Your session ended* — reached by

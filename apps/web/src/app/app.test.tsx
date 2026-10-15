@@ -24,6 +24,7 @@ import type { Api } from '../data/api';
 import { anApi } from '../testing/fake-api';
 import { IDS, aSignedInApi } from '../testing/fixtures';
 import { expectFocusOn } from '../testing/focus';
+import { NarrowPortContext, type NarrowPort } from '../features/shell/narrow';
 
 installDom();
 
@@ -170,12 +171,39 @@ describe('focus follows navigation', () => {
     expectFocusOn(getByRole('main'));
   });
 
+  /** A window on one side of the narrow line, for as long as the test runs. */
+  const windowThat =
+    (narrow: boolean): NarrowPort =>
+    () => ({
+      matches: narrow,
+      addEventListener: (): void => undefined,
+      removeEventListener: (): void => undefined,
+    });
+
   test('reaches a main that was not there yet when the address changed', async () => {
     // `/` asks who is signed in before it has a page, so the first thing it shows has no <main>.
-    const { getByRole } = await mounted('/nowhere', signedIn());
+    // A narrow window, where nothing on the page keeps focus from it (#697).
+    const { getByRole } = render(
+      <NarrowPortContext.Provider value={windowThat(true)}>
+        <App {...worldPorts('/nowhere', undefined, signedIn())} />
+      </NarrowPortContext.Provider>,
+    );
+    await settle();
     fireEvent.click(getByRole('link', { name: 'Go to your channels' }));
     await settle();
     expectFocusOn(getByRole('main'));
+  });
+
+  test('on a wide window, leaves focus in the composer of the channel it arrives in (#697)', async () => {
+    const { getByRole } = render(
+      <NarrowPortContext.Provider value={windowThat(false)}>
+        <App {...worldPorts('/nowhere', undefined, signedIn())} />
+      </NarrowPortContext.Provider>,
+    );
+    await settle();
+    fireEvent.click(getByRole('link', { name: 'Go to your channels' }));
+    await settle();
+    expectFocusOn(getByRole('textbox', { name: 'Message api' }));
   });
 });
 

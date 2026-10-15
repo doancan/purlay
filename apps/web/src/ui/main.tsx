@@ -19,18 +19,43 @@ import { cn } from './cn';
 /** The id the skip link and the router address. */
 export const MAIN_ID = 'main';
 
-/** Set by the frame once the address has changed at least once; read by a `<main>` as it mounts. */
-export const MainFocus = createContext<{ current: boolean }>({ current: false });
+/**
+ * What the frame tells a `<main>` as it mounts: whether the address has changed at least once, and
+ * whether a field the new page focused for itself keeps focus (a wide window) or `<main>` takes it
+ * anyway (a narrow one, where a focused field opens the on-screen keyboard over the page, #697).
+ */
+export interface MainFocusState {
+  readonly navigated: { current: boolean };
+  readonly keepsField: { current: boolean };
+}
+
+export const MainFocus = createContext<MainFocusState>({
+  navigated: { current: false },
+  keepsField: { current: false },
+});
+
+/**
+ * Moves focus to `<main>` — unless the new page has already put it on a field of its own inside
+ * it and that is to be kept, as a channel's composer on a wide window: that field is where a
+ * keyboard goes next, and its label says where the person is (#697). Its effect runs before this
+ * one, so taking focus back would leave the composer dozens of Tab presses away.
+ */
+export const takeFocus = (main: HTMLElement | null, keepsField: boolean): void => {
+  if (main === null) return;
+  const current = document.activeElement;
+  if (keepsField && current !== null && current !== main && main.contains(current)) return;
+  main.focus();
+};
 
 export const Main = ({
   className,
   ...rest
 }: React.ComponentPropsWithoutRef<'main'>): React.JSX.Element => {
   const element = useRef<HTMLElement>(null);
-  const navigated = useContext(MainFocus);
+  const { navigated, keepsField } = useContext(MainFocus);
   useEffect(() => {
-    if (navigated.current) element.current?.focus();
-  }, [navigated]);
+    if (navigated.current) takeFocus(element.current, keepsField.current);
+  }, [navigated, keepsField]);
   return (
     <main
       id={MAIN_ID}
