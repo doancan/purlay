@@ -11,7 +11,8 @@
  * Both take their words as props. They are layout and semantics; the sentences
  * belong to the screen that knows what failed, in the language it is in.
  */
-import { Icon } from '../components/icon';
+import { Icon, type GlyphName } from '../components/icon';
+import { cn } from './cn';
 import { Button } from './button';
 
 type Heading = 'h1' | 'h2' | 'h3';
@@ -35,6 +36,48 @@ export const EmptyState = ({
     <Title className="text-display text-ink">{title}</Title>
     <p className="max-w-feed text-body text-ink-muted">{body}</p>
     {action}
+  </section>
+);
+
+/** The tile's tone: an invitation (accent), or all done (success). */
+const tileTones = {
+  accent: 'bg-accent-subtle text-accent-text',
+  success: 'bg-success-subtle text-success-text',
+} as const;
+
+interface GlyphEmptyStateProps {
+  readonly glyph: GlyphName;
+  readonly tone: keyof typeof tileTones;
+  readonly title: string;
+  readonly body: string;
+  /** The heading level in the page's outline: `h2` on a screen, `h3` in a panel under its heading. */
+  readonly as?: Exclude<Heading, 'h1'>;
+}
+
+/**
+ * Nothing here, centred under a glyph in a tile — a list that is empty because it is done or not
+ * started (the inbox, the open questions, saved messages, a side panel). One component so each has
+ * the same room above it: the screens wrote their own copy and drew it against the header (#625).
+ */
+export const GlyphEmptyState = ({
+  glyph,
+  tone,
+  title,
+  body,
+  as: Title = 'h2',
+}: GlyphEmptyStateProps): React.JSX.Element => (
+  <section className="flex max-w-feed flex-col items-center gap-3 px-4 py-8 text-center">
+    <span
+      aria-hidden="true"
+      className={cn(
+        'inline-flex size-avatar-lg items-center justify-center rounded-lg',
+        tileTones[tone],
+      )}
+    >
+      <Icon name={glyph} size="lg" />
+    </span>
+    <Title className="text-title text-ink">{title}</Title>
+    <p className="text-body text-ink-muted">{body}</p>
   </section>
 );
 

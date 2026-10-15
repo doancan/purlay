@@ -558,7 +558,7 @@ export const en = {
   'saved.empty.in_progress': 'Nothing saved to come back to',
   'saved.empty.archived': 'Nothing archived',
   'saved.empty.completed': 'Nothing completed yet',
-  'saved.empty.body': 'Save a message for later from beside React, and find it here.',
+  'saved.empty.body': 'Choose Save for later on any message, and it waits for you here.',
   'saved.more': 'Load more',
   'message.editLabel': 'Edit your message',
   'message.editSave': 'Save',

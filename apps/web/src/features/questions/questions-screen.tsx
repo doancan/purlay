@@ -26,7 +26,7 @@ import { Button } from '../../ui/button';
 import { Avatar } from '../../ui/avatar';
 import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { ErrorState } from '../../ui/states';
+import { ErrorState, GlyphEmptyState } from '../../ui/states';
 import { useFeedPorts } from '../channel/feed-ports';
 import {
   activeSegmentClasses,
@@ -256,16 +256,12 @@ export const QuestionsScreen = (): React.JSX.Element => {
     );
   } else if (groups.length === 0) {
     body = (
-      <section className="flex max-w-feed flex-col items-center gap-3 px-4 text-center">
-        <span
-          aria-hidden="true"
-          className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-success-subtle text-success-text"
-        >
-          <Icon name="resolved" size="lg" />
-        </span>
-        <h2 className="text-title text-ink">{t('state.questions.empty.title')}</h2>
-        <p className="text-body text-ink-muted">{t('state.questions.empty.body')}</p>
-      </section>
+      <GlyphEmptyState
+        glyph="resolved"
+        tone="success"
+        title={t('state.questions.empty.title')}
+        body={t('state.questions.empty.body')}
+      />
     );
   } else {
     body = (
