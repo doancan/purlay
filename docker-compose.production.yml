@@ -159,8 +159,8 @@ services:
       start_period: 10s
 
   # Garage: S3-compatible object storage (docs/spikes/object-storage.md). Its image
-  # has no shell, so the layout, bucket and key are created once by
-  # `scripts/production-init.sh`.
+  # has no shell, so the layout, bucket and key are prepared by the `storage-init`
+  # service on every `up` (D-144).
   garage:
     image: dxflrs/garage:v2.1.0@sha256:4c9b34c113e61358466e83fd6e7d66e6d18657ede14b776eb78a93ee8da7cf6a
     restart: unless-stopped

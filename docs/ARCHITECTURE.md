@@ -780,7 +780,7 @@ constant and variables go in fields.
 makes one-transaction-per-test possible, and it is enforced by the same lint boundary as the
 layering rule. (D-46)
 
-**Health.** `/health` is liveness and touches nothing. `/health/ready` is readiness: the database answers, every migration is applied, and the identifier columns compare byte-wise (D-40); otherwise `503`, with the reason in the log and not in the response.
+**Health.** `/health` is liveness and touches nothing. `/health/ready` is readiness: the database answers, every migration is applied, and the identifier columns compare byte-wise (D-40); otherwise `503`, with the reason in the log and not in the response. It is public — an uptime monitor points at it — so its answer is reused for a second and one check runs at a time however many ask (`recentReadiness`, #636); draining is decided before it, so a shutdown is never hidden behind a cached `ready`.
 
 **Testing (D-21).**
 

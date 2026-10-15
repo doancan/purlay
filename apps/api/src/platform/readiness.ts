@@ -20,6 +20,7 @@
  * disclose nothing about dependencies (`API.md` §8).
  */
 import { migrationHistoryProblem, pendingMigrations, sql, type Executor } from '@purlay/db';
+import type { Clock } from './clock';
 
 /**
  * The columns the migrations declare `COLLATE "C"`. Repeated here because a
@@ -76,4 +77,38 @@ export const readiness = async (database: Executor): Promise<Readiness> => {
       reason: `the database did not answer: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+};
+
+/**
+ * How old a readiness answer may be and still be given. Readiness runs several queries, and the
+ * endpoint is public — the proxy's check, the image's, and an external uptime monitor (`PRD.md` §5)
+ * all ask it — so asked a thousand times a second it would be a thousand checks (#636). A second is
+ * shorter than any of those checks' own interval, so none of them reads a stale answer twice.
+ */
+export const READINESS_FRESH_MS = 1_000;
+
+/**
+ * Readiness as the endpoint gives it: one check at a time however many ask, and its answer reused
+ * while younger than `freshMs`. A not-ready answer is reused the same way; draining is decided by the
+ * caller before this is asked, so a shutdown is never hidden behind a cached "ready".
+ */
+export const recentReadiness = (
+  check: () => Promise<Readiness>,
+  clock: Clock,
+  freshMs: number = READINESS_FRESH_MS,
+): (() => Promise<Readiness>) => {
+  let last: { readonly at: number; readonly answer: Readiness } | null = null;
+  let asking: Promise<Readiness> | null = null;
+  return async () => {
+    if (last !== null && clock.now().getTime() - last.at < freshMs) return last.answer;
+    asking ??= check()
+      .then((answer) => {
+        last = { at: clock.now().getTime(), answer };
+        return answer;
+      })
+      .finally(() => {
+        asking = null;
+      });
+    return await asking;
+  };
 };
