@@ -333,3 +333,40 @@ export const withErrorTracking = (
       withErrorTracking(log.child(childBindings), tracker, { ...bindings, ...childBindings }),
   };
 };
+
+/**
+ * A process's error tracking as the configuration says (D-96): the tracker, and the logger whose
+ * `error` lines it reports. One place, so the API, the scheduler and each job are tracked alike
+ * (#635); a failed or dropped report is said on the plain log at `warn`, never reported in turn.
+ */
+export const errorTrackingFor = (
+  config: { readonly ERROR_TRACKING_DSN?: string | undefined; readonly NODE_ENV: string },
+  plain: Logger,
+  clock: Clock,
+  send: Delivery = fetchDelivery,
+): { readonly tracker: ErrorTracker; readonly log: Logger } => {
+  const tracker = createErrorTracker({
+    dsn: config.ERROR_TRACKING_DSN,
+    environment: config.NODE_ENV,
+    clock,
+    send,
+    onFailure: (reason) => {
+      plain.warn('an error report was not delivered', { err: reason });
+    },
+    onDropped: (total) => {
+      plain.warn('error reports are being dropped; the collector is not keeping up', { total });
+    },
+  });
+  return { tracker, log: withErrorTracking(plain, tracker) };
+};
+
+/**
+ * A crash's report (#634): straight to the tracker, cleaned as a log line is, and urgent — one slot
+ * past the bound, so a tracker full of ordinary reports is not why it is lost. Shared by every
+ * process that installs crash handlers.
+ */
+export const reportUrgently =
+  (tracker: ErrorTracker): ((message: string, fields: Record<string, unknown>) => void) =>
+  (message, fields) => {
+    tracker.capture({ message, fields: clean(fields) as Fields }, 'urgent');
+  };

@@ -17,8 +17,8 @@ import { systemClock } from './platform/clock';
 import { githubClient } from './modules/auth/github';
 import { SIGN_IN_CALLBACK } from './modules/auth/sign-in';
 import { createApp } from './ingress/http/app';
-import { clean, createLogger, type Fields } from './platform/logging';
-import { createErrorTracker, fetchDelivery, withErrorTracking } from './platform/error-tracking';
+import { createLogger } from './platform/logging';
+import { errorTrackingFor, reportUrgently } from './platform/error-tracking';
 import { installCrashHandlers, installShutdown } from './lifecycle';
 import { migrateOnStart } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
@@ -33,28 +33,13 @@ const plainLog = createLogger({ level: config.LOG_LEVEL });
 // Off unless ERROR_TRACKING_DSN is set (D-96). A DSN that cannot be parsed refuses
 // to start, here, rather than failing quietly at the first error. Everything logged
 // at `error` below is also reported, cleaned the way the log is.
-const errorTracker = createErrorTracker({
-  dsn: config.ERROR_TRACKING_DSN,
-  environment: config.NODE_ENV,
-  clock: systemClock,
-  send: fetchDelivery,
-  // At `warn`: a failed report must not be reported in turn.
-  onFailure: (reason) => {
-    plainLog.warn('an error report was not delivered', { err: reason });
-  },
-  onDropped: (total) => {
-    plainLog.warn('error reports are being dropped; the collector is not keeping up', { total });
-  },
-});
-const log = withErrorTracking(plainLog, errorTracker);
+const { tracker: errorTracker, log } = errorTrackingFor(config, plainLog, systemClock);
 // From here on an error nothing handled is reported and ends the process, never left half-alive
 // (#634). The line goes to the plain log and the report straight to the tracker, as urgent, so a
 // tracker full of ordinary reports cannot be the reason it is not sent.
 const crash = installCrashHandlers({
   log: plainLog,
-  report: (message, fields) => {
-    errorTracker.capture({ message, fields: clean(fields) as Fields }, 'urgent');
-  },
+  report: reportUrgently(errorTracker),
   flush: errorTracker.flush,
   process,
   deadlineMs: 2_000,

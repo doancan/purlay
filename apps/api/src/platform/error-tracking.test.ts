@@ -12,6 +12,8 @@ import {
   parseDsn,
   withErrorTracking,
   type Delivery,
+  errorTrackingFor,
+  reportUrgently,
 } from './error-tracking';
 import { createLogger, withinRequest, type Logger } from './logging';
 
@@ -328,5 +330,84 @@ describe('withErrorTracking', () => {
       ['error', 'still logged'],
       ['warn', 'error tracking failed'],
     ]);
+  });
+});
+
+describe('a process tracked as its configuration says (#635)', () => {
+  test('an error line is reported; a failed report is said on the plain log, at warn', async () => {
+    const lines: { level: string; message: string }[] = [];
+    const plain = {
+      ...createLogger({ level: 'silent' }),
+      warn: (message: string): void => {
+        lines.push({ level: 'warn', message });
+      },
+      error: (message: string): void => {
+        lines.push({ level: 'error', message });
+      },
+    };
+    const sent: string[] = [];
+    const { log, tracker } = errorTrackingFor(
+      { ERROR_TRACKING_DSN: 'https://key@errors.example/1', NODE_ENV: 'production' },
+      plain,
+      { now: () => new Date('2026-10-15T12:00:00.000Z') },
+      async (url) => {
+        sent.push(url);
+        await Promise.resolve();
+        return new Response(null, { status: 500 });
+      },
+    );
+    log.error('a job failed', {});
+    await tracker.flush();
+    expect(sent).toHaveLength(1);
+    expect(lines).toEqual([
+      { level: 'error', message: 'a job failed' },
+      { level: 'warn', message: 'an error report was not delivered' },
+    ]);
+  });
+
+  test('reports dropped under a storm are said on the plain log, at warn', () => {
+    const warned: string[] = [];
+    const plain = {
+      ...createLogger({ level: 'silent' }),
+      warn: (message: string): void => {
+        warned.push(message);
+      },
+    };
+    const { log } = errorTrackingFor(
+      { ERROR_TRACKING_DSN: 'https://key@errors.example/1', NODE_ENV: 'production' },
+      plain,
+      { now: () => new Date('2026-10-15T12:00:00.000Z') },
+      // A collector that never answers: every slot stays taken.
+      () => new Promise<Response>(() => undefined),
+    );
+    for (let i = 0; i < 11; i += 1) log.error('storm', {});
+    expect(warned).toEqual(['error reports are being dropped; the collector is not keeping up']);
+  });
+
+  test('without a DSN nothing is reported and the logger is the plain one', () => {
+    const plain = createLogger({ level: 'silent' });
+    const { log } = errorTrackingFor({ NODE_ENV: 'production' }, plain, {
+      now: () => new Date(),
+    });
+    expect(log).toBe(plain);
+  });
+});
+
+describe('a crash reported urgently (#634)', () => {
+  test('goes to the tracker as urgent, its fields cleaned as a log line is', () => {
+    const captured: { error: unknown; priority: unknown }[] = [];
+    const tracker = {
+      ...noErrorTracking,
+      capture: (error: unknown, priority?: 'urgent'): void => {
+        captured.push({ error, priority });
+      },
+    };
+    reportUrgently(tracker)('an error escaped every handler; exiting', {
+      kind: 'uncaughtException',
+      authorization: 'Bearer secret',
+    });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.priority).toBe('urgent');
+    expect(JSON.stringify(captured[0]?.error)).not.toContain('secret');
   });
 });

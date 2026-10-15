@@ -120,7 +120,7 @@ services:
   # The scheduled jobs (D-30): one container however many API nodes there are, so a
   # job runs once, and shipped here so it is installed by `up`, not remembered. Each
   # run is recorded; `bun apps/api/src/cli/jobs.ts jobs:status` in it says when each
-  # last succeeded.
+  # last succeeded, and is its healthcheck.
   scheduler:
     <<: *application
     command: ['apps/api/src/cli/schedule.ts']
@@ -132,9 +132,17 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    # The image's own check asks the API's port, which this container does not open.
+    # Not the image's check, which asks the API's port: the jobs' own report (#635). A
+    # job overdue or failing since its last success makes the container unhealthy, which
+    # `docker ps` and any monitor of container health see. Unhealthy is a signal, not a
+    # restart: the jobs are retried on their own schedule. The start leaves room for the
+    # first run of every job.
     healthcheck:
-      disable: true
+      test: ['CMD', '/usr/local/bin/bun', 'apps/api/src/cli/jobs.ts', 'jobs:status']
+      interval: 1m
+      timeout: 20s
+      retries: 1
+      start_period: 10m
 
   postgres:
     image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873

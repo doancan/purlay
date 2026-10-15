@@ -46,7 +46,12 @@ interface Resolved {
       volumes?: { type: string; source?: string; read_only?: boolean }[];
       depends_on?: Record<string, { condition: string }>;
       command?: string[];
-      healthcheck?: { disable?: boolean };
+      healthcheck?: {
+        disable?: boolean;
+        test?: string[];
+        interval?: string;
+        start_period?: string;
+      };
       logging?: { driver?: string; options?: Record<string, string> };
     }
   >;
@@ -267,8 +272,19 @@ describe('integration: the production compose file', () => {
     expect(scheduler?.cap_drop).toEqual(['ALL']);
     expect(scheduler?.security_opt).toContain('no-new-privileges:true');
     expect(scheduler?.ports ?? []).toEqual([]);
-    // The image's healthcheck asks the API's port, which this container does not open.
-    expect(scheduler?.healthcheck?.disable).toBe(true);
+    // Not the image's check, which asks the API's port: its own, the jobs' report (#635). A job overdue
+    // or failing since its last success makes the container unhealthy — seen by `docker ps` and by any
+    // monitor of container health — rather than said only in a log. Every minute, after a start long
+    // enough for the first runs of every job.
+    expect(scheduler?.healthcheck?.disable).toBeUndefined();
+    expect(scheduler?.healthcheck?.test).toEqual([
+      'CMD',
+      '/usr/local/bin/bun',
+      'apps/api/src/cli/jobs.ts',
+      'jobs:status',
+    ]);
+    expect(scheduler?.healthcheck?.interval).toBe('1m0s');
+    expect(scheduler?.healthcheck?.start_period).toBe('10m0s');
   });
 
   test('the proxy waits for a ready API, and the API for a healthy database and a prepared store', () => {

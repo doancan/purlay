@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a scheduled job that stops working is seen (closes #635)
+
+- The `scheduler` container's healthcheck is now `jobs:status`: a job overdue, or failing since it last
+  succeeded, shows the container unhealthy in `docker ps` and to anything that watches container
+  health. It was disabled, and the status was a command nobody ran.
+- The scheduler and each job report what they log at `error` to the error tracker, like the API, through
+  one `errorTrackingFor` the three share.
+
 ### Fix — 2026-10-15: each place in the workspace menu has a glyph of its own (closes #642)
 
 - Audit log was drawn with the keyboard of Keyboard shortcuts, and Members, Workspace settings and Keep
