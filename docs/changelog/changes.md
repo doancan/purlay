@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: leaving a channel no longer deadlocks with a message being sent in it (part of #669)
+
+- A leave took the channel's row and then its membership; a send holds the memberships it counts and
+  then takes the channel's row. Side by side they could each wait for the other, and one failed with a
+  deadlock. A leave now takes its membership first. Shown by a test that sets the interleaving up with a
+  third transaction holding the channel row: before, a deadlock in each of three runs; after, none.
+
 ### Fix — 2026-10-15: concurrent sends into one channel no longer deadlock (closes #668)
 
 - Several people writing into one channel at once could each hold a member's counter row the other
