@@ -3,7 +3,8 @@
  * message cuts off after two lines — often before the words that found it. So the excerpt starts a
  * little before the first match, at a word, said with an ellipsis, and the match is marked.
  *
- * Matched as the server matches: the words as typed, ignoring case, anywhere (D-105 §1). The server
+ * Matched as the server matches: the words as typed, ignoring case — I ı İ i as one letter — anywhere
+ * (D-105 §1). The server
  * matched the message as typed and this marks the excerpt a reader sees, so words that were found in
  * the markdown and not in the words (`` `api` ``) mark nothing, and the excerpt is shown from its start.
  */
@@ -22,7 +23,10 @@ export const markedExcerpt = (text: string, words: string): MarkedExcerpt | null
   if (wanted === '') return null;
   // On the text itself, not a lower-cased copy: a letter whose lower case is longer (İ) would move
   // every index after it.
-  const found = new RegExp(wanted.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu').exec(text);
+  // Each of I ı İ i stands for all four, as the server folds them (#701, #704); every other letter's
+  // case is the `u` flag's.
+  const pattern = wanted.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&').replace(/[iıİI]/gu, '[iıİI]');
+  const found = new RegExp(pattern, 'iu').exec(text);
   if (found === null) return null;
   const at = found.index;
   const match = found[0];

@@ -60,4 +60,14 @@ describe('markedExcerpt', () => {
     expect(markedExcerpt('a.b and axb', 'a.b')?.before).toBe('');
     expect(markedExcerpt('axb only', 'a.b')).toBeNull();
   });
+
+  // As the server matches since #701: case by Unicode, and I ı İ i one letter (#704).
+  test('a match the server found across I, ı, İ and i is marked too', () => {
+    expect(markedExcerpt('ÇAĞRI merkezi', 'çağrı')?.match).toBe('ÇAĞRI');
+    expect(markedExcerpt('İstanbul toplantısı', 'istanbul')?.match).toBe('İstanbul');
+    expect(markedExcerpt('Iğdır şubesi', 'ığdır')?.match).toBe('Iğdır');
+    expect(markedExcerpt('ılık su', 'ILIK')?.match).toBe('ılık');
+    // A word with none of them is matched as before, and a pattern character is still itself.
+    expect(markedExcerpt('a [link] here', '[link]')?.match).toBe('[link]');
+  });
 });
