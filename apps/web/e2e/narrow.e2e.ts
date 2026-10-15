@@ -160,6 +160,37 @@ test.describe('at a phone width', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
+  test("an inbox row's first line is one line: the time never breaks, the reason gives way", async ({
+    page,
+    signIn,
+    room,
+    tenant,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'carol'] });
+    await api('carol').say(made.id, `@dogancan a mention to lay out in ${made.name}`);
+    await signIn();
+    await page.goto(`/w/${tenant.slug}/inbox`);
+    const row = page.getByRole('button', { name: new RegExp(made.name) });
+    await expect(row).toContainText('carol mentioned you');
+    // The line the time sits on: one line tall, and the time one box on it (#679).
+    const line = await row.locator('time').evaluate((time) => {
+      const parent = time.parentElement;
+      if (parent === null) throw new Error('the time has no line');
+      return {
+        height: parent.getBoundingClientRect().height,
+        lineHeight: Number.parseFloat(getComputedStyle(parent).lineHeight),
+        boxes: time.getClientRects().length,
+        timeHeight: time.getBoundingClientRect().height,
+        timeLine: Number.parseFloat(getComputedStyle(time).lineHeight),
+      };
+    });
+    expect(line.boxes).toBe(1);
+    expect(line.timeHeight).toBeLessThan(line.timeLine * 1.5);
+    expect(line.height).toBeLessThan(line.lineHeight * 1.5);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
   test.describe('the overlay', () => {
     test.beforeEach(async ({ page, signIn, world }) => {
       await signIn('bob');

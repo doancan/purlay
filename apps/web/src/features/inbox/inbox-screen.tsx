@@ -106,7 +106,7 @@ const markLocally = (
 };
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
-  <span>{useChannelTitle(channel)}</span>
+  <span className="min-w-0 truncate">{useChannelTitle(channel)}</span>
 );
 
 const Row = ({
@@ -141,9 +141,10 @@ const Row = ({
           username={authorOf(message, t('user.erased')).username}
         />
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2 text-label text-ink-muted">
+          {/* One line at any width: the reason and the channel give way, the time never breaks (#679). */}
+          <span className="flex items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
             <Icon name={glyphOf(notification.type)} size="sm" />
-            <span className={cn(unread && 'font-medium text-ink')}>
+            <span className={cn('min-w-0 truncate', unread && 'font-medium text-ink')}>
               {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
               {why(notification, channel)}
             </span>
@@ -151,10 +152,17 @@ const Row = ({
             {!withOne && (
               <>
                 <span aria-hidden="true">·</span>
-                {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
+                {channel === undefined ? (
+                  <span className="min-w-0 truncate">{t('questions.unnamed')}</span>
+                ) : (
+                  <ChannelName channel={channel} />
+                )}
               </>
             )}
-            <time dateTime={notification.createdAt} className="ml-auto font-mono text-caption">
+            <time
+              dateTime={notification.createdAt}
+              className="ml-auto shrink-0 font-mono text-caption"
+            >
               {format.time(notification.createdAt, now)}
             </time>
           </span>
