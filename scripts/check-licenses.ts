@@ -4,9 +4,15 @@
  *
  *   bun install --frozen-lockfile && bun run check:licenses
  */
-import { installedPackages, judgeLicenses } from './licenses';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { installedPackages, judgeLicenses, resolvedByLockfile } from './licenses';
 
-const packages = installedPackages(process.cwd());
+// What the lockfile resolves, not every manifest a long-lived store still holds (#675).
+const packages = resolvedByLockfile(
+  installedPackages(process.cwd()),
+  readFileSync(join(process.cwd(), 'bun.lock'), 'utf8'),
+);
 const verdict = judgeLicenses(packages);
 
 const counts = new Map<string, number>();

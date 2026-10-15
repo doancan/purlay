@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the licence check judges what the lockfile resolves (closes #675)
+
+- `bun install --frozen-lockfile` does not prune `node_modules/.bun`, and the check read every manifest
+  there: a long-lived checkout failed on a font nothing depended on any more. It now judges the installed
+  packages the lockfile names at that version, and the workspace's own; a fresh install loses none.
+
 ### Fix — 2026-10-15: `db:check` reads only the application's schema (closes #673)
 
 - The migrator's integration test makes a schema per case and drops them when it ends; a run killed

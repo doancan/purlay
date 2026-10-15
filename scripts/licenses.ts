@@ -210,3 +210,32 @@ export const judgeLicenses = (packages: readonly InstalledPackage[]): Verdict =>
   });
   return { ok: problems.length === 0, problems };
 };
+
+/**
+ * The installed packages the lockfile resolves (#675). `bun install --frozen-lockfile` does not prune
+ * the store, so a long-lived checkout keeps packages nothing depends on any more, and judging them
+ * failed a check on something that will not ship. A package is kept when the lockfile names it at that
+ * version (`name@version`, the first item of each entry), or resolves it from the workspace.
+ */
+export const resolvedByLockfile = (
+  installed: readonly InstalledPackage[],
+  lockfile: string,
+): readonly InstalledPackage[] => {
+  const resolved = new Set<string>();
+  const workspace = new Set<string>();
+  for (const [, spec] of lockfile.matchAll(/^\s+"[^"]+": \["([^"]+)"/gmu)) {
+    if (spec === undefined) continue;
+    const at = spec.lastIndexOf('@');
+    if (at <= 0) continue;
+    const name = spec.slice(0, at);
+    const version = spec.slice(at + 1);
+    if (version.startsWith('workspace:')) workspace.add(name);
+    else resolved.add(`${name}@${version}`);
+  }
+  if (resolved.size === 0 && workspace.size === 0) {
+    throw new Error('the lockfile resolves no package: is it bun.lock?');
+  }
+  return installed.filter(
+    (pkg) => resolved.has(`${pkg.name}@${pkg.version}`) || workspace.has(pkg.name),
+  );
+};
