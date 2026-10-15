@@ -264,13 +264,35 @@ under cron's bare environment (`env -i`, `PATH=/usr/bin:/bin`) against the produ
 ```
 # crontab -e, as the user who owns /srv/purlay and may run docker
 PATH=/usr/bin:/bin
-30 2 * * * cd /srv/purlay && scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1
-45 2 * * * find /srv/purlay-backups -mindepth 1 -maxdepth 1 -type d -name 'purlay-*' -mtime +14 -exec rm -rf {} +
+0 1 * * * cd /srv/purlay && scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1
+45 1 * * * find /srv/purlay-backups -mindepth 1 -maxdepth 1 -type d -name 'purlay-*' -mtime +14 -exec rm -rf {} +
 ```
 
-`backup.sh` exits non-zero and leaves nothing that looks like a backup when it fails, so the log is
-where a failed night shows; copying the directory off the host, and encrypting it there, is the
-operator's (`docs/spikes/backup-restore.md`). A backup nobody restored is a belief (D-44). Before the
+**The times are the host's; the stack's jobs are UTC** (`modules/jobs/schedule.ts`), and the nightly
+ones — the retention purge first, at 02:30 — must not run while a backup does, or a file can be removed
+between the database dump and the bucket copy and the backup names a file it does not hold (#637).
+On a host whose clock is UTC the lines above start at 01:00, clear of every nightly job; on another zone,
+move them so the backup starts between 00:00 and 01:30 UTC. The hourly sweeps still run in that window;
+the most they can do is remove a file somebody deleted while the backup ran, which the restore then lacks.
+
+**A backup on the server dies with the server.** `backup.sh` exits non-zero and leaves nothing that looks
+like a backup when it fails, but a disk that fails takes the data and every night's backup with it. Copy
+each night off the host, and be told when a night fails. For example (an example, not rehearsed against
+the stack: the copy line was run alone under the same bare environment, and keeps the backup's `0700`
+and `0600`):
+
+```
+# a third line: the backups, mirrored to another machine you control over SSH
+30 1 * * * rsync -a --delete /srv/purlay-backups/ backup@other-host:/srv/purlay-backups/
+# and the first line, saying so when it fails (cron mails what a job prints, if the host can send mail)
+MAILTO=ops@example.com
+0 1 * * * cd /srv/purlay && scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1 || echo "purlay backup failed: see /srv/purlay-backups/backup.log"
+```
+
+Encrypting the copy where it lands is the operator's choice of tool (`docs/spikes/backup-restore.md`);
+it holds every message in the clear. A host that cannot send mail can instead call an uptime monitor's
+check-in address after a backup that succeeded (`&& curl -fsS -m 10 <address>`), which also notices a
+cron that stopped running at all. A backup nobody restored is a belief (D-44). Before the
 team moves in, restore the newest whole — `scripts/restore.sh <dir>`, database and bucket — and judge
 it with `scripts/compare-databases.sh purlay purlay_restore`. Then monthly, the database alone, which
 repeats cleanly (rehearsed twice in a row):

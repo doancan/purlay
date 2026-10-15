@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-15: the backup runbook keeps clear of the nightly purge, leaves the host, and says when it fails (closes #637)
+
+- The documented backup started at 02:30 host time, the minute the retention purge starts in UTC; it now
+  starts at 01:00 and says how to place it on a host in another zone.
+- New: a concrete off-host copy (`rsync` over SSH, keeping the backup's permissions) and two ways to be
+  told a night failed — cron's mail, or an uptime monitor's check-in. Marked as examples, not rehearsed.
+- The upgrade runbook says what to do when `--wait` gives up during a long migration.
+
 ### Fix — 2026-10-15: the socket tests that fill the kernel's buffers state their own time (part of #632)
 
 - They post megabytes until the kernel's buffers fill, and on a loaded machine one ran past Bun's
