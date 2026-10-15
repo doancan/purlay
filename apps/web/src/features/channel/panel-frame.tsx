@@ -11,6 +11,7 @@ import { useEffect, useId, useRef } from 'react';
 import { Icon, type GlyphName } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { IconButton } from '../../ui/icon-button';
+import { GlyphEmptyState } from '../../ui/states';
 import { useSidePanel } from './side-panel';
 
 export interface PanelFocus {
@@ -108,16 +109,7 @@ export const PanelEmpty = ({
   readonly title: string;
   readonly body: string;
 }): React.JSX.Element => (
-  <section className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-    <span
-      aria-hidden="true"
-      className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-accent-subtle text-accent-text"
-    >
-      <Icon name={glyph} size="lg" />
-    </span>
-    <h3 className="text-title text-ink">{title}</h3>
-    <p className="text-body text-ink-muted">{body}</p>
-  </section>
+  <GlyphEmptyState glyph={glyph} tone="accent" title={title} body={body} as="h3" />
 );
 
 /**

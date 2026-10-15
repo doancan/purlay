@@ -553,7 +553,7 @@ export const tr = {
   'saved.empty.in_progress': 'Geri dönülecek kayıtlı bir şey yok',
   'saved.empty.archived': 'Arşivlenmiş bir şey yok',
   'saved.empty.completed': 'Henüz tamamlanan bir şey yok',
-  'saved.empty.body': 'Bir mesajı React’in yanından sonrası için kaydet, burada bul.',
+  'saved.empty.body': 'Herhangi bir mesajda Sonrası için kaydet’i seç; burada seni bekler.',
   'saved.more': 'Daha fazla yükle',
   'message.editLabel': 'Mesajını düzenle',
   'message.editSave': 'Kaydet',

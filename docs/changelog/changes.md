@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the empty Saved, Inbox and Open questions screens have room under the header (closes #625)
+
+- The three screens drew their own copy of the "nothing here" tile, with no space above it, so it
+  touched the header. They and the side panels now share one `GlyphEmptyState` (`ui/states.tsx`).
+- The empty Saved screen named the reaction button "React", which read as the framework. It now
+  says: choose Save for later on any message, and it waits for you here.
 ### Fix — 2026-10-15: one Escape closes a dialog that has only a list to read (closes #623)
 
 - The audit log and the workspace export opened with focus on their close button, whose tooltip

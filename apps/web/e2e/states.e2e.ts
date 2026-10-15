@@ -304,3 +304,34 @@ test.describe('the connection', () => {
     await expect(bar).toBeHidden({ timeout: 30_000 });
   });
 });
+
+test.describe('Saved', () => {
+  test('is empty as an invitation that names the control, with room under the header', async ({
+    page,
+    signIn,
+    world,
+    expectNoAxe,
+  }) => {
+    // Found by hand (#625): "from beside React", and the tile drawn against the header's edge.
+    await signIn('bob');
+    await page.route('**/api/workspaces/*/saved*', async (route) => {
+      await route.fulfill({ json: { data: [], nextCursor: null } });
+    });
+    await page.goto(`/w/${world.workspace.slug}/saved`);
+    const heading = page.getByRole('heading', { name: 'Nothing saved to come back to' });
+    await expect(heading).toBeVisible();
+    await expect(page.getByText('Choose Save for later on any message')).toBeVisible();
+    const gap = await page.evaluate(() => {
+      const header = document.querySelector('main header');
+      const empty = [...document.querySelectorAll('main section')].find((section) =>
+        section.textContent.includes('Nothing saved'),
+      );
+      if (header === null || empty === undefined) throw new Error('no header or empty state');
+      const tile = empty.firstElementChild;
+      if (tile === null) throw new Error('no tile');
+      return tile.getBoundingClientRect().top - header.getBoundingClientRect().bottom;
+    });
+    expect(gap, 'the tile is drawn against the header').toBeGreaterThanOrEqual(16);
+    await expectNoAxe();
+  });
+});

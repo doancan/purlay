@@ -26,7 +26,7 @@ import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { ErrorState } from '../../ui/states';
+import { ErrorState, GlyphEmptyState } from '../../ui/states';
 import { useToast } from '../../ui/toast';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
@@ -203,16 +203,12 @@ export const SavedScreen = (): React.JSX.Element => {
     );
   } else if (items.length === 0) {
     body = (
-      <section className="flex max-w-feed flex-col items-center gap-3 px-4 text-center">
-        <span
-          aria-hidden="true"
-          className="inline-flex size-avatar-lg items-center justify-center rounded-lg bg-accent-subtle text-accent-text"
-        >
-          <Icon name="saved" size="lg" />
-        </span>
-        <h2 className="text-title text-ink">{t(`saved.empty.${state}`)}</h2>
-        <p className="text-body text-ink-muted">{t('saved.empty.body')}</p>
-      </section>
+      <GlyphEmptyState
+        glyph="saved"
+        tone="accent"
+        title={t(`saved.empty.${state}`)}
+        body={t('saved.empty.body')}
+      />
     );
   } else {
     body = (
