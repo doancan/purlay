@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Testing — 2026-10-15: the screenshots three changes left stale (closes #658)
+
+- The gallery (four new glyphs, #649) and, on a narrow window, the conversation screenshots (the header's
+  Open questions as a glyph, #629; no composer hints, #656) are updated. The full browser suite passes in
+  all four projects.
+
 ### Fix — 2026-10-15: a send that cannot reach the server is failed after its three seconds, not at once (closes #655)
 
 - Since #640 an offline send goes to the HTTP door, which fails at once, and the row said "Failed to
