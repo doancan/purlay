@@ -123,6 +123,25 @@ done
 echo "healthcheck: $status"
 [ "$status" = "healthy" ] || { echo "FAIL: the container never reported healthy" >&2; exit 1; }
 
+# The scheduler's healthcheck (#635) runs in this image, from its working directory, with the
+# API's configuration: nothing has run yet, so every job says `never` and it exits 1. A command
+# that cannot even start — a wrong path, a configuration it refuses — names no job.
+jobs_status="$(docker run --rm --network "$NETWORK" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --entrypoint /usr/local/bin/bun \
+  -e APP_URL=https://chat.example.test \
+  -e DATABASE_URL="postgres://purlay:purlay@$DATABASE:5432/purlay" \
+  -e GITHUB_CLIENT_ID=smoke -e GITHUB_CLIENT_SECRET=smoke -e DATABASE_ALLOW_PLAINTEXT=true \
+  -e ENCRYPTION_KEY="$ENCRYPTION_KEY" \
+  -e S3_ENDPOINT=http://storage.invalid:3900 -e S3_BUCKET=smoke \
+  -e S3_ACCESS_KEY_ID=GK000000000000000000000001 \
+  -e S3_SECRET_ACCESS_KEY=0000000000000000000000000000000000000000000000000000000000000002 \
+  "$IMAGE" apps/api/src/cli/jobs.ts jobs:status 2>&1; echo "exit=$?")"
+grep -q '^never .*sweep:sessions' <<<"$jobs_status" ||
+  { echo "FAIL: the scheduler's healthcheck did not report the jobs: $jobs_status" >&2; exit 1; }
+grep -q '^exit=1$' <<<"$jobs_status" ||
+  { echo "FAIL: jobs that never ran did not make the healthcheck fail: $jobs_status" >&2; exit 1; }
+echo "scheduler healthcheck: runs in the image, and fails while a job has never run"
+
 # Not root. The image has no `id`, so ask the runtime.
 identity="$(docker run --rm --read-only --entrypoint /usr/local/bin/bun "$IMAGE" -e 'console.log(process.getuid())')"
 echo "uid:       $identity"

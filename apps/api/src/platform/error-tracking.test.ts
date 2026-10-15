@@ -365,6 +365,25 @@ describe('a process tracked as its configuration says (#635)', () => {
     ]);
   });
 
+  test('reports dropped under a storm are said on the plain log, at warn', () => {
+    const warned: string[] = [];
+    const plain = {
+      ...createLogger({ level: 'silent' }),
+      warn: (message: string): void => {
+        warned.push(message);
+      },
+    };
+    const { log } = errorTrackingFor(
+      { ERROR_TRACKING_DSN: 'https://key@errors.example/1', NODE_ENV: 'production' },
+      plain,
+      { now: () => new Date('2026-10-15T12:00:00.000Z') },
+      // A collector that never answers: every slot stays taken.
+      () => new Promise<Response>(() => undefined),
+    );
+    for (let i = 0; i < 11; i += 1) log.error('storm', {});
+    expect(warned).toEqual(['error reports are being dropped; the collector is not keeping up']);
+  });
+
   test('without a DSN nothing is reported and the logger is the plain one', () => {
     const plain = createLogger({ level: 'silent' });
     const { log } = errorTrackingFor({ NODE_ENV: 'production' }, plain, {
