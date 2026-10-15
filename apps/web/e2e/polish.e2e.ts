@@ -190,3 +190,71 @@ test.describe('readable, in whichever theme this project is', () => {
     await expectNoAxe(menu);
   });
 });
+
+test.describe("a message's hover controls (#653)", () => {
+  test('clear the first line of their message, and on a wide window the row above it too', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    await signIn('bob');
+    await page.goto(`/w/${world.workspace.slug}/c/${world.channels.api}`);
+    const rows = page.locator('[data-message-row]');
+    await expect(rows.first()).toBeVisible();
+    const count = await rows.count();
+    const measured: string[] = [];
+    const wide = (page.viewportSize()?.width ?? 0) >= 900;
+    for (let i = Math.max(1, count - 8); i < count; i += 1) {
+      const row = rows.nth(i);
+      await row.scrollIntoViewIfNeeded();
+      await row.hover();
+      const controls = row.locator('[data-hover-controls]').first();
+      if ((await controls.count()) === 0) continue;
+      await expect(controls).toHaveCSS('opacity', '1');
+      const overlap = await row.evaluate((element) => {
+        const bar = element.querySelector('[data-hover-controls]')?.getBoundingClientRect();
+        const text = element.querySelector('p, pre')?.firstChild;
+        if (bar === undefined || text === null || text === undefined) return null;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const line = range.getClientRects()[0];
+        const above = element.previousElementSibling?.getBoundingClientRect();
+        return {
+          intoTheLine: line === undefined ? 0 : bar.bottom - line.top,
+          intoTheRowAbove: above === undefined ? 0 : above.bottom - bar.top,
+        };
+      });
+      if (overlap === null) continue;
+      measured.push(JSON.stringify(overlap));
+      expect(
+        overlap.intoTheLine,
+        `the controls are over the first line of row ${String(i)}`,
+      ).toBeLessThanOrEqual(0);
+      // A narrow window's controls are a finger tall (size-touch) and taller than the gap between rows:
+      // there they hang over the corner of the row above rather than over their own words, as a chat's
+      // hover controls commonly do. A wide window has room for both.
+      if (wide) {
+        expect(
+          overlap.intoTheRowAbove,
+          `the controls are over the row above row ${String(i)}`,
+        ).toBeLessThanOrEqual(0);
+      }
+    }
+    expect(measured.length, 'no row was measured').toBeGreaterThan(3);
+  });
+
+  test('are not drawn while the message is being edited', async ({ page, signIn, room }) => {
+    // Seeded before the page loads, as editing.e2e.ts does: sent from the page and edited at once,
+    // the row being edited could be the optimistic one the server's echo was replacing.
+    const made = await room({ messages: [{ by: 'dogancan', text: 'a message to edit' }] });
+    await signIn();
+    await page.goto(made.path);
+    const row = page.locator('[data-message-row]', { hasText: 'a message to edit' });
+    await expect(row).toBeVisible();
+    await page.getByRole('textbox', { name: /^Message/ }).focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByRole('textbox', { name: 'Edit your message' })).toBeFocused();
+    await row.hover();
+    await expect(row.locator('[data-hover-controls]')).toHaveCount(0);
+  });
+});

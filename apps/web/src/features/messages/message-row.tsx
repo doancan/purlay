@@ -220,10 +220,16 @@ const MessageRowView = ({
             )}
             <EditedMark message={message} mine={isMine(message, meId)} />
             {!deleted && <PinnedMark message={message} />}
-            {delivery === 'sent' && !deleted && (
+            {/* None of them applies while the message is being edited, and they were drawn over the editor (#653). */}
+            {delivery === 'sent' && !deleted && !editing && (
               <div
+                data-hover-controls=""
                 className={cn(
-                  'absolute -top-4 flex rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-card transition-opacity duration-hover ease-standard',
+                  // Above the first line, not over it: the group is taller than the bubble's padding, and
+                  // hung lower it hid the words it is about (#653). Wide, the row above is still clear; on a
+                  // narrow window the controls are a finger tall, so they stand on the bubble's top edge and
+                  // hang over the corner of the row above instead of over their own words.
+                  'absolute -top-8 max-narrow:top-auto max-narrow:bottom-full flex rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-card transition-opacity duration-hover ease-standard',
                   // The inner corner (D-119 §6) — but your own short bubble is narrower than the
                   // actions, which then ran past the feed's edge and scrolled the whole conversation
                   // sideways; on your own they hang from the corner that is always inside.
