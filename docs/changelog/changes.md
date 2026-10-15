@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: a send that cannot reach the server is failed after its three seconds, not at once (closes #655)
+
+- Since #640 an offline send goes to the HTTP door, which fails at once, and the row said "Failed to
+  send" at once while the bar promised it would send. Wanting a server is now `sending` until the send's
+  three seconds are out (UX §3.1), and a reconnect inside them sends it without a word; after them it
+  is failed, and still resent on the reconnect. A server's refusal is still said at once.
+
 ### Fix — 2026-10-15: focusing the composer on a narrow window no longer moves the page (closes #654)
 
 - #643 gave the composer's hints a row of their own on a narrow window, so focusing the composer made it

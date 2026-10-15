@@ -411,7 +411,26 @@ export const createEngine = (options: EngineOptions): Engine => {
       messageCreated(client, message);
       forget(pending.id);
     } catch (error) {
-      fail(pending.id, codeOf(error));
+      const code = codeOf(error);
+      if (!UNREACHED.has(code)) {
+        fail(pending.id, code);
+        return;
+      }
+      // Wanting a server is not yet a failure: the send stays `sending` until its three seconds are
+      // out, as it would over the socket (UX §3.1), and a reconnect inside them sends it — `transmit`
+      // cancels this deadline for its own (#655). After them it is failed, and still resent then.
+      const age = options.clock.now().getTime() - Date.parse(pending.createdAt);
+      timers.get(pending.id)?.();
+      timers.set(
+        pending.id,
+        schedule(
+          () => {
+            timers.delete(pending.id);
+            fail(pending.id, code);
+          },
+          Math.max(0, ACK_DEADLINE_MS - age),
+        ),
+      );
     }
   };
 

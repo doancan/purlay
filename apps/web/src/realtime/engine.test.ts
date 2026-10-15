@@ -575,6 +575,13 @@ describe('a send that failed because the server could not be reached', () => {
     const refused = w.engine.send({ channelId: CH, content: 'refused' });
     await Promise.resolve();
     await Promise.resolve();
+    // A refusal is the server's answer, said at once; wanting a server is not yet a failure: the send
+    // is `sending` until its three seconds are out, as it would be over the socket (UX §3.1, #655).
+    expect(w.pending().map((p) => [p.id, p.delivery, p.reason])).toEqual([
+      [unreachable, 'sending', null],
+      [refused, 'failed', 'VALIDATION_FAILED'],
+    ]);
+    w.timers.advance(ACK_DEADLINE_MS);
     expect(w.pending().map((p) => [p.id, p.delivery, p.reason])).toEqual([
       [unreachable, 'failed', 'NETWORK'],
       [refused, 'failed', 'VALIDATION_FAILED'],
@@ -591,6 +598,26 @@ describe('a send that failed because the server could not be reached', () => {
       reason: null,
     });
     expect(w.pending().find((p) => p.id === refused)).toMatchObject({ delivery: 'failed' });
+  });
+
+  test('back before its three seconds are out, it is simply sent: never shown as failed (#655)', async () => {
+    const w = world({ send: () => Promise.reject(new ApiError(0, 'NETWORK', 'down')) });
+    w.engine.start();
+    w.open();
+    w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+    const id = w.engine.send({ channelId: CH, content: 'a blip' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(w.pending()[0]).toMatchObject({ id, delivery: 'sending', reason: null });
+    // The first reconnect comes well inside the three seconds.
+    for (let waited = 0; w.sockets.length < 2 && waited < ACK_DEADLINE_MS - 100; waited += 100) {
+      w.timers.advance(100);
+    }
+    w.open();
+    expect(w.sentOps('MESSAGE_SEND').map((s) => s.id)).toEqual([id]);
+    w.deliver(ack(id));
+    w.timers.advance(ACK_DEADLINE_MS * 2);
+    expect(w.pending()[0]).toMatchObject({ id, delivery: 'sent' });
   });
 
   test('a send that timed out stays failed for the person on the next connection (§5.3)', () => {
