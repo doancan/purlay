@@ -203,14 +203,16 @@ const QuestionRow = ({
             <time dateTime={question.createdAt} className="font-mono text-caption text-ink-subtle">
               {format.time(question.createdAt, now)}
             </time>
+            {/* On the author's line, where a wide window drew it anyway: as a column of its own it
+            left a phone's excerpt two words a line (#688). */}
+            <span className="ml-auto inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
+              <Icon name="reply" size="sm" />
+              {t('questions.replies', { replies, when: format.time(last, now) })}
+            </span>
           </span>
           <span className="block truncate text-body text-ink max-narrow:line-clamp-2 max-narrow:whitespace-normal">
             {textOf(question)}
           </span>
-        </span>
-        <span className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
-          <Icon name="reply" size="sm" />
-          {t('questions.replies', { replies, when: format.time(last, now) })}
         </span>
       </button>
     </li>

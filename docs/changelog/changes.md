@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: an open question reads in full lines on a phone (closes #688)
+
+The "2 replies · 14:49" pill was a column of its own beside each question, which at 390 px left the
+question two or three words a line. It is on the author's line now — where a wide window drew it
+anyway — and the question has the row's width; `apps/web/e2e/narrow.e2e.ts` measures it.
+
 ### Fix — 2026-10-15: an offline send says it will go on its own (closes #685)
 
 A send written while the network was gone said "Failed to send · Check your connection and try again"
