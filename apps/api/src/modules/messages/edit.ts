@@ -210,6 +210,22 @@ const countMentions = async (
   told: readonly string[],
   writtenAt: Date,
 ): Promise<readonly ChannelStateUpdate[]> => {
+  if (told.length === 0) return [];
+  // Locked first, by `user_id` — the order a send counting arrivals takes them in (#670) — and only
+  // those updated (#669). Updated straight away, `user_id in (…)` reached the rows in whatever order
+  // the plan gave: on a small table a sequential scan, in their physical order, and an edit naming
+  // two people beside a send deadlocked (seen in a chaos soak, then pinned by a test).
+  const locked = (
+    await executor
+      .selectFrom('channel_members')
+      .select('user_id')
+      .where('channel_id', '=', context.channelId)
+      .where('user_id', 'in', told)
+      .orderBy('user_id')
+      .forNoKeyUpdate()
+      .execute()
+  ).map((row) => row.user_id);
+  if (locked.length === 0) return [];
   const changed = await executor
     .updateTable('channel_members')
     .set({
@@ -217,7 +233,7 @@ const countMentions = async (
       state_version: sql<number>`state_version + 1`,
     })
     .where('channel_id', '=', context.channelId)
-    .where('user_id', 'in', told)
+    .where('user_id', 'in', locked)
     .where((eb) =>
       eb.or([eb('last_read_message_id', 'is', null), eb('last_read_message_id', '<', messageId)]),
     )

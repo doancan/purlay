@@ -391,6 +391,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
   {
+    id: 'edit-mentions-counted-out-of-order',
+    why: 'an edit naming two people locks them in its scan order beside a send that locks them in user order: a deadlock, and a 500 (#669)',
+    file: 'apps/api/src/modules/messages/edit.ts',
+    find: "      .where('user_id', 'in', told)\n      .orderBy('user_id')\n      .forNoKeyUpdate()\n",
+    replace: "      .where('user_id', 'in', told)\n      .orderBy('user_id')\n",
+    tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
+  },
+  {
     id: 'arrival-counted-out-of-order',
     why: 'two senders into one channel each hold a member row the other needs: a deadlock, and a send fails with 500 (#668)',
     file: 'apps/api/src/modules/messages/delivery.ts',
@@ -1894,8 +1902,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'edit-row-not-locked',
     why: 'an edit that passed its guard just before a delete committed writes the deleted words back',
     file: 'apps/api/src/modules/messages/edit.ts',
-    find: '    .forNoKeyUpdate()\n',
-    replace: '',
+    find: '    // not made to wait — FOR UPDATE would, and a reader holding its membership deadlocks on it.\n    .forNoKeyUpdate()\n',
+    replace:
+      '    // not made to wait — FOR UPDATE would, and a reader holding its membership deadlocks on it.\n',
     tests: ['apps/api/src/modules/messages/concurrency.integration.test.ts'],
   },
   {
@@ -1934,8 +1943,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'edit-counts-mentions-in-every-channel',
     why: "a name an edit adds raises the person's mention count in every channel they are in",
     file: 'apps/api/src/modules/messages/edit.ts',
-    find: "    .where('channel_id', '=', context.channelId)\n    .where('user_id', 'in', told)",
-    replace: "    .where('user_id', 'in', told)",
+    find: "    .where('channel_id', '=', context.channelId)\n    .where('user_id', 'in', locked)",
+    replace: "    .where('user_id', 'in', locked)",
     tests: ['apps/api/src/modules/messages/edit.integration.test.ts'],
   },
   {
