@@ -216,6 +216,9 @@ export interface Engine {
   readonly applyPresence: (changes: readonly PresenceChange[]) => void;
   /** These people's presence is no longer known: drawn as nothing until something is heard. */
   readonly forgetPresence: (userIds: readonly string[]) => void;
+  /** The browser says the network is gone, or back: told to the connection at once (#626). */
+  readonly networkLost: () => void;
+  readonly networkBack: () => void;
 }
 
 const isSendAck = (
@@ -763,6 +766,16 @@ export const createEngine = (options: EngineOptions): Engine => {
 
   return {
     store,
+    networkLost: (): void => {
+      // The socket is known gone, so no ACK can come: a send waiting for one is not failed on its
+      // deadline but stays `sending`, and the reconnect sends it again with the same id (D-33).
+      for (const cancel of timers.values()) cancel();
+      timers.clear();
+      connection?.networkLost();
+    },
+    networkBack: (): void => {
+      connection?.networkBack();
+    },
     start: (): void => {
       if (connection === null) {
         connection = build();

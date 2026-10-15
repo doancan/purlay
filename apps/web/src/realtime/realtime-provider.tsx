@@ -96,6 +96,23 @@ export const RealtimeProvider = ({
     };
   }, [engine]);
 
+  // The browser knows the network went before the socket does: a socket is not closed when the
+  // network goes, and would read open until a PING went unanswered (#626).
+  useEffect(() => {
+    const lost = (): void => {
+      engine.networkLost();
+    };
+    const back = (): void => {
+      engine.networkBack();
+    };
+    window.addEventListener('offline', lost);
+    window.addEventListener('online', back);
+    return (): void => {
+      window.removeEventListener('offline', lost);
+      window.removeEventListener('online', back);
+    };
+  }, [engine]);
+
   // Channels the person is a member of, and only those: one they can merely see has no
   // subscription to hold, and the server would refuse it.
   const memberOf = useMemo(

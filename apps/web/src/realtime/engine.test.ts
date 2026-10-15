@@ -532,6 +532,31 @@ describe('a reconnect', () => {
   });
 });
 
+describe('the network gone under a send still waiting for its answer (#626)', () => {
+  test('is not failed on the deadline: the socket is known gone, so it is sent again on the reconnect', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'in flight' });
+    w.engine.networkLost();
+    // Past the deadline, offline: the answer could not come, which is not a failure of the send.
+    w.timers.advance(ACK_DEADLINE_MS * 2);
+    expect(w.pending()[0]).toMatchObject({ id, delivery: 'sending', reason: null });
+    // Retries ran meanwhile, and one may be mid-handshake: the socket that counts is the one after.
+    const before = w.sockets.length;
+    w.engine.networkBack();
+    for (let waited = 0; w.sockets.length === before && waited < 10_000; waited += 100) {
+      w.timers.advance(100);
+    }
+    expect(w.sockets.length).toBe(before + 1);
+    w.open();
+    // The same id: the server keeps one message whichever of the two it had (D-33).
+    expect(w.sentOps('MESSAGE_SEND').map((s) => s.id)).toEqual([id, id]);
+    w.deliver(ack(id));
+    expect(w.pending()[0]?.delivery).toBe('sent');
+  });
+});
+
 describe('a send that failed because the server could not be reached', () => {
   /**
    * The bar promises "messages will send when you are back" (`UX.md` §8). Found against the
