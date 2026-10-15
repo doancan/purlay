@@ -58,7 +58,7 @@ import {
   threadUpdated,
 } from '../data/cache';
 import type { ClientStorage } from '../data/browser-storage';
-import { codeOf, type FailureCode } from '../data/failure';
+import { codeOf, UNREACHED, type FailureCode } from '../data/failure';
 import { isApiError } from '../data/errors';
 import { families, keys } from '../data/keys';
 import type { Clock } from './clock';
@@ -74,14 +74,6 @@ import { createServerClock } from './server-clock';
 
 /** How long a send may wait for its ACK before it is shown as failed (`UX.md` §3.1). */
 export const ACK_DEADLINE_MS = 3_000;
-
-/**
- * Why a send can fail without the server ever having it: no answer at all from the HTTP door — the
- * network, or a proxy's 502/503/504 while the API is down. Such a send is still pending in truth, and
- * a reconnect sends it again (`ARCHITECTURE.md` §5.3). A timeout, or anything the server said, stays
- * failed for the person: §5.3's "Retry" is theirs.
- */
-const UNREACHED: ReadonlySet<FailureCode> = new Set<FailureCode>(['NETWORK']);
 
 /**
  * How long a replay continuation waits before it asks again, and so how many times it tries:

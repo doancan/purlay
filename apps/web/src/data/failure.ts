@@ -41,6 +41,15 @@ export type FailureKey =
   | 'failure.incidentPostmortemChanged'
   | 'failure.generic';
 
+/**
+ * Why a send can fail without the server ever having it: no answer at all from the HTTP door — the
+ * network, or a proxy's 502/503/504 while the API is down. Such a send is still pending in truth, and
+ * a reconnect sends it again (`ARCHITECTURE.md` §5.3). A timeout, or anything the server said, stays
+ * failed for the person: §5.3's "Retry" is theirs. The engine resends these, and a failed row says
+ * so in place of asking the person to (#685): one set, so the two cannot disagree.
+ */
+export const UNREACHED: ReadonlySet<FailureCode> = new Set<FailureCode>(['NETWORK']);
+
 /** The code of whatever was thrown; anything that is not an `ApiError` is a failure nobody described. */
 export const codeOf = (error: unknown): FailureCode => (isApiError(error) ? error.code : 'UNKNOWN');
 

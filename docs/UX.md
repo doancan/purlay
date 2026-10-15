@@ -450,7 +450,10 @@ no screen to show them (#521).
 
 **Connection loss** shows a single non-blocking bar: `Reconnecting…`. The composer stays
 enabled — messages queue and send on reconnect (`ARCHITECTURE.md` §5.4). Disabling input on a
-transient network blip is the failure mode this whole architecture exists to avoid.
+transient network blip is the failure mode this whole architecture exists to avoid. A send that
+never reached the server is still `failed` after its three seconds (§3.1), with Retry and Delete, but
+its words say it goes on its own when the connection is back — not to check the connection and try
+again, which is what the product is about to do for the person (#685).
 
 **Deep Work** shows a persistent, quiet indicator in the header with its expiry, and the account menu
 says the minutes left. A mode you can forget you are in is a mode that loses you messages.

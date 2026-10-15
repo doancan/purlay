@@ -24,7 +24,7 @@ import { memo, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
-import { failureKey, type FailureCode } from '../../data/failure';
+import { failureKey, UNREACHED, type FailureCode } from '../../data/failure';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Delivery } from '../../realtime/engine';
 import { cn } from '../../ui/cn';
@@ -265,7 +265,9 @@ const MessageRowView = ({
             <Icon name="failed" size="sm" />
             <span>{t('delivery.failed')}</span>
             {failure !== null && (
-              <span className="text-caption text-ink-muted">{t(failureKey(failure))}</span>
+              <span className="text-caption text-ink-muted">
+                {UNREACHED.has(failure) ? t('delivery.unreached') : t(failureKey(failure))}
+              </span>
             )}
             <span aria-hidden="true">·</span>
             <button
