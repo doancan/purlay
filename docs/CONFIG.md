@@ -282,11 +282,11 @@ the stack: the copy line was run alone under the same bare environment, and keep
 and `0600`):
 
 ```
-# a third line: the backups, mirrored to another machine you control over SSH
-30 1 * * * rsync -a --delete /srv/purlay-backups/ backup@other-host:/srv/purlay-backups/
-# and the first line, saying so when it fails (cron mails what a job prints, if the host can send mail)
+# the first line, mirroring the backups to another machine you control over SSH once a backup has
+# succeeded (never a half-written one), and saying so when either fails: cron mails what a job prints,
+# if the host can send mail
 MAILTO=ops@example.com
-0 1 * * * cd /srv/purlay && scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1 || echo "purlay backup failed: see /srv/purlay-backups/backup.log"
+0 1 * * * cd /srv/purlay && scripts/backup.sh /srv/purlay-backups >>/srv/purlay-backups/backup.log 2>&1 && rsync -a --delete /srv/purlay-backups/ backup@other-host:/srv/purlay-backups/ >>/srv/purlay-backups/backup.log 2>&1 || echo "purlay backup failed: see /srv/purlay-backups/backup.log"
 ```
 
 Encrypting the copy where it lands is the operator's choice of tool (`docs/spikes/backup-restore.md`);
