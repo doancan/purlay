@@ -42,14 +42,14 @@ describe('readiness asked from outside (#636)', () => {
     let calls = 0;
     let settle: (answer: Readiness) => void = () => undefined;
     return {
-      check: () => {
+      check: (): Promise<Readiness> => {
         calls += 1;
         return new Promise<Readiness>((resolve) => {
           settle = resolve;
         });
       },
-      calls: () => calls,
-      settle: (answer) => {
+      calls: (): number => calls,
+      settle: (answer): void => {
         settle(answer);
       },
     };
@@ -57,8 +57,8 @@ describe('readiness asked from outside (#636)', () => {
   const clockAt = (): { now: () => Date; advance: (ms: number) => void } => {
     let at = Date.parse('2026-10-15T12:00:00.000Z');
     return {
-      now: () => new Date(at),
-      advance: (ms) => {
+      now: (): Date => new Date(at),
+      advance: (ms): void => {
         at += ms;
       },
     };
