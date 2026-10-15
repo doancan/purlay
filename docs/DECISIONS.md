@@ -4373,6 +4373,14 @@ is a top-level navigation, never a pop-up, so nothing it opens needs a handle ba
 **Reopened when** #110 lands (drop the avatar host), or when a primitive that needs inline style is
 replaced or learns to take a stylesheet.
 
+*Amended 2026-10-15 (#638): the document also carries a `Permissions-Policy`.* Camera, microphone,
+geolocation, payment, USB, serial, HID, MIDI, display capture and the Topics API are off — the page uses
+none, so anything that ever runs in it cannot either. Two stay the origin's own: `clipboard-write`
+(Copy code writes it) and `fullscreen` (a video's own control). Notifications are not governed by the
+header; they ask the person (D-126). The list is whole in `edge.ts` and in its test, so a feature
+allowed later is a decision; a browser test fails if Chromium objects to an entry or the clipboard stops
+working. Rejected: the same header on API responses, which load nothing for it to govern.
+
 ---
 
 ### D-103. Editing and deleting a message — closes O-1

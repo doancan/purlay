@@ -213,11 +213,32 @@ const DOCUMENT_SECURITY_POLICY = [
   "frame-ancestors 'none'",
 ].join('; ');
 
+/**
+ * The powerful features the page never uses, off for anything that ever runs in it (#638). Two stay
+ * this origin's: the clipboard, which Copy code writes, and fullscreen, a video's own control.
+ * Notifications are not governed by this header; they ask the person (D-126).
+ */
+const DOCUMENT_PERMISSIONS = [
+  'camera=()',
+  'microphone=()',
+  'geolocation=()',
+  'payment=()',
+  'usb=()',
+  'serial=()',
+  'hid=()',
+  'midi=()',
+  'display-capture=()',
+  'browsing-topics=()',
+  'clipboard-write=(self)',
+  'fullscreen=(self)',
+].join(', ');
+
 /** What the document carries in place of the API's policy (D-102). */
 export const DOCUMENT_HEADERS: Readonly<Record<string, string>> = {
   'content-security-policy': DOCUMENT_SECURITY_POLICY,
   // Sign-in is a top-level navigation, never a pop-up: nothing it opens needs a handle back.
   'cross-origin-opener-policy': 'same-origin',
+  'permissions-policy': DOCUMENT_PERMISSIONS,
 };
 
 /** Bounded in length and in alphabet: it is written into logs and echoed in a header. */

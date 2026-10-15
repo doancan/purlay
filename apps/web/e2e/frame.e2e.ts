@@ -128,3 +128,31 @@ test.describe('the language', () => {
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Sign in to Purlay');
   });
 });
+
+test.describe('the permissions the page keeps (#638)', () => {
+  test('the browser understands every one it is given, and Copy code still reaches the clipboard', async ({
+    page,
+    context,
+    signIn,
+    world,
+  }) => {
+    test.skip(
+      test.info().project.name !== 'chromium-dark',
+      'one engine is enough: the header is the same for every project, and the clipboard permission is Chromium’s to grant',
+    );
+    const said: string[] = [];
+    page.on('console', (message) => {
+      if (/permissions.policy|unrecognized feature/i.test(message.text()))
+        said.push(message.text());
+    });
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await signIn('bob');
+    await page.goto(`/w/${world.workspace.slug}/c/${world.channels.api}`);
+    const copy = page.getByRole('button', { name: /Copy code/ }).first();
+    await copy.scrollIntoViewIfNeeded();
+    await copy.click();
+    const copied = await page.evaluate(async () => await navigator.clipboard.readText());
+    expect(copied).toContain('RetryPolicy');
+    expect(said, 'the browser objected to the permissions policy').toEqual([]);
+  });
+});
