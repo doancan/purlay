@@ -17,10 +17,16 @@
 		health_uri /health/ready
 		health_interval 5s
 		# A request that arrives while the API restarts waits up to 30 s for a
-		# ready one instead of failing 502 (#636). Caddy retries only a request it
-		# could not hand to the upstream, so nothing is sent twice.
+		# ready one instead of failing 502 (#636).
 		lb_try_duration 30s
 		lb_try_interval 250ms
+		# Tried again only if it never reached the API (#666): a connection that
+		# could not be made is always retried; one the API received and then died
+		# on is not, whatever its method. Caddy's default retries such a GET, and
+		# the OAuth callback is a GET that spends a one-time code.
+		lb_retry_match {
+			expression false
+		}
 	}
 
 	# Passed to the client unchanged; the API sets its own security headers (D-39).
