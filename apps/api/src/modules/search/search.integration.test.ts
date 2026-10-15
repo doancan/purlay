@@ -122,6 +122,29 @@ describe('integration: what is found', () => {
     });
   });
 
+  // `ILIKE` under the database's C ctype folds ASCII letters only (#700): every letter beyond them was
+  // case-sensitive, and Turkish's four i's never met.
+  test('case is ignored beyond ASCII, and I, ı, İ and i are one letter', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const as = member(room, 'alice').userId;
+      await post(db, room, 'alice', 'İstanbul toplantısı yarın');
+      await post(db, room, 'alice', 'ÇAĞRI merkezi');
+      await post(db, room, 'alice', 'ılık su');
+      await post(db, room, 'alice', 'Iğdır şubesi');
+      await post(db, room, 'alice', 'Straße und ÄRGER');
+      const found = async (q: string): Promise<string[]> =>
+        (await search(db, room, as, q)).contents;
+      expect(await found('istanbul')).toEqual(['İstanbul toplantısı yarın']);
+      expect(await found('İSTANBUL')).toEqual(['İstanbul toplantısı yarın']);
+      expect(await found('çağrı')).toEqual(['ÇAĞRI merkezi']);
+      expect(await found('ILIK')).toEqual(['ılık su']);
+      expect(await found('ığdır')).toEqual(['Iğdır şubesi']);
+      expect(await found('IĞDIR')).toEqual(['Iğdır şubesi']);
+      expect(await found('ärger')).toEqual(['Straße und ÄRGER']);
+    });
+  });
+
   test('%, _ and backslash are themselves, not patterns', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);

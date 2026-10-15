@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: search ignores case in every language, and I ı İ i are one letter (closes #700)
+
+The database is C, under which `ILIKE` folds ASCII letters only: "çağrı" did not find "ÇAĞRI",
+"istanbul" did not find "İstanbul", "ärger" did not find "ÄRGER". Search now compares
+`purlay_fold(content)` with the folded words — ICU's root lowering, then Turkish's four i's as one —
+on a trigram index built on the same expression (migration `0043`, replacing `idx_messages_search`), so
+the scan stays inside the workspace (D-10). `%`, `_` and `\` are still what was typed.
+
 ### Fix — 2026-10-15: the channel-list error spec no longer fails when another spec moves bob (part of #632)
 
 `states.e2e.ts` *the channel list … offers Retry, and recovers* failed in three of four full browser runs

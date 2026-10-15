@@ -594,8 +594,14 @@ CREATE INDEX idx_messages_thread
 
 -- Scoped substring / identifier search. btree_gin lets workspace_id sit inside the
 -- GIN index, so the trigram scan is confined to one tenant instead of the whole table. (D-10)
-CREATE INDEX idx_messages_search
-    ON messages USING gin (workspace_id, content gin_trgm_ops)
+-- On the folded text, which search compares: case ignored by Unicode, I ı İ i one letter
+-- (0043, D-105 §1 amended, #700). It replaced idx_messages_search, on the raw content.
+CREATE FUNCTION purlay_fold(value text) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    RETURN translate(lower(value COLLATE "und-x-icu"), 'ı' || U&'\0307', 'i') COLLATE "C";
+
+CREATE INDEX idx_messages_search_folded
+    ON messages USING gin (workspace_id, purlay_fold(content) gin_trgm_ops)
     WHERE deleted_at IS NULL;
 
 -- "Messages by this user", and the guard against orphaned RESTRICT references.
@@ -636,7 +642,7 @@ which is all a lookup by value needs. Measured on 1,000,000 messages (10 workspa
 | the four new `messages` indexes, on disk | | 14 MB over 376 MB of indexes |
 | 20,000 single-row inserts | 1,107 ms | 1,168 ms (+5 %) |
 
-**The search index is the expensive one, and it stays.** `idx_messages_search` is 206 MB of the 376 MB the
+**The search index is the expensive one, and it stays.** `idx_messages_search` (now `idx_messages_search_folded`, on the folded text — #700) was 206 MB of the 376 MB the
 table's indexes occupy, and removing it made 20,000 single-row inserts 1.8 times as fast on
 high-entropy text (1,107 ms against 613 ms) and 1.45 to 1.6 times on prose (892 and 1,036 ms against 607
 and 651). That is about 15 to 25 µs a message, which is invisible at the rate a team sends and is the price
@@ -1475,6 +1481,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0040_workspace_exports.sql   workspace_exports: an owner's export, made in the background, downloaded once  (D-140)
 0041_object_deletions.sql    object_deletions: objects whose rows are gone, until the store lets them go  (D-141)
 0042_object_deletions_due.sql object_deletions.due_at: an upload's keys, written ahead, due after a grace  (D-141 §4)
+0043_messages_search_folded.sql purlay_fold + idx_messages_search_folded replace idx_messages_search: case by Unicode  (D-105 §1, #700)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

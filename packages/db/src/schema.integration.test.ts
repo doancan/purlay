@@ -121,7 +121,7 @@ describe('integration: the migrated schema', () => {
     const names = rows.map((row) => row.name);
     for (const kept of [
       'idx_messages_channel_feed',
-      'idx_messages_search',
+      'idx_messages_search_folded',
       'idx_messages_sender',
       'idx_messages_thread',
       'idx_messages_unresolved',

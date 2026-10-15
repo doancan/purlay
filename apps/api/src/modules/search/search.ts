@@ -7,10 +7,11 @@
  * cannot reach the answer even for a moment. A deleted message is not found: its words are not on
  * any screen, and search must not be the way back to them (D-103).
  *
- * The match is `ILIKE`, backed by the trigram index `idx_messages_search` — which is why a search is
- * at least three characters (`SEARCH_QUERY_MIN`): below a trigram the index cannot help.
+ * The match is `LIKE` on both sides folded — case ignored by Unicode, I ı İ i one letter (#700) —
+ * backed by the trigram index `idx_messages_search_folded` on the same expression, which is why a
+ * search is at least three characters (`SEARCH_QUERY_MIN`): below a trigram the index cannot help.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import type { MessagePage, SearchQuery } from '@purlay/types';
 import { channelNotFound } from '../../platform/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
@@ -44,7 +45,13 @@ export const searchIn = async (
     .where('messages.workspace_id', '=', context.workspaceId)
     .where('messages.channel_id', 'in', channelIds)
     .where('messages.deleted_at', 'is', null)
-    .where('messages.content', 'ilike', literalPattern(query.q))
+    // Case folded by Unicode on both sides, I ı İ i as one letter (#700), through the expression
+    // `idx_messages_search_folded` is built on.
+    .where(
+      sql<string>`purlay_fold(messages.content)`,
+      'like',
+      sql<string>`purlay_fold(${literalPattern(query.q)})`,
+    )
     .orderBy('messages.id', 'desc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);

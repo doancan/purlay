@@ -4491,6 +4491,14 @@ D-10 fixed the index and the scope; nothing fixed what a search *means*. Served 
 `idx_messages_search`. `%`, `_` and `\` are what the person typed, escaped before they reach the
 pattern: a search for `100%` is not a search for `100`. Nothing is stemmed, split or ranked (D-10).
 
+*Amended 2026-10-15 (#700):* "ignoring case" now means by Unicode. Under the database's C ctype
+`ILIKE` folded ASCII alone — "çağrı" did not find "ÇAĞRI", "istanbul" not "İstanbul". Both sides are
+folded by `purlay_fold` — ICU's root lowering, then I ı İ i as one letter — and compared with `LIKE`
+on `idx_messages_search_folded`, built on the same expression. Rejected: *a language's own lowering*
+(Turkish lowers I to ı, every other language to i, and one workspace writes both); *a database
+created with an ICU locale* (a fresh cluster for every deployment, and identifiers would stop comparing
+byte-wise, D-40).
+
 **2 · A trigram at least, and a bounded length, after trimming** (`SEARCH_QUERY_MIN`,
 `SEARCH_QUERY_MAX` in `@purlay/types`). Below a trigram the index cannot narrow anything, so a
 two-letter search is a scan of the workspace; the maximum bounds the pattern a request may hand to
