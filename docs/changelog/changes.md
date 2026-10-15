@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-15: the socket tests that fill the kernel's buffers state their own time (part of #632)
+
+- They post megabytes until the kernel's buffers fill, and on a loaded machine one ran past Bun's
+  default five seconds. They now state their own budget; what decides whether the server works is still
+  their own bound and the three-second wait for the close.
+
 ### Fix — 2026-10-15: a restart is held by the proxy, not answered 503; readiness is bounded (closes #636)
 
 - While the API restarted, the proxy answered at once that no upstream was there. It now holds a
