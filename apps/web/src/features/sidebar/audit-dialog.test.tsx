@@ -278,6 +278,31 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('a feed entry names its channel to a viewer who can see it, and only to them (#691)', async () => {
+    const view = await openDialog({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'integration.feed_removed',
+              targetType: 'integration',
+              // A channel this viewer cannot see — private and not theirs — stays unnamed.
+              metadata: { repository: 'acme/api', channelId: entryId(99) },
+            }),
+            anEntry(1, {
+              action: 'integration.feed_created',
+              targetType: 'integration',
+              metadata: { repository: 'acme/api', channelId: IDS.api },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} disconnected acme/api from a channel`,
+      `${ME.displayName} connected acme/api to #api`,
+    ]);
+  });
+
   test('an action this client does not know is said by its name; an erased actor or a gone channel is said as such', async () => {
     const view = await openDialog({
       audit: () =>

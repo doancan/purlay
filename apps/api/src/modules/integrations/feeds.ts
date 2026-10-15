@@ -181,7 +181,8 @@ export const createFeed = async (
     action: 'integration.feed_created',
     targetType: 'integration',
     targetId: id,
-    metadata: { repository },
+    // Where, as well as what: the audit log names the channel to whoever can see it (#691).
+    metadata: { repository, channelId: context.channelId },
   });
   return { feed: feedOf(row), webhookPath: `/api/webhooks/github/${id}`, secret };
 };
@@ -209,6 +210,6 @@ export const removeFeed = async (
     action: 'integration.feed_removed',
     targetType: 'integration',
     targetId: feedId,
-    metadata: { repository: removed.repository_full_name },
+    metadata: { repository: removed.repository_full_name, channelId: context.channelId },
   });
 };

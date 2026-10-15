@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-15: the audit log says which channel a repository was connected to (closes #691)
+
+`integration.feed_created` and `integration.feed_removed` now record the channel's id beside the
+repository, and **Audit log…** names it — *connected acme/api to #deploys* — from the channels the
+viewer can see, so a private channel they are not in is still "a channel". Entries written before keep
+their words.
+
 ### Fix — 2026-10-15: an open question reads in full lines on a phone (closes #688)
 
 The "2 replies · 14:49" pill was a column of its own beside each question, which at 390 px left the

@@ -103,16 +103,23 @@ export const AuditDialog = ({
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':
         return t('audit.action.integration.token_removed', { actor });
+      // Named only from the channels this viewer can see: a private one they are not in, or an entry
+      // from before the channel was recorded, stays "a channel" (#691).
       case 'integration.feed_created':
-        return t('audit.action.integration.feed_created', {
-          actor,
-          repository: entry.metadata['repository'] ?? '',
-        });
-      case 'integration.feed_removed':
-        return t('audit.action.integration.feed_removed', {
-          actor,
-          repository: entry.metadata['repository'] ?? '',
-        });
+      case 'integration.feed_removed': {
+        const repository = entry.metadata['repository'] ?? '';
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        const removed = entry.action === 'integration.feed_removed';
+        if (name == null) {
+          return removed
+            ? t('audit.action.integration.feed_removed', { actor, repository })
+            : t('audit.action.integration.feed_created', { actor, repository });
+        }
+        const channel = `#${name}`;
+        return removed
+          ? t('audit.action.integration.feed_removed_from', { actor, repository, channel })
+          : t('audit.action.integration.feed_created_in', { actor, repository, channel });
+      }
       case 'invitation.created':
         return t('audit.action.invitation.created', { actor });
       case 'invitation.revoked':
