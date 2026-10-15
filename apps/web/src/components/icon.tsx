@@ -40,6 +40,8 @@ import {
   CircleHelp,
   CircleX,
   Clock,
+  Download,
+  History,
   Quote,
   Copy,
   Ellipsis,
@@ -61,6 +63,7 @@ import {
   Pencil,
   Plus,
   Reply,
+  ScrollText,
   Search,
   SendHorizontal,
   Settings,
@@ -72,6 +75,7 @@ import {
   Trash2,
   TriangleAlert,
   User,
+  Users,
   X,
 } from 'lucide-react';
 
@@ -126,6 +130,14 @@ const glyphs = {
   language: Languages,
   'sign-out': LogOut,
   person: User,
+  /** The workspace's people, as a list to manage — not one person. */
+  people: Users,
+  /** Who did which administrative thing: a record to read. */
+  audit: ScrollText,
+  /** How long the workspace keeps what was said. */
+  history: History,
+  /** Something that leaves the instance as a file. */
+  download: Download,
   shortcuts: Keyboard,
   warning: TriangleAlert,
   info: Info,

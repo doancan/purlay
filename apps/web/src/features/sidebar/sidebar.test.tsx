@@ -603,6 +603,26 @@ describe('the workspace menu', () => {
     ]);
   });
 
+  test('each place in it has a glyph of its own, so it is found without reading every label (#642)', async () => {
+    const view = await open();
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    const places = view
+      .getAllByRole('menuitem')
+      .filter((item) => item.textContent.endsWith('…'))
+      .map((item) => ({
+        place: item.textContent,
+        glyph: [...(item.querySelector('svg')?.classList ?? [])].find(
+          (name) => name.startsWith('lucide-') && name !== 'lucide-icon',
+        ),
+      }));
+    expect(places.length).toBeGreaterThan(5);
+    expect(places.filter((p) => p.glyph === undefined)).toEqual([]);
+    const glyphs = places.map((p) => p.glyph);
+    expect(new Set(glyphs).size, JSON.stringify(places)).toBe(glyphs.length);
+    // And none borrows another place's: the keyboard is Keyboard shortcuts', not the audit log's.
+    expect(places.find((p) => p.place === 'Audit log…')?.glyph).not.toBe('lucide-keyboard');
+  });
+
   test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
     const view = await open();
     const sidebar = within(view.getByRole('complementary'));
