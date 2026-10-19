@@ -53,8 +53,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   inbox (a dot while anything needs you — the same fact as the mention badges, D-106, so in Deep Work
   it is not drawn, as they are not, D-15), open
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
-  messages you kept to come back to, in three tabs, In progress, Archived and Completed, each moved
-  or let go from its row (D-128). Every entry is a route
+  messages you kept to come back to, in three tabs, In progress, Archived and Completed — chosen
+  above the list as the inbox's All and Unread are (D-158) — each moved or let go from its row
+  (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
 - **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the

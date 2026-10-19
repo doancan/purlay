@@ -35,7 +35,13 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
-import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
+import {
+  ListCard,
+  ListColumn,
+  ListFilter,
+  listButtonClasses,
+  listRowClasses,
+} from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
@@ -390,30 +396,15 @@ export const InboxScreen = (): React.JSX.Element => {
         )}
       </header>
       <ListColumn>
-        <div
-          role="group"
-          aria-label={t('inbox.show')}
-          className="flex self-start rounded-lg bg-surface-200 p-1"
-        >
-          {(['all', 'unread'] as const).map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              aria-pressed={filter === choice}
-              onClick={() => {
-                setFilter(choice);
-              }}
-              className={cn(
-                'inline-flex h-control items-center rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
-                filter === choice
-                  ? 'bg-surface-100 text-ink shadow-card'
-                  : 'text-ink-muted hover:text-ink',
-              )}
-            >
-              {t(`inbox.filter.${choice}`)}
-            </button>
-          ))}
-        </div>
+        <ListFilter
+          label={t('inbox.show')}
+          value={filter}
+          choices={(['all', 'unread'] as const).map((choice) => ({
+            value: choice,
+            label: t(`inbox.filter.${choice}`),
+          }))}
+          onChange={setFilter}
+        />
         {body}
       </ListColumn>
     </>

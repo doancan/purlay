@@ -31,7 +31,13 @@ import { useToast } from '../../ui/toast';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
-import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
+import {
+  ListCard,
+  ListColumn,
+  ListFilter,
+  listButtonClasses,
+  listRowClasses,
+} from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
@@ -119,6 +125,11 @@ const Row = ({
           the row's hover or a keyboard's focus, over the row's meta line and in its hover tone, so they
           read as the row's own; on a phone, where nothing hovers, they stay below the words. */}
       <div className="absolute top-1 right-3 flex gap-1 bg-surface-050 pl-2 opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:static max-narrow:flex-wrap max-narrow:bg-transparent max-narrow:px-3 max-narrow:pt-0 max-narrow:pb-3 max-narrow:opacity-100">
+        {/* On a phone, an avatar's width first: the buttons' words then start where the message's do. */}
+        <span
+          aria-hidden="true"
+          className="hidden shrink-0 max-narrow:block max-narrow:size-avatar"
+        />
         {MOVES[item.state].map((to) => (
           <Button
             key={to}
@@ -259,8 +270,7 @@ export const SavedScreen = (): React.JSX.Element => {
 
   return (
     <>
-      {/* On a phone the tabs take a row of their own: beside the title they were drawn over it (#681). */}
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5 max-narrow:h-auto max-narrow:flex-wrap max-narrow:py-2">
+      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
@@ -268,26 +278,19 @@ export const SavedScreen = (): React.JSX.Element => {
           </HeaderTile>
           <h1 className="whitespace-nowrap text-heading text-ink">{t('saved.title')}</h1>
         </div>
-        <div role="group" aria-label={t('saved.tabs')} className="flex gap-1 max-narrow:w-full">
-          {STATES.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              aria-pressed={tab === state}
-              className={cn(
-                'rounded-md px-3 py-1 text-label max-narrow:h-touch max-narrow:flex-1',
-                tab === state ? 'bg-surface-200 text-ink' : 'text-ink-muted hover:text-ink',
-              )}
-              onClick={() => {
-                navigate(`${href('saved', { slug: workspace.slug })}?state=${tab}`);
-              }}
-            >
-              {t(`saved.tab.${tab}`)}
-            </button>
-          ))}
-        </div>
       </header>
-      <ListColumn>{body}</ListColumn>
+      <ListColumn>
+        {/* Over the rows it chooses, as the inbox's is (D-158); a phone gives it the column's width. */}
+        <ListFilter
+          label={t('saved.tabs')}
+          value={state}
+          choices={STATES.map((tab) => ({ value: tab, label: t(`saved.tab.${tab}`) }))}
+          onChange={(tab) => {
+            navigate(`${href('saved', { slug: workspace.slug })}?state=${tab}`);
+          }}
+        />
+        {body}
+      </ListColumn>
     </>
   );
 };

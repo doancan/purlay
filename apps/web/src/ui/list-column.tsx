@@ -56,3 +56,48 @@ export const listButtonClasses = (extra?: string): string =>
     'flex w-full items-start gap-3 px-5 py-3 text-left transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:px-4',
     extra,
   );
+
+interface ListFilterProps<V extends string> {
+  /** What the choice is about, said as the group is entered. */
+  readonly label: string;
+  readonly value: V;
+  readonly choices: readonly { readonly value: V; readonly label: string }[];
+  readonly onChange: (value: V) => void;
+}
+
+/**
+ * Which part of the list is shown — Unread, Archived — at the top of the column, over the rows it
+ * filters, in every list screen alike: the chosen one raised on a sunk track. On a phone it is the
+ * column's width, each choice a finger tall.
+ */
+export const ListFilter = <V extends string>({
+  label,
+  value,
+  choices,
+  onChange,
+}: ListFilterProps<V>): React.JSX.Element => (
+  <div
+    role="group"
+    aria-label={label}
+    className="flex self-start rounded-lg bg-surface-200 p-1 max-narrow:self-stretch"
+  >
+    {choices.map((choice) => (
+      <button
+        key={choice.value}
+        type="button"
+        aria-pressed={value === choice.value}
+        onClick={() => {
+          onChange(choice.value);
+        }}
+        className={cn(
+          'inline-flex h-control items-center justify-center rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1',
+          value === choice.value
+            ? 'bg-surface-100 text-ink shadow-card'
+            : 'text-ink-muted hover:text-ink',
+        )}
+      >
+        {choice.label}
+      </button>
+    ))}
+  </div>
+);
