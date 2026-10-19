@@ -835,6 +835,7 @@ export const tr = {
   'upload.why.busy': 'Sunucu meşgul',
   'upload.why.storage': 'Dosya deposuna ulaşılamıyor',
   'upload.why.session': 'Oturumun sona erdi: tekrar giriş yap',
+  'upload.why.notInWorkspace': 'Bu çalışma alanına artık erişimin yok',
   'upload.uploadingPercent': 'Yükleniyor… %{percent}',
   'upload.progressOf': '{name} yükleniyor',
   'upload.retry': '{name}: yeniden dene',

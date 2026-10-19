@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
-import type { Message, ThreadFollow, ThreadPage } from '@purlay/types';
+import type { Attachment, Message, ThreadFollow, ThreadPage } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -353,6 +353,60 @@ describe('replying', () => {
     });
     const mine = rowAround(within(section).getByText('because of the rate limit'));
     expect(within(mine).getByLabelText('Sending')).toBeDefined();
+    view.unmountAll();
+  });
+
+  // The thread's box has the channel's buttons (D-164): a reply formats and carries files like any message.
+  test('the thread’s box has the channel’s buttons, and a file attached in it goes with the reply', async () => {
+    const uploaded: string[] = [];
+    const view = await mount({
+      api: {
+        upload: (_workspaceId, { id, name, file }): Promise<Attachment> => {
+          uploaded.push(id);
+          return Promise.resolve({
+            id,
+            fileName: name,
+            mimeType: 'text/plain',
+            sizeBytes: file.size,
+            kind: 'file',
+            width: null,
+            height: null,
+          });
+        },
+      },
+    });
+    connect(view);
+    await showThread(view);
+    const section = sectionOf(view);
+    for (const name of ['Bold', 'Code block', 'Mention someone', 'Attach a file']) {
+      expect(within(section).getByRole('button', { name })).toBeDefined();
+    }
+    const box = within(section).getByLabelText<HTMLTextAreaElement>('Message a thread in api');
+    await person().click(within(section).getByRole('button', { name: 'Bold' }));
+    expect(box.value).toBe('****');
+    const picker = section.querySelector<HTMLInputElement>('input[type="file"]');
+    if (picker === null) throw new Error('no file picker in the thread');
+    act(() => {
+      fireEvent.change(picker, {
+        target: { files: [new File([new Uint8Array([1, 2])], 'trace.txt')] },
+      });
+    });
+    await settle();
+    expect(within(section).getByText('trace.txt')).toBeDefined();
+    // Typed where the button left the caret: between the marks.
+    await person().type(box, 'the trace{Enter}', { skipClick: true });
+    await settle();
+    expect(uploaded).toHaveLength(1);
+    expect(view.world.sockets.sent('MESSAGE_SEND').at(-1)?.payload).toMatchObject({
+      channelId: IDS.api,
+      content: '**the trace**',
+      parentId: messageIdAt(ROOT),
+      attachmentIds: uploaded,
+    });
+    // The chip went with the reply, which carries the file in the thread.
+    expect(within(section).queryByRole('list', { name: 'Files to send' })).toBeNull();
+    expect(rowAround(within(section).getByText('the trace')).textContent).toContain('trace.txt');
+    await expectNoAxeViolations(section);
     view.unmountAll();
   });
 

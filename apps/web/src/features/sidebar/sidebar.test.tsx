@@ -760,6 +760,18 @@ describe('the workspace menu', () => {
     expectFocusOn(door);
   });
 
+  test('Cancel in the create dialog closes it without making anything', async () => {
+    const view = await open();
+    await person().click(
+      within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' }),
+    );
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
+  });
+
   test('choosing another goes to it', async () => {
     const view = await open(
       aSignedInApi({

@@ -1262,6 +1262,25 @@ describe('attaching files (D-109, #370)', () => {
       },
     ],
     [
+      'file storage down',
+      new ApiError(503, 'STORAGE_UNAVAILABLE', 'down'),
+      { en: 'File storage is unavailable', tr: 'Dosya deposuna ulaşılamıyor', retry: true },
+    ],
+    [
+      'no longer in the workspace',
+      new ApiError(404, 'WORKSPACE_NOT_FOUND', 'gone'),
+      {
+        en: 'You no longer have access to this workspace',
+        tr: 'Bu çalışma alanına artık erişimin yok',
+        retry: false,
+      },
+    ],
+    [
+      'a refusal no upload meets',
+      new ApiError(500, 'INTERNAL', 'oops'),
+      { en: 'Didn’t upload', tr: 'Yüklenmedi', retry: true },
+    ],
+    [
       'anything nobody described',
       new Error('boom'),
       { en: 'Didn’t upload', tr: 'Yüklenmedi', retry: true },
@@ -1294,7 +1313,11 @@ describe('attaching files (D-109, #370)', () => {
     Object.defineProperty(huge, 'size', { value: ATTACHMENT_BYTES_MAX + 1 });
     paste(box(), [huge]);
     expect(uploads.calls).toEqual([]);
-    expect(view.getByText('Larger than 25 MB')).toBeDefined();
+    const chip = view.getByText('Larger than 25 MB').closest('li');
+    if (chip === null) throw new Error('no chip');
+    // Nothing to retry: the same bytes are as large again. Remove is the way on.
+    expect(within(chip).queryByRole('button', { name: 'Retry huge.mov' })).toBeNull();
+    expect(within(chip).getByRole('button', { name: 'Remove huge.mov' })).toBeDefined();
   });
 
   test('a chip can be removed, and its upload is thrown away on the server too', async () => {

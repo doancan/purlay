@@ -147,9 +147,9 @@ export const useUploads = (): Uploads => {
 /**
  * Why an upload was refused, in words, from the code it was refused with (D-159) — and whether Retry
  * is offered: not where the same bytes would be refused the same way (too large, unreadable, a type
- * refused), so the one control left is Remove. Out of room says how much room there is, so the person
- * knows what would still go. The general sentences of `failure.ts` are written for a dialog; these are
- * a chip's, a phrase beside a file's name.
+ * refused, a workspace the person is no longer in), so the one control left is Remove. Out of room
+ * says how much room there is, so the person knows what would still go. The general sentences of
+ * `failure.ts` are written for a dialog; these are a chip's, a phrase beside a file's name.
  */
 const uploadRefusal = (
   reason: FailureCode,
@@ -194,6 +194,10 @@ const uploadRefusal = (
       return { text: t('upload.why.storage'), retry: true };
     case 'UNAUTHENTICATED':
       return { text: t('upload.why.session'), retry: true };
+    // The workspace answers a person who is no longer in it as one that does not exist (404, never
+    // 403): taken out of it, or it was deleted. The same bytes would be refused the same way.
+    case 'WORKSPACE_NOT_FOUND':
+      return { text: t('upload.why.notInWorkspace'), retry: false };
     // Nothing more to say than that it did not: the server's fault, or a refusal no upload meets.
     case 'LENGTH_REQUIRED':
     case 'ATTACHMENT_ID_CONFLICT':
@@ -201,7 +205,6 @@ const uploadRefusal = (
     case 'FORBIDDEN':
     // Membership is the send's to judge (D-156): an upload is the workspace's, before any channel.
     case 'NOT_A_CHANNEL_MEMBER':
-    case 'WORKSPACE_NOT_FOUND':
     case 'DATABASE_UNAVAILABLE':
     case 'INTERNAL':
     case 'MALFORMED':
@@ -262,10 +265,8 @@ export const UploadList = ({
           item.status === 'failed'
             ? uploadRefusal(item.reason, item.remainingBytes, t, format)
             : item.status === 'too-large'
-              ? {
-                  text: t('upload.tooLarge', { size: format.bytes(ATTACHMENT_BYTES_MAX) }),
-                  retry: false,
-                }
+              ? // Refused here, before a byte left, in the words the server would have used.
+                uploadRefusal('PAYLOAD_TOO_LARGE', null, t, format)
               : null;
         return (
           <li
