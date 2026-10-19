@@ -43,8 +43,8 @@ const call = async (
 /** One person, a workspace and a channel with one message in it. */
 const aWorld = async (
   db: Executor,
-): Promise<{ cookie: string; workspaceId: string; channelId: string }> => {
-  const { cookie } = await aSignedInUser(db, clock, 'se-alice');
+): Promise<{ cookie: string; userId: string; workspaceId: string; channelId: string }> => {
+  const { cookie, userId } = await aSignedInUser(db, clock, 'se-alice');
   const created = await call(db, 'POST', '/api/workspaces', cookie, {
     name: 'se',
     slug: aUniqueSlug('se'),
@@ -59,7 +59,7 @@ const aWorld = async (
     content: 'the deploy is at noon',
   });
   expect(sent.ok).toBe(true);
-  return { cookie, workspaceId, channelId };
+  return { cookie, userId, workspaceId, channelId };
 };
 
 const search = async (
@@ -121,6 +121,27 @@ describe('integration: the search door', () => {
       );
       expect(nowhere.status).toBe(404);
       expect(await codeOf(nowhere)).toBe('CHANNEL_NOT_FOUND');
+    });
+  });
+
+  test('senderId narrows to one person, and must be an id', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const mine = await search(db, world, `q=deploy&senderId=${world.userId}`);
+      expect(mine.status).toBe(200);
+      expect(((await mine.json()) as SearchPage).data.map((m) => m.content)).toEqual([
+        'the deploy is at noon',
+      ]);
+      const nobody = await search(
+        db,
+        world,
+        'q=deploy&senderId=00000000-0000-4000-8000-000000000000',
+      );
+      expect(nobody.status).toBe(200);
+      expect(await nobody.json()).toEqual({ data: [], nextCursor: null });
+      const malformed = await search(db, world, 'q=deploy&senderId=alice');
+      expect(malformed.status).toBe(400);
+      expect(await codeOf(malformed)).toBe('VALIDATION_FAILED');
     });
   });
 

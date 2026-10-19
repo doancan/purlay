@@ -161,6 +161,12 @@ export interface CrossTenantCase {
   /** The query string the request needs to be one the endpoint can answer (an upload's id and name). */
   readonly query?: string;
   /**
+   * The same crossing again with more in its query, each named by what it adds: a filter that names
+   * an id of its own — search's `senderId`, the owner's member (D-166) — is refused across the
+   * boundary as the bare request is, and the owner's own still succeeds. Filled in by `pathFor`.
+   */
+  readonly alsoWith?: Readonly<Record<string, string>>;
+  /**
    * The workspace's member is made an owner before the owner's own request: for what the last owner
    * may not do (leave, I-2), so the control still proves the request succeeds.
    */
@@ -183,6 +189,17 @@ export const queryFor = (crossing: CrossTenantCase): string => {
     crossing.query ??
     (crossing.visibility.kind === 'workspace-wide' ? crossing.visibility.query : undefined);
   return query === undefined ? '' : `?${query}`;
+};
+
+/** Every query a case is crossed with: its own, then each of `alsoWith` added to it, by name. */
+export const queriesFor = (crossing: CrossTenantCase): readonly (readonly [string, string])[] => {
+  const base = queryFor(crossing);
+  return [
+    ['', base],
+    ...Object.entries(crossing.alsoWith ?? {}).map(
+      ([what, more]) => [` with ${what}`, base === '' ? `?${more}` : `${base}&${more}`] as const,
+    ),
+  ];
 };
 
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
@@ -406,6 +423,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'GET /api/workspaces/:workspaceId/search': {
     refusal: 'WORKSPACE_NOT_FOUND',
+    alsoWith: { 'one of its people as the author': 'senderId=:userId' },
     visibility: { kind: 'workspace-wide', query: 'q=question' },
   },
   'PUT /api/channels/:channelId/notification-level': {
