@@ -219,7 +219,11 @@ describe('what it shows', () => {
     expect(
       document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className ?? '',
     ).not.toContain('text-caption');
+    // The line that divides the buttons from the hints comes with them, and like them is not on a phone.
+    const divider = (): Element | null => view.container.querySelector('[data-hints-divider]');
+    expect(divider()).toBeNull();
     await user.click(box());
+    expect(divider()?.className.split(' ')).toContain('max-narrow:hidden');
     for (const hint of ['sends', 'new line', 'code block']) {
       expect(view.getByText(hint)).toBeDefined();
       expect(described()).toContain(hint);

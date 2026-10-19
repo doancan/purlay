@@ -618,11 +618,13 @@ const Inner = ({
                   picker.current?.click();
                 }}
               />
-              {/* Between the buttons and the hints; a thread draws no hints, so nothing to divide. */}
-              {!compact && (
+              {/* Between the buttons and the hints, and only where the hints are drawn: unfocused, in a
+                  thread, or on a phone it divided the buttons from nothing. */}
+              {focused && !compact && (
                 <span
                   aria-hidden="true"
-                  className="mx-1 h-4 border-l-hairline border-border-subtle"
+                  data-hints-divider=""
+                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden"
                 />
               )}
             </span>
