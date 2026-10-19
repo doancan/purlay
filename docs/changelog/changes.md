@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: the production stack passes the Web Push and sign-in mail settings to the API
+
+`docker-compose.production.yml` named every variable it hands the API, and `VAPID_*`, `SMTP_URL`,
+`MAIL_FROM` and `SMTP_ALLOW_PLAINTEXT` were not among them. `--env-file` only fills the file's
+placeholders, so keys set in `production.env` never reached the container: `/api/push/key` answered
+`{"publicKey":null}` and email sign-in stayed off, without a word. They are now passed to the API and the
+scheduler, empty meaning off as before, and `docker/production.env.example` lists them with how to make
+a key pair. The test that holds the stack now fails on any variable the API reads (`.env.example`) that
+the stack neither passes nor names with the reason it is withheld.
+
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 
 With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the

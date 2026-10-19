@@ -190,8 +190,12 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
-`SESSION_TTL_DAYS`, `S3_REGION`, `S3_BUCKET` (optional). `docker compose`
-refuses to start with a required one missing, and names it. Garage wants its own key format:
+`SESSION_TTL_DAYS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
+`SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), all optional. `docker compose`
+refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
+placeholders: a variable it does not name never reaches the container, so the test that holds the stack
+fails on any variable the API reads that is neither passed nor named there with the reason it is
+withheld (`CLIENT_DIST`, set by the image; `STORAGE_DIRECTORY`; `DATABASE_SSL_CA_FILE`). Garage wants its own key format:
 `S3_ACCESS_KEY_ID` is `GK` plus 24 hex digits (`echo GK$(openssl rand -hex 12)`) and
 `S3_SECRET_ACCESS_KEY` is 64 hex digits.
 

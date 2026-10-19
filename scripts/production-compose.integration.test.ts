@@ -373,6 +373,67 @@ describe('integration: the production compose file', () => {
     expect(undocumented).toEqual([]);
   });
 
+  test('every variable the API reads reaches it, or is named here with why the stack withholds it', () => {
+    // `--env-file` only fills the `${}` in this file: a variable set in production.env that the
+    // compose file does not pass is never seen by the container, and the feature it turns on stays
+    // off without a word (Web Push did, until this). The variables the API reads are `.env.example`,
+    // which is generated from its configuration loader and checked against it by `config:example`.
+    const reads = readFileSync(join(repo, '.env.example'), 'utf8')
+      .split('\n')
+      .flatMap((line) => /^#?\s?([A-Z][A-Z0-9_]*)=/.exec(line)?.[1] ?? []);
+    expect(reads).toContain('APP_URL');
+    const stack: Record<string, string> = {
+      CLIENT_DIST: 'the image sets it (Dockerfile)',
+      STORAGE_DIRECTORY: 'production keeps attachments in the bucket and refuses it (D-117)',
+      DATABASE_SSL_CA_FILE: 'the database is on the stack’s private network, without TLS (D-79)',
+    };
+    const withheldFrom: Record<string, Record<string, string>> = {
+      api: stack,
+      scheduler: {
+        ...stack,
+        PORT: 'it serves nothing',
+        TRUST_PROXY: 'no request reaches it',
+        MIGRATE_ON_START: 'the API migrates; the scheduler starts after it is ready',
+      },
+    };
+    for (const [service, withheld] of Object.entries(withheldFrom)) {
+      const passed = Object.keys(model.services[service]?.environment ?? {});
+      const dropped = reads.filter((name) => !passed.includes(name) && !(name in withheld));
+      expect({ service, dropped }).toEqual({ service, dropped: [] });
+      // A name on the list that the stack does pass is a list gone stale.
+      const stale = Object.keys(withheld).filter((name) => passed.includes(name));
+      expect({ service, stale }).toEqual({ service, stale: [] });
+    }
+  });
+
+  test('Web Push and email sign-in are off unless the env file turns them on, and then reach the API and the scheduler', () => {
+    const off = model.services['api']?.environment ?? {};
+    // Empty is unset to the configuration loader: push off, mail off, and production still starts.
+    for (const name of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT', 'SMTP_URL']) {
+      expect({ name, value: off[name] }).toEqual({ name, value: '' });
+    }
+    const on: Record<string, string> = {
+      VAPID_PUBLIC_KEY: 'B' + 'p'.repeat(86),
+      VAPID_PRIVATE_KEY: 'q'.repeat(43),
+      VAPID_SUBJECT: 'mailto:ops@example.test',
+      SMTP_URL: 'smtps://user:pass@mail.example.test:465',
+      MAIL_FROM: 'purlay@example.test',
+      SMTP_ALLOW_PLAINTEXT: 'true',
+    };
+    const result = resolve({ ...ENVIRONMENT, ...on });
+    expect(result.code).toBe(0);
+    const services = (JSON.parse(result.stdout) as Resolved).services;
+    for (const service of ['api', 'scheduler']) {
+      for (const [name, value] of Object.entries(on)) {
+        expect({ service, name, value: services[service]?.environment?.[name] }).toEqual({
+          service,
+          name,
+          value,
+        });
+      }
+    }
+  });
+
   describe('docker/production.env.example', () => {
     const lines = readFileSync(join(repo, 'docker/production.env.example'), 'utf8').split('\n');
     const code = composeText
