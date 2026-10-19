@@ -938,6 +938,7 @@ export const en = {
   'failure.session': 'Your session ended. Sign in again to carry on.',
   'failure.reauthenticate':
     'Sign out and sign in again, then try once more: this needs a fresh sign-in.',
+  'failure.notAMember': 'You are not in this channel. Join it to write here, then try again.',
   'failure.gone':
     'This is no longer available. It may have been removed, or you may have lost access.',
   'failure.slow': 'You are going too fast. Wait a moment and try again.',

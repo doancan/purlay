@@ -11,6 +11,7 @@ import { AppError } from '../../platform/errors';
 import { markRead } from '../channels/read-state';
 import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms';
 import { edit as editMessage, reviseMessage } from './edit';
+import { removeMessage } from './delete';
 import { issueSession, revokeSession } from '../auth/sessions';
 import { aRecordingLogger } from '../../testing/doubles';
 import { MARKDOWN_DELIMITERS_MAX, type Engine } from '@purlay/markdown';
@@ -187,6 +188,37 @@ describe('integration: the author edits', () => {
 });
 
 describe('integration: who may not', () => {
+  test('an author who has left the public channel cannot edit there, and may still delete their own (D-156)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const sent = await post(db, room, 'bob', 'words to change');
+      await db
+        .deleteFrom('channel_members')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', member(room, 'bob').userId)
+        .execute();
+
+      expect(await refused(edit(db, room, 'bob', sent.message.id, 'changed'))).toMatchObject({
+        code: 'NOT_A_CHANNEL_MEMBER',
+      });
+      const row = await db
+        .selectFrom('messages')
+        .select(['content', 'edited_at'])
+        .where('id', '=', sent.message.id)
+        .executeTakeFirstOrThrow();
+      expect(row).toEqual({ content: 'words to change', edited_at: null });
+
+      // Taking one's own words away is not writing in the channel: it stays theirs to do.
+      await removeMessage(db, later, member(room, 'bob').userId, sent.message.id);
+      const gone = await db
+        .selectFrom('messages')
+        .select('deleted_at')
+        .where('id', '=', sent.message.id)
+        .executeTakeFirstOrThrow();
+      expect(gone.deleted_at).not.toBeNull();
+    });
+  });
+
   test('another member sending the very words already there is refused too, not answered', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

@@ -838,6 +838,29 @@ describe('a send on its way', () => {
     view.unmountAll();
   });
 
+  test('a send refused because the person is not in the channel says so, and how to get in (D-156)', async () => {
+    const view = await mountChannel({ messages: page([aMessage(1, { sender: BOB })]) });
+    open(view);
+    let id = '';
+    act(() => {
+      id = view.engine().send({ channelId: IDS.api, content: 'in flight' });
+    });
+    act(() => {
+      view.world.sockets.deliver({
+        event: 'ERROR',
+        data: { code: 'NOT_A_CHANNEL_MEMBER', message: 'Join the channel to write in it.' },
+        refId: id,
+        ts: 1,
+      });
+    });
+    expect(view.getByText('Failed to send')).toBeDefined();
+    expect(
+      view.getByText('You are not in this channel. Join it to write here, then try again.'),
+    ).toBeDefined();
+    expect(view.getByRole('button', { name: 'Retry' })).toBeDefined();
+    view.unmountAll();
+  });
+
   test("Delete takes a failed send away, and the reason is shown in words, not the server's", async () => {
     const view = await mountChannel({ messages: page([aMessage(1, { sender: BOB })]) });
     open(view);

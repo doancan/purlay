@@ -74,6 +74,10 @@ const aRoom = async (): Promise<{
     .values({ workspace_id: workspace.id, name: 'general', type: 'public' })
     .returning('id')
     .executeTakeFirstOrThrow();
+  await cloned.db
+    .insertInto('channel_members')
+    .values({ channel_id: channel.id, user_id: user.userId })
+    .execute();
   return { token, sessionId: session.id, channelId: channel.id, userId: user.userId };
 };
 

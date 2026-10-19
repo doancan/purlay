@@ -175,7 +175,9 @@ describe('integration: who may not', () => {
       const room = await aRoom(db, ['alice'], { outsiders: ['olga', 'pat'] });
       // Olga sees the public channel without being in it: the guard gives her a context.
       const olga = await requireChannelById(db, outsider(room, 'olga'), room.channelId);
-      expect(await refusal(addMember(db, clock, olga, outsider(room, 'pat')))).toBe('FORBIDDEN');
+      expect(await refusal(addMember(db, clock, olga, outsider(room, 'pat')))).toBe(
+        'NOT_A_CHANNEL_MEMBER',
+      );
       const rows = await db
         .selectFrom('channel_members')
         .select('user_id')

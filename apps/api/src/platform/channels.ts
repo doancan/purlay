@@ -158,7 +158,14 @@ export const isChannelMember = async (
 
 /**
  * The caller is in the channel, not only able to see it: seeing a public channel is not being in it,
- * so a visible non-member is refused `403` with what to do (D-104, D-123 §1).
+ * so a visible non-member is refused `403 NOT_A_CHANNEL_MEMBER` with what to do (D-104, D-123 §1,
+ * D-156). Every write into a channel goes through here.
+ *
+ * A read, not a lock. A send locks the channel's memberships in one order, after its own row is
+ * written (#668), and a purge or a delete takes them all first (`lockMemberships`); a lock taken here,
+ * before either, would be a second order beside theirs, and a deadlock. A leave in the same instant
+ * as a write can therefore let that one write land — from somebody who was in the channel when it was
+ * checked (D-156 §5).
  */
 export const requireChannelMember = async (
   executor: Executor,
@@ -166,7 +173,7 @@ export const requireChannelMember = async (
   refusal: string,
 ): Promise<void> => {
   if (!(await isChannelMember(executor, context))) {
-    throw new AppError({ code: 'FORBIDDEN', message: refusal });
+    throw new AppError({ code: 'NOT_A_CHANNEL_MEMBER', message: refusal });
   }
 };
 

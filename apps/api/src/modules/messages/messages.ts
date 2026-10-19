@@ -28,7 +28,7 @@ import {
 import { AppError } from '../../platform/errors';
 import { requireLiveSession } from '../auth/sessions';
 import type { Clock } from '../../platform/clock';
-import type { ChannelContext } from '../../platform/channels';
+import { requireChannelMember, type ChannelContext } from '../../platform/channels';
 import {
   channelTopic,
   NO_LOG,
@@ -247,6 +247,10 @@ export const sendMessage = async (
 
   // Read once, here (`ARCHITECTURE.md` §8.1), or refused for a broadcast (D-12).
   const { names, reading, metadata } = readBody(input.content, engine);
+
+  // Seeing a public channel is not being in it: a message, or a reply, is written by its members
+  // only, over HTTP and the socket alike, since both come here (D-156).
+  await requireChannelMember(executor, context, 'Join the channel to write in it.');
 
   const root =
     input.parentId === undefined ? undefined : await requireRoot(executor, context, input.parentId);

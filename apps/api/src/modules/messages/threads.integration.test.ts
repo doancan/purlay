@@ -166,6 +166,28 @@ describe('integration: reading a thread', () => {
 });
 
 describe('integration: resolving', () => {
+  test('somebody who can see the public channel and is not in it can neither resolve nor reopen (D-156)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { outsiders: ['erin'] });
+      const { root } = await aThread(db, room, 1);
+      const { bus, frames } = recordingBus();
+      const dependencies = { atomically: atomicallyOn(db), clock, bus };
+      const erin = room.outsiders['erin']?.userId ?? '';
+
+      for (const resolved of [true, false]) {
+        const refusal = await refusalOf(setResolved(dependencies, erin, root, resolved));
+        expect(refusal.body.code).toBe('NOT_A_CHANNEL_MEMBER');
+      }
+      expect(frames).toEqual([]);
+      const row = await db
+        .selectFrom('messages')
+        .select('resolved_at')
+        .where('id', '=', root)
+        .executeTakeFirstOrThrow();
+      expect(row.resolved_at).toBeNull();
+    });
+  });
+
   const resolve = async (
     db: Executor,
     userId: string,

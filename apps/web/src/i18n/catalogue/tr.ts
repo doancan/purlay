@@ -920,6 +920,7 @@ export const tr = {
   'failure.session': 'Oturumun sona erdi. Devam etmek için tekrar giriş yap.',
   'failure.reauthenticate':
     'Çıkış yapıp yeniden giriş yap, sonra tekrar dene: bu işlem yeni bir giriş ister.',
+  'failure.notAMember': 'Bu kanalda değilsin. Buraya yazmak için katıl, sonra tekrar dene.',
   'failure.gone':
     'Bu artık kullanılamıyor. Kaldırılmış olabilir ya da erişimini kaybetmiş olabilirsin.',
   'failure.slow': 'Çok hızlı gidiyorsun. Biraz bekleyip tekrar dene.',

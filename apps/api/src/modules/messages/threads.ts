@@ -16,7 +16,11 @@
 import { sql, type Executor } from '@purlay/db';
 import { PAGE_LIMIT, type Message, type MessagePage } from '@purlay/types';
 import { AppError } from '../../platform/errors';
-import { requireMessageById, type VisibleMessage } from '../../platform/channels';
+import {
+  requireChannelMember,
+  requireMessageById,
+  type VisibleMessage,
+} from '../../platform/channels';
 import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
@@ -167,6 +171,12 @@ export const setResolved = async (
   const outcome = await atomically(async (transaction) => {
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
     const target = await requireMessageById(transaction, userId, messageId);
+    // Closing or reopening a thread changes what the channel's members see: theirs to do (D-156).
+    await requireChannelMember(
+      transaction,
+      target.context,
+      'Join the channel to resolve or reopen its threads.',
+    );
     if (target.parentId !== null) {
       throw notResolvable('Only the message that started a thread can be resolved.');
     }

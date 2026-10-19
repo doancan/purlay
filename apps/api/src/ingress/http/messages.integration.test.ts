@@ -244,6 +244,11 @@ describe('integration: messages', () => {
           user_id: mallory.userId,
         })
         .execute();
+      // In the channel too, so the id is what refuses her and not her membership (D-156).
+      await db
+        .insertInto('channel_members')
+        .values({ channel_id: channelId, user_id: mallory.userId })
+        .execute();
 
       const id = messageId(NOW);
       await send(db, alice.cookie, channelId, id, 'a private thought');
@@ -376,6 +381,52 @@ describe('integration: messages', () => {
       });
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+    });
+  });
+});
+
+describe('integration: writing needs membership of the channel (D-156)', () => {
+  test('a public channel seen and not joined refuses a message and a reply alike, writes nothing, and takes both once joined', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'msg-member');
+      const reader = await signedIn(db, 'msg-reader');
+      const channelId = await aChannel(db, owner, 'msg-unjoined');
+      const { workspace_id: workspaceId } = await db
+        .selectFrom('channels')
+        .select('workspace_id')
+        .where('id', '=', channelId)
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: reader.userId })
+        .execute();
+      const root = messageId(NOW);
+      expect((await send(db, owner.cookie, channelId, root, 'a question')).status).toBe(201);
+
+      // She can read it: the channel is public, and she is in the workspace.
+      const read = await call(db, 'GET', `/api/channels/${channelId}/messages`, {
+        cookie: reader.cookie,
+      });
+      expect(read.status).toBe(200);
+
+      const message = await send(db, reader.cookie, channelId, messageId(NOW), 'drive-by');
+      expect(message.status).toBe(403);
+      expect(await message.json()).toMatchObject({ error: { code: 'NOT_A_CHANNEL_MEMBER' } });
+      const reply = await call(db, 'POST', `/api/channels/${channelId}/messages`, {
+        cookie: reader.cookie,
+        body: { id: messageId(NOW), content: 'a reply', parentId: root },
+      });
+      expect(reply.status).toBe(403);
+      expect(await reply.json()).toMatchObject({ error: { code: 'NOT_A_CHANNEL_MEMBER' } });
+      expect((await messagesIn(db, channelId)).map((row) => row.content)).toEqual(['a question']);
+
+      const joined = await call(db, 'POST', `/api/channels/${channelId}/join`, {
+        cookie: reader.cookie,
+      });
+      expect(joined.status).toBeLessThan(300);
+      expect(
+        (await send(db, reader.cookie, channelId, messageId(NOW), 'now a member')).status,
+      ).toBe(201);
     });
   });
 });

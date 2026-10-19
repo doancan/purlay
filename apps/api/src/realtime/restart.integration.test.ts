@@ -106,6 +106,10 @@ describe('integration: a restart', () => {
       })
       .returning('id')
       .executeTakeFirstOrThrow();
+    await cloned.db
+      .insertInto('channel_members')
+      .values({ channel_id: channel.id, user_id: alice.userId })
+      .execute();
 
     // The first process takes the message over a socket.
     const first = aProcess();

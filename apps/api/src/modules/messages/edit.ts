@@ -9,7 +9,12 @@ import { sql, type Executor } from '@purlay/db';
 import type { Message } from '@purlay/types';
 import type { Engine, Reading } from '@purlay/markdown';
 import { AppError } from '../../platform/errors';
-import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
+import {
+  messageNotFound,
+  requireChannelMember,
+  requireMessageById,
+  type ChannelContext,
+} from '../../platform/channels';
 import type { Clock } from '../../platform/clock';
 import {
   NO_LOG,
@@ -80,6 +85,8 @@ export const reviseMessage = async (
   if (row.sender_id !== userId) {
     throw new AppError({ code: 'FORBIDDEN', message: 'Only the author can edit a message.' });
   }
+  // An edit writes words the channel reads, and may tell a new name: a member's, as a send is (D-156).
+  await requireChannelMember(executor, context, 'Join the channel to edit what you wrote in it.');
 
   const built = async (): Promise<Message> => {
     const message = await readBuilt(executor, messageId);

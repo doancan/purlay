@@ -252,6 +252,12 @@ they were.
 | `sent` | Glyph removed | On `ACK`. **The row does not move** — the id was final from the start (D-8) |
 | `failed` | The bubble's left edge in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
 
+**Writing is a member's** (D-156). A public channel the person has not joined is read with a bar in
+place of the composer — *You are reading #name without being a member* and **Join** — and a send that
+was already on its way when they left, or that reached the server some other way, is `failed` with
+the reason in words: they are not in the channel, and joining it is how to write there; Retry then
+sends it. Reacting, editing and resolving there are refused the same way, said as a toast.
+
 The `sending` state is deliberately **not** dimmed to 50% opacity. Dimming implies "not real
 yet"; in an optimistic UI the message *is* real, and flickering opacity on every send is visual
 noise on the most frequent action in the product.
