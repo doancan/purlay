@@ -14,6 +14,9 @@ Defects found by a visual audit of the messaging screens, at 1440 and 390 wide i
   field's text, so the first key typed renamed the channel. The dialog takes the first focus itself
   (`Dialog`'s `focusFirst="dialog"`), and no dialog opens with a field's text selected: a first field
   that already holds text gets the caret at its end.
+- **Browse channels and New channel are always shown** beside the Channels heading, in the navigation's
+  quiet tone with their tooltips; they were invisible until the heading was hovered. New message beside
+  Conversations takes the same tone and alignment (it was drawn in the content's tone on the navy).
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

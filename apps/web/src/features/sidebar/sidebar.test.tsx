@@ -72,6 +72,18 @@ const links = (view: View, scope: string): string[] =>
     .map((a) => a.textContent.trim());
 
 describe('the channels section', () => {
+  test('Browse channels and New channel are always there, never revealed only on hover', async () => {
+    const view = await open();
+    const nav = some(view.getAllByRole('navigation', { name: 'Channels' })[0]);
+    for (const name of ['Browse channels', 'New channel']) {
+      const button = within(nav).getByRole('button', { name });
+      // Nothing between the button and its section may hide it until a pointer passes over.
+      for (let node: HTMLElement | null = button; node !== null && node !== nav; node = node.parentElement) {
+        expect(node.className).not.toContain('opacity-0');
+      }
+    }
+  });
+
   test('lists the channels the person is in, # and name, and not the one they could join', async () => {
     const view = await open();
     expect(links(view, 'Channels')).toEqual(['api', 'deploys', 'incidents']);

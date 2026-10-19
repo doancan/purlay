@@ -189,7 +189,8 @@ describe('Dialog', () => {
         <input aria-label="Name" defaultValue="general" />
       </Dialog>,
     );
-    const field = getByLabelText<HTMLInputElement>('Name');
+    const field = getByLabelText('Name');
+    if (!(field instanceof HTMLInputElement)) throw new Error('Name is not a field');
     await waitFor(() => {
       expect(getByRole('dialog').contains(document.activeElement)).toBe(true);
     });

@@ -34,9 +34,11 @@ export const ChannelList = (): React.JSX.Element => {
 
   return (
     <nav aria-label={t('sidebar.channels')} className="flex flex-col">
-      <div className="group flex items-center justify-between px-2 py-1">
-        <h2 className="text-label text-nav-ink-muted">{t('sidebar.channels')}</h2>
-        <div className="flex opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:opacity-100">
+      {/* Always shown, in the section's quiet tone: a way in that appears only under a pointer is one
+      a newcomer never finds, and the tooltips say what each glyph is. */}
+      <div className="flex items-center justify-between pl-2">
+        <h2 className="py-1 text-label text-nav-ink-muted">{t('sidebar.channels')}</h2>
+        <div className="flex">
           <IconButton
             label={t('sidebar.browse')}
             glyph="search"
