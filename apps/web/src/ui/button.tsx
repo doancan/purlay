@@ -25,8 +25,14 @@
 import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
 
+/** A control's height (D-151), or the touch height for the one action a whole screen is for. */
+const sizeClasses = {
+  md: 'h-control max-narrow:h-touch',
+  lg: 'h-touch text-body',
+} as const;
+
 const baseClasses =
-  'inline-flex h-control max-narrow:h-touch shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border-hairline px-3 text-label transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted';
+  'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border-hairline px-3 text-label transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted';
 
 const variantClasses = {
   primary: 'border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover',
@@ -39,8 +45,10 @@ const variantClasses = {
 export type ButtonVariant = keyof typeof variantClasses;
 
 /** The look of a button on something that is not a `<button>` — a link that is the page's next step. */
-export const buttonStyle = (variant: ButtonVariant): string =>
-  cn(baseClasses, variantClasses[variant]);
+export const buttonStyle = (
+  variant: ButtonVariant,
+  size: keyof typeof sizeClasses = 'md',
+): string => cn(baseClasses, sizeClasses[size], variantClasses[variant]);
 
 export interface ButtonProps extends Omit<React.ComponentPropsWithRef<'button'>, 'children'> {
   readonly variant?: ButtonVariant;
@@ -65,7 +73,7 @@ export const Button = ({
     type={type}
     disabled={disabled === true || busy}
     aria-busy={busy || undefined}
-    className={cn(baseClasses, variantClasses[variant], className)}
+    className={cn(baseClasses, sizeClasses.md, variantClasses[variant], className)}
   >
     {glyph === undefined ? null : <Icon name={glyph} size="sm" />}
     {children}
