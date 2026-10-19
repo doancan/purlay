@@ -846,6 +846,7 @@ export const en = {
   'upload.why.busy': 'The server is busy',
   'upload.why.storage': 'File storage is unavailable',
   'upload.why.session': 'Session ended: sign in again',
+  'upload.why.notInWorkspace': 'You no longer have access to this workspace',
   'upload.uploadingPercent': 'Uploading… {percent}%',
   'upload.progressOf': 'Uploading {name}',
   'upload.retry': 'Retry {name}',
