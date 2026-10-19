@@ -320,7 +320,9 @@ describe('triage', () => {
     });
     const marks = view.getAllByRole('button', { name: 'Mark read' });
     expect(marks).toHaveLength(2);
-    await person().click(marks[0] as HTMLElement);
+    const first = marks[0];
+    if (first === undefined) throw new Error('no Mark read was drawn');
+    await person().click(first);
     await settle();
     expect(reads).toEqual([{ ids: [notificationId(1)] }]);
     // The other still waits, and the person is still in the inbox.
