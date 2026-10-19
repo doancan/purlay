@@ -278,7 +278,8 @@ export const MembersPage = (): React.JSX.Element => {
                           ))}
                         </Select>
                       ) : (
-                        <span className="pl-3 text-label font-normal text-ink-muted">
+                        // Beside a column of menus, under their words; on a phone, at the row's edge as they are.
+                        <span className="pl-3 text-label font-normal text-ink-muted max-narrow:pl-0">
                           {t(`members.role.${member.role}`)}
                         </span>
                       )}
