@@ -95,6 +95,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
           label: displayName(channel, user.id, t('sidebar.you'), t('user.erased')),
           keywords: channel.peers.map((person) => person.username),
           glyph: 'people',
+          faces: channel.peers,
           recency: channel.lastMessageAt ?? '',
           run: () => {
             navigate(href('channel', { slug, channelId: channel.id }));

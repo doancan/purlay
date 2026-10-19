@@ -17,6 +17,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { narrowedTo } from '../../router/routes';
 import { Avatar } from '../../ui/avatar';
+import { GroupFace } from '../conversations/group-face';
 import { cn } from '../../ui/cn';
 import { useOpenCount } from '../questions/use-open-count';
 import { NavToggle } from '../shell/nav';
@@ -113,6 +114,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             size="sm"
             online={peerOnline}
           />
+        ) : group ? (
+          // A group shows the faces it is named by, as its sidebar row does (D-166).
+          <GroupFace peers={channel.peers} surface="surface" />
         ) : (
           <HeaderTile>
             <Icon
