@@ -457,6 +457,15 @@ describe('the sign-in screen', () => {
     );
   });
 
+  test('says what Purlay is in Turkish as a Turkish reader says it: the question stays open', async () => {
+    const view = await renderApp(<Outlet />, { path: '/sign-in', api: out(), locale: 'tr' });
+    await settle();
+    expect(view.getByRole('heading', { level: 1, name: 'Purlay’e giriş yap' })).toBeDefined();
+    expect(
+      view.getByText('Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.'),
+    ).toBeDefined();
+  });
+
   test('says nothing when nothing went wrong', async () => {
     const view = await visit('/sign-in', out());
     expect(within(view.getByRole('main')).queryByRole('status')).toBeNull();

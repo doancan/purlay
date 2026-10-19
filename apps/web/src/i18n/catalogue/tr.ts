@@ -44,7 +44,7 @@ export const tr = {
 
   // ── Giriş ───────────────────────────────────────────────────────────────
   'signIn.title': 'Purlay’e giriş yap',
-  'signIn.lede': 'Bir soru, biri kapatana kadar açık kalan ekip sohbeti.',
+  'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
   'signIn.cancelled': 'GitHub’da girişi iptal ettin — hazır olduğunda GitHub ile devam et.',
   'signIn.expired':
