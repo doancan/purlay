@@ -16,7 +16,7 @@ const unread = (n: number): Channel['state'] => ({
 const names = (channels: readonly Channel[]): (string | null)[] => channels.map((c) => c.name);
 
 describe('the sidebar order', () => {
-  test('is channels then direct messages, newest activity first, then by name', () => {
+  test('is channels by name, then direct messages newest first (D-160)', () => {
     const list = [
       aChannel('1', 'beta', { lastMessageAt: '2026-09-09T08:00:00.000Z' }),
       aChannel('2', 'alpha', { lastMessageAt: '2026-09-09T08:00:00.000Z' }),
@@ -29,8 +29,8 @@ describe('the sidebar order', () => {
       }),
       aChannel('6', null, { type: 'direct_message', peer: ME }),
     ];
-    expect(names(inSidebarOrder(list))).toEqual(['newest', 'alpha', 'beta', 'quiet', null, null]);
-    expect(inSidebarOrder(list).map((c) => c.id)).toEqual(['3', '2', '1', '4', '5', '6']);
+    expect(names(inSidebarOrder(list))).toEqual(['alpha', 'beta', 'newest', 'quiet', null, null]);
+    expect(inSidebarOrder(list).map((c) => c.id)).toEqual(['2', '1', '3', '4', '5', '6']);
   });
 
   test('leaves out what the person has not joined', () => {
