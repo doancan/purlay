@@ -22,8 +22,8 @@ import type {
   NotificationQuery,
   ReadNotificationsRequest,
   ReadThreadRequest,
-  NEEDS_YOU,
 } from '@purlay/types';
+import { NEEDS_YOU } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireMessageById } from '../../platform/channels';
