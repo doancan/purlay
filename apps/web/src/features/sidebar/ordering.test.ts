@@ -16,14 +16,14 @@ const names = (list: readonly { name: string | null }[]): (string | null)[] =>
   list.map((c) => c.name);
 
 describe('channels the person is in', () => {
-  test('most recently active first, then by name, so a silent list never shuffles', () => {
+  test('by name, whatever was written in them last: a place stays put (D-160)', () => {
     const list = joinedChannels([
       aChannel('1', 'zeta'),
       aChannel('2', 'alpha'),
       aChannel('3', 'old', { lastMessageAt: at(1) }),
       aChannel('4', 'new', { lastMessageAt: at(9) }),
     ]);
-    expect(names(list)).toEqual(['new', 'old', 'alpha', 'zeta']);
+    expect(names(list)).toEqual(['alpha', 'new', 'old', 'zeta']);
   });
 
   test('leaves out what they have not joined, and direct messages, which are people', () => {

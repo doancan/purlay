@@ -95,12 +95,13 @@ describe('the channels section', () => {
     expect(view.queryByText('browse')).toBeNull();
   });
 
-  test('is ordered by activity: the channel somebody wrote in last is first', async () => {
+  test('is ordered by name, and a new message moves nothing (D-160)', async () => {
     const channels = someChannels().map((c) =>
       c.id === IDS.incidents ? { ...c, lastMessageAt: '2026-09-09T09:00:00.000Z' } : c,
     );
     const view = await open(aSignedInApi({ channels: () => Promise.resolve(channels) }));
-    expect(links(view, 'Channels')[0]).toBe('incidents');
+    const listed = links(view, 'Channels');
+    expect(listed).toEqual([...listed].sort((a, b) => a.localeCompare(b)));
   });
 
   test('the channel you are in is the current page, and nothing else is', async () => {

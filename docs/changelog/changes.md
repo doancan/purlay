@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: a new message no longer moves the channel you were reaching for (D-160)
+
+Channels in the sidebar are listed by name, so a message never reshuffles them; unread still shows as
+the row's weight and badge. People and group conversations stay newest first.
+
 ### Polish — 2026-10-19: the list screens read as one product (D-158)
 
 The open questions, search and saved now share the inbox's shape: a centred column on a quieter ground,
