@@ -2324,6 +2324,15 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/data/cache.test.ts'],
   },
   {
+    id: 'inbox-dot-lit-in-deep-work',
+    why: 'the rail asks for attention in Deep Work, when every badge it stands for is quiet',
+    file: 'apps/web/src/features/inbox/inbox-link.tsx',
+    find: '    !quiet && (channels ?? []).some((channel) => (channel.state?.unreadMentionCount ?? 0) > 0);\n',
+    replace:
+      '    (channels ?? []).some((channel) => (channel.state?.unreadMentionCount ?? 0) > 0);\n',
+    tests: ['apps/web/src/features/shell/rail.test.tsx'],
+  },
+  {
     id: 'inbox-read-not-painted-first',
     why: 'a notification opened or Mark all read stays unread on screen until the server answers, and on a slow network looks ignored',
     file: 'apps/web/src/features/inbox/inbox-screen.tsx',

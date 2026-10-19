@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: the rail's inbox dot is quiet in Deep Work, as the badges are
+
+The dot on the rail's Inbox is the same fact as the mention badges (`UX.md` §2), and in Deep Work the
+badges and the tab's count draw nothing (D-15) — but the dot never asked whether Deep Work was on, so it
+stayed lit through it. It now reads Deep Work as the badges do; the inbox itself still lists everything.
+
 ### Fix — 2026-10-19: the production stack passes the Web Push and sign-in mail settings to the API
 
 `docker-compose.production.yml` named every variable it hands the API, and `VAPID_*`, `SMTP_URL`,

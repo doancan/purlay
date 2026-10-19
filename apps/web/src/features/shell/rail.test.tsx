@@ -5,12 +5,19 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import type { Message } from '@purlay/types';
+import type { MeResponse, Message } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
-import { IDS, aChannel, aMessage, aSignedInApi, someChannels } from '../../testing/fixtures';
+import {
+  IDS,
+  aChannel,
+  aMessage,
+  aSession,
+  aSignedInApi,
+  someChannels,
+} from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
@@ -100,6 +107,27 @@ describe('the inbox', () => {
     );
     expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent).toContain(
       'unread',
+    );
+  });
+
+  test('in Deep Work it carries nothing, as the badges draw nothing (D-15)', async () => {
+    const [first, ...rest] = someChannels();
+    if (first === undefined) throw new Error('no channels');
+    const waiting = { lastReadMessageId: null, unreadCount: 2, unreadMentionCount: 2 };
+    const me = aSession();
+    const quiet: MeResponse = {
+      ...me,
+      memberships: me.memberships.map((m) => ({ ...m, deepWorkUntil: '2026-09-09T13:00:00.000Z' })),
+    };
+    const view = await open(
+      aSignedInApi({
+        me: () => Promise.resolve(quiet),
+        channels: () => Promise.resolve([{ ...first, state: waiting }, ...rest]),
+      }),
+    );
+    // The same channels, out of Deep Work, carry the dot: the test above.
+    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
+      'Inbox',
     );
   });
 
