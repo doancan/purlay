@@ -181,8 +181,13 @@ export const makeRoom = async (tenant: Tenant, options: RoomOptions = {}): Promi
     `/api/workspaces/${tenant.workspaceId}/channels`,
     { name, topic: 'a channel a test made for itself' },
   );
+  // Brought in by the creator (D-104), not each joining: a join is a write charged to the person
+  // who joins, and every room of a run joining dogancan and alice spent the budget their pages
+  // send with — most of the `429`s a loaded run met were alice's page, starved by other tests'
+  // joins in her name.
+  const maker = apiAs(tenant, creator);
   for (const person of members.filter((member) => member !== creator)) {
-    await apiAs(tenant, person).join(made.id);
+    await maker.post(`/api/channels/${made.id}/members`, { userId: tenant.userIds[person] });
   }
   for (const message of options.messages ?? []) {
     await apiAs(tenant, message.by).say(made.id, message.text);
