@@ -154,7 +154,10 @@ describe('notifications', () => {
   test('where this device cannot be told with Purlay closed, it says so plainly', async () => {
     const view = await open();
     const card = within(view.getByRole('region', { name: 'Notifications on this device' }));
-    expect(card.getByText(/with Purlay closed you hear nothing/)).toBeDefined();
+    // A browser with no notices at all says so; one with them says a closed tab hears nothing here.
+    expect(
+      card.getByText(/cannot show notifications|with Purlay closed you hear nothing/),
+    ).toBeDefined();
     // The open tab's notices are still offered (D-148), and say they reach the open tab alone.
     if (card.queryByRole('button') !== null) {
       expect(card.getByText(/while Purlay is open in a background tab/)).toBeDefined();
