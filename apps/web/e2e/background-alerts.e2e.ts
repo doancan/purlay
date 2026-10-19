@@ -99,7 +99,7 @@ test.describe('a tab in the background', () => {
       .poll(async () => (await told()).find((n) => n.title === `#${there.name}`))
       .toEqual({
         title: `#${there.name}`,
-        body: 'carol mentioned you',
+        body: 'Carol Reyes mentioned you',
         tag: `purlay:c:${there.id}`,
       });
     await expect

@@ -135,7 +135,7 @@ describe('a tab in the background', () => {
     const view = await open({ notifier: fake });
     await rise(view, { [IDS.deploys]: 1 });
     expect(fake.shown.map(({ title, body }) => ({ title, body }))).toEqual([
-      { title: '#deploys', body: 'alice mentioned you' },
+      { title: '#deploys', body: 'Alice mentioned you' },
     ]);
     // Asking the browser is the switch's, never the page's on load.
     expect(fake.asked).toBe(0);
@@ -151,7 +151,7 @@ describe('a tab in the background', () => {
     });
     const view = await open({ notifier: fake, inbox: [reply] });
     await rise(view, { [IDS.deploys]: 1 });
-    expect(fake.shown[0]?.body).toBe('alice replied in your thread');
+    expect(fake.shown[0]?.body).toBe('Alice replied in your thread');
     act(() => {
       fake.shown[0]?.onOpen();
     });
