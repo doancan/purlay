@@ -109,8 +109,8 @@ export const href = <N extends RouteName>(name: N, ...args: Arguments<N>): strin
 
 /**
  * `?thread=<message id>` on a channel's address: open this root's thread when the channel
- * opens (the open-questions view links to a question this way). It is the one query
- * parameter the client defines, so its name and its reading live beside the routes.
+ * opens (the open-questions view links to a question this way). The query parameters the
+ * client defines are spelled and read here, beside the routes.
  */
 const THREAD_PARAM = 'thread';
 
@@ -124,6 +124,25 @@ export const threadInSearch = (search: string): string | null => {
 };
 
 /**
+ * `?message=<message id>` on a channel's address: a link to one message (D-149). The channel opens
+ * around it, scrolled to it and marked for a moment; a reply opens its thread and is marked there.
+ * What "Copy link" puts on the clipboard, and where search, saved items and pins go.
+ */
+const MESSAGE_PARAM = 'message';
+
+/** An id as the server spells one: anything else in an address is not asked for. */
+const ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const messageHref = (slug: string, channelId: string, messageId: string): string =>
+  `${href('channel', { slug, channelId })}?${MESSAGE_PARAM}=${encodeURIComponent(messageId)}`;
+
+/** The message an address links to, or null; anything that is not an id is not a link. */
+export const messageInSearch = (search: string): string | null => {
+  const value = new URLSearchParams(search).get(MESSAGE_PARAM);
+  return value !== null && ID_SHAPE.test(value) ? value : null;
+};
+
+/**
  * `?q=` on the search screen's address: the words searched for, so Back, a reload and a shared
  * link all come back to the same results.
  */
@@ -131,7 +150,6 @@ const WORDS_PARAM = 'q';
 
 /** The channel a search is narrowed to (`PRD.md` §4.6), beside the words. */
 const CHANNEL_PARAM = 'in';
-const CHANNEL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const searchHref = (
   slug: string,
@@ -152,5 +170,5 @@ export const wordsInSearch = (search: string): string =>
 /** The channel an address narrows a search to; null for every channel, or for anything not an id. */
 export const channelInSearch = (search: string): string | null => {
   const named = new URLSearchParams(search).get(CHANNEL_PARAM);
-  return named !== null && CHANNEL_ID.test(named) ? named : null;
+  return named !== null && ID_SHAPE.test(named) ? named : null;
 };

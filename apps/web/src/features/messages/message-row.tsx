@@ -68,6 +68,11 @@ export interface MessageRowProps {
   readonly compact?: boolean;
   /** This root's thread is the one open in the panel (D-122): the row says so, to the eye and to a test. */
   readonly threadOpen?: boolean;
+  /**
+   * The message a link opened, for a moment (D-149): the row is tinted until the feed lets it go.
+   * The tint fades by the hover token, which is nothing under reduced motion.
+   */
+  readonly landed?: boolean;
   /** More hover actions beside React — the thread slice's Reply. */
   readonly actions?: React.ReactNode;
   /** Below the content and the reactions: a thread's summary line and its replies. */
@@ -88,6 +93,7 @@ const MessageRowView = ({
   dimmed = false,
   compact = false,
   threadOpen = false,
+  landed = false,
   actions,
   children,
 }: MessageRowProps): React.JSX.Element => {
@@ -140,6 +146,7 @@ const MessageRowView = ({
       data-editable={mine ? '' : undefined}
       data-outgoing={outgoing ? '' : undefined}
       data-thread-open={threadOpen ? '' : undefined}
+      data-landed={landed ? '' : undefined}
       onPointerOver={(event) => {
         setPointed(own(event));
       }}
@@ -157,8 +164,9 @@ const MessageRowView = ({
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: author.username, when: absolute })}
       className={cn(
-        'relative flex gap-3 rounded-lg px-2',
+        'relative flex gap-3 rounded-lg px-2 transition-colors duration-hover ease-standard',
         grouped ? 'pt-1' : 'pt-3',
+        landed && 'bg-warning-subtle',
         outgoing && 'flex-row-reverse',
       )}
     >

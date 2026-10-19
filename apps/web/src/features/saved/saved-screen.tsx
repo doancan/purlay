@@ -20,7 +20,7 @@ import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { href } from '../../router/routes';
+import { href, messageHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
@@ -220,9 +220,7 @@ export const SavedScreen = (): React.JSX.Element => {
               item={item}
               channel={byId.get(item.message.channelId)}
               onOpen={() => {
-                navigate(
-                  href('channel', { slug: workspace.slug, channelId: item.message.channelId }),
-                );
+                navigate(messageHref(workspace.slug, item.message.channelId, item.message.id));
               }}
               onMove={(to) => {
                 change(item, () => api.saveMessage(item.message.id, to), 'saved.moveFailed');

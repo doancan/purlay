@@ -67,6 +67,7 @@ import {
   type CreateGitHubFeedRequest,
   PresenceSnapshot,
   MessageVersionPage,
+  MessageWindow,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
@@ -224,6 +225,8 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<MessagePage>;
+  /** The feed around one message, for a link to it (D-149). */
+  readonly messageWindow: (messageId: string, signal?: AbortSignal) => Promise<MessageWindow>;
   readonly send: (channelId: string, input: SendMessageRequest) => Promise<Message>;
   /** A file's bytes under the attachment id the client chose (D-109 §3). */
   readonly upload: (
@@ -578,6 +581,13 @@ export const createApi = (http: Http): Api => {
         `/api/channels/${at(channelId)}/messages`,
         MessagePage,
         options({ query: { ...page } }, signal),
+      ),
+    messageWindow: (messageId, signal) =>
+      http.request(
+        'GET',
+        `/api/messages/${at(messageId)}/around`,
+        MessageWindow,
+        options({}, signal),
       ),
     upload: (workspaceId, { id, name, file }, onProgress) =>
       http.upload(`/api/workspaces/${at(workspaceId)}/uploads`, Attachment, file, {

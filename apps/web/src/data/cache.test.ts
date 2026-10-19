@@ -152,6 +152,26 @@ describe('a message arrives', () => {
     expect(feed(client)).toHaveLength(3);
   });
 
+  test('a window around a linked message takes it only once it reaches the present (D-149)', () => {
+    const client = new QueryClient();
+    const reaching = keys.messagesAround(CH, id(2));
+    const short = keys.messagesAround(CH, id(1));
+    client.setQueryData(reaching, {
+      pageParams: [{ around: id(2) }],
+      pages: [{ data: [message(3), message(2)], nextCursor: null, newerCursor: null }],
+    });
+    client.setQueryData(short, {
+      pageParams: [{ around: id(1) }],
+      pages: [{ data: [message(2), message(1)], nextCursor: null, newerCursor: id(2) }],
+    });
+    messageCreated(client, message(5));
+    const ids = (key: readonly unknown[]): string[] =>
+      client.getQueryData<Pages>(key)?.pages.flatMap((p) => p.data.map((m) => m.id)) ?? [];
+    expect(ids(reaching)).toEqual([id(5), id(3), id(2)]);
+    // Put after the window's newest, it would sit above messages the window has not read.
+    expect(ids(short)).toEqual([id(2), id(1)]);
+  });
+
   test('an uncached feed is left alone: it loads whole when opened', () => {
     const client = new QueryClient();
     messageCreated(client, message(1));

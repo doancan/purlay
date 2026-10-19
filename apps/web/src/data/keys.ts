@@ -17,6 +17,12 @@ export const keys = {
   channelMembers: (channelId: string) => ['channel-members', channelId] as const,
   channels: (workspaceId: string) => ['channels', workspaceId] as const,
   messages: (channelId: string) => ['messages', channelId] as const,
+  /**
+   * The feed around one message, which a link opens (D-149). Under the channel's own key, so what
+   * edits a channel's messages — a reaction, an edit, a channel let go — reaches it too.
+   */
+  messagesAround: (channelId: string, messageId: string | null) =>
+    ['messages', channelId, 'around', messageId] as const,
   thread: (messageId: string) => ['thread', messageId] as const,
   unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
   notifications: (workspaceId: string) => ['notifications', workspaceId] as const,

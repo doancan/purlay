@@ -99,16 +99,76 @@ export const useChannelMembers = (
  */
 const KEEP_MESSAGES = { structuralSharing: false } as const;
 
-/** The feed: root messages, the newest page first and older ones as asked for. */
-export const useMessages = (channelId: string): UseInfiniteQueryResult<Pages> => {
+/**
+ * A page of a feed. A window around a message (D-149) reads both ways: `nextCursor` continues it
+ * older, as on every page, and `newerCursor` — read on the newest page only — newer. Absent or null,
+ * the page reaches the present, and a message arriving belongs on it (`cache.ts`). `target` is on
+ * the page that opened the window: the message the link names.
+ */
+type FeedPage = MessagePage & {
+  readonly newerCursor?: string | null;
+  readonly target?: Message;
+};
+export type FeedPages = InfiniteData<FeedPage>;
+
+/** Where a window's page starts: around the message linked, older than an id, or newer than one. */
+type WindowParam =
+  { readonly around: string } | { readonly before: string } | { readonly after: string };
+
+/**
+ * The feed: root messages, the newest page first and older ones as asked for — or, given a message
+ * a link names (`around`), the window around it, read older and newer from there (D-149). Both are
+ * pages under the channel's key, so whatever edits the one edits the other.
+ */
+export const useMessages = (
+  channelId: string,
+  around: string | null = null,
+): UseInfiniteQueryResult<FeedPages> => {
   const api = useApi();
-  return useInfiniteQuery({
+  const present = useInfiniteQuery({
     queryKey: keys.messages(channelId),
     queryFn: ({ pageParam, signal }) => api.messages(channelId, { before: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: around === null,
     ...KEEP_MESSAGES,
   });
+  const window = useInfiniteQuery({
+    queryKey: keys.messagesAround(channelId, around),
+    queryFn: async ({ pageParam, signal }): Promise<FeedPage> => {
+      if ('around' in pageParam) {
+        const found = await api.messageWindow(pageParam.around, signal);
+        return {
+          data: found.data,
+          nextCursor: found.olderCursor,
+          newerCursor: found.newerCursor,
+          target: found.target,
+        };
+      }
+      if ('after' in pageParam) {
+        const newer = await api.messages(channelId, { after: pageParam.after }, signal);
+        const data = [...newer.data].reverse();
+        // A list read again is read forwards from its first page, which may be this one: older
+        // than it goes on from its oldest message.
+        return {
+          data,
+          nextCursor: data.at(-1)?.id ?? pageParam.after,
+          newerCursor: newer.nextCursor,
+        };
+      }
+      return await api.messages(channelId, { before: pageParam.before }, signal);
+    },
+    initialPageParam: { around: around ?? '' },
+    getNextPageParam: (last: FeedPage): WindowParam | undefined =>
+      last.nextCursor === null ? undefined : { before: last.nextCursor },
+    getPreviousPageParam: (first: FeedPage): WindowParam | undefined =>
+      first.newerCursor === undefined || first.newerCursor === null
+        ? undefined
+        : { after: first.newerCursor },
+    enabled: around !== null,
+    ...KEEP_MESSAGES,
+  });
+  return around === null ? present : window;
 };
 
 /** One thread's replies, oldest first, a page at a time. */
@@ -192,7 +252,7 @@ export const useSearch = (
  * newest first, so reading order is the whole reversed — never a sort, because the
  * cache already keeps ids in order and a sort would hide a cache that did not.
  */
-export const readingOrder = (data: Pages | undefined): Message[] =>
+export const readingOrder = (data: InfiniteData<MessagePage> | undefined): Message[] =>
   data === undefined ? [] : [...data.pages].reverse().flatMap((page) => [...page.data].reverse());
 
 /** A thread's replies, which are already oldest first. */

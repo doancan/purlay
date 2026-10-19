@@ -538,7 +538,7 @@ describe('the Pins panel', () => {
     view.unmountAll();
   });
 
-  test('a pinned reply opens its thread in the panel’s place', async () => {
+  test('a pinned reply opens at its address: its thread in the panel’s place, the reply marked (D-149)', async () => {
     const root = aMessage(2, {
       thread: {
         replyCount: 1,
@@ -552,16 +552,28 @@ describe('the Pins panel', () => {
       messages: page([aMessage(1), root]),
       api: {
         pins: () => Promise.resolve([aPin(reply)]),
+        messageWindow: () =>
+          Promise.resolve({
+            target: reply,
+            data: [root, aMessage(1)],
+            olderCursor: null,
+            newerCursor: null,
+          }),
         thread: (): Promise<ThreadPage> => Promise.resolve({ data: [reply], nextCursor: null }),
       },
     });
     await openPins(view);
     await person().click(
-      within(panelOf(view)).getByRole('button', { name: /^Open the thread of the message from/ }),
+      within(panelOf(view)).getByRole('button', { name: /^Go to the message from/ }),
     );
     await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?message=${reply.id}`);
     expect(view.queryByRole('complementary', { name: /^Pinned/ })).toBeNull();
-    expect(view.container.querySelector(`[data-thread-root="${root.id}"]`)).not.toBeNull();
+    const panel = view.container.querySelector(`[data-thread-root="${root.id}"]`);
+    expect(panel).not.toBeNull();
+    const row = panel?.querySelector(`[data-message-row][data-message-id="${reply.id}"]`);
+    expect(row?.hasAttribute('data-landed')).toBe(true);
+    expectFocusOn(row ?? null);
     view.unmountAll();
   });
 

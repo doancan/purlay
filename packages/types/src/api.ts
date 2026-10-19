@@ -230,6 +230,27 @@ export type EditMessageRequest = Static<typeof EditMessageRequest>;
 export const MessagePage = Page(Message);
 export type MessagePage = Static<typeof MessagePage>;
 
+/** How many roots a window around a message holds on each side of the one it is around (D-149). */
+export const MESSAGE_WINDOW_SIDE = 25;
+
+/**
+ * `GET /api/messages/:messageId/around` — a channel's feed around one message: what a link to a
+ * message opens (D-149).
+ *
+ * `target` is the message the link names — a root, or a reply, whose thread then opens. `data` is
+ * the root it lives under (itself, or its thread's root) with up to `MESSAGE_WINDOW_SIDE` roots on
+ * each side, **newest first** as every feed page is. The two cursors are the keyset cursors a feed
+ * already reads with (D-8): `olderCursor` continues as `before`, `newerCursor` as `after`, and each
+ * is null once that end of the channel is in the window.
+ */
+export const MessageWindow = Type.Object({
+  target: Message,
+  data: Type.Array(Message),
+  olderCursor: Type.Union([Uuid, Type.Null()]),
+  newerCursor: Type.Union([Uuid, Type.Null()]),
+});
+export type MessageWindow = Static<typeof MessageWindow>;
+
 export const ChannelList = Type.Array(Channel);
 export type ChannelList = Static<typeof ChannelList>;
 

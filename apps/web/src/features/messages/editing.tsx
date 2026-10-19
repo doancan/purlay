@@ -18,6 +18,7 @@ import { Dialog } from '../../ui/dialog';
 import { Menu, MenuItem } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { isMine } from './author';
+import { useCopyMessageLink } from './message-link';
 
 interface Editing {
   readonly editingId: string | null;
@@ -139,13 +140,14 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
   );
 };
 
-/** What the author can do with their own message: edit it, or delete it after being asked. */
+/** What the author can do with their own message: copy its link, edit it, or delete it after being asked. */
 export const OwnActions = ({ message }: { readonly message: Message }): React.JSX.Element => {
   const { t } = useI18n();
   const { remove } = useActions();
   const { show } = useToast();
   const describe = useDescribeFailure();
   const { start } = useEditing();
+  const copyLink = useCopyMessageLink();
   const [asking, setAsking] = useState(false);
   // Edit puts focus in the editor it opens; the menu must not take it back to its button.
   const toEditor = useRef(false);
@@ -180,6 +182,16 @@ export const OwnActions = ({ message }: { readonly message: Message }): React.JS
           </button>
         }
       >
+        {copyLink !== null && (
+          <MenuItem
+            glyph="copy"
+            onSelect={() => {
+              copyLink(message);
+            }}
+          >
+            {t('message.copyLink')}
+          </MenuItem>
+        )}
         <MenuItem
           glyph="edit"
           shortcut="E"

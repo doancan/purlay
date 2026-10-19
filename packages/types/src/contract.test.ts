@@ -27,6 +27,7 @@ import {
   CreateDirectMessageRequest,
   MeResponse,
   MessagePage,
+  MessageWindow,
   NotificationQuery,
   PAGE_LIMIT,
   ReadNotificationsRequest,
@@ -473,6 +474,18 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     mentions: [id],
     attachments: [],
   };
+
+  test('a window around a message names it and carries both cursors, null at an end (D-149)', () => {
+    const window = { target: root, data: [root], olderCursor: id, newerCursor: null };
+    expect(Value.Check(MessageWindow, window)).toBe(true);
+    expect(Value.Check(MessageWindow, { ...window, target: null })).toBe(false);
+    expect(Value.Check(MessageWindow, { data: [root], olderCursor: null, newerCursor: null })).toBe(
+      false,
+    );
+    expect(Value.Check(MessageWindow, { target: root, data: [root], olderCursor: null })).toBe(
+      false,
+    );
+  });
 
   test('a root carries its thread summary, a reply carries none', () => {
     expect(Value.Check(Message, root)).toBe(true);
