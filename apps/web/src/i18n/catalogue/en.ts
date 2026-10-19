@@ -574,9 +574,13 @@ export const en = {
   'message.deleteTitle': 'Delete this message?',
   'message.deleteBody': 'It is replaced by a note that it was deleted. Its replies stay.',
   'message.deleteFailed': 'The message was not deleted.',
+  'message.deleteBodyModerated':
+    'It is replaced by a note that it was deleted, and your deleting it is on the audit trail. Its replies stay.',
   'message.more': 'More',
   'message.copyLink': 'Copy link',
   'message.linkCopied': 'Link copied',
+  'message.actions': 'Message actions',
+  'message.copyText': 'Copy text',
   'message.mention': 'You were mentioned',
   'message.newMarker': 'New',
   'message.newMessages': {
@@ -729,6 +733,12 @@ export const en = {
   'reaction.rocket': 'Ship it',
   'reaction.done': 'Done',
   'reaction.smile': 'Smile',
+  'reaction.by': '{names} reacted with {emoji}',
+  'reaction.you': 'You',
+  'reaction.others': {
+    one: '{count} other',
+    other: '{count} others',
+  },
 
   // ── Delivery (UX §3.1) ──────────────────────────────────────────────────
   'delivery.sending': 'Sending',

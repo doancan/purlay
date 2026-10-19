@@ -38,6 +38,10 @@ interface MenuProps {
   readonly children: React.ReactNode;
   /** Whether focus returns to the trigger on close: not when the item chosen put it elsewhere. */
   readonly returnFocus?: () => boolean;
+  /** Told when it opens and closes: a message's bar stays drawn while its menu is open. */
+  readonly onOpenChange?: (open: boolean) => void;
+  /** What it must stay inside besides the window: a feed, so it never covers the composer below. */
+  readonly boundary?: Element | null;
 }
 
 export const Menu = ({
@@ -46,8 +50,10 @@ export const Menu = ({
   side = 'bottom',
   children,
   returnFocus,
+  onOpenChange,
+  boundary,
 }: MenuProps): React.JSX.Element => (
-  <RadixMenu.Root>
+  <RadixMenu.Root {...(onOpenChange === undefined ? {} : { onOpenChange })}>
     <RadixMenu.Trigger asChild>{trigger}</RadixMenu.Trigger>
     <RadixMenu.Portal>
       <RadixMenu.Content
@@ -56,6 +62,7 @@ export const Menu = ({
         side={side}
         sideOffset={4}
         collisionPadding={8}
+        {...(boundary == null ? {} : { collisionBoundary: boundary })}
         onCloseAutoFocus={(event) => {
           if (returnFocus?.() === false) event.preventDefault();
         }}
@@ -141,4 +148,59 @@ export const MenuRadioItem = ({
       <Icon name="confirm" />
     </RadixMenu.ItemIndicator>
   </RadixMenu.RadioItem>
+);
+
+/**
+ * A row of square choices that are glyphs rather than words — the quick reactions. Each is a
+ * checkbox item, so one already chosen says so (`aria-checked`) and not only by its tint, and the
+ * arrows along the row move along it as the arrows down a list do.
+ */
+export const MenuTiles = ({
+  children,
+}: {
+  readonly children: React.ReactNode;
+}): React.JSX.Element => (
+  <div
+    role="group"
+    className="flex gap-1"
+    onKeyDown={(event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (step === 0) return;
+      const tiles = Array.from(
+        event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'),
+      );
+      const at = tiles.findIndex((tile) => tile === document.activeElement);
+      tiles[(at + step + tiles.length) % tiles.length]?.focus();
+      event.preventDefault();
+    }}
+  >
+    {children}
+  </div>
+);
+
+interface MenuTileProps {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onSelect: () => void;
+  /** Told when it is reached, by the pointer or the keyboard. */
+  readonly onHighlight?: () => void;
+  readonly children: React.ReactNode;
+}
+
+export const MenuTile = ({
+  label,
+  checked,
+  onSelect,
+  onHighlight,
+  children,
+}: MenuTileProps): React.JSX.Element => (
+  <RadixMenu.CheckboxItem
+    aria-label={label}
+    checked={checked}
+    onSelect={onSelect}
+    {...(onHighlight === undefined ? {} : { onFocus: onHighlight })}
+    className="flex h-row max-narrow:h-touch aspect-square cursor-pointer items-center justify-center rounded-md text-title data-[highlighted]:bg-surface-200 data-[state=checked]:bg-accent-subtle"
+  >
+    <span aria-hidden="true">{children}</span>
+  </RadixMenu.CheckboxItem>
 );

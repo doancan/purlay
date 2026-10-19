@@ -38,7 +38,7 @@ const ThreadedMessageRowView = (row: ThreadedMessageRowProps): React.JSX.Element
   const actions = useMemo(
     () =>
       threaded ? (
-        <IconButton label={label} glyph="reply" shortcut="R" onClick={reply} />
+        <IconButton size="bar" label={label} glyph="reply" shortcut="R" onClick={reply} />
       ) : undefined,
     [threaded, label, reply],
   );

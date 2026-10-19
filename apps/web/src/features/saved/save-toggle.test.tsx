@@ -72,7 +72,8 @@ describe('saving a message', () => {
     await person().click(button);
     expect(saveButton(view).getAttribute('aria-pressed')).toBe('true');
     expect(saveButton(view).getAttribute('aria-busy')).toBe('true');
-    expect(saveButton(view).getAttribute('title')).toBe('Remove from saved');
+    // The name stays; the tip says what a press does now.
+    expect(saveButton(view).getAttribute('title')).toBeNull();
     // A press while it is on its way is not a second request, and does not undo the first.
     await person().click(saveButton(view));
     expect(saveButton(view).getAttribute('aria-pressed')).toBe('true');

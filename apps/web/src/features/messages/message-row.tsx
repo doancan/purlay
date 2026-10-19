@@ -7,8 +7,9 @@
  * **Nothing here reflows.** The avatar and the name belong to the *first* message of a group, so a
  * message arriving below never changes the one above it; a grouped message (the same author
  * within five minutes) has neither, and its time is drawn in its place but invisible until the
- * row is hovered or focused. The actions are an overlay on the bubble's top corner, there from
- * the start and only faded in. A row is the same height whether the pointer is on it or not.
+ * row is the one showing its actions. The actions are a bar on the row's own top edge, in the
+ * corner the message is not in (`message-actions.tsx`, D-150), there from the start and only faded
+ * in. A row is the same height whether the pointer is on it or not.
  *
  * **The row serves threads too.** It takes a `children` slot below the bubble for the line that
  * opens the thread in the panel, and an `actions` slot beside the reaction control, so the thread
@@ -20,7 +21,7 @@
  * the cache's, and the cache keeps untouched messages as they were), so React's shallow
  * comparison is the whole check.
  */
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
@@ -36,10 +37,11 @@ import { ImageLinks } from '../content/image-links';
 import { Attachments } from './attachments';
 import { authorOf, isMine } from './author';
 import { EditedMark } from './edit-history';
-import { ReactMenu, ReactionBar } from './reactions';
-import { MessageEditor, OwnActions, useEditing } from './editing';
-import { SaveToggle } from '../saved/save-toggle';
-import { PinnedMark, PinToggle } from '../pins/pin-toggle';
+import { ReactionBar } from './reactions';
+import { MessageEditor, useEditing } from './editing';
+import { PinnedMark } from '../pins/pin-toggle';
+import { useActiveRow } from './active-row';
+import { MessageActions } from './message-actions';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -73,7 +75,7 @@ export interface MessageRowProps {
    * The tint fades by the hover token, which is nothing under reduced motion.
    */
   readonly landed?: boolean;
-  /** More hover actions beside React — the thread slice's Reply. */
+  /** More actions on the bar after React — the thread slice's Reply. */
   readonly actions?: React.ReactNode;
   /** Below the content and the reactions: a thread's summary line and its replies. */
   readonly children?: React.ReactNode;
@@ -114,16 +116,10 @@ const MessageRowView = ({
   const author = authorOf(message, t('user.erased'));
   const event = deleted ? null : message.githubEvent;
   const editing = useEditing().editingId === message.id && mine;
-  // Whether the pointer or focus is on THIS row and not on a row nested inside it. Replies were
-  // once rows inside the root's row, where CSS `group-hover` showed every reply's actions whenever
-  // the root was hovered; they are in the thread panel now (D-122), and the nearest row still
-  // answers, so a row placed inside another never again lights up both.
-  const [pointed, setPointed] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const own = (event: React.SyntheticEvent): boolean =>
-    event.target instanceof Element &&
-    event.target.closest('[data-message-row]') === event.currentTarget;
-  const on = pointed || focused;
+  // Whether this is the one row showing its actions: the row under the pointer, or the focused row
+  // when the keyboard is in use, across the feed and the thread panel together (D-150). The nearest
+  // row answers, so a row placed inside another never lights up both.
+  const on = useActiveRow(message.id);
 
   // Which edge the message sits on: the person's own on the right, everyone else's on the left.
   const outgoing = isMine(message, meId);
@@ -147,18 +143,6 @@ const MessageRowView = ({
       data-outgoing={outgoing ? '' : undefined}
       data-thread-open={threadOpen ? '' : undefined}
       data-landed={landed ? '' : undefined}
-      onPointerOver={(event) => {
-        setPointed(own(event));
-      }}
-      onPointerLeave={() => {
-        setPointed(false);
-      }}
-      onFocus={(event) => {
-        setFocused(own(event));
-      }}
-      onBlur={() => {
-        setFocused(false);
-      }}
       data-message-row=""
       data-message-id={message.id}
       tabIndex={tabIndex}
@@ -226,33 +210,11 @@ const MessageRowView = ({
             ) : (
               renderContent(message.content, { mentioned, me: members.get(meId)?.toLowerCase() })
             )}
-            <EditedMark message={message} mine={isMine(message, meId)} />
-            {!deleted && <PinnedMark message={message} />}
-            {/* None of them applies while the message is being edited, and they were drawn over the editor (#653). */}
-            {delivery === 'sent' && !deleted && !editing && (
-              <div
-                data-hover-controls=""
-                className={cn(
-                  // Above the first line, not over it: the group is taller than the bubble's padding, and
-                  // hung lower it hid the words it is about (#653). Wide, the row above is still clear; on a
-                  // narrow window the controls are a finger tall, so they stand on the bubble's top edge and
-                  // hang over the corner of the row above instead of over their own words.
-                  'absolute -top-8 max-narrow:top-auto max-narrow:bottom-full flex rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-card transition-opacity duration-hover ease-standard',
-                  // The inner corner (D-119 §6) — but your own short bubble is narrower than the
-                  // actions, which then ran past the feed's edge and scrolled the whole conversation
-                  // sideways; on your own they hang from the corner that is always inside.
-                  'right-2',
-                  // Hidden, it must not take a click meant for the words under it.
-                  !on && 'pointer-events-none opacity-0',
-                )}
-              >
-                <ReactMenu message={message} meId={meId} />
-                <SaveToggle message={message} />
-                <PinToggle message={message} />
-                {actions}
-                {mine && <OwnActions message={message} />}
-              </div>
-            )}
+            {/* What is known about the message — edited, pinned — on one line under its words, apart. */}
+            <div className="mt-1 flex items-center gap-3 empty:hidden">
+              <EditedMark message={message} mine={isMine(message, meId)} />
+              {!deleted && <PinnedMark message={message} />}
+            </div>
           </div>
           {/* Your own grouped message has no avatar column, so its time waits beside the bubble. */}
           {outgoing && grouped && (
@@ -267,7 +229,7 @@ const MessageRowView = ({
         {!deleted && event === null && <GitHubCards content={message.content} />}
         {!deleted && event === null && <ImageLinks content={message.content} />}
         {!deleted && <Attachments attachments={message.attachments} />}
-        {!deleted && <ReactionBar message={message} meId={meId} />}
+        {!deleted && <ReactionBar message={message} meId={meId} members={members} />}
         {failed && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-label text-danger-text">
             <Icon name="failed" size="sm" />
@@ -301,6 +263,17 @@ const MessageRowView = ({
         )}
         {children !== undefined && <div className="self-stretch">{children}</div>}
       </div>
+      {/* None of them applies while the message is being edited, and they were drawn over the editor (#653). */}
+      {delivery === 'sent' && !deleted && !editing && (
+        <MessageActions
+          message={message}
+          meId={meId}
+          mine={mine}
+          outgoing={outgoing}
+          shown={on}
+          actions={actions}
+        />
+      )}
     </article>
   );
 };

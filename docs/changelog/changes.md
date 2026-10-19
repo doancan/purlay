@@ -118,6 +118,14 @@ the count while anything is waiting. "Notifications on this device" is one switc
 Web Push, offered without the server's push keys too, and never asks on load. No sound: the
 operating system already sounds a notice. `NEEDS_YOU` moved to `@purlay/types`, so the client reads
 the server's one list.
+### Change — 2026-10-19: a message's actions, redesigned (D-150)
+
+The bar of actions sits on its own row's top edge, in the corner the message is not in, and no longer
+covers the author's name or the row above; only one row shows it — the pointer's, or the focused one
+while the keyboard is used. React, Reply, Save, Pin and More are one square each, with a tooltip and
+their key; More is on every message (Copy text, Save, Pin; Edit and Delete on one's own; Delete on
+anybody's for an owner or an admin). A reaction chip names who reacted; the quick reactions are one
+row of tiles that never opens over the composer; "edited" and "Pinned" are apart on one line.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

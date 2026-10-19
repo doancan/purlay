@@ -567,7 +567,12 @@ export const MessageFeed = ({
           </button>
         </div>
       )}
-      <div ref={scroller} onScroll={onScroll} className="relative flex-1 overflow-y-auto py-2">
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        data-message-list=""
+        className="relative flex-1 overflow-y-auto py-2"
+      >
         {/* The top row is one height whatever it says, so loading above never pushes what is below. */}
         <div
           ref={top}
