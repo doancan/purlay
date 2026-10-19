@@ -31,6 +31,8 @@ Defects found by a visual audit of the messaging screens, at 1440 and 390 wide i
 - **A long line of code shows that it goes on.** A code block, a diff and a table scroll under a thin
   scrollbar in the theme's tones that is always drawn (macOS hid it until scrolled), and a code block's
   header has **Wrap lines**, a toggle that wraps the view without changing what Copy copies.
+- **Add people says who is already in the channel.** Its members are listed after the people who can be
+  added, each saying *Member* instead of offering an Add that did nothing.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

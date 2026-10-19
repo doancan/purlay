@@ -83,6 +83,28 @@ describe('the list', () => {
     view.unmountAll();
   });
 
+  test('somebody already in the channel is a member, not somebody to add, and listed after', async () => {
+    // Found by an audit: every member of the channel had an Add of their own, which did nothing.
+    const view = await mountChannel({
+      messages: page([]),
+      members: people(ME, ALICE, BOB),
+      api: {
+        channelMembers: () =>
+          Promise.resolve([ME, ALICE].map((user) => ({ user, joinedAt: WHEN }))),
+      },
+    });
+    const dialog = await openPeople(view);
+    await settle();
+    const rows = within(dialog).getAllByRole('listitem');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      `BO${BOB.displayName} @${BOB.username}Add`,
+      `AL${ALICE.displayName} @${ALICE.username}Member`,
+    ]);
+    expect(within(dialog).getAllByRole('button', { name: 'Add' })).toHaveLength(1);
+    await expectNoAxeViolations(dialog);
+    view.unmountAll();
+  });
+
   test('closed and opened again, it starts afresh: no filter, nobody marked added', async () => {
     const view = await mountChannel({
       messages: page([]),

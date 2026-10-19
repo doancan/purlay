@@ -305,6 +305,7 @@ export const tr = {
   'people.filter': 'Kişi ara',
   'people.addOne': 'Ekle',
   'people.added': 'Eklendi',
+  'people.member': 'Üye',
   'people.loading': 'Kişiler yükleniyor…',
   'people.failed': 'Bu çalışma alanının kişileri yüklenemedi.',
   'people.none': 'Bu çalışma alanında henüz başka kimse yok.',

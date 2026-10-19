@@ -166,7 +166,9 @@ Details panel of the Superdesign screens: the **name and topic**, editable by a 
 with **Save** (somebody who has not joined reads them and is told to join) — the dialog opens with
 focus on itself, never on the name, so a key pressed on opening renames nothing; no dialog opens with a
 field's text selected; the **members** with a count
-and **Add people** (the same dialog as the header's); the **notification level** (the header's menu);
+and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed, those
+who can be added first with **Add**, and anybody already in the channel after them, saying *Member*
+quietly with nothing to press); the **notification level** (the header's menu);
 for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
 posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to
 **Connect** one, which answers with the payload URL, the content type and the secret, each with Copy,

@@ -1,14 +1,18 @@
 /**
  * Bringing people from the workspace into a channel (D-104): any member may. A list of the
  * workspace's people, narrowed as you type, each with Add. The person added is told by the server
- * (`CHANNEL_ADDED`) and sees the channel at once; somebody already in it is the same answer, so the
- * list needs no knowledge of who is in the channel to be right.
+ * (`CHANNEL_ADDED`) and sees the channel at once.
+ *
+ * Somebody already in the channel says **Member** instead, quietly, after the people who can be
+ * added: an Add that does nothing is a control that lies. The channel's members are read for that
+ * alone; until they arrive, or if they cannot be read, everybody is offered Add — the server answers
+ * an add of a member as it answers any other, so the list is never wrong, only less helpful.
  */
 import { useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
-import { useMembers } from '../../data/queries';
+import { useChannelMembers, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
@@ -32,6 +36,8 @@ export const AddPeopleDialog = ({
   const describe = useDescribeFailure();
   const { user } = useSession();
   const members = useMembers(channel.workspaceId);
+  const inChannel = useChannelMembers(channel.id);
+  const already = new Set((inChannel.data ?? []).map((member) => member.user.id));
   const [filter, setFilter] = useState('');
   const [asked, setAsked] = useState<ReadonlyMap<string, Asked>>(new Map());
 
@@ -56,7 +62,9 @@ export const AddPeopleDialog = ({
         wanted === '' ||
         person.username.toLowerCase().includes(wanted) ||
         person.displayName.toLowerCase().includes(wanted),
-    );
+    )
+    // Who can be added first; the channel's members after, as they cannot be.
+    .sort((a, b) => Number(already.has(a.id)) - Number(already.has(b.id)));
 
   const body = ((): React.ReactNode => {
     if (members.isPending) return <p className="text-body text-ink-muted">{t('people.loading')}</p>;
@@ -96,16 +104,22 @@ export const AddPeopleDialog = ({
                   {`${t('people.addFailed', { name: person.displayName })} ${failed}`}
                 </span>
               )}
-              <Button
-                variant={state === 'added' ? 'ghost' : 'secondary'}
-                busy={state === 'adding'}
-                disabled={state === 'added'}
-                onClick={() => {
-                  add(person.id);
-                }}
-              >
-                {state === 'added' ? t('people.added') : t('people.addOne')}
-              </Button>
+              {state === undefined && already.has(person.id) ? (
+                <span className="inline-flex h-control items-center px-3 text-label text-ink-muted max-narrow:h-touch">
+                  {t('people.member')}
+                </span>
+              ) : (
+                <Button
+                  variant={state === 'added' ? 'ghost' : 'secondary'}
+                  busy={state === 'adding'}
+                  disabled={state === 'added'}
+                  onClick={() => {
+                    add(person.id);
+                  }}
+                >
+                  {state === 'added' ? t('people.added') : t('people.addOne')}
+                </Button>
+              )}
             </li>
           );
         })}
