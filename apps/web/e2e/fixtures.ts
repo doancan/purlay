@@ -17,12 +17,14 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   apiAs,
   makeRoom,
+  sessionApi,
   type ApiClient,
   type Persona,
   type Room,
@@ -31,6 +33,8 @@ import {
 } from './support';
 
 export type { Persona, Room };
+
+const run = promisify(execFile);
 
 /**
  * Somebody in no workspace, signed in twice (`demo-seed.ts`): for a test that ends every session a
@@ -95,6 +99,58 @@ const freshSessionOf = (world: World, outsider: Outsider): string => {
   return printed;
 };
 
+/**
+ * Somebody made for one test alone (`demo-session.ts --new`), signed in once, in no workspace. The
+ * write budget is per person (`WRITE_BUDGET`), and the seeded four are every test's at once: a test
+ * whose own writes are many — a long history — or whose page is a person the others write as, waits
+ * behind them, and under load runs out of time or is refused. A newcomer's budget is the test's.
+ */
+export interface Newcomer {
+  readonly userId: string;
+  readonly username: string;
+  /** Speaks to the API with their session. */
+  readonly api: ApiClient;
+  /** Their browser, in this project's colour scheme and window, signed in and closed with the test. */
+  readonly page: () => Promise<Page>;
+}
+
+const madePerson = async (
+  world: World,
+  username: string,
+): Promise<{ userId: string; token: string }> => {
+  const printed = (
+    await run('bun', ['run', 'apps/api/src/cli/demo-session.ts', '--new', username], {
+      cwd: join(import.meta.dirname, '../../..'),
+      env: { ...process.env, DATABASE_URL: world.database },
+      encoding: 'utf8',
+    })
+  ).stdout.trim();
+  const [userId, token] = printed.split(' ');
+  // Fail here, saying what came back, rather than as a 401 three steps later.
+  if (userId === undefined || token === undefined || !/^[\w-]{32,}$/.test(token)) {
+    throw new Error(
+      `demo-session.ts --new printed something that is not a person: ${printed.slice(0, 80)}`,
+    );
+  }
+  return { userId, token };
+};
+
+/** A workspace the first newcomer makes, every other one invited by a link and joined. */
+export const workspaceFor = async (
+  owner: Newcomer,
+  ...others: readonly Newcomer[]
+): Promise<OwnWorkspace> => {
+  const slug = `${owner.username}-own`.slice(0, 64);
+  const workspace = await owner.api.post<OwnWorkspace>('/api/workspaces', { name: slug, slug });
+  for (const other of others) {
+    const { token } = await owner.api.post<{ token: string }>(
+      `/api/workspaces/${workspace.id}/invitations`,
+    );
+    await other.api.post('/api/invitations/accept', { token });
+  }
+  return workspace;
+};
+
 const SESSION_COOKIE = '__Host-purlay_session';
 
 /** The page's way to tell the test that the policy refused something. */
@@ -147,6 +203,8 @@ interface Fixtures {
   readonly asOutsider: (outsider: Outsider, session?: 0 | 1 | 'fresh') => Promise<Page>;
   /** A workspace an outsider makes, through the API, with a name of the test's own. */
   readonly workspaceOf: (outsider: Outsider) => Promise<OwnWorkspace>;
+  /** Somebody nobody else in the run is, named after what they are for (`Newcomer`). */
+  readonly newcomer: (label: string) => Promise<Newcomer>;
 }
 
 export const test = base.extend<Fixtures>({
@@ -326,6 +384,30 @@ export const test = base.extend<Fixtures>({
       }
       return (await response.json()) as OwnWorkspace;
     });
+  },
+
+  newcomer: async ({ browser, baseURL, world, throttling, securityPolicy }, use, testInfo) => {
+    const contexts: BrowserContext[] = [];
+    await use(async (label) => {
+      // Unique across tests, projects, attempts and runs; within the 39 a username may have.
+      const username = `${label}-${crypto.randomUUID().slice(0, 8)}`.toLowerCase().slice(0, 39);
+      const { userId, token } = await madePerson(world, username);
+      return {
+        userId,
+        username,
+        api: sessionApi({ baseURL: baseURL ?? '', workspaceId: undefined, token, who: username }),
+        page: async (): Promise<Page> => {
+          const context = await browserLike(browser, baseURL, testInfo);
+          contexts.push(context);
+          throttling.watch(context);
+          await securityPolicy.watch(context);
+          await signInAs(context, baseURL ?? '', token);
+          return await context.newPage();
+        },
+      };
+    });
+    for (const context of contexts) await securityPolicy.settle(context);
+    for (const context of contexts) await context.close();
   },
 
   expectNoAxe: async ({ page }, use) => {

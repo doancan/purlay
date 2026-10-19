@@ -55,7 +55,8 @@ export interface Tenant {
 }
 
 export interface ApiClient {
-  readonly persona: Persona;
+  /** Who it speaks as: a seeded persona's name, or a newcomer's username (`fixtures.ts`). */
+  readonly who: string;
   readonly get: <T>(path: string) => Promise<T>;
   readonly post: <T>(path: string, body?: unknown) => Promise<T>;
   readonly put: <T>(path: string, body?: unknown) => Promise<T>;
@@ -83,13 +84,29 @@ export interface ApiClient {
   } | null>;
 }
 
-export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
+export const apiAs = (tenant: Tenant, persona: Persona): ApiClient =>
+  sessionApi({
+    baseURL: tenant.baseURL,
+    workspaceId: tenant.workspaceId,
+    token: tenant.tokens[persona],
+    who: persona,
+  });
+
+/** The same client for any session: a seeded persona's, or a newcomer's in a workspace of their own. */
+export const sessionApi = (session: {
+  readonly baseURL: string;
+  /** The workspace `channelState` reads; a newcomer's client has none, and refuses to guess one. */
+  readonly workspaceId: string | undefined;
+  readonly token: string;
+  readonly who: string;
+}): ApiClient => {
+  const { who } = session;
   const call = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
     for (let attempt = 0; attempt < 40; attempt++) {
-      const response = await fetch(`${tenant.baseURL}${path}`, {
+      const response = await fetch(`${session.baseURL}${path}`, {
         method,
         headers: {
-          cookie: `__Host-purlay_session=${tenant.tokens[persona]}`,
+          cookie: `__Host-purlay_session=${session.token}`,
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -101,17 +118,15 @@ export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
       }
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(
-          `${method} ${path} as ${persona} answered ${String(response.status)}: ${text}`,
-        );
+        throw new Error(`${method} ${path} as ${who} answered ${String(response.status)}: ${text}`);
       }
       return (text === '' ? null : JSON.parse(text)) as T;
     }
-    throw new Error(`${method} ${path} as ${persona} stayed rate limited`);
+    throw new Error(`${method} ${path} as ${who} stayed rate limited`);
   };
 
   const client: ApiClient = {
-    persona,
+    who,
     get: (path) => call('GET', path),
     post: (path, body) => call('POST', path, body),
     put: (path, body) => call('PUT', path, body),
@@ -140,9 +155,12 @@ export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
       await call('POST', `/api/channels/${channelId}/join`);
     },
     channelState: async (channelId) => {
+      if (session.workspaceId === undefined) {
+        throw new Error(`${who}'s client was made with no workspace to read the channels of`);
+      }
       const channels = await call<{ id: string; state: Json | null }[]>(
         'GET',
-        `/api/workspaces/${tenant.workspaceId}/channels`,
+        `/api/workspaces/${session.workspaceId}/channels`,
       );
       const state = channels.find((c) => c.id === channelId)?.state;
       return (state ?? null) as Awaited<ReturnType<ApiClient['channelState']>>;
@@ -153,7 +171,7 @@ export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
 
 let counter = 0;
 /** A name no other test, project or run will pick: lowercase, hyphens, within the 64. */
-const uniqueName = (prefix: string): string => {
+export const uniqueName = (prefix: string): string => {
   counter += 1;
   const stamp = Math.floor(performance.timeOrigin + performance.now()).toString(36);
   const salt = Math.random().toString(36).slice(2, 6);

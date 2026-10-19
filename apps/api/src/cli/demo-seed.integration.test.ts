@@ -4,7 +4,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
-import { Channel, type Message } from '@purlay/types';
+import { Channel, type MeResponse, type Message } from '@purlay/types';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { createApp } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
@@ -14,6 +14,7 @@ import { testConfig, testDependencies } from '../testing/doubles';
 import { PERSONAS } from './demo-script';
 import {
   assertDemoDatabase,
+  freshPerson,
   freshSession,
   neverSignsIn,
   plannedMessages,
@@ -227,6 +228,38 @@ describe('integration: a fresh session for a seeded person (#522 follow-up)', ()
       expect(await refusal('postgres://u:p@localhost:5432/purlay_e2e_x', 'nobody')).toContain(
         'nobody called nobody',
       );
+    });
+  });
+});
+
+describe('integration: a fresh person, for a browser test that needs people nobody else spends', () => {
+  test('is signed in, in no workspace, and refused outside a scratch database', async () => {
+    await withRollback(async (db) => {
+      const config = testConfig({
+        DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_e2e_test',
+      });
+      const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
+      const person = await freshPerson(db, fixedClock(NOW), config.DATABASE_URL, 'hana-test');
+      const response = await app.handle(
+        new Request('http://localhost/api/me', {
+          headers: { cookie: `${SESSION_COOKIE}=${person.token}` },
+        }),
+      );
+      expect(response.status).toBe(200);
+      const me = (await response.json()) as MeResponse;
+      expect(me.user).toMatchObject({ id: person.userId, username: 'hana-test' });
+      expect(me.memberships).toEqual([]);
+
+      const refusal = await freshPerson(
+        db,
+        fixedClock(NOW),
+        'postgres://u:p@localhost:5432/purlay',
+        'hana-elsewhere',
+      ).then(
+        () => 'no refusal',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      expect(refusal).toContain('refusing to seed "purlay"');
     });
   });
 });

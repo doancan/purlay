@@ -102,7 +102,7 @@ test.describe('an invitation', () => {
     page,
     signIn,
     tenant,
-    asPerson,
+    newcomer,
   }) => {
     // A workspace of its own: every open link in it is revoked below, and in the shared one that
     // would end the links the other tests here are in the middle of opening. Bob makes it and makes
@@ -135,8 +135,10 @@ test.describe('an invitation', () => {
     }
     await expect(main.getByText('No links are open.')).toBeVisible();
 
-    const carol = await asPerson('carol');
-    await carol.goto(`/invite#${token}`);
-    await expect(carol.getByText('This invitation does not open')).toBeVisible();
+    // Somebody of the test's own opens it: the preview is a write on their budget, and carol's — the
+    // person every room of the run is made by (`support.ts`) — was spent by the time she got here.
+    const stranger = await (await newcomer('stranger')).page();
+    await stranger.goto(`/invite#${token}`);
+    await expect(stranger.getByText('This invitation does not open')).toBeVisible();
   });
 });
