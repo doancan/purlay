@@ -1036,6 +1036,15 @@ export const en = {
   'settings.account.here': 'This device',
   'settings.account.hereHint': 'Sign out of Purlay in this browser only.',
   'settings.account.danger': 'Danger zone',
+  'settings.account.leave': 'Leave {workspace}',
+  'settings.account.leaveEntry': 'Leave workspace…',
+  'settings.account.leaveTitle': 'Leave {workspace}?',
+  'settings.account.leaveHint':
+    'You lose every channel in it. An invitation link lets you back in.',
+  'settings.account.leaveConfirm': 'Leave {workspace}',
+  'settings.account.leaveLastOwner':
+    'You are its last owner: make somebody else an owner on Members first.',
+  'settings.account.leaveFailed': 'You did not leave.',
   'settings.account.eraseHint':
     'Your account and your name on what you wrote are removed for good. This cannot be undone.',
   'settings.general.title': 'General',

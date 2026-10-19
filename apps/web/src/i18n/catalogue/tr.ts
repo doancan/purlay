@@ -1016,6 +1016,15 @@ export const tr = {
   'settings.account.here': 'Bu cihaz',
   'settings.account.hereHint': 'Yalnızca bu tarayıcıda Purlay’den çık.',
   'settings.account.danger': 'Tehlikeli bölge',
+  'settings.account.leave': '{workspace} alanından ayrıl',
+  'settings.account.leaveEntry': 'Çalışma alanından ayrıl…',
+  'settings.account.leaveTitle': '{workspace} alanından ayrılınsın mı?',
+  'settings.account.leaveHint':
+    'İçindeki her kanalı kaybedersin. Bir davet bağlantısıyla geri dönebilirsin.',
+  'settings.account.leaveConfirm': '{workspace} alanından ayrıl',
+  'settings.account.leaveLastOwner':
+    'Son sahibi sensin: önce Üyeler sayfasında başka birini sahip yap.',
+  'settings.account.leaveFailed': 'Ayrılamadın.',
   'settings.account.eraseHint':
     'Hesabın ve yazdıklarındaki adın kalıcı olarak silinir. Geri alınamaz.',
   'settings.general.title': 'Genel',

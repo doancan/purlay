@@ -278,3 +278,48 @@ describe('erasing the account (D-139 §5)', () => {
     ).toContainEqual(expect.stringContaining('Your account was not erased.') as unknown as string);
   });
 });
+
+describe('leaving the workspace (D-152)', () => {
+  test('asks first, then leaves, reads the memberships again and goes to the front door', async () => {
+    const left: string[] = [];
+    let reads = 0;
+    const session = aSession();
+    const view = await open({
+      me: () => {
+        reads += 1;
+        return Promise.resolve(session);
+      },
+      leaveWorkspace: (workspaceId) => {
+        left.push(workspaceId);
+        return Promise.resolve();
+      },
+    });
+    const before = reads;
+    await person().click(main(view).getByRole('button', { name: 'Leave workspace…' }));
+    const ask = view.getByRole('dialog');
+    expect(left).toEqual([]);
+    await person().click(within(ask).getByRole('button', { name: /^Leave / }));
+    await settle();
+    expect(left).toHaveLength(1);
+    expect(reads).toBeGreaterThan(before);
+    // Through the front door (with `replace`), which sends them on to what they are still in.
+    expect(here(view)).not.toBe('/w/acme/settings/account');
+    view.unmount();
+  });
+
+  test('the last owner is told to hand the workspace on, and stays', async () => {
+    const view = await open({
+      leaveWorkspace: () =>
+        Promise.reject(new ApiError(409, 'LAST_OWNER', 'A workspace keeps at least one owner.')),
+    });
+    await person().click(main(view).getByRole('button', { name: 'Leave workspace…' }));
+    const ask = view.getByRole('dialog');
+    await person().click(within(ask).getByRole('button', { name: /^Leave / }));
+    await settle();
+    expect(within(ask).getByRole('alert').textContent).toContain(
+      'make somebody else an owner on Members first',
+    );
+    expect(here(view)).toBe('/w/acme/settings/account');
+    view.unmount();
+  });
+});

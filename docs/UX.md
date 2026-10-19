@@ -204,7 +204,8 @@ it. On a narrow window the navigation opens as the sidebar does.
 - **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126)
   with where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
 - **Keyboard shortcuts** — the reference, as a page.
-- **Sessions & account** — *Sign out everywhere…* and *Erase my account…*, each asking first as before.
+- **Sessions & account** — *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told to
+  make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), and *Create workspace…*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
