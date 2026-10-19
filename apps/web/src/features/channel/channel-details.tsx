@@ -1,9 +1,10 @@
 /**
- * A channel's details (D-123), opened from its name in the header: the Details panel of the
- * Superdesign screens, drawn as the product's dialog — its name and topic, who is in it with Add
- * people, what the person is told about, the repositories it hears from (for an owner or an admin,
- * D-134), and at the bottom, in the danger tone, Leave and (for an owner or an admin) Archive. Files
- * and pins are not here (#485).
+ * A channel's details (D-123), opened from its name in the header: the product's wide dialog with
+ * tabs (D-154). **About** — its name and topic, what the person is told about said in words, and at
+ * the foot a danger zone with Leave and (for an owner or an admin) Archive; **Members** — who is in
+ * it, found by name when there are many, with Add people; **Integrations** — the repositories it
+ * hears from, an owner's or an admin's only (D-134), and absent for anybody else. Files and pins are
+ * not here (#485).
  *
  * What is offered is what the server would allow: only a member edits the name and topic, only a
  * member leaves, only an owner or an admin archives. The server stays the authority, and what it
@@ -14,6 +15,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { Channel, UpdateChannelRequest } from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
+import { fold } from '../composer/mention-suggest';
 import { useActions } from '../../data/actions-provider';
 import { isApiError } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
@@ -24,6 +26,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { TextField } from '../../ui/text-field';
@@ -34,12 +37,19 @@ import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
-import { NotificationLevelMenu } from './notification-level-menu';
+import { LEVELS, useChooseLevel } from './notification-level-menu';
 
-const sectionTitle = 'text-label text-ink-muted';
+const sectionTitle = 'text-label font-semibold text-ink';
+
+/** A row of the danger zone: what the act costs, and the act. */
+const dangerRow =
+  'flex items-center gap-4 border-border-subtle px-4 py-3 not-first:border-t-hairline max-narrow:gap-3';
+
+/** More members than this, and the list can be narrowed by name. */
+const FINDABLE_FROM = 8;
 
 /** The name and the topic: a form for a member, two lines for anybody else. */
-const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+const NameAndTopic = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const { updateChannel } = useActions();
@@ -135,7 +145,7 @@ const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element =>
         }}
       />
       <div className="flex items-center justify-end gap-3">
-        <p role="status" className="text-label text-ink-muted">
+        <p role="status" className="min-w-0 flex-1 text-right text-label text-ink-muted">
           {state === 'saved' ? t('details.saved') : ''}
         </p>
         {problem?.field === 'form' && (
@@ -151,7 +161,42 @@ const About = ({ channel }: { readonly channel: Channel }): React.JSX.Element =>
   );
 };
 
-/** Who is in it, and the way to bring somebody else in. */
+/** What the person is told about here, the level said in words and changed in place (D-107). */
+const Notifications = ({ channel }: { readonly channel: Channel }): React.JSX.Element | null => {
+  const { t } = useI18n();
+  const choose = useChooseLevel(channel);
+  const name = useId();
+  const current = channel.notificationLevel;
+  // Only a member has a level; somebody who has not joined is told nothing and offered nothing.
+  if (channel.state === null || current === null) return null;
+  return (
+    <fieldset className="flex flex-col">
+      <legend className={cn(sectionTitle, 'mb-2')}>{t('details.notifications')}</legend>
+      <div className="flex flex-col rounded-lg border-hairline border-border-subtle">
+        {LEVELS.map((level) => (
+          <label
+            key={level}
+            className="flex min-h-row items-center gap-3 border-border-subtle px-3 py-2 text-body text-ink not-first:border-t-hairline max-narrow:min-h-touch"
+          >
+            <input
+              type="radio"
+              name={name}
+              value={level}
+              checked={level === current}
+              onChange={() => {
+                choose(level);
+              }}
+              className="size-icon-md accent-ink"
+            />
+            {t(`level.${level}`)}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+};
+
+/** Who is in it, found by name when there are many, and the way to bring somebody else in. */
 const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t, format } = useI18n();
   const describe = useDescribeFailure();
@@ -159,13 +204,35 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   const { user } = useSession();
   const members = useChannelMembers(channel.id);
   const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState('');
   const headingId = useId();
+  const all = members.data ?? [];
+  const wanted = fold(query.trim());
+  const shown =
+    wanted === ''
+      ? all
+      : all.filter(
+          ({ user: person }) =>
+            fold(person.displayName).includes(wanted) || fold(person.username).includes(wanted),
+        );
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h3 id={headingId} className={sectionTitle}>
-        {t('details.members', { number: format.number(members.data?.length ?? 0) })}
-      </h3>
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <div className="flex min-h-control items-center justify-between gap-3">
+        <h3 id={headingId} className={sectionTitle}>
+          {t('details.members', { number: format.number(all.length) })}
+        </h3>
+        {channel.state !== null && (
+          <Button
+            glyph="add"
+            onClick={() => {
+              setAdding(true);
+            }}
+          >
+            {t('people.add')}
+          </Button>
+        )}
+      </div>
       {members.isError ? (
         <div className="flex items-center gap-3">
           <p className="text-body text-ink-muted">
@@ -184,46 +251,57 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
-      ) : members.data.length === 0 ? (
+      ) : all.length === 0 ? (
         <p className="text-body text-ink-muted">{t('details.nobody')}</p>
       ) : (
-        <ul className="flex max-h-palette-list flex-col gap-2 overflow-y-auto">
-          {members.data.map(({ user: person }) => (
-            <li key={person.id} className="flex items-center gap-3">
-              <Avatar name={person.displayName} username={person.username} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-body text-ink">
-                {person.displayName}{' '}
-                <span className="text-caption text-ink-muted">
-                  @{person.username}
-                  {person.id === user.id && ` · ${t('details.you')}`}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          {all.length > FINDABLE_FROM && (
+            <TextField
+              label={t('details.find')}
+              type="search"
+              value={query}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+            />
+          )}
+          {shown.length === 0 ? (
+            <p role="status" className="text-body text-ink-muted">
+              {t('details.noMatch', { query: query.trim() })}
+            </p>
+          ) : (
+            <ul className="flex max-h-palette-list flex-col overflow-y-auto rounded-lg border-hairline border-border-subtle">
+              {shown.map(({ user: person }) => (
+                <li
+                  key={person.id}
+                  className="flex min-h-row items-center gap-3 border-border-subtle px-3 py-2 not-first:border-t-hairline max-narrow:min-h-touch"
+                >
+                  <Avatar name={person.displayName} username={person.username} size="md" />
+                  <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span className="truncate text-body text-ink">{person.displayName}</span>
+                    <span className="truncate text-caption text-ink-muted">@{person.username}</span>
+                  </span>
+                  {person.id === user.id && (
+                    <span className="shrink-0 text-caption text-ink-muted">{t('details.you')}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
       {channel.state !== null && (
-        <>
-          <Button
-            variant="ghost"
-            className="self-start"
-            onClick={() => {
-              setAdding(true);
-            }}
-          >
-            {t('people.add')}
-          </Button>
-          <AddPeopleDialog
-            channel={channel}
-            open={adding}
-            onOpenChange={(next) => {
-              setAdding(next);
-              // Whoever was brought in is in the list when it is shown again.
-              if (!next)
-                void client.invalidateQueries({ queryKey: keys.channelMembers(channel.id) });
-            }}
-          />
-        </>
+        <AddPeopleDialog
+          channel={channel}
+          open={adding}
+          onOpenChange={(next) => {
+            setAdding(next);
+            // Whoever was brought in is in the list when it is shown again.
+            if (!next) void client.invalidateQueries({ queryKey: keys.channelMembers(channel.id) });
+          }}
+        />
       )}
     </section>
   );
@@ -244,6 +322,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   const [asking, setAsking] = useState<'leave' | 'archive' | null>(null);
   const [busy, setBusy] = useState(false);
   const questionId = useId();
+  const headingId = useId();
   const box = useRef<HTMLDivElement>(null);
   // Which button asked, so Cancel can give focus back to it: the question replaces the buttons, and
   // focus on a button that is gone falls to the dialog itself, far from where the person was.
@@ -283,66 +362,190 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   };
 
   return (
-    <div ref={box} className="flex flex-col gap-2 border-t-hairline border-border-subtle pt-4">
+    <section aria-labelledby={headingId} className="flex flex-col">
+      <h3 id={headingId} className={cn(sectionTitle, 'mb-2')}>
+        {t('details.danger')}
+      </h3>
+      <div ref={box} className="flex flex-col rounded-lg border-hairline border-danger">
+        {asking === null ? (
+          <>
+            {member && (
+              <div className={dangerRow}>
+                <p className="min-w-0 flex-1 text-body text-ink-muted">{t('details.leaveHint')}</p>
+                <Button
+                  variant="dangerQuiet"
+                  data-ask="leave"
+                  onClick={() => {
+                    setAsking('leave');
+                  }}
+                >
+                  {t('details.leave')}
+                </Button>
+              </div>
+            )}
+            {archiver && (
+              <div className={dangerRow}>
+                <p className="min-w-0 flex-1 text-body text-ink-muted">
+                  {t('details.archiveHint')}
+                </p>
+                <Button
+                  variant="dangerQuiet"
+                  data-ask="archive"
+                  onClick={() => {
+                    setAsking('archive');
+                  }}
+                >
+                  {t('details.archive')}
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div role="group" aria-labelledby={questionId} className="flex flex-col gap-3 p-4">
+            <p id={questionId} className="text-body text-ink">
+              {t(asking === 'leave' ? 'details.leaveAsk' : 'details.archiveAsk', { name })}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                data-answer="cancel"
+                onClick={() => {
+                  setAsking(null);
+                  setProblem(null);
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                busy={busy}
+                onClick={() => {
+                  void act(asking);
+                }}
+              >
+                {t(asking === 'leave' ? 'details.leave' : 'details.archive')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
       {problem !== null && (
-        <p role="alert" className="text-label text-danger-text">
+        <p role="alert" className="mt-2 text-label text-danger-text">
           {problem}
         </p>
       )}
-      {asking === null ? (
-        <div className="flex flex-wrap gap-2">
-          {member && (
-            <Button
-              variant="dangerQuiet"
-              data-ask="leave"
+    </section>
+  );
+};
+
+type Tab = 'about' | 'members' | 'integrations';
+
+/**
+ * The tabs (WAI-ARIA's pattern, activated as they are reached): one tab in the Tab order, ← → move
+ * between them and wrap, Home and End go to the ends. Every panel stays mounted and only the chosen
+ * one is shown, so a name half typed in About is still there after a look at Members.
+ */
+const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+  const { t, format } = useI18n();
+  const { workspace } = useWorkspace();
+  const { memberships } = useSession();
+  const members = useChannelMembers(channel.id);
+  const [tab, setTab] = useState<Tab>('about');
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const base = useId();
+  // Repository feeds are an owner's or an admin's to see and set up (D-134 §2).
+  const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
+  const configures = (role === 'owner' || role === 'admin') && channel.type !== 'direct_message';
+  const tabs: readonly Tab[] = configures
+    ? ['about', 'members', 'integrations']
+    : ['about', 'members'];
+
+  const move = (event: React.KeyboardEvent): void => {
+    const at = tabs.indexOf(tab);
+    const to =
+      event.key === 'ArrowRight'
+        ? (at + 1) % tabs.length
+        : event.key === 'ArrowLeft'
+          ? (at - 1 + tabs.length) % tabs.length
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? tabs.length - 1
+              : null;
+    const next = to === null ? undefined : tabs[to];
+    if (next === undefined) return;
+    event.preventDefault();
+    setTab(next);
+    tabsRef.current?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus();
+  };
+
+  return (
+    <>
+      {/* The rule under the tabs is drawn behind them, so the chosen tab's mark lies on it rather
+      than above it. */}
+      <div className="relative">
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 border-b-hairline border-border-subtle"
+        />
+        <div
+          ref={tabsRef}
+          role="tablist"
+          aria-label={t('details.tabs')}
+          onKeyDown={move}
+          className="relative flex gap-5"
+        >
+          {tabs.map((each) => (
+            <button
+              key={each}
+              type="button"
+              role="tab"
+              id={`${base}-${each}-tab`}
+              data-tab={each}
+              aria-selected={each === tab}
+              aria-controls={`${base}-${each}`}
+              tabIndex={each === tab ? 0 : -1}
               onClick={() => {
-                setAsking('leave');
+                setTab(each);
               }}
+              className={cn(
+                'flex h-control items-center gap-2 border-b-marker text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
+                each === tab
+                  ? 'border-ink text-ink'
+                  : 'border-transparent text-ink-muted hover:text-ink',
+              )}
             >
-              {t('details.leave')}
-            </Button>
-          )}
-          {archiver && (
-            <Button
-              variant="dangerQuiet"
-              data-ask="archive"
-              onClick={() => {
-                setAsking('archive');
-              }}
-            >
-              {t('details.archive')}
-            </Button>
-          )}
+              {t(`details.tab.${each}`)}
+              {each === 'members' && members.data !== undefined && (
+                <span className="text-caption text-ink-muted">
+                  {format.number(members.data.length)}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div role="group" aria-labelledby={questionId} className="flex flex-col gap-2">
-          <p id={questionId} className="text-label text-ink">
-            {t(asking === 'leave' ? 'details.leaveAsk' : 'details.archiveAsk', { name })}
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              data-answer="cancel"
-              onClick={() => {
-                setAsking(null);
-                setProblem(null);
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="danger"
-              busy={busy}
-              onClick={() => {
-                void act(asking);
-              }}
-            >
-              {t(asking === 'leave' ? 'details.leave' : 'details.archive')}
-            </Button>
-          </div>
+      </div>
+      {tabs.map((each) => (
+        <div
+          key={each}
+          role="tabpanel"
+          id={`${base}-${each}`}
+          aria-labelledby={`${base}-${each}-tab`}
+          hidden={each !== tab}
+          className="flex flex-col gap-6 pt-2"
+        >
+          {each === 'about' && (
+            <>
+              <NameAndTopic channel={channel} />
+              <Notifications channel={channel} />
+              <Farewell channel={channel} />
+            </>
+          )}
+          {each === 'members' && <Members channel={channel} />}
+          {each === 'integrations' && <GitHubFeeds channel={channel} />}
         </div>
-      )}
-    </div>
+      ))}
+    </>
   );
 };
 
@@ -356,11 +559,6 @@ export const ChannelDetailsDialog = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { workspace } = useWorkspace();
-  const { memberships } = useSession();
-  // Repository feeds are an owner's or an admin's to see and set up (D-134 §2).
-  const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
-  const configures = role === 'owner' || role === 'admin';
   return (
     <Dialog
       open={open}
@@ -368,19 +566,11 @@ export const ChannelDetailsDialog = ({
       title={t('details.title', { name: channel.name ?? '' })}
       description={t('details.description')}
       closeLabel={t('common.close')}
+      size="wide"
       // Read first: the name field is not where the person is going, and one key would rename it.
       focusFirst="dialog"
     >
-      <About channel={channel} />
-      <Members channel={channel} />
-      {channel.state !== null && (
-        <div className="flex items-center justify-between gap-3">
-          <span className={sectionTitle}>{t('details.notifications')}</span>
-          <NotificationLevelMenu channel={channel} />
-        </div>
-      )}
-      {configures && channel.type !== 'direct_message' && <GitHubFeeds channel={channel} />}
-      <Farewell channel={channel} />
+      <Details channel={channel} />
     </Dialog>
   );
 };

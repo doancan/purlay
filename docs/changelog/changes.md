@@ -74,6 +74,18 @@ The inbox shows **All** or **Unread** (asked of the server, so an old unread one
 it holds under **Today** and **Earlier** in cards centred like the feed, marks unread with a dot as well
 as full ink, and reads one row without opening it with **Mark read**. With nothing waiting, Unread says
 *All caught up*.
+### Change — 2026-10-19: channel details in tabs (D-154)
+
+- **A channel's details are a wide dialog with tabs** — About, Members, Integrations — instead of one
+  480px column that grew to 886px at 900 wide and past a phone's height. On a narrow window it is a
+  sheet that fills the screen. A new size token, `size-dialog-lg` (640px), is `Dialog`'s `wide` size.
+- **The notification level is said in words**: three choices in About with the current one chosen,
+  where the details showed only the header's bell.
+- **Leave and Archive are a Danger zone at the foot of About**, each row saying what it costs; they
+  were below the fold under the GitHub form.
+- **Members carries its count in its tab**, Add people beside its heading, and a field to find a
+  member by name once there are more than eight.
+- **The GitHub repositories are their own Integrations tab**, which only an owner or an admin has.
 
 ### Fix — 2026-10-19: messaging polish
 

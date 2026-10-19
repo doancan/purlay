@@ -92,6 +92,7 @@
   --container-dialog: var(--size-dialog);
   --container-settings: var(--size-settings);
   --container-field: var(--size-field);
+  --container-dialog-lg: var(--size-dialog-lg);
   --container-palette: var(--size-palette);
   --height-palette-list: var(--size-palette-list);
   --container-toast: var(--size-toast);

@@ -29,7 +29,7 @@ import { useContentPorts } from '../content/content-ports';
 /** `CreateGitHubFeedRequest`'s rule, so the common slip is answered before a round trip. */
 const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/(?!\.\.?$)[A-Za-z0-9._-]{1,100}$/;
 
-const sectionTitle = 'text-label text-ink-muted';
+const sectionTitle = 'text-label font-semibold text-ink';
 
 /** The address GitHub posts to: this server's own origin and the path the feed was given. */
 const addressOf = (created: CreatedGitHubFeed): string =>

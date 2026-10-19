@@ -25,6 +25,7 @@
  */
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { useRef } from 'react';
+import { cn } from './cn';
 import { IconButton } from './icon-button';
 
 /**
@@ -32,10 +33,27 @@ import { IconButton } from './icon-button';
  * dialog sits inside it, a margin from the top and the bottom, so its last button is reached by
  * scrolling rather than lost below the window. A click on it beside the dialog closes the dialog.
  */
-const overlayClasses = 'fixed inset-0 z-palette overflow-y-auto bg-scrim px-4 py-8';
+const overlayClasses = 'fixed inset-0 z-palette overflow-y-auto bg-scrim';
 
-const contentClasses =
-  'relative mx-auto flex max-w-dialog flex-col gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-6 text-ink shadow-float outline-none';
+const contentClasses = 'relative mx-auto flex flex-col gap-4 bg-surface-100 text-ink outline-none';
+
+/**
+ * The two widths (D-154). A dialog is 480px, a margin inside the window on a phone. A **wide** one —
+ * a surface with tabs, such as a channel's details — is 640px, and below the narrow width it is a
+ * sheet that fills the screen: a phone has no room for a card's margins around a whole surface.
+ * Each size's classes are whole, never one overriding the other (`cn` does not merge them).
+ */
+const sizeClasses = {
+  default: {
+    overlay: 'px-4 py-8',
+    content: 'max-w-dialog rounded-2xl border-hairline border-border-subtle p-6 shadow-float',
+  },
+  wide: {
+    overlay: 'narrow:px-4 narrow:py-8',
+    content:
+      'max-w-dialog-lg p-6 max-narrow:min-h-full max-narrow:p-4 narrow:rounded-2xl narrow:border-hairline narrow:border-border-subtle narrow:shadow-float',
+  },
+} as const;
 
 interface DialogProps {
   readonly open: boolean;
@@ -53,6 +71,8 @@ interface DialogProps {
    * channel's name, D-123). Either way no text is ever selected on opening.
    */
   readonly focusFirst?: 'control' | 'dialog';
+  /** `wide` for a surface with tabs (D-154); a dialog is the default width. */
+  readonly size?: keyof typeof sizeClasses;
 }
 
 /**
@@ -92,15 +112,16 @@ export const Dialog = ({
   children,
   footer,
   focusFirst = 'control',
+  size = 'default',
 }: DialogProps): React.JSX.Element => {
   const returnTo = useRef<HTMLElement | null>(null);
   const close = useRef<HTMLButtonElement>(null);
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={overlayClasses}>
+        <RadixDialog.Overlay className={cn(overlayClasses, sizeClasses[size].overlay)}>
           <RadixDialog.Content
-            className={contentClasses}
+            className={cn(contentClasses, sizeClasses[size].content)}
             onOpenAutoFocus={(event) => {
               // Fired before Radix moves focus in, so the active element is still the opener.
               returnTo.current = openerOf(document.activeElement);
