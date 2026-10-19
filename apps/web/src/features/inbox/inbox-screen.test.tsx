@@ -286,3 +286,56 @@ describe('the sidebar', () => {
     view.unmount();
   });
 });
+
+describe('triage', () => {
+  test('Unread asks the server for what waits only, and with nothing waiting says so', async () => {
+    const asked: { unreadOnly?: boolean }[] = [];
+    const view = await visit({
+      notifications: (_workspaceId, at = {}) => {
+        asked.push(at);
+        return Promise.resolve(page(at.unreadOnly === true ? [] : [told(1, 'mention')]));
+      },
+    });
+    const unread = view.getByRole('button', { name: 'Unread' });
+    expect(unread.getAttribute('aria-pressed')).toBe('false');
+    await person().click(unread);
+    await settle();
+    expect(unread.getAttribute('aria-pressed')).toBe('true');
+    expect(asked.some((at) => at.unreadOnly === true)).toBe(true);
+    expect(view.getByText('All caught up')).toBeDefined();
+    await person().click(view.getByRole('button', { name: 'All' }));
+    await settle();
+    expect(view.getByText('words 1')).toBeDefined();
+    view.unmount();
+  });
+
+  test('Mark read reads that one alone, painted at once, without leaving the inbox', async () => {
+    const reads: ReadNotificationsRequest[] = [];
+    const view = await visit({
+      notifications: () => Promise.resolve(page([told(1, 'mention'), told(2, 'mention')])),
+      readNotifications: (input) => {
+        reads.push(input);
+        return Promise.resolve();
+      },
+    });
+    const marks = view.getAllByRole('button', { name: 'Mark read' });
+    expect(marks).toHaveLength(2);
+    await person().click(marks[0] as HTMLElement);
+    await settle();
+    expect(reads).toEqual([{ ids: [notificationId(1)] }]);
+    // The other still waits, and the person is still in the inbox.
+    expect(view.getAllByRole('button', { name: 'Mark read' })).toHaveLength(1);
+    expect(view.world.history.stack.at(-1) ?? '/w/acme/inbox').toBe('/w/acme/inbox');
+    view.unmount();
+  });
+
+  test('what was not told today is under Earlier', async () => {
+    const view = await visit({
+      notifications: () =>
+        Promise.resolve(page([{ ...told(1, 'mention'), createdAt: '2020-01-01T08:00:00.000Z' }])),
+    });
+    expect(view.getByRole('heading', { name: 'Earlier' })).toBeDefined();
+    expect(view.queryByRole('heading', { name: 'Today' })).toBeNull();
+    view.unmount();
+  });
+});

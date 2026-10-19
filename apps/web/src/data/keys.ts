@@ -19,7 +19,11 @@ export const keys = {
   messages: (channelId: string) => ['messages', channelId] as const,
   thread: (messageId: string) => ['thread', messageId] as const,
   unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
-  notifications: (workspaceId: string) => ['notifications', workspaceId] as const,
+  /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
+  notifications: (workspaceId: string, filter?: 'unread') =>
+    filter === undefined
+      ? (['notifications', workspaceId] as const)
+      : (['notifications', workspaceId, filter] as const),
   search: (workspaceId: string, words: string, channelId: string | null) =>
     ['search', workspaceId, words, channelId] as const,
   invitation: (token: string) => ['invitation', token] as const,

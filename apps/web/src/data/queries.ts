@@ -152,12 +152,19 @@ export const useUnresolved = (workspaceId: string): UseInfiniteQueryResult<Pages
 /** The caller's inbox in one workspace, newest first, a page at a time (D-106). */
 export const useNotifications = (
   workspaceId: string,
+  unreadOnly = false,
 ): UseInfiniteQueryResult<InfiniteData<NotificationPage>> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.notifications(workspaceId),
+    queryKey: unreadOnly
+      ? keys.notifications(workspaceId, 'unread')
+      : keys.notifications(workspaceId),
     queryFn: ({ pageParam, signal }) =>
-      api.notifications(workspaceId, { before: pageParam }, signal),
+      api.notifications(
+        workspaceId,
+        unreadOnly ? { before: pageParam, unreadOnly } : { before: pageParam },
+        signal,
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });

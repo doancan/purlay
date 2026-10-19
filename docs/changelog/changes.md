@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-19: the inbox is for triage (D-153)
+
+The inbox shows **All** or **Unread** (asked of the server, so an old unread one is found), groups what
+it holds under **Today** and **Earlier** in cards centred like the feed, marks unread with a dot as well
+as full ink, and reads one row without opening it with **Mark read**. With nothing waiting, Unread says
+*All caught up*.
+
 ### Fix — 2026-10-19: messaging polish
 
 Defects found by a visual audit of the messaging screens, at 1440 and 390 wide in both themes.
