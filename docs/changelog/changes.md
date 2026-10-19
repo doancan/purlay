@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Polish — 2026-10-19: a muted channel says so in the sidebar
+
+A channel set to *Nothing* carries a struck-through bell after its name (read as "muted"), so it no longer
+looks like every other channel; it is still bold while unread, as D-107 keeps it.
+
 ### Polish — 2026-10-19: the list screens read as one product (D-158)
 
 The open questions, search and saved now share the inbox's shape: a centred column on a quieter ground,

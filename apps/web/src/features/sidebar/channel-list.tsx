@@ -94,6 +94,7 @@ export const ChannelList = (): React.JSX.Element => {
                 unread={(channel.state?.unreadCount ?? 0) > 0}
                 mentions={channel.state?.unreadMentionCount ?? 0}
                 incident={channel.incident}
+                muted={channel.notificationLevel === 'none'}
               >
                 {channel.name}
               </ChannelRow>

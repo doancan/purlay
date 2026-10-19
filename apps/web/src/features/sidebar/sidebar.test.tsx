@@ -1034,3 +1034,18 @@ describe('the keyboard', () => {
     await expectNoAxeViolations(view.container);
   });
 });
+
+describe('a channel set to tell nothing (D-107)', () => {
+  test('says so after its name, and only that one', async () => {
+    const channels = someChannels().map((c) =>
+      c.id === IDS.deploys ? { ...c, notificationLevel: 'none' as const } : c,
+    );
+    const view = await open(aSignedInApi({ channels: () => Promise.resolve(channels) }));
+    const muted = within(view.getByRole('complementary', { name: 'Workspace' })).getAllByRole(
+      'img',
+      { name: 'muted' },
+    );
+    expect(muted).toHaveLength(1);
+    expect(muted[0]?.closest('a')?.textContent).toContain('deploys');
+  });
+});
