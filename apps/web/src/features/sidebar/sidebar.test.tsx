@@ -677,6 +677,15 @@ describe('the workspace menu', () => {
     expect(items).not.toContain('Create workspace…');
   });
 
+  test('Create workspace… is put away by its Cancel, and nothing is made', async () => {
+    const view = await open();
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = await view.findByRole('dialog');
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
+  });
+
   test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
     const view = await open();
     const sidebar = within(view.getByRole('complementary'));
@@ -758,18 +767,6 @@ describe('the workspace menu', () => {
     expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
     expect(dialog.isConnected).toBe(false);
     expectFocusOn(door);
-  });
-
-  test('Cancel in the create dialog closes it without making anything', async () => {
-    const view = await open();
-    await person().click(
-      within(view.getByRole('complementary')).getByRole('button', { name: 'acme-eng' }),
-    );
-    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
-    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
-    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await settle();
-    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
   });
 
   test('choosing another goes to it', async () => {

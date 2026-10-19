@@ -1,6 +1,6 @@
 /**
  * A menu — the workspace switcher, the account menu, the theme and language
- * pickers.
+ * pickers, and a sidebar row's context menu.
  *
  * Radix's dropdown does the keyboard model a menu has to have and a hand-written
  * one never quite does: Enter, Space or ArrowDown opens it; arrows move; typing a
@@ -14,18 +14,21 @@
  * they are.
  */
 import * as RadixMenu from '@radix-ui/react-dropdown-menu';
+import { createPortal } from 'react-dom';
 import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
 import { Kbd } from './kbd';
+import { VisuallyHidden } from './visually-hidden';
 
 const contentClasses =
   'z-popover min-w-sidebar rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float';
 
 const itemClasses =
-  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body text-ink data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
+  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
 
+// Whole, never one over the other: `cn` does not merge, and in the stylesheet `text-ink` came after.
 const toneClasses = {
-  default: '',
+  default: 'text-ink',
   danger: 'text-danger-text',
 } as const;
 
@@ -65,6 +68,79 @@ export const Menu = ({
         {...(boundary == null ? {} : { collisionBoundary: boundary })}
         onCloseAutoFocus={(event) => {
           if (returnFocus?.() === false) event.preventDefault();
+        }}
+      >
+        {children}
+      </RadixMenu.Content>
+    </RadixMenu.Portal>
+  </RadixMenu.Root>
+);
+
+/** The box an anchored menu opens from, in the window's coordinates: a point has no size. */
+export interface MenuAnchor {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+interface AnchoredMenuProps {
+  /** Where it opens, while it is open; null is closed. */
+  readonly anchor: MenuAnchor | null;
+  /** What it is for, said as its name: a menu with no button has nothing else to be named by. */
+  readonly label: string;
+  readonly onClose: () => void;
+  /** Where focus goes once it has closed: there is no button for Radix to give it back to. */
+  readonly onClosed: () => void;
+  readonly children: React.ReactNode;
+}
+
+/**
+ * A menu with no button: a context menu, opened at the pointer, at a finger's long press, or under a
+ * row the keyboard is on (D-165). The same Radix menu as the rest, so its items, its keys and its look
+ * are theirs; what it opens from is a box of no appearance at `anchor`, drawn on the page's body so a
+ * transformed ancestor (the narrow sidebar's overlay) cannot move it.
+ */
+export const AnchoredMenu = ({
+  anchor,
+  label,
+  onClose,
+  onClosed,
+  children,
+}: AnchoredMenuProps): React.JSX.Element => (
+  <RadixMenu.Root
+    open={anchor !== null}
+    onOpenChange={(open) => {
+      if (!open) onClose();
+    }}
+  >
+    {createPortal(
+      <RadixMenu.Trigger asChild>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none fixed"
+          style={
+            anchor === null
+              ? {}
+              : { left: anchor.x, top: anchor.y, width: anchor.width, height: anchor.height }
+          }
+        >
+          {/* The menu is labelled by its trigger (Radix): this is the name a screen reader says. */}
+          <VisuallyHidden>{label}</VisuallyHidden>
+        </span>
+      </RadixMenu.Trigger>,
+      document.body,
+    )}
+    <RadixMenu.Portal>
+      <RadixMenu.Content
+        className={contentClasses}
+        align="start"
+        side="bottom"
+        sideOffset={4}
+        collisionPadding={8}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onClosed();
         }}
       >
         {children}
@@ -141,7 +217,7 @@ export const MenuRadioItem = ({
   glyph,
   children,
 }: MenuRadioItemProps): React.JSX.Element => (
-  <RadixMenu.RadioItem value={value} className={itemClasses}>
+  <RadixMenu.RadioItem value={value} className={cn(itemClasses, toneClasses.default)}>
     {glyph === undefined ? null : <Icon name={glyph} />}
     <span className="flex-1">{children}</span>
     <RadixMenu.ItemIndicator>

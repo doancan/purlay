@@ -1,9 +1,9 @@
 /**
  * What the first page does not need to read a conversation, in one chunk (D-49, D-159, D-163): the
  * settings (D-146), the image viewer, and the overlays a person opens on purpose — the command
- * palette, the shortcut reference, the sidebar's dialogs, a group's details and adding people to a
- * channel. Each door asks for this module with `import()`, and nothing imports it statically, so none
- * of it counts against the initial budget.
+ * palette, the shortcut reference, the sidebar's dialogs, a group's details, adding people to a
+ * channel and a sidebar row's context menu (D-165). Each door asks for this module with `import()`, and
+ * nothing imports it statically, so none of it counts against the initial budget.
  *
  * **One chunk, so one preload fetches every door.** The shell asks for it once the first screen is
  * drawn (`deferred-door.ts`): an overlay opened by a key has no pointer to preload it on. D-159's
@@ -22,3 +22,4 @@ export { InviteDialog } from '../features/sidebar/invite-dialog';
 export { NewConversationDialog } from '../features/conversations/new-conversation';
 export { GroupDetailsDialog } from '../features/conversations/group-details';
 export { AddPeopleDialog } from '../features/channel/add-people';
+export { RowMenu } from '../features/sidebar/row-menu-body';

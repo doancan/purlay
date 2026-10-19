@@ -28,7 +28,7 @@ export const StarredList = (): React.JSX.Element | null => {
           <li key={channel.id}>
             <ChannelRow
               slug={workspace.slug}
-              channelId={channel.id}
+              channel={channel}
               glyph={channel.type === 'private' ? 'private-channel' : 'channel'}
               current={channel.id === currentId}
               unread={(channel.state?.unreadCount ?? 0) > 0}

@@ -145,11 +145,12 @@ export const PeopleList = (): React.JSX.Element => {
                 ) : (
                   <ChannelRow
                     slug={workspace.slug}
-                    channelId={direct.id}
+                    channel={direct}
                     current={direct.id === currentId}
                     avatar={<PersonAvatar user={user} meId={me.id} />}
                     unread={(direct.state?.unreadCount ?? 0) > 0}
                     mentions={direct.state?.unreadMentionCount ?? 0}
+                    muted={direct.notificationLevel === 'none'}
                   >
                     {label}
                   </ChannelRow>

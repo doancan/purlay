@@ -37,6 +37,7 @@ import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-name';
 import { typeChannelName } from './name-field';
+import { useLeaveRefusal } from './leave';
 import { LEVELS, useChooseLevel } from './notification-level-menu';
 
 const sectionTitle = 'text-label font-semibold text-ink';
@@ -315,6 +316,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const { leaveChannel, archiveChannel } = useActions();
+  const leaveRefusal = useLeaveRefusal();
   const { workspace } = useWorkspace();
   const { memberships } = useSession();
   const { navigate } = useRoute();
@@ -354,9 +356,9 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
     } catch (failure) {
       setBusy(false);
       setProblem(
-        isApiError(failure) && failure.code === 'LAST_CHANNEL_MEMBER'
-          ? t('details.lastMember')
-          : `${t(what === 'leave' ? 'details.leaveFailed' : 'details.archiveFailed')} ${describe(failure)}`,
+        what === 'leave'
+          ? leaveRefusal(failure)
+          : `${t('details.archiveFailed')} ${describe(failure)}`,
       );
     }
   };

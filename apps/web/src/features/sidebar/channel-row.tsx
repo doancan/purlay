@@ -8,7 +8,7 @@
  * survives colour-blindness and a screen reader hears it as the word "unread" before the
  * name rather than as a typographic accident.
  */
-import type { ChannelIncident } from '@purlay/types';
+import type { Channel, ChannelIncident } from '@purlay/types';
 import { Icon, type GlyphName } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
@@ -16,6 +16,7 @@ import { Badge } from '../../ui/badge';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useDeepWork } from '../shell/deep-work';
+import { useRowMenu } from './row-menu';
 
 const rowClasses =
   'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
@@ -91,26 +92,37 @@ const RowContent = ({
 
 interface ChannelLinkProps extends RowContentProps {
   readonly slug: string;
-  readonly channelId: string;
+  /** What it opens, and what its context menu acts on (D-165). */
+  readonly channel: Channel;
 }
 
-/** A row that opens a conversation the person is already in. */
+/**
+ * A row that opens a conversation the person is already in. A right click, Shift+F10 or a long press
+ * opens its context menu (D-165); the menu says it exists only by opening, as a desktop's does.
+ */
 export const ChannelRow = ({
   slug,
-  channelId,
+  channel,
   current,
   children,
   ...content
-}: ChannelLinkProps): React.JSX.Element => (
-  <Link
-    to="channel"
-    params={{ slug, channelId }}
-    {...(current ? { 'aria-current': 'page' as const } : {})}
-    className={cn(rowClasses, toneClasses[rowTone(current, content.unread)])}
-  >
-    <RowContent {...content}>{children}</RowContent>
-  </Link>
-);
+}: ChannelLinkProps): React.JSX.Element => {
+  const { handlers, menu } = useRowMenu(channel, current);
+  return (
+    <>
+      <Link
+        to="channel"
+        params={{ slug, channelId: channel.id }}
+        {...(current ? { 'aria-current': 'page' as const } : {})}
+        {...handlers}
+        className={cn(rowClasses, toneClasses[rowTone(current, content.unread)])}
+      >
+        <RowContent {...content}>{children}</RowContent>
+      </Link>
+      {menu}
+    </>
+  );
+};
 
 interface ActionRowProps extends Omit<RowContentProps, 'current'> {
   readonly onClick: () => void;

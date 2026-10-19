@@ -3762,4 +3762,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "      return { text: t('upload.why.notInWorkspace'), retry: true };\n",
     tests: ['apps/web/src/features/composer/composer.test.tsx'],
   },
+  {
+    id: 'row-menu-offers-leave-on-a-conversation',
+    why: 'a direct message or a group offers Leave channel…, which the server refuses with 404 — a conversation’s people never change (D-127, D-165)',
+    file: 'apps/web/src/features/sidebar/row-menu-body.tsx',
+    find: "  kindOf(channel) === 'channel' && channel.state !== null;\n",
+    replace: '  channel.state !== null;\n',
+    tests: ['apps/web/src/features/sidebar/row-menu.test.tsx'],
+  },
 ];

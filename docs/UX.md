@@ -77,6 +77,14 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
+- **A row's context menu** (D-165) — a right click on a channel, a person's conversation or a group,
+  Shift+F10 or the ContextMenu key on a focused row, or a finger held on it, opens what can be done to
+  it without opening it, and only what applies and the person may do: **Mark as read** while it is
+  unread (the feed, as reaching its bottom reads it — a reply waiting in a thread still waits, D-147);
+  **Star** or **Unstar**, a channel's; the notification level's three choices; **Copy link**;
+  **Channel details…**, or **Conversation details…** for a group; and **Leave channel…** for a channel,
+  never a conversation, asked first in a dialog that says what it costs. Each is painted at once and put
+  back with a toast when refused, as in the header. Escape gives focus back to the row.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
   carries the two views as a segmented control: the feed, and **open questions** with the live count
   of *this channel's* — never the workspace's, which is the rail's and the sidebar's — opening the view
@@ -547,6 +555,7 @@ trade a certain cost for a hypothetical benefit.
 | `E` | Edit (own messages) |
 | `Cmd/Ctrl+Shift+R` | Resolve / reopen the focused thread — on its root, or anywhere in its panel |
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
+| `Shift+F10` · `ContextMenu` | On a sidebar row: its context menu, under the row (D-165) |
 | `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; another while is the account menu's or the palette's |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
