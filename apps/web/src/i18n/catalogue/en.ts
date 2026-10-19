@@ -938,6 +938,11 @@ export const en = {
   'search.hintIn': 'Press Enter to search {channel}.',
   'search.where': 'Where',
   'search.everywhere': 'Every channel',
+  'search.from': 'From',
+  'search.anyone': 'Anyone',
+  'search.someone': 'Someone',
+  'search.hintFrom': 'Press Enter to search what {person} wrote, in every channel you can see.',
+  'search.hintInFrom': 'Press Enter to search what {person} wrote in {channel}.',
   'search.searching': 'Searching…',
   'search.tooShort': 'Type at least {min} characters.',
   'search.prompt':
@@ -947,6 +952,10 @@ export const en = {
   'state.search.empty.body':
     'Searched every channel you can see. A deleted message is never found.',
   'state.search.empty.bodyIn': 'Searched {channel}. A deleted message is never found.',
+  'state.search.empty.bodyFrom':
+    'Searched what {person} wrote, in every channel you can see. A deleted message is never found.',
+  'state.search.empty.bodyInFrom':
+    'Searched what {person} wrote in {channel}. A deleted message is never found.',
   'state.search.error.title': "Couldn't search",
   'state.search.error.body': 'The server did not answer. Your words are kept; try again.',
 

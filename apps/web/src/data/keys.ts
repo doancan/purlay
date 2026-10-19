@@ -34,8 +34,8 @@ export const keys = {
       : (['notifications', workspaceId, filter] as const),
   /** The inbox's newest page, read when an open tab in the background tells of one (D-148). */
   newestNotifications: (workspaceId: string) => ['notifications', workspaceId, 'newest'] as const,
-  search: (workspaceId: string, words: string, channelId: string | null) =>
-    ['search', workspaceId, words, channelId] as const,
+  search: (workspaceId: string, words: string, channelId: string | null, authorId: string | null) =>
+    ['search', workspaceId, words, channelId, authorId] as const,
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,

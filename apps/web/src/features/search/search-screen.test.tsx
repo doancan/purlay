@@ -346,3 +346,130 @@ describe('narrowed to a channel (`PRD.md` §4.6)', () => {
     view.unmount();
   });
 });
+
+describe('narrowed to who wrote it (D-166)', () => {
+  const from = (view: Awaited<ReturnType<typeof visit>>, chosen = 'Anyone'): HTMLElement =>
+    within(view.container).getByRole('button', { name: `From ${chosen}` });
+
+  const recording = (asked: string[]): Partial<Api> => ({
+    search: (_workspace, query): Promise<MessagePage> => {
+      asked.push(`${query.q}@${query.channelId ?? 'everywhere'}/${query.senderId ?? 'anyone'}`);
+      return Promise.resolve(page([]));
+    },
+  });
+
+  test('choosing a person asks again for their words alone, keeps them in the address, and says so', async () => {
+    const asked: string[] = [];
+    const view = await visit(recording(asked), { path: '/w/acme/search?q=deploy' });
+    await person().click(from(view));
+    const choices = view.getAllByRole('menuitemradio');
+    // Anyone, then the person themself, then everybody by name — each with a face.
+    // Read without the avatar's letters, which are hidden from a screen reader.
+    const words = (choice: HTMLElement): string =>
+      choice.textContent.replace(choice.querySelector('[data-avatar]')?.textContent ?? '', '');
+    expect(choices.map(words)).toEqual(['Anyone', 'Dogancan you', 'Alice', 'Bob']);
+    expect(choices.map((choice) => choice.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ]);
+    expect(choices[2]?.querySelector('[data-avatar]')).not.toBeNull();
+    await expectNoAxeViolations(view.getByRole('menu'));
+    await person().click(view.getByRole('menuitemradio', { name: /Alice/ }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=deploy&from=${IDS.alice}`);
+    expect(asked).toEqual(['deploy@everywhere/anyone', `deploy@everywhere/${IDS.alice}`]);
+    expect(from(view, 'Alice')).toBeDefined();
+    expect(
+      view.getByText(
+        'Searched what Alice wrote, in every channel you can see. A deleted message is never found.',
+      ),
+    ).toBeDefined();
+    expect(
+      view.getByText('Press Enter to search what Alice wrote, in every channel you can see.'),
+    ).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('the address keeps both filters: new words keep them, Anyone lets the person go, Back brings them back', async () => {
+    const asked: string[] = [];
+    const view = await visit(recording(asked), {
+      path: `/w/acme/search?q=deploy&in=${IDS.api}&from=${IDS.bob}`,
+    });
+    expect(from(view, 'Bob')).toBeDefined();
+    expect(
+      view.getByText('Searched what Bob wrote in #api. A deleted message is never found.'),
+    ).toBeDefined();
+    await person().clear(field(view));
+    await person().type(field(view), 'noon{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?q=noon&in=${IDS.api}&from=${IDS.bob}`,
+    );
+    // Choosing where keeps who.
+    await person().selectOptions(
+      within(view.container).getByRole<HTMLSelectElement>('combobox', { name: 'Where' }),
+      '',
+    );
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=noon&from=${IDS.bob}`);
+    await person().click(from(view, 'Bob'));
+    await person().click(view.getByRole('menuitemradio', { name: 'Anyone' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/search?q=noon');
+    act(() => {
+      view.world.history.back();
+    });
+    await settle();
+    expect(from(view, 'Bob')).toBeDefined();
+    expect(asked).toEqual([
+      `deploy@${IDS.api}/${IDS.bob}`,
+      `noon@${IDS.api}/${IDS.bob}`,
+      `noon@everywhere/${IDS.bob}`,
+      'noon@everywhere/anyone',
+    ]);
+    view.unmount();
+  });
+
+  test('typing a name reaches it, and Enter chooses it', async () => {
+    const view = await visit(recording([]), { path: '/w/acme/search?q=deploy' });
+    await person().click(from(view));
+    await person().keyboard('Bo');
+    expect(document.activeElement?.textContent.endsWith('Bob')).toBe(true);
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=deploy&from=${IDS.bob}`);
+    view.unmount();
+  });
+
+  test('somebody no longer listed is still searched for, and said as Someone; not an id is nobody', async () => {
+    const asked: string[] = [];
+    const gone = '00000000-0000-4000-8000-0000000000ff';
+    const view = await visit(recording(asked), { path: `/w/acme/search?q=deploy&from=${gone}` });
+    expect(from(view, 'Someone')).toBeDefined();
+    view.unmount();
+    const odd = await visit(recording(asked), { path: '/w/acme/search?q=deploy&from=alice' });
+    expect(from(odd)).toBeDefined();
+    expect(asked).toEqual([`deploy@everywhere/${gone}`, 'deploy@everywhere/anyone']);
+    odd.unmount();
+  });
+
+  test('is said in Turkish when the interface is', async () => {
+    const view = await visit(
+      { search: () => Promise.resolve(page([])) },
+      { path: `/w/acme/search?q=yok&from=${IDS.alice}`, locale: 'tr' },
+    );
+    expect(within(view.container).getByRole('button', { name: 'Kimden Alice' })).toBeDefined();
+    expect(
+      view.getByText(
+        'Yazan: Alice. Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
+      ),
+    ).toBeDefined();
+    await person().click(within(view.container).getByRole('button', { name: 'Kimden Alice' }));
+    expect(view.getByRole('menuitemradio', { name: 'Herkes' })).toBeDefined();
+    expect(view.getByRole('menuitemradio', { name: /Dogancan sen/ })).toBeDefined();
+    view.unmount();
+  });
+});

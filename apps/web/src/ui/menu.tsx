@@ -208,6 +208,11 @@ export const MenuRadioGroup = ({
 interface MenuRadioItemProps {
   readonly value: string;
   readonly glyph?: GlyphName;
+  /**
+   * Drawn before the words in place of a glyph — a person's avatar. Its letters are not the item's:
+   * typing jumps by `textValue`, so it is required with one.
+   */
+  readonly leading?: { readonly node: React.ReactNode; readonly textValue: string };
   readonly children: React.ReactNode;
 }
 
@@ -215,9 +220,15 @@ interface MenuRadioItemProps {
 export const MenuRadioItem = ({
   value,
   glyph,
+  leading,
   children,
 }: MenuRadioItemProps): React.JSX.Element => (
-  <RadixMenu.RadioItem value={value} className={cn(itemClasses, toneClasses.default)}>
+  <RadixMenu.RadioItem
+    value={value}
+    className={cn(itemClasses, toneClasses.default)}
+    {...(leading === undefined ? {} : { textValue: leading.textValue })}
+  >
+    {leading?.node}
     {glyph === undefined ? null : <Icon name={glyph} />}
     <span className="flex-1">{children}</span>
     <RadixMenu.ItemIndicator>

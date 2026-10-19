@@ -154,14 +154,19 @@ const WORDS_PARAM = 'q';
 /** The channel a search is narrowed to (`PRD.md` §4.6), beside the words. */
 const CHANNEL_PARAM = 'in';
 
+/** The person a search is narrowed to, by id (D-166): who wrote it, beside where. */
+const AUTHOR_PARAM = 'from';
+
 export const searchHref = (
   slug: string,
   words: string,
   channelId: string | null = null,
+  authorId: string | null = null,
 ): string => {
   const params = new URLSearchParams();
   if (words !== '') params.set(WORDS_PARAM, words);
   if (channelId !== null) params.set(CHANNEL_PARAM, channelId);
+  if (authorId !== null) params.set(AUTHOR_PARAM, authorId);
   const query = params.toString();
   return query === '' ? href('search', { slug }) : `${href('search', { slug })}?${query}`;
 };
@@ -180,5 +185,11 @@ export const wordsInSearch = (search: string): string =>
 /** The channel an address narrows a list to; null for every channel, or for anything not an id. */
 export const channelInSearch = (search: string): string | null => {
   const named = new URLSearchParams(search).get(CHANNEL_PARAM);
+  return named !== null && ID_SHAPE.test(named) ? named : null;
+};
+
+/** The person an address narrows a search to; null for anyone, or for anything not an id. */
+export const authorInSearch = (search: string): string | null => {
+  const named = new URLSearchParams(search).get(AUTHOR_PARAM);
   return named !== null && ID_SHAPE.test(named) ? named : null;
 };
