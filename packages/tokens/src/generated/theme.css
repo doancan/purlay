@@ -66,6 +66,9 @@
   --spacing-5: var(--space-5);
   --spacing-6: var(--space-6);
   --spacing-8: var(--space-8);
+  --spacing-10: var(--space-10);
+  --spacing-12: var(--space-12);
+  --spacing-16: var(--space-16);
 
   /* Radius */
 
@@ -87,6 +90,8 @@
   --container-badge: var(--size-badge);
   --height-code: var(--size-code-clamp);
   --container-dialog: var(--size-dialog);
+  --container-settings: var(--size-settings);
+  --container-field: var(--size-field);
   --container-palette: var(--size-palette);
   --height-palette-list: var(--size-palette-list);
   --container-toast: var(--size-toast);

@@ -42,6 +42,8 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-code-clamp': '--height-code',
   'size-dialog': '--container-dialog',
   'size-palette': '--container-palette',
+  'size-settings': '--container-settings',
+  'size-field': '--container-field',
   'size-palette-list': '--height-palette-list',
   'size-toast': '--container-toast',
   'size-avatar': '--size-avatar',

@@ -53,22 +53,20 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
   messages you kept to come back to, in three tabs, In progress, Archived and Completed, each moved
   or let go from its row (D-128). Every entry is a route
-  or a menu that exists without the rail; it adds no destination. It has no gear: what is the
-  person's is the account menu's (D-124). Its top is an empty drag strip for the desktop
-  shell (D-14).
+  or a menu that exists without the rail; it adds no destination. At its foot a gear opens
+  **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
 - **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the
-  workspaces to switch to, **Create workspace…**, and an owner's or an admin's items below), the jump
+  workspaces to switch to, **Create workspace…**, and for an owner or an admin **Invite people…** and
+  **Workspace settings**, D-146), the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
   (D-132) — the channels, the **conversations** — groups of up to ten
   people, each named by its people, and **New message** (`+`), which picks people ("To: …") and
   starts the conversation of exactly them (D-127) —
-  then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
-  for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is on, until when, the
-  minutes left and its end; **notifications on this device** (D-126) — turned on or off, and where the
-  browser blocked them, where that is undone; drawn only where the browser and the server can send
-  them; the theme; the language; the shortcut reference; **Sign out**; and **Sign
-  out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
+  then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
+  you are; Deep Work for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is
+  on, until when, the minutes left and its end; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  and **Sign out**. Unread channels are bold;
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
   to a screen reader (D-137). A person has an avatar, and a
@@ -190,6 +188,33 @@ in every open tab of every member.
 **Another workspace** (D-124). **Create workspace…** in the same menu, anybody's, opens the form `/`
 shows a person with none — a name and an address — and goes to the new workspace, with Back to where
 they were.
+
+**Settings** (D-146). A page, `/w/<slug>/settings/<section>`, opened from the rail's gear, the
+account menu, the workspace menu's **Workspace settings** and the palette. The sidebar's place holds
+its navigation: **Back to <workspace>**, then **Account** — Profile, Preferences, Notifications,
+Keyboard shortcuts, Sessions & account — and, for an owner or an admin, **Workspace** — General,
+Members, Invitations, Integrations, Audit log, Data & retention. The current page is marked as the
+current channel is. Each page: a title, one sentence, then cards; a setting is a row with its label and
+a sentence on the left and its control on the right (stacked below 900px). A choice applies when it is
+made; a form of words has **Save** in its card, enabled once something changed, its outcome said beside
+it. On a narrow window the navigation opens as the sidebar does.
+
+- **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away.
+- **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
+- **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126)
+  with where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
+- **Keyboard shortcuts** — the reference, as a page.
+- **Sessions & account** — *Sign out everywhere…* and *Erase my account…*, each asking first as before.
+- **General** — the workspace's name, its address (which stays), and *Create workspace…*.
+- **Members** — a table: person, role, and actions, with a search field and a role filter above it;
+  the rules of *Members* below hold unchanged.
+- **Invitations** — making a link and the links still open, as *Invitations* below says.
+- **Integrations** — the GitHub connection, as below.
+- **Audit log** — the trail as a table, newest first, a page at a time.
+- **Data & retention** — how long history is kept, and exports.
+
+The sections below say what each does; where they say a dialog from the workspace menu, it is now the
+page of the same name.
 
 ---
 
