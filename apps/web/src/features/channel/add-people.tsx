@@ -87,43 +87,49 @@ export const AddPeopleDialog = ({
     }
     if (people.length === 0)
       return <p className="text-body text-ink-muted">{t('people.noMatch')}</p>;
+    // Nobody left to bring in: said, rather than left for the person to find by reading every row.
+    const allIn =
+      wanted === '' && people.every((person) => already.has(person.id) && !asked.has(person.id));
     return (
-      <ul className="flex max-h-palette-list flex-col gap-1 overflow-y-auto">
-        {people.map((person) => {
-          const state = asked.get(person.id);
-          const failed = typeof state === 'object' ? state.failed : null;
-          return (
-            <li key={person.id} className="flex items-center gap-2">
-              <Avatar name={person.displayName} username={person.username} size="sm" />
-              <span className="min-w-0 flex-1 truncate text-body text-ink">
-                {person.displayName}
-                <span className="text-ink-muted">{` @${person.username}`}</span>
-              </span>
-              {failed !== null && (
-                <span role="alert" className="text-caption text-danger-text">
-                  {`${t('people.addFailed', { name: person.displayName })} ${failed}`}
+      <>
+        {allIn && <p className="text-body text-ink-muted">{t('people.allIn')}</p>}
+        <ul className="flex max-h-palette-list flex-col gap-1 overflow-y-auto">
+          {people.map((person) => {
+            const state = asked.get(person.id);
+            const failed = typeof state === 'object' ? state.failed : null;
+            return (
+              <li key={person.id} className="flex items-center gap-2">
+                <Avatar name={person.displayName} username={person.username} size="sm" />
+                <span className="min-w-0 flex-1 truncate text-body text-ink">
+                  {person.displayName}
+                  <span className="text-ink-muted">{` @${person.username}`}</span>
                 </span>
-              )}
-              {state === undefined && already.has(person.id) ? (
-                <span className="inline-flex h-control items-center px-3 text-label text-ink-muted max-narrow:h-touch">
-                  {t('people.member')}
-                </span>
-              ) : (
-                <Button
-                  variant={state === 'added' ? 'ghost' : 'secondary'}
-                  busy={state === 'adding'}
-                  disabled={state === 'added'}
-                  onClick={() => {
-                    add(person.id);
-                  }}
-                >
-                  {state === 'added' ? t('people.added') : t('people.addOne')}
-                </Button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                {failed !== null && (
+                  <span role="alert" className="text-caption text-danger-text">
+                    {`${t('people.addFailed', { name: person.displayName })} ${failed}`}
+                  </span>
+                )}
+                {state === undefined && already.has(person.id) ? (
+                  <span className="inline-flex h-control items-center px-3 text-label text-ink-muted max-narrow:h-touch">
+                    {t('people.member')}
+                  </span>
+                ) : (
+                  <Button
+                    variant={state === 'added' ? 'ghost' : 'secondary'}
+                    busy={state === 'adding'}
+                    disabled={state === 'added'}
+                    onClick={() => {
+                      add(person.id);
+                    }}
+                  >
+                    {state === 'added' ? t('people.added') : t('people.addOne')}
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </>
     );
   })();
 

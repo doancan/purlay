@@ -168,7 +168,7 @@ focus on itself, never on the name, so a key pressed on opening renames nothing;
 field's text selected; the **members** with a count
 and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed, those
 who can be added first with **Add**, and anybody already in the channel after them, saying *Member*
-quietly with nothing to press); the **notification level** (the header's menu);
+quietly with nothing to press, and a sentence above them when that is everybody); the **notification level** (the header's menu);
 for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
 posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to
 **Connect** one, which answers with the payload URL, the content type and the secret, each with Copy,

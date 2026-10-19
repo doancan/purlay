@@ -307,6 +307,7 @@ export const en = {
   'people.addOne': 'Add',
   'people.added': 'Added',
   'people.member': 'Member',
+  'people.allIn': 'Everybody in the workspace is in this channel.',
   'people.loading': 'Loading people…',
   'people.failed': 'The people of this workspace could not be loaded.',
   'people.none': 'Nobody else is in this workspace yet.',

@@ -306,6 +306,7 @@ export const tr = {
   'people.addOne': 'Ekle',
   'people.added': 'Eklendi',
   'people.member': 'Üye',
+  'people.allIn': 'Çalışma alanındaki herkes bu kanalda.',
   'people.loading': 'Kişiler yükleniyor…',
   'people.failed': 'Bu çalışma alanının kişileri yüklenemedi.',
   'people.none': 'Bu çalışma alanında henüz başka kimse yok.',

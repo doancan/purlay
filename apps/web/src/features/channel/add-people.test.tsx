@@ -105,6 +105,24 @@ describe('the list', () => {
     view.unmountAll();
   });
 
+  test('with everybody already in the channel, it says so above the list', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      members: people(ME, ALICE, BOB),
+      api: {
+        channelMembers: () =>
+          Promise.resolve([ME, ALICE, BOB].map((user) => ({ user, joinedAt: WHEN }))),
+      },
+    });
+    const dialog = await openPeople(view);
+    await settle();
+    expect(
+      within(dialog).getByText('Everybody in the workspace is in this channel.'),
+    ).toBeDefined();
+    expect(within(dialog).queryByRole('button', { name: 'Add' })).toBeNull();
+    view.unmountAll();
+  });
+
   test('closed and opened again, it starts afresh: no filter, nobody marked added', async () => {
     const view = await mountChannel({
       messages: page([]),
