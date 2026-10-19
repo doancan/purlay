@@ -12,6 +12,9 @@ const WORKSPACES_TESTS = ['apps/api/src/modules/workspaces/workspaces.integratio
 const MESSAGES = 'apps/api/src/modules/messages/messages.ts';
 const MESSAGES_TESTS = ['apps/api/src/modules/messages/messages.integration.test.ts'];
 
+const FOLLOW_TESTS = 'apps/api/src/ingress/http/thread-follow.integration.test.ts';
+const FOLLOW_PANEL_TESTS = 'apps/web/src/features/threads/thread.test.tsx';
+
 const SEARCH = 'apps/api/src/modules/search/search.ts';
 const SEARCH_TESTS = ['apps/api/src/modules/search/search.integration.test.ts'];
 
@@ -1509,6 +1512,78 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/messages/send-effects.integration.test.ts'],
   },
   {
+    id: 'thread-let-go-still-tells',
+    why: 'somebody who turned off a thread’s replies — its author, or one who answered — is told of the next one anyway (D-161)',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: '    ].filter((id): id is string => id !== null && !choices.unfollowed.has(id));\n',
+    replace: '    ].filter((id): id is string => id !== null);\n',
+    tests: [FOLLOW_TESTS],
+  },
+  {
+    id: 'thread-let-go-takes-a-place',
+    why: 'somebody who let a thread go still counts toward the fifty repliers a reply tells, and the fifty-first who did not is never told (D-161)',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "      .where((eb) =>\n        unfollowed.length === 0 ? eb.lit(true) : eb('sender_id', 'not in', unfollowed),\n      )\n",
+    replace: '',
+    tests: [FOLLOW_TESTS],
+  },
+  {
+    id: 'thread-let-go-loud-at-every-message',
+    why: 'a channel at every message tells of every reply in a thread the person turned off (D-161)',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: "    if (!choices.unfollowed.has(row.user_id)) consider(row.user_id, 'channel_message');\n",
+    replace: "    consider(row.user_id, 'channel_message');\n",
+    tests: [FOLLOW_TESTS],
+  },
+  {
+    id: 'thread-followed-tells-nothing',
+    why: 'somebody who asked to be told of a thread’s replies is told nothing until they reply (D-161)',
+    file: 'apps/api/src/modules/messages/delivery.ts',
+    find: '        ...choices.followed.slice(0, THREAD_PARTICIPANTS_MAX),\n',
+    replace: '',
+    tests: [FOLLOW_TESTS],
+  },
+  {
+    id: 'thread-follow-on-a-reply',
+    why: 'a reply is followed as though it had a thread, and the row names a thread that does not exist',
+    file: 'apps/api/src/modules/messages/follow.ts',
+    find: '  if (root.parentId !== null) {\n',
+    replace: '  if (false) {\n',
+    tests: [FOLLOW_TESTS],
+  },
+  {
+    id: 'thread-follow-shown-to-everybody',
+    why: 'the panel says everybody follows every thread, so letting one go looks like the only way to be quiet',
+    file: 'apps/api/src/modules/messages/follow.ts',
+    find: "    .where('sender_id', '=', userId)\n",
+    replace: '',
+    tests: [FOLLOW_TESTS],
+  },
+  {
+    id: 'thread-follow-waits-for-the-server',
+    why: 'Follow changes only when the server answers, so the panel says the old state for a round trip (CONTRIBUTING §1.9)',
+    file: 'apps/web/src/features/threads/follow-toggle.tsx',
+    find: '    client.setQueryData<ThreadFollow>(key, { following });\n',
+    replace: '',
+    tests: [FOLLOW_PANEL_TESTS],
+  },
+  {
+    id: 'thread-follow-refusal-kept',
+    why: 'a refused follow stays painted, so the panel says the person is not told of replies when they are',
+    file: 'apps/web/src/features/threads/follow-toggle.tsx',
+    find: '          if (before !== undefined) client.setQueryData<ThreadFollow>(key, before);\n',
+    replace: '',
+    tests: [FOLLOW_PANEL_TESTS],
+  },
+  {
+    id: 'thread-follow-own-reply-ignored',
+    why: 'after answering a thread the panel still says Follow is off, though the reply followed it (D-29, D-161)',
+    file: 'apps/web/src/features/threads/follow-toggle.tsx',
+    find: '    if (repliedByMe > replied.current) {\n',
+    replace: '    if (false) {\n',
+    tests: [FOLLOW_PANEL_TESTS],
+  },
+  {
     id: 'sender-notified-of-their-own-reply',
     why: 'answering your own thread puts a notification in your own inbox, for something you just wrote',
     file: 'apps/api/src/modules/messages/delivery.ts',
@@ -2498,7 +2573,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'level-all-told-nothing',
     why: 'a member who asked for every message in a channel is told of none of them',
     file: 'apps/api/src/modules/messages/delivery.ts',
-    find: "  for (const row of following) consider(row.user_id, 'channel_message');\n",
+    find: "  for (const row of following) {\n    if (!choices.unfollowed.has(row.user_id)) consider(row.user_id, 'channel_message');\n  }\n",
     replace: '',
     tests: ['apps/api/src/modules/channels/notification-level.integration.test.ts'],
   },

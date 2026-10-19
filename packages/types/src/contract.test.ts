@@ -44,6 +44,8 @@ import {
   CreateChannelRequest,
   EditMessageRequest,
   SendMessageRequest,
+  SetThreadFollowRequest,
+  ThreadFollow,
   ThreadPage,
   UnresolvedPage,
 } from './api';
@@ -537,6 +539,14 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     expect(Value.Check(ReadThreadRequest, { lastReadMessageId: id })).toBe(true);
     expect(Value.Check(ReadThreadRequest, {})).toBe(false);
     expect(Value.Check(CreateDirectMessageRequest, { userId: id })).toBe(true);
+  });
+
+  test('following a thread is one boolean, the caller’s own (D-161)', () => {
+    expect(Value.Check(SetThreadFollowRequest, { following: false })).toBe(true);
+    expect(Value.Check(SetThreadFollowRequest, {})).toBe(false);
+    expect(Value.Check(SetThreadFollowRequest, { following: true, userId: id })).toBe(false);
+    expect(Value.Check(ThreadFollow, { following: true })).toBe(true);
+    expect(Value.Check(ThreadFollow, { following: 'yes' })).toBe(false);
   });
 
   test('a revision carries what an edit or a delete changes, and nothing it does not', () => {

@@ -812,6 +812,14 @@ export const en = {
   'thread.resolveFailed': 'Only a thread with at least one reply can be resolved.',
   'thread.actionFailed': 'The thread was not changed.',
 
+  // ── Following a thread (D-161) ──────────────────────────────────────────
+  'thread.follow.label': 'Follow',
+  'thread.follow.on': 'Get notified about new replies',
+  'thread.follow.off': 'Turn off notifications for replies',
+  'thread.follow.error': "Couldn't tell whether you follow this thread. Try again.",
+  'thread.follow.failed': 'You are still not following this thread.',
+  'thread.follow.unfollowFailed': 'You are still following this thread.',
+
   // ── Composer (UX §5) ────────────────────────────────────────────────────
   'composer.bold': 'Bold',
   'composer.codeBlock': 'Code block',

@@ -112,6 +112,17 @@ describe('integration: erasing an account', () => {
           workspace_id: room.workspaceId,
         })
         .execute();
+      // A thread let go (D-161): which conversations a person stopped hearing is theirs too.
+      await db
+        .insertInto('thread_follows')
+        .values({
+          user_id: ada.userId,
+          message_id: sent.message.id,
+          channel_id: room.channelId,
+          workspace_id: room.workspaceId,
+          following: false,
+        })
+        .execute();
       await db
         .insertInto('push_subscriptions')
         .values({
@@ -170,7 +181,12 @@ describe('integration: erasing an account', () => {
         .where('id', '=', caller.sessionId)
         .executeTakeFirstOrThrow();
       expect(session).toEqual({ revoked_at: NOW, ip_address: null, user_agent: null });
-      for (const table of ['push_subscriptions', 'saved_messages', 'notifications'] as const) {
+      for (const table of [
+        'push_subscriptions',
+        'saved_messages',
+        'thread_follows',
+        'notifications',
+      ] as const) {
         expect(
           await db.selectFrom(table).select('user_id').where('user_id', '=', ada.userId).execute(),
         ).toEqual([]);

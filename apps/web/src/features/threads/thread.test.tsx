@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
-import type { Message, ThreadPage } from '@purlay/types';
+import type { Message, ThreadFollow, ThreadPage } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -26,6 +26,7 @@ import {
   ALICE,
   BOB,
   IDS,
+  ME,
   aChannel,
   aMessage,
   messageIdAt,
@@ -1095,6 +1096,143 @@ describe('a thread open in front of the person is read (D-147)', () => {
     await showThread(view);
     await settle();
     expect(calls).toBe(1);
+    view.unmountAll();
+  });
+});
+
+describe('following it (D-161)', () => {
+  const followButton = (view: ChannelView): HTMLElement =>
+    within(sectionOf(view)).getByRole('button', { name: 'Follow' });
+
+  /** A request the test answers when it chooses. */
+  const held = (): {
+    readonly promise: Promise<ThreadFollow>;
+    readonly answer: (value: ThreadFollow) => void;
+  } => {
+    let answer: (value: ThreadFollow) => void = () => undefined;
+    const promise = new Promise<ThreadFollow>((resolve) => {
+      answer = resolve;
+    });
+    return { promise, answer };
+  };
+
+  test('the header says whether the person follows the thread, as a toggle with one name', async () => {
+    const view = await mount({
+      api: { threadFollow: () => Promise.resolve({ following: true }) },
+    });
+    await showThread(view);
+    const button = followButton(view);
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.hasAttribute('disabled')).toBe(false);
+    await expectNoAxeViolations(view.container);
+    view.unmountAll();
+  });
+
+  test('until it is known the control is there and does nothing', async () => {
+    const view = await mount({
+      api: { threadFollow: () => new Promise<ThreadFollow>(() => undefined) },
+    });
+    await showThread(view);
+    expect(followButton(view).hasAttribute('disabled')).toBe(true);
+    view.unmountAll();
+  });
+
+  test('unfollowing paints at once, before the server answers, and keeps what the server says', async () => {
+    const asked: [string, boolean][] = [];
+    const request = held();
+    const view = await mount({
+      api: {
+        threadFollow: () => Promise.resolve({ following: true }),
+        setThreadFollow: (rootId, following) => {
+          asked.push([rootId, following]);
+          return request.promise;
+        },
+      },
+    });
+    await showThread(view);
+    await person().click(followButton(view));
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    expect(asked).toEqual([[messageIdAt(ROOT), false]]);
+    await act(async () => {
+      request.answer({ following: false });
+      await Promise.resolve();
+    });
+    await settle();
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    view.unmountAll();
+  });
+
+  test('following a thread one never wrote in asks the server to follow it', async () => {
+    const asked: boolean[] = [];
+    const view = await mount({
+      api: {
+        setThreadFollow: (_rootId, following) => {
+          asked.push(following);
+          return Promise.resolve({ following });
+        },
+      },
+    });
+    await showThread(view);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    await person().click(followButton(view));
+    await settle();
+    expect(asked).toEqual([true]);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    view.unmountAll();
+  });
+
+  test('a refusal puts it back and says so, with Retry when trying again could help', async () => {
+    let attempts = 0;
+    const view = await mount({
+      api: {
+        threadFollow: () => Promise.resolve({ following: true }),
+        setThreadFollow: (_rootId, following) => {
+          attempts += 1;
+          return attempts === 1
+            ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+            : Promise.resolve({ following });
+        },
+      },
+    });
+    await showThread(view);
+    await person().click(followButton(view));
+    await settle();
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    expect(view.getByText(/You are still following this thread\./)).toBeDefined();
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(attempts).toBe(2);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    view.unmountAll();
+  });
+
+  test('a reply of the person’s own reads the state again: answering a thread follows it', async () => {
+    let reads = 0;
+    const view = await mount({
+      api: {
+        threadFollow: () => {
+          reads += 1;
+          return Promise.resolve({ following: reads > 1 });
+        },
+      },
+    });
+    connect(view);
+    await showThread(view);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: reply(6, { content: 'mine', sender: ME }),
+      ts: 1,
+    });
+    expect(reads).toBe(2);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    // Somebody else's reply changes nothing about whether this person follows.
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: reply(7, { content: 'theirs' }),
+      ts: 2,
+    });
+    expect(reads).toBe(2);
     view.unmountAll();
   });
 });

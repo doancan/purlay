@@ -1,8 +1,8 @@
 /**
  * A message gone from under a write that referred to it (D-139 §2): the retention purge took a root
- * while a reply, a reaction, a pin, a save or a read of it was on its way, and the database refused the
- * reference. That is the message not found — as it would have been a moment earlier — on HTTP and on
- * the socket alike, never a `500`: nobody did anything wrong.
+ * while a reply, a reaction, a pin, a save, a follow or a read of it was on its way, and the database
+ * refused the reference. That is the message not found — as it would have been a moment earlier — on
+ * HTTP and on the socket alike, never a `500`: nobody did anything wrong.
  *
  * The same refusal is what a write pairing a message with the wrong channel or workspace meets (the
  * composite keys exist to catch that, I-1, I-3, I-4), so each one is logged by its constraint's name:
@@ -29,6 +29,7 @@ export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
   'pinned_messages_message_channel_fkey',
   'reactions_message_id_fkey',
   'saved_messages_message_channel_fkey',
+  'thread_follows_message_channel_fkey',
 ]);
 
 /**

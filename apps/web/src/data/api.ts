@@ -45,6 +45,7 @@ import {
   ReactionsResponse,
   SearchPage,
   ReadChannelResponse,
+  ThreadFollow,
   ThreadPage,
   UnfurlResponse,
   UnresolvedPage,
@@ -59,6 +60,7 @@ import {
   type SetDeepWorkRequest,
   type ReadNotificationsRequest,
   type ReadThreadRequest,
+  type SetThreadFollowRequest,
   type SendMessageRequest,
   type PushLocale,
   Profile,
@@ -260,6 +262,10 @@ export interface Api {
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
   /** Reads a thread up to and including a reply: its notifications for the caller (D-147). */
   readonly readThread: (rootId: string, lastReadMessageId: string) => Promise<void>;
+  /** Whether the caller is told of new replies in this root's thread (D-161). */
+  readonly threadFollow: (rootId: string, signal?: AbortSignal) => Promise<ThreadFollow>;
+  /** Follows this root's thread, or lets it go: the caller's own choice (D-161). */
+  readonly setThreadFollow: (rootId: string, following: boolean) => Promise<ThreadFollow>;
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
@@ -656,6 +662,15 @@ export const createApi = (http: Http): Api => {
         'PUT',
         `/api/messages/${at(rootId)}/thread/read`,
         options({ body: { lastReadMessageId } satisfies ReadThreadRequest }),
+      ),
+    threadFollow: (rootId, signal) =>
+      http.request('GET', `/api/messages/${at(rootId)}/follow`, ThreadFollow, options({}, signal)),
+    setThreadFollow: (rootId, following) =>
+      http.request(
+        'PUT',
+        `/api/messages/${at(rootId)}/follow`,
+        ThreadFollow,
+        options({ body: { following } satisfies SetThreadFollowRequest }),
       ),
     search: (workspaceId, query, signal) =>
       http.request(

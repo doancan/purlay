@@ -800,6 +800,14 @@ export const tr = {
   'thread.resolveFailed': 'Yalnızca en az bir yanıtı olan thread çözülebilir.',
   'thread.actionFailed': 'Thread değişmedi.',
 
+  // ── Thread'i takip etmek (D-161) ────────────────────────────────────────
+  'thread.follow.label': 'Takip et',
+  'thread.follow.on': 'Yeni yanıtlardan haberdar ol',
+  'thread.follow.off': 'Yanıt bildirimlerini kapat',
+  'thread.follow.error': 'Bu thread’i takip edip etmediğin okunamadı. Yeniden dene.',
+  'thread.follow.failed': 'Bu thread’i hâlâ takip etmiyorsun.',
+  'thread.follow.unfollowFailed': 'Bu thread’i hâlâ takip ediyorsun.',
+
   // ── Mesaj kutusu (UX §5) ────────────────────────────────────────────────
   'composer.bold': 'Kalın',
   'composer.codeBlock': 'Kod bloğu',

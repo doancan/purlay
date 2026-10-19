@@ -22,6 +22,13 @@ avatar, name, handle, local time and a check — instead of a list of Pick butto
 
 Every message, mentions and replies, and nothing each draw their own bell in a channel's header, so what
 a channel tells is seen without opening the menu.
+### Feature — 2026-10-19: follow a thread, or turn off its replies (D-161)
+
+The thread panel's header has **Follow**. Turn it off and the thread's replies stop notifying you —
+until you turn it on again; replying once more does not quietly turn it back on. Turn it on in a
+thread you never wrote in and you are told of its replies. A mention in the thread still reaches you,
+and a channel set to *Nothing* stays silent. Before, replying once subscribed you for good, and the
+only way out was muting the whole channel.
 
 ### Performance — 2026-10-19: rarely opened surfaces load when first opened
 

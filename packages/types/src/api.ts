@@ -318,6 +318,19 @@ export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
 export const ReadThreadRequest = FromClient({ lastReadMessageId: Uuid });
 export type ReadThreadRequest = Static<typeof ReadThreadRequest>;
 
+/**
+ * `GET` and `PUT /api/messages/:messageId/follow` — whether the caller is told of new replies in the
+ * thread of this root (D-161). Without a choice of their own, they follow a thread they started or
+ * have answered (D-29); a choice, either way, is kept until they make another — replying again does
+ * not take it back. A mention is addressed to them and is told whatever they chose.
+ */
+export const ThreadFollow = Type.Object({ following: Type.Boolean() });
+export type ThreadFollow = Static<typeof ThreadFollow>;
+
+/** `PUT /api/messages/:messageId/follow` — the caller's own choice; the answer is `ThreadFollow`. */
+export const SetThreadFollowRequest = FromClient({ following: Type.Boolean() });
+export type SetThreadFollowRequest = Static<typeof SetThreadFollowRequest>;
+
 /** `PUT`/`DELETE /api/messages/:messageId/reactions/:emoji` — idempotent; answers the message's reactions. */
 export const ReactionsResponse = Type.Object({ reactions: Type.Array(Reaction) });
 export type ReactionsResponse = Static<typeof ReactionsResponse>;
