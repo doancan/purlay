@@ -59,6 +59,7 @@ export interface ApiClient {
   readonly get: <T>(path: string) => Promise<T>;
   readonly post: <T>(path: string, body?: unknown) => Promise<T>;
   readonly put: <T>(path: string, body?: unknown) => Promise<T>;
+  readonly patch: <T>(path: string, body?: unknown) => Promise<T>;
   readonly del: <T>(path: string) => Promise<T>;
   /** Sends a root or a reply and returns the message as the server has it. */
   readonly say: (
@@ -114,6 +115,7 @@ export const apiAs = (tenant: Tenant, persona: Persona): ApiClient => {
     get: (path) => call('GET', path),
     post: (path, body) => call('POST', path, body),
     put: (path, body) => call('PUT', path, body),
+    patch: (path, body) => call('PATCH', path, body),
     del: (path) => call('DELETE', path),
     say: (channelId, content, options = {}) =>
       call<Message>('POST', `/api/channels/${channelId}/messages`, {

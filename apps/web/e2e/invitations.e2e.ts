@@ -102,25 +102,41 @@ test.describe('an invitation', () => {
     page,
     signIn,
     tenant,
-    api,
     asPerson,
   }) => {
-    const { token } = await api('dogancan').post<{ token: string }>(
-      `/api/workspaces/${tenant.workspaceId}/invitations`,
-      {},
+    // A workspace of its own: every open link in it is revoked below, and in the shared one that
+    // would end the links the other tests here are in the middle of opening. Bob makes it and makes
+    // Alice an admin, so she may see its links; the page is hers.
+    const bob = apiAs(tenant, 'bob');
+    const slug = `revoked-${crypto.randomUUID().slice(0, 8)}`;
+    const workspace = await bob.post<{ id: string }>('/api/workspaces', {
+      name: 'Revoked',
+      slug,
+    });
+    const welcome = await bob.post<{ token: string }>(
+      `/api/workspaces/${workspace.id}/invitations`,
     );
-    await signIn();
-    const main = await openSettings(page, tenant.slug, 'invitations', 'Invitations');
+    const alice = apiAs(tenant, 'alice');
+    await alice.post('/api/invitations/accept', { token: welcome.token });
+    const me = await alice.get<{ user: { id: string } }>('/api/me');
+    await bob.patch(`/api/workspaces/${workspace.id}/members/${me.user.id}`, { role: 'admin' });
+    const { token } = await bob.post<{ token: string }>(
+      `/api/workspaces/${workspace.id}/invitations`,
+    );
+
+    await signIn('alice');
+    const main = await openSettings(page, slug, 'invitations', 'Invitations');
     const revoke = main.getByRole('button', { name: 'Revoke' });
     // Every open link is ended, the one made above among them.
-    for (let open = await revoke.count(); open > 0; open -= 1) {
+    await expect(revoke).toHaveCount(2);
+    for (let open = 2; open > 0; open -= 1) {
       await revoke.first().click();
       await expect(revoke).toHaveCount(open - 1);
     }
     await expect(main.getByText('No links are open.')).toBeVisible();
 
-    const alice = await asPerson('alice');
-    await alice.goto(`/invite#${token}`);
-    await expect(alice.getByText('This invitation does not open')).toBeVisible();
+    const carol = await asPerson('carol');
+    await carol.goto(`/invite#${token}`);
+    await expect(carol.getByText('This invitation does not open')).toBeVisible();
   });
 });

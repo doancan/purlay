@@ -330,7 +330,9 @@ test.describe('a message somebody else revises', () => {
     room,
     api,
   }) => {
+    // Bob answers, so he is in the room: a write from somebody who has not joined is refused (D-156).
     const made = await room({
+      members: ['dogancan', 'alice', 'bob'],
       messages: [
         { by: 'alice', text: 'a question about the cache' },
         { by: 'alice', text: 'never mind this one' },

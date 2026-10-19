@@ -119,7 +119,8 @@ test.describe('the line under a root', () => {
     const status = row.locator('[data-thread-summary]').getByText(/^Open · 1 reply/);
     await expect(status).toBeVisible();
     const bubble = await row.locator('[data-bubble]').first().boundingBox();
-    const pill = await status.boundingBox();
+    // The pill the words are cut inside, not the words: its edge is the one drawn.
+    const pill = await status.locator('xpath=..').boundingBox();
     if (bubble === null || pill === null) throw new Error('the bubble or its status is not drawn');
     expect(
       Math.abs(bubble.x + bubble.width - (pill.x + pill.width)),
