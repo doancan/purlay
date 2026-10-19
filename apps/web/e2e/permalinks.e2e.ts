@@ -3,29 +3,36 @@
  * newest page opens the channel at it — in view, marked for a moment, focused — with the way back to
  * the present; and Copy link on one's own message puts that address on the clipboard.
  *
- * Each test makes a room of its own (`support.ts`): the four projects share one database.
+ * The first test is people of its own in a workspace of their own (`fixtures.ts`, `Newcomer`): its
+ * history is forty-one writes, twice a shared person's burst, and written as carol and bob it waited
+ * behind every other test of the project writing as them — under load the history alone took 27 of
+ * the test's 30 seconds, and the timeout landed on whichever assertion came next. The second makes a
+ * room of its own (`support.ts`).
  */
-import { expect, test } from './fixtures';
-import { shellReady } from './support';
+import { expect, test, workspaceFor } from './fixtures';
+import { shellReady, uniqueName } from './support';
 
 /** More than the window holds after the message (25 a side), so the window stops short of the present. */
 const LATER = 40;
 
 test.describe('a link to a message', () => {
   test('opens the channel at an old message, marked, with the way back to the present', async ({
-    page,
-    signIn,
-    room,
-    api,
+    newcomer,
   }) => {
-    const here = await room({ members: ['dogancan', 'carol', 'bob'] });
-    const old = await api('carol').say(here.id, `the decision about ${here.name}`);
+    const reader = await newcomer('reader');
+    const writer = await newcomer('writer');
+    const workspace = await workspaceFor(reader, writer);
+    const here = await reader.api.post<{ id: string }>(`/api/workspaces/${workspace.id}/channels`, {
+      name: uniqueName('room'),
+    });
+    await reader.api.post(`/api/channels/${here.id}/members`, { userId: writer.userId });
+    const old = await writer.api.say(here.id, 'the decision about the cache');
     for (let n = 0; n < LATER; n += 1) {
-      await api(n % 2 === 0 ? 'bob' : 'carol').say(here.id, `later note ${String(n)}`);
+      await writer.api.say(here.id, `later note ${String(n)}`);
     }
 
-    await signIn();
-    await page.goto(`${here.path}?message=${old.id}`);
+    const page = await reader.page();
+    await page.goto(`/w/${workspace.slug}/c/${here.id}?message=${old.id}`);
     await shellReady(page);
     const row = page.locator(`[role="feed"] [data-message-id="${old.id}"]`);
     await expect(row).toBeInViewport();

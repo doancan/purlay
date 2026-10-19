@@ -6,6 +6,26 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: the browser tests that failed only under a loaded parallel run
+
+Four specs passed alone and failed beside the rest of the suite. Each cause was found in a trace or a
+count, and none was the product's:
+
+- **The write budget of the people every test shares.** A room was made by carol and then *joined* by
+  each of its people, so every room of a run spent a write of dogancan's and alice's — the people the
+  pages are driven as. Counted per user in one loaded run, 520 of alice's 1,405 writes were joins, and
+  her page's reactions and reads were the `429`s (`live.e2e.ts`). The room's maker now brings its
+  people in (`POST /api/channels/:id/members`), so setup is charged to the maker alone.
+- **People of a test's own** (`newcomer` in `fixtures.ts`, `demo-session.ts --new`): a person made
+  for one test, in a workspace of their own. The permalink spec's forty-one-message history, written
+  as carol and bob behind every other test, took 27 of its 30 seconds under load; the Alt+↓ spec, as
+  alice, opened and read whichever room of another test was next unread; the revoked-invitation spec
+  opened its link as carol, whose budget the run's room-making spends. Each now uses its own people.
+- **A wait that passed on the wrong row.** The palette's last row searches for what was typed, so it
+  holds the typed channel name too; on a page whose channel list had not yet loaded it was the only
+  row, and Enter searched (the list arrived 27 ms after Enter in the trace). The spec now waits for
+  the selected row of the Channels group.
+
 ### Fix — 2026-10-19: a reply in a thread can attach a file and format like any message (D-164)
 
 The thread panel's box now has the channel's buttons — Bold, Code block, Mention and Attach — so a file

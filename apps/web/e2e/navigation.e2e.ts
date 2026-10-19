@@ -3,9 +3,9 @@
  * reference, moving through messages, a Tab order with no trap and a ring on everything that can
  * take focus, the skip link, and where focus lands when the route changes.
  */
-import type { Page } from '@playwright/test';
-import { expect, focused, test } from './fixtures';
-import { navLink, shellReady } from './support';
+import type { Locator, Page } from '@playwright/test';
+import { expect, focused, test, workspaceFor } from './fixtures';
+import { navLink, shellReady, uniqueName } from './support';
 
 const modifier = 'ControlOrMeta';
 
@@ -28,6 +28,16 @@ const fromTop = (page: Page): Promise<void> =>
     document.body.removeAttribute('tabindex');
   });
 
+/**
+ * The option Enter will run, if it is the channel row: `aria-selected`, inside the Channels group.
+ * Not "the first option has the name": the palette's last row offers to search the messages for
+ * what was typed, so it holds the name too — and on a page whose channel list has not loaded yet it
+ * is the only row, first and selected. Asserted that way, the wait passed on the search row and Enter
+ * searched (seen in a trace under load: the channels came back 27 ms after Enter).
+ */
+const currentChannel = (dialog: Locator): Locator =>
+  dialog.getByRole('group', { name: 'Channels' }).getByRole('option', { selected: true });
+
 /** The app is up when its frame is: keys are listened for only after that. */
 const ready = async (page: Page): Promise<void> => {
   await shellReady(page);
@@ -49,7 +59,7 @@ test.describe('the command palette', () => {
     const input = dialog.getByRole('combobox');
     await expect(input).toBeFocused();
     await input.fill(target.name);
-    await expect(dialog.getByRole('option').first()).toContainText(target.name);
+    await expect(currentChannel(dialog)).toContainText(target.name);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/c/${target.id}$`));
     await expect(dialog).toHaveCount(0);
@@ -84,7 +94,7 @@ test.describe('the command palette', () => {
         .getByRole('combobox')
         .fill(target.name);
       await expect(
-        page.getByRole('dialog', { name: 'Command palette' }).getByRole('option').first(),
+        currentChannel(page.getByRole('dialog', { name: 'Command palette' })),
       ).toContainText(target.name);
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(new RegExp(`/c/${target.id}$`));
@@ -160,22 +170,32 @@ test.describe('the shortcuts reference', () => {
 
 test.describe('moving through the app', () => {
   test('Alt+↓ and Alt+↑ go to another channel that has something unread, and say where', async ({
-    page,
-    signIn,
-    room,
-    api,
+    newcomer,
   }) => {
-    // Alice reads: the jump opens whichever channel is next with something unread, and a channel
-    // that is opened is read — which must not be the viewer's seeded unread state (dogancan's).
-    const here = await room({ members: ['alice', 'bob'] });
-    const unread = await room({ members: ['alice', 'bob'] });
-    await api('bob').say(unread.id, 'something you have not read');
-    await signIn('alice');
-    await page.goto(here.path);
+    // People of its own, in a workspace of their own (`fixtures.ts`): the jump opens whichever
+    // channel is next with something unread, and a channel opened is read. As alice, "next" was any
+    // room of any test running beside it, and reading it took the unread another test was about to
+    // assert on (live.e2e.ts, "raises their badge live": seen as an unread count of 0 under load).
+    const reader = await newcomer('reader');
+    const writer = await newcomer('writer');
+    const workspace = await workspaceFor(reader, writer);
+    const channel = async (): Promise<string> => {
+      const made = await reader.api.post<{ id: string }>(
+        `/api/workspaces/${workspace.id}/channels`,
+        { name: uniqueName('room') },
+      );
+      await reader.api.post(`/api/channels/${made.id}/members`, { userId: writer.userId });
+      return made.id;
+    };
+    const here = await channel();
+    const unread = await channel();
+    await writer.api.say(unread, 'something you have not read');
+    const page = await reader.page();
+    await page.goto(`/w/${workspace.slug}/c/${here}`);
     await expect(page.getByRole('textbox', { name: /^Message/ })).toBeVisible();
     await page.keyboard.press('Alt+ArrowDown');
-    await expect(page).not.toHaveURL(new RegExp(`/c/${here.id}$`));
-    await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
+    // The one channel with something unread is the one it goes to.
+    await expect(page).toHaveURL(new RegExp(`/c/${unread}$`));
     await expect(page.getByText(/^Opened /)).toBeAttached();
     await page.keyboard.press('Alt+ArrowUp');
     await expect(page).toHaveURL(/\/c\/[0-9a-f-]{36}$/);
