@@ -134,7 +134,13 @@ export const SettingsRow = ({
   <div
     className={cn(
       'flex not-first:border-t-hairline border-border-subtle px-6 py-5 max-narrow:flex-col max-narrow:gap-3 max-narrow:px-4 max-narrow:py-4',
-      wide ? 'flex-col gap-3' : 'items-start justify-between gap-6',
+      wide
+        ? 'flex-col gap-3'
+        : // A label alone is centred on the control beside it; with a description it hangs from the top.
+          cn(
+            'justify-between gap-6',
+            description === undefined ? 'items-center max-narrow:items-start' : 'items-start',
+          ),
     )}
   >
     <div className="flex min-w-0 flex-1 flex-col gap-1">
