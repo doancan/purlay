@@ -2634,8 +2634,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'upload-quota-not-checked',
     why: 'a workspace fills its disk past the quota its self-hoster set',
     file: 'apps/api/src/modules/attachments/uploads.ts',
-    find: '      if (total > BigInt(workspace.storage_quota_bytes)) {\n',
-    replace: '      if (total < 0n) {\n',
+    find: '      if (BigInt(stored.length) > room) {\n',
+    replace: '      if (BigInt(stored.length) < 0n) {\n',
     tests: ['apps/api/src/modules/attachments/uploads.integration.test.ts'],
   },
   {
@@ -2863,8 +2863,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'tombstone-draws-its-attachments',
     why: 'a message deleted live still shows what was sent with it, until the page is read again',
     file: 'apps/web/src/features/messages/message-row.tsx',
-    find: '{!deleted && <Attachments attachments={message.attachments} />}',
-    replace: '<Attachments attachments={message.attachments} />',
+    find: '        {!deleted && (\n          <Attachments\n',
+    replace: '        {(\n          <Attachments\n',
     tests: ['apps/web/src/features/messages/attachments.test.tsx'],
   },
   {

@@ -200,12 +200,17 @@ export const storeUpload = async (
         });
       }
       // BIGINT arrives as text: summed as integers, never as strings.
-      const total =
-        BigInt(workspace.storage_used_bytes) + BigInt(waiting.bytes) + BigInt(stored.length);
-      if (total > BigInt(workspace.storage_quota_bytes)) {
+      const room =
+        BigInt(workspace.storage_quota_bytes) -
+        BigInt(workspace.storage_used_bytes) -
+        BigInt(waiting.bytes);
+      if (BigInt(stored.length) > room) {
+        // The room is said, so the person knows how large a file would still go (D-159): never
+        // below nothing, and never more than a file may be, so it is a safe number on the wire.
         throw new AppError({
           code: 'STORAGE_QUOTA_EXCEEDED',
           message: 'This workspace has no room for that file.',
+          details: { remainingBytes: room > 0n ? Number(room) : 0 },
         });
       }
 

@@ -33,6 +33,7 @@ import {
   BellOff,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   Code,
@@ -47,6 +48,7 @@ import {
   Copy,
   WrapText,
   Ellipsis,
+  ExternalLink,
   File,
   GitMerge,
   GitPullRequest,
@@ -155,6 +157,11 @@ const glyphs = {
   history: History,
   /** Something that leaves the instance as a file. */
   download: Download,
+  /** The thing itself, in a tab of its own: an image's original (D-159). */
+  external: ExternalLink,
+  /** One back and one on, in a sequence: the image viewer's pictures (D-159). */
+  previous: ChevronLeft,
+  next: ChevronRight,
   shortcuts: Keyboard,
   warning: TriangleAlert,
   info: Info,

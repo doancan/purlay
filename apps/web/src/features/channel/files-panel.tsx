@@ -2,8 +2,9 @@
  * A channel's files, in the panel beside its conversation (D-129, `UX.md` §4.2).
  *
  * Every file of the channel's messages, newest message first, each with who shared it and when.
- * An image shows its thumbnail and opens the full image; anything else is a download, as it is in
- * the message (`messages/attachments.tsx`). A file shared in a thread opens that thread here, in
+ * An image shows its thumbnail and opens the image viewer, whose ←/→ step through the panel's images
+ * as far as the list has been read (D-159); anything else is a download, as it is in the message
+ * (`messages/attachments.tsx`). A file shared in a thread opens that thread here, in
  * the panel's place.
  *
  * The list is read when the panel opens and again when a frame says it changed — a message with
@@ -19,6 +20,8 @@ import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
+import { nameOf } from '../messages/author';
+import { isPlainClick, useImageViewer, type ViewedImage } from '../messages/image-viewer-door';
 import { useThreads } from '../threads/thread-context';
 import { useFeedPorts } from './feed-ports';
 import { useNowMinute } from './now-minute';
@@ -58,15 +61,20 @@ const Preview = ({ file }: { readonly file: ChannelFile }): React.JSX.Element =>
 const FileRow = ({
   file,
   now,
+  onOpen,
+  onPreload,
 }: {
   readonly file: ChannelFile;
   readonly now: Date;
+  /** Opens the viewer on this image; absent for a file that is not one. */
+  readonly onOpen?: (opener: HTMLElement) => void;
+  readonly onPreload: () => void;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
   const threads = useThreads();
   const { attachment, sender } = file;
   const size = format.bytes(attachment.sizeBytes);
-  const image = attachment.kind === 'image';
+  const image = onOpen !== undefined;
   const parentId = file.parentId;
   return (
     <li className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-200">
@@ -75,7 +83,18 @@ const FileRow = ({
         <a
           href={at(file)}
           {...(image
-            ? { target: '_blank', rel: 'noopener noreferrer' }
+            ? {
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                'aria-haspopup': 'dialog',
+                onPointerEnter: onPreload,
+                onFocus: onPreload,
+                onClick: (event: React.MouseEvent<HTMLAnchorElement>): void => {
+                  if (!isPlainClick(event)) return;
+                  event.preventDefault();
+                  onOpen(event.currentTarget);
+                },
+              }
             : { download: attachment.fileName })}
           aria-label={
             image
@@ -124,6 +143,19 @@ const FilesPanelView = ({
   const query = useChannelFiles(channelId);
   const now = new Date(useNowMinute(useFeedPorts()));
   const files = useMemo(() => query.data?.pages.flatMap((page) => page.data) ?? [], [query.data]);
+  const door = useImageViewer();
+  const erased = t('user.erased');
+  const pictures = useMemo(
+    (): readonly ViewedImage[] =>
+      files
+        .filter((file) => file.attachment.kind === 'image')
+        .map((file) => ({
+          attachment: file.attachment,
+          sharedBy: nameOf(file.sender, erased),
+          sharedAt: file.sentAt,
+        })),
+    [files, erased],
+  );
   const focus = usePanelFocus(
     query.isFetching,
     Math.max(query.dataUpdatedAt, query.errorUpdatedAt),
@@ -160,10 +192,28 @@ const FilesPanelView = ({
     body = (
       <div className="flex flex-col gap-3 px-2 py-2">
         <ul aria-labelledby={focus.headingId} className="flex flex-col gap-1">
-          {files.map((file) => (
-            <FileRow key={file.attachment.id} file={file} now={now} />
-          ))}
+          {files.map((file) => {
+            const index = pictures.findIndex(
+              (picture) => picture.attachment.id === file.attachment.id,
+            );
+            return (
+              <FileRow
+                key={file.attachment.id}
+                file={file}
+                now={now}
+                onPreload={door.preload}
+                {...(index === -1
+                  ? {}
+                  : {
+                      onOpen: (opener: HTMLElement): void => {
+                        door.open(pictures, index, opener);
+                      },
+                    })}
+              />
+            );
+          })}
         </ul>
+        {door.viewer}
         {query.isFetchNextPageError && (
           <p role="alert" className="flex items-center gap-2 px-2 text-label text-danger-text">
             <Icon name="failed" size="sm" />

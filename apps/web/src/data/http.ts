@@ -114,6 +114,7 @@ const failureOf = (status: number, text: string): ApiError => {
     body.code === 'VALIDATION_FAILED' ? body.details.fields : {},
     undefined,
     body.code === 'LAST_OWNER' ? (body.details?.workspaceIds ?? []) : [],
+    body.code === 'STORAGE_QUOTA_EXCEEDED' ? (body.details?.remainingBytes ?? null) : null,
   );
 };
 

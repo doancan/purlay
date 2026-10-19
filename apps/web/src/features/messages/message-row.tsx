@@ -228,7 +228,13 @@ const MessageRowView = ({
         {/* An event's words are its own summary: nothing in them to unfurl (D-134 §6). */}
         {!deleted && event === null && <GitHubCards content={message.content} />}
         {!deleted && event === null && <ImageLinks content={message.content} />}
-        {!deleted && <Attachments attachments={message.attachments} />}
+        {!deleted && (
+          <Attachments
+            attachments={message.attachments}
+            sharedBy={author.displayName}
+            sharedAt={message.createdAt}
+          />
+        )}
         {!deleted && <ReactionBar message={message} meId={meId} members={members} />}
         {failed && (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-label text-danger-text">

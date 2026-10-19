@@ -90,7 +90,8 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   The feed keeps the rest of the width.
 - **Files panel** — the same place, opened by the header's **Files** control (D-129): every file
   shared in the channel, newest first, each with who shared it, when and its size. An image shows its
-  thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
+  thumbnail and opens the image viewer, whose ←/→ step through the panel's images (D-159); any other
+  file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
 - **On a narrow window** the Files and Pinned messages controls, and the channel's star, are one
@@ -280,6 +281,14 @@ page of the same name.
 - **A link to a picture is the picture, under the words** — up to three, in the order written, each a
   link to the original, drawn through the API's proxy so the picture's host never sees who is reading
   (#110). One the proxy cannot show draws nothing; the link stays a link.
+- **A file sent with the message is under the words** (D-109 §6): an image as its thumbnail, in a box
+  shaped like it and kept before it loads; any other file as its name, its size and a download. An
+  image opens the **image viewer** (D-159): the picture over the whole window on the navigation's dark
+  tone, fitted to it and never enlarged, with its name, who shared it, its size and when, **Download**,
+  **Open original** in a new tab, and Close. Esc — whatever is focused —, the close button or a click
+  beside the picture close it, and focus goes back to the thumbnail; `←` `→` step through the message's
+  pictures and stop at either end. While the picture loads its thumbnail stands in its place; one that
+  does not load says so, with Retry. ⌘/Ctrl-click still opens the image in a tab.
 - **Two edges, in bubbles** (D-119, amending D-100). Everyone else's messages are on the left in a `surface-200`
   bubble, with an avatar in a fixed column; your own are on the right in an `accent-subtle` bubble,
   with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
@@ -433,7 +442,11 @@ block, a mention — and each only *inserts markdown* that the keys below also p
 | `@` and a letter | Member autocomplete: who a mention here would reach, found by display name or handle without case or accents; `↑` `↓` move, `Enter` or `Tab` writes `@handle`, `Esc` closes it, and `Enter` while it is open never sends (D-110 §8). **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
-the upload is still in flight. Pasting over ~12 lines of text is inserted as a fenced block
+the upload is still in flight. **A file that did not upload says why under its name** (D-159), in
+words from what the server answered: larger than the limit, an image past the side or pixel bound, an
+image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
+too many files waiting, no connection, the server busy, file storage unavailable, the session ended.
+Retry is there when trying again can be answered differently; Remove always. Pasting over ~12 lines of text is inserted as a fenced block
 automatically, with an undo toast — a paste that silently becomes a code block with no way back
 is worse than no help at all.
 
@@ -495,7 +508,8 @@ trade a certain cost for a hypothetical benefit.
 | `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
 | `Cmd/Ctrl+/` | Shortcut reference |
 | `Cmd/Ctrl+,` | Settings (D-146) |
-| `Esc` | Close the topmost thing — palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
+| `Esc` | Close the topmost thing — the image viewer, palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
+| `←` `→` | In the image viewer: the previous / next picture of the message, or of the files panel (D-159) |
 | `↑` `↓` | Move message focus |
 | `T` | Open the focused message's thread in the panel, and move focus there |
 | `R` | Reply to the focused message |
@@ -525,6 +539,7 @@ missing specified behaviour and does not merge.
 | Pins (panel) | "Nothing pinned yet" — pin a message everyone here should keep at hand | Skeleton rows, in the panel | Retry in the panel; a list that could not be brought up to date says so, with Retry |
 | Channels to join (after an invitation) | "There are no public channels to join yet" + the way into the workspace | Skeleton rows | Retry; a join that fails part way names the channels and why, keeps them picked, focus on the button that tries again |
 | Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |
+| Image viewer | n/a — opened on a picture | The thumbnail, in the picture's own box, until the full image has loaded | "The image did not load" + Retry; Download and Open original stay (D-159) |
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
 | Sign-in | n/a — always GitHub's button; the email form under it only where the server sends mail, and not until it has said so (D-138) | n/a for GitHub; the email form's button is busy while it asks | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121). The email form: the same sentence whatever the address once asked, a refused address under the field, "switched off" or the failure above its button |

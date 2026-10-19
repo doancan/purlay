@@ -6,9 +6,10 @@
 import { lazy, Suspense } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import type * as SettingsModule from './settings-screen';
+import type * as Deferred from '../../app/deferred';
 
-const load = (): Promise<typeof SettingsModule> => import('./settings-screen');
+// The chunk it is in is shared with the image viewer (`app/deferred.ts`, D-159).
+const load = (): Promise<typeof Deferred> => import('../../app/deferred');
 
 const Screen = lazy(async () => ({ default: (await load()).SettingsScreen }));
 const Nav = lazy(async () => ({ default: (await load()).SettingsNav }));

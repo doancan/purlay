@@ -148,7 +148,8 @@ purlay/
 │       ├── worker/          the push worker (D-126): built alone to `/push-worker.js`, its own
 │       │                    compiler project (the WebWorker library), importing nothing the page does
 │       └── src/
-│           ├── app/             providers (one tree, every port optional), the frame, the outlet
+│           ├── app/             providers (one tree, every port optional), the frame, the outlet,
+│           │                    and deferred.ts: the one lazy chunk — settings, image viewer (D-159)
 │           ├── features/        vertical slices: chat, threads, palette, notifications, auth
 │           ├── ui/              primitives on Radix where focus and ARIA fail silently; token classes only
 │           ├── components/      shared pieces: Icon (the one door to the icon set), CodeBlock, Markdown
