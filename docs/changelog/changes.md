@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: an open inbox shows "your question was resolved" without a reload
+
+The client asked an open inbox again only when a channel's mention count rose, and a resolution moves no
+counter (D-99 §1), nor does a mention in a public channel the person is not in — so either appeared only
+after a reload. Every write that creates a notification now tells its person `NOTIFICATIONS_UPDATED` on
+their own topic after the commit (a send, an edit naming somebody new, a resolution), and the client reads
+that workspace's inbox again — once more after a read already on its way, however many arrive. The
+counters no longer ask as well, and a reconnect reads the inbox again, since the frame went to a socket
+that was down (D-106, amended).
+
 ### Fix — 2026-10-19: the rail's inbox dot is quiet in Deep Work, as the badges are
 
 The dot on the rail's Inbox is the same fact as the mention badges (`UX.md` §2), and in Deep Work the

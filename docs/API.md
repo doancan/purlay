@@ -220,7 +220,9 @@ repaired. Nobody else hears it.
 | ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34) |
 
 A reply, a resolution and a reopening publish `THREAD_UPDATED` after the commit; a reply also moves the
-caller-independent counters and tells each recipient their own numbers (`CHANNEL_STATE`, D-99).
+caller-independent counters and tells each recipient their own numbers (`CHANNEL_STATE`, D-99). A send,
+an edit or a resolution that writes somebody a notification then tells them `NOTIFICATIONS_UPDATED` on
+their own topic, whether or not a counter of theirs moved (D-106).
 
 **A publish is never the request's error.** The write is committed before anything is published
 (D-35), so a frame that cannot be sent is logged with what it was, the rest are still sent, and the

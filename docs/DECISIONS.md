@@ -4590,6 +4590,19 @@ cannot disagree. Absent at zero, and absent in Deep Work, where the badges are n
 the noise D-12 exists to prevent; and counting only mentions and direct messages, a second definition
 of "needs you" beside `NEEDS_YOU`, which D-29 and D-107 already settled.
 
+**Amended 2026-10-19 — an open inbox hears every notification, not only those that move a counter.** The
+client asked an open inbox again when a channel's `unreadMentionCount` rose. A notification that moves
+no counter — a `thread_resolved` (§2: told, not counted), or a mention in a public channel the person is
+not in, where they have no counter — never reached it before a reload. Each write that creates a
+notification now tells its person `NOTIFICATIONS_UPDATED` on their `user:` topic after the commit, with
+nothing but the workspace in it — a send, an edit naming somebody new, a resolution — and the client
+reads that workspace's inbox again, as `SAVED_UPDATED` does for saves (D-128); a reconnect reads it again
+too. The counters no longer ask: one frame per notification, not two. **Rejected:** reading the inbox
+again on `THREAD_UPDATED`, which the whole room hears for every reply — the client cannot tell from it
+whose question was closed without holding the root, and would ask on every reply in every channel;
+and carrying the notification in the frame, which would be a second shape of it beside the page's,
+for a list the client reads whole anyway.
+
 ### D-107. What each notification level is told
 
 `notification_level` has been in the schema since the start (`'mentions'` by default), and delivery

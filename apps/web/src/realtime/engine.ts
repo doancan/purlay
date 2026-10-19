@@ -474,6 +474,8 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: families.channels });
     // An incident moved while away (D-137): its frame went to a socket that was down.
     void client.invalidateQueries({ queryKey: families.incident });
+    // So did a notification's, on the person's own topic (D-106).
+    void client.invalidateQueries({ queryKey: families.notifications });
     // A workspace's name, the person's role or Deep Work changed elsewhere reach this tab as frames on
     // the person's own topic, which a socket that was down never hears (D-124).
     void client.invalidateQueries({ queryKey: keys.me });
@@ -686,6 +688,11 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.
         readAgain(client, keys.saved(frame.data.workspaceId));
+        return;
+      case 'NOTIFICATIONS_UPDATED':
+        // Something new in the inbox, of any kind (D-106): an open inbox reads it again — once more
+        // after a read already on its way, however many arrive meanwhile — and a closed one on opening.
+        readAgain(client, keys.notifications(frame.data.workspaceId));
         return;
       case 'WORKSPACE_UPDATED':
         // No state in the frame (D-124): the memberships are read again, newest wins — and the
