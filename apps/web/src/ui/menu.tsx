@@ -22,10 +22,11 @@ const contentClasses =
   'z-popover min-w-sidebar rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float';
 
 const itemClasses =
-  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body text-ink data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
+  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
 
+// Whole, never one over the other: `cn` does not merge, and in the stylesheet `text-ink` came after.
 const toneClasses = {
-  default: '',
+  default: 'text-ink',
   danger: 'text-danger-text',
 } as const;
 
@@ -141,7 +142,7 @@ export const MenuRadioItem = ({
   glyph,
   children,
 }: MenuRadioItemProps): React.JSX.Element => (
-  <RadixMenu.RadioItem value={value} className={itemClasses}>
+  <RadixMenu.RadioItem value={value} className={cn(itemClasses, toneClasses.default)}>
     {glyph === undefined ? null : <Icon name={glyph} />}
     <span className="flex-1">{children}</span>
     <RadixMenu.ItemIndicator>
