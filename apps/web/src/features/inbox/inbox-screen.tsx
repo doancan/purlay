@@ -32,6 +32,7 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
+import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
@@ -107,13 +108,13 @@ const Row = ({
   const withOne =
     channel?.type === 'direct_message' && channel.peer !== null && channel.peers.length < 2;
   return (
-    <li className="group relative not-first:border-t-hairline border-border-subtle">
+    <li className={cn('group relative', listRowClasses)}>
       <button
         type="button"
         onClick={() => {
           onOpen(notification);
         }}
-        className="flex w-full items-start gap-3 py-3 pr-4 pl-5 text-left transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:pl-4"
+        className={listButtonClasses()}
       >
         {/* Unread is a dot at the row's edge as well as full ink, never colour alone (#58). */}
         <span
@@ -187,12 +188,7 @@ const Section = ({
   readonly title: string;
   readonly children: React.ReactNode;
 }): React.JSX.Element => (
-  <section className="flex flex-col gap-2">
-    <h2 className="text-label text-ink-muted">{title}</h2>
-    <ul className="overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-card">
-      {children}
-    </ul>
-  </section>
+  <ListCard heading={<h2 className="text-label text-ink-muted">{title}</h2>}>{children}</ListCard>
 );
 
 export const InboxScreen = (): React.JSX.Element => {
@@ -347,35 +343,33 @@ export const InboxScreen = (): React.JSX.Element => {
           </Button>
         )}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-surface-000">
-        <div className="mx-auto flex w-full max-w-feed flex-col gap-4 px-6 pt-6 pb-10 max-narrow:px-4 max-narrow:pt-4">
-          <div
-            role="group"
-            aria-label={t('inbox.show')}
-            className="flex self-start rounded-lg bg-surface-200 p-1"
-          >
-            {(['all', 'unread'] as const).map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                aria-pressed={filter === choice}
-                onClick={() => {
-                  setFilter(choice);
-                }}
-                className={cn(
-                  'inline-flex h-control items-center rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
-                  filter === choice
-                    ? 'bg-surface-100 text-ink shadow-card'
-                    : 'text-ink-muted hover:text-ink',
-                )}
-              >
-                {t(`inbox.filter.${choice}`)}
-              </button>
-            ))}
-          </div>
-          {body}
+      <ListColumn>
+        <div
+          role="group"
+          aria-label={t('inbox.show')}
+          className="flex self-start rounded-lg bg-surface-200 p-1"
+        >
+          {(['all', 'unread'] as const).map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={filter === choice}
+              onClick={() => {
+                setFilter(choice);
+              }}
+              className={cn(
+                'inline-flex h-control items-center rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch',
+                filter === choice
+                  ? 'bg-surface-100 text-ink shadow-card'
+                  : 'text-ink-muted hover:text-ink',
+              )}
+            >
+              {t(`inbox.filter.${choice}`)}
+            </button>
+          ))}
         </div>
-      </div>
+        {body}
+      </ListColumn>
     </>
   );
 };

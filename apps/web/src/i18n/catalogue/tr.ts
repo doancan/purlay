@@ -525,6 +525,7 @@ export const tr = {
   'message.edit': 'Düzenle',
   'message.delete': 'Sil',
   'saved.save': 'Sonrası için kaydet',
+  'saved.removeShort': 'Kaldır',
   'saved.remove': 'Kaydedilenlerden çıkar',
   'saved.failed': 'Mesaj kaydedilmedi.',
   'saved.unsaveFailed': 'Mesaj kaydedilenlerden çıkarılmadı.',
