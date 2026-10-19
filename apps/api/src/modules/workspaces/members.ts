@@ -34,18 +34,23 @@ const forbidden = (): AppError =>
 const notFound = (): AppError =>
   new AppError({ code: 'USER_NOT_FOUND', message: 'That person is not in this workspace.' });
 
-/** The caller's and the target's roles as they are under the workspace's lock. */
-const rolesUnderLock = async (
-  executor: Executor,
-  context: WorkspaceContext,
-  userId: string,
-): Promise<{ caller: UserRole; target: UserRole }> => {
+/** Takes the workspace row's lock, which every change to its members waits on. */
+const lockWorkspace = async (executor: Executor, context: WorkspaceContext): Promise<void> => {
   await executor
     .selectFrom('workspaces')
     .select('id')
     .where('id', '=', context.workspaceId)
     .forUpdate()
     .execute();
+};
+
+/** The caller's and the target's roles as they are under the workspace's lock. */
+const rolesUnderLock = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  userId: string,
+): Promise<{ caller: UserRole; target: UserRole }> => {
+  await lockWorkspace(executor, context);
   const rows = await executor
     .selectFrom('workspace_members')
     .select(['user_id', 'role'])
@@ -189,12 +194,7 @@ export const leaveWorkspace = async (
   clock: Clock,
   context: WorkspaceContext,
 ): Promise<{ readonly channelIds: readonly string[] }> => {
-  await executor
-    .selectFrom('workspaces')
-    .select('id')
-    .where('id', '=', context.workspaceId)
-    .forUpdate()
-    .execute();
+  await lockWorkspace(executor, context);
   const row = await executor
     .selectFrom('workspace_members')
     .select('role')
