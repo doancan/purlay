@@ -1,6 +1,6 @@
 /**
- * An open tab in the background (D-148), end to end: the person turns notifications on in the
- * account menu, looks at another window, and a mention written through the API reaches them as a
+ * An open tab in the background (D-148), end to end: the person turns notifications on in
+ * settings, looks at another window, and a mention written through the API reaches them as a
  * notice from the browser — who and where — with a dot on the tab's icon; clicking it opens the
  * conversation.
  *
@@ -79,11 +79,27 @@ test.describe('a tab in the background', () => {
 
     // Never asked on load: the switch asks.
     expect(await page.evaluate(() => Notification.permission)).toBe('default');
+    // The switch is on the Notifications settings page (D-146), reached without a reload: one would
+    // run the init script again and forget what was granted.
     await openNav(page);
     await page.getByRole('button', { name: /^Account: / }).click();
-    await page.getByRole('menuitem', { name: 'Turn on' }).click();
+    await page.getByRole('menuitem', { name: /^Settings/ }).click();
+    await page
+      .getByRole('navigation', { name: 'Settings' })
+      .getByRole('link', { name: 'Notifications' })
+      .click();
+    const main = page.getByRole('main');
+    await expect(main.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
+    await main.getByRole('button', { name: 'Turn on' }).click();
     await expect.poll(() => page.evaluate(() => Notification.permission)).toBe('granted');
-    await page.keyboard.press('Escape');
+    await page
+      .getByRole('navigation', { name: 'Settings' })
+      .getByRole('link', { name: /^Back to / })
+      .click();
+    await shellReady(page);
+    // Somewhere other than the conversation the notice is about, so opening it is a move.
+    await expect(page).toHaveURL(/\/c\//);
+    expect(page.url()).not.toContain(there.id);
 
     await page.evaluate(() => {
       window.elsewhere = true;
