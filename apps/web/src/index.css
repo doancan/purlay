@@ -80,6 +80,8 @@
     height: var(--space-2);
   }
   &::-webkit-scrollbar-track {
+    /* Inset to the text's own edges, so the bar lines up with what it scrolls. */
+    margin-inline: var(--space-3);
     background-color: transparent;
   }
   &::-webkit-scrollbar-thumb {
