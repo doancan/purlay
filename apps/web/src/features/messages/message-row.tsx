@@ -21,7 +21,7 @@
  * the cache's, and the cache keeps untouched messages as they were), so React's shallow
  * comparison is the whole check.
  */
-import { memo, useId } from 'react';
+import { memo, useId, useRef } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
@@ -42,6 +42,7 @@ import { MessageEditor, useEditing } from './editing';
 import { PinnedMark } from '../pins/pin-toggle';
 import { useActiveRow } from './active-row';
 import { MessageActions } from './message-actions';
+import { useRowStops } from './row-stops';
 
 export interface MessageRowProps {
   readonly message: Message;
@@ -56,7 +57,10 @@ export interface MessageRowProps {
   readonly nowMinute: number;
   /** Who is who: user id to username, for the mentions the server resolved. */
   readonly members: ReadonlyMap<string, string>;
-  /** Roving focus: 0 for the one row the keyboard reaches by Tab, -1 for the rest. */
+  /**
+   * Roving focus: 0 for the one row the keyboard reaches by Tab, -1 for the rest. Whichever it is,
+   * the controls inside a row are stops only while focus is in it (`row-stops.ts`).
+   */
   readonly tabIndex?: 0 | -1;
   /** Given the message's id, so one stable function serves every row and memoisation holds. */
   readonly onRetry?: (id: string) => void;
@@ -122,6 +126,10 @@ const MessageRowView = ({
   // message: a thread's root is drawn in the feed and the panel at once, and is two rows.
   const rowKey = useId();
   const on = useActiveRow(rowKey);
+  // The list is one Tab stop: what is inside this message is reached from it, and only while focus
+  // is in it (`row-stops.ts`, D-168).
+  const self = useRef<HTMLElement>(null);
+  useRowStops(self);
 
   // Which edge the message sits on: the person's own on the right, everyone else's on the left.
   const outgoing = isMine(message, meId);
@@ -141,6 +149,7 @@ const MessageRowView = ({
 
   return (
     <article
+      ref={self}
       data-editable={mine ? '' : undefined}
       data-outgoing={outgoing ? '' : undefined}
       data-thread-open={threadOpen ? '' : undefined}

@@ -34,7 +34,7 @@ import {
 } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { ACK_DEADLINE_MS } from '../../realtime/engine';
-import { expectFocusOn } from '../../testing/focus';
+import { expectFocusOn, pressTab, tabOrder } from '../../testing/focus';
 
 installDom();
 
@@ -855,6 +855,87 @@ describe('the keyboard (UX §7)', () => {
     );
     await settle();
     expectFocusOn(view.getByLabelText('Message a thread in api'));
+    view.unmountAll();
+  });
+});
+
+describe('the panel’s list is one Tab stop, as the feed is (D-168)', () => {
+  const linked = (): ThreadPage => ({
+    data: [
+      reply(3, { content: 'see https://example.com/three' }),
+      reply(4, { content: 'and https://example.com/four' }),
+    ],
+    nextCursor: null,
+  });
+  const named = (stop: Element | null): string =>
+    stop === null
+      ? 'nothing'
+      : stop.matches('[data-message-row]')
+        ? `row ${stop.getAttribute('data-message-id') ?? ''}`
+        : stop.matches('textarea')
+          ? 'composer'
+          : (stop.getAttribute('aria-label') ?? stop.textContent.trim());
+  const tab = (shift = false): string => {
+    let reached: HTMLElement | null = null;
+    act(() => {
+      reached = pressTab(shift);
+    });
+    return named(reached);
+  };
+  const walkToComposer = (): string[] => {
+    const walk: string[] = [];
+    for (let press = 0; press < 20; press++) {
+      const stop = tab();
+      walk.push(stop);
+      if (stop === 'composer') break;
+    }
+    return walk;
+  };
+
+  test('from Close, Tab reaches the root, its controls, Resolve and the reply box; no reply’s link is on the way', async () => {
+    const view = await mount({ thread: () => Promise.resolve(linked()) });
+    await showThread(view);
+    const panel = sectionOf(view);
+    const list = panel.querySelector('[data-message-list]');
+    if (list === null) throw new Error('the panel has no list');
+    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-message-row]'));
+    expect(tabOrder(list).filter((stop) => stop.matches('[data-message-row]'))).toEqual(
+      rows.slice(0, 1),
+    );
+    act(() => {
+      within(panel).getByRole('button', { name: 'Close thread' }).focus();
+    });
+    expect(tab()).toBe(`row ${messageIdAt(ROOT)}`);
+    const walk = walkToComposer();
+    expect(walk.at(-1)).toBe('composer');
+    expect(walk.some((stop) => stop.startsWith('Resolve'))).toBe(true);
+    expect(walk.some((stop) => stop.startsWith('https://example.com'))).toBe(false);
+    expect(walk.some((stop) => stop.startsWith('row'))).toBe(false);
+    view.unmountAll();
+  });
+
+  test('↓ moves to a reply, whose link Tab then reaches, and the row it left is where Shift+Tab comes back', async () => {
+    const view = await mount({ thread: () => Promise.resolve(linked()) });
+    await showThread(view);
+    const [root] = within(sectionOf(view)).getAllByRole('article');
+    if (root === undefined) throw new Error('the panel has no root');
+    act(() => {
+      root.focus();
+    });
+    fireEvent.keyDown(root, { key: 'ArrowDown' });
+    const [, second] = within(sectionOf(view)).getAllByRole('article');
+    if (second === undefined) throw new Error('the panel has no reply');
+    expectFocusOn(second);
+    const walk = walkToComposer();
+    expect(walk[0]).toMatch(/^https:\/\/example.com\/three/);
+    expect(walk.some((stop) => stop.startsWith('https://example.com/four'))).toBe(false);
+    expect(walk.at(-1)).toBe('composer');
+    expect(tab(true)).toBe(`row ${messageIdAt(3)}`);
+    // A reply's link that is not the current row's still opens under the pointer: it is a link.
+    const four = within(sectionOf(view)).getByRole('link', { name: /example.com\/four/ });
+    expect(four.getAttribute('tabindex')).toBe('-1');
+    expect(four.getAttribute('href')).toBe('https://example.com/four');
+    await expectNoAxeViolations(sectionOf(view));
     view.unmountAll();
   });
 });

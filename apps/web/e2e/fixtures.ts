@@ -8,6 +8,7 @@
  * feed, the composer and the palette land are four lines each, not four hundred.
  */
 import AxeBuilder from '@axe-core/playwright';
+import type { Result } from 'axe-core';
 import {
   test as base,
   expect,
@@ -148,6 +149,52 @@ interface Fixtures {
   /** A workspace an outsider makes, through the API, with a name of the test's own. */
   readonly workspaceOf: (outsider: Outsider) => Promise<OwnWorkspace>;
 }
+
+/**
+ * **A scrollable block in a message whose row is out is reached through its row** (D-168): a list of
+ * messages is one Tab stop, and a code block, a diff or a table in any other message than the focused
+ * one is out of the Tab order until its row is focused — then Tab reaches it. axe audits the page as
+ * it stands and cannot see that path, so it calls the block unreachable. Such a finding is not
+ * excused here, it is *checked*: the row is focused, and only a block that is then a stop is dropped
+ * from the violation; one that is still not a stop — or that is in no row, or in the row focus is
+ * already in — stays a violation. Focus goes back where it was.
+ */
+const withoutRowsOut = async (page: Page, violations: readonly Result[]): Promise<Result[]> => {
+  const kept: Result[] = [];
+  for (const violation of violations) {
+    if (violation.id !== 'scrollable-region-focusable') {
+      kept.push(violation);
+      continue;
+    }
+    const nodes = [];
+    for (const node of violation.nodes) {
+      const [selector, ...deeper] = node.target;
+      const throughItsRow =
+        typeof selector === 'string' &&
+        deeper.length === 0 &&
+        (await page.evaluate((target) => {
+          const block = document.querySelector<HTMLElement>(target);
+          const row = block?.closest<HTMLElement>('[data-message-row]');
+          if (block == null || row == null || row.contains(document.activeElement)) return false;
+          const before = document.activeElement;
+          row.focus({ preventScroll: true });
+          const reached =
+            block.tabIndex >= 0 &&
+            !block.hasAttribute('inert') &&
+            block.closest('[inert]') === null;
+          if (before instanceof HTMLElement && before !== document.body) {
+            before.focus({ preventScroll: true });
+          } else {
+            row.blur();
+          }
+          return reached;
+        }, selector));
+      if (!throughItsRow) nodes.push(node);
+    }
+    if (nodes.length > 0) kept.push({ ...violation, nodes });
+  }
+  return kept;
+};
 
 export const test = base.extend<Fixtures>({
   throttling: [
@@ -332,7 +379,8 @@ export const test = base.extend<Fixtures>({
     await use(async (scope) => {
       let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
       if (scope !== undefined) builder = builder.include(await scope.evaluate(selectorOf));
-      const { violations } = await builder.analyze();
+      const { violations: found } = await builder.analyze();
+      const violations = await withoutRowsOut(page, found);
       const summary = violations.map(
         (violation) =>
           `${violation.id} (${violation.impact ?? 'unknown'}): ${violation.help}\n` +

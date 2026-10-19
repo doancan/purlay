@@ -211,6 +211,16 @@ const ThreadPanelView = ({
     handleRowKeys(event, rows, editing.start);
   };
 
+  // ── One row in the Tab order, as in the feed (`row-stops.ts`, D-168) ────
+  // The row focus was last in, while it is still here; otherwise the root, the list's first row.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const tabbable =
+    focusedId !== null && items.some((item) => item.key === focusedId) ? focusedId : rootId;
+  const onFocusRow = (event: React.FocusEvent<HTMLElement>): void => {
+    const id = event.target.closest<HTMLElement>('[data-message-id]')?.dataset['messageId'];
+    if (id !== undefined) setFocusedId(id);
+  };
+
   const counted = t('thread.replies', { count: replyCount });
 
   return (
@@ -275,6 +285,7 @@ const ThreadPanelView = ({
         <div
           ref={scroller}
           data-message-list=""
+          onFocusCapture={onFocusRow}
           className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
         >
           <MessageRow
@@ -283,7 +294,7 @@ const ThreadPanelView = ({
             nowMinute={nowMinute}
             members={members}
             dimmed={resolved}
-            tabIndex={-1}
+            tabIndex={tabbable === rootId ? 0 : -1}
           />
           {/* Wraps rather than widening the panel: on a narrow window the button takes a line of its own. */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-2">
@@ -352,7 +363,7 @@ const ThreadPanelView = ({
                 meId={user.id}
                 nowMinute={nowMinute}
                 members={members}
-                tabIndex={-1}
+                tabIndex={item.key === tabbable ? 0 : -1}
                 onRetry={engine.retry}
                 onDiscard={engine.discard}
               />

@@ -11,8 +11,9 @@
  * load above does not push what is below it; older pages restore the reader's place exactly;
  * and a message arriving while the reader is scrolled up raises a pill instead of moving them.
  *
- * **Keyboard**: one row is in the tab order (roving focus) and ↑ ↓ Home End move between
- * rows (`row-keys.ts`); Escape returns to the composer — or, on the root whose thread is open in
+ * **Keyboard**: the feed is one Tab stop — one row is in the tab order (roving focus), and the
+ * controls inside a message are stops only while focus is in its row (`row-stops.ts`, D-168) —
+ * and ↑ ↓ Home End move between rows (`row-keys.ts`); Escape returns to the composer — or, on the root whose thread is open in
  * the panel, closes the panel first (`features/threads`, which also owns T, R and ⌘⇧R on the
  * focused row). Visible focus is the global ring, which a row never hides.
  */
