@@ -88,7 +88,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
     openText === null ? t('header.questions') : `${t('header.questions')} ${openText}`;
 
   return (
-    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
+    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline max-narrow:gap-1 border-border-subtle px-4">
       <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (

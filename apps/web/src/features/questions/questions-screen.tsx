@@ -229,7 +229,12 @@ const Narrowed = ({ channel }: { readonly channel: Channel | undefined }): React
   const { workspace } = useWorkspace();
   return (
     <p className="flex flex-wrap items-center gap-2 px-3 text-label text-ink-muted">
-      {channel === undefined ? null : <NarrowedName channel={channel} />}
+      {channel === undefined ? null : (
+        <>
+          <NarrowedName channel={channel} />
+          <span aria-hidden="true">·</span>
+        </>
+      )}
       <Link
         to="questions"
         params={{ slug: workspace.slug }}
