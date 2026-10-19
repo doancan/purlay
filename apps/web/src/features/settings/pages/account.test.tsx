@@ -328,4 +328,65 @@ describe('leaving the workspace (D-152)', () => {
     expect(here(view)).toBe('/w/acme/settings/account');
     view.unmount();
   });
+
+  test('any other refusal says they did not leave, and why, and stays', async () => {
+    const view = await open({
+      leaveWorkspace: () => Promise.reject(new ApiError(500, 'INTERNAL', 'x')),
+    });
+    await person().click(main(view).getByRole('button', { name: 'Leave workspace…' }));
+    const ask = view.getByRole('dialog');
+    await person().click(within(ask).getByRole('button', { name: /^Leave / }));
+    await settle();
+    expect(within(ask).getByRole('alert').textContent).toMatch(/^You did not leave\. \S/);
+    expect(here(view)).toBe('/w/acme/settings/account');
+    view.unmount();
+  });
+
+  test('Cancel and Esc each close the question, and nobody leaves', async () => {
+    const left: string[] = [];
+    const view = await open({
+      leaveWorkspace: (workspaceId) => {
+        left.push(workspaceId);
+        return Promise.resolve();
+      },
+    });
+    await person().click(main(view).getByRole('button', { name: 'Leave workspace…' }));
+    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+
+    await person().click(main(view).getByRole('button', { name: 'Leave workspace…' }));
+    expect(view.getByRole('dialog')).toBeDefined();
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(left).toEqual([]);
+    expect(here(view)).toBe('/w/acme/settings/account');
+    view.unmount();
+  });
+
+  test('while leaving, the question cannot be closed or cancelled', async () => {
+    let finish: (() => void) | undefined;
+    const view = await open({
+      leaveWorkspace: () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    await person().click(main(view).getByRole('button', { name: 'Leave workspace…' }));
+    const ask = view.getByRole('dialog');
+    await person().click(within(ask).getByRole('button', { name: /^Leave / }));
+    await settle();
+    expect(within(ask).getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true);
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.getByRole('dialog')).toBe(ask);
+    await act(async () => {
+      finish?.();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(here(view)).not.toBe('/w/acme/settings/account');
+    view.unmount();
+  });
 });

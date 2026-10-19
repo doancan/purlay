@@ -454,6 +454,46 @@ describe('what each kind of item does', () => {
     expect(here()).toBe('/w/acme/c/00000000-0000-4000-8000-0000000000d2');
   });
 
+  test('a public channel not joined is opened to be read, where its Join bar is', async () => {
+    const { input, options, here, closed } = await mount();
+    await person().type(input(), 'brow');
+    expect(options()[0]).toBe('browse' + 'Not joined');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe(`/w/acme/c/${IDS.browse}`);
+    expect(closed()).toEqual([false]);
+  });
+
+  test('a group conversation is found by the username of anybody in it, and Enter goes there (D-127)', async () => {
+    const GROUP = '00000000-0000-4000-8000-0000000000c8';
+    const zeynep = {
+      id: '00000000-0000-4000-8000-0000000000e9',
+      username: 'zed',
+      displayName: 'Zeynep',
+      avatarUrl: null,
+    };
+    const api = apiWith({
+      channels: () =>
+        Promise.resolve([
+          ...withDm(),
+          aChannel(GROUP, null, {
+            type: 'direct_message',
+            peer: null,
+            peers: [ALICE, zeynep],
+            lastMessageAt: '2026-09-09T11:00:00.000Z',
+          }),
+        ]),
+    });
+    const { input, options, here, closed } = await mount(api);
+    // Neither name has "zed" in it: the group is found by the username alone.
+    await person().type(input(), 'zed');
+    expect(options()[0]).toBe('Alice, Zeynep');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe(`/w/acme/c/${GROUP}`);
+    expect(closed()).toEqual([false]);
+  });
+
   test('a settings page is found by its name, and Enter goes there and closes (D-146)', async () => {
     const { input, here, closed } = await mount();
     await person().type(input(), 'audit log');

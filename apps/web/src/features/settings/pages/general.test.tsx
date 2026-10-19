@@ -199,4 +199,30 @@ describe('general', () => {
     expect(view.getByRole('dialog', { name: 'Create a workspace' })).toBeDefined();
     view.unmount();
   });
+
+  test('a workspace made there closes the form and goes to it, with Back to these settings', async () => {
+    const asked: { name: string; slug: string }[] = [];
+    const view = await openPage({
+      createWorkspace: (input) => {
+        asked.push(input);
+        return Promise.resolve({
+          id: WORKSPACE.id,
+          name: input.name,
+          slug: input.slug,
+          avatarUrl: null,
+        });
+      },
+    });
+    const before = view.world.history.stack.length;
+    await person().click(main(view).getByRole('button', { name: 'Create workspace…' }));
+    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
+    await person().type(within(dialog).getByLabelText('Name'), 'New team');
+    await person().click(within(dialog).getByRole('button', { name: 'Create workspace' }));
+    await settle();
+    expect(asked).toEqual([{ name: 'New team', slug: 'new-team' }]);
+    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
+    expect(view.world.history.stack.at(-1)).toMatch(/^\/w\/new-team/);
+    expect(view.world.history.stack.length).toBeGreaterThan(before);
+    view.unmount();
+  });
 });

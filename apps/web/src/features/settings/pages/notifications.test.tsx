@@ -122,6 +122,27 @@ describe('notifications', () => {
     view.unmount();
   });
 
+  test('channels that could not be read say why, and Retry reads them again', async () => {
+    let reads = 0;
+    const view = await open({
+      channels: () => {
+        reads += 1;
+        return reads === 1
+          ? Promise.reject(new ApiError(500, 'INTERNAL', 'x'))
+          : Promise.resolve(channels());
+      },
+    });
+    const card = within(view.getByRole('region', { name: 'Channels' }));
+    expect(card.queryAllByRole('combobox')).toEqual([]);
+    const retry = card.getByRole('button', { name: 'Retry' });
+    expect(retry.previousElementSibling?.textContent).not.toBe('');
+    await person().click(retry);
+    await settle();
+    expect(card.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(card.getAllByRole('combobox')).toHaveLength(3);
+    view.unmount();
+  });
+
   test('in no channel yet, it says so', async () => {
     const view = await open({ channels: () => Promise.resolve([]) });
     expect(main(view).getByText('You are in no channels yet.')).toBeDefined();

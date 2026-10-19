@@ -83,6 +83,21 @@ describe('the menu (D-150)', () => {
     view.unmountAll();
   });
 
+  test('Copy text the browser refuses says so, and how to copy it instead', async () => {
+    const view = await mountChannel({
+      messages: page([theirs]),
+      copy: () => Promise.reject(new Error('clipboard blocked')),
+    });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: /Copy text/ }));
+    expect(
+      await view.findByText("Couldn't copy. Select the text and copy it yourself."),
+    ).toBeDefined();
+    expect(view.queryByText('Copied')).toBeNull();
+    view.unmountAll();
+  });
+
   test("an owner may delete anybody's message, and is told it is on the audit trail", async () => {
     const asked: string[] = [];
     const view = await mountChannel({

@@ -5,16 +5,19 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
+import { renderToString } from 'react-dom/server';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
 import { anApi } from '../../testing/fake-api';
 import { ALICE, BOB, ME, aMessage } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
+import { expectFocusOn } from '../../testing/focus';
 import { person } from '../../testing/user';
 import { IconButton } from '../../ui/icon-button';
 import { Toaster } from '../../ui/toast';
 import * as Content from '../content/render-content';
+import { useActiveRow } from './active-row';
 import { MessageRow, type MessageRowProps } from './message-row';
 import { QUICK_REACTIONS } from './reactions';
 
@@ -521,6 +524,28 @@ describe('reactions', () => {
     expect(calls).toEqual(['🚀']);
   });
 
+  test('the arrows along the row of tiles move along it, round at either end', async () => {
+    const view = await mount(props());
+    const user = person();
+    await user.click(view.getByRole('button', { name: 'Add reaction' }));
+    const menu = view.getByRole('menu', { name: 'Add reaction' });
+    const tiles = within(menu).getAllByRole('menuitemcheckbox');
+    const first = tiles[0];
+    const last = tiles.at(-1);
+    if (first === undefined || last === undefined) throw new Error('no tiles');
+    act(() => {
+      first.focus();
+    });
+    await user.keyboard('{ArrowRight}');
+    expectFocusOn(tiles[1] ?? null);
+    await user.keyboard('{ArrowLeft}');
+    expectFocusOn(first);
+    await user.keyboard('{ArrowLeft}');
+    expectFocusOn(last);
+    await user.keyboard('{ArrowRight}');
+    expectFocusOn(first);
+  });
+
   test('choosing an emoji that is already yours takes it back', async () => {
     const calls: string[] = [];
     const view = await mount(props({ message: withReactions }), {
@@ -692,6 +717,13 @@ describe('the bar of actions (D-150)', () => {
       (document.activeElement as HTMLElement | null)?.blur();
     });
     expect(barOf(row).className).toContain('opacity-0');
+  });
+
+  test('a page drawn before it reaches the browser shows no row as the one with its bar', () => {
+    const Probe = ({ id }: { readonly id: string }): React.JSX.Element => (
+      <span>{useActiveRow(id) ? 'bar shown' : 'bar hidden'}</span>
+    );
+    expect(renderToString(<Probe id={aMessage(1).id} />)).toBe('<span>bar hidden</span>');
   });
 
   test('edited and pinned are one line under the words, apart, and the line is not drawn when there is neither', async () => {

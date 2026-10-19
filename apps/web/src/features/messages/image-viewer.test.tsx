@@ -183,6 +183,28 @@ describe('the image viewer', () => {
     view.unmount();
   });
 
+  test('while the picture loads its thumbnail stands in and it says so; loaded, the picture shows', async () => {
+    const view = await renderApp(<MessageRow {...row([FIRST])} />);
+    const dialog = await openOn(view, 'first.png');
+    const full = within(dialog).getByRole('img', { name: 'first.png' });
+    expect(within(dialog).getByRole('status').textContent).toBe('Loading the image');
+    expect(
+      dialog.querySelector(`img[src="/api/attachments/${FIRST.id}/thumbnail"]`),
+    ).not.toBeNull();
+    expect(full.className).toContain('opacity-0');
+
+    act(() => {
+      fireEvent.load(full);
+    });
+
+    expect(within(dialog).queryByRole('status')).toBeNull();
+    expect(dialog.querySelector(`img[src="/api/attachments/${FIRST.id}/thumbnail"]`)).toBeNull();
+    expect(within(dialog).getByRole('img', { name: 'first.png' }).className).not.toContain(
+      'opacity-0',
+    );
+    view.unmount();
+  });
+
   test('a picture that does not load says so, with Retry', async () => {
     const view = await renderApp(<MessageRow {...row([FIRST])} />);
     const dialog = await openOn(view, 'first.png');
