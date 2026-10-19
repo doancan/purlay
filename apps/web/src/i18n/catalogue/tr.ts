@@ -129,6 +129,11 @@ export const tr = {
   'browse.join': 'Katıl',
   'browse.joinLabel': '{name} kanalına katıl',
   'browse.joinFailed': 'Kanala katılamadın.',
+  'browse.members': {
+    other: '{count} üye',
+  },
+  'browse.find': 'Kanal bul',
+  'browse.noMatch': '“{query}” ile eşleşen kanal yok.',
   'browse.loading': 'Kanallar yükleniyor',
   'browse.empty.title': 'Katılacak kanal yok',
   'browse.empty.body': 'Var olan tüm herkese açık kanallardasın.',

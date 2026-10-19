@@ -29,7 +29,7 @@ import { Button } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { TextField } from '../../ui/text-field';
+import { FINDABLE_FROM, TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
@@ -45,9 +45,6 @@ const sectionTitle = 'text-label font-semibold text-ink';
 /** A row of the danger zone: what the act costs, and the act. */
 const dangerRow =
   'flex items-center gap-4 border-border-subtle px-4 py-3 not-first:border-t-hairline max-narrow:gap-3';
-
-/** More members than this, and the list can be narrowed by name. */
-const FINDABLE_FROM = 8;
 
 /** The name and the topic: a form for a member, two lines for anybody else. */
 const NameAndTopic = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
