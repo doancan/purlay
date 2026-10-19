@@ -628,12 +628,19 @@ describe('integration: the one way in', () => {
         `hi ${at(room, 'bob')} and ${at(room, 'carol')}`,
       );
       expect(message.editedAt).toBe(LATER.toISOString());
-      expect(frames.map((frame) => frame.event)).toEqual(['MESSAGE_REVISED', 'CHANNEL_STATE']);
-      // The room first, with the revision at the message's version; then Carol's own numbers.
+      expect(frames.map((frame) => frame.event)).toEqual([
+        'MESSAGE_REVISED',
+        'CHANNEL_STATE',
+        'NOTIFICATIONS_UPDATED',
+      ]);
+      // The room first, with the revision at the message's version; then Carol's own numbers, then
+      // her inbox (D-106).
       expect(topics).toEqual([
         channelTopic(room.channelId),
         userTopic(member(room, 'carol').userId),
+        userTopic(member(room, 'carol').userId),
       ]);
+      expect(frames[2]).toMatchObject({ data: { workspaceId: room.workspaceId } });
       const [revision, frame] = frames;
       if (revision?.event !== 'MESSAGE_REVISED') throw new Error('no revision');
       expect(revision.data).toEqual({

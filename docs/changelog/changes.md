@@ -74,6 +74,31 @@ Defects found by a visual audit of the messaging screens, at 1440 and 390 wide i
   header has **Wrap lines**, a toggle that wraps the view without changing what Copy copies.
 - **Add people says who is already in the channel.** Its members are listed after the people who can be
   added, each saying *Member* instead of offering an Add that did nothing.
+### Fix — 2026-10-19: an open inbox shows "your question was resolved" without a reload
+
+The client asked an open inbox again only when a channel's mention count rose, and a resolution moves no
+counter (D-99 §1), nor does a mention in a public channel the person is not in — so either appeared only
+after a reload. Every write that creates a notification now tells its person `NOTIFICATIONS_UPDATED` on
+their own topic after the commit (a send, an edit naming somebody new, a resolution), and the client reads
+that workspace's inbox again — once more after a read already on its way, however many arrive. The
+counters no longer ask as well, and a reconnect reads the inbox again, since the frame went to a socket
+that was down (D-106, amended).
+
+### Fix — 2026-10-19: the rail's inbox dot is quiet in Deep Work, as the badges are
+
+The dot on the rail's Inbox is the same fact as the mention badges (`UX.md` §2), and in Deep Work the
+badges and the tab's count draw nothing (D-15) — but the dot never asked whether Deep Work was on, so it
+stayed lit through it. It now reads Deep Work as the badges do; the inbox itself still lists everything.
+
+### Fix — 2026-10-19: the production stack passes the Web Push and sign-in mail settings to the API
+
+`docker-compose.production.yml` named every variable it hands the API, and `VAPID_*`, `SMTP_URL`,
+`MAIL_FROM` and `SMTP_ALLOW_PLAINTEXT` were not among them. `--env-file` only fills the file's
+placeholders, so keys set in `production.env` never reached the container: `/api/push/key` answered
+`{"publicKey":null}` and email sign-in stayed off, without a word. They are now passed to the API and the
+scheduler, empty meaning off as before, and `docker/production.env.example` lists them with how to make
+a key pair. The test that holds the stack now fails on any variable the API reads (`.env.example`) that
+the stack neither passes nor names with the reason it is withheld.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

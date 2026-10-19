@@ -323,25 +323,19 @@ describe('the channel list', () => {
     expect(client.getQueryData<Channel[]>(keys.channels(WS))).toHaveLength(1);
   });
 
-  test('more mentions waiting mark the inbox stale; fewer, or the same, do not (D-106)', () => {
+  test('the counters never ask the inbox again: a new notification is its own frame, whatever its kind (D-106)', () => {
     const client = seeded();
     client.setQueryData(keys.notifications(WS), { pages: [], pageParams: [] });
-    const stale = (): boolean =>
-      client.getQueryState(keys.notifications(WS))?.isInvalidated ?? false;
-    const at = (mentions: number): void => {
+    // More waiting for you, then less: either way the inbox is asked again by NOTIFICATIONS_UPDATED,
+    // once, and not a second time by the numbers that moved with it.
+    for (const mentions of [2, 1]) {
       channelStateChanged(client, CH, {
         lastReadMessageId: null,
         unreadCount: 5,
         unreadMentionCount: mentions,
       });
-    };
-    at(0);
-    expect(stale()).toBe(false);
-    at(2);
-    expect(stale()).toBe(true);
-    client.setQueryData(keys.notifications(WS), { pages: [], pageParams: [] });
-    at(1);
-    expect(stale()).toBe(false);
+    }
+    expect(client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(false);
   });
 
   test('a channel is added once; with no list cached the list is asked for instead', () => {

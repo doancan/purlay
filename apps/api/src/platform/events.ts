@@ -386,6 +386,27 @@ export const publishAfterCommit = async (
   }
 };
 
+/**
+ * A notification was written for each of these people in a workspace (D-106), of whatever kind: their
+ * own tabs read their inbox again. Nothing of the notification in it; nobody else hears it. One stage
+ * of `publishAfterCommit`, after whatever else the write tells.
+ */
+export const inboxPublications = (
+  bus: EventBus,
+  clock: Clock,
+  workspaceId: string,
+  userIds: readonly string[],
+): Publish[] =>
+  userIds.map((userId) =>
+    publication('NOTIFICATIONS_UPDATED', () =>
+      bus.publish(userTopic(userId), {
+        event: 'NOTIFICATIONS_UPDATED',
+        data: { workspaceId },
+        ts: clock.now().getTime(),
+      }),
+    ),
+  );
+
 /** What the bus hands a frame to. The hub implements it; nothing else needs to. */
 export type Deliver = (socketId: string, frame: ServerFrame) => void;
 

@@ -370,6 +370,20 @@ export const SavedUpdatedFrame = Type.Object({
 });
 
 /**
+ * Something was written to the person's inbox in a workspace (D-106): a notification of any kind — a
+ * mention, a direct message, a reply, a message in a channel they follow, or their question resolved.
+ * On their own `user:` topic only, after the commit; it carries nothing but the workspace, and a client
+ * with the inbox open reads it again. Not every notification moves a counter — a resolution is not a
+ * message, and a person named in a public channel they are not in has no counter there — so the
+ * counters in `CHANNEL_STATE` cannot stand in for it.
+ */
+export const NotificationsUpdatedFrame = Type.Object({
+  event: Type.Literal('NOTIFICATIONS_UPDATED'),
+  data: Type.Object({ workspaceId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * The caller's own channel list changed in a way no other frame says — a channel starred or let go
  * (D-132) — in another tab or device. On their own `user:` topic; it carries nothing but the
  * workspace, and a client reads that workspace's channels again.
@@ -509,6 +523,7 @@ export const ServerFrame = Type.Union([
   AccessRevokedFrame,
   DeepWorkUpdatedFrame,
   SavedUpdatedFrame,
+  NotificationsUpdatedFrame,
   PinsUpdatedFrame,
   IncidentUpdatedFrame,
   MessageVersionsUpdatedFrame,

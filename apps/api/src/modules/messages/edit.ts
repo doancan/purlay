@@ -12,6 +12,7 @@ import { AppError } from '../../platform/errors';
 import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
 import type { Clock } from '../../platform/clock';
 import {
+  inboxPublications,
   NO_LOG,
   publication,
   publishAfterCommit,
@@ -36,8 +37,10 @@ export interface Revised {
   readonly version: number;
   /** The members whose counters moved: the newly named, where the message is still unread. */
   readonly recipients: readonly ChannelStateUpdate[];
-  /** The newly named, told for the first time: their devices are next (D-126). */
+  /** The newly named, told for the first time: their inbox and their devices are next (D-106, D-126). */
   readonly told: readonly string[];
+  /** The message's workspace: where the told find it in their inbox. */
+  readonly workspaceId: string;
   /** Why the content is stored as typed, when it is; null when it was read (D-101). */
   readonly unformatted: Extract<Reading, { tree: null }>['reason'] | null;
   readonly engineFailure?: unknown;
@@ -97,6 +100,7 @@ export const reviseMessage = async (
       version: row.state_version,
       recipients: [],
       told: [],
+      workspaceId: context.workspaceId,
       unformatted: null,
     };
   }
@@ -199,6 +203,7 @@ export const reviseMessage = async (
     version: updated.state_version,
     recipients,
     told,
+    workspaceId: context.workspaceId,
     unformatted: reading.tree === null ? reading.reason : null,
     ...(reading.tree === null && reading.reason === 'engine'
       ? { engineFailure: reading.error }
@@ -345,6 +350,8 @@ export const edit = async (
         ),
       ),
     ),
+    // Then their inbox, which has the mention whether or not a counter moved for it (D-106).
+    inboxPublications(bus, clock, revised.workspaceId, revised.told),
   ]);
   push?.told(message.id, revised.told);
   return revised.message;

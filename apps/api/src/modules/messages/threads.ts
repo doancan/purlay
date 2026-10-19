@@ -21,6 +21,7 @@ import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
 import {
+  inboxPublications,
   NO_LOG,
   publication,
   publishAfterCommit,
@@ -192,6 +193,7 @@ export const setResolved = async (
     }
 
     const changes = resolved ? root.resolved_at === null : root.resolved_at !== null;
+    let told: readonly string[] = [];
     if (changes) {
       const now = clock.now();
       await transaction
@@ -207,7 +209,7 @@ export const setResolved = async (
         .execute();
       // An event's thread has no author to tell (D-134 §6).
       if (resolved && root.sender_id !== null && root.sender_id !== userId) {
-        await notifyResolved(transaction, target, root.sender_id, now);
+        told = await notifyResolved(transaction, target, root.sender_id, now);
       }
     }
 
@@ -230,6 +232,8 @@ export const setResolved = async (
       message,
       changed: changes,
       channelId: target.context.channelId,
+      workspaceId: target.context.workspaceId,
+      told,
       summary: await readSummary(transaction, columns),
       version: columns.state_version,
     };
@@ -247,6 +251,8 @@ export const setResolved = async (
           ),
         ),
       ],
+      // The asker's inbox has it, though no counter of theirs moved (D-106).
+      inboxPublications(bus, clock, outcome.workspaceId, outcome.told),
     ]);
   }
   return outcome.message;
@@ -255,23 +261,24 @@ export const setResolved = async (
 /**
  * The root's author is told their thread was closed — unless they muted the channel, or can
  * no longer see it: a notification row names a conversation, and somebody removed from a
- * private channel since asking must not learn it was resolved (D-34).
+ * private channel since asking must not learn it was resolved (D-34). Returns them when a
+ * notification was written, for their inbox to be told after the commit.
  */
 const notifyResolved = async (
   executor: Executor,
   target: VisibleMessage,
   authorId: string,
   now: Date,
-): Promise<void> => {
-  if (!(await stillSeeing(executor, target.context, [authorId])).has(authorId)) return;
+): Promise<readonly string[]> => {
+  if (!(await stillSeeing(executor, target.context, [authorId])).has(authorId)) return [];
   const membership = await executor
     .selectFrom('channel_members')
     .select('notification_level')
     .where('channel_id', '=', target.context.channelId)
     .where('user_id', '=', authorId)
     .executeTakeFirst();
-  if (membership?.notification_level === 'none') return;
-  await executor
+  if (membership?.notification_level === 'none') return [];
+  const written = await executor
     .insertInto('notifications')
     .values({
       user_id: authorId,
@@ -284,5 +291,7 @@ const notifyResolved = async (
       ).has(authorId),
     })
     .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
+    .returning('user_id')
     .execute();
+  return written.map((row) => row.user_id);
 };

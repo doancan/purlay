@@ -311,3 +311,75 @@ describe('integration: a direct message appears for the other person', () => {
     for (const client of [alice, bob, carol]) await client.close();
   });
 });
+
+describe('integration: a new notification tells the person’s devices, whatever its kind (D-106)', () => {
+  const told = (frames: readonly ServerFrame[]): ServerFrame[] =>
+    frames.filter((f) => f.event === 'NOTIFICATIONS_UPDATED');
+
+  const say = async (
+    cookie: string,
+    channelId: string,
+    at: number,
+    content: string,
+    parentId?: string,
+  ): Promise<string> => {
+    const id = messageId(new Date(NOW.getTime() + at));
+    const answer = await http('POST', `/api/channels/${channelId}/messages`, cookie, {
+      id,
+      content,
+      ...(parentId === undefined ? {} : { parentId }),
+    });
+    expect(answer.status).toBe(201);
+    return id;
+  };
+
+  test('a mention tells the person named, member of the channel or not, and nobody else', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice.cookie);
+    const bob = await connect(room.bob.cookie);
+    const carol = await connect(room.carol.cookie);
+
+    // Bob is in the channel; Carol is in the workspace only, so no counter of hers moves for it.
+    await say(
+      room.alice.cookie,
+      room.channelId,
+      10,
+      `@${room.bob.username} @${room.carol.username}`,
+    );
+    for (const person of [bob, carol]) {
+      await person.until((all) => told(all).length > 0, 'the inbox to be told');
+      await settle(person);
+      // Once, for the one message, whoever else it named.
+      expect(told(person.frames).map((frame) => frame.data)).toEqual([
+        { workspaceId: room.workspaceId },
+      ]);
+    }
+    expect(frames(carol, 'CHANNEL_STATE')).toEqual([]);
+    await settle(alice);
+    expect(told(alice.frames)).toEqual([]);
+    for (const client of [alice, bob, carol]) await client.close();
+  });
+
+  test('a resolution tells the person who asked, though no counter moves for it', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice.cookie);
+    const bob = await connect(room.bob.cookie);
+    const root = await say(room.alice.cookie, room.channelId, 20, 'a question');
+    // Bob's answer is a `thread_reply` for Alice: the first time she is told.
+    await say(room.bob.cookie, room.channelId, 21, 'an answer', root);
+    await alice.until((all) => told(all).length === 1, 'the reply');
+    const states = frames(alice, 'CHANNEL_STATE').length;
+
+    const resolved = await http('POST', `/api/messages/${root}/resolve`, room.bob.cookie);
+    expect(resolved.status).toBe(200);
+    await alice.until((all) => told(all).length === 2, 'the resolution');
+    expect(told(alice.frames)[1]).toMatchObject({ data: { workspaceId: room.workspaceId } });
+    // Nothing else told her: a resolution is not a message and moves none of her numbers (D-99 §1).
+    await settle(alice);
+    expect(frames(alice, 'CHANNEL_STATE')).toHaveLength(states);
+    // The one who resolved it is told nothing of it.
+    await settle(bob);
+    expect(told(bob.frames)).toEqual([]);
+    for (const client of [alice, bob]) await client.close();
+  });
+});

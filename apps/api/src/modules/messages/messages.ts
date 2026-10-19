@@ -31,6 +31,7 @@ import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
 import {
   channelTopic,
+  inboxPublications,
   NO_LOG,
   publication,
   publishAfterCommit,
@@ -629,6 +630,8 @@ export const send = async (
     sent.thread,
     sent.recipients,
   );
+  // Then each person told: their inbox has it, whatever its kind (D-106).
+  await publishAfterCommit(log, [inboxPublications(bus, clock, context.workspaceId, sent.told)]);
   // Last, and not waited for: the room and the numbers are what a client is owed now.
   push?.told(sent.message.id, sent.told);
   return sent.message;

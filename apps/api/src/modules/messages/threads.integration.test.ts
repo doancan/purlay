@@ -193,7 +193,7 @@ describe('integration: resolving', () => {
         resolvedAt: NOW.toISOString(),
         resolvedBy: { id: idOf(room, 'bob') },
       });
-      expect(frames).toHaveLength(1);
+      expect(frames).toHaveLength(2);
       expect(frames[0]).toMatchObject({
         event: 'THREAD_UPDATED',
         data: {
@@ -201,6 +201,11 @@ describe('integration: resolving', () => {
           messageId: root,
           thread: { resolvedAt: NOW.toISOString() },
         },
+      });
+      // Then her inbox, after the room: a resolution moves no counter, so this is all that says it.
+      expect(frames[1]).toMatchObject({
+        event: 'NOTIFICATIONS_UPDATED',
+        data: { workspaceId: room.workspaceId },
       });
       // Alice asked it, Bob closed it: she is told, and her counters do not move for it.
       const told = (await notificationsOf(db, idOf(room, 'alice'))).filter(
@@ -216,7 +221,8 @@ describe('integration: resolving', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const { root } = await aThread(db, room, 1);
-      await resolve(db, idOf(room, 'alice'), root, true);
+      const { frames } = await resolve(db, idOf(room, 'alice'), root, true);
+      expect(frames.map((frame) => frame.event)).toEqual(['THREAD_UPDATED']);
       expect(
         (await notificationsOf(db, idOf(room, 'alice'))).filter(
           (n) => n.type === 'thread_resolved',
@@ -235,7 +241,8 @@ describe('integration: resolving', () => {
         .where('channel_id', '=', room.channelId)
         .where('user_id', '=', idOf(room, 'alice'))
         .execute();
-      await resolve(db, idOf(room, 'bob'), root, true);
+      const { frames } = await resolve(db, idOf(room, 'bob'), root, true);
+      expect(frames.map((frame) => frame.event)).toEqual(['THREAD_UPDATED']);
       expect(
         (await notificationsOf(db, idOf(room, 'alice'))).filter(
           (n) => n.type === 'thread_resolved',
@@ -342,6 +349,7 @@ describe('integration: two people resolving at once', () => {
     // Both answered with the thread closed — by whoever won, and the same one in both.
     expect(results[0].thread?.resolvedBy?.id).toBe(results[1].thread?.resolvedBy?.id);
     expect(frames.filter((f) => f.event === 'THREAD_UPDATED')).toHaveLength(1);
+    expect(frames.filter((f) => f.event === 'NOTIFICATIONS_UPDATED')).toHaveLength(1);
     const told = (await notificationsOf(db, idOf(room, 'alice'))).filter(
       (n) => n.type === 'thread_resolved',
     );

@@ -228,7 +228,9 @@ What the shape is for, which the types do not say:
   author is `MESSAGE_VERSIONS_UPDATED` on the channel's topic, with the channel and the message, and a
   client with its history open reads it again (D-135). A change of the person's own Deep Work is `DEEP_WORK_UPDATED` on their `user:` topic, so
   their other tabs draw it (#526); a change of their saved messages is `SAVED_UPDATED` there too, with
-  nothing but the workspace in it, and the client reads what it shows again (D-128); a channel starred or
+  nothing but the workspace in it, and the client reads what it shows again (D-128); a notification
+  written for them, of any kind, is `NOTIFICATIONS_UPDATED` there, with nothing but the workspace, and
+  an open inbox reads it again (D-106); a channel starred or
   let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a

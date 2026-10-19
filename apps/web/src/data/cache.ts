@@ -322,21 +322,17 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
   if (deletedRoot) readAgain(client, families.unresolved);
 };
 
-/** The caller's own position and counters in one channel — the server's numbers, copied. */
+/**
+ * The caller's own position and counters in one channel — the server's numbers, copied. The inbox is
+ * not asked again from here: not every notification moves a counter, and each is its own frame
+ * (`NOTIFICATIONS_UPDATED`, D-106).
+ */
 export const channelStateChanged = (
   client: QueryClient,
   channelId: string,
   state: ChannelState,
 ): void => {
-  const before = client
-    .getQueriesData<Channel[]>({ queryKey: families.channels })
-    .flatMap(([, list]) => list ?? [])
-    .find((c) => c.id === channelId);
   editChannels(client, channelId, (c) => ({ ...c, state }));
-  // More waiting for you is a new notification: the inbox, if it is open, asks again (D-106).
-  if (before !== undefined && state.unreadMentionCount > (before.state?.unreadMentionCount ?? 0)) {
-    void client.invalidateQueries({ queryKey: keys.notifications(before.workspaceId) });
-  }
 };
 
 /** The caller's notification level in a channel, as they chose it or as it was before a refusal. */
