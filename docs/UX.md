@@ -18,7 +18,8 @@
    live status — open or resolved — and the open questions are one click away.
 2. **Density over comfort.** This is a tool for people who read a lot of text quickly. The
    density is in what is shown — one column, no chrome, nothing decorative — not in how tightly it
-   is set: prose gets a readable line, and the screen gets nothing else. (D-110)
+   is set: prose gets a readable line, and the screen gets nothing else; a control is 32px tall, a
+   comfortable target for the pointer (D-110, D-151).
 3. **Keyboard first, mouse optional.** Every action reachable by mouse has a key. The command
    palette is the primary navigation surface, not a power-user extra.
 4. **Never move content under the reader.** Late-arriving content, an opening thread and
