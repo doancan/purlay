@@ -133,10 +133,8 @@ describe('a root and its thread, closed', () => {
     const words = within(line).getByText(/Open · 2 replies/);
     expect(words.className.split(' ')).toContain('truncate');
     expect(words.parentElement?.className.split(' ')).toContain('whitespace-nowrap');
-    const open = within(line).getByText('Show thread');
-    expect(open.className.split(' ')).toEqual(
-      expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
-    );
+    const open = within(line).getByText('Show thread').className.split(' ');
+    expect(['shrink-0', 'whitespace-nowrap'].filter((name) => !open.includes(name))).toEqual([]);
     await expectNoAxeViolations(view.container);
     view.unmountAll();
   });
