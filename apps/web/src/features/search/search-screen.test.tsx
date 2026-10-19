@@ -277,6 +277,22 @@ describe('narrowed to a channel (`PRD.md` §4.6)', () => {
     view.unmount();
   });
 
+  test('a person is named by their name, as the feed names them, never by the handle', async () => {
+    const direct = aChannel(IDS.dm, null, { type: 'direct_message', peer: BOB });
+    const view = await visit({
+      channels: () => Promise.resolve([...someChannels(), direct]),
+      search: () => Promise.resolve(page([aMessage(4, { sender: BOB, content: 'deploy now' })])),
+    });
+    await person().type(field(view), 'deploy');
+    await person().keyboard('{Enter}');
+    await settle();
+    const row = view.getByRole('button', { name: /deploy now/ });
+    expect(within(row).getByText(BOB.displayName)).toBeDefined();
+    expect(within(row).queryByText(BOB.username)).toBeNull();
+    expect(within(where(view)).getByRole('option', { name: BOB.displayName })).toBeDefined();
+    view.unmount();
+  });
+
   test('a group is offered and said by its people, not as one person (D-127)', async () => {
     const group = aChannel(IDS.dm, null, { type: 'direct_message', peers: [ALICE, BOB] });
     const names = `${ALICE.displayName}, ${BOB.displayName}`;

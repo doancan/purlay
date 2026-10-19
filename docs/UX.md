@@ -60,7 +60,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   **Workspace settings**, D-146), the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
-  (D-132) — the channels, the **conversations** — groups of up to ten
+  (D-132) — the channels, under a heading that carries **Browse channels** and **New channel**, always
+shown in the section's quiet tone with a tooltip each, never revealed only under a pointer — the **conversations** — groups of up to ten
   people, each named by its people, and **New message** (`+`), which picks people ("To: …") and
   starts the conversation of exactly them (D-127) —
   then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
@@ -74,8 +75,12 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
-  carries the two views as a segmented control: the feed, and **open questions** with its live count,
-  which is the product's argument and so is always one click away. The channel's **name opens its
+  carries the two views as a segmented control: the feed, and **open questions** with the live count
+  of *this channel's* — never the workspace's, which is the rail's and the sidebar's — opening the view
+  narrowed to the channel (§4.4). In a channel it is always there, being the product's argument; a
+  conversation (a direct message or a group) carries it only while it has open questions, since an
+  empty view there is one more control. The name is cut with an ellipsis before anything is drawn
+  over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
@@ -156,8 +161,12 @@ Admin* — and when. An action newer than the client is said by its name, never 
 
 **Channel details** (D-123). Clicking a channel's name in its header opens a dialog, drawn after the
 Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
-with **Save** (somebody who has not joined reads them and is told to join); the **members** with a count
-and **Add people** (the same dialog as the header's); the **notification level** (the header's menu);
+with **Save** (somebody who has not joined reads them and is told to join) — the dialog opens with
+focus on itself, never on the name, so a key pressed on opening renames nothing; no dialog opens with a
+field's text selected; the **members** with a count
+and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed, those
+who can be added first with **Add**, and anybody already in the channel after them, saying *Member*
+quietly with nothing to press, and a sentence above them when that is everybody); the **notification level** (the header's menu);
 for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
 posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to
 **Connect** one, which answers with the payload URL, the content type and the secret, each with Copy,
@@ -253,6 +262,10 @@ page of the same name.
   with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
   card inside it, and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
   colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are centred.
+- **A person is named by their name** — the display name, as the sidebar names them — wherever they
+  are named in words: the feed, a direct message's header, the inbox, search, the open questions,
+  *Resolved by …*, and what a screen reader hears of a row. The handle appears only where it is the
+  point: an `@mention`, the profile's handle line, and beside the name where people are picked.
 - **The header line** is over a group's first bubble: the name and the time on the left, the time
   alone on the right, the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
@@ -297,7 +310,9 @@ A root message with replies shows one line beneath it:
 Clicking it, or pressing `T` on the focused message, opens the thread **in the panel** on the
 right (D-122). The affordance is absent when there are no replies — an empty thread control on
 every message is clutter that teaches people to ignore that region. While a root's thread is in
-the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from.
+the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from. Under your own message, which
+sits on the right (§3), the line is mirrored: the status under the bubble's edge, **Show thread** at the
+other end — never the status a column away from the bubble it is about.
 
 ### 4.2. The panel
 
@@ -344,7 +359,7 @@ On resolve:
    because a state change that reorganizes the reader's view needs to be *seen* to be understood.
    Focus returns to the root. Resolved by somebody else, an open panel stays and only its status
    changes (D-122).
-2. The affordance line becomes `✓ Resolved by alice · 4 replies`.
+2. The affordance line becomes `✓ Resolved by Alice Chen · 4 replies`.
 3. A `system_event` message is **not** posted. The resolution is metadata on the root, not
    another line of chatter in a product whose thesis is less noise.
 
@@ -356,6 +371,9 @@ parent message. Reopening is the same control, inverted.
 Reached from the palette (`Cmd+K` → "Open questions") or the workspace header. It lists
 unresolved root messages that have at least one reply, workspace-wide, newest first, grouped by
 channel — backed by `idx_messages_unresolved`.
+
+Opened from a channel's header it is **narrowed to that channel** (`?in=`): only its questions, its
+count on the tab, Feed back to it, and *Show every channel* to widen it again.
 
 This view is the product's argument in one screen: *these are the questions your team has not
 finished answering.* Slack cannot produce it at any price. It ships in Phase 1, not later.

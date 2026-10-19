@@ -26,13 +26,14 @@ export const ConversationList = (): React.JSX.Element => {
 
   return (
     <section aria-labelledby="sidebar-conversations" className="flex flex-col">
-      <div className="flex items-center justify-between pr-1">
-        <h2 id="sidebar-conversations" className="px-2 py-1 text-label text-nav-ink-muted">
+      <div className="flex items-center justify-between pl-2">
+        <h2 id="sidebar-conversations" className="py-1 text-label text-nav-ink-muted">
           {t('conversations.title')}
         </h2>
         <IconButton
           label={t('conversations.new')}
           glyph="add"
+          size="nav"
           onClick={() => {
             setStarting(true);
           }}

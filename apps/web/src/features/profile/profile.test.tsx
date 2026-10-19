@@ -81,7 +81,7 @@ describe('a conversation with one other person', () => {
     const view = await withAlice();
     const name = nameOf(view);
     // Its name is the one it shows (WCAG 2.5.3); what it does is said beside it.
-    expect(name.textContent).toBe('alice');
+    expect(name.textContent).toBe('Alice');
     expect(document.getElementById(name.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
       `Open ${ALICE.displayName}’s profile`,
     );

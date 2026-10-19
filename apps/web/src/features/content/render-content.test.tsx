@@ -290,6 +290,7 @@ describe('markdown', () => {
     const box = view.getByRole('group', { name: 'Table' });
     expect(box.getAttribute('tabindex')).toBe('0');
     expect(box.className).toContain('overflow-x-auto');
+    expect(box.className).toContain('scrollbar-thin');
   });
 
   test('a table of only a header, and one whose rows are ragged, are drawn as written', async () => {
@@ -558,6 +559,28 @@ describe('a code block', () => {
     const view = await mount('```go\nx\ny\n```', { locale: 'tr' });
     expect(view.getByText('2 satır')).toBeDefined();
     expect(view.getByRole('button', { name: 'Kodu kopyala' })).toBeDefined();
+    expect(view.getByRole('button', { name: 'Satırları kaydır' })).toBeDefined();
+  });
+
+  test('a long line scrolls under a scrollbar that is always drawn, or wraps on request', async () => {
+    // Found by an audit: a long line was cut at the block's edge with no sign there was more — the
+    // block scrolled, under a scrollbar the system hid until it was scrolled.
+    const view = await mount(`\`\`\`ts\nconst x = '${'y'.repeat(200)}';\n\`\`\``);
+    const pre = (): HTMLElement | null => view.container.querySelector('pre');
+    expect(pre()?.className).toContain('overflow-x-auto');
+    expect(pre()?.className).toContain('scrollbar-thin');
+    expect(pre()?.className).not.toContain('whitespace-pre-wrap');
+    const wrap = view.getByRole('button', { name: 'Wrap lines' });
+    expect(wrap.getAttribute('aria-pressed')).toBe('false');
+    await person().click(wrap);
+    expect(wrap.getAttribute('aria-pressed')).toBe('true');
+    expect(pre()?.className).toContain('whitespace-pre-wrap');
+    // What is copied is still what was written: wrapping is only how it is drawn.
+    expect(view.container.querySelector('code')?.textContent).toBe(
+      `const x = '${'y'.repeat(200)}';`,
+    );
+    await person().click(wrap);
+    expect(pre()?.className).not.toContain('whitespace-pre-wrap');
   });
 });
 

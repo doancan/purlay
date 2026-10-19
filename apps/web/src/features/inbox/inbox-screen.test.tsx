@@ -91,8 +91,8 @@ describe('the list', () => {
   test('a message in a group says it was written to the conversation, in both languages', async () => {
     const group = aChannel(IDS.api, null, { type: 'direct_message', peers: [ALICE, BOB] });
     for (const [locale, words] of [
-      [undefined, 'bob wrote to the conversation'],
-      ['tr', 'bob konuşmaya yazdı'],
+      [undefined, 'Bob wrote to the conversation'],
+      ['tr', 'Bob konuşmaya yazdı'],
     ] as const) {
       const view = await visit(
         {
@@ -114,8 +114,8 @@ describe('the list', () => {
       notifications: () => Promise.resolve(page([told(3, 'direct_message')])),
     });
     const [row] = view.getAllByRole('button', { name: /words/ });
-    expect(row?.textContent).toContain('bob wrote to you');
-    expect(row?.textContent.match(/bob/g)).toHaveLength(1);
+    expect(row?.textContent).toContain('Bob wrote to you');
+    expect(row?.textContent.match(/Bob/g)).toHaveLength(1);
     expect(row?.textContent).not.toContain('·');
     view.unmount();
   });
@@ -134,12 +134,12 @@ describe('the list', () => {
     });
     expect(view.getByRole('heading', { level: 1, name: 'Inbox' })).toBeDefined();
     const rows = view.getAllByRole('button', { name: /words/ }).map((b) => b.textContent);
-    expect(rows[0]).toContain('unread alice mentioned you');
+    expect(rows[0]).toContain('unread Alice mentioned you');
     expect(rows[0]).toContain('api');
-    expect(rows[1]).toContain('bob wrote to you');
+    expect(rows[1]).toContain('Bob wrote to you');
     expect(rows[1]).not.toContain('unread');
     expect(rows[2]).toContain('Your question was resolved');
-    expect(rows[3]).toContain('bob wrote');
+    expect(rows[3]).toContain('Bob wrote');
     await expectNoAxeViolations(view.container);
     view.unmount();
   });
@@ -272,7 +272,7 @@ describe('the states', () => {
       'tr',
     );
     expect(view.getByRole('heading', { level: 1, name: 'Gelen kutusu' })).toBeDefined();
-    expect(view.getByText(/alice senden bahsetti/)).toBeDefined();
+    expect(view.getByText(/Alice senden bahsetti/)).toBeDefined();
     expect(view.getByRole('button', { name: 'Tümünü okundu yap' })).toBeDefined();
     view.unmount();
   });

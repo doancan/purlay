@@ -47,6 +47,12 @@ interface DialogProps {
   readonly children: React.ReactNode;
   /** Buttons, right-aligned: the primary action last. */
   readonly footer?: React.ReactNode;
+  /**
+   * What takes the first focus: the first control (a form to fill in), or the dialog itself — one
+   * to read before anything in it is changed, whose first field holds something already there (a
+   * channel's name, D-123). Either way no text is ever selected on opening.
+   */
+  readonly focusFirst?: 'control' | 'dialog';
 }
 
 /**
@@ -85,6 +91,7 @@ export const Dialog = ({
   closeLabel,
   children,
   footer,
+  focusFirst = 'control',
 }: DialogProps): React.JSX.Element => {
   const returnTo = useRef<HTMLElement | null>(null);
   const close = useRef<HTMLButtonElement>(null);
@@ -101,11 +108,23 @@ export const Dialog = ({
               // the close button, whose tooltip then takes the first Escape (#623): the dialog
               // itself takes it instead, and Tab still reaches Close.
               const content = event.currentTarget;
-              if (!(content instanceof HTMLElement) || firstControl(content) !== close.current) {
-                return;
+              if (!(content instanceof HTMLElement)) return;
+              const first = firstControl(content);
+              if (focusFirst === 'dialog' || first === close.current) {
+                event.preventDefault();
+                content.focus();
+              } else if (
+                (first instanceof HTMLInputElement || first instanceof HTMLTextAreaElement) &&
+                first.value !== '' &&
+                // An email or a number field has no selection to set (it would throw).
+                first.selectionStart !== null
+              ) {
+                // Radix selects the text of the field it focuses, so the first key typed would
+                // replace what is there: the caret goes to its end instead.
+                event.preventDefault();
+                first.focus();
+                first.setSelectionRange(first.value.length, first.value.length);
               }
-              event.preventDefault();
-              content.focus();
             }}
             onCloseAutoFocus={(event) => {
               // Ours when we know where; Radix's own return otherwise, rather than nowhere.

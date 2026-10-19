@@ -155,7 +155,7 @@ const MessageRowView = ({
       data-message-row=""
       data-message-id={message.id}
       tabIndex={tabIndex}
-      aria-label={t('feed.row', { name: author.username, when: absolute })}
+      aria-label={t('feed.row', { name: author.displayName, when: absolute })}
       className={cn(
         'relative flex gap-3 rounded-lg px-2',
         grouped ? 'pt-1' : 'pt-3',

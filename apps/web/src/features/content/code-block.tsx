@@ -19,6 +19,7 @@ import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { useToast } from '../../ui/toast';
+import { Tooltip } from '../../ui/tooltip';
 import { useContentPorts } from './content-ports';
 import type { HighlightToken } from './highlight';
 
@@ -63,6 +64,8 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
   const ports = useContentPorts();
   const [lines, setLines] = useState<readonly (readonly HighlightToken[])[] | null>(null);
   const [open, setOpen] = useState(false);
+  // A long line scrolls, under a scrollbar that is always drawn; wrapped, it is all in view at once.
+  const [wrapped, setWrapped] = useState(false);
   const count = lineCount(code);
   const clamped = count > CLAMP_ABOVE_LINES && !open;
 
@@ -97,10 +100,26 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
       <figcaption className="flex h-row items-center gap-2 border-b-hairline border-border-subtle bg-surface-050 pr-1 pl-3 text-caption text-ink-muted">
         <span className="font-mono">{language === '' ? t('message.code.plain') : language}</span>
         <span className="font-mono text-ink-subtle">{t('message.code.lines', { count })}</span>
+        <Tooltip content={t('message.code.wrap')}>
+          <button
+            type="button"
+            aria-label={t('message.code.wrap')}
+            aria-pressed={wrapped}
+            onClick={() => {
+              setWrapped(!wrapped);
+            }}
+            className={cn(
+              'ml-auto inline-flex size-6 items-center justify-center rounded-md transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink',
+              wrapped ? 'bg-surface-200 text-ink' : 'text-ink-muted',
+            )}
+          >
+            <Icon name="wrap" size="sm" />
+          </button>
+        </Tooltip>
         <button
           type="button"
           onClick={copy}
-          className="ml-auto inline-flex h-6 items-center gap-1 rounded-md px-2 text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
+          className="inline-flex h-6 items-center gap-1 rounded-md px-2 text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
         >
           <Icon name="copy" size="sm" />
           <span>{t('message.code.copy')}</span>
@@ -113,7 +132,8 @@ export const CodeBlock = ({ code, language }: CodeBlockProps): React.JSX.Element
           tabIndex={clamped ? undefined : 0}
           aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
           className={cn(
-            'overflow-x-auto p-3 text-code text-ink',
+            'scrollbar-thin overflow-x-auto p-3 text-code text-ink',
+            wrapped && 'whitespace-pre-wrap break-words',
             clamped && 'max-h-code overflow-y-hidden',
           )}
         >

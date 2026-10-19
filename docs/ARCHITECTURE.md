@@ -679,7 +679,9 @@ stored representation. (D-36)
 ### 8.2. Rendering
 
 - Code blocks over 12 lines clamp to 280px with a gradient mask, and carry a language badge,
-  line count, expand/collapse and copy-raw.
+  line count, expand/collapse, copy-raw and **Wrap lines** (a pressed toggle, the view only). A long
+  line scrolls sideways under a thin, themed scrollbar that is always drawn (`scrollbar-thin` in
+  `index.css`), as do a diff and a table, so a line cut at the edge always shows there is more.
 - Syntax highlighting runs synchronously by default. It moves to a Web Worker **only where a
   measurement shows a dropped frame** — for a clamped 12-line block, the `postMessage`
   round-trip costs more than the highlight. (Corrects an earlier blanket rule.)

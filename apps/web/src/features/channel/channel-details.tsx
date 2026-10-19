@@ -368,6 +368,8 @@ export const ChannelDetailsDialog = ({
       title={t('details.title', { name: channel.name ?? '' })}
       description={t('details.description')}
       closeLabel={t('common.close')}
+      // Read first: the name field is not where the person is going, and one key would rename it.
+      focusFirst="dialog"
     >
       <About channel={channel} />
       <Members channel={channel} />

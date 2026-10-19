@@ -86,6 +86,45 @@ test.describe('at a phone width', () => {
     expect(measured.cut, 'a three-letter name is cut short').toBe(false);
   });
 
+  test('a long channel name is cut with an ellipsis, drawn under nothing, and nothing leaves the header', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    // Found by an audit: a fifteen-letter name ran under the open-questions control, because the name
+    // would not shrink and so overflowed its box rather than being cut.
+    const made = await room({ members: ['dogancan', 'bob'] });
+    await signIn('dogancan');
+    await page.goto(made.path);
+    const header = page.locator('header').filter({ has: page.getByRole('heading', { level: 1 }) });
+    await expect(header.getByRole('heading', { level: 1 })).toContainText(made.name.slice(0, 4));
+    const measured = await header.evaluate((element) => {
+      const title = element.querySelector('h1 button');
+      if (title === null) throw new Error('no channel name in the header');
+      const box = title.getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
+      const controls = [...element.querySelectorAll('a, button')].filter(
+        (control) => !control.closest('h1') && control.getBoundingClientRect().width > 0,
+      );
+      return {
+        overlapping: controls
+          .filter((control) => {
+            const other = control.getBoundingClientRect();
+            return other.left < box.right && other.right > box.left;
+          })
+          .map((control) => control.getAttribute('aria-label') ?? control.textContent),
+        outside: controls
+          .filter((control) => control.getBoundingClientRect().right > bounds.right + 0.5)
+          .map((control) => control.getAttribute('aria-label') ?? control.textContent),
+        cut: title.scrollWidth > title.clientWidth,
+        ellipsis: getComputedStyle(title).textOverflow,
+      };
+    });
+    expect(measured.overlapping, 'controls drawn over the name').toEqual([]);
+    expect(measured.outside, 'controls pushed out of the header').toEqual([]);
+    if (measured.cut) expect(measured.ellipsis, 'a cut name ends in an ellipsis').toBe('ellipsis');
+  });
+
   test("every screen's title has its room in its header, drawn under nothing", async ({
     page,
     signIn,
@@ -249,7 +288,7 @@ test.describe('at a phone width', () => {
     await signIn();
     await page.goto(`/w/${tenant.slug}/inbox`);
     const row = page.getByRole('button', { name: new RegExp(made.name) });
-    await expect(row).toContainText('carol mentioned you');
+    await expect(row).toContainText('Carol Reyes mentioned you');
     // The line the time sits on: one line tall, and the time one box on it (#679).
     const line = await row.locator('time').evaluate((time) => {
       const parent = time.parentElement;

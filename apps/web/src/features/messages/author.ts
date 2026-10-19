@@ -28,10 +28,6 @@ export const authorOf = (message: Pick<Message, 'sender'>, erased: string): Auth
       ? { displayName: erased, username: erased }
       : { displayName: message.sender.displayName, username: message.sender.username };
 
-/** A person's handle, or "deleted user" once their account is erased (D-139 §5). */
-export const handleOf = (person: { readonly username: string }, erased: string): string =>
-  isErased(person) ? erased : person.username;
-
 /** A person, named: their display name, or "deleted user" once their account is erased (D-139 §5). */
 export const nameOf = (
   person: { readonly username: string; readonly displayName: string },

@@ -256,7 +256,9 @@ test.describe('a thread', () => {
     await expect(questions.getByText(question)).toBeVisible();
 
     await alice.resolve(root.id);
-    await expect(page.getByRole('button', { name: /Resolved by alice · 1 reply/ })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Resolved by Alice Chen · 1 reply/ }),
+    ).toBeVisible();
     await expect(questions.getByText(question)).toHaveCount(0, {
       timeout: 5_000,
     });

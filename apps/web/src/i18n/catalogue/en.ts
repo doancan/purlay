@@ -307,6 +307,8 @@ export const en = {
   'people.filter': 'Find a person',
   'people.addOne': 'Add',
   'people.added': 'Added',
+  'people.member': 'Member',
+  'people.allIn': 'Everybody in the workspace is in this channel.',
   'people.loading': 'Loading people…',
   'people.failed': 'The people of this workspace could not be loaded.',
   'people.none': 'Nobody else is in this workspace yet.',
@@ -680,6 +682,7 @@ export const en = {
   'diff.split': 'Split',
   'diff.label': 'Diff, {added} added, {removed} removed',
   'message.code.copy': 'Copy code',
+  'message.code.wrap': 'Wrap lines',
   'message.code.expand': 'Show all {count} lines',
   'message.code.collapse': 'Show fewer lines',
   'message.code.lines': {
@@ -933,6 +936,8 @@ export const en = {
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
+  'questions.only': 'Only {name}',
+  'questions.everyChannel': 'Show every channel',
   'questions.more': 'Load more questions',
   'questions.unnamed': 'A channel you can no longer see',
 

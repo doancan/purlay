@@ -26,6 +26,7 @@ import { Kbd } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useThreads } from './thread-context';
+import { nameOf } from '../messages/author';
 
 /** The id of the panel, which the line it opens from controls. */
 export const THREAD_PANEL_ID = 'thread-panel';
@@ -45,7 +46,10 @@ export const ThreadStatus = ({
     return (
       <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text">
         <Icon name="resolved" size="sm" />
-        {t('thread.resolved', { name: summary.resolvedBy?.username ?? '', replies: counted })}
+        {t('thread.resolved', {
+          name: summary.resolvedBy === null ? '' : nameOf(summary.resolvedBy, t('user.erased')),
+          replies: counted,
+        })}
       </span>
     );
   }
@@ -64,9 +68,19 @@ export interface ThreadSummaryProps {
   readonly nowMinute: number;
   /** This root's thread is the one open in the panel. */
   readonly open: boolean;
+  /**
+   * The root is the person's own, on the right (D-119): the line is mirrored, so its status sits
+   * under the bubble it is about rather than a column away at the feed's other edge.
+   */
+  readonly outgoing?: boolean;
 }
 
-const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React.JSX.Element => {
+const ThreadSummaryView = ({
+  root,
+  nowMinute,
+  open,
+  outgoing = false,
+}: ThreadSummaryProps): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const threads = useThreads();
@@ -144,10 +158,11 @@ const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React
           'mt-2 flex h-control w-full items-center gap-2 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
           // The one open in the panel is marked as such, so the eye finds where it came from.
           open && 'bg-accent-subtle',
+          outgoing && 'flex-row-reverse',
         )}
       >
         <ThreadStatus root={root} nowMinute={nowMinute} />
-        <span className="ml-auto inline-flex items-center gap-2">
+        <span className={cn('inline-flex items-center gap-2', outgoing ? 'mr-auto' : 'ml-auto')}>
           {t(open ? 'thread.shown' : 'thread.show')}
           <Kbd>T</Kbd>
         </span>

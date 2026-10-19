@@ -47,6 +47,33 @@ said in the feed. The read position now reads the roots only. A reply's notifica
 thread, which the panel reads while it is open in front of the person (`PUT
 /api/messages/:messageId/thread/read`, up to the newest reply it has), or for the inbox; until then it
 counts as unread, so the badge stays within the unread count (I-6) without vanishing.
+### Fix — 2026-10-19: messaging polish
+
+Defects found by a visual audit of the messaging screens, at 1440 and 390 wide in both themes.
+
+- **Channel details no longer opens on its name with the text selected.** Radix selected the first
+  field's text, so the first key typed renamed the channel. The dialog takes the first focus itself
+  (`Dialog`'s `focusFirst="dialog"`), and no dialog opens with a field's text selected: a first field
+  that already holds text gets the caret at its end.
+- **Browse channels and New channel are always shown** beside the Channels heading, in the navigation's
+  quiet tone with their tooltips; they were invisible until the heading was hovered. New message beside
+  Conversations takes the same tone and alignment (it was drawn in the content's tone on the navy).
+- **A long channel name no longer runs under the header's controls on a phone.** The name could not
+  shrink, so it overflowed its box; it is now cut with an ellipsis, and the topic gives way first.
+- **The header's open-questions count is the channel's own**, not the workspace's, and opens the view
+  narrowed to the channel (`?in=`, with *Show every channel*). A direct message or a group shows the
+  control only while it has open questions.
+- **A person is named by their display name everywhere they are named in words**: a direct message's
+  header, the inbox, search (its rows and the choice of where to look), the open questions, *Resolved
+  by …*, an add that failed, and a row's name for a screen reader. They said the handle while the feed
+  and the sidebar said the name. The handle stays where it is the point: a mention and the profile.
+- **The thread line under your own message is mirrored**: its status ends where your bubble ends,
+  instead of sitting at the feed's far left.
+- **A long line of code shows that it goes on.** A code block, a diff and a table scroll under a thin
+  scrollbar in the theme's tones that is always drawn (macOS hid it until scrolled), and a code block's
+  header has **Wrap lines**, a toggle that wraps the view without changing what Copy copies.
+- **Add people says who is already in the channel.** Its members are listed after the people who can be
+  added, each saying *Member* instead of offering an Add that did nothing.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

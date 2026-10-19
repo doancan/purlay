@@ -306,6 +306,8 @@ export const tr = {
   'people.filter': 'Kişi ara',
   'people.addOne': 'Ekle',
   'people.added': 'Eklendi',
+  'people.member': 'Üye',
+  'people.allIn': 'Çalışma alanındaki herkes bu kanalda.',
   'people.loading': 'Kişiler yükleniyor…',
   'people.failed': 'Bu çalışma alanının kişileri yüklenemedi.',
   'people.none': 'Bu çalışma alanında henüz başka kimse yok.',
@@ -673,6 +675,7 @@ export const tr = {
   'diff.split': 'Yan yana',
   'diff.label': 'Fark, {added} eklendi, {removed} silindi',
   'message.code.copy': 'Kodu kopyala',
+  'message.code.wrap': 'Satırları kaydır',
   'message.code.expand': 'Tüm {count} satırı göster',
   'message.code.collapse': 'Daha az satır göster',
   'message.code.lines': {
@@ -915,6 +918,8 @@ export const tr = {
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
+  'questions.only': 'Yalnızca {name}',
+  'questions.everyChannel': 'Tüm kanalları göster',
   'questions.more': 'Daha fazla soru yükle',
   'questions.unnamed': 'Artık göremediğin bir kanal',
 
