@@ -32,7 +32,8 @@ import { StorageProvider } from '../data/storage-provider';
 import { RealtimePortsContext, type RealtimePorts } from '../realtime/realtime-provider';
 import { createQueryClient } from './query-client';
 import type { PushDevice } from '../features/push/device';
-import { PushDeviceContext } from '../features/push/push';
+import type { Notifier } from '../features/push/notifier';
+import { NotifierContext, PushDeviceContext } from '../features/push/push';
 
 export interface AppPorts {
   readonly theme?: ThemePorts;
@@ -48,6 +49,8 @@ export interface AppPorts {
   readonly storage?: ClientStorage | null;
   /** This browser's Web Push; the browser's when absent, none when `null` (D-126). */
   readonly push?: PushDevice | null;
+  /** The page's own notices while it is in the background; the browser's when absent (D-148). */
+  readonly notifier?: Notifier | null;
 }
 
 interface AppProvidersProps {
@@ -84,7 +87,9 @@ export const AppProviders = ({
                           {...(ports.schedule === undefined ? {} : { schedule: ports.schedule })}
                         >
                           <PushDeviceContext.Provider value={ports.push}>
-                            {children}
+                            <NotifierContext.Provider value={ports.notifier}>
+                              {children}
+                            </NotifierContext.Provider>
                           </PushDeviceContext.Provider>
                         </ToastProvider>
                       </TooltipProvider>

@@ -868,6 +868,9 @@ export const tr = {
   'push.working': 'Bir saniye…',
   'push.blocked': 'Engellendi: tarayıcının site ayarlarından izin ver',
   'push.failed': 'Bu cihazdaki bildirimler değiştirilemedi.',
+  // Arka plandaki açık bir sekmenin söyledikleri (D-148).
+  'alerts.many': '{count} konuşma sizi bekliyor',
+  'alerts.waiting': 'Burada sizi bekleyen bir şey var',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
 
   // ── Notification level (D-107) ─────────────────────────────────────────

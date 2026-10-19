@@ -326,6 +326,19 @@ export const NotificationType = Type.Union([
 ]);
 export type NotificationType = Static<typeof NotificationType>;
 
+/**
+ * The reasons that make a message one that *needs* the person (D-99 §1, D-107): what the mention
+ * badge counts, the tab's title adds up, a push is sent for (D-126) and an open tab in the background
+ * is told of (D-148). A resolution is told and not counted — it is not a message. One list, read by
+ * the server's send, read and delete, and by the client: "needs you" is not defined twice.
+ */
+export const NEEDS_YOU = [
+  'mention',
+  'direct_message',
+  'thread_reply',
+  'channel_message',
+] as const satisfies readonly NotificationType[];
+
 /** `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107). */
 export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
 export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;

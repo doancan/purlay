@@ -21,13 +21,12 @@
  *   said. `flush` waits for them at shutdown, within its bound.
  */
 import { sql, type Executor } from '@purlay/db';
-import type { PushPayload } from '@purlay/types';
+import { NEEDS_YOU, type PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
-import { NEEDS_YOU } from '../messages/delivery';
 import { encryptPush, freshParts } from './encrypt';
 import { vapidAuthorization, vapidSigningKey, type VapidKeys } from './vapid';
 import { pushBody } from './words';

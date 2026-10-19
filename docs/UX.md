@@ -65,9 +65,9 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   starts the conversation of exactly them (D-127) —
   then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
   for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is on, until when, the
-  minutes left and its end; **notifications on this device** (D-126) — turned on or off, and where the
-  browser blocked them, where that is undone; drawn only where the browser and the server can send
-  them; the theme; the language; the shortcut reference; **Sign out**; and **Sign
+  minutes left and its end; **notifications on this device** (D-126, D-148) — turned on or off, and where the
+  browser blocked them, where that is undone; one switch for the open tab's notices and, where the
+  server has push, the closed tab's; drawn only where the browser can show notifications; the theme; the language; the shortcut reference; **Sign out**; and **Sign
   out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
@@ -124,8 +124,20 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
-  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). It is the only
-  signal a tab in the background has in Phase 1.
+  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). The tab's icon
+  says the same with a dot, which a pinned tab still shows (D-148).
+- **What reaches a person, by where Purlay is** (D-148). What *needs* them is one thing everywhere —
+  what the mention badges count: a mention, a direct message, an answer in a thread they are part of,
+  a channel set to every message. Never their own messages, and in Deep Work nothing interrupts.
+  - **The tab in front of them:** the page says it — the badges, the inbox dot, the title. Nothing
+    pops up and no device buzzes (D-143).
+  - **The tab open but not in front** (another tab, another window): the title's count, a dot on the
+    tab's icon, the installed app's badge; and, with notifications on for this device, a notice from
+    the browser — the place and who, never the words — one per conversation, the next replacing the
+    last, several at once as one. Clicking it brings the tab forward on the conversation or thread.
+  - **The tab closed:** nothing, unless the server has push and the person turned notifications on
+    for this device — then the same notice reaches the device (D-126). Without push, the inbox has it
+    all when they come back.
 
 **Below 900px** the rail and the sidebar become one overlay and the channel fills the window. An
 open thread, or the files, covers the channel — header and composer included — and its close control is the way

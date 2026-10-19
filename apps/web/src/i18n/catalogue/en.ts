@@ -885,6 +885,9 @@ export const en = {
   'push.working': 'One moment…',
   'push.blocked': 'Blocked: allow them in the browser’s site settings',
   'push.failed': 'Notifications on this device were not changed.',
+  // What an open tab in the background says (D-148).
+  'alerts.many': '{count} conversations need you',
+  'alerts.waiting': 'Something here needs you',
   'shortcuts.deepWork': 'Start or end Deep Work',
 
   // ── Notification level (D-107) ─────────────────────────────────────────

@@ -13,11 +13,10 @@
  * it also publishes nothing.
  */
 import { sql, type RawBuilder, type Transaction } from '@purlay/db';
-import type { ChannelState } from '@purlay/types';
+import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
-import { NEEDS_YOU } from '../messages/delivery';
 
 /**
  * The notifications still waiting for a person in one channel, of the kinds that need them: what

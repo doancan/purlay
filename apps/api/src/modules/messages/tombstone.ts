@@ -7,8 +7,8 @@
  * a copy of `uncount` that missed the notifications would leave a mention counted for ever.
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
+import { NEEDS_YOU } from '@purlay/types';
 import type { ChannelStateUpdate } from './delivery';
-import { NEEDS_YOU } from './delivery';
 import { enqueueObjectDeletions } from '../attachments/deletions';
 
 /** A message as the counters saw it when it was sent. */
