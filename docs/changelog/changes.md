@@ -26,6 +26,8 @@ Defects found by a visual audit of the messaging screens, at 1440 and 390 wide i
   header, the inbox, search (its rows and the choice of where to look), the open questions, *Resolved
   by …*, an add that failed, and a row's name for a screen reader. They said the handle while the feed
   and the sidebar said the name. The handle stays where it is the point: a mention and the profile.
+- **The thread line under your own message is mirrored**: its status ends where your bubble ends,
+  instead of sitting at the feed's far left.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

@@ -68,9 +68,19 @@ export interface ThreadSummaryProps {
   readonly nowMinute: number;
   /** This root's thread is the one open in the panel. */
   readonly open: boolean;
+  /**
+   * The root is the person's own, on the right (D-119): the line is mirrored, so its status sits
+   * under the bubble it is about rather than a column away at the feed's other edge.
+   */
+  readonly outgoing?: boolean;
 }
 
-const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React.JSX.Element => {
+const ThreadSummaryView = ({
+  root,
+  nowMinute,
+  open,
+  outgoing = false,
+}: ThreadSummaryProps): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const threads = useThreads();
@@ -148,10 +158,11 @@ const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React
           'mt-2 flex h-control w-full items-center gap-2 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
           // The one open in the panel is marked as such, so the eye finds where it came from.
           open && 'bg-accent-subtle',
+          outgoing && 'flex-row-reverse',
         )}
       >
         <ThreadStatus root={root} nowMinute={nowMinute} />
-        <span className="ml-auto inline-flex items-center gap-2">
+        <span className={cn('inline-flex items-center gap-2', outgoing ? 'mr-auto' : 'ml-auto')}>
           {t(open ? 'thread.shown' : 'thread.show')}
           <Kbd>T</Kbd>
         </span>

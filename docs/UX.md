@@ -282,7 +282,9 @@ A root message with replies shows one line beneath it:
 Clicking it, or pressing `T` on the focused message, opens the thread **in the panel** on the
 right (D-122). The affordance is absent when there are no replies — an empty thread control on
 every message is clutter that teaches people to ignore that region. While a root's thread is in
-the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from.
+the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from. Under your own message, which
+sits on the right (§3), the line is mirrored: the status under the bubble's edge, **Show thread** at the
+other end — never the status a column away from the bubble it is about.
 
 ### 4.2. The panel
 
