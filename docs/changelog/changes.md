@@ -12,6 +12,11 @@ The open questions, search and saved now share the inbox's shape: a centred colu
 lists as cards with their heading above, rows divided by hairlines. Saved items' moves appear on hover or
 focus instead of under every row (and stay visible on a phone); search's field and *where* sit in their
 own card, with the product's select.
+### Feature — 2026-10-19: the palette finds every place (D-157)
+
+`Cmd/Ctrl+K` now finds the inbox, saved items and search; public channels not yet joined (marked so);
+group conversations by their people; and every settings page. Whatever is typed can be searched for in
+the messages from the palette's last row, so a query never ends in "No match" alone.
 
 ### Polish — 2026-10-19: the first two screens a person sees
 

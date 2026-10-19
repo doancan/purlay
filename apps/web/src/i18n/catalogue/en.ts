@@ -1155,12 +1155,15 @@ export const en = {
   'user.menuFor': 'Account: {name}',
 
   // ── Command palette (D-98) ──────────────────────────────────────────────
+  'palette.notJoined': 'Not joined',
+  'palette.searchFor': 'Search messages for “{query}”',
   'palette.title': 'Command palette',
   'palette.placeholder': 'Jump to a channel, person or view…',
   'palette.empty': 'No match for “{query}”',
   'palette.group.views': 'Views',
   'palette.group.channels': 'Channels',
   'palette.group.people': 'People',
+  'palette.group.search': 'Search',
   'palette.group.settings': 'Settings',
   'palette.hint.move': 'move',
   'palette.hint.open': 'open',

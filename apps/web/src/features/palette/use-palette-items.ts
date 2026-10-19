@@ -53,6 +53,23 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
         navigate(href('questions', { slug }));
       },
     });
+    // The rail's places, by name (`PRD.md` §4.6): the palette is the product's search over where to go.
+    for (const view of [
+      { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
+      { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
+      { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
+    ] as const) {
+      items.push({
+        id: `view:${view.id}`,
+        group: 'views',
+        label: view.label,
+        glyph: view.glyph,
+        recency: '',
+        run: () => {
+          navigate(view.to);
+        },
+      });
+    }
     if (current !== undefined) {
       items.push({
         id: 'view:feed',
@@ -68,13 +85,46 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     }
 
     for (const channel of ordered) {
-      if (channel.type === 'direct_message') continue;
+      // A group conversation is found by its people (D-127); one with a single other person is the
+      // People group's.
+      if (channel.type === 'direct_message') {
+        if (channel.peer !== null) continue;
+        items.push({
+          id: `group:${channel.id}`,
+          group: 'channels',
+          label: displayName(channel, user.id, t('sidebar.you'), t('user.erased')),
+          keywords: channel.peers.map((person) => person.username),
+          glyph: 'people',
+          recency: channel.lastMessageAt ?? '',
+          run: () => {
+            navigate(href('channel', { slug, channelId: channel.id }));
+          },
+        });
+        continue;
+      }
       items.push({
         id: `channel:${channel.id}`,
         group: 'channels',
         label: channel.name ?? '',
         glyph: channel.type === 'private' ? 'private-channel' : 'channel',
         recency: channel.lastMessageAt ?? '',
+        run: () => {
+          navigate(href('channel', { slug, channelId: channel.id }));
+        },
+      });
+    }
+
+    // Public channels the person has not joined: found too, and said so — opening one reads it,
+    // with the Join bar its feed already offers.
+    for (const channel of channels ?? []) {
+      if (channel.type !== 'public' || channel.state !== null) continue;
+      items.push({
+        id: `channel:${channel.id}`,
+        group: 'channels',
+        label: channel.name ?? '',
+        hint: t('palette.notJoined'),
+        glyph: 'channel',
+        recency: '',
         run: () => {
           navigate(href('channel', { slug, channelId: channel.id }));
         },

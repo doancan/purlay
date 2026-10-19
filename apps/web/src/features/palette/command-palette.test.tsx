@@ -145,9 +145,14 @@ describe('what is on offer before anything is typed', () => {
     expect(view.getByText('Views')).toBeDefined();
     expect(options().map((text) => text.replace(/@\w+/, ''))).toEqual([
       'Open questions',
+      'Inbox',
+      'Saved',
+      'Search',
       'Feed' + 'api',
       'api',
       'deploys',
+      // A public channel not joined is found, and says so.
+      'browse' + 'Not joined',
       'incidents',
       'secrets',
       'Bob',
@@ -220,8 +225,9 @@ describe('typing', () => {
   test('narrows to what matches, best first, with the matched letters in semibold', async () => {
     const { view, input, options } = await mount();
     await person().type(input(), 'dep');
-    expect(options()).toEqual(['deploys']);
-    const strong = view.getByRole('option').querySelectorAll('b');
+    // What matched, then the messages searched for the same words, always last.
+    expect(options()).toEqual(['deploys', 'Search messages for “dep”']);
+    const strong = view.getAllByRole('option')[0]?.querySelectorAll('b') ?? [];
     expect([...strong].map((node) => node.textContent).join('')).toBe('dep');
     expect(strong[0]?.className).toContain('font-semibold');
   });
@@ -232,17 +238,24 @@ describe('typing', () => {
     expect(options().some((text) => text.startsWith('Bob'))).toBe(true);
   });
 
-  test('says so, politely, when nothing matches, and has no current option', async () => {
-    const { view, input } = await mount();
+  test('says so, politely, when nothing matches, and offers to search the messages instead', async () => {
+    const { view, input, options } = await mount();
     await person().type(input(), 'zzz');
-    expect(view.queryAllByRole('option')).toEqual([]);
+    expect(options()).toEqual(['Search messages for “zzz”']);
     expect(view.getAllByText('No match for “zzz”').length).toBeGreaterThan(0);
-    expect(input().getAttribute('aria-activedescendant')).toBeNull();
     const live = view
       .getAllByRole('status')
       .find((node) => node.textContent === 'No match for “zzz”');
     expect(live?.getAttribute('aria-live')).toBe('polite');
     await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  test('Enter on the search row searches the messages for what was typed', async () => {
+    const { input, here } = await mount();
+    await person().type(input(), 'zzz');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/search?q=zzz');
   });
 
   test('announces how many results there are, once something is typed', async () => {
@@ -289,12 +302,12 @@ describe('the keyboard', () => {
     expect(selected()).toBe(all[0]);
   });
 
-  test('the arrows do nothing when there is nothing to move to', async () => {
-    const { input } = await mount();
-    const user = person();
-    await user.type(input(), 'zzz');
-    await user.keyboard('{ArrowDown}{End}{Enter}');
-    expect(input().value).toBe('zzz');
+  test('the rail’s places are found by name: the inbox, saved and search', async () => {
+    const { input, here } = await mount();
+    await person().type(input(), 'inbox');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/inbox');
   });
 
   test('Enter on a channel goes there and closes', async () => {
