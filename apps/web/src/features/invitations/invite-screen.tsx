@@ -140,7 +140,7 @@ export const InviteScreen = (): React.JSX.Element => {
       <LogoMark />
       <section className="flex flex-col gap-2">
         <h1 className="text-display">{t('invite.title', { workspace: workspace.name })}</h1>
-        <p className="text-body text-ink-muted">
+        <p className="text-balance text-body text-ink-muted">
           {member
             ? t('invite.member', { workspace: workspace.name })
             : t('invite.body', { until: format.absolute(expiresAt) })}
