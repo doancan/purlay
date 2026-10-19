@@ -14,6 +14,9 @@ import { useId } from 'react';
 import { Icon } from '../components/icon';
 import { cn } from './cn';
 
+/** A list longer than this gets a field to find in it; a shorter one is read at a glance. */
+export const FINDABLE_FROM = 8;
+
 const inputClasses =
   'h-control max-narrow:h-touch w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted';
 

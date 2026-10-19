@@ -57,6 +57,7 @@ const channel: Channel = {
   starred: false,
   peer: null,
   peers: [],
+  memberCount: 1,
 };
 
 const world = (): { client: QueryClient } => {

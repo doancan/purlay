@@ -16,6 +16,7 @@
  * best matches overall. The cap is there for the reader, not the machine: past fifty
  * results nobody scrolls, they type another letter.
  */
+import type { User } from '@purlay/types';
 import type { GlyphName } from '../../components/icon';
 import { matchText } from './match';
 
@@ -49,6 +50,8 @@ export interface PaletteItem {
   readonly glyph: GlyphName;
   /** A person: the row shows their avatar where other rows show the glyph (the glyph is still the fallback for assistive text). */
   readonly avatar?: { readonly name: string; readonly username: string };
+  /** A group conversation: its people, drawn as its faces where other rows show the glyph (D-167). */
+  readonly faces?: readonly User[];
   /** When it was last active, ISO; `''` when that means nothing (a setting). Newest first. */
   readonly recency: string;
   /** Do it. A promise means the palette stays open until it settles. */

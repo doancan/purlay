@@ -67,6 +67,8 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 shown in the section's quiet tone with a tooltip each, never revealed only under a pointer — the **conversations** — groups of up to ten
   people, each named by its people, and **New message** (`+`), which picks people ("To: …") and
   starts the conversation of exactly them (D-127) —
+  each drawn with the faces of its first two people, the second overlapping the first, and "+N"
+  for the rest, in the height of any row (D-167) —
   then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
   you are; Deep Work for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is
   on, until when, the minutes left and its end; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
@@ -77,6 +79,11 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
+- **Browse channels** — the public channels the person has not joined, by name (D-160), each saying
+  what it is before it is joined: its name, and on one quiet line how many people are in it (*12
+  members*) and its topic, cut with an ellipsis; **Join** on the row joins and goes there. Past eight
+  channels a **Find a channel** field narrows them by name and topic; it is empty each time the dialog
+  opens (D-167).
 - **A row's context menu** (D-165) — a right click on a channel, a person's conversation or a group,
   Shift+F10 or the ContextMenu key on a focused row, or a finger held on it, opens what can be done to
   it without opening it, and only what applies and the person may do: **Mark as read** while it is

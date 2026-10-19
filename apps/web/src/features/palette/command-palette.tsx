@@ -27,6 +27,7 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
+import { GroupFace } from '../conversations/group-face';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { Kbd } from '../../ui/kbd';
@@ -267,7 +268,12 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
                         active && 'bg-accent-subtle',
                       )}
                     >
-                      {entry.item.avatar === undefined ? (
+                      {entry.item.faces !== undefined ? (
+                        <GroupFace
+                          peers={entry.item.faces}
+                          surface={active ? 'selected' : 'surface'}
+                        />
+                      ) : entry.item.avatar === undefined ? (
                         <span
                           aria-hidden="true"
                           className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted"

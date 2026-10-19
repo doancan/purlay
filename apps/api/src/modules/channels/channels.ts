@@ -48,6 +48,8 @@ interface ChannelRow {
   readonly peer_deleted_at: Date | string | null;
   /** Everybody in a direct message's key, in its order; empty for a channel. */
   readonly key_people: readonly KeyPerson[];
+  /** Its live members (D-167); null when nobody is in it, which the grouped join cannot say. */
+  readonly member_count: string | number | null;
 }
 
 interface KeyPerson {
@@ -122,6 +124,7 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
             avatarUrl: row.peer_avatar_url,
           },
   peers: peersOf(row, userId),
+  memberCount: Number(row.member_count ?? 0),
   incident: incidentOf(row),
 });
 
@@ -140,8 +143,20 @@ const readChannels = async (
   userId: string,
   only: { readonly ids?: readonly string[]; readonly id?: string },
 ): Promise<readonly ChannelRow[]> => {
+  // How many live people each listed channel holds (D-167): one aggregate over the same channels,
+  // grouped once and joined, so a hundred channels are one scan of their memberships, not a count
+  // each. Narrowed by the same ids as the outer query, never counted across the whole table.
+  let counted = executor
+    .selectFrom('channel_members as counted')
+    .innerJoin('users as counted_user', 'counted_user.id', 'counted.user_id')
+    .where('counted_user.deleted_at', 'is', null)
+    .select(['counted.channel_id', sql<string>`count(*)`.as('member_count')])
+    .groupBy('counted.channel_id');
+  if (only.ids !== undefined) counted = counted.where('counted.channel_id', 'in', only.ids);
+  if (only.id !== undefined) counted = counted.where('counted.channel_id', '=', only.id);
   let query = executor
     .selectFrom('channels')
+    .leftJoin(counted.as('member_counts'), 'member_counts.channel_id', 'channels.id')
     .leftJoin('channel_members', (join) =>
       join
         .onRef('channel_members.channel_id', '=', 'channels.id')
@@ -183,6 +198,7 @@ const readChannels = async (
       'users.display_name as peer_display_name',
       'users.avatar_url as peer_avatar_url',
       'users.deleted_at as peer_deleted_at',
+      'member_counts.member_count as member_count',
       // Its key's people in its order, in this one query: the key is its identity (D-127), and a
       // group of ten is ten primary-key reads, not a query per channel.
       sql<readonly KeyPerson[]>`coalesce((

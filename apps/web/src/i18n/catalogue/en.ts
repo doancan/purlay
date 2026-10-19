@@ -133,6 +133,12 @@ export const en = {
   'browse.join': 'Join',
   'browse.joinLabel': 'Join {name}',
   'browse.joinFailed': 'You could not join the channel.',
+  'browse.members': {
+    one: '{count} member',
+    other: '{count} members',
+  },
+  'browse.find': 'Find a channel',
+  'browse.noMatch': 'No channel matches “{query}”.',
   'browse.loading': 'Loading channels',
   'browse.empty.title': 'Nothing to join',
   'browse.empty.body': 'You are in every public channel there is.',

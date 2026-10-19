@@ -56,6 +56,8 @@ interface AvatarProps {
   readonly className?: string;
   /** Online now (D-136): a dot in the corner. Undefined or false draws none. */
   readonly online?: boolean | undefined;
+  /** How many letters: two, or one where avatars overlap and a second would be covered (D-167). */
+  readonly letters?: 1 | 2;
 }
 
 export const Avatar = ({
@@ -64,6 +66,7 @@ export const Avatar = ({
   size = 'md',
   className,
   online,
+  letters = 2,
 }: AvatarProps): React.JSX.Element => (
   <span
     aria-hidden="true"
@@ -75,7 +78,7 @@ export const Avatar = ({
       className,
     )}
   >
-    {initialsOf(name)}
+    {letters === 2 ? initialsOf(name) : Array.from(initialsOf(name))[0]}
     {online === true && (
       <span
         data-online=""

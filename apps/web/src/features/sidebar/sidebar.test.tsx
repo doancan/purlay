@@ -953,6 +953,8 @@ describe('browsing channels', () => {
   const browse = async (api: Api = aSignedInApi()): Promise<View> => {
     const view = await open(api);
     await person().click(view.getByRole('button', { name: 'Browse channels' }));
+    // The dialog is in the deferred chunk (D-163): the first open waits for it to arrive.
+    await view.findByRole('dialog', { name: 'Browse channels' });
     return view;
   };
 
@@ -971,6 +973,111 @@ describe('browsing channels', () => {
     ];
     const view = await browse(aSignedInApi({ channels: () => Promise.resolve(channels) }));
     expect(view.getByRole('dialog').textContent).toContain('Reading list');
+  });
+
+  test('says how many people each channel holds, beside its topic, one each', async () => {
+    const channels = [
+      ...someChannels().slice(0, 3),
+      aChannel(IDS.browse, 'browse', { state: null, topic: 'Reading list', memberCount: 12 }),
+      aChannel('00000000-0000-4000-8000-0000000000b1', 'alone', { state: null, memberCount: 1 }),
+    ];
+    const view = await browse(aSignedInApi({ channels: () => Promise.resolve(channels) }));
+    const dialog = within(view.getByRole('dialog'));
+    const rows = dialog.getAllByRole('listitem');
+    // By name (D-160): `alone` before `browse`.
+    expect(rows.map((row) => row.querySelector('.font-mono')?.textContent)).toEqual([
+      'alone',
+      'browse',
+    ]);
+    expect(rows[0]?.textContent).toContain('1 member');
+    expect(rows[0]?.textContent).not.toContain('·');
+    expect(rows[1]?.textContent).toContain('12 members');
+    // The topic is one line, cut with an ellipsis, and gives way before the count does.
+    const topic = some(within(some(rows[1])).getByText('Reading list'));
+    expect(topic.className.split(' ')).toContain('truncate');
+    expect(within(some(rows[1])).getByText('12 members').className.split(' ')).toContain(
+      'shrink-0',
+    );
+    // A handful is read at a glance: no field to find in it.
+    expect(dialog.queryByRole('searchbox')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  /** Ten channels to join, so the list is long enough to be searched. */
+  const many = (): ReturnType<typeof someChannels> => [
+    ...someChannels().slice(0, 3),
+    ...Array.from({ length: 10 }, (_, n) =>
+      aChannel(
+        `00000000-0000-4000-8000-0000000001${String(n).padStart(2, '0')}`,
+        `room-${String(n)}`,
+        {
+          state: null,
+          memberCount: n,
+          topic: n === 7 ? 'Çalışma odası' : null,
+        },
+      ),
+    ),
+  ];
+
+  test('past a handful, a field narrows the list by name and by topic', async () => {
+    const view = await browse(aSignedInApi({ channels: () => Promise.resolve(many()) }));
+    const dialog = within(view.getByRole('dialog'));
+    const field = dialog.getByRole('searchbox', { name: 'Find a channel' });
+    expect(dialog.getAllByRole('listitem')).toHaveLength(10);
+
+    await person().type(field, 'ROOM-3');
+    const narrowed = dialog.getAllByRole('listitem');
+    expect(narrowed).toHaveLength(1);
+    expect(narrowed[0]?.textContent).toContain('room-3');
+
+    // By topic, with no case and no marks: `calisma` finds `Çalışma odası`.
+    await person().clear(field);
+    await person().type(field, 'calisma');
+    const [found, ...rest] = dialog.getAllByRole('listitem');
+    expect(rest).toHaveLength(0);
+    expect(found?.textContent).toContain('room-7');
+
+    await person().clear(field);
+    await person().type(field, 'nowhere');
+    expect(dialog.queryAllByRole('listitem')).toHaveLength(0);
+    expect(dialog.getByRole('status').textContent).toBe('No channel matches “nowhere”.');
+    await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  test('opened again, it starts from every channel, not from the last search', async () => {
+    const view = await browse(aSignedInApi({ channels: () => Promise.resolve(many()) }));
+    await person().type(view.getByRole('searchbox'), 'room-3');
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    await person().click(view.getByRole('button', { name: 'Browse channels' }));
+    const dialog = within(await view.findByRole('dialog'));
+    expect(dialog.getByRole<HTMLInputElement>('searchbox').value).toBe('');
+    expect(dialog.getAllByRole('listitem')).toHaveLength(10);
+  });
+
+  test('in Turkish, it counts üye and finds with Kanal bul', async () => {
+    const view = await renderApp(
+      <>
+        <Outlet />
+        <Toaster dismissLabel="Kapat" />
+      </>,
+      {
+        path: `/w/acme/c/${IDS.api}`,
+        locale: 'tr',
+        api: aSignedInApi({ channels: () => Promise.resolve(many()) }),
+      },
+    );
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Kanallara göz at' }));
+    const dialog = within(await view.findByRole('dialog'));
+    expect(dialog.getByRole('searchbox', { name: 'Kanal bul' })).toBeDefined();
+    const rows = dialog.getAllByRole('listitem');
+    expect(rows[1]?.textContent).toContain('1 üye');
+    expect(rows[2]?.textContent).toContain('2 üye');
+    await person().type(dialog.getByRole('searchbox'), 'yok-böyle');
+    expect(dialog.getByRole('status').textContent).toBe('“yok-böyle” ile eşleşen kanal yok.');
+    await expectNoAxeViolations(view.getByRole('dialog'));
   });
 
   test('joining joins, goes there, and closes', async () => {

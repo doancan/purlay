@@ -18,8 +18,9 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useDeepWork } from '../shell/deep-work';
 import { useRowMenu } from './row-menu';
 
+/** `group`, so what is drawn on the row can follow its hover (a group's faces, D-167). */
 const rowClasses =
-  'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
+  'group flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
 
 const incidentClasses =
   'inline-flex h-badge shrink-0 items-center rounded-pill bg-danger-subtle px-1 font-mono text-caption font-medium text-danger-text';

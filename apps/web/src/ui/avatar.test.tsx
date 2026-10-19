@@ -82,3 +82,10 @@ describe('the avatar', () => {
     }
   });
 });
+
+describe('one letter', () => {
+  test('is the first of the two, for where avatars overlap (D-167)', () => {
+    const view = render(<Avatar name="Çiğdem Öz" username="cigdem" letters={1} />);
+    expect(view.container.textContent).toBe('Ç');
+  });
+});

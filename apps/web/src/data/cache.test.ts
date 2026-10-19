@@ -68,6 +68,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   starred: false,
   peer: null,
   peers: [],
+  memberCount: 1,
   ...over,
 });
 const pages = (...lists: Message[][]): Pages => ({

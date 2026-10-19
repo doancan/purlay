@@ -484,10 +484,20 @@ describe('what each kind of item does', () => {
           }),
         ]),
     });
-    const { input, options, here, closed } = await mount(api);
+    const { view, input, options, here, closed } = await mount(api);
     // Neither name has "zed" in it: the group is found by the username alone.
     await person().type(input(), 'zed');
     expect(options()[0]).toBe('Alice, Zeynep');
+    // Its tile is its faces, as in the sidebar (D-167), cut out in the selected row's colour.
+    const [option] = view.getAllByRole('option');
+    const face = option?.querySelector('[data-group-face]');
+    expect([...(face?.querySelectorAll('[data-avatar]') ?? [])].map((a) => a.textContent)).toEqual([
+      'A',
+      'Z',
+    ]);
+    expect(face?.lastElementChild?.getAttribute('class')?.split(' ')).toContain(
+      'border-accent-subtle',
+    );
     await person().keyboard('{Enter}');
     await settle();
     expect(here()).toBe(`/w/acme/c/${GROUP}`);

@@ -86,6 +86,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   starred: false,
   peer: null,
   peers: [],
+  memberCount: 1,
   ...over,
 });
 
