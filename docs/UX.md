@@ -457,7 +457,9 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 ## 5. Composer
 
 Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1). Three buttons sit under it — bold, a code
-block, a mention — and each only *inserts markdown* that the keys below also produce (D-110).
+block, a mention — and each only *inserts markdown* that the keys below also produce (D-110); a fourth
+attaches a file. **A thread's box has the same four** (D-163): in the panel's width the key hints are not
+drawn (a screen reader still reads them) and Send is the icon alone.
 
 | Key | Action |
 |---|---|
@@ -472,7 +474,8 @@ Pasting an image uploads immediately and inserts a placeholder; the message can 
 the upload is still in flight. **A file that did not upload says why under its name** (D-159), in
 words from what the server answered: larger than the limit, an image past the side or pixel bound, an
 image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
-too many files waiting, no connection, the server busy, file storage unavailable, the session ended.
+too many files waiting, no connection, the server busy, file storage unavailable, the session ended, no
+longer having access to the workspace (D-163).
 Retry is there when trying again can be answered differently; Remove always. Pasting over ~12 lines of text is inserted as a fenced block
 automatically, with an undo toast — a paste that silently becomes a code block with no way back
 is worse than no help at all.

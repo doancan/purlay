@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: a reply in a thread can attach a file and format like any message (D-163)
+
+The thread panel's box now has the channel's buttons — Bold, Code block, Mention and Attach — so a file
+goes with a reply without pasting or dropping it. An upload refused because you are no longer in the
+workspace says so, with Remove and no Retry, instead of "Didn't upload".
+
 ### Fix — 2026-10-19: sending a picture no longer leaves the feed a picture's height above the end
 
 When the last message grew in place — its pictures drawn after it was sent, its words edited longer —
