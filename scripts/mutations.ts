@@ -33,6 +33,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'feed-left-by-a-late-scroll-report',
+    why: 'the late report of the feed’s own move to the bottom, after a picture grew the list, strands the reader above it',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: '      scrollToBottom(el);\n    }\n    settle(el);\n',
+    replace: '    }\n    settle(el);\n',
+    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+  },
+  {
     id: 'feed-left-above-a-grown-row',
     why: 'a picture drawn in the last message leaves the reader at the bottom a picture’s height above the end',
     file: 'apps/web/src/features/channel/use-feed-scroll.ts',

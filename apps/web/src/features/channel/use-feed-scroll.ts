@@ -133,6 +133,22 @@ export const useFeedScroll = ({
   const onScroll = useCallback((): void => {
     const el = scroller.current;
     if (el === null) return;
+    // A scroll the reader did not make upward, from a place that was the bottom, keeps them there.
+    // The report of our own move to the bottom can arrive after the list grew under it — a picture
+    // drawn a frame later — and would otherwise be taken as the reader having stopped above the end.
+    const previous = before.current;
+    const movedUp = el.scrollTop < previous.top - 1;
+    if (
+      !movedUp &&
+      !held.current &&
+      isNearBottom({
+        scrollTop: previous.top,
+        scrollHeight: previous.height,
+        clientHeight: previous.client,
+      })
+    ) {
+      scrollToBottom(el);
+    }
     settle(el);
     // Where the reader is *now* is what a later prepend must give back to them.
     remember(el, before.current);

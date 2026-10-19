@@ -310,6 +310,28 @@ describe('what arrives while the reader is somewhere', () => {
     view.unmountAll();
   });
 
+  test('the late report of our own move to the bottom, after the list grew, keeps the reader there', async () => {
+    // A picture drawn a frame after the feed went to the bottom: the browser reports that scroll
+    // only once the list is already taller, before the resize is heard (seen live, 1 send in 3).
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300;
+    scrollTo(view, BOTTOM); // where the bottom was; nothing moved upward
+    expect(view.metrics.assigned).toContain(900);
+    view.unmountAll();
+  });
+
+  test('a scroll upward after the list grew is the reader leaving the bottom', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300;
+    scrollTo(view, BOTTOM - 200);
+    expect(view.metrics.assigned).toEqual([]);
+    view.unmountAll();
+  });
+
   test('a box that changes size before a scroll up is reported leaves the reader alone', async () => {
     const view = await mountChannel({ messages: page(first) });
     open(view);
