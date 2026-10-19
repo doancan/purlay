@@ -2175,6 +2175,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/messages/message-row.test.tsx'],
   },
   {
+    id: 'every-bar-in-the-tab-order',
+    why: 'a message’s hidden bar keeps its buttons in the Tab order, so Tab walks five buttons on every message before the feed’s one row',
+    file: 'apps/web/src/features/messages/message-actions.tsx',
+    find: '      inert={!shown}\n',
+    replace: '',
+    tests: ['apps/web/src/features/messages/message-row.test.tsx'],
+  },
+  {
     id: 'two-bars-on-one-message',
     why: "a thread's root, drawn in the feed and in the panel, shows its bar on both copies when the pointer is on one",
     file: 'apps/web/src/features/messages/active-row.ts',

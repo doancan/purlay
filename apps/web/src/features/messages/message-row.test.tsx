@@ -635,6 +635,11 @@ describe('the bar of actions (D-150)', () => {
     expect(sizes.size).toBe(1);
     expect(holds(buttons[0]?.className, ['h-control', 'aspect-square'])).toEqual([]);
     expect(holds(buttons[0]?.className, ['max-narrow:h-touch'])).toEqual(['max-narrow:h-touch']);
+    // Reached as the keyboard reaches it: the row first, which makes its bar the one, then into it.
+    act(() => {
+      fireEvent.keyDown(document.body, { key: 'ArrowDown' });
+      view.getByRole('article').focus();
+    });
     act(() => {
       buttons[1]?.focus();
     });
@@ -697,6 +702,17 @@ describe('the bar of actions (D-150)', () => {
       fireEvent.pointerOver(panel);
     });
     expect(shown()).toEqual([false, true]);
+  });
+
+  test('is out of the Tab order until its row is the one, so Tab reaches the row, not every bar', async () => {
+    const view = await mount(props({ message: aMessage(1, { sender: BOB }) }));
+    const row = view.getByRole('article');
+    expect(barOf(row).hasAttribute('inert')).toBe(true);
+    act(() => {
+      fireEvent.keyDown(document.body, { key: 'Tab' });
+      row.focus();
+    });
+    expect(barOf(row).hasAttribute('inert')).toBe(false);
   });
 
   test('stays while its menu is open, though focus and the pointer are in the menu', async () => {

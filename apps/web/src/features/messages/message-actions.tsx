@@ -49,6 +49,9 @@ interface MessageActionsProps {
   readonly actions?: React.ReactNode;
 }
 
+/** How long a closed menu keeps its row the one when focus lands nowhere. */
+const RELEASE_BOUND_MS = 1_000;
+
 export const MessageActions = ({
   message,
   meId,
@@ -63,8 +66,21 @@ export const MessageActions = ({
   const [boundary, setBoundary] = useState<Element | null>(null);
   // While a menu from the bar is open, the bar stays: focus and the pointer are in the menu.
   const opened = (open: boolean): void => {
-    if (open) setBoundary(bar.current?.closest(LIST) ?? null);
-    holdRow(rowKey, open);
+    if (open) {
+      setBoundary(bar.current?.closest(LIST) ?? null);
+      holdRow(rowKey, true);
+      return;
+    }
+    // Let go once focus has landed — back on the trigger, after the menu's closing motion, or
+    // wherever the person went. Let go at once, the bar went inert before focus could return to its
+    // trigger, and a keyboard's Escape left focus nowhere. A second is the bound if nothing is focused.
+    const release = (): void => {
+      document.removeEventListener('focusin', release);
+      clearTimeout(bound);
+      holdRow(rowKey, false);
+    };
+    const bound = setTimeout(release, RELEASE_BOUND_MS);
+    document.addEventListener('focusin', release);
   };
   return (
     <div
@@ -72,6 +88,10 @@ export const MessageActions = ({
       data-hover-controls=""
       role="group"
       aria-label={t('message.actions')}
+      // Not the one row: out of the Tab order and the accessibility tree, as it is out of reach of a
+      // click. Tab then reaches the feed's one row (its roving stop) instead of five buttons on every
+      // message above it; focusing a row, or the pointer on it, brings its bar back.
+      inert={!shown}
       className={cn(
         'absolute top-0 z-popover flex items-center rounded-lg border-hairline border-border-subtle bg-surface-100 p-1 shadow-float transition-opacity duration-hover ease-standard',
         outgoing ? 'left-2' : 'right-2',
