@@ -103,7 +103,7 @@ describe('asking', () => {
       search: () =>
         Promise.resolve(
           page([
-            aMessage(4, { sender: BOB, content: 'deploy at noon' }),
+            aMessage(4, { sender: BOB, content: 'deploy at noon, then deploy again' }),
             aMessage(3, { sender: BOB, content: long }),
           ]),
         ),
@@ -112,10 +112,11 @@ describe('asking', () => {
     await person().keyboard('{Enter}');
     await settle();
     const marks = [...view.container.querySelectorAll('mark')].map((mark) => mark.textContent);
-    expect(marks).toEqual(['deploy', 'Deploy']);
+    // Every time the words are said, not only the first.
+    expect(marks).toEqual(['deploy', 'deploy', 'Deploy']);
     // Marked in the match tone, full enough to find in a line — not a status pill's faint ground.
     expect(view.container.querySelector('mark')?.className.split(' ')).toContain('bg-match');
-    const second = view.container.querySelectorAll('mark')[1]?.parentElement?.textContent ?? '';
+    const second = view.container.querySelectorAll('mark')[2]?.parentElement?.textContent ?? '';
     expect(second.startsWith('…')).toBe(true);
     expect(second).toContain('Then the Deploy window moved');
     await expectNoAxeViolations(view.container);

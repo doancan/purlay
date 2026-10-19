@@ -30,7 +30,7 @@ import { Select } from '../../ui/select';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
-import { markedExcerpt } from './excerpt';
+import { markedExcerpt, marksIn } from './excerpt';
 
 /** Where a found message is read: its own address, which opens the feed — or its thread — at it (D-149). */
 export const placeOf = (slug: string, message: Message): string =>
@@ -57,7 +57,15 @@ const Excerpt = ({
         <>
           {marked.before}
           <mark className="rounded-sm bg-match text-ink">{marked.match}</mark>
-          {marked.after}
+          {marksIn(marked.after, words).map((part, index) =>
+            part.marked ? (
+              <mark key={index} className="rounded-sm bg-match text-ink">
+                {part.text}
+              </mark>
+            ) : (
+              part.text
+            ),
+          )}
         </>
       )}
     </span>
