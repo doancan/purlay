@@ -317,7 +317,7 @@ page of the same name.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,
   put back and said with Retry if the server refuses; a saved message's mark is filled.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
-- **Copy link** is in the **More** menu of a message that has one — today one's own (D-149): the
+- **Copy link** is first in every message's **More** menu (D-149, D-150): the
   message's whole address on the clipboard, said with *Link copied*, or, when the browser refuses,
   that it could not be copied.
 
