@@ -154,7 +154,7 @@ a question you asked is the thing you were waiting for, not an interruption.
 
 **4.6 · Navigation & search** (D-10)
 `Cmd/Ctrl+K` command palette over channels, DMs, people and settings · substring search scoped
-to a workspace, optionally to a channel, keyset-paginated
+to a workspace, optionally to a channel and to who wrote it (D-166), keyset-paginated
 
 **4.7 · Administration** (D-26)
 An append-only audit log of administrative actions — role changes, membership changes,
