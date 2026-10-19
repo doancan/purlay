@@ -64,6 +64,20 @@ describe('opening it', () => {
     view.unmountAll();
   });
 
+  test('opens on itself, never on the name with its text selected, so a key cannot rename it', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(ME)) },
+    });
+    const dialog = await openDetails(view);
+    expectFocusOn(dialog);
+    const name = within(dialog).getByLabelText<HTMLInputElement>('Name');
+    expect(name.selectionEnd === name.selectionStart || document.activeElement !== name).toBe(true);
+    await person().keyboard('x');
+    expect(name.value).toBe('api');
+    view.unmountAll();
+  });
+
   test('a direct message has no channel details: its title opens the person’s profile (D-131)', async () => {
     const direct = { ...aChannel(IDS.api, null), type: 'direct_message' as const, peer: BOB };
     const view = await mountChannel({

@@ -158,7 +158,9 @@ Admin* — and when. An action newer than the client is said by its name, never 
 
 **Channel details** (D-123). Clicking a channel's name in its header opens a dialog, drawn after the
 Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
-with **Save** (somebody who has not joined reads them and is told to join); the **members** with a count
+with **Save** (somebody who has not joined reads them and is told to join) — the dialog opens with
+focus on itself, never on the name, so a key pressed on opening renames nothing; no dialog opens with a
+field's text selected; the **members** with a count
 and **Add people** (the same dialog as the header's); the **notification level** (the header's menu);
 for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
 posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to

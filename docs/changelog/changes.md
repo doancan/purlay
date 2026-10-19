@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: messaging polish
+
+Defects found by a visual audit of the messaging screens, at 1440 and 390 wide in both themes.
+
+- **Channel details no longer opens on its name with the text selected.** Radix selected the first
+  field's text, so the first key typed renamed the channel. The dialog takes the first focus itself
+  (`Dialog`'s `focusFirst="dialog"`), and no dialog opens with a field's text selected: a first field
+  that already holds text gets the caret at its end.
+
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 
 With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the
