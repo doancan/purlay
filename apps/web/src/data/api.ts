@@ -250,7 +250,7 @@ export interface Api {
   /** The caller's inbox in one workspace, newest first (D-106). */
   readonly notifications: (
     workspaceId: string,
-    page?: { readonly before?: string | undefined },
+    page?: { readonly before?: string | undefined; readonly unreadOnly?: boolean },
     signal?: AbortSignal,
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
@@ -627,7 +627,17 @@ export const createApi = (http: Http): Api => {
         'GET',
         '/api/notifications',
         NotificationPage,
-        options({ query: { workspaceId, ...page } }, signal),
+        options(
+          {
+            query: {
+              workspaceId,
+              before: page.before,
+              // The server reads it as text; absent is everything (D-106).
+              ...(page.unreadOnly === true ? { unreadOnly: 'true' } : {}),
+            },
+          },
+          signal,
+        ),
       ),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),

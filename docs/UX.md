@@ -149,6 +149,15 @@ back; what it covers is hidden from a screen reader and from Tab until it closes
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
 
+**The inbox** (D-106, D-153). What the person was told in this workspace, newest first, in one centred
+column like the feed: **All** or **Unread** above it — Unread is asked of the server, so what waits is
+found however old — then **Today** and **Earlier**, each a card of rows. A row says who, why and where,
+with the message under it in two lines at most; unread is a dot at its edge and the line in full ink,
+read is muted. Opening a row takes the person to the message and reads it; **Mark read**, beside the
+row on a pointer's hover or a keyboard's focus, reads it without going; **Mark all read** in the header
+reads what is on screen. A row read in the Unread view stays there, muted, until the person looks again,
+so nothing moves out from under the pointer. Unread with nothing waiting says *All caught up*.
+
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
 - **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link
