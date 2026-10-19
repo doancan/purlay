@@ -189,6 +189,13 @@ export const useFeedScroll = ({
         // counts as read, follow the place measured now.
         settle(el);
       }
+    } else if (wasAtBottom(el)) {
+      // Nothing new, but a row changed in place — its pictures drawn, its words edited longer. A
+      // reader who was at the bottom is kept there, judged by the height before the change: the
+      // resize that follows would otherwise measure from the taller list remembered below and
+      // leave them a picture's height above the end.
+      scrollToBottom(el);
+      settle(el);
     }
     remember(el, { first, last });
   }, [items, ready, meId, scroller, settle]);

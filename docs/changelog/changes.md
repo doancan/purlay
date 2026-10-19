@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: sending a picture no longer leaves the feed a picture's height above the end
+
+When the last message grew in place — its pictures drawn after it was sent, its words edited longer —
+the feed remembered the taller list before the resize that follows could judge whether the reader had
+been at the bottom, and left them above the new picture. A row changed in place now keeps a reader who
+was at the bottom there.
+
 ### Polish — 2026-10-19: picking people for a conversation
 
 New message shows who it is to as chips that can be taken off, and each person is one row to pick —

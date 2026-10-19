@@ -33,6 +33,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'feed-left-above-a-grown-row',
+    why: 'a picture drawn in the last message leaves the reader at the bottom a picture’s height above the end',
+    file: 'apps/web/src/features/channel/use-feed-scroll.ts',
+    find: '    } else if (wasAtBottom(el)) {\n',
+    replace: '    } else if (false) {\n',
+    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+  },
+  {
     id: 'upload-objects-written-before-they-are-named',
     why: 'a process that stops between the store’s write and the row’s insert leaves objects nothing names',
     file: 'apps/api/src/modules/attachments/uploads.ts',

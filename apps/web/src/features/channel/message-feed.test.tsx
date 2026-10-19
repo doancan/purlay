@@ -407,6 +407,22 @@ describe('a message somebody revised', () => {
     view.unmountAll();
   });
 
+  test('a reader at the bottom stays there when the last message grows in place', async () => {
+    // A message that changes without a newer one arriving — its pictures drawn, its words edited
+    // longer — makes the list taller; the reader at the bottom must not be left above it (#feed).
+    const original = aMessage(1, { sender: BOB });
+    const view = await mountChannel({ messages: page([original]) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300; // the revised message is 300px taller
+    await revise(view, original, { content: 'a much longer message', editedAt: EDITED }, 2);
+    act(() => {
+      view.feed.resize();
+    });
+    expect(view.metrics.assigned).toContain(900);
+    view.unmountAll();
+  });
+
   test('an older revision arriving late is dropped: the newer words stay', async () => {
     const original = aMessage(1, { sender: BOB });
     const view = await mountChannel({ messages: page([original]) });
