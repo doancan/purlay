@@ -16,7 +16,7 @@ import { SEARCH_QUERY_MIN, type Channel, type Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannels, useSearch } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { channelInSearch, href, searchHref, threadHref, wordsInSearch } from '../../router/routes';
+import { channelInSearch, messageHref, searchHref, wordsInSearch } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
@@ -30,12 +30,9 @@ import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
 import { markedExcerpt } from './excerpt';
 
-/** Where a found message is read: in its thread when it is in one, in its channel otherwise. */
-export const placeOf = (slug: string, message: Message): string => {
-  if (message.parentId !== null) return threadHref(slug, message.channelId, message.parentId);
-  if ((message.thread?.replyCount ?? 0) > 0) return threadHref(slug, message.channelId, message.id);
-  return href('channel', { slug, channelId: message.channelId });
-};
+/** Where a found message is read: its own address, which opens the feed — or its thread — at it (D-149). */
+export const placeOf = (slug: string, message: Message): string =>
+  messageHref(slug, message.channelId, message.id);
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
   <span>{useChannelTitle(channel)}</span>

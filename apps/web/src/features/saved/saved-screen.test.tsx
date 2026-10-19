@@ -110,10 +110,11 @@ describe('the Saved view', () => {
     view.unmount();
   });
 
-  test('a saved message opens its conversation', async () => {
+  test('a saved message opens its conversation at the message', async () => {
     const view = await visit({ saved: () => Promise.resolve(page([item(1)])) });
     await person().click(view.getByRole('button', { name: /kept words 1/ }));
-    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
+    // At the message itself, not the channel's bottom (D-149).
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?message=${messageIdAt(1)}`);
     view.unmount();
   });
 

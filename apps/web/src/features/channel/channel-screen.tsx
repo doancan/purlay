@@ -13,12 +13,17 @@
  * like the rest, unless the address names one. The channel's files open in the same place, in the
  * thread's stead (D-129, `side-panel.tsx`).
  *
+ * **A link to a message opens the channel around it** (`?message=`, D-149). Unlike `?thread=` it is
+ * read on every change of address, not once: Go to message in the pins panel names another message
+ * of the same channel, and the feed is opened again around it. A link the person cannot follow says
+ * so in one sentence over the channel, which opens as it is.
+ *
  * A channel the person can see but has not joined has no read position and cannot be
  * written to; it shows its messages and a way to join, in place of the composer, so a link
  * to a public channel is useful before they are in it.
  */
 import { useDescribeFailure } from '../../data/failure';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { useActions } from '../../data/actions-provider';
 import { useChannels } from '../../data/queries';
@@ -28,7 +33,8 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { EmptyState } from '../../ui/states';
 import { EditingProvider } from '../messages/editing';
 import { Composer } from '../composer/composer';
-import { threadInSearch } from '../../router/routes';
+import { href, messageInSearch, threadInSearch } from '../../router/routes';
+import { Icon } from '../../components/icon';
 import { useRoute } from '../../router/router-provider';
 import { rememberChannel } from '../questions/last-channel';
 import { ScreenBar } from '../shell/screen-bar';
@@ -104,11 +110,19 @@ const ConversationColumn = ({
 const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const title = useChannelTitle(channel);
   const { workspace } = useWorkspace();
-  const { search } = useRoute();
+  const { t } = useI18n();
+  const { search, navigate } = useRoute();
   const member = channel.state !== null;
   const conversation = channel.type === 'direct_message';
   // The thread the address asks for, read when the channel opens and not again.
   const [openThread] = useState(() => threadInSearch(search));
+  // The message the address links to, until it turns out not to be one the person can read here.
+  const linked = messageInSearch(search);
+  const [missing, setMissing] = useState<string | null>(null);
+  const around = linked !== null && linked !== missing ? linked : null;
+  const leaveWindow = useCallback((): void => {
+    navigate(href('channel', { slug: workspace.slug, channelId: channel.id }), { replace: true });
+  }, [navigate, workspace.slug, channel.id]);
   useEffect(() => {
     rememberChannel(workspace.id, channel.id);
   }, [workspace.id, channel.id]);
@@ -118,6 +132,12 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
     after: channel.state?.lastReadMessageId ?? null,
     unread: (channel.state?.unreadCount ?? 0) > 0,
   }));
+  // Once a link has moved the reader in this visit, the unread place is no longer where they are:
+  // Jump to recent means the bottom, not back to the marker (D-149).
+  const [followedLink, setFollowedLink] = useState(around !== null);
+  useEffect(() => {
+    if (around !== null) setFollowedLink(true);
+  }, [around]);
 
   return (
     <EditingProvider>
@@ -128,14 +148,28 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
               <ConversationColumn>
                 <ChannelHeader channel={channel} />
                 {!conversation && <IncidentBanner channel={channel} />}
+                {linked !== null && linked === missing && (
+                  <p
+                    role="status"
+                    className="flex shrink-0 items-center gap-2 border-b-hairline border-border-subtle px-4 py-1 text-caption text-ink-muted"
+                  >
+                    <Icon name="info" size="sm" />
+                    {t('feed.linkMissing')}
+                  </p>
+                )}
                 <MessageFeed
+                  // Another message linked is another window, with its own place and its own mark.
+                  key={around ?? ''}
                   channelId={channel.id}
                   channelName={title}
                   conversation={conversation}
-                  markerAfter={member && opened.unread ? opened.after : undefined}
+                  markerAfter={member && opened.unread && !followedLink ? opened.after : undefined}
                   readAtOpen={opened.after}
                   member={member}
                   openThread={openThread}
+                  around={around}
+                  onLinkMissing={setMissing}
+                  onLeaveWindow={leaveWindow}
                 />
                 {member ? (
                   <Composer channelId={channel.id} channelName={title} autoFocus />
@@ -145,6 +179,7 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
               </ConversationColumn>
               <ThreadPanel
                 channelId={channel.id}
+                around={around}
                 channelLabel={conversation ? title : `#${title}`}
                 channelName={title}
               />

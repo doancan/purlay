@@ -49,15 +49,11 @@ const field = (view: Awaited<ReturnType<typeof visit>>): HTMLInputElement =>
   within(view.container).getByLabelText<HTMLInputElement>('Search messages');
 
 describe('where a found message is read', () => {
-  test('a reply in its thread, a question with answers in its thread, anything else in its channel', () => {
-    expect(placeOf('acme', aMessage(1))).toBe(`/w/acme/c/${IDS.api}`);
+  test('every message at its own address, which opens its thread for a reply (D-149)', () => {
+    expect(placeOf('acme', aMessage(1))).toBe(`/w/acme/c/${IDS.api}?message=${messageIdAt(1)}`);
     expect(placeOf('acme', aMessage(2, { parentId: messageIdAt(1) }))).toBe(
-      `/w/acme/c/${IDS.api}?thread=${messageIdAt(1)}`,
+      `/w/acme/c/${IDS.api}?message=${messageIdAt(2)}`,
     );
-    const answered = aMessage(3, {
-      thread: { replyCount: 2, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
-    });
-    expect(placeOf('acme', answered)).toBe(`/w/acme/c/${IDS.api}?thread=${messageIdAt(3)}`);
   });
 });
 
@@ -81,7 +77,7 @@ describe('asking', () => {
     expect(view.getByRole('button', { name: /the deploy is at noon/ })).toBeDefined();
     await expectNoAxeViolations(view.container);
     await person().click(view.getByRole('button', { name: /the deploy is at noon/ }));
-    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?message=${messageIdAt(4)}`);
     view.unmount();
   });
 

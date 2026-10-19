@@ -16,11 +16,14 @@
  * person sent but the server has not yet answered is in the list as `sending` or `failed` like any
  * message.
  *
+ * **A link to a reply opens here** (`?message=`, D-149): the feed opens its root's thread, and the
+ * panel reads on until the reply is in, brings it into view, marks it for a moment and focuses it.
+ *
  * A thread that is open but has no replies yet exists for one reason, the person pressed Reply,
  * and it holds the box to write in. A reply arriving near the end keeps the end in view (`UX.md`
  * §6); anywhere else the reader stays where they are.
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import {
   readingOrder,
@@ -41,6 +44,7 @@ import { useNowMinute } from '../channel/now-minute';
 import { Composer } from '../composer/composer';
 import { useEditing } from '../messages/editing';
 import { MessageRow } from '../messages/message-row';
+import { LANDED_MS } from '../messages/message-link';
 import { handleRowKeys } from '../messages/row-keys';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
@@ -58,6 +62,8 @@ export interface ThreadPanelProps {
   readonly channelLabel: string;
   /** The channel's name, for the reply box's label. */
   readonly channelName: string;
+  /** The message a link names, when the feed is the window around it (D-149). */
+  readonly around?: string | null;
 }
 
 const ThreadPanelView = ({
@@ -65,6 +71,7 @@ const ThreadPanelView = ({
   channelId,
   channelLabel,
   channelName,
+  around = null,
 }: ThreadPanelProps & { readonly rootId: string }): React.JSX.Element | null => {
   const { t } = useI18n();
   const threads = useThreads();
@@ -77,7 +84,9 @@ const ThreadPanelView = ({
   const { workspace } = useWorkspace();
   const membersQuery = useMembers(workspace.id);
   const pendingAll = usePending();
-  const feed = useMessages(channelId);
+  // The feed's own pages — the window around a linked message, when there is one — so the root is
+  // found where the feed read it.
+  const feed = useMessages(channelId, around);
   const headingId = useId();
 
   const panel = useRef<HTMLElement>(null);
@@ -124,6 +133,38 @@ const ThreadPanelView = ({
     [replies],
   );
   useReadThread({ workspaceId: workspace.id, rootId, newestReplyId, waiting, ports });
+  // ── A linked reply is read to, brought into view, marked and focused ────
+  const landing = useMemo(() => {
+    const target = feed.data?.pages.find((page) => page.target !== undefined)?.target;
+    return target?.parentId === rootId ? target.id : null;
+  }, [feed.data, rootId]);
+  const landedOnce = useRef(false);
+  const [landed, setLanded] = useState<string | null>(null);
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = query;
+  const readingTo =
+    landing !== null && !landedOnce.current && !replies.some((m) => m.id === landing);
+  useEffect(() => {
+    if (readingTo && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+      void fetchNextPage();
+    }
+  }, [readingTo, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
+  useLayoutEffect(() => {
+    if (landing === null || landedOnce.current) return;
+    const row = scroller.current?.querySelector<HTMLElement>(
+      `[data-message-row][data-message-id="${landing}"]`,
+    );
+    if (row === null || row === undefined) return;
+    landedOnce.current = true;
+    row.scrollIntoView({ block: 'center' });
+    row.focus({ preventScroll: true });
+    setLanded(landing);
+  });
+  useEffect(() => {
+    if (landed === null) return undefined;
+    return ports.schedule(() => {
+      setLanded(null);
+    }, LANDED_MS);
+  }, [landed, ports]);
 
   // ── Focus moves in when the panel opens, to where the person asked ──────
   // The heading is there at once, whatever the root's state — loading, failed, gone (#555); the reply
@@ -295,6 +336,7 @@ const ThreadPanelView = ({
                 failure={item.failure}
                 grouped={item.grouped}
                 compact
+                landed={item.key === landed}
                 meId={user.id}
                 nowMinute={nowMinute}
                 members={members}

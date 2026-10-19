@@ -1,4 +1,4 @@
-/** `?thread=` — the one query parameter the client defines, spelled and read in one place. */
+/** `?thread=` — a query parameter the client defines, spelled and read in one place. */
 import { describe, expect, test } from 'bun:test';
 import { matchRoute, threadHref, threadInSearch } from './routes';
 

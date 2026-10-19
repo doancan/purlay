@@ -17,12 +17,18 @@ import {
   SendMessageRequest,
   type Message,
   type MessagePage,
+  type MessageWindow,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById, requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { visibleChannelIds } from '../../platform/channels';
-import { messageHistory, send, type SendDependencies } from '../../modules/messages/messages';
+import {
+  messageHistory,
+  messageWindow,
+  send,
+  type SendDependencies,
+} from '../../modules/messages/messages';
 import { edit } from '../../modules/messages/edit';
 import { deleteMessage } from '../../modules/messages/delete';
 import {
@@ -117,6 +123,20 @@ export const readThread = async (
   const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
   const query = validated(PageQuery, asPageQuery(new URL(request.url)));
   return await threadReplies(database, root, query);
+};
+
+/**
+ * `GET /api/messages/:messageId/around` — the feed around a message, for a link to it (D-149). A
+ * message deleted, never sent, or in a channel the caller cannot see is the one `404` (D-34).
+ */
+export const readAround = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  messageId: string,
+): Promise<MessageWindow> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  return await messageWindow(database, await requireMessageById(database, userId, messageId));
 };
 
 /** `POST` and `DELETE /api/messages/:messageId/resolve` — close the thread, or reopen it. */

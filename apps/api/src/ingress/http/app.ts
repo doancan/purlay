@@ -115,6 +115,7 @@ import {
   postMessage,
   readFiles,
   readHistory,
+  readAround,
   readThread,
   readSearch,
   readUnresolved,
@@ -838,6 +839,10 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/messages/:messageId',
       async ({ request, params, body }) =>
         await editMessage(sending, request, params.messageId, body),
+    )
+    .get(
+      '/api/messages/:messageId/around',
+      async ({ request, params }) => await readAround(dependencies, request, params.messageId),
     )
     .get(
       '/api/messages/:messageId/thread',

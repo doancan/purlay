@@ -47,7 +47,7 @@ test.describe('search', () => {
     await expectNoAxe();
 
     await found.click();
-    await expect(page).toHaveURL(new RegExp(`/c/${open.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/c/${open.id}\\?message=`));
   });
 
   test('narrowed to one channel, finds the words there and not in another', async ({

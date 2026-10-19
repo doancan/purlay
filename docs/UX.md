@@ -305,6 +305,9 @@ page of the same name.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,
   put back and said with Retry if the server refuses; a saved message's mark is filled.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
+- **Copy link** is in the **More** menu of a message that has one — today one's own (D-149): the
+  message's whole address on the clipboard, said with *Link copied*, or, when the browser refuses,
+  that it could not be copied.
 
 ### 3.1. Delivery state
 
@@ -354,8 +357,8 @@ other end — never the status a column away from the bubble it is about.
 ```
 
 - **One thread at a time.** Opening another replaces it. A channel opened again opens with no
-  thread, unless its address names one (`?thread=`, from the open questions, the inbox and search),
-  which opens even when its root is older than the feed's first page.
+  thread, unless its address names one (`?thread=`, from the open questions and the inbox), which
+  opens even when its root is older than the feed's first page — or a reply's link does (§6).
 - **The header** names it — *Thread · #channel*, or the person's name in a conversation — and its
   close control (`Esc`) closes it.
 - **The root**, its status and **Resolve / Reopen**, a rule labelled *N replies*, then the replies as
@@ -452,6 +455,18 @@ The hardest problem in the product, and the subject of **O-5**.
   the feed shows; an answer in a thread keeps waiting — on the badge, in the tab title, in the inbox —
   until its thread is open in the panel with the page in front of the person, which reads its replies
   up to the newest one the panel has. A reply that arrives after that is still waiting.
+- **A link to a message opens the channel at it** (`?message=`, D-149) — from Copy link, search,
+  saved items and **Go to message** in the pins panel. The feed is read **around** the message, not
+  from the newest page: it is brought into view in the middle, marked in the highlight tone for a
+  moment (a fade that reduced motion skips), and focused, as ↑ ↓ would focus it; a reply opens its
+  thread, where the reply is brought into view, marked and focused instead. Scrolling up reads older
+  history as always; scrolling down reads newer history in below **without moving the reader** and
+  without the "new messages" pill, since none of it is new. Until the window reaches the newest
+  message, **Jump to recent** sits where the pill would, takes the reader to the bottom (not back to
+  the unread marker), and so does sending. Nothing is marked read from a window short of the
+  present. A message deleted, never there, or not the person's to see is said in one sentence over
+  the channel — *That message no longer exists, or you can't see it.* — and the channel opens as it
+  is.
 
 **On O-5:** variable-height rows defeat naive virtualization, and a
 wrong guess here is expensive. Phase 1 ships **unvirtualized with a 50-message window** and

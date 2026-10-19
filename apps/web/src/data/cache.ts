@@ -29,6 +29,7 @@ import type {
   MeResponse,
 } from '@purlay/types';
 import { families, keys } from './keys';
+import type { FeedPages } from './queries';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -181,18 +182,20 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
   // A channel's files list has no frame of its own: a message carrying files reads it again (D-129).
   if (message.attachments.length > 0) readAgain(client, keys.files(message.channelId));
   if (message.parentId === null) {
-    const key = keys.messages(message.channelId);
-    const cached = client.getQueryData<Pages>(key);
-    if (cached !== undefined) {
-      const [first, ...rest] = cached.pages;
-      if (first !== undefined) {
-        client.setQueryData<Pages>(key, {
+    // The feed, and any window around a linked message (D-149) — but only one that reaches the
+    // present: a window that stops short of it has a gap a message cannot be put after.
+    for (const [key, cached] of client.getQueriesData<FeedPages>({
+      queryKey: keys.messages(message.channelId),
+    })) {
+      const [first, ...rest] = cached?.pages ?? [];
+      if (cached !== undefined && first !== undefined && (first.newerCursor ?? null) === null) {
+        client.setQueryData<FeedPages>(key, {
           ...cached,
           pages: [{ ...first, data: placed(first.data, message, byIdDescending) }, ...rest],
         });
       }
+      askAgainIfOnItsWay(client, key);
     }
-    askAgainIfOnItsWay(client, key);
   } else {
     const key = keys.thread(message.parentId);
     const cached = client.getQueryData<Pages>(key);

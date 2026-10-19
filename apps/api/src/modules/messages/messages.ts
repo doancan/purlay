@@ -20,15 +20,17 @@ import { sql, type Executor } from '@purlay/db';
 import {
   isMessageIdShape,
   isPlausibleMessageId,
+  MESSAGE_WINDOW_SIDE,
   PAGE_LIMIT,
   type Message,
   type MessagePage,
+  type MessageWindow,
   type ThreadSummary,
 } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import { requireLiveSession } from '../auth/sessions';
 import type { Clock } from '../../platform/clock';
-import type { ChannelContext } from '../../platform/channels';
+import { messageNotFound, type ChannelContext, type VisibleMessage } from '../../platform/channels';
 import {
   channelTopic,
   inboxPublications,
@@ -435,6 +437,43 @@ export const messageHistory = async (
     // The cursor to pass back **in the direction you were travelling**: the last
     // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
+  };
+};
+
+/**
+ * The feed around one message — what a link to it opens (D-149).
+ *
+ * Built from the feed's own reads, not a query of its own: the roots older than the one the target
+ * lives under and the roots newer than it are two keyset pages (`before` and `after`, D-8), so the
+ * window's cursors are the ones the client continues it with and nothing new orders a channel. A
+ * reply's window is around its root, which keeps its place while it has replies even when deleted
+ * (D-103 §7). A fixed number of queries, however many messages the window holds.
+ */
+export const messageWindow = async (
+  executor: Executor,
+  visible: VisibleMessage,
+): Promise<MessageWindow> => {
+  const rootId = visible.parentId ?? visible.messageId;
+  const [older, newer, rows] = await Promise.all([
+    messageHistory(executor, visible.context, { before: rootId, limit: MESSAGE_WINDOW_SIDE }),
+    messageHistory(executor, visible.context, { after: rootId, limit: MESSAGE_WINDOW_SIDE }),
+    executor
+      .selectFrom('messages')
+      .leftJoin('users', 'users.id', 'messages.sender_id')
+      .select(MESSAGE_COLUMNS)
+      .where('messages.id', 'in', [...new Set([rootId, visible.messageId])])
+      .execute(),
+  ]);
+  const built = await buildMessages(executor, rows);
+  const target = built.find((m) => m.id === visible.messageId);
+  const root = built.find((m) => m.id === rootId);
+  // `requireMessageById` found both a moment ago; a row gone between is said, never drawn as a gap.
+  if (target === undefined || root === undefined) throw messageNotFound();
+  return {
+    target,
+    data: [...[...newer.data].reverse(), root, ...older.data],
+    olderCursor: older.nextCursor,
+    newerCursor: newer.nextCursor,
   };
 };
 
