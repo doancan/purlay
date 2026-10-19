@@ -3,7 +3,7 @@
  * reference, moving through messages, a Tab order with no trap and a ring on everything that can
  * take focus, the skip link, and where focus lands when the route changes.
  */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, focused, test } from './fixtures';
 import { navLink, shellReady } from './support';
 
@@ -28,6 +28,16 @@ const fromTop = (page: Page): Promise<void> =>
     document.body.removeAttribute('tabindex');
   });
 
+/**
+ * The option Enter will run, if it is the channel row: `aria-selected`, inside the Channels group.
+ * Not "the first option has the name": the palette's last row offers to search the messages for
+ * what was typed, so it holds the name too — and on a page whose channel list has not loaded yet it
+ * is the only row, first and selected. Asserted that way, the wait passed on the search row and Enter
+ * searched (seen in a trace under load: the channels came back 27 ms after Enter).
+ */
+const currentChannel = (dialog: Locator): Locator =>
+  dialog.getByRole('group', { name: 'Channels' }).getByRole('option', { selected: true });
+
 /** The app is up when its frame is: keys are listened for only after that. */
 const ready = async (page: Page): Promise<void> => {
   await shellReady(page);
@@ -49,7 +59,7 @@ test.describe('the command palette', () => {
     const input = dialog.getByRole('combobox');
     await expect(input).toBeFocused();
     await input.fill(target.name);
-    await expect(dialog.getByRole('option').first()).toContainText(target.name);
+    await expect(currentChannel(dialog)).toContainText(target.name);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/c/${target.id}$`));
     await expect(dialog).toHaveCount(0);
@@ -84,7 +94,7 @@ test.describe('the command palette', () => {
         .getByRole('combobox')
         .fill(target.name);
       await expect(
-        page.getByRole('dialog', { name: 'Command palette' }).getByRole('option').first(),
+        currentChannel(page.getByRole('dialog', { name: 'Command palette' })),
       ).toContainText(target.name);
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(new RegExp(`/c/${target.id}$`));
