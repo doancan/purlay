@@ -161,21 +161,26 @@ in the row first, because it costs the person every channel. The last owner is s
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
 Admin* — and when. An action newer than the client is said by its name, never dropped.
 
-**Channel details** (D-123). Clicking a channel's name in its header opens a dialog, drawn after the
-Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
-with **Save** (somebody who has not joined reads them and is told to join) — the dialog opens with
-focus on itself, never on the name, so a key pressed on opening renames nothing; no dialog opens with a
-field's text selected; the **members** with a count
-and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed, those
-who can be added first with **Add**, and anybody already in the channel after them, saying *Member*
-quietly with nothing to press, and a sentence above them when that is everybody); the **notification level** (the header's menu);
-for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
-posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to
-**Connect** one, which answers with the payload URL, the content type and the secret, each with Copy,
-the secret said to be shown only now, until **Done**; and at the foot, in the danger tone, **Leave channel** for a member and **Archive channel** for an owner
-or an admin. Each of the two asks in place first and says what it costs; done, the person is taken to
-the workspace and told in a toast. The last member of a private channel is told to bring somebody in
-first or ask an admin to archive it. A direct message between two has no details: its title is not a button. A group's title opens its
+**Channel details** (D-123, D-154). Clicking a channel's name in its header opens a wide dialog
+(`size-dialog-lg`; on a narrow window a sheet that fills the screen) with three tabs, **About** chosen on
+opening — one tab in the Tab order, ← → between them, Home and End to the ends, Escape closes. The
+dialog opens with focus on itself, never on the name, so a key pressed on opening renames nothing; no
+dialog opens with a field's text selected. **About**: the **name and topic**, editable by a member of
+the channel with **Save** (somebody who has not joined reads them and is told to join); the
+**notification level** as three choices, the current one said in words (the header's menu, painted
+first and put back on a refusal); and at the foot a **Danger zone** in the danger tone — **Leave
+channel** for a member and **Archive channel** for an owner or an admin, each row saying what it costs.
+Each of the two asks in place first; done, the person is taken to the workspace and told in a toast.
+The last member of a private channel is told to bring somebody in first or ask an admin to archive it.
+**Members**, its count in the tab: who is in it, a field to find one by name once there are more than
+eight, and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed,
+those who can be added first with **Add**, and anybody already in the channel after them, saying
+*Member* quietly with nothing to press, and a sentence above them when that is everybody).
+**Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
+the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
+**Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
+content type and the secret, each with Copy, the secret said to be shown only now, until **Done**. A
+half-typed name survives a look at another tab. A direct message between two has no details: its title is not a button. A group's title opens its
 details (D-127): its people, you first, and **New conversation with these people…**, which opens New
 message with them already picked — a group's people never change, so more people is a new
 conversation.

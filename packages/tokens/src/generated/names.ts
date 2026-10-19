@@ -99,6 +99,7 @@ export const sizeTokens = [
   'size-dot',
   'size-code-clamp',
   'size-dialog',
+  'size-dialog-lg',
   'size-palette',
   'size-palette-list',
   'size-toast',

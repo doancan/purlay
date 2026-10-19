@@ -16,10 +16,31 @@ import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuLabel, MenuRadioGroup, MenuRadioItem } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 
-const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
+export const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
 
 const levelOf = (value: string): NotificationLevel | undefined =>
   LEVELS.find((level) => level === value);
+
+/**
+ * Choosing a level, for the header's menu and the channel's details alike: painted at once, put back
+ * and said in a toast when the server refuses.
+ */
+export const useChooseLevel = (channel: Channel): ((level: NotificationLevel) => void) => {
+  const { t } = useI18n();
+  const api = useApi();
+  const client = useQueryClient();
+  const { show } = useToast();
+  const describe = useDescribeFailure();
+  const current = channel.notificationLevel;
+  return (level) => {
+    if (current === null || level === current) return;
+    channelLevelChanged(client, channel.id, level);
+    api.setNotificationLevel(channel.id, level).catch((failure: unknown) => {
+      channelLevelChanged(client, channel.id, current);
+      show({ message: `${t('level.failed')} ${describe(failure)}` });
+    });
+  };
+};
 
 export const NotificationLevelMenu = ({
   channel,
@@ -27,21 +48,9 @@ export const NotificationLevelMenu = ({
   readonly channel: Channel;
 }): React.JSX.Element | null => {
   const { t } = useI18n();
-  const api = useApi();
-  const client = useQueryClient();
-  const { show } = useToast();
-  const describe = useDescribeFailure();
+  const choose = useChooseLevel(channel);
   const current = channel.notificationLevel;
   if (current === null) return null;
-
-  const choose = (level: NotificationLevel): void => {
-    if (level === current) return;
-    channelLevelChanged(client, channel.id, level);
-    api.setNotificationLevel(channel.id, level).catch((failure: unknown) => {
-      channelLevelChanged(client, channel.id, current);
-      show({ message: `${t('level.failed')} ${describe(failure)}` });
-    });
-  };
 
   return (
     <Menu

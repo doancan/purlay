@@ -1,11 +1,18 @@
 /**
- * A channel's details, opened from its name in the header (D-123): the name and topic, who is in
- * it in its three states (`UX.md` §8), and Leave and Archive — who is offered each, that each asks
- * first, and what a refusal says.
+ * A channel's details, opened from its name in the header (D-123): its tabs and how a keyboard moves
+ * between them (D-154), the name and topic, the notification level said in words, who is in it in
+ * its three states (`UX.md` §8) and found by name when there are many, and Leave and Archive — who
+ * is offered each, that each asks first, and what a refusal says.
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import type { Channel, ChannelMember, MeResponse, UpdateChannelRequest } from '@purlay/types';
+import type {
+  Channel,
+  ChannelMember,
+  MeResponse,
+  NotificationLevel,
+  UpdateChannelRequest,
+} from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -19,6 +26,7 @@ import {
   ME,
   WHEN,
   aChannel,
+  aUser,
   aSession,
   someChannels,
 } from '../../testing/fixtures';
@@ -46,6 +54,144 @@ const openDetails = async (view: ChannelView): Promise<HTMLElement> => {
 
 const here = (view: ChannelView): string => view.world.history.stack.at(-1) ?? '';
 
+/** Chooses one of the dialog's tabs, as a pointer does. */
+const showTab = async (dialog: HTMLElement, name: RegExp): Promise<void> => {
+  await person().click(within(dialog).getByRole('tab', { name }));
+  await settle();
+};
+
+describe('its tabs', () => {
+  test('About is chosen on opening; an owner has Members and Integrations beside it', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(ME, ALICE)) },
+    });
+    const dialog = await openDetails(view);
+    const tabs = within(dialog).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['About', 'Members2', 'Integrations']);
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
+    expect(within(dialog).getByRole('tabpanel', { name: 'About' })).toBeDefined();
+    await showTab(dialog, /^Members/);
+    expect(within(dialog).getByRole('tabpanel', { name: /^Members/ })).toBeDefined();
+    expect(within(dialog).queryByRole('textbox', { name: 'Name' })).toBeNull();
+    await expectNoAxeViolations(dialog);
+    view.unmountAll();
+  });
+
+  test('a member who is not an owner or an admin has no Integrations tab', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        me: () => Promise.resolve(asMember()),
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+      },
+    });
+    const dialog = await openDetails(view);
+    expect(
+      within(dialog)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual(['About', 'Members1']);
+    view.unmountAll();
+  });
+
+  test('one tab is in the Tab order; arrows move and choose, wrapping, and Home and End go to the ends', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(ME)) },
+    });
+    const dialog = await openDetails(view);
+    const [about, members, integrations] = within(dialog).getAllByRole('tab');
+    if (about === undefined || members === undefined || integrations === undefined) {
+      throw new Error('three tabs were expected');
+    }
+    expect([about, members, integrations].map((tab) => tab.tabIndex)).toEqual([0, -1, -1]);
+    await person().tab();
+    expectFocusOn(about);
+    await person().keyboard('{ArrowRight}');
+    expectFocusOn(members);
+    expect(members.getAttribute('aria-selected')).toBe('true');
+    expect(members.tabIndex).toBe(0);
+    await person().keyboard('{End}');
+    expectFocusOn(integrations);
+    await person().keyboard('{ArrowRight}');
+    expectFocusOn(about);
+    await person().keyboard('{ArrowLeft}');
+    expectFocusOn(integrations);
+    await person().keyboard('{Home}');
+    expectFocusOn(about);
+    expect(about.getAttribute('aria-selected')).toBe('true');
+    view.unmountAll();
+  });
+
+  test('a name half typed in About is still there after a look at Members', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(ME)) },
+    });
+    const dialog = await openDetails(view);
+    await person().type(within(dialog).getByLabelText('Name'), '-two');
+    await showTab(dialog, /^Members/);
+    await showTab(dialog, /^About/);
+    expect(within(dialog).getByLabelText<HTMLInputElement>('Name').value).toBe('api-two');
+    view.unmountAll();
+  });
+
+  test('Escape closes it from a tab', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(ME)) },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    view.unmountAll();
+  });
+});
+
+describe('the notification level', () => {
+  test('is said in words in About, and choosing another asks the server', async () => {
+    const asked: [string, NotificationLevel][] = [];
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME)),
+        setNotificationLevel: (channelId, level) => {
+          asked.push([channelId, level]);
+          return new Promise<void>(() => undefined);
+        },
+      },
+    });
+    const dialog = await openDetails(view);
+    const group = within(dialog).getByRole('group', { name: 'Notifications' });
+    expect(
+      within(group).getByRole<HTMLInputElement>('radio', { name: 'Mentions and replies' }).checked,
+    ).toBe(true);
+    await person().click(within(group).getByRole('radio', { name: 'Nothing' }));
+    await settle();
+    expect(asked).toEqual([[IDS.api, 'none']]);
+    expect(within(group).getByRole<HTMLInputElement>('radio', { name: 'Nothing' }).checked).toBe(
+      true,
+    );
+    view.unmountAll();
+  });
+
+  test('is not offered to somebody who has not joined', async () => {
+    const view = await mountChannel({
+      channelId: IDS.browse,
+      messages: page([]),
+      api: { me: () => Promise.resolve(asMember()), channelMembers: () => Promise.resolve([]) },
+    });
+    await person().click(view.getByRole('button', { name: 'browse' }));
+    await settle();
+    const dialog = view.getByRole('dialog', { name: 'Details of #browse' });
+    expect(within(dialog).queryByRole('group', { name: 'Notifications' })).toBeNull();
+    view.unmountAll();
+  });
+});
+
 describe('opening it', () => {
   test('the channel’s name in the header opens it, and the heading is still the name', async () => {
     const view = await mountChannel({
@@ -58,6 +204,7 @@ describe('opening it', () => {
     expect(within(dialog).getByLabelText<HTMLInputElement>('Topic').value).toBe(
       'Backend deploys and incident follow-ups',
     );
+    await showTab(dialog, /^Members/);
     expect(within(dialog).getByRole('heading', { name: 'Members (2)' })).toBeDefined();
     expect(within(dialog).getByText(/@alice/)).toBeDefined();
     await expectNoAxeViolations(dialog);
@@ -121,6 +268,7 @@ describe('the members', () => {
       },
     });
     const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
     const before = asked;
     await person().click(within(dialog).getByRole('button', { name: 'Add people' }));
     await settle();
@@ -140,6 +288,7 @@ describe('the members', () => {
       api: { channelMembers: () => answer() },
     });
     const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
     expect(within(dialog).getByText(/could not be loaded/)).toBeDefined();
     answer = (): Promise<ChannelMember[]> => Promise.resolve([]);
     await person().click(within(dialog).getByRole('button', { name: 'Retry' }));
@@ -154,8 +303,47 @@ describe('the members', () => {
       api: { channelMembers: () => new Promise<ChannelMember[]>(() => undefined) },
     });
     const loading = await openDetails(slow);
+    await showTab(loading, /^Members/);
     expect(within(loading).getByText('Loading')).toBeDefined();
     slow.unmountAll();
+  });
+
+  test('more than eight are found by name, with no case, accents or dotless ı in the way', async () => {
+    const many = [
+      ME,
+      ALICE,
+      BOB,
+      ...['carol', 'deniz', 'emre', 'fatma', 'gökhan'].map((name, n) =>
+        aUser(name, `0199155c-6200-7b7f-8c11-0000000000${String(n + 10)}`),
+      ),
+      { ...aUser('isik', '0199155c-6200-7b7f-8c11-000000000020'), displayName: 'Işık Yılmaz' },
+    ];
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(...many)) },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    const find = within(dialog).getByLabelText('Find a member');
+    await person().type(find, 'ISIK');
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(dialog).getByText('Işık Yılmaz')).toBeDefined();
+    await person().clear(find);
+    await person().type(find, 'nobody');
+    expect(within(dialog).getByText('Nobody in this channel matches “nobody”.')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('eight or fewer are not given a field to find one by', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { channelMembers: () => Promise.resolve(inChannel(ME, ALICE, BOB)) },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    expect(within(dialog).queryByLabelText('Find a member')).toBeNull();
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(3);
+    view.unmountAll();
   });
 });
 

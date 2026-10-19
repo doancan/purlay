@@ -87,6 +87,7 @@
   --container-badge: var(--size-badge);
   --height-code: var(--size-code-clamp);
   --container-dialog: var(--size-dialog);
+  --container-dialog-lg: var(--size-dialog-lg);
   --container-palette: var(--size-palette);
   --height-palette-list: var(--size-palette-list);
   --container-toast: var(--size-toast);
