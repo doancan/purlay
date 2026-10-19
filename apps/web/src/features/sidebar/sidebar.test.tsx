@@ -985,10 +985,12 @@ describe('browsing channels', () => {
     const dialog = within(view.getByRole('dialog'));
     const rows = dialog.getAllByRole('listitem');
     // By name (D-160): `alone` before `browse`.
-    expect(rows.map((row) => row.querySelector('.font-mono')?.textContent)).toEqual([
+    expect(rows.map((row) => row.querySelector('.text-label')?.textContent)).toEqual([
       'alone',
       'browse',
     ]);
+    // A channel's name is in the face it has in the sidebar, the header and the palette — not code's.
+    expect(rows.some((row) => row.querySelector('.font-mono') !== null)).toBe(false);
     expect(rows[0]?.textContent).toContain('1 member');
     expect(rows[0]?.textContent).not.toContain('·');
     expect(rows[1]?.textContent).toContain('12 members');

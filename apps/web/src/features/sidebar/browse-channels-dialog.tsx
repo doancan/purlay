@@ -116,7 +116,7 @@ export const BrowseChannelsDialog = ({
                 <li key={channel.id} className="flex items-center gap-3 px-1 py-1">
                   <Icon name="channel" />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-mono text-body text-ink">{channel.name}</span>
+                    <span className="truncate text-label text-ink">{channel.name}</span>
                     {/* What it is before it is joined: who is in it, and what it is for (D-167). */}
                     <span className="flex min-w-0 items-baseline gap-1 text-caption text-ink-muted">
                       <span className="shrink-0">
