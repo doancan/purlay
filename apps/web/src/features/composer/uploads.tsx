@@ -199,6 +199,8 @@ const uploadRefusal = (
     case 'ATTACHMENT_ID_CONFLICT':
     case 'ATTACHMENT_NOT_FOUND':
     case 'FORBIDDEN':
+    // Membership is the send's to judge (D-156): an upload is the workspace's, before any channel.
+    case 'NOT_A_CHANNEL_MEMBER':
     case 'WORKSPACE_NOT_FOUND':
     case 'DATABASE_UNAVAILABLE':
     case 'INTERNAL':
