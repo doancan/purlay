@@ -35,6 +35,7 @@ import {
   Page,
   ReactionsResponse,
   ReadChannelRequest,
+  ReadThreadRequest,
   AddChannelMemberRequest,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
@@ -520,6 +521,8 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
   test('reading names a message and nothing else', () => {
     expect(Value.Check(ReadChannelRequest, { lastReadMessageId: id })).toBe(true);
     expect(Value.Check(ReadChannelRequest, { lastReadMessageId: id, unreadCount: 0 })).toBe(false);
+    expect(Value.Check(ReadThreadRequest, { lastReadMessageId: id })).toBe(true);
+    expect(Value.Check(ReadThreadRequest, {})).toBe(false);
     expect(Value.Check(CreateDirectMessageRequest, { userId: id })).toBe(true);
   });
 

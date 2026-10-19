@@ -386,6 +386,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: MESSAGE_BY_AUTHOR,
   },
   'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
+  'PUT /api/messages/:messageId/thread/read': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    body: (_now, owner) => ({ lastReadMessageId: owner.messageId }),
+    visibility: MESSAGE,
+  },
   'POST /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/workspaces/:workspaceId/unresolved': {

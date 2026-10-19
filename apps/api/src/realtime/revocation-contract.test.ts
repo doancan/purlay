@@ -121,10 +121,10 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/modules/channels/star.ts#setStarred': {
     none: 'marks an existing member’s own row; nobody gains or loses sight of a channel (#489)',
   },
-  // Reading the inbox recounts the mention badge of the channels it touched. It changes no
-  // membership, so nobody's access moves (D-106, #58).
-  'apps/api/src/modules/notifications/notifications.ts#readNotifications': {
-    none: 'recounts the mention counters of existing memberships and changes no access (#58)',
+  // Reading the inbox, or a thread, recounts the counters of the channels it touched. It changes
+  // no membership, so nobody's access moves (D-106, D-147, #58).
+  'apps/api/src/modules/notifications/notifications.ts#readAndCount': {
+    none: 'recounts the counters of existing memberships and changes no access (#58)',
   },
   // A new message raises the unread counters of the channel's existing memberships. It
   // adds, removes and changes no membership, so nobody's access moves (D-99, #58).

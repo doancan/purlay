@@ -58,6 +58,7 @@ import {
   type NotificationLevel,
   type SetDeepWorkRequest,
   type ReadNotificationsRequest,
+  type ReadThreadRequest,
   type SendMessageRequest,
   type PushLocale,
   Profile,
@@ -254,6 +255,8 @@ export interface Api {
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
+  /** Reads a thread up to and including a reply: its notifications for the caller (D-147). */
+  readonly readThread: (rootId: string, lastReadMessageId: string) => Promise<void>;
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
@@ -628,6 +631,12 @@ export const createApi = (http: Http): Api => {
       ),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),
+    readThread: (rootId, lastReadMessageId) =>
+      http.send(
+        'PUT',
+        `/api/messages/${at(rootId)}/thread/read`,
+        options({ body: { lastReadMessageId } satisfies ReadThreadRequest }),
+      ),
     search: (workspaceId, query, signal) =>
       http.request(
         'GET',

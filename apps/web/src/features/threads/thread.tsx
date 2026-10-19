@@ -22,7 +22,14 @@
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef } from 'react';
 import { Icon } from '../../components/icon';
-import { readingOrder, repliesOf, useMembers, useMessages, useThread } from '../../data/queries';
+import {
+  readingOrder,
+  repliesOf,
+  useChannels,
+  useMembers,
+  useMessages,
+  useThread,
+} from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useEngine, usePending } from '../../realtime/realtime-provider';
 import { Button } from '../../ui/button';
@@ -40,6 +47,7 @@ import { useWorkspace } from '../shell/workspace';
 import { useOpenThread, useThreads } from './thread-context';
 import { THREAD_PANEL_ID, ThreadStatus } from './thread-summary';
 import { buildReplies } from './thread-model';
+import { useReadThread } from './use-read-thread';
 
 /** A reply arriving this near the end of a thread, or less, keeps the end in view (`UX.md` §6). */
 const NEAR_END_PX = 80;
@@ -106,6 +114,16 @@ const ThreadPanelView = ({
     [membersQuery.data],
   );
   const items = useMemo(() => buildReplies({ replies, pending, me }), [replies, pending, me]);
+
+  // ── Open in front of the person, the thread is read (D-147) ─────────────
+  const channels = useChannels(workspace.id);
+  const waiting =
+    (channels.data?.find((c) => c.id === channelId)?.state?.unreadMentionCount ?? 0) > 0;
+  const newestReplyId = useMemo(
+    () => replies.reduce<string | null>((n, r) => (n === null || r.id > n ? r.id : n), null),
+    [replies],
+  );
+  useReadThread({ workspaceId: workspace.id, rootId, newestReplyId, waiting, ports });
 
   // ── Focus moves in when the panel opens, to where the person asked ──────
   // The heading is there at once, whatever the root's state — loading, failed, gone (#555); the reply

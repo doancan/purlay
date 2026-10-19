@@ -110,7 +110,7 @@ import {
   leave,
   listChannelMembers,
 } from './channels';
-import { markNotificationsRead, readInbox } from './notifications';
+import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
 import {
   postMessage,
   readFiles,
@@ -843,6 +843,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/messages/:messageId/thread',
       async ({ request, params }) => await readThread(dependencies, request, params.messageId),
     )
+    .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
+      await markThreadRead({ ...dependencies, bus: sockets.bus }, request, params.messageId, body);
+      set.status = 204;
+      return null;
+    })
     .post(
       '/api/messages/:messageId/resolve',
       async ({ request, params }) =>

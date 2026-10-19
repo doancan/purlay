@@ -407,6 +407,10 @@ The hardest problem in the product, and the subject of **O-5**.
   vanish the instant the messages are seen, because it is the reader's place-holder, not a
   notification.
 - **Marking read** happens when the bottom is reached, or on channel exit. Never on mere render.
+- **The feed reads the feed, not the threads** (D-147). Reading the channel to the bottom reads what
+  the feed shows; an answer in a thread keeps waiting — on the badge, in the tab title, in the inbox —
+  until its thread is open in the panel with the page in front of the person, which reads its replies
+  up to the newest one the panel has. A reply that arrives after that is still waiting.
 
 **On O-5:** variable-height rows defeat naive virtualization, and a
 wrong guess here is expensive. Phase 1 ships **unvirtualized with a 50-message window** and
