@@ -191,8 +191,8 @@ test.describe('readable, in whichever theme this project is', () => {
   });
 });
 
-test.describe("a message's hover controls (#653)", () => {
-  test('clear the first line of their message, and on a wide window the row above it too', async ({
+test.describe("a message's hover controls (#653, D-150)", () => {
+  test('never reach the row above, nor cover the name or the first line under it', async ({
     page,
     signIn,
     world,
@@ -203,42 +203,54 @@ test.describe("a message's hover controls (#653)", () => {
     await expect(rows.first()).toBeVisible();
     const count = await rows.count();
     const measured: string[] = [];
-    const wide = (page.viewportSize()?.width ?? 0) >= 900;
     for (let i = Math.max(1, count - 8); i < count; i += 1) {
       const row = rows.nth(i);
       await row.scrollIntoViewIfNeeded();
       await row.hover();
-      const controls = row.locator('[data-hover-controls]').first();
+      const controls = row.locator(':scope > [data-hover-controls]');
       if ((await controls.count()) === 0) continue;
       await expect(controls).toHaveCSS('opacity', '1');
+      // One bar on the page: the hovered row's (D-150).
+      await expect(page.locator('[data-hover-controls]:not(.opacity-0)')).toHaveCount(1);
       const overlap = await row.evaluate((element) => {
-        const bar = element.querySelector('[data-hover-controls]')?.getBoundingClientRect();
-        const text = element.querySelector('p, pre')?.firstChild;
-        if (bar === undefined || text === null || text === undefined) return null;
-        const range = document.createRange();
-        range.selectNodeContents(text);
-        const line = range.getClientRects()[0];
+        const bar = element
+          .querySelector(':scope > [data-hover-controls]')
+          ?.getBoundingClientRect();
+        if (bar === undefined) return null;
+        const meets = (other: DOMRect | undefined): boolean =>
+          other !== undefined &&
+          bar.left < other.right &&
+          other.left < bar.right &&
+          bar.top < other.bottom &&
+          other.top < bar.bottom;
+        const name = element.querySelector('.font-semibold')?.getBoundingClientRect();
+        const text = element.querySelector('[data-bubble] p, [data-bubble] pre')?.firstChild;
+        let line: DOMRect | undefined;
+        if (text !== null && text !== undefined) {
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          line = range.getClientRects()[0];
+        }
         const above = element.previousElementSibling?.getBoundingClientRect();
         return {
-          intoTheLine: line === undefined ? 0 : bar.bottom - line.top,
           intoTheRowAbove: above === undefined ? 0 : above.bottom - bar.top,
+          overTheName: meets(name),
+          // A message under a name has a band above its bubble, and the bar stays in it. A grouped
+          // message has none: there the bar may cover its own first line's corner (D-150).
+          overTheLine: name !== undefined && meets(line),
         };
       });
       if (overlap === null) continue;
       measured.push(JSON.stringify(overlap));
+      // The bar starts at its own row's top edge, on every window: nothing of another message is under it.
       expect(
-        overlap.intoTheLine,
-        `the controls are over the first line of row ${String(i)}`,
+        overlap.intoTheRowAbove,
+        `the controls are over the row above row ${String(i)}`,
       ).toBeLessThanOrEqual(0);
-      // A narrow window's controls are a finger tall (size-touch) and taller than the gap between rows:
-      // there they hang over the corner of the row above rather than over their own words, as a chat's
-      // hover controls commonly do. A wide window has room for both.
-      if (wide) {
-        expect(
-          overlap.intoTheRowAbove,
-          `the controls are over the row above row ${String(i)}`,
-        ).toBeLessThanOrEqual(0);
-      }
+      expect(overlap.overTheName, `the controls are over the name of row ${String(i)}`).toBe(false);
+      expect(overlap.overTheLine, `the controls are over the first line of row ${String(i)}`).toBe(
+        false,
+      );
     }
     expect(measured.length, 'no row was measured').toBeGreaterThan(3);
   });

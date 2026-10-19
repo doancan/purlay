@@ -12,6 +12,7 @@ import { anApi } from '../../testing/fake-api';
 import { ALICE, BOB, ME, aMessage } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
+import { IconButton } from '../../ui/icon-button';
 import { Toaster } from '../../ui/toast';
 import * as Content from '../content/render-content';
 import { MessageRow, type MessageRowProps } from './message-row';
@@ -269,8 +270,7 @@ describe('what a row shows', () => {
     );
     const [root] = view.getAllByRole('article');
     if (root === undefined) throw new Error('the row did not render');
-    const actions = (): HTMLElement | null =>
-      root.querySelector(':scope > div > div > [data-bubble] > div.absolute');
+    const actions = (): HTMLElement | null => root.querySelector(':scope > [data-hover-controls]');
     expect(actions()?.className).toContain('opacity-0');
     // Hidden, the actions overlap the row above and must not take its clicks.
     expect(actions()?.className).toContain('pointer-events-none');
@@ -508,11 +508,15 @@ describe('reactions', () => {
     });
     const user = person();
     await user.click(view.getByRole('button', { name: 'Add reaction' }));
-    const items = view.getAllByRole('menuitem');
+    // One row of tiles, each named in words and none chosen yet.
+    const menu = view.getByRole('menu', { name: 'Add reaction' });
+    const items = within(menu).getAllByRole('menuitemcheckbox');
     expect(items).toHaveLength(QUICK_REACTIONS.length);
-    expect(items[0]?.textContent).toContain('Thumbs up');
-    await expectNoAxeViolations(view.getByRole('menu'));
-    await user.click(view.getByRole('menuitem', { name: /Rocket|Ship it/ }));
+    expect(items[0]?.getAttribute('aria-label')).toBe('Thumbs up');
+    expect(items[0]?.textContent).toBe('👍');
+    expect(items.every((item) => item.getAttribute('aria-checked') === 'false')).toBe(true);
+    await expectNoAxeViolations(menu);
+    await user.click(view.getByRole('menuitemcheckbox', { name: /Rocket|Ship it/ }));
     expect(calls).toEqual(['🚀']);
   });
 
@@ -528,7 +532,11 @@ describe('reactions', () => {
     });
     const user = person();
     await user.click(view.getByRole('button', { name: 'Add reaction' }));
-    await user.click(view.getByRole('menuitem', { name: /Thumbs up/ }));
+    // Yours already, it is marked as chosen, and not only by its tint.
+    expect(
+      view.getByRole('menuitemcheckbox', { name: /Thumbs up/ }).getAttribute('aria-checked'),
+    ).toBe('true');
+    await user.click(view.getByRole('menuitemcheckbox', { name: /Thumbs up/ }));
     expect(calls).toEqual(['👍']);
   });
 
@@ -553,6 +561,180 @@ describe('reactions', () => {
     const view = await mount(props({ message: withReactions }), { locale: 'tr' });
     expect(view.getByRole('button', { name: '👍, 2 tepki' })).toBeDefined();
     expect(view.getByRole('button', { name: 'Tepki ekle' })).toBeDefined();
+  });
+});
+
+/** Whether a class list holds every one of these classes. */
+const holds = (classes: string | undefined, wanted: readonly string[]): string[] =>
+  wanted.filter((name) => !(classes ?? '').split(' ').includes(name));
+
+describe('the bar of actions (D-150)', () => {
+  const barOf = (row: HTMLElement): HTMLElement => {
+    const bar = row.querySelector<HTMLElement>(':scope > [data-hover-controls]');
+    if (bar === null) throw new Error('the row has no bar');
+    return bar;
+  };
+
+  test("sits on the row's own top edge, in the corner the message is not in, outside its bubble", async () => {
+    const theirs = await mount(props({ message: aMessage(1, { sender: BOB }) }));
+    const left = barOf(theirs.getByRole('article')).className;
+    expect(holds(left, ['absolute', 'top-0', 'right-2', 'shadow-float'])).toEqual([]);
+    expect(theirs.getByRole('article').querySelector('[data-bubble] [data-hover-controls]')).toBe(
+      null,
+    );
+    const mine = await mount(props({ message: aMessage(2, { sender: ME }) }));
+    const own = mine.getAllByRole('article').at(-1);
+    if (own === undefined) throw new Error('the row did not render');
+    const right = barOf(own).className;
+    expect(holds(right, ['top-0', 'left-2'])).toEqual([]);
+    expect(holds(right, ['right-2'])).toEqual(['right-2']);
+  });
+
+  test('every control is the same square, with a tip naming it and its key where it has one', async () => {
+    const view = await mount(
+      props({
+        message: aMessage(1, { sender: ME }),
+        actions: <IconButton size="bar" glyph="reply" label="Reply" shortcut="R" />,
+      }),
+    );
+    const bar = barOf(view.getByRole('article'));
+    const buttons = within(bar).getAllByRole('button');
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Add reaction',
+      'Reply',
+      'More',
+    ]);
+    // One size on every window: a finger-tall control made the bar cover the name on a phone.
+    const sizes = new Set(buttons.map((b) => b.className));
+    expect(sizes.size).toBe(1);
+    expect(holds(buttons[0]?.className, ['h-control', 'aspect-square'])).toEqual([]);
+    expect(holds(buttons[0]?.className, ['max-narrow:h-touch'])).toEqual(['max-narrow:h-touch']);
+    act(() => {
+      buttons[1]?.focus();
+    });
+    const tip = await view.findByRole('tooltip');
+    expect(tip.textContent).toBe('ReplyR');
+    act(() => {
+      buttons[0]?.focus();
+    });
+    expect((await view.findByRole('tooltip')).textContent).toBe('Add reaction');
+  });
+
+  test("is shown on one row only: the pointer's, or the focused one while the keyboard is used", async () => {
+    await mount(props({ message: aMessage(1, { sender: BOB }) }));
+    await renderApp(<MessageRow {...props({ message: aMessage(2) })} />);
+    const [first, second] = [aMessage(1).id, aMessage(2).id].map((id) =>
+      document.querySelector<HTMLElement>(`[data-message-id="${id}"]`),
+    );
+    if (first == null || second == null) throw new Error('two rows were not drawn');
+    const shown = (): boolean[] =>
+      [first, second].map((row) => !barOf(row).className.includes('opacity-0'));
+    expect(shown()).toEqual([false, false]);
+    // The keyboard brings focus to one row while the pointer rests on the other.
+    act(() => {
+      fireEvent.pointerOver(second);
+      fireEvent.keyDown(document.body, { key: 'ArrowDown' });
+      first.focus();
+    });
+    expect(shown()).toEqual([true, false]);
+    // The pointer moves: its row is the one, and the focused row's bar goes.
+    act(() => {
+      fireEvent.pointerMove(second);
+    });
+    expect(shown()).toEqual([false, true]);
+    // The pointer leaves for nothing that is a row: the focused row has it back.
+    act(() => {
+      fireEvent.pointerLeave(second);
+    });
+    expect(shown()).toEqual([true, false]);
+    act(() => {
+      first.blur();
+    });
+    expect(shown()).toEqual([false, false]);
+  });
+
+  test('stays while its menu is open, though focus and the pointer are in the menu', async () => {
+    const view = await mount(props({ message: aMessage(1, { sender: BOB }) }));
+    const row = view.getByRole('article');
+    act(() => {
+      fireEvent.pointerOver(row);
+    });
+    await person().click(within(row).getByRole('button', { name: 'More' }));
+    act(() => {
+      fireEvent.pointerLeave(row);
+    });
+    expect(barOf(row).className).not.toContain('opacity-0');
+    // Closed from the keyboard, focus is back on More, in the row: it is still the one.
+    await person().keyboard('{Escape}');
+    expect(barOf(row).className).not.toContain('opacity-0');
+    act(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+    });
+    expect(barOf(row).className).toContain('opacity-0');
+  });
+
+  test('edited and pinned are one line under the words, apart, and the line is not drawn when there is neither', async () => {
+    const view = await mount(
+      props({ message: aMessage(1, { content: 'better', editedAt: '2026-09-09T11:58:00.000Z' }) }),
+    );
+    const line = view.getByText('edited').parentElement;
+    expect(holds(line?.className, ['flex', 'gap-3', 'empty:hidden'])).toEqual([]);
+    const plain = await mount(props({ message: aMessage(2) }));
+    const bubble = plain.getAllByRole('article').at(-1)?.querySelector('[data-bubble]');
+    expect(bubble?.lastElementChild?.childElementCount).toBe(0);
+  });
+});
+
+describe('who reacted (D-150)', () => {
+  const CAROL = 'c0000000-0000-7000-8000-000000000003';
+  const DAN = 'c0000000-0000-7000-8000-000000000004';
+  const EVE = 'c0000000-0000-7000-8000-000000000005';
+  const many = new Map([
+    ...members,
+    [ALICE.id, 'alice'],
+    [CAROL, 'carol'],
+    [DAN, 'dan'],
+    [EVE, 'eve'],
+  ]);
+
+  const tipOf = async (
+    view: Awaited<ReturnType<typeof mount>>,
+    name: string,
+  ): Promise<string | null> => {
+    act(() => {
+      view.getByRole('button', { name }).focus();
+    });
+    return (await view.findByRole('tooltip')).textContent;
+  };
+
+  test('a chip names who reacted, the person first as You', async () => {
+    const view = await mount(
+      props({
+        members: many,
+        message: aMessage(1, { reactions: [{ emoji: '👍', userIds: [BOB.id, ME.id] }] }),
+      }),
+    );
+    expect(await tipOf(view, '👍, 2 reactions')).toBe('You and bob reacted with 👍');
+  });
+
+  test('past three, two names and how many others', async () => {
+    const view = await mount(
+      props({
+        members: many,
+        message: aMessage(1, {
+          reactions: [{ emoji: '🎉', userIds: [ALICE.id, BOB.id, CAROL, DAN, EVE] }],
+        }),
+      }),
+    );
+    expect(await tipOf(view, '🎉, 5 reactions')).toBe('alice, bob, and 3 others reacted with 🎉');
+  });
+
+  test('somebody the workspace no longer lists is a deleted user; in Turkish, the words are Turkish', async () => {
+    const view = await mount(
+      props({ message: aMessage(1, { reactions: [{ emoji: '👀', userIds: [CAROL] }] }) }),
+      { locale: 'tr' },
+    );
+    expect(await tipOf(view, '👀, 1 tepki')).toBe('Silinmiş kullanıcı 👀 tepkisini verdi');
   });
 });
 

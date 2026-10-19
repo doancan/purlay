@@ -205,7 +205,11 @@ const ThreadPanelView = ({
           <Skeleton className="w-sidebar" />
         </LoadingStatus>
       ) : (
-        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <div
+          ref={scroller}
+          data-message-list=""
+          className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
+        >
           <MessageRow
             message={root}
             meId={user.id}

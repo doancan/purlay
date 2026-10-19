@@ -305,7 +305,12 @@ describe('replying', () => {
   test('a root nobody answered can be: Reply opens a thread that is only the box, then the first reply makes it a thread', async () => {
     const view = await mount({ messages: page([aMessage(1), aMessage(2, { content: 'quiet' })]) });
     const row = rowOf(view, messageIdAt(2));
-    await person().click(within(row).getByRole('button', { name: 'Reply' }));
+    const reply = within(row).getByRole('button', { name: 'Reply' });
+    // The same square as React beside it on every window: on a phone it once stood taller (D-150).
+    expect(reply.className).toBe(
+      within(row).getByRole('button', { name: 'Add reaction' }).className,
+    );
+    await person().click(reply);
     await settle();
     const section = view.container.querySelector<HTMLElement>('[data-thread-root]');
     if (section === null) throw new Error('the reply box did not open');

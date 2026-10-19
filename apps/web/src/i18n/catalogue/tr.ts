@@ -566,7 +566,11 @@ export const tr = {
   'message.deleteTitle': 'Bu mesaj silinsin mi?',
   'message.deleteBody': 'Yerine silindiğini söyleyen bir not gelir. Yanıtları kalır.',
   'message.deleteFailed': 'Mesaj silinmedi.',
+  'message.deleteBodyModerated':
+    'Yerine silindiğini söyleyen bir not gelir ve silmeniz denetim kaydına geçer. Yanıtları kalır.',
   'message.more': 'Daha fazla',
+  'message.actions': 'Mesaj işlemleri',
+  'message.copyText': 'Metni kopyala',
   'message.mention': 'Senden bahsedildi',
   'message.newMarker': 'Yeni',
   'message.newMessages': {
@@ -708,6 +712,11 @@ export const tr = {
   'reaction.rocket': 'Yayına al',
   'reaction.done': 'Tamam',
   'reaction.smile': 'Gülümse',
+  'reaction.by': '{names} {emoji} tepkisini verdi',
+  'reaction.you': 'Siz',
+  'reaction.others': {
+    other: '{count} kişi daha',
+  },
 
   // ── Teslimat (UX §3.1) ──────────────────────────────────────────────────
   'delivery.sending': 'Gönderiliyor',

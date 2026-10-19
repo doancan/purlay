@@ -280,7 +280,7 @@ test.describe('a reaction', () => {
     const aliceRow = rowWith(alice, 'ship it?');
     await aliceRow.hover();
     await aliceRow.getByRole('button', { name: 'Add reaction' }).click();
-    await alice.getByRole('menuitem', { name: /Ship it/ }).click();
+    await alice.getByRole('menuitemcheckbox', { name: /Ship it/ }).click();
     await expect(alice.getByText('The reaction was not saved. Try again.')).toHaveCount(0);
 
     const chip = rowWith(page, 'ship it?').getByRole('button', { name: '🚀, 1 reaction' });

@@ -232,14 +232,26 @@ they were.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
   their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
-- **Hover controls** are a small raised group on the bubble's inner top corner (on
-  your own message, its outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
-  thread panel is a row of its own.
+- **Hover controls** are one floating bar — hairline edge, the float shadow — on the row's own top
+  edge, in the corner the message is not in: the right for everyone else's, the left for your own
+  (D-150, amending D-119 §6). It never reaches above its row, so it never covers the row above or
+  the name over a bubble; it never reflows the row, and the row itself is not tinted. **One bar on
+  the page**, across the feed and the thread panel: the row under the pointer, or the focused row
+  while the keyboard is in use; a row whose menu is open keeps its bar. On a phone the row tapped is
+  the one.
+- **The bar holds** React · Reply (a thread's root) · Save · Pin · More, each the same square
+  control on every window, each with its tooltip and its key where it has one (Reply `R`). **More
+  is on every message**: Copy text, Save and Pin again, then Edit (`E`) and Delete on your own; an
+  owner or an admin may delete anybody's, told it goes on the audit trail. React opens the quick
+  set as one row of tiles, the name of the one reached under it and yours marked as chosen, opening
+  upward and kept inside the feed so it never covers the composer.
 - **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
   the bubble has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
-- **Reactions** sit below the content, above the thread affordance.
+- **Reactions** sit below the content, above the thread affordance. A chip's tooltip says who:
+  "You, Alice and Bob reacted with 👍"; past three, two names and how many others (D-150).
+- **Edited** and **Pinned** share one line under the words, apart from each other.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,
   put back and said with Retry if the server refuses; a saved message's mark is filled.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)

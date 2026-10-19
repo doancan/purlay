@@ -25,6 +25,8 @@ export interface Formatters {
   /** The label of a day divider; `today` and `yesterday` are the catalogue's words. */
   readonly day: (value: Date | string, now: Date, words: DayWords) => string;
   readonly number: (value: number) => string;
+  /** Names joined as the language joins them: "Alice, Bob and 3 others", "Alice, Bob ve 3 kişi daha". */
+  readonly list: (items: readonly string[]) => string;
   /** A file's size: bytes, then kilobytes and megabytes of 1024, one decimal at most. */
   readonly bytes: (value: number) => string;
 }
@@ -74,6 +76,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
   });
   const year = new Intl.DateTimeFormat('en-CA', { year: 'numeric', ...zone });
   const numbers = new Intl.NumberFormat(locale);
+  const names = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
   const inUnit = (unit: 'byte' | 'kilobyte' | 'megabyte'): Intl.NumberFormat =>
     new Intl.NumberFormat(locale, { style: 'unit', unit, maximumFractionDigits: 1 });
   const [inBytes, inKilobytes, inMegabytes] = [
@@ -109,6 +112,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
       return (sameYear(date, now) ? weekdayDay : monthDayYear).format(date);
     },
     number: (value) => numbers.format(value),
+    list: (items) => names.format(items),
     bytes: (value) =>
       value < 1024
         ? inBytes.format(value)

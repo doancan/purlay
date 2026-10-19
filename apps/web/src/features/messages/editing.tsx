@@ -1,6 +1,6 @@
 /**
- * Editing and deleting one's own message (D-103, `UX.md` §5 and §7): the editor drawn in the row in
- * place of the words, the menu that offers it, and the question asked before a delete.
+ * Editing one's own message (D-103, `UX.md` §5 and §7): the editor drawn in the row in place of the
+ * words. The menu that offers it, and Delete, are the row's More (`message-actions.tsx`, D-150).
  *
  * Which message is being edited is one fact for the channel screen, so the menu, `E` and `↑` open
  * the same editor; a row drawn outside a channel screen edits nothing.
@@ -8,14 +8,11 @@
 import { createContext, useContext, useMemo, useRef, useState } from 'react';
 import type { QueryClient, InfiniteData } from '@tanstack/react-query';
 import type { Message, MessagePage } from '@purlay/types';
-import { Icon } from '../../components/icon';
 import { useActions } from '../../data/actions-provider';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
-import { Dialog } from '../../ui/dialog';
-import { Menu, MenuItem } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { isMine } from './author';
 
@@ -136,94 +133,5 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
         </span>
       </div>
     </div>
-  );
-};
-
-/** What the author can do with their own message: edit it, or delete it after being asked. */
-export const OwnActions = ({ message }: { readonly message: Message }): React.JSX.Element => {
-  const { t } = useI18n();
-  const { remove } = useActions();
-  const { show } = useToast();
-  const describe = useDescribeFailure();
-  const { start } = useEditing();
-  const [asking, setAsking] = useState(false);
-  // Edit puts focus in the editor it opens; the menu must not take it back to its button.
-  const toEditor = useRef(false);
-
-  const confirm = (): void => {
-    setAsking(false);
-    remove(message).catch((failure: unknown) => {
-      show({ message: `${t('message.deleteFailed')} ${describe(failure)}` });
-    });
-  };
-
-  return (
-    <>
-      <Menu
-        align="end"
-        returnFocus={() => {
-          if (!toEditor.current) return true;
-          toEditor.current = false;
-          // The open menu trapped focus from the editor that mounted under it: given it as it closes.
-          document
-            .querySelector<HTMLTextAreaElement>(`[data-message-id="${message.id}"] textarea`)
-            ?.focus();
-          return false;
-        }}
-        trigger={
-          <button
-            type="button"
-            aria-label={t('message.more')}
-            className="inline-flex h-control aspect-square items-center justify-center rounded-sm text-ink-muted hover:bg-surface-100 hover:text-ink"
-          >
-            <Icon name="more" />
-          </button>
-        }
-      >
-        <MenuItem
-          glyph="edit"
-          shortcut="E"
-          onSelect={() => {
-            toEditor.current = true;
-            start(message.id);
-          }}
-        >
-          {t('message.edit')}
-        </MenuItem>
-        <MenuItem
-          glyph="delete"
-          tone="danger"
-          onSelect={() => {
-            setAsking(true);
-          }}
-        >
-          {t('message.delete')}
-        </MenuItem>
-      </Menu>
-      <Dialog
-        open={asking}
-        onOpenChange={setAsking}
-        title={t('message.deleteTitle')}
-        description={t('message.deleteBody')}
-        closeLabel={t('common.close')}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setAsking(false);
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button variant="danger" glyph="delete" onClick={confirm}>
-              {t('message.delete')}
-            </Button>
-          </>
-        }
-      >
-        {null}
-      </Dialog>
-    </>
   );
 };

@@ -203,6 +203,18 @@ describe('day dividers', () => {
   });
 });
 
+describe('names in a list', () => {
+  test('are joined the way the language joins them', () => {
+    expect(createFormatters('en').list(['You'])).toBe('You');
+    expect(createFormatters('en').list(['Alice', 'Bob', '3 others'])).toBe(
+      'Alice, Bob, and 3 others',
+    );
+    expect(createFormatters('tr').list(['Alice', 'Bob', '3 kişi daha'])).toBe(
+      'Alice, Bob ve 3 kişi daha',
+    );
+  });
+});
+
 describe('numbers', () => {
   test('are grouped the way the locale groups them', () => {
     expect(createFormatters('en').number(1234567)).toBe('1,234,567');

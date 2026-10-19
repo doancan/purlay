@@ -1,6 +1,6 @@
 /**
- * Save, beside React on a message (#484, D-128): a message kept to come back to, on any message one
- * can read.
+ * Save, beside React on a message (#484, D-128) and again in its More menu (D-150): a message kept to
+ * come back to, on any message one can read.
  *
  * **Two layers, never mixed** (D-18), as Pin holds them (`features/pins/use-pin.ts`). What the server
  * says is the workspace's list of saves (`GET …/saved/ids`), read once and kept by the cache; another
@@ -25,13 +25,13 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Icon } from '../../components/icon';
 import { useApi } from '../../data/api-provider';
 import { isTransient } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
-import { cn } from '../../ui/cn';
+import { IconButton } from '../../ui/icon-button';
+import { MenuItem } from '../../ui/menu';
 import { useToast } from '../../ui/toast';
 import { useWorkspaceIfAny } from '../shell/workspace';
 
@@ -86,28 +86,28 @@ const useSavedIds = (workspaceId: string): UseQueryResult<SavedIds> => {
   });
 };
 
-/** Nothing outside a workspace: what is saved belongs to one. */
-export const SaveToggle = ({
-  message,
-}: {
-  readonly message: Message;
-}): React.JSX.Element | null => {
-  const scope = useWorkspaceIfAny();
-  const intents = useContext(IntentsContext);
-  return scope === null || intents === null ? null : (
-    <Toggle message={message} workspaceId={scope.workspace.id} intents={intents} />
-  );
-};
-
-const Toggle = ({
-  message,
-  workspaceId,
-  intents,
-}: {
+interface Scoped {
   readonly message: Message;
   readonly workspaceId: string;
   readonly intents: Intents;
-}): React.JSX.Element => {
+}
+
+/** Nothing outside a workspace: what is saved belongs to one. */
+const useScoped = (message: Message): Scoped | null => {
+  const scope = useWorkspaceIfAny();
+  const intents = useContext(IntentsContext);
+  return scope === null || intents === null
+    ? null
+    : { message, workspaceId: scope.workspace.id, intents };
+};
+
+interface SaveControl {
+  readonly saved: boolean;
+  readonly pending: boolean;
+  readonly toggle: () => void;
+}
+
+const useSave = ({ message, workspaceId, intents }: Scoped): SaveControl => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
@@ -170,22 +170,57 @@ const Toggle = ({
     );
   };
 
+  return {
+    saved,
+    pending: intent !== undefined,
+    toggle: (): void => {
+      change(!savedNow());
+    },
+  };
+};
+
+const SaveButton = (props: Scoped): React.JSX.Element => {
+  const { t } = useI18n();
+  const { saved, pending, toggle } = useSave(props);
   return (
-    <button
-      type="button"
+    <IconButton
+      size="bar"
+      glyph={saved ? 'saved' : 'save'}
+      label={t('saved.save')}
+      tooltip={t(saved ? 'saved.remove' : 'saved.save')}
       aria-pressed={saved}
-      aria-busy={intent !== undefined}
-      aria-label={t('saved.save')}
-      title={t(saved ? 'saved.remove' : 'saved.save')}
-      className={cn(
-        'inline-flex h-control aspect-square items-center justify-center rounded-sm hover:bg-surface-100',
-        saved ? 'text-accent-text' : 'text-ink-muted hover:text-ink',
-      )}
-      onClick={() => {
-        change(!savedNow());
-      }}
-    >
-      <Icon name={saved ? 'saved' : 'save'} />
-    </button>
+      aria-busy={pending}
+      onClick={toggle}
+    />
   );
+};
+
+const SaveItem = (props: Scoped): React.JSX.Element => {
+  const { t } = useI18n();
+  const { saved, toggle } = useSave(props);
+  return (
+    <MenuItem glyph={saved ? 'saved' : 'save'} onSelect={toggle}>
+      {t(saved ? 'saved.remove' : 'saved.save')}
+    </MenuItem>
+  );
+};
+
+/** Save on a message's bar: one name, its state in `aria-pressed`, what a press does in its tip. */
+export const SaveToggle = ({
+  message,
+}: {
+  readonly message: Message;
+}): React.JSX.Element | null => {
+  const scope = useScoped(message);
+  return scope === null ? null : <SaveButton {...scope} />;
+};
+
+/** Save in a message's More menu (D-150), saying what choosing it does. */
+export const SaveMenuItem = ({
+  message,
+}: {
+  readonly message: Message;
+}): React.JSX.Element | null => {
+  const scope = useScoped(message);
+  return scope === null ? null : <SaveItem {...scope} />;
 };

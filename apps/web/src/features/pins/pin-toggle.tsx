@@ -1,5 +1,6 @@
 /**
- * Pin, beside Save on a message (D-130), and the mark a pinned message carries in the feed.
+ * Pin, beside Save on a message (D-130) and again in its More menu (D-150), and the mark a pinned
+ * message carries in the feed.
  *
  * Both read the channel's pins with what has been asked laid over them (`use-pin.ts`); outside a
  * channel visit there is nothing to pin in, and both draw nothing. Pin is a member's: for anyone
@@ -9,7 +10,8 @@
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
-import { cn } from '../../ui/cn';
+import { IconButton } from '../../ui/icon-button';
+import { MenuItem } from '../../ui/menu';
 import { useHasPinIntents, useIsPinned, usePin } from './use-pin';
 
 const Toggle = ({ message }: { readonly message: Message }): React.JSX.Element | null => {
@@ -17,25 +19,38 @@ const Toggle = ({ message }: { readonly message: Message }): React.JSX.Element |
   const { pinned, canPin, pending, toggle } = usePin(message);
   if (!canPin) return null;
   return (
-    <button
-      type="button"
+    <IconButton
+      size="bar"
+      glyph={pinned ? 'unpin' : 'pin'}
+      label={t('pins.pin')}
+      tooltip={t(pinned ? 'pins.unpin' : 'pins.pin')}
       aria-pressed={pinned}
       aria-busy={pending}
-      aria-label={t('pins.pin')}
-      title={t(pinned ? 'pins.unpin' : 'pins.pin')}
-      className={cn(
-        'inline-flex h-control aspect-square items-center justify-center rounded-sm hover:bg-surface-100',
-        pinned ? 'text-accent-text' : 'text-ink-muted hover:text-ink',
-      )}
       onClick={toggle}
-    >
-      <Icon name={pinned ? 'unpin' : 'pin'} />
-    </button>
+    />
   );
 };
 
 export const PinToggle = ({ message }: { readonly message: Message }): React.JSX.Element | null =>
   useHasPinIntents() ? <Toggle message={message} /> : null;
+
+const Item = ({ message }: { readonly message: Message }): React.JSX.Element | null => {
+  const { t } = useI18n();
+  const { pinned, canPin, toggle } = usePin(message);
+  if (!canPin) return null;
+  return (
+    <MenuItem glyph={pinned ? 'unpin' : 'pin'} onSelect={toggle}>
+      {t(pinned ? 'pins.unpin' : 'pins.pin')}
+    </MenuItem>
+  );
+};
+
+/** Pin in a message's More menu, for whoever looks for it there rather than on the bar. */
+export const PinMenuItem = ({
+  message,
+}: {
+  readonly message: Message;
+}): React.JSX.Element | null => (useHasPinIntents() ? <Item message={message} /> : null);
 
 const Mark = ({ message }: { readonly message: Message }): React.JSX.Element | null => {
   const { t } = useI18n();

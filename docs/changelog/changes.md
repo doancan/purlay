@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-19: a message's actions, redesigned (D-150)
+
+The bar of actions sits on its own row's top edge, in the corner the message is not in, and no longer
+covers the author's name or the row above; only one row shows it — the pointer's, or the focused one
+while the keyboard is used. React, Reply, Save, Pin and More are one square each, with a tooltip and
+their key; More is on every message (Copy text, Save, Pin; Edit and Delete on one's own; Delete on
+anybody's for an owner or an admin). A reaction chip names who reacted; the quick reactions are one
+row of tiles that never opens over the composer; "edited" and "Pinned" are apart on one line.
+
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 
 With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the
