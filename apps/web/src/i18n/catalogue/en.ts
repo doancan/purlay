@@ -249,6 +249,7 @@ export const en = {
   'github.token': 'Token',
   'github.tokenHint':
     'A fine-grained personal access token with read access to the repositories your team links to.',
+  'github.tokenShape': 'github_pat_…',
   'github.invalid': 'A token is one word of letters, digits and symbols, with no spaces.',
   'github.save': 'Save token',
   'github.saved': 'The token was saved.',

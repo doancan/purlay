@@ -177,6 +177,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
             label={t('github.token')}
             hint={t('github.tokenHint')}
             type="password"
+            placeholder={t('github.tokenShape')}
             value={token}
             maxLength={255}
             autoComplete="off"

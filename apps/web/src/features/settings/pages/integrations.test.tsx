@@ -96,6 +96,8 @@ describe('the GitHub connection', () => {
     expect(view.getByText(/^Not connected: links/)).toBeDefined();
     const field = view.getByLabelText('Token');
     expect(field.getAttribute('type')).toBe('password');
+    // The empty field shows the shape a token has, so the right kind is pasted.
+    expect(field.getAttribute('placeholder')).toBe('github_pat_…');
     await person().type(field, '  github_pat_abc123  ');
     await person().click(view.getByRole('button', { name: 'Save token' }));
     await settle();

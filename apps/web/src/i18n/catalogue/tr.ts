@@ -248,6 +248,7 @@ export const tr = {
   'github.token': 'Token',
   'github.tokenHint':
     'Ekibinin bağlantı verdiği depolarda okuma yetkisi olan, ince ayarlı bir kişisel erişim token’ı.',
+  'github.tokenShape': 'github_pat_…',
   'github.invalid': 'Token boşluksuz tek bir kelimedir: harf, rakam ve simgeler.',
   'github.save': 'Tokenı kaydet',
   'github.saved': 'Token kaydedildi.',
