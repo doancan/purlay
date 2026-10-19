@@ -31,6 +31,7 @@ import { useToast } from '../../ui/toast';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
+import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
@@ -92,32 +93,36 @@ const Row = ({
   const { message } = item;
   const now = useFeedPorts().clock.now();
   return (
-    <li className="flex flex-col gap-2 rounded-lg px-3 py-3 hover:bg-surface-100">
-      <button type="button" className="flex min-w-0 items-start gap-3 text-left" onClick={onOpen}>
+    <li className={cn('group relative', listRowClasses)}>
+      <button type="button" className={listButtonClasses('pr-5')} onClick={onOpen}>
         <Avatar
           name={authorOf(message, t('user.erased')).displayName}
           username={authorOf(message, t('user.erased')).username}
-          size="sm"
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 items-center gap-1 text-caption text-ink-muted">
-            <span className="font-semibold text-ink">
+          <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
+            <span className="min-w-0 truncate font-semibold text-ink">
               {authorOf(message, t('user.erased')).displayName}
             </span>
             <span aria-hidden="true">·</span>
-            {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
-            <time dateTime={item.savedAt} className="ml-auto font-mono text-caption">
+            <span className="min-w-0 truncate">
+              {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
+            </span>
+            <time dateTime={item.savedAt} className="ml-auto shrink-0 font-mono text-caption">
               {t('saved.when', { when: format.time(item.savedAt, now) })}
             </time>
           </span>
-          <span className="block truncate text-body text-ink">{textOf(message)}</span>
+          <span className="line-clamp-2 block text-body text-ink">{textOf(message)}</span>
         </span>
       </button>
-      <div className="flex flex-wrap gap-2 pl-8">
+      {/* Beside the row, not inside its button: each its own control. On a pointer they appear with
+          the row's hover or a keyboard's focus, over the row's meta line and in its hover tone, so they
+          read as the row's own; on a phone, where nothing hovers, they stay below the words. */}
+      <div className="absolute top-1 right-3 flex gap-1 bg-surface-050 pl-2 opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:static max-narrow:flex-wrap max-narrow:bg-transparent max-narrow:px-3 max-narrow:pt-0 max-narrow:pb-3 max-narrow:opacity-100">
         {MOVES[item.state].map((to) => (
           <Button
             key={to}
-            variant="secondary"
+            variant="ghost"
             onClick={() => {
               onMove(to);
             }}
@@ -125,8 +130,15 @@ const Row = ({
             {t(`saved.move.${to}`)}
           </Button>
         ))}
-        <Button variant="ghost" glyph="delete" onClick={onRemove}>
-          {t('saved.remove')}
+        <Button
+          variant="dangerQuiet"
+          glyph="delete"
+          aria-label={t('saved.remove')}
+          onClick={onRemove}
+        >
+          {/* A phone's row has room for the short word beside Complete and Archive. */}
+          <span className="max-narrow:hidden">{t('saved.remove')}</span>
+          <span className="hidden max-narrow:inline">{t('saved.removeShort')}</span>
         </Button>
       </div>
     </li>
@@ -178,10 +190,7 @@ export const SavedScreen = (): React.JSX.Element => {
   let body: React.JSX.Element;
   if (query.isPending) {
     body = (
-      <LoadingStatus
-        label={t('saved.loading')}
-        className="flex w-full max-w-feed flex-col gap-4 px-4 py-4"
-      >
+      <LoadingStatus label={t('saved.loading')} className="flex flex-col gap-4 py-2">
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
             <Skeleton className="w-members" />
@@ -212,8 +221,8 @@ export const SavedScreen = (): React.JSX.Element => {
     );
   } else {
     body = (
-      <div className="flex w-full max-w-feed flex-col gap-4 px-3 py-4">
-        <ul className="flex flex-col gap-1">
+      <>
+        <ListCard label={t('saved.title')}>
           {items.map((item) => (
             <Row
               key={item.id}
@@ -230,9 +239,9 @@ export const SavedScreen = (): React.JSX.Element => {
               }}
             />
           ))}
-        </ul>
+        </ListCard>
         {query.hasNextPage && (
-          <div className="px-3">
+          <div className="flex justify-center">
             <Button
               variant="secondary"
               busy={query.isFetchingNextPage}
@@ -244,7 +253,7 @@ export const SavedScreen = (): React.JSX.Element => {
             </Button>
           </div>
         )}
-      </div>
+      </>
     );
   }
 
@@ -278,7 +287,7 @@ export const SavedScreen = (): React.JSX.Element => {
           ))}
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+      <ListColumn>{body}</ListColumn>
     </>
   );
 };

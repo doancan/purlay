@@ -527,6 +527,7 @@ export const en = {
   'message.edit': 'Edit',
   'message.delete': 'Delete',
   'saved.save': 'Save for later',
+  'saved.removeShort': 'Remove',
   'saved.remove': 'Remove from saved',
   'saved.failed': 'The message was not saved.',
   'saved.unsaveFailed': 'The message was not removed from saved.',

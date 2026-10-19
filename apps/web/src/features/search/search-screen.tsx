@@ -25,6 +25,8 @@ import { TextField } from '../../ui/text-field';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../shell/nav';
+import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
+import { Select } from '../../ui/select';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
@@ -79,13 +81,13 @@ const Found = ({
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
   return (
-    <li>
+    <li className={listRowClasses}>
       <button
         type="button"
         onClick={() => {
           navigate(placeOf(workspace.slug, message));
         }}
-        className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
+        className={listButtonClasses()}
       >
         <Avatar
           name={authorOf(message, t('user.erased')).displayName}
@@ -159,7 +161,7 @@ const SearchView = ({
 
   let body: React.JSX.Element | null = null;
   if (asked.length < SEARCH_QUERY_MIN) {
-    body = <p className="px-3 text-body text-ink-muted">{t('search.prompt')}</p>;
+    body = <p className="text-center text-body text-ink-muted">{t('search.prompt')}</p>;
   } else if (query.isError && query.data === undefined) {
     body = (
       <ErrorState
@@ -173,7 +175,7 @@ const SearchView = ({
     );
   } else if (query.isSuccess && found.length === 0) {
     body = (
-      <section className="flex flex-col items-center gap-3 px-4 text-center">
+      <section className="flex flex-col items-center gap-3 py-6 text-center">
         <h2 className="text-title text-ink">{t('state.search.empty.title', { words: asked })}</h2>
         <p className="text-body text-ink-muted">
           {narrowed === undefined
@@ -185,7 +187,7 @@ const SearchView = ({
   } else if (found.length > 0) {
     body = (
       <>
-        <ul className="flex flex-col">
+        <ListCard label={t('search.title')}>
           {found.map((message) => (
             <Found
               key={message.id}
@@ -195,9 +197,9 @@ const SearchView = ({
               words={asked}
             />
           ))}
-        </ul>
+        </ListCard>
         {query.hasNextPage && (
-          <div className="px-3">
+          <div className="flex justify-center">
             <Button
               variant="secondary"
               busy={query.isFetchingNextPage}
@@ -222,64 +224,62 @@ const SearchView = ({
         </HeaderTile>
         <h1 className="whitespace-nowrap text-heading text-ink">{t('search.title')}</h1>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex w-full max-w-feed flex-col gap-4 px-3 py-4">
-          <form
-            role="search"
-            className="px-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const words = draft.trim();
-              setTooShort(words.length < SEARCH_QUERY_MIN);
-              if (words.length >= SEARCH_QUERY_MIN) {
-                navigate(searchHref(workspace.slug, words, channelId));
-              }
+      <ListColumn>
+        <form
+          role="search"
+          className="flex flex-col gap-3 rounded-xl border-hairline border-border-subtle bg-surface-100 px-5 py-4 shadow-card max-narrow:px-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const words = draft.trim();
+            setTooShort(words.length < SEARCH_QUERY_MIN);
+            if (words.length >= SEARCH_QUERY_MIN) {
+              navigate(searchHref(workspace.slug, words, channelId));
+            }
+          }}
+        >
+          <TextField
+            label={t('search.label')}
+            type="search"
+            value={draft}
+            autoComplete="off"
+            aria-busy={searching}
+            {...(tooShort
+              ? { error: t('search.tooShort', { min: String(SEARCH_QUERY_MIN) }) }
+              : {
+                  hint: searching
+                    ? t('search.searching')
+                    : narrowed === undefined
+                      ? t('search.hint')
+                      : t('search.hintIn', { channel: placeName(narrowed) }),
+                })}
+            onChange={(event) => {
+              setDraft(event.target.value);
             }}
-          >
-            <TextField
-              label={t('search.label')}
-              type="search"
-              value={draft}
-              autoComplete="off"
-              aria-busy={searching}
-              {...(tooShort
-                ? { error: t('search.tooShort', { min: String(SEARCH_QUERY_MIN) }) }
-                : {
-                    hint: searching
-                      ? t('search.searching')
-                      : narrowed === undefined
-                        ? t('search.hint')
-                        : t('search.hintIn', { channel: placeName(narrowed) }),
-                  })}
+          />
+          <div className="flex items-center gap-3">
+            <label htmlFor={whereId} className="text-label text-ink-muted">
+              {t('search.where')}
+            </label>
+            <Select
+              id={whereId}
+              value={channelId ?? ''}
+              className="min-w-0 max-w-field flex-1"
               onChange={(event) => {
-                setDraft(event.target.value);
+                const chosen = event.target.value;
+                navigate(searchHref(workspace.slug, asked, chosen === '' ? null : chosen));
               }}
-            />
-            <div className="mt-3 flex items-center gap-2">
-              <label htmlFor={whereId} className="text-label text-ink-muted">
-                {t('search.where')}
-              </label>
-              <select
-                id={whereId}
-                value={channelId ?? ''}
-                onChange={(event) => {
-                  const chosen = event.target.value;
-                  navigate(searchHref(workspace.slug, asked, chosen === '' ? null : chosen));
-                }}
-                className="min-w-0 rounded-md border-hairline border-border-subtle bg-surface-000 px-2 py-1 text-label text-ink"
-              >
-                <option value="">{t('search.everywhere')}</option>
-                {places.map((place) => (
-                  <option key={place.id} value={place.id}>
-                    {place.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </form>
-          {body}
-        </div>
-      </div>
+            >
+              <option value="">{t('search.everywhere')}</option>
+              {places.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </form>
+        {body}
+      </ListColumn>
     </>
   );
 };

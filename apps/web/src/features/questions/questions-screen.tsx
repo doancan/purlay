@@ -36,6 +36,7 @@ import {
   useChannelTitle,
 } from '../channel/channel-header';
 import { NavToggle } from '../shell/nav';
+import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { lastChannel } from './last-channel';
 import { useOpenCount } from './use-open-count';
@@ -144,7 +145,7 @@ const GroupTitle = ({
   // A hook cannot be called conditionally, so a channel the person can no longer see gets a
   // stand-in that never reaches `useChannelTitle`.
   return channel === undefined ? (
-    <h2 id={id} className="px-3 pb-2 text-label text-ink-muted">
+    <h2 id={id} className="text-label text-ink-muted">
       {t('questions.unnamed')}
     </h2>
   ) : (
@@ -164,7 +165,7 @@ const KnownGroupTitle = ({
   const { t } = useI18n();
   const title = useChannelTitle(channel);
   return (
-    <h2 id={id} className="flex items-center gap-1 px-3 pb-2 text-label text-ink-muted">
+    <h2 id={id} className="flex items-center gap-1 text-label text-ink-muted">
       <Icon name={channel.type === 'direct_message' ? 'person' : 'channel'} size="sm" />
       <span>{title}</span>
       <span aria-hidden="true">·</span>
@@ -187,13 +188,13 @@ const QuestionRow = ({
   const replies = t('thread.replies', { count: question.thread?.replyCount ?? 0 });
   const last = question.thread?.lastReplyAt ?? question.createdAt;
   return (
-    <li>
+    <li className={listRowClasses}>
       <button
         type="button"
         onClick={() => {
           navigate(threadHref(workspace.slug, question.channelId, question.id));
         }}
-        className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
+        className={listButtonClasses()}
       >
         <Avatar
           name={authorOf(question, t('user.erased')).displayName}
@@ -228,7 +229,7 @@ const Narrowed = ({ channel }: { readonly channel: Channel | undefined }): React
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   return (
-    <p className="flex flex-wrap items-center gap-2 px-3 text-label text-ink-muted">
+    <p className="flex flex-wrap items-center gap-2 text-label text-ink-muted">
       {channel === undefined ? null : (
         <>
           <NarrowedName channel={channel} />
@@ -278,10 +279,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
   let body: React.JSX.Element;
   if (query.isPending) {
     body = (
-      <LoadingStatus
-        label={t('state.questions.loading')}
-        className="flex w-full max-w-feed flex-col gap-4 px-4 py-4"
-      >
+      <LoadingStatus label={t('state.questions.loading')} className="flex flex-col gap-4 py-2">
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
             <Skeleton className="w-members" />
@@ -319,27 +317,30 @@ export const QuestionsScreen = (): React.JSX.Element => {
     );
   } else {
     body = (
-      <div className="flex w-full max-w-feed flex-col gap-6 px-3 py-4">
+      <>
         {narrowed !== null && <Narrowed channel={byId.get(narrowed)} />}
         {groups.map((group) => {
           const id = `questions-${group.channelId}`;
           return (
-            <section key={group.channelId} aria-labelledby={id}>
-              <GroupTitle
-                channel={byId.get(group.channelId)}
-                count={group.questions.length}
-                id={id}
-              />
-              <ul className="flex flex-col">
-                {group.questions.map((question) => (
-                  <QuestionRow key={question.id} question={question} now={now} />
-                ))}
-              </ul>
-            </section>
+            <ListCard
+              key={group.channelId}
+              headingId={id}
+              heading={
+                <GroupTitle
+                  channel={byId.get(group.channelId)}
+                  count={group.questions.length}
+                  id={id}
+                />
+              }
+            >
+              {group.questions.map((question) => (
+                <QuestionRow key={question.id} question={question} now={now} />
+              ))}
+            </ListCard>
           );
         })}
         {query.hasNextPage && (
-          <div className="px-3">
+          <div className="flex justify-center">
             <Button
               variant="secondary"
               busy={query.isFetchingNextPage}
@@ -351,15 +352,15 @@ export const QuestionsScreen = (): React.JSX.Element => {
             </Button>
           </div>
         )}
-        <p className="px-3 text-caption text-ink-muted">{t('questions.footer')}</p>
-      </div>
+        <p className="text-center text-caption text-ink-muted">{t('questions.footer')}</p>
+      </>
     );
   }
 
   return (
     <>
       <Header narrowed={narrowed} />
-      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+      <ListColumn>{body}</ListColumn>
     </>
   );
 };

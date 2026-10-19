@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Polish — 2026-10-19: the list screens read as one product (D-158)
+
+The open questions, search and saved now share the inbox's shape: a centred column on a quieter ground,
+lists as cards with their heading above, rows divided by hairlines. Saved items' moves appear on hover or
+focus instead of under every row (and stay visible on a phone); search's field and *where* sit in their
+own card, with the product's select.
+
 ### Polish — 2026-10-19: the first two screens a person sees
 
 **Sign in** carries GitHub's mark on its button (the icon set dropped brand marks, so the mark is a
