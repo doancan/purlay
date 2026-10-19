@@ -280,6 +280,23 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('following a thread is read and set on its root, and the answer is checked (D-161)', async () => {
+    const call = harness({ following: false });
+    expect(await call.api.threadFollow(ID)).toEqual({ following: false });
+    expect(await call.api.setThreadFollow(ID, false)).toEqual({ following: false });
+    expect(call.calls).toEqual([
+      { method: 'GET', url: `/api/messages/${ID}/follow`, body: undefined },
+      { method: 'PUT', url: `/api/messages/${ID}/follow`, body: { following: false } },
+    ]);
+    const wrong = harness({ following: 'yes' });
+    expect(
+      await wrong.api.threadFollow(ID).then(
+        () => 'parsed',
+        () => 'refused',
+      ),
+    ).toBe('refused');
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);

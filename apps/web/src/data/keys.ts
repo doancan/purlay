@@ -24,6 +24,8 @@ export const keys = {
   messagesAround: (channelId: string, messageId: string | null) =>
     ['messages', channelId, 'around', messageId] as const,
   thread: (messageId: string) => ['thread', messageId] as const,
+  /** Whether the caller follows a root's thread (D-161): theirs alone, so not under `thread`. */
+  threadFollow: (rootId: string) => ['thread-follow', rootId] as const,
   unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
   /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
   notifications: (workspaceId: string, filter?: 'unread') =>

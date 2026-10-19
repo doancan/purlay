@@ -78,6 +78,11 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   search: unexpected('search'),
   readNotifications: unexpected('readNotifications'),
   readThread: unexpected('readThread'),
+  // The thread panel asks on every opening whether its person follows the thread (D-161), so a test
+  // of anything that opens one need not say so: somebody who never wrote in it. A test of following
+  // says otherwise.
+  threadFollow: () => Promise.resolve({ following: false }),
+  setThreadFollow: unexpected('setThreadFollow'),
   react: unexpected('react'),
   unreact: unexpected('unreact'),
   editMessage: unexpected('editMessage'),

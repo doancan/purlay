@@ -367,7 +367,7 @@ other end — never the status a column away from the bubble it is about.
 ### 4.2. The panel
 
 ```
-  ┌ Thread · #api ─────────────────────────── × ┐
+  ┌ Thread · #api ────────────────── [Follow] × ┐
   │ (AC) Alice  14:32                           │
   │      ╭ The retry backoff is 4s because… ╮   │
   │ ○ Open · 4 replies · last 12m   [Resolve ⌘⇧R]│
@@ -384,7 +384,14 @@ other end — never the status a column away from the bubble it is about.
   thread, unless its address names one (`?thread=`, from the open questions and the inbox), which
   opens even when its root is older than the feed's first page — or a reply's link does (§6).
 - **The header** names it — *Thread · #channel*, or the person's name in a conversation — and its
-  close control (`Esc`) closes it.
+  close control (`Esc`) closes it. Beside the close control, **Follow** (D-161): a toggle with one
+  name, pressed while the person is told of new replies — a bell — and not pressed with the struck
+  bell a muted channel shows; its tooltip says what pressing it would do, *Get notified about new
+  replies* or *Turn off notifications for replies*. Somebody who started or answered the thread
+  follows it until they press it; replying again does not follow a thread let go again. It paints at
+  once and a refusal puts it back with a toast, and Retry when trying again could help. Until the
+  state is read it is there and disabled, so the header does not move; when it could not be read,
+  its tooltip says so and pressing it reads it again. A mention in the thread still arrives.
 - **The root**, its status and **Resolve / Reopen**, a rule labelled *N replies*, then the replies as
   the feed draws them: two edges, grouped by the same rule (§3). The reply box is at the bottom, and
   keeps its draft per thread like the channel's (§5). There is no "also send to the channel": the

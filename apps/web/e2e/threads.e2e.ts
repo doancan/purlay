@@ -157,6 +157,47 @@ test.describe('answering', () => {
   });
 });
 
+test.describe('following', () => {
+  test('Follow in the header: off for a thread one never wrote in, on with a press, told of the next reply, and off again stays off', async ({
+    page,
+    signIn,
+    room,
+    api,
+    tenant,
+  }) => {
+    const made = await aQuestion(room, api);
+    await signIn();
+    await page.goto(made.path);
+    await page.getByRole('button', { name: /Open · 2 replies/ }).click();
+    const follow = threadOf(page, made.rootId).getByRole('button', { name: 'Follow' });
+    await expect(follow).toHaveAttribute('aria-pressed', 'false');
+    await follow.click();
+    await expect(follow).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(async () => {
+        const state = await api('dogancan').get<{ following: boolean }>(
+          `/api/messages/${made.rootId}/follow`,
+        );
+        return state.following;
+      })
+      .toBe(true);
+
+    const reply = await api('bob').say(made.id, 'one more data point', { parentId: made.rootId });
+    const told = await api('dogancan').get<{
+      data: { type: string; message: { id: string } }[];
+    }>(`/api/notifications?workspaceId=${tenant.workspaceId}&limit=100`);
+    expect(told.data.map((n) => [n.type, n.message.id])).toContainEqual(['thread_reply', reply.id]);
+
+    await follow.click();
+    await expect(follow).toHaveAttribute('aria-pressed', 'false');
+    await page.reload();
+    await page.getByRole('button', { name: /Open · 3 replies/ }).click();
+    await expect(
+      threadOf(page, made.rootId).getByRole('button', { name: 'Follow' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
 test.describe('resolving', () => {
   test('with Cmd/Ctrl+Shift+R: the panel closes and the thread reads as resolved, the page does not reload, and the same keys reopen it', async ({
     page,

@@ -258,6 +258,7 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   notifications: 'each person’s inbox, their own state',
   saved_messages: 'each person’s saved items, their own state',
+  thread_follows: 'which threads each person follows or let go, their own state',
   link_previews: 'a cache of other sites’ pages',
   job_runs: 'the scheduler’s own record',
   workspace_exports: 'an export’s own record: its archive is the export',

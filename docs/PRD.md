@@ -144,7 +144,8 @@ Paste-to-upload for images · file size capped by the `attachment_size_limit` co
 
 **4.5 · Noise control** (D-12, D-15, D-29)
 `@username` mentions · **thread participation** — a reply notifies the root author and everyone
-who has already replied in that thread (D-29) · in-app notification inbox · unread and
+who has already replied in that thread (D-29), and a person can follow a thread or let it go
+(D-161) · in-app notification inbox · unread and
 unread-mention counts · Deep Work mode, which suppresses **server-side delivery** and expires
 automatically
 

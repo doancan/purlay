@@ -61,6 +61,7 @@ is rotated out (§4).
 | `reactions` | Who reacted to what, with which emoji | Reactions | With its message |
 | `pinned_messages` | Who pinned a message | Pins (D-130) | With its message, or until unpinned |
 | `saved_messages` | Which messages a person saved, and their state | Save for later (D-128) | Until unsaved; on erasure; with the message |
+| `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |
 | `notifications` | What a person was told of, and whether they read it | The inbox (D-12) | With its message; on erasure |
 | `incidents` | Who declared and resolved an incident; its runbook and postmortem | Incident channels (D-137) | For the life of the channel; not touched by content erasure (D-139 §7) |
 | `incident_updates` | Who changed an incident, and what | The incident's timeline (D-137) | With the incident |

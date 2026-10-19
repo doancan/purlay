@@ -8,11 +8,12 @@
  *
  * **"Needs you" is decided here and nowhere else.** A person is *notified* when the
  * message names them, is in a direct message to them, or is a reply in a thread they
- * started or have already answered. One row per person per message, the strongest
- * reason winning — a mention beats a direct message beats a reply — so the inbox
- * says why they were told, once. A membership at `notification_level = 'none'` is
- * told nothing; a person who is not in the channel but can see it (a public
- * channel, a mention) gets the notification and has no counter to move.
+ * started, have already answered or chose to follow — and did not let go (D-161). One
+ * row per person per message, the strongest reason winning — a mention beats a direct
+ * message beats a reply — so the inbox says why they were told, once. A membership at
+ * `notification_level = 'none'` is told nothing; a person who is not in the channel but
+ * can see it (a public channel, a mention) gets the notification and has no counter to
+ * move.
  *
  * **The counters move in one statement** for the whole channel (D-35): every other
  * member's `unread_count` goes up by one, and `unread_mention_count` by one for
@@ -23,6 +24,10 @@ import { sql, type Executor } from '@purlay/db';
 import type { ChannelState, NEEDS_YOU } from '@purlay/types';
 import type { ChannelContext } from '../../platform/channels';
 import { inDeepWork } from '../workspaces/deep-work';
+import { threadChoices, type ThreadChoices } from './follow';
+
+/** A root has no thread to have chosen about. */
+const NO_CHOICES: ThreadChoices = { followed: [], unfollowed: new Set() };
 
 /** Strongest first — the order a person's one notification for a message is chosen in. */
 type Reason = (typeof NEEDS_YOU)[number];
@@ -251,6 +256,10 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
     for (const row of others) consider(row.user_id, 'direct_message');
   }
 
+  // What the people of a thread chose about it (D-161): who follows it without having written in
+  // it, and who let it go — told nothing for the thread's sake, nor for a channel at every message.
+  const choices = thread === null ? NO_CHOICES : await threadChoices(executor, thread.rootId);
+
   // A member who asked for every message (D-107) is told of this one, for the weakest reason.
   const following = await executor
     .selectFrom('channel_members')
@@ -259,24 +268,36 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
     .where('notification_level', '=', 'all')
     .where('user_id', '<>', sender)
     .execute();
-  for (const row of following) consider(row.user_id, 'channel_message');
+  for (const row of following) {
+    if (!choices.unfollowed.has(row.user_id)) consider(row.user_id, 'channel_message');
+  }
 
   if (thread !== null) {
     // The most recent repliers over `idx_messages_thread`, one row per person, newest first and
     // bounded: one indexed scan per reply (D-29), and a bound on what one reply can write.
+    // Somebody who let the thread go is left out before the bound, so they do not take a place.
+    const unfollowed = [...choices.unfollowed];
     const answered = await executor
       .selectFrom('messages')
       .select('sender_id')
       .where('parent_id', '=', thread.rootId)
       .where('deleted_at', 'is', null)
       .where('id', '<>', messageId)
+      .where((eb) =>
+        unfollowed.length === 0 ? eb.lit(true) : eb('sender_id', 'not in', unfollowed),
+      )
       .groupBy('sender_id')
       .orderBy(sql`max(id::text)`, 'desc')
       .limit(THREAD_PARTICIPANTS_MAX)
       .execute();
-    const participants = [thread.rootAuthorId, ...answered.map((row) => row.sender_id)].filter(
-      (id): id is string => id !== null,
-    );
+    const participants = [
+      ...new Set([
+        thread.rootAuthorId,
+        ...answered.map((row) => row.sender_id),
+        // Who follows it by choice, most recent first, under the same bound (D-161).
+        ...choices.followed.slice(0, THREAD_PARTICIPANTS_MAX),
+      ]),
+    ].filter((id): id is string => id !== null && !choices.unfollowed.has(id));
     const seeing = await stillSeeing(executor, context, participants);
     for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }

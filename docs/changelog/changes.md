@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-19: follow a thread, or turn off its replies (D-161)
+
+The thread panel's header has **Follow**. Turn it off and the thread's replies stop notifying you —
+until you turn it on again; replying once more does not quietly turn it back on. Turn it on in a
+thread you never wrote in and you are told of its replies. A mention in the thread still reaches you,
+and a channel set to *Nothing* stays silent. Before, replying once subscribed you for good, and the
+only way out was muting the whole channel.
+
 ### Performance — 2026-10-19: rarely opened surfaces load when first opened
 
 With every surface of this round in, the initial JavaScript reached 246.6 KB of its 250 KB budget

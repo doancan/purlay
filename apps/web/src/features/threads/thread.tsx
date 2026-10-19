@@ -1,6 +1,6 @@
 /**
  * The thread panel (`UX.md` §4.2, D-122): one root's thread, on the right of the feed — a header
- * that names it and closes it, the root, the replies under an "N replies" rule, and the box to
+ * that names it, follows it (D-161) and closes it, the root, the replies under an "N replies" rule, and the box to
  * answer in at the bottom.
  *
  * **Beside the conversation, not instead of it.** On a wide window the panel is a fixed width
@@ -48,6 +48,7 @@ import { LANDED_MS } from '../messages/message-link';
 import { handleRowKeys } from '../messages/row-keys';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { FollowToggle } from './follow-toggle';
 import { useOpenThread, useThreads } from './thread-context';
 import { THREAD_PANEL_ID, ThreadStatus } from './thread-summary';
 import { buildReplies } from './thread-model';
@@ -123,6 +124,10 @@ const ThreadPanelView = ({
     [membersQuery.data],
   );
   const items = useMemo(() => buildReplies({ replies, pending, me }), [replies, pending, me]);
+  const repliedByMe = useMemo(
+    () => replies.filter((m) => m.sender?.id === user.id && m.deletedAt === null).length,
+    [replies, user.id],
+  );
 
   // ── Open in front of the person, the thread is read (D-147) ─────────────
   const channels = useChannels(workspace.id);
@@ -227,14 +232,17 @@ const ThreadPanelView = ({
           {t('thread.panel.title')}{' '}
           <span className="font-normal text-ink-muted">{`· ${channelLabel}`}</span>
         </h2>
-        <IconButton
-          label={t('thread.close')}
-          glyph="close"
-          shortcut="Esc"
-          onClick={() => {
-            threads.close();
-          }}
-        />
+        <div className="flex shrink-0 items-center gap-1">
+          {root !== undefined && <FollowToggle rootId={rootId} repliedByMe={repliedByMe} />}
+          <IconButton
+            label={t('thread.close')}
+            glyph="close"
+            shortcut="Esc"
+            onClick={() => {
+              threads.close();
+            }}
+          />
+        </div>
       </div>
 
       {root === undefined && rootFailed ? (

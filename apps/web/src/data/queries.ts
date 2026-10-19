@@ -25,6 +25,7 @@ import type {
   NotificationPage,
   WorkspaceMember,
   ChannelMember,
+  ThreadFollow,
 } from '@purlay/types';
 import { SEARCH_QUERY_MIN } from '@purlay/types';
 import { useApi } from './api-provider';
@@ -181,6 +182,16 @@ export const useThread = (messageId: string, enabled = true): UseInfiniteQueryRe
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
     ...KEEP_MESSAGES,
+  });
+};
+
+/** Whether the caller is told of new replies in a root's thread (D-161). */
+export const useThreadFollow = (rootId: string, enabled = true): UseQueryResult<ThreadFollow> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.threadFollow(rootId),
+    queryFn: ({ signal }) => api.threadFollow(rootId, signal),
+    enabled,
   });
 };
 

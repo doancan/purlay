@@ -117,6 +117,8 @@ import {
   readHistory,
   readAround,
   readThread,
+  readThreadFollow,
+  putThreadFollow,
   readSearch,
   readUnresolved,
   setThreadResolution,
@@ -847,6 +849,16 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get(
       '/api/messages/:messageId/thread',
       async ({ request, params }) => await readThread(dependencies, request, params.messageId),
+    )
+    .get(
+      '/api/messages/:messageId/follow',
+      async ({ request, params }) =>
+        await readThreadFollow(dependencies, request, params.messageId),
+    )
+    .put(
+      '/api/messages/:messageId/follow',
+      async ({ request, params, body }) =>
+        await putThreadFollow(dependencies, request, params.messageId, body),
     )
     .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
       await markThreadRead({ ...dependencies, bus: sockets.bus }, request, params.messageId, body);

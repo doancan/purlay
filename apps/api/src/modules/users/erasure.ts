@@ -170,6 +170,7 @@ export const eraseAccount = async (
   await forgetSessions(executor, sessionIds);
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('saved_messages').where('user_id', '=', person.id).execute();
+  await executor.deleteFrom('thread_follows').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('notifications').where('user_id', '=', person.id).execute();
 
   const workspaces: { id: string; memberIds: string[] }[] = [];
