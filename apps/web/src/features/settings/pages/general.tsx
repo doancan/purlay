@@ -104,8 +104,12 @@ export const GeneralPage = (): React.JSX.Element => {
             fill
           >
             <span className="flex w-full min-w-0 items-center gap-2">
-              <code className="flex h-control min-w-0 flex-1 items-center truncate rounded-md border-hairline border-border-subtle bg-surface-000 px-3 font-mono text-caption text-ink max-narrow:h-touch">
-                {address}
+              {/* Cut with an ellipsis, said in full on hover: a flex box clips its words without one. */}
+              <code
+                title={address}
+                className="flex h-control min-w-0 flex-1 items-center rounded-md border-hairline border-border-subtle bg-surface-000 px-3 font-mono text-caption text-ink max-narrow:h-touch"
+              >
+                <span className="truncate">{address}</span>
               </code>
               <Button
                 glyph="copy"

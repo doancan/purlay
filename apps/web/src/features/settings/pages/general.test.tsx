@@ -129,7 +129,10 @@ describe('general', () => {
       },
     });
     const address = `${window.location.origin}/w/${WORKSPACE.slug}`;
-    expect(main(view).getByText(address)).toBeDefined();
+    const shown = main(view).getByText(address);
+    // Too long for the box, it is cut with an ellipsis and said whole on hover.
+    expect(shown.className.split(' ')).toContain('truncate');
+    expect(shown.closest('code')?.getAttribute('title')).toBe(address);
     await person().click(main(view).getByRole('button', { name: 'Copy' }));
     await settle();
     expect(copied).toEqual([address]);
