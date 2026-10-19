@@ -9,17 +9,16 @@
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { useApi } from '../../data/api-provider';
-import { isApiError } from '../../data/errors';
-import { useDescribeFailure } from '../../data/failure';
-import { keys } from '../../data/keys';
-import { useI18n } from '../../i18n/i18n-provider';
-import { Button } from '../../ui/button';
-import { Dialog } from '../../ui/dialog';
-import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { TextField } from '../../ui/text-field';
-import { useToast } from '../../ui/toast';
-import { useWorkspace } from '../shell/workspace';
+import { useApi } from '../../../data/api-provider';
+import { isApiError } from '../../../data/errors';
+import { useDescribeFailure } from '../../../data/failure';
+import { keys } from '../../../data/keys';
+import { useI18n } from '../../../i18n/i18n-provider';
+import { Button } from '../../../ui/button';
+import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { useToast } from '../../../ui/toast';
+import { useWorkspace } from '../../shell/workspace';
+import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 
 /** `SetGitHubTokenRequest`'s rule: printable ASCII, no spaces. */
 const TOKEN = /^[\x21-\x7e]+$/;
@@ -29,13 +28,7 @@ interface Problem {
   readonly message: string;
 }
 
-export const GitHubDialog = ({
-  open,
-  onOpenChange,
-}: {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}): React.JSX.Element => {
+export const IntegrationsPage = (): React.JSX.Element => {
   const { t, format } = useI18n();
   const api = useApi();
   const client = useQueryClient();
@@ -50,19 +43,9 @@ export const GitHubDialog = ({
   const status = useQuery({
     queryKey: keys.githubIntegration(workspace.id),
     queryFn: async ({ signal }) => await api.githubIntegration(workspace.id, signal),
-    enabled: open,
   });
   const reread = async (): Promise<void> => {
     await client.invalidateQueries({ queryKey: keys.githubIntegration(workspace.id) });
-  };
-
-  const change = (next: boolean): void => {
-    // A token half typed is not kept once the dialog is closed.
-    if (!next) {
-      setToken('');
-      setProblem(null);
-    }
-    onOpenChange(next);
   };
 
   const save = async (event: React.SyntheticEvent): Promise<void> => {
@@ -106,82 +89,105 @@ export const GitHubDialog = ({
     }
   };
 
+  const connected = status.data?.configured === true;
   return (
-    <Dialog
-      open={open}
-      onOpenChange={change}
-      title={t('github.title', { workspace: workspace.name })}
-      description={t('github.description')}
-      closeLabel={t('common.close')}
+    <SettingsPage
+      title={t('settings.integrations.title')}
+      description={t('settings.integrations.description')}
     >
-      <section className="flex flex-col gap-2">
-        {status.isError ? (
-          <div className="flex items-center gap-3">
-            <p className="text-body text-ink-muted">{describe(status.error)}</p>
-            <Button
-              onClick={() => {
-                void status.refetch();
-              }}
-            >
-              {t('common.retry')}
-            </Button>
-          </div>
-        ) : status.data === undefined ? (
-          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-2">
-            <Skeleton />
-          </LoadingStatus>
-        ) : (
-          <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 text-body text-ink">
-              {status.data.configured && status.data.updatedAt !== null
-                ? t('github.connected', { when: format.absolute(status.data.updatedAt) })
-                : t('github.notConnected')}
-            </p>
-            {status.data.configured && (
-              <Button
-                busy={busy === 'disconnect'}
-                onClick={() => {
-                  void disconnect();
-                }}
-              >
-                {t('github.disconnect')}
-              </Button>
-            )}
-          </div>
-        )}
-      </section>
       <form
         id={formId}
         onSubmit={(event) => {
           void save(event);
         }}
-        className="flex flex-col gap-3"
       >
-        <TextField
-          label={t('github.token')}
-          hint={t('github.tokenHint')}
-          type="password"
-          value={token}
-          maxLength={255}
-          required
-          autoComplete="off"
-          spellCheck={false}
-          {...(problem?.field === 'token' ? { error: problem.message } : {})}
-          onChange={(event) => {
-            setToken(event.target.value);
-          }}
-        />
-        <div>
-          <Button type="submit" variant="primary" busy={busy === 'save'}>
-            {t('github.save')}
-          </Button>
-        </div>
-        {problem?.field === 'form' && (
-          <p role="alert" className="text-label text-danger-text">
-            {problem.message}
-          </p>
-        )}
+        <SettingsCard
+          title={t('settings.integrations.github')}
+          description={t('github.description')}
+          footer={
+            <>
+              <SaveOutcome
+                outcome={problem?.field === 'form' ? { ok: false, words: problem.message } : null}
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                busy={busy === 'save'}
+                disabled={token.trim() === ''}
+              >
+                {connected ? t('settings.integrations.replace') : t('github.save')}
+              </Button>
+            </>
+          }
+        >
+          <SettingsRow
+            label={t('settings.integrations.status')}
+            {...(status.data === undefined
+              ? {}
+              : {
+                  description:
+                    connected && status.data.updatedAt !== null
+                      ? t('github.connected', { when: format.absolute(status.data.updatedAt) })
+                      : t('github.notConnected'),
+                })}
+          >
+            {status.isError ? (
+              <span className="flex items-center gap-3">
+                <span className="text-label text-ink-muted">{describe(status.error)}</span>
+                <Button
+                  onClick={() => {
+                    void status.refetch();
+                  }}
+                >
+                  {t('common.retry')}
+                </Button>
+              </span>
+            ) : status.data === undefined ? (
+              <LoadingStatus label={t('common.loading')} className="w-full">
+                <Skeleton />
+              </LoadingStatus>
+            ) : (
+              <span className="flex min-w-0 items-center gap-3">
+                <span
+                  className={
+                    connected
+                      ? 'inline-flex h-badge items-center rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text'
+                      : 'inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption font-medium text-ink-muted'
+                  }
+                >
+                  {connected
+                    ? t('settings.integrations.connected')
+                    : t('settings.integrations.notConnected')}
+                </span>
+                {connected && (
+                  <Button
+                    variant="dangerQuiet"
+                    busy={busy === 'disconnect'}
+                    onClick={() => {
+                      void disconnect();
+                    }}
+                  >
+                    {t('github.disconnect')}
+                  </Button>
+                )}
+              </span>
+            )}
+          </SettingsRow>
+          <SettingsTextRow
+            label={t('github.token')}
+            hint={t('github.tokenHint')}
+            type="password"
+            value={token}
+            maxLength={255}
+            autoComplete="off"
+            spellCheck={false}
+            {...(problem?.field === 'token' ? { error: problem.message } : {})}
+            onChange={(event) => {
+              setToken(event.target.value);
+            }}
+          />
+        </SettingsCard>
       </form>
-    </Dialog>
+    </SettingsPage>
   );
 };

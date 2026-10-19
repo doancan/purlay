@@ -41,14 +41,34 @@ const root = (n: number): Message =>
   });
 
 describe('the rail', () => {
-  test('holds the switcher and the five places, each named, and no gear: preferences are the account menu’s', async () => {
+  test('holds the switcher and the five places, each named, and Settings at its foot (D-146)', async () => {
     const view = await open();
     const rail = within(places(view));
     expect(rail.getByRole('button', { name: 'Switch workspace' })).toBeDefined();
     expect(
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
-    ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search', 'Saved']);
+    ).toEqual(['Channels', 'Inbox', 'Open questions', 'Search', 'Saved', 'Settings']);
+    // A link to a page, not a menu of its own.
     expect(rail.queryByRole('button', { name: 'Settings' })).toBeNull();
+  });
+
+  test('Settings opens the person’s Profile page, and is the current page while any settings page is', async () => {
+    const view = await open();
+    const settings = within(places(view)).getByRole('link', { name: 'Settings' });
+    expect(settings.getAttribute('href')).toBe('/w/acme/settings');
+    expect(settings.hasAttribute('aria-current')).toBe(false);
+    await person().click(settings);
+    expect(await view.findByRole('heading', { level: 1, name: 'Profile' })).toBeDefined();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/settings');
+    const marked = (): string[] =>
+      within(places(view))
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('aria-current') === 'page')
+        .map((link) => link.textContent.trim().replace(/\d+$/, ''));
+    expect(marked()).toEqual(['Settings']);
+    await person().click(view.getByRole('link', { name: 'Preferences' }));
+    await view.findByRole('heading', { level: 1, name: 'Preferences' });
+    expect(marked()).toEqual(['Settings']);
   });
 
   test('the workspace tile shows its initials and opens the switcher', async () => {
@@ -182,13 +202,13 @@ describe('the open questions', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab runs the tile and the five places, then the sidebar from the workspace’s name', async () => {
+  test('Tab runs the tile, the five places and Settings, then the sidebar from the workspace’s name', async () => {
     const view = await open();
     act(() => {
       within(places(view)).getByRole('button', { name: 'Switch workspace' }).focus();
     });
     const names: string[] = [];
-    for (let step = 0; step < 7; step++) {
+    for (let step = 0; step < 8; step++) {
       await person().tab();
       const active = document.activeElement;
       names.push(
@@ -201,6 +221,7 @@ describe('the keyboard', () => {
       'Open questions',
       'Search',
       'Saved',
+      'Settings',
       'acme-eng',
       expect.stringMatching(/^Jump to…/) as unknown as string,
     ]);

@@ -1,21 +1,28 @@
 /**
- * The workspace's GitHub connection (D-23, `API.md` §7), through the real frame: who is offered it,
- * the status in each state, saving a token and disconnecting, and every failure said in words.
+ * The workspace's GitHub connection (D-23, `API.md` §7, D-146), through the real frame at the
+ * Integrations page's address: who is offered it, the status in each state, saving a token and
+ * disconnecting, and every failure said in words.
  */
 import { describe, expect, test } from 'bun:test';
-import { act } from '@testing-library/react';
-import type { GitHubIntegration } from '@purlay/types';
-import { Outlet } from '../../app/outlet';
-import { ApiError } from '../../data/errors';
-import type { Api } from '../../data/api';
-import { expectNoAxeViolations } from '../../testing/axe';
-import { installDom } from '../../testing/dom';
-import { IDS, WHEN, aSession, aSignedInApi } from '../../testing/fixtures';
-import { renderApp } from '../../testing/render';
-import { person } from '../../testing/user';
-import { Toaster } from '../../ui/toast';
+import { act, within } from '@testing-library/react';
+import type { BoundFunctions, queries } from '@testing-library/react';
+import type { GitHubIntegration, UserRole } from '@purlay/types';
+import { Outlet } from '../../../app/outlet';
+import { ApiError } from '../../../data/errors';
+import type { Api } from '../../../data/api';
+import { expectNoAxeViolations } from '../../../testing/axe';
+import { installDom } from '../../../testing/dom';
+import { IDS, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
+import { renderApp } from '../../../testing/render';
+import { person } from '../../../testing/user';
+import { Toaster } from '../../../ui/toast';
 
 installDom();
+
+/** What `within` answers: the queries, bound to one part of the page. */
+type Scope = BoundFunctions<typeof queries>;
+
+type View = Awaited<ReturnType<typeof renderApp>>;
 
 const NOT_CONNECTED: GitHubIntegration = { configured: false, updatedAt: null };
 const CONNECTED: GitHubIntegration = { configured: true, updatedAt: WHEN };
@@ -28,10 +35,7 @@ const settle = async (): Promise<void> => {
   }
 };
 
-const open = async (
-  api: Partial<Api>,
-  role: 'owner' | 'admin' | 'member' = 'owner',
-): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+const render = async (path: string, api: Partial<Api>, role: UserRole = 'owner'): Promise<View> => {
   const session = aSession();
   const view = await renderApp(
     <>
@@ -39,7 +43,7 @@ const open = async (
       <Toaster dismissLabel="Dismiss" />
     </>,
     {
-      path: `/w/acme/c/${IDS.api}`,
+      path,
       api: aSignedInApi({
         me: () =>
           Promise.resolve({
@@ -51,33 +55,37 @@ const open = async (
     },
   );
   await settle();
-  await person().click(view.getByRole('button', { name: 'Switch workspace' }));
   return view;
 };
 
-const openDialog = async (
-  api: Partial<Api>,
-  role: 'owner' | 'admin' = 'owner',
-): Promise<Awaited<ReturnType<typeof renderApp>>> => {
-  const view = await open(api, role);
-  await person().click(view.getByRole('menuitem', { name: 'GitHub connection…' }));
+const openPage = async (api: Partial<Api>, role: UserRole = 'owner'): Promise<View> => {
+  const view = await render('/w/acme/settings/integrations', api, role);
+  await view.findByRole('heading', { level: 1, name: 'Integrations' });
   await settle();
   return view;
 };
 
+const main = (view: View): Scope => within(view.getByRole('main'));
+
 describe('the GitHub connection', () => {
-  test('is an owner’s and an admin’s; a member is not offered it', async () => {
-    const member = await open({}, 'member');
-    expect(member.queryByRole('menuitem', { name: 'GitHub connection…' })).toBeNull();
+  test('is an owner’s and an admin’s; a member is not offered it, and its address is not found', async () => {
+    const member = await render('/w/acme/settings/integrations', {}, 'member');
+    expect(await member.findByText('Nothing here')).toBeDefined();
+    expect(member.queryByRole('link', { name: 'Integrations' })).toBeNull();
     member.unmount();
-    const admin = await open({}, 'admin');
-    expect(admin.getByRole('menuitem', { name: 'GitHub connection…' })).toBeDefined();
+    const admin = await openPage(
+      { githubIntegration: () => Promise.resolve(NOT_CONNECTED) },
+      'admin',
+    );
+    expect(admin.getByRole('link', { name: 'Integrations' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
   });
 
   test('not connected, it says links stay links; a token saved is sent whole, said, and the status read again', async () => {
     let status = NOT_CONNECTED;
     const sent: string[] = [];
-    const view = await openDialog({
+    const view = await openPage({
       githubIntegration: () => Promise.resolve(status),
       setGitHubToken: (workspaceId, token) => {
         sent.push(`${workspaceId}:${token}`);
@@ -85,7 +93,7 @@ describe('the GitHub connection', () => {
         return Promise.resolve();
       },
     });
-    expect(view.getByText(/Not connected/)).toBeDefined();
+    expect(view.getByText(/^Not connected: links/)).toBeDefined();
     const field = view.getByLabelText('Token');
     expect(field.getAttribute('type')).toBe('password');
     await person().type(field, '  github_pat_abc123  ');
@@ -100,7 +108,7 @@ describe('the GitHub connection', () => {
   test('connected, it can be disconnected, and the status is read again', async () => {
     let status = CONNECTED;
     let removed = 0;
-    const view = await openDialog({
+    const view = await openPage({
       githubIntegration: () => Promise.resolve(status),
       removeGitHubToken: () => {
         removed += 1;
@@ -112,13 +120,13 @@ describe('the GitHub connection', () => {
     await person().click(view.getByRole('button', { name: 'Disconnect' }));
     await settle();
     expect(removed).toBe(1);
-    expect(view.getByText(/Not connected/)).toBeDefined();
+    expect(view.getByText(/^Not connected: links/)).toBeDefined();
     expect(view.queryByRole('button', { name: 'Disconnect' })).toBeNull();
   });
 
   test('a token with a space is refused in the field before the server hears; the server’s refusal lands there too', async () => {
     let calls = 0;
-    const view = await openDialog({
+    const view = await openPage({
       githubIntegration: () => Promise.resolve(NOT_CONNECTED),
       setGitHubToken: () => {
         calls += 1;
@@ -139,13 +147,14 @@ describe('the GitHub connection', () => {
   });
 
   test('a save or a disconnect that fails is said, and what was typed stays', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       githubIntegration: () => Promise.resolve(CONNECTED),
       setGitHubToken: () => Promise.reject(new ApiError(0, 'NETWORK', 'down')),
       removeGitHubToken: () => Promise.reject(new ApiError(0, 'NETWORK', 'down')),
     });
     await person().type(view.getByLabelText('Token'), 'ghp_kept');
-    await person().click(view.getByRole('button', { name: 'Save token' }));
+    // Connected, saving a token replaces the one there is.
+    await person().click(view.getByRole('button', { name: 'Replace token' }));
     await settle();
     expect(view.getByRole('alert').textContent).toContain('The token was not saved.');
     expect((view.getByLabelText('Token') as HTMLInputElement).value).toBe('ghp_kept');
@@ -156,7 +165,7 @@ describe('the GitHub connection', () => {
 
   test('a status that will not load says why, with Retry; while it is read it is a status', async () => {
     let reads = 0;
-    const view = await openDialog({
+    const view = await openPage({
       githubIntegration: async () => {
         reads += 1;
         if (reads === 1) throw new ApiError(0, 'NETWORK', 'down');
@@ -165,25 +174,30 @@ describe('the GitHub connection', () => {
     });
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(view.getByText(/Not connected/)).toBeDefined();
+    expect(view.getByText(/^Not connected: links/)).toBeDefined();
     view.unmount();
-    const reading = await openDialog({ githubIntegration: () => new Promise(() => undefined) });
-    expect(reading.getByRole('dialog').querySelector('[role="status"]')).not.toBeNull();
+    const reading = await openPage({ githubIntegration: () => new Promise(() => undefined) });
+    expect(reading.getByRole('main').querySelector('[role="status"]')).not.toBeNull();
   });
 
-  test('a token half typed is forgotten when the dialog is closed', async () => {
-    const view = await openDialog({ githubIntegration: () => Promise.resolve(NOT_CONNECTED) });
+  test('nothing typed, there is nothing to save', async () => {
+    const view = await openPage({ githubIntegration: () => Promise.resolve(NOT_CONNECTED) });
+    expect(main(view).getByRole('button', { name: 'Save token' })).toHaveProperty('disabled', true);
+  });
+
+  test('a token half typed is forgotten when the page is left', async () => {
+    const view = await openPage({ githubIntegration: () => Promise.resolve(NOT_CONNECTED) });
     await person().type(view.getByLabelText('Token'), 'ghp_half');
-    await person().keyboard('{Escape}');
-    await settle();
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    await person().click(view.getByRole('menuitem', { name: 'GitHub connection…' }));
+    await person().click(view.getByRole('link', { name: 'Profile' }));
+    await view.findByRole('heading', { level: 1, name: 'Profile' });
+    await person().click(view.getByRole('link', { name: 'Integrations' }));
+    await view.findByRole('heading', { level: 1, name: 'Integrations' });
     await settle();
     expect((view.getByLabelText('Token') as HTMLInputElement).value).toBe('');
   });
 
   test('passes the accessibility audit', async () => {
-    const view = await openDialog({ githubIntegration: () => Promise.resolve(CONNECTED) });
-    await expectNoAxeViolations(view.getByRole('dialog'));
+    const view = await openPage({ githubIntegration: () => Promise.resolve(CONNECTED) });
+    await expectNoAxeViolations(view.getByRole('main'));
   });
 });

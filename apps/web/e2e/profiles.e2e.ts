@@ -39,13 +39,15 @@ test.describe('profiles', () => {
     await shellReady(page);
     await openNav(page);
     await page.getByRole('button', { name: /^Account:/ }).click();
-    await page.getByRole('menuitem', { name: 'Your profile…' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Your profile' });
-    await dialog.getByRole('textbox', { name: 'Title' }).fill('Platform lead');
-    await dialog.getByRole('textbox', { name: 'Status' }).fill('On call this week');
-    await dialog.getByRole('combobox', { name: 'Time zone' }).fill('Asia/Tokyo');
-    await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(dialog.getByRole('status')).toHaveText('Saved.');
+    // Settings opens on the person's Profile page (D-146).
+    await page.getByRole('menuitem', { name: /^Settings/ }).click();
+    const form = page.getByRole('main');
+    await expect(form.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+    await form.getByRole('textbox', { name: 'Title' }).fill('Platform lead');
+    await form.getByRole('textbox', { name: 'Status' }).fill('On call this week');
+    await form.getByRole('combobox', { name: 'Time zone' }).fill('Asia/Tokyo');
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(form.getByRole('status')).toHaveText('Saved.');
 
     // Told by the socket, read again: no reload on Bob's side. On a wide window the time and status
     // are beside her name; on a narrow one there is no room, and her profile says them.

@@ -7,7 +7,7 @@
  * answers for an asset of a build it no longer has (D-102).
  */
 import { expect, test } from './fixtures';
-import { isNarrow, openNav, shellReady } from './support';
+import { openSettings, shellReady } from './support';
 
 test.describe('after a deployment', () => {
   test('a chunk that is gone offers a reload, and Reload reloads', async ({
@@ -16,24 +16,12 @@ test.describe('after a deployment', () => {
     tenant,
   }) => {
     await signIn();
-    await page.goto(`/w/${tenant.slug}`);
-    await shellReady(page);
+    // The language is chosen on the Preferences page of Settings (D-146).
+    const main = await openSettings(page, tenant.slug, 'preferences', 'Preferences');
     await page.route('**/assets/tr-*.js', (route) => route.fulfill({ status: 404, body: '' }));
 
-    await openNav(page);
-    await page.getByRole('button', { name: /^Account: / }).click();
-    await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
+    await main.getByRole('radio', { name: 'Türkçe' }).click();
 
-    // Narrow, the navigation is a modal over the page: the person closes it to reach the page.
-    // Choosing closes the menu and gives focus back to the account button; Escape pressed before it
-    // arrived could be taken by the closing menu instead of the overlay (#498 measured the same race
-    // with the rail's Settings, which the account menu replaced). So: wait for focus, then close.
-    if (isNarrow(page)) {
-      const overlay = page.getByRole('dialog', { name: 'Workspace' });
-      await expect(overlay.getByRole('button', { name: /^Account: / })).toBeFocused();
-      await page.keyboard.press('Escape');
-      await expect(overlay).toHaveCount(0);
-    }
     const bar = page.getByRole('status').filter({ hasText: 'Purlay was updated' });
     await expect(bar).toBeVisible();
     // The language whose words did not come stays unchosen: the page is still in English.
@@ -46,9 +34,8 @@ test.describe('after a deployment', () => {
     await reloaded;
     await shellReady(page);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-    await openNav(page);
-    await page.getByRole('button', { name: /^Account: / }).click();
-    await page.getByRole('menuitemradio', { name: 'Türkçe' }).click();
+    await expect(main.getByRole('heading', { level: 1, name: 'Preferences' })).toBeVisible();
+    await main.getByRole('radio', { name: 'Türkçe' }).click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'tr');
   });
 });

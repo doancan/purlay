@@ -28,6 +28,9 @@ const ROUTES = {
   search: '/w/:slug/search',
   saved: '/w/:slug/saved',
   welcome: '/w/:slug/welcome',
+  // Settings are a page with a navigation of its own (D-146); the bare address opens Profile.
+  settingsHome: '/w/:slug/settings',
+  settings: '/w/:slug/settings/:section',
   gallery: '/__gallery',
 } as const;
 

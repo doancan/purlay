@@ -3391,8 +3391,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'invite-link-kept-after-closing',
     why: "a link's secret stays on screen for whoever opens the dialog next",
     file: 'apps/web/src/features/sidebar/invite-dialog.tsx',
-    find: '    if (!next) {\n      setLink(null);\n',
-    replace: '    if (!next) {\n',
+    find: '    if (!next) invitations.forget();\n',
+    replace: '',
     tests: ['apps/web/src/features/sidebar/invite-dialog.test.tsx'],
   },
   {

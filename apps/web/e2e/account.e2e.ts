@@ -1,20 +1,27 @@
 /**
- * The account menu at the sidebar's foot (D-124), against the real API: signing out everywhere
- * ends a session in another browser.
+ * Signing out everywhere (D-124, D-146), against the real API: from the account menu's Settings to
+ * the Sessions & account page, where it asks first and then ends a session in another browser.
  *
  * As an outsider (`fixtures.ts`): signing out everywhere ends every session the person holds, and
  * done as one of the seeded four it would sign every other test of the run out.
  */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { openNav, shellReady } from './support';
 
-const accountMenu = async (page: Page): Promise<void> => {
+/** Sessions & account, the way a person goes: the account menu's Settings, then the page by name. */
+const sessionsPage = async (page: Page): Promise<Locator> => {
   await openNav(page);
   await page.getByRole('button', { name: /^Account: / }).click();
+  await page.getByRole('menuitem', { name: /^Settings/ }).click();
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1, name: 'Profile' })).toBeVisible();
+  await (await openNav(page)).getByRole('link', { name: 'Sessions & account' }).click();
+  await expect(main.getByRole('heading', { level: 1, name: 'Sessions & account' })).toBeVisible();
+  return main;
 };
 
-test.describe('the account menu', () => {
+test.describe('signing out everywhere', () => {
   test('signing out everywhere ends the session in the other browser too', async ({
     asOutsider,
     workspaceOf,
@@ -28,8 +35,8 @@ test.describe('the account menu', () => {
       await shellReady(page);
     }
 
-    await accountMenu(here);
-    await here.getByRole('menuitem', { name: 'Sign out everywhere…' }).click();
+    const main = await sessionsPage(here);
+    await main.getByRole('button', { name: 'Sign out everywhere…' }).click();
     const dialog = here.getByRole('dialog', { name: 'Sign out everywhere?' });
     await dialog.getByRole('button', { name: 'Sign out everywhere' }).click();
     // The one who chose to sign out is not told their session ended: they ended it.

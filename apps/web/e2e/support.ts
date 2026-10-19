@@ -261,6 +261,22 @@ export const openNav = async (page: Page): Promise<Locator> => {
   return sidebar;
 };
 
+/**
+ * A page of Settings (D-146), opened at its address, once its chunk has loaded and drawn the page's
+ * title; returns the main column the page is in.
+ */
+export const openSettings = async (
+  page: Page,
+  slug: string,
+  section: string,
+  title: string,
+): Promise<Locator> => {
+  await page.goto(`/w/${slug}/settings/${section}`);
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  return main;
+};
+
 /** A place on the rail — the inbox, the open questions, search — with the navigation open (D-110). */
 export const railLink = async (page: Page, name: string): Promise<Locator> => {
   await openNav(page);

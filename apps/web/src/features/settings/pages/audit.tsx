@@ -10,27 +10,23 @@
  */
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { AUDIT_ACTIONS, type AuditAction, type AuditEntry, type UserRole } from '@purlay/types';
-import { useApi } from '../../data/api-provider';
-import { useDescribeFailure } from '../../data/failure';
-import { keys } from '../../data/keys';
-import { useChannels, useMembers } from '../../data/queries';
-import { useI18n } from '../../i18n/i18n-provider';
-import { Button } from '../../ui/button';
-import { Dialog } from '../../ui/dialog';
-import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { useWorkspace } from '../shell/workspace';
+import { useApi } from '../../../data/api-provider';
+import { useDescribeFailure } from '../../../data/failure';
+import { keys } from '../../../data/keys';
+import { useChannels, useMembers } from '../../../data/queries';
+import { useI18n } from '../../../i18n/i18n-provider';
+import { Icon } from '../../../components/icon';
+import { Avatar } from '../../../ui/avatar';
+import { Button } from '../../../ui/button';
+import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { useWorkspace } from '../../shell/workspace';
+import { SettingsCard, SettingsPage } from '../page';
 
 const known = (action: string): AuditAction | undefined => AUDIT_ACTIONS.find((a) => a === action);
 const roleOf = (word: string | undefined): UserRole | undefined =>
   word === 'member' || word === 'admin' || word === 'owner' ? word : undefined;
 
-export const AuditDialog = ({
-  open,
-  onOpenChange,
-}: {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}): React.JSX.Element => {
+export const AuditPage = (): React.JSX.Element => {
   const { t, format } = useI18n();
   const api = useApi();
   const describe = useDescribeFailure();
@@ -42,7 +38,6 @@ export const AuditDialog = ({
     queryFn: async ({ pageParam, signal }) => await api.audit(workspace.id, pageParam, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled: open,
   });
 
   const person = (userId: string | undefined): string =>
@@ -173,59 +168,75 @@ export const AuditDialog = ({
   const entries = (trail.data?.pages ?? []).flatMap((page) => page.data);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={t('audit.title', { workspace: workspace.name })}
-      description={t('audit.description')}
-      closeLabel={t('common.close')}
-    >
-      {trail.isError && trail.data === undefined ? (
-        <div className="flex items-center gap-3">
-          <p className="text-body text-ink-muted">{describe(trail.error)}</p>
-          <Button
-            onClick={() => {
-              void trail.refetch();
-            }}
-          >
-            {t('common.retry')}
-          </Button>
-        </div>
-      ) : trail.data === undefined ? (
-        <LoadingStatus label={t('common.loading')} className="flex flex-col gap-2">
-          <Skeleton />
-          <Skeleton />
-        </LoadingStatus>
-      ) : entries.length === 0 ? (
-        <p className="text-body text-ink-muted">{t('audit.empty')}</p>
-      ) : (
-        <>
-          <ul className="flex flex-col gap-2">
+    <SettingsPage title={t('settings.audit.title')} description={t('audit.description')}>
+      <SettingsCard>
+        {trail.isError && trail.data === undefined ? (
+          <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+            <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(trail.error)}</p>
+            <Button
+              onClick={() => {
+                void trail.refetch();
+              }}
+            >
+              {t('common.retry')}
+            </Button>
+          </div>
+        ) : trail.data === undefined ? (
+          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
+            <Skeleton />
+            <Skeleton />
+            <Skeleton />
+          </LoadingStatus>
+        ) : entries.length === 0 ? (
+          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{t('audit.empty')}</p>
+        ) : (
+          <ol aria-label={t('settings.audit.title')} className="flex flex-col">
             {entries.map((entry) => (
-              <li key={entry.id} className="flex flex-col">
-                <span data-audit-line="" className="text-body text-ink">
-                  {sentence(entry)}
+              <li
+                key={entry.id}
+                className="flex items-center gap-3 not-first:border-t-hairline border-border-subtle px-6 py-3 max-narrow:items-start max-narrow:px-4"
+              >
+                {/* Who acted, at a glance; nobody (the nightly purge, an erased account) is the system. */}
+                {entry.actor === null ? (
+                  <span className="inline-flex size-avatar shrink-0 items-center justify-center rounded-lg bg-surface-200 text-ink-muted">
+                    <Icon name="history" size="sm" />
+                  </span>
+                ) : (
+                  <Avatar
+                    name={entry.actor.displayName}
+                    username={entry.actor.username}
+                    size="md"
+                  />
+                )}
+                <span className="flex min-w-0 flex-1 items-baseline gap-6 max-narrow:flex-col max-narrow:gap-1">
+                  <span data-audit-line="" className="min-w-0 flex-1 text-body text-ink">
+                    {sentence(entry)}
+                  </span>
+                  <time
+                    dateTime={entry.createdAt}
+                    className="shrink-0 font-mono text-caption text-ink-muted"
+                  >
+                    {format.absolute(entry.createdAt)}
+                  </time>
                 </span>
-                <time dateTime={entry.createdAt} className="text-caption text-ink-muted">
-                  {format.absolute(entry.createdAt)}
-                </time>
               </li>
             ))}
-          </ul>
-          {trail.hasNextPage && (
-            <div>
-              <Button
-                busy={trail.isFetchingNextPage}
-                onClick={() => {
-                  void trail.fetchNextPage();
-                }}
-              >
-                {t('audit.older')}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </Dialog>
+          </ol>
+        )}
+        {trail.hasNextPage && (
+          <footer className="flex justify-center border-t-hairline border-border-subtle px-6 py-3">
+            <Button
+              variant="ghost"
+              busy={trail.isFetchingNextPage}
+              onClick={() => {
+                void trail.fetchNextPage();
+              }}
+            >
+              {t('audit.older')}
+            </Button>
+          </footer>
+        )}
+      </SettingsCard>
+    </SettingsPage>
   );
 };

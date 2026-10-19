@@ -1,5 +1,5 @@
 /**
- * An owner's export of the workspace (D-140), against the fake API: an owner's alone; read first, with
+ * An owner's export of the workspace (D-140), on the Data & retention page (D-146), against the fake API: an owner's alone; read first, with
  * its loading, its failure and its empty list; asked for, then read again while it is made — on the
  * schedule the test moves — until it is ready; a ready one downloaded once, by a link to the API; a
  * failed one said by its code; one already being made refused, in both languages.
@@ -7,15 +7,15 @@
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { UserRole, WorkspaceExport } from '@purlay/types';
-import { Outlet } from '../../app/outlet';
-import type { Api } from '../../data/api';
-import { ApiError } from '../../data/errors';
-import { en } from '../../i18n/catalogue/en';
-import { expectNoAxeViolations } from '../../testing/axe';
-import { installDom } from '../../testing/dom';
-import { IDS, WORKSPACE, aSession, aSignedInApi } from '../../testing/fixtures';
-import { renderApp } from '../../testing/render';
-import { person } from '../../testing/user';
+import { Outlet } from '../../../app/outlet';
+import type { Api } from '../../../data/api';
+import { ApiError } from '../../../data/errors';
+import { en } from '../../../i18n/catalogue/en';
+import { expectNoAxeViolations } from '../../../testing/axe';
+import { installDom } from '../../../testing/dom';
+import { WORKSPACE, aSession, aSignedInApi } from '../../../testing/fixtures';
+import { renderApp } from '../../../testing/render';
+import { person } from '../../../testing/user';
 
 installDom();
 
@@ -45,14 +45,17 @@ const READY = anExport({
   sizeBytes: 2048,
 });
 
-const open = async (
+type View = Awaited<ReturnType<typeof renderApp>>;
+
+const render = async (
+  path: string,
   api: Partial<Api>,
-  role: UserRole = 'owner',
-  locale: 'en' | 'tr' = 'en',
-): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+  role: UserRole,
+  locale: 'en' | 'tr',
+): Promise<View> => {
   const session = aSession();
   const view = await renderApp(<Outlet />, {
-    path: `/w/acme/c/${IDS.api}`,
+    path,
     locale,
     api: aSignedInApi({
       me: () =>
@@ -60,31 +63,54 @@ const open = async (
           ...session,
           memberships: session.memberships.map((m) => ({ ...m, role })),
         }),
+      // The page's other card: how long history is kept.
+      retention: () => Promise.resolve({ retentionDays: null }),
       ...api,
     }),
   });
   await settle();
-  const switcher = locale === 'en' ? 'Switch workspace' : 'Çalışma alanını değiştir';
-  await person().click(view.getByRole('button', { name: switcher }));
   return view;
 };
 
-const dialogOf = async (
-  view: Awaited<ReturnType<typeof renderApp>>,
-  entry = 'Export workspace…',
-): Promise<HTMLElement> => {
-  await person().click(view.getByRole('menuitem', { name: entry }));
+/** The Data & retention page, loaded: its chunk is lazy, so the heading is waited for. */
+const open = async (
+  api: Partial<Api>,
+  role: UserRole = 'owner',
+  locale: 'en' | 'tr' = 'en',
+): Promise<View> => {
+  const view = await render('/w/acme/settings/data', api, role, locale);
+  await view.findByRole('heading', {
+    level: 1,
+    name: locale === 'en' ? 'Data & retention' : 'Veri ve saklama',
+  });
   await settle();
-  return view.getByRole('dialog');
+  return view;
+};
+
+/** The export's card on the page. */
+const cardOf = (view: View, name = 'Export'): HTMLElement => view.getByRole('region', { name });
+
+/** Leaves for Profile and comes back, as a person moving between the pages would. */
+const leaveAndReturn = async (view: View): Promise<void> => {
+  await person().click(view.getByRole('link', { name: 'Profile' }));
+  await view.findByRole('heading', { level: 1, name: 'Profile' });
+  await person().click(view.getByRole('link', { name: 'Data & retention' }));
+  await view.findByRole('heading', { level: 1, name: 'Data & retention' });
+  await settle();
 };
 
 describe('an owner’s export of the workspace', () => {
-  test('is an owner’s alone: an admin and a member are not offered it', async () => {
+  test('is an owner’s alone: an admin and a member are not offered it, and its address is not found', async () => {
     for (const role of ['admin', 'member'] as const) {
-      const view = await open({}, role);
-      expect(view.queryByRole('menuitem', { name: 'Export workspace…' })).toBeNull();
+      const view = await render('/w/acme/settings/data', {}, role, 'en');
+      expect(await view.findByText('Nothing here')).toBeDefined();
+      expect(view.queryByRole('link', { name: 'Data & retention' })).toBeNull();
       view.unmount();
     }
+    const owner = await open({ exports: () => Promise.resolve([]) });
+    expect(owner.getByRole('link', { name: 'Data & retention' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
   });
 
   test('asked for, read again while it is made, then offered once as a download', async () => {
@@ -102,7 +128,7 @@ describe('an owner’s export of the workspace', () => {
         return Promise.resolve(anExport());
       },
     });
-    const dialog = await dialogOf(view);
+    const dialog = cardOf(view);
     expect(within(dialog).getByText('You have not exported this workspace yet.')).toBeDefined();
     await expectNoAxeViolations(dialog);
 
@@ -173,7 +199,7 @@ describe('an owner’s export of the workspace', () => {
     test(`a download that ${what}`, async () => {
       let held: WorkspaceExport[] = [READY];
       const view = await open({ exports: () => Promise.resolve(held) });
-      const dialog = await dialogOf(view);
+      const dialog = cardOf(view);
       const link = within(dialog).getByRole('link');
       link.addEventListener('click', (event) => {
         event.preventDefault();
@@ -199,7 +225,7 @@ describe('an owner’s export of the workspace', () => {
     });
   }
 
-  test('closed while one is being made, the list is not read again', async () => {
+  test('left while one is being made, the list is not read again', async () => {
     let reads = 0;
     const view = await open({
       exports: () => {
@@ -207,10 +233,10 @@ describe('an owner’s export of the workspace', () => {
         return Promise.resolve([anExport()]);
       },
     });
-    const dialog = await dialogOf(view);
-    await person().click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(within(cardOf(view)).getByText('Being made…')).toBeDefined();
+    await person().click(view.getByRole('link', { name: 'Profile' }));
+    await view.findByRole('heading', { level: 1, name: 'Profile' });
     await settle();
-    expect(view.queryByRole('dialog')).toBeNull();
     const closed = reads;
     await act(async () => {
       view.world.timers.advance(30_000);
@@ -247,11 +273,11 @@ describe('an owner’s export of the workspace', () => {
           }),
         ]),
     });
-    const dialog = await dialogOf(view);
+    const dialog = cardOf(view);
     const list = within(dialog).getByRole('list', { name: 'Your exports' });
     const said = within(list)
       .getAllByRole('listitem')
-      .map((item) => item.lastElementChild?.textContent);
+      .map((item) => item.firstElementChild?.textContent);
     expect(said).toEqual([
       'Expired before it was downloaded',
       'It was cut off when the server restarted. Try again.',
@@ -271,7 +297,7 @@ describe('an owner’s export of the workspace', () => {
         return await Promise.resolve([]);
       },
     });
-    const dialog = await dialogOf(view);
+    const dialog = cardOf(view);
     expect(within(dialog).getByText('Check your connection and try again.')).toBeDefined();
     expect(within(dialog).getByRole('button', { name: 'Export' })).toHaveProperty('disabled', true);
     await person().click(within(dialog).getByRole('button', { name: 'Retry' }));
@@ -280,7 +306,7 @@ describe('an owner’s export of the workspace', () => {
     view.unmount();
 
     const pending = await open({ exports: () => new Promise(() => undefined) });
-    const waiting = await dialogOf(pending);
+    const waiting = cardOf(pending);
     expect(within(waiting).getByRole('status')).toBeDefined();
   });
 
@@ -297,7 +323,7 @@ describe('an owner’s export of the workspace', () => {
       'owner',
       'tr',
     );
-    const dialog = await dialogOf(view, 'Çalışma alanını dışa aktar…');
+    const dialog = cardOf(view, 'Dışa aktarma');
     await person().click(within(dialog).getByRole('button', { name: 'Dışa aktar' }));
     await settle();
     expect(within(dialog).getByRole('alert').textContent).toBe(
@@ -306,22 +332,19 @@ describe('an owner’s export of the workspace', () => {
     expect(within(dialog).getByText('Hazırlanıyor…')).toBeDefined();
   });
 
-  test('any other refusal is said with its reason, and gone when the dialog opens again', async () => {
+  test('any other refusal is said with its reason, and gone when the page is opened again', async () => {
     const view = await open({
       exports: () => Promise.resolve([]),
       requestExport: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'no')),
     });
-    let dialog = await dialogOf(view);
+    let dialog = cardOf(view);
     await person().click(within(dialog).getByRole('button', { name: 'Export' }));
     await settle();
     expect(within(dialog).getByRole('alert').textContent).toBe(
       `The export was not asked for. ${en['failure.gone']}`,
     );
-    await person().click(within(dialog).getByRole('button', { name: 'Close' }));
-    await settle();
-    expect(view.queryByRole('dialog')).toBeNull();
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    dialog = await dialogOf(view);
+    await leaveAndReturn(view);
+    dialog = cardOf(view);
     expect(within(dialog).queryByRole('alert')).toBeNull();
   });
 });

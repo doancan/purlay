@@ -64,6 +64,13 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
         setOverlay((now) => (now === 'palette' ? null : 'palette'));
         return;
       }
+      // Settings (D-146), where the platforms put an application's preferences.
+      if (command && !event.altKey && !event.shiftKey && event.key === ',') {
+        event.preventDefault();
+        setOverlay(null);
+        navigate(href('settingsHome', { slug }));
+        return;
+      }
       // `/` is a shifted key on some layouts, so Shift is not held against it.
       if (command && !event.altKey && event.key === '/') {
         event.preventDefault();

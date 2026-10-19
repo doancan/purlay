@@ -18,6 +18,7 @@ import {
   ME,
   WHEN,
   aChannel,
+  aSession,
   aSignedInApi,
   NO_PROFILE,
 } from '../../testing/fixtures';
@@ -152,6 +153,18 @@ describe('what is on offer before anything is typed', () => {
       'Bob',
       'Alice',
       'you',
+      // Every settings page this owner may open (D-146), then the choices made in place.
+      'Profile',
+      'Preferences',
+      'Notifications',
+      'Keyboard shortcuts',
+      'Sessions & account',
+      'General',
+      'Members',
+      'Invitations',
+      'Integrations',
+      'Audit log',
+      'Data & retention',
       'Theme: System',
       'Theme: Light',
       'Theme: Dark',
@@ -426,6 +439,34 @@ describe('what each kind of item does', () => {
     await settle();
     expect(asked).toEqual([IDS.me]);
     expect(here()).toBe('/w/acme/c/00000000-0000-4000-8000-0000000000d2');
+  });
+
+  test('a settings page is found by its name, and Enter goes there and closes (D-146)', async () => {
+    const { input, here, closed } = await mount();
+    await person().type(input(), 'audit log');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/settings/audit');
+    expect(closed()).toEqual([false]);
+  });
+
+  test('a member is offered their own settings pages and none of the workspace’s', async () => {
+    const session = aSession();
+    const { options } = await mount(
+      apiWith({
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((m) => ({ ...m, role: 'member' as const })),
+          }),
+      }),
+    );
+    const offered = options();
+    expect(offered).toContain('Profile');
+    expect(offered).toContain('Sessions & account');
+    for (const page of ['General', 'Members', 'Invitations', 'Audit log', 'Data & retention']) {
+      expect(offered).not.toContain(page);
+    }
   });
 
   test('a theme is applied at once, and the palette closes', async () => {

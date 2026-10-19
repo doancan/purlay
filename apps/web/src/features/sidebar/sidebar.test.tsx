@@ -30,6 +30,7 @@ import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
 import { PRESENCE_GRACE_MS, type PresenceSnapshot, type ServerFrame } from '@purlay/types';
 import { keys } from '../../data/keys';
+import { en } from '../../i18n/catalogue/en';
 import { expectFocusOn } from '../../testing/focus';
 
 installDom();
@@ -588,19 +589,43 @@ describe('the workspace menu', () => {
     const view = await open(aSignedInApi({ me: () => Promise.resolve(two()) }));
     await person().click(view.getByRole('button', { name: 'Switch workspace' }));
     const items = view.getAllByRole('menuitem').map((i) => i.textContent);
-    // The owner of acme-eng is also offered invitation links (D-115) and the GitHub token (D-23).
+    // The owner of acme-eng is also offered invitation links (D-115) and the workspace's settings,
+    // a page of Settings (D-146); everything else an owner does is there.
     expect(items).toEqual([
       'acme-eng',
       'side-project',
       'Create workspace…',
       'Invite people…',
-      'Members…',
-      'GitHub connection…',
-      'Audit log…',
-      'Workspace settings…',
-      'Keep history…',
-      'Export workspace…',
+      en['workspace.settings.entry'],
     ]);
+  });
+
+  test('a member is offered the workspaces and a new one, and nothing that is an owner’s or an admin’s', async () => {
+    const session = aSession();
+    const view = await open(
+      aSignedInApi({
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((m) => ({ ...m, role: 'member' as const })),
+          }),
+      }),
+    );
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'acme-eng',
+      'Create workspace…',
+    ]);
+  });
+
+  test('Workspace settings opens the General page, with a way Back', async () => {
+    const view = await open();
+    const before = view.world.history.stack.length;
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: en['workspace.settings.entry'] }));
+    expect(await view.findByRole('heading', { level: 1, name: 'General' })).toBeDefined();
+    expect(here(view)).toBe('/w/acme/settings/general');
+    expect(view.world.history.stack.length).toBeGreaterThan(before);
   });
 
   test('each place in it has a glyph of its own, so it is found without reading every label (#642)', async () => {
@@ -608,19 +633,21 @@ describe('the workspace menu', () => {
     await person().click(view.getByRole('button', { name: 'Switch workspace' }));
     const places = view
       .getAllByRole('menuitem')
-      .filter((item) => item.textContent.endsWith('…'))
+      .filter((item) => item.textContent !== 'acme-eng')
       .map((item) => ({
         place: item.textContent,
         glyph: [...(item.querySelector('svg')?.classList ?? [])].find(
           (name) => name.startsWith('lucide-') && name !== 'lucide-icon',
         ),
       }));
-    expect(places.length).toBeGreaterThan(5);
+    expect(places.map((p) => p.place)).toEqual([
+      'Create workspace…',
+      'Invite people…',
+      en['workspace.settings.entry'],
+    ]);
     expect(places.filter((p) => p.glyph === undefined)).toEqual([]);
     const glyphs = places.map((p) => p.glyph);
     expect(new Set(glyphs).size, JSON.stringify(places)).toBe(glyphs.length);
-    // And none borrows another place's: the keyboard is Keyboard shortcuts', not the audit log's.
-    expect(places.find((p) => p.place === 'Audit log…')?.glyph).not.toBe('lucide-keyboard');
   });
 
   test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
@@ -633,12 +660,7 @@ describe('the workspace menu', () => {
       'acme-eng',
       'Create workspace…',
       'Invite people…',
-      'Members…',
-      'GitHub connection…',
-      'Audit log…',
-      'Workspace settings…',
-      'Keep history…',
-      'Export workspace…',
+      en['workspace.settings.entry'],
     ]);
   });
 

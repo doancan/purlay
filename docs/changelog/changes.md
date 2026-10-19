@@ -6,6 +6,33 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Polish — 2026-10-19: the first two screens a person sees
+
+**Sign in** carries GitHub's mark on its button (the icon set dropped brand marks, so the mark is a
+glyph of our own), the button is the touch height, and the lines below the title break evenly instead
+of leaving one word alone. **Welcome** — the channels to start in — is a centred column with the
+workspace's tile, the channels as rows of one card (picked ones tinted, the busiest marked *Active*,
+the topic under the name), and Skip and Join in the card's foot; the button reads *Join* rather than
+*Join 0 channels* while nothing is picked. Somebody already in every public channel is told so, rather
+than that there are none.
+
+### Feature — 2026-10-19: Settings is a page, and the menus are short again (D-146, D-151)
+
+The workspace menu had grown to nine items, each opening a 480px dialog, and the account menu to sixteen
+rows — the owner, looking at the running product, called them cramped and the screens undesigned. Settings
+is now a page, `/w/<slug>/settings/<section>`, with its own navigation in the sidebar's place: **Account**
+(Profile, Preferences, Notifications, Keyboard shortcuts, Sessions & account) and, for an owner or an
+admin, the workspace's pages (General, Members, Invitations, Integrations, Audit log, Data & retention).
+Every page has one shape — a title, a sentence, cards of labelled rows — on a ground a step below the
+cards, in both themes and down to a phone. Members is a table with counts, a search, a role filter and
+what each role can do; the audit log names who acted with their avatar; history windows read "Forever",
+"1 year", "5 years". Notifications says plainly what reaches a closed tab on this server, and lists every
+channel's level in one place. The account menu keeps Deep Work, Settings (`Cmd/Ctrl+,`), shortcuts and
+Sign out; the workspace menu keeps the workspaces, Create, Invite people and Workspace settings; the rail
+has a gear; the palette finds every page by name. The pages load as a chunk of their own. Controls —
+buttons, fields, selects — are 32px tall instead of 28px, and menus are as wide as the sidebar. Turkish
+role names are Sahip and Yönetici, no longer "Owner" and "Admin".
+
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 
 With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the

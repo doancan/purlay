@@ -33,6 +33,8 @@ import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { SavedScreen } from '../features/saved/saved-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
+import { LazySettingsScreen } from '../features/settings/load';
+import { FIRST_SECTION } from '../features/settings/sections';
 
 declare global {
   /**
@@ -132,6 +134,18 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return (
         <Shell slug={match.params.slug}>
           <WelcomeScreen />
+        </Shell>
+      );
+    case 'settingsHome':
+      return (
+        <Shell slug={match.params.slug}>
+          <LazySettingsScreen section={FIRST_SECTION} />
+        </Shell>
+      );
+    case 'settings':
+      return (
+        <Shell slug={match.params.slug}>
+          <LazySettingsScreen section={match.params.section} />
         </Shell>
       );
     case 'gallery': {

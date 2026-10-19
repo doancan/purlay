@@ -22,6 +22,7 @@ export interface ShortcutsDialogProps {
 type RowKey =
   | 'shortcuts.palette'
   | 'shortcuts.reference'
+  | 'shortcuts.settings'
   | 'shortcuts.close'
   | 'shortcuts.channels'
   | 'shortcuts.deepWork'
@@ -49,6 +50,7 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
     rows: [
       { label: 'shortcuts.palette', keys: (k) => [[k.mod, 'K']] },
       { label: 'shortcuts.reference', keys: (k) => [[k.mod, '/']] },
+      { label: 'shortcuts.settings', keys: (k) => [[k.mod, ',']] },
       { label: 'shortcuts.close', keys: (k) => [[k.escape]] },
       {
         label: 'shortcuts.channels',
@@ -80,13 +82,56 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
   },
 ];
 
+/** The reference itself: the groups and their rows, as the dialog and the settings page both show it. */
+export const ShortcutList = ({
+  mac,
+  level = 3,
+}: {
+  readonly mac: boolean;
+  /** The groups' heading level: below a dialog's title, or a page's. */
+  readonly level?: 2 | 3;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const labels = keyLabels(mac);
+  const Heading = level === 2 ? 'h2' : 'h3';
+  return (
+    <>
+      {GROUPS.map((group) => (
+        <section key={group.title} aria-labelledby={group.title} className="flex flex-col gap-2">
+          <Heading id={group.title} className="text-label text-ink-muted">
+            {t(group.title)}
+          </Heading>
+          <ul className="flex flex-col gap-2">
+            {group.rows.map((row) => (
+              <li key={row.label} className="flex items-center justify-between gap-4">
+                <span className="text-body text-ink">{t(row.label)}</span>
+                <span className="flex items-center gap-2">
+                  {row.keys(labels).map((sequence, at) => (
+                    <span key={sequence.join('+')} className="flex items-center gap-1">
+                      {at > 0 && (
+                        <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
+                      )}
+                      {sequence.map((key) => (
+                        <Kbd key={key}>{key}</Kbd>
+                      ))}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
+  );
+};
+
 export const ShortcutsDialog = ({
   open,
   onOpenChange,
   mac,
 }: ShortcutsDialogProps): React.JSX.Element => {
   const { t } = useI18n();
-  const labels = keyLabels(mac);
   return (
     <Dialog
       open={open}
@@ -104,32 +149,7 @@ export const ShortcutsDialog = ({
         aria-label={t('shortcuts.title')}
         className="flex flex-col gap-4"
       >
-        {GROUPS.map((group) => (
-          <section key={group.title} aria-labelledby={group.title} className="flex flex-col gap-2">
-            <h3 id={group.title} className="text-label text-ink-muted">
-              {t(group.title)}
-            </h3>
-            <ul className="flex flex-col gap-2">
-              {group.rows.map((row) => (
-                <li key={row.label} className="flex items-center justify-between gap-4">
-                  <span className="text-body text-ink">{t(row.label)}</span>
-                  <span className="flex items-center gap-2">
-                    {row.keys(labels).map((sequence, at) => (
-                      <span key={sequence.join('+')} className="flex items-center gap-1">
-                        {at > 0 && (
-                          <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
-                        )}
-                        {sequence.map((key) => (
-                          <Kbd key={key}>{key}</Kbd>
-                        ))}
-                      </span>
-                    ))}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+        <ShortcutList mac={mac} />
       </div>
     </Dialog>
   );

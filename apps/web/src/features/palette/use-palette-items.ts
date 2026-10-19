@@ -16,6 +16,8 @@ import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
 import { LOCALES } from '../../i18n/types';
 import { useSession } from '../session/session';
+import { useWorkspaceRole } from '../settings/role';
+import { sectionsFor } from '../settings/sections';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
 import { useWorkspace } from '../shell/workspace';
 import { displayName, inSidebarOrder } from './channels';
@@ -31,6 +33,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const deepWork = useDeepWorkControls();
   const channels = useChannels(workspace.id).data;
   const members = useMembers(workspace.id).data;
+  const role = useWorkspaceRole();
 
   const currentChannelId = match.name === 'channel' ? match.params.channelId : null;
   const slug = workspace.slug;
@@ -97,6 +100,21 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
       });
     }
 
+    // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
+    for (const section of sectionsFor(role)) {
+      items.push({
+        id: `settings:${section.id}`,
+        group: 'settings',
+        label: t(`settings.${section.id}.nav`),
+        keywords: [t('settings.label')],
+        glyph: section.glyph,
+        recency: '',
+        run: () => {
+          navigate(href('settings', { slug, section: section.id }));
+        },
+      });
+    }
+
     // Deep Work as the account menu offers it (D-124): the whiles to start it for, or its end.
     if (deepWork !== null && deepWork.until === null) {
       for (const choice of DEEP_WORK_CHOICES) {
@@ -159,5 +177,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     setLocale,
     openDirectMessage,
     deepWork,
+    role,
   ]);
 };

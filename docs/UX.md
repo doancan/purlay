@@ -421,6 +421,7 @@ trade a certain cost for a hypothetical benefit.
 |---|---|
 | `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
 | `Cmd/Ctrl+/` | Shortcut reference |
+| `Cmd/Ctrl+,` | Settings (D-146) |
 | `Esc` | Close the topmost thing — palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
 | `↑` `↓` | Move message focus |
 | `T` | Open the focused message's thread in the panel, and move focus there |

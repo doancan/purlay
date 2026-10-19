@@ -1,6 +1,6 @@
 /**
- * An owner's export of the workspace (D-140), in the app against the real API: asked for, made by the
- * API process in the background, downloaded once as an archive `tar` opens — and the link not offered
+ * An owner's export of the workspace (D-140), on the Data & retention page of Settings (D-146) against
+ * the real API: asked for, made by the API process in the background, downloaded once as an archive `tar` opens — and the link not offered
  * again — and the trail says who exported it.
  */
 import { execFileSync } from 'node:child_process';
@@ -8,7 +8,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from './fixtures';
-import { openNav } from './support';
+import { openSettings } from './support';
 
 test.describe('exporting a workspace', () => {
   test('an owner asks, waits for it, downloads it once, and the trail says so', async ({
@@ -18,18 +18,14 @@ test.describe('exporting a workspace', () => {
     expectNoAxe,
   }) => {
     await signIn();
-    await page.goto(`/w/${tenant.slug}`);
-    await openNav(page);
-    await page.getByRole('button', { name: 'Switch workspace' }).click();
-    await page.getByRole('menuitem', { name: 'Export workspace…' }).click();
-    // By its name: on a narrow screen the navigation drawer is a dialog too.
-    const dialog = page.getByRole('dialog', { name: /^Export / });
-    await expect(dialog.getByText('You have not exported this workspace yet.')).toBeVisible();
+    const main = await openSettings(page, tenant.slug, 'data', 'Data & retention');
+    const card = main.getByRole('region', { name: 'Export' });
+    await expect(card.getByText('You have not exported this workspace yet.')).toBeVisible();
     await expectNoAxe();
-    await dialog.getByRole('button', { name: 'Export' }).click();
+    await card.getByRole('button', { name: 'Export' }).click();
 
     // Made in the background; the list is read again until it is ready.
-    const link = dialog.getByRole('link', { name: /^Download \(.+\) — once, until/ });
+    const link = card.getByRole('link', { name: /^Download \(.+\) — once, until/ });
     await expect(link).toBeVisible({ timeout: 30_000 });
     await expectNoAxe();
     const href = await link.getAttribute('href');
@@ -42,16 +38,12 @@ test.describe('exporting a workspace', () => {
     expect(entries).toContain('export/messages.ndjson');
 
     // Once: the link is gone here, and the server refuses it a second time.
-    await expect(dialog.getByText(/^Downloaded\./)).toBeVisible();
-    await expect(dialog.getByRole('link')).toHaveCount(0);
+    await expect(card.getByText(/^Downloaded\./)).toBeVisible();
+    await expect(card.getByRole('link')).toHaveCount(0);
     const again = await page.request.get(href ?? '');
     expect(again.status()).toBe(404);
 
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await page.getByRole('button', { name: 'Switch workspace' }).click();
-    await page.getByRole('menuitem', { name: 'Audit log…' }).click();
-    const trail = page.getByRole('dialog', { name: /Audit log/ });
+    const trail = await openSettings(page, tenant.slug, 'audit', 'Audit log');
     await expect(trail.getByText(/exported the workspace, with \d+ messages/)).toBeVisible();
   });
 });

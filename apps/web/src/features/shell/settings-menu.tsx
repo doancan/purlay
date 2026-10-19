@@ -35,7 +35,7 @@ interface PreferencesProps {
   readonly platform?: PlatformSource;
 }
 
-export const PreferenceItems = ({ platform }: PreferencesProps): React.JSX.Element => {
+const PreferenceItems = ({ platform }: PreferencesProps): React.JSX.Element => {
   const { t, locale, setLocale } = useI18n();
   const { choice, setChoice } = useTheme();
   const openShortcuts = useShortcutsDoor();

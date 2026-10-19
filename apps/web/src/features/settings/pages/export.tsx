@@ -10,16 +10,16 @@
 import type { WorkspaceExport } from '@purlay/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
-import { useApi } from '../../data/api-provider';
-import { codeOf, failureKey, useDescribeFailure } from '../../data/failure';
-import { keys } from '../../data/keys';
-import { useI18n } from '../../i18n/i18n-provider';
-import { RealtimePortsContext } from '../../realtime/realtime-provider';
-import { browserSchedule } from '../../realtime/socket';
-import { Button } from '../../ui/button';
-import { Dialog } from '../../ui/dialog';
-import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { useWorkspace } from '../shell/workspace';
+import { useApi } from '../../../data/api-provider';
+import { codeOf, failureKey, useDescribeFailure } from '../../../data/failure';
+import { keys } from '../../../data/keys';
+import { useI18n } from '../../../i18n/i18n-provider';
+import { RealtimePortsContext } from '../../../realtime/realtime-provider';
+import { browserSchedule } from '../../../realtime/socket';
+import { Button } from '../../../ui/button';
+import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { useWorkspace } from '../../shell/workspace';
+import { SaveOutcome, SettingsCard } from '../page';
 
 /** How often the list is read again while an export is being made. */
 const EXPORT_POLL_MS = 3_000;
@@ -27,13 +27,7 @@ const EXPORT_POLL_MS = 3_000;
 const downloadUrl = (workspaceId: string, exportId: string): string =>
   `/api/workspaces/${encodeURIComponent(workspaceId)}/exports/${encodeURIComponent(exportId)}/download`;
 
-export const ExportDialog = ({
-  open,
-  onOpenChange,
-}: {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}): React.JSX.Element => {
+export const ExportCard = (): React.JSX.Element => {
   const { t, format } = useI18n();
   const api = useApi();
   const client = useQueryClient();
@@ -49,7 +43,6 @@ export const ExportDialog = ({
   const exports = useQuery({
     queryKey: keys.exports(workspace.id),
     queryFn: async ({ signal }) => await api.exports(workspace.id, signal),
-    enabled: open,
   });
   const list = exports.data;
   const making = list?.some((made) => made.status === 'pending') === true;
@@ -57,23 +50,18 @@ export const ExportDialog = ({
   // While one is being made, read again a while after each read — through the schedule the realtime
   // ports carry, so a test moves the time instead of waiting for it.
   useEffect(() => {
-    if (!open || !making) return undefined;
+    if (!making) return undefined;
     return schedule(() => {
       void refetch();
     }, EXPORT_POLL_MS);
-  }, [open, making, dataUpdatedAt, schedule, refetch]);
+  }, [making, dataUpdatedAt, schedule, refetch]);
   useEffect(() => {
-    if (!open || !followed) return undefined;
+    if (!followed) return undefined;
     return schedule(() => {
       setFollowed(false);
       void refetch();
     }, EXPORT_POLL_MS);
-  }, [open, followed, schedule, refetch]);
-
-  const change = (wanted: boolean): void => {
-    if (!wanted) setProblem(null);
-    onOpenChange(wanted);
-  };
+  }, [followed, schedule, refetch]);
 
   const ask = async (): Promise<void> => {
     setBusy(true);
@@ -152,16 +140,15 @@ export const ExportDialog = ({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={change}
-      title={t('export.title', { workspace: workspace.name })}
+    <SettingsCard
+      title={t('settings.data.export')}
       description={t('export.description')}
-      closeLabel={t('common.close')}
       footer={
         <>
+          <SaveOutcome outcome={problem === null ? null : { ok: false, words: problem }} />
           <Button
             variant="primary"
+            glyph="download"
             busy={busy}
             disabled={list === undefined || making}
             onClick={() => {
@@ -173,42 +160,38 @@ export const ExportDialog = ({
         </>
       }
     >
-      <div className="flex flex-col gap-3">
-        {exports.isError ? (
-          <div className="flex items-center gap-3">
-            <p className="text-body text-ink-muted">{describe(exports.error)}</p>
-            <Button
-              onClick={() => {
-                void exports.refetch();
-              }}
+      {exports.isError ? (
+        <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+          <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(exports.error)}</p>
+          <Button
+            onClick={() => {
+              void exports.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </Button>
+        </div>
+      ) : list === undefined ? (
+        <LoadingStatus label={t('common.loading')} className="px-6 py-5">
+          <Skeleton />
+        </LoadingStatus>
+      ) : list.length === 0 ? (
+        <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{t('export.empty')}</p>
+      ) : (
+        <ul aria-label={t('export.list')} className="flex flex-col">
+          {list.map((made) => (
+            <li
+              key={made.id}
+              className="flex items-baseline justify-between gap-6 not-first:border-t-hairline border-border-subtle px-6 py-3 max-narrow:flex-col max-narrow:gap-1 max-narrow:px-4"
             >
-              {t('common.retry')}
-            </Button>
-          </div>
-        ) : list === undefined ? (
-          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-2">
-            <Skeleton />
-          </LoadingStatus>
-        ) : list.length === 0 ? (
-          <p className="text-body text-ink-muted">{t('export.empty')}</p>
-        ) : (
-          <ul aria-label={t('export.list')} className="flex flex-col gap-2">
-            {list.map((made) => (
-              <li key={made.id} className="flex flex-col gap-1">
-                <span className="text-label text-ink-muted">
-                  {t('export.asked', { when: format.absolute(made.createdAt) })}
-                </span>
-                <span className="text-body text-ink">{stateOf(made)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {problem !== null && (
-          <p role="alert" className="text-label text-danger-text">
-            {problem}
-          </p>
-        )}
-      </div>
-    </Dialog>
+              <span className="min-w-0 text-body text-ink">{stateOf(made)}</span>
+              <span className="shrink-0 font-mono text-caption text-ink-muted">
+                {t('export.asked', { when: format.absolute(made.createdAt) })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SettingsCard>
   );
 };

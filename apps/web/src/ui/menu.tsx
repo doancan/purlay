@@ -19,7 +19,7 @@ import { cn } from './cn';
 import { Kbd } from './kbd';
 
 const contentClasses =
-  'z-popover min-w-members rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float';
+  'z-popover min-w-sidebar rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float';
 
 const itemClasses =
   'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body text-ink data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';

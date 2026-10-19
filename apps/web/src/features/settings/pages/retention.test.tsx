@@ -1,19 +1,21 @@
 /**
- * How long the workspace keeps its history (D-139 §4), against the fake API: an owner's alone; read
+ * How long the workspace keeps its history (D-139 §4), on the Data & retention page (D-146), against
+ * the fake API: an owner's alone; read
  * first, with its loading and its failure; a shorter window said in full before it is saved, in red;
  * a longer one plainly; a window set some other way shown as itself; a refusal said, in both languages.
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { UserRole } from '@purlay/types';
-import { Outlet } from '../../app/outlet';
-import type { Api } from '../../data/api';
-import { ApiError } from '../../data/errors';
-import { expectNoAxeViolations } from '../../testing/axe';
-import { installDom } from '../../testing/dom';
-import { IDS, WORKSPACE, aSession, aSignedInApi } from '../../testing/fixtures';
-import { renderApp } from '../../testing/render';
-import { person } from '../../testing/user';
+import { Outlet } from '../../../app/outlet';
+import type { Api } from '../../../data/api';
+import { ApiError } from '../../../data/errors';
+import { expectNoAxeViolations } from '../../../testing/axe';
+import { installDom } from '../../../testing/dom';
+import { WORKSPACE, aSession, aSignedInApi } from '../../../testing/fixtures';
+import { renderApp } from '../../../testing/render';
+import { person } from '../../../testing/user';
+import { Toaster } from '../../../ui/toast';
 
 installDom();
 
@@ -25,46 +27,68 @@ const settle = async (): Promise<void> => {
   }
 };
 
+type View = Awaited<ReturnType<typeof renderApp>>;
+
+const render = async (
+  path: string,
+  api: Partial<Api>,
+  role: UserRole,
+  locale: 'en' | 'tr',
+): Promise<View> => {
+  const session = aSession();
+  const view = await renderApp(
+    <>
+      <Outlet />
+      <Toaster dismissLabel="Dismiss" />
+    </>,
+    {
+      path,
+      locale,
+      api: aSignedInApi({
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((m) => ({ ...m, role })),
+          }),
+        // The page's other card: the exports.
+        exports: () => Promise.resolve([]),
+        ...api,
+      }),
+    },
+  );
+  await settle();
+  return view;
+};
+
+/** The Data & retention page, loaded: its chunk is lazy, so the heading is waited for. */
 const open = async (
   api: Partial<Api>,
   role: UserRole = 'owner',
   locale: 'en' | 'tr' = 'en',
-): Promise<Awaited<ReturnType<typeof renderApp>>> => {
-  const session = aSession();
-  const view = await renderApp(<Outlet />, {
-    path: `/w/acme/c/${IDS.api}`,
-    locale,
-    api: aSignedInApi({
-      me: () =>
-        Promise.resolve({
-          ...session,
-          memberships: session.memberships.map((m) => ({ ...m, role })),
-        }),
-      ...api,
-    }),
+): Promise<View> => {
+  const view = await render('/w/acme/settings/data', api, role, locale);
+  await view.findByRole('heading', {
+    level: 1,
+    name: locale === 'en' ? 'Data & retention' : 'Veri ve saklama',
   });
   await settle();
-  const switcher = locale === 'en' ? 'Switch workspace' : 'Çalışma alanını değiştir';
-  await person().click(view.getByRole('button', { name: switcher }));
   return view;
 };
 
-const dialogOf = async (view: Awaited<ReturnType<typeof renderApp>>): Promise<HTMLElement> => {
-  await person().click(view.getByRole('menuitem', { name: 'Keep history…' }));
-  await settle();
-  return view.getByRole('dialog');
-};
+/** The card that holds the setting. */
+const cardOf = (view: View, name = 'History'): HTMLElement => view.getByRole('region', { name });
 
 describe('how long the workspace keeps its history', () => {
-  test('is an owner’s alone: an admin and a member are not offered it', async () => {
+  test('is an owner’s alone: an admin and a member are not offered it, and its address is not found', async () => {
     for (const role of ['admin', 'member'] as const) {
-      const view = await open({}, role);
-      expect(view.queryByRole('menuitem', { name: 'Keep history…' })).toBeNull();
+      const view = await render('/w/acme/settings/data', {}, role, 'en');
+      expect(await view.findByText('Nothing here')).toBeDefined();
+      expect(view.queryByRole('link', { name: 'Data & retention' })).toBeNull();
       view.unmount();
     }
   });
 
-  test('a shorter window is said in full, in red, before it is saved; then saved and closed', async () => {
+  test('a shorter window is said in full, in red, before it is saved; then saved and said', async () => {
     const asked: [string, number | null][] = [];
     const view = await open({
       retention: () => Promise.resolve({ retentionDays: null }),
@@ -73,7 +97,7 @@ describe('how long the workspace keeps its history', () => {
         return Promise.resolve({ retentionDays });
       },
     });
-    const dialog = await dialogOf(view);
+    const dialog = cardOf(view);
     const select = within(dialog).getByLabelText('Keep history');
     expect((select as HTMLSelectElement).value).toBe('forever');
     // The same window as now: nothing to save.
@@ -86,28 +110,32 @@ describe('how long the workspace keeps its history', () => {
       name: 'Delete history older than 90 days',
     });
     expect(destroy.className).toContain('bg-danger');
-    await expectNoAxeViolations(dialog);
+    await expectNoAxeViolations(view.getByRole('main'));
     await person().click(destroy);
     await settle();
     expect(asked).toEqual([[WORKSPACE.id, 90]]);
-    expect(view.queryByRole('dialog')).toBeNull();
+    expect(view.getByText('Saved.')).toBeDefined();
+    // What is held now is what was chosen: nothing more to save, nothing more to warn of.
+    expect(within(dialog).queryByRole('note')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
   });
 
-  test('Cancel closes it and saves nothing, and the next opening starts from what is held', async () => {
+  test('left without saving, nothing is saved, and coming back starts from what is held', async () => {
     const view = await open({
       retention: () => Promise.resolve({ retentionDays: null }),
       setRetention: () => {
         throw new Error('nothing should be saved');
       },
     });
-    let dialog = await dialogOf(view);
-    await person().selectOptions(within(dialog).getByLabelText('Keep history'), '30 days');
-    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await person().selectOptions(within(cardOf(view)).getByLabelText('Keep history'), '30 days');
+    await person().click(view.getByRole('link', { name: 'Profile' }));
+    await view.findByRole('heading', { level: 1, name: 'Profile' });
+    await person().click(view.getByRole('link', { name: 'Data & retention' }));
+    await view.findByRole('heading', { level: 1, name: 'Data & retention' });
     await settle();
-    expect(view.queryByRole('dialog')).toBeNull();
-    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
-    dialog = await dialogOf(view);
-    expect(within(dialog).getByLabelText<HTMLSelectElement>('Keep history').value).toBe('forever');
+    expect(within(cardOf(view)).getByLabelText<HTMLSelectElement>('Keep history').value).toBe(
+      'forever',
+    );
   });
 
   test('a longer window, or forever, deletes nothing and is said plainly', async () => {
@@ -119,8 +147,8 @@ describe('how long the workspace keeps its history', () => {
         return Promise.resolve({ retentionDays });
       },
     });
-    const dialog = await dialogOf(view);
-    await person().selectOptions(within(dialog).getByLabelText('Keep history'), 'forever');
+    const dialog = cardOf(view);
+    await person().selectOptions(within(dialog).getByLabelText('Keep history'), 'Forever');
     expect(within(dialog).queryByRole('note')).toBeNull();
     await person().click(within(dialog).getByRole('button', { name: 'Save' }));
     await settle();
@@ -129,17 +157,30 @@ describe('how long the workspace keeps its history', () => {
 
   test('a window set some other way is shown as itself, not as a neighbour', async () => {
     const view = await open({ retention: () => Promise.resolve({ retentionDays: 45 }) });
-    const dialog = await dialogOf(view);
+    const dialog = cardOf(view);
     const select = within(dialog).getByLabelText<HTMLSelectElement>('Keep history');
     expect(select.value).toBe('45');
     expect([...select.options].map((option) => option.textContent)).toEqual([
-      'forever',
+      'Forever',
       '30 days',
       '45 days',
       '90 days',
-      '365 days',
-      '730 days',
-      '1825 days',
+      '1 year',
+      '2 years',
+      '5 years',
+    ]);
+  });
+
+  test('the windows offered are named as a person says them: forever, days, years', async () => {
+    const view = await open({ retention: () => Promise.resolve({ retentionDays: null }) });
+    const select = within(cardOf(view)).getByLabelText<HTMLSelectElement>('Keep history');
+    expect([...select.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['forever', 'Forever'],
+      ['30', '30 days'],
+      ['90', '90 days'],
+      ['365', '1 year'],
+      ['730', '2 years'],
+      ['1825', '5 years'],
     ]);
   });
 
@@ -152,15 +193,14 @@ describe('how long the workspace keeps its history', () => {
         return await Promise.resolve({ retentionDays: null });
       },
     });
-    const dialog = await dialogOf(view);
+    const dialog = cardOf(view);
     await person().click(within(dialog).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(within(dialog).getByLabelText('Keep history')).toBeDefined();
     view.unmount();
 
     const pending = await open({ retention: () => new Promise(() => undefined) });
-    const waiting = await dialogOf(pending);
-    expect(within(waiting).getByRole('status')).toBeDefined();
+    expect(within(cardOf(pending)).getByRole('status')).toBeDefined();
   });
 
   test('a refusal is said, and the choice stays for another try — in Turkish too', async () => {
@@ -172,9 +212,7 @@ describe('how long the workspace keeps its history', () => {
       'owner',
       'tr',
     );
-    await person().click(view.getByRole('menuitem', { name: 'Geçmişi sakla…' }));
-    await settle();
-    const dialog = view.getByRole('dialog');
+    const dialog = cardOf(view, 'Geçmiş');
     const select = within(dialog).getByLabelText<HTMLSelectElement>('Geçmişi sakla');
     await person().selectOptions(select, '30 gün');
     await person().click(

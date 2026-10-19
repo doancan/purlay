@@ -1,18 +1,18 @@
 /**
- * The audit trail (D-26), read in the app: who did which administrative thing to whom, newest first,
+ * The audit trail (D-26), read in the app at the Audit log page's address (D-146): who did which administrative thing to whom, newest first,
  * in words — and an action this client does not know yet said by its name, never dropped.
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { AuditEntry, AuditPage, UserRole } from '@purlay/types';
-import { Outlet } from '../../app/outlet';
-import type { Api } from '../../data/api';
-import { ApiError } from '../../data/errors';
-import { expectNoAxeViolations } from '../../testing/axe';
-import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, ME, WHEN, aSession, aSignedInApi } from '../../testing/fixtures';
-import { renderApp } from '../../testing/render';
-import { person } from '../../testing/user';
+import { Outlet } from '../../../app/outlet';
+import type { Api } from '../../../data/api';
+import { ApiError } from '../../../data/errors';
+import { expectNoAxeViolations } from '../../../testing/axe';
+import { installDom } from '../../../testing/dom';
+import { ALICE, BOB, IDS, ME, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
+import { renderApp } from '../../../testing/render';
+import { person } from '../../../testing/user';
 
 installDom();
 
@@ -40,13 +40,12 @@ const page = (data: AuditEntry[], nextCursor: string | null = null): AuditPage =
   nextCursor,
 });
 
-const open = async (
-  api: Partial<Api>,
-  role: UserRole = 'owner',
-): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+type View = Awaited<ReturnType<typeof renderApp>>;
+
+const render = async (path: string, api: Partial<Api>, role: UserRole = 'owner'): Promise<View> => {
   const session = aSession();
   const view = await renderApp(<Outlet />, {
-    path: `/w/acme/c/${IDS.api}`,
+    path,
     api: aSignedInApi({
       me: () =>
         Promise.resolve({
@@ -57,33 +56,36 @@ const open = async (
     }),
   });
   await settle();
-  await person().click(view.getByRole('button', { name: 'Switch workspace' }));
   return view;
 };
 
-const openDialog = async (api: Partial<Api>): Promise<Awaited<ReturnType<typeof renderApp>>> => {
-  const view = await open(api);
-  await person().click(view.getByRole('menuitem', { name: 'Audit log…' }));
+/** The Audit log page, loaded: its chunk is lazy, so the heading is waited for. */
+const openPage = async (api: Partial<Api>, role: UserRole = 'owner'): Promise<View> => {
+  const view = await render('/w/acme/settings/audit', api, role);
+  await view.findByRole('heading', { level: 1, name: 'Audit log' });
   await settle();
   return view;
 };
 
-const lines = (view: Awaited<ReturnType<typeof renderApp>>): string[] =>
-  within(view.getByRole('dialog'))
+const lines = (view: View): string[] =>
+  within(view.getByRole('list', { name: 'Audit log' }))
     .getAllByRole('listitem')
     .map((item) => item.querySelector('[data-audit-line]')?.textContent ?? '');
 
 describe('the audit log', () => {
-  test('is an owner’s and an admin’s; a member is not offered it', async () => {
-    const member = await open({}, 'member');
-    expect(member.queryByRole('menuitem', { name: 'Audit log…' })).toBeNull();
+  test('is an owner’s and an admin’s; a member is not offered it, and its address is not found', async () => {
+    const member = await render('/w/acme/settings/audit', {}, 'member');
+    expect(await member.findByText('Nothing here')).toBeDefined();
+    expect(member.queryByRole('link', { name: 'Audit log' })).toBeNull();
     member.unmount();
-    const admin = await open({}, 'admin');
-    expect(admin.getByRole('menuitem', { name: 'Audit log…' })).toBeDefined();
+    const admin = await openPage({ audit: () => Promise.resolve(page([])) }, 'admin');
+    expect(admin.getByRole('link', { name: 'Audit log' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
   });
 
   test('a channel renamed is said with the name it had and the one it has (D-123)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -98,7 +100,7 @@ describe('the audit log', () => {
   });
 
   test('a channel archived is said by the name it had, since it is no longer listed (D-123)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([anEntry(1, { action: 'channel.archived', metadata: { name: 'general' } })]),
@@ -108,7 +110,7 @@ describe('the audit log', () => {
   });
 
   test('the nightly purge is said with what it cleared, and no person, since nobody did it (D-139 §3)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -125,7 +127,7 @@ describe('the audit log', () => {
   });
 
   test('a window changed is said in the reader’s words, forever or in days (D-139 §4)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -149,7 +151,7 @@ describe('the audit log', () => {
   });
 
   test('an account erased is said without naming the person who is gone (D-139 §5)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([anEntry(1, { action: 'account.erased', targetType: 'user', targetId: ME.id })]),
@@ -159,7 +161,7 @@ describe('the audit log', () => {
   });
 
   test('an operator’s content erasure is said with what went, and nobody named (D-139 §7)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -176,7 +178,7 @@ describe('the audit log', () => {
   });
 
   test('an export is said by who asked — the operator when nobody in the workspace did (D-140)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -203,7 +205,7 @@ describe('the audit log', () => {
   });
 
   test('says each action in words, with the people and the channel named', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -251,11 +253,11 @@ describe('the audit log', () => {
       `${ME.displayName} revoked an invitation link`,
       `${ALICE.displayName} joined by an invitation link`,
     ]);
-    await expectNoAxeViolations(view.getByRole('dialog'));
+    await expectNoAxeViolations(view.getByRole('main'));
   });
 
   test('a repository connected to a channel and disconnected is said with the repository (D-134)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -279,7 +281,7 @@ describe('the audit log', () => {
   });
 
   test('a feed entry names its channel to a viewer who can see it, and only to them (#691)', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -304,7 +306,7 @@ describe('the audit log', () => {
   });
 
   test('an action this client does not know is said by its name; an erased actor or a gone channel is said as such', async () => {
-    const view = await openDialog({
+    const view = await openPage({
       audit: () =>
         Promise.resolve(
           page([
@@ -321,7 +323,7 @@ describe('the audit log', () => {
 
   test('reads older entries by the cursor it was given', async () => {
     const asked: (string | undefined)[] = [];
-    const view = await openDialog({
+    const view = await openPage({
       audit: (_workspace, before) => {
         asked.push(before);
         return Promise.resolve(
@@ -330,35 +332,33 @@ describe('the audit log', () => {
       },
     });
     await person().click(
-      within(view.getByRole('dialog')).getByRole('button', { name: 'Load older' }),
+      within(view.getByRole('main')).getByRole('button', { name: 'Load older' }),
     );
     await settle();
     expect(asked).toEqual([undefined, entryId(2)]);
     expect(lines(view)).toHaveLength(2);
-    expect(
-      within(view.getByRole('dialog')).queryByRole('button', { name: 'Load older' }),
-    ).toBeNull();
+    expect(within(view.getByRole('main')).queryByRole('button', { name: 'Load older' })).toBeNull();
   });
 
   test('empty, it says so; failing, it says why with Retry; reading, it is a status', async () => {
-    const empty = await openDialog({ audit: () => Promise.resolve(page([])) });
+    const empty = await openPage({ audit: () => Promise.resolve(page([])) });
     expect(
-      within(empty.getByRole('dialog')).getByText('Nothing administrative has happened yet.'),
+      within(empty.getByRole('main')).getByText('Nothing administrative has happened yet.'),
     ).toBeDefined();
     empty.unmount();
     let failing = true;
-    const failed = await openDialog({
+    const failed = await openPage({
       audit: () =>
         failing ? Promise.reject(new ApiError(0, 'NETWORK', 'down')) : Promise.resolve(page([])),
     });
     failing = false;
-    await person().click(within(failed.getByRole('dialog')).getByRole('button', { name: 'Retry' }));
+    await person().click(within(failed.getByRole('main')).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(
-      within(failed.getByRole('dialog')).getByText('Nothing administrative has happened yet.'),
+      within(failed.getByRole('main')).getByText('Nothing administrative has happened yet.'),
     ).toBeDefined();
     failed.unmount();
-    const reading = await openDialog({ audit: () => new Promise(() => undefined) });
-    expect(reading.getByRole('dialog').querySelector('[role="status"]')).not.toBeNull();
+    const reading = await openPage({ audit: () => new Promise(() => undefined) });
+    expect(reading.getByRole('main').querySelector('[role="status"]')).not.toBeNull();
   });
 });
