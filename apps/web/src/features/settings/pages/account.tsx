@@ -96,6 +96,8 @@ export const AccountPage = (): React.JSX.Element => {
         >
           <Button
             variant="dangerQuiet"
+            // Under the words on a phone, a fill-less button's words line up with them, not its edge.
+            className="max-narrow:-ml-3"
             glyph="sign-out"
             onClick={() => {
               setLeaveProblem(null);
@@ -108,6 +110,7 @@ export const AccountPage = (): React.JSX.Element => {
         <SettingsRow label={t('erase.title')} description={t('settings.account.eraseHint')}>
           <Button
             variant="dangerQuiet"
+            className="max-narrow:-ml-3"
             glyph="delete"
             onClick={() => {
               setErasing(true);

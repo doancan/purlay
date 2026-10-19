@@ -63,6 +63,12 @@ describe('the page', () => {
     expect(
       view.getByRole('link', { name: 'Sessions & account' }).getAttribute('aria-current'),
     ).toBe('page');
+    // On a phone the danger zone's fill-less buttons line their words up with the words above.
+    for (const name of ['Leave workspace…', 'Erase my account…']) {
+      expect(main(view).getByRole('button', { name }).className.split(' ')).toContain(
+        'max-narrow:-ml-3',
+      );
+    }
     await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();
   });
