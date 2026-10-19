@@ -73,7 +73,8 @@ const DeepWorkCard = (): React.JSX.Element | null => {
     >
       {until === null ? (
         <SettingsRow label={t('settings.notifications.deepWorkStart')} wide>
-          <div className="flex flex-wrap gap-2">
+          {/* On a phone the four are two even columns, not a ragged wrap. */}
+          <div className="flex flex-wrap gap-2 max-narrow:grid max-narrow:w-full max-narrow:grid-cols-2">
             {DEEP_WORK_CHOICES.map((choice) => (
               <Button
                 key={choice}
