@@ -272,6 +272,7 @@ export interface Api {
     query: {
       readonly q: string;
       readonly channelId?: string | undefined;
+      readonly senderId?: string | undefined;
       readonly before?: string | undefined;
     },
     signal?: AbortSignal,

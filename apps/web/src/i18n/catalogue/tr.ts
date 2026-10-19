@@ -922,6 +922,11 @@ export const tr = {
   'search.hintIn': '{channel} içinde aramak için Enter’a bas.',
   'search.where': 'Nerede',
   'search.everywhere': 'Tüm kanallar',
+  'search.from': 'Kimden',
+  'search.anyone': 'Herkes',
+  'search.someone': 'Biri',
+  'search.hintFrom': 'Yazan: {person}. Görebildiğin tüm kanallarda aramak için Enter’a bas.',
+  'search.hintInFrom': 'Yazan: {person}. {channel} içinde aramak için Enter’a bas.',
   'search.searching': 'Aranıyor…',
   'search.tooShort': 'En az {min} karakter yaz.',
   'search.prompt':
@@ -930,6 +935,10 @@ export const tr = {
   'state.search.empty.title': '“{words}” için sonuç yok',
   'state.search.empty.body': 'Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
   'state.search.empty.bodyIn': '{channel} içinde arandı. Silinmiş bir mesaj hiç bulunmaz.',
+  'state.search.empty.bodyFrom':
+    'Yazan: {person}. Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
+  'state.search.empty.bodyInFrom':
+    'Yazan: {person}. {channel} içinde arandı. Silinmiş bir mesaj hiç bulunmaz.',
   'state.search.error.title': 'Aranamadı',
   'state.search.error.body': 'Sunucu yanıt vermedi. Kelimelerin duruyor; yeniden dene.',
 

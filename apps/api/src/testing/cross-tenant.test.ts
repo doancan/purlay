@@ -14,6 +14,7 @@ import {
   WORKSPACE_WIDE_READS,
   documentedEndpoints,
   endpointKey,
+  queriesFor,
   type DocumentedEndpoint,
 } from './cross-tenant';
 import { testDependencies } from './doubles';
@@ -108,6 +109,29 @@ describe('every served endpoint has a cross-tenant case', () => {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'message' });
       }
     }
+  });
+
+  test('a further query is crossed after the case’s own, joined to it', () => {
+    expect(
+      queriesFor({
+        refusal: 'WORKSPACE_NOT_FOUND',
+        alsoWith: { 'an author': 'senderId=:userId' },
+        visibility: { kind: 'workspace-wide', query: 'q=question' },
+      }),
+    ).toEqual([
+      ['', '?q=question'],
+      [' with an author', '?q=question&senderId=:userId'],
+    ]);
+    expect(
+      queriesFor({
+        refusal: 'CHANNEL_NOT_FOUND',
+        alsoWith: { 'a limit': 'limit=1' },
+        visibility: { kind: 'channel' },
+      }),
+    ).toEqual([
+      ['', ''],
+      [' with a limit', '?limit=1'],
+    ]);
   });
 
   test('search and open questions are read as workspace-wide, once they exist', () => {

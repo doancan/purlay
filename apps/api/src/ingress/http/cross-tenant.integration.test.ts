@@ -21,7 +21,13 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
-import { CROSS_TENANT, pathFor, queryFor, type Ids, requestInit } from '../../testing/cross-tenant';
+import {
+  CROSS_TENANT,
+  pathFor,
+  queriesFor,
+  type Ids,
+  requestInit,
+} from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
@@ -221,61 +227,63 @@ describe('integration: cross-tenant isolation', () => {
     const aimed = (ids: Ids): Ids =>
       crossing.unsent === true ? { ...ids, attachmentId: ids.unsentAttachmentId } : ids;
 
-    test(`${key} answers 404 across a tenant boundary, as if it did not exist`, async () => {
-      await withRollback(async (db) => {
-        const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
-        const owner = ownerUser.cookie;
-        const stranger = await signedIn(db, 'xt-stranger');
-        const theirs = await aTenant(db, owner, 'xt-theirs');
-        await aTenant(db, stranger, 'xt-own');
-        const body = crossing.body?.(NOW, {
-          userId: ownerUser.userId,
-          workspaceId: theirs.workspaceId,
-          messageId: theirs.messageId,
-        });
+    for (const [what, query] of queriesFor(crossing)) {
+      test(`${key}${what} answers 404 across a tenant boundary, as if it did not exist`, async () => {
+        await withRollback(async (db) => {
+          const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
+          const owner = ownerUser.cookie;
+          const stranger = await signedIn(db, 'xt-stranger');
+          const theirs = await aTenant(db, owner, 'xt-theirs');
+          await aTenant(db, stranger, 'xt-own');
+          const body = crossing.body?.(NOW, {
+            userId: ownerUser.userId,
+            workspaceId: theirs.workspaceId,
+            messageId: theirs.messageId,
+          });
 
-        const across = await call(
-          db,
-          method,
-          pathFor(`${path}${queryFor(crossing)}`, aimed(theirs)),
-          stranger,
-          body,
-        );
-        expect(across.status).toBe(404);
-        const refusal: unknown = await across.json();
-        expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
-
-        for (const ids of [NEVER_EXISTED, NOT_A_UUID]) {
-          const elsewhere = await call(
+          const across = await call(
             db,
             method,
-            pathFor(`${path}${queryFor(crossing)}`, aimed(ids)),
+            pathFor(`${path}${query}`, aimed(theirs)),
             stranger,
             body,
           );
-          expect({ status: elsewhere.status, body: await elsewhere.json() }).toEqual({
-            status: 404,
-            body: refusal,
-          });
-        }
+          expect(across.status).toBe(404);
+          const refusal: unknown = await across.json();
+          expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
-        if (crossing.secondOwner === true) {
-          await db
-            .updateTable('workspace_members')
-            .set({ role: 'owner' })
-            .where('workspace_id', '=', theirs.workspaceId)
-            .where('user_id', '=', theirs.memberId)
-            .execute();
-        }
-        const own = await call(
-          db,
-          method,
-          pathFor(`${path}${queryFor(crossing)}`, aimed(theirs)),
-          owner,
-          body,
-        );
-        expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
+          for (const ids of [NEVER_EXISTED, NOT_A_UUID]) {
+            const elsewhere = await call(
+              db,
+              method,
+              pathFor(`${path}${query}`, aimed(ids)),
+              stranger,
+              body,
+            );
+            expect({ status: elsewhere.status, body: await elsewhere.json() }).toEqual({
+              status: 404,
+              body: refusal,
+            });
+          }
+
+          if (crossing.secondOwner === true) {
+            await db
+              .updateTable('workspace_members')
+              .set({ role: 'owner' })
+              .where('workspace_id', '=', theirs.workspaceId)
+              .where('user_id', '=', theirs.memberId)
+              .execute();
+          }
+          const own = await call(
+            db,
+            method,
+            pathFor(`${path}${query}`, aimed(theirs)),
+            owner,
+            body,
+          );
+          expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
+        });
       });
-    });
+    }
   }
 });

@@ -266,8 +266,8 @@ export const SEARCH_QUERY_MAX = 200;
 
 /**
  * `GET /api/workspaces/:workspaceId/search` — messages whose words contain `q`, ignoring case, in
- * the channels the caller can see, or in one of them (D-10, D-34, D-105). Newest first, keyset by
- * `before`. `%`, `_` and `\` are themselves, not patterns.
+ * the channels the caller can see, or in one of them, from anybody or from one person (D-10, D-34,
+ * D-105, D-166). Newest first, keyset by `before`. `%`, `_` and `\` are themselves, not patterns.
  */
 export const SearchQuery = FromClient({
   q: Type.String({
@@ -276,6 +276,11 @@ export const SearchQuery = FromClient({
     format: 'plain-text',
   }),
   channelId: Type.Optional(Uuid),
+  /**
+   * Only what this person wrote (D-166). A filter, not a resource: somebody who never wrote in the
+   * caller's visible channels — another workspace's, or nobody at all — is an empty page, not a 404.
+   */
+  senderId: Type.Optional(Uuid),
   before: Type.Optional(Uuid),
   limit: Type.Optional(
     Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),

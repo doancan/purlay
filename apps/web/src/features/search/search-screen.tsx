@@ -2,9 +2,9 @@
  * Search (D-105, `UX.md` §8): the words as typed, ignoring case, in every channel the person can see —
  * roots and replies, resolved threads too — newest first.
  *
- * The words live in the address (`?q=`), so Back, a reload and a link come back to the same results,
- * and pressing Enter is what searches: a search is a question asked once, not a list redrawn under
- * every keystroke. Fewer characters than the server takes are said in the field and never sent.
+ * The words live in the address (`?q=`), and so do where (`?in=`) and from whom (`?from=`, D-166), so
+ * Back, a reload and a link come back to the same results, and pressing Enter is what searches: a
+ * search is a question asked once, not a list redrawn under every keystroke. Fewer characters than the server takes are said in the field and never sent.
  * Arriving here focuses the page, as every navigation does (`ui/main.tsx`); the field is its first
  * stop, one Tab away.
  *
@@ -14,9 +14,15 @@
 import { useId, useMemo, useState } from 'react';
 import { SEARCH_QUERY_MIN, type Channel, type Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
-import { useChannels, useSearch } from '../../data/queries';
+import { useChannels, useMembers, useSearch } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { channelInSearch, messageHref, searchHref, wordsInSearch } from '../../router/routes';
+import {
+  authorInSearch,
+  channelInSearch,
+  messageHref,
+  searchHref,
+  wordsInSearch,
+} from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
@@ -30,6 +36,8 @@ import { Select } from '../../ui/select';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
+import { useSession } from '../session/session';
+import { AuthorPicker } from './author-picker';
 import { markedExcerpt, marksIn } from './excerpt';
 
 /** Where a found message is read: its own address, which opens the feed — or its thread — at it (D-149). */
@@ -124,7 +132,14 @@ const Found = ({
 export const SearchScreen = (): React.JSX.Element => {
   const { search } = useRoute();
   const asked = wordsInSearch(search);
-  return <SearchView key={asked} asked={asked} channelId={channelInSearch(search)} />;
+  return (
+    <SearchView
+      key={asked}
+      asked={asked}
+      channelId={channelInSearch(search)}
+      authorId={authorInSearch(search)}
+    />
+  );
 };
 
 /** How a channel is named in the choice of where to look: `#name`, or `@person` for a direct message. */
@@ -137,22 +152,61 @@ const placeName = (channel: Channel): string => {
   return channel.peer === null ? (channel.name ?? '') : channel.peer.displayName;
 };
 
+/** What the field says Enter will do: where, and from whom (D-166). */
+const hintFor = (
+  t: ReturnType<typeof useI18n>['t'],
+  narrowed: Channel | undefined,
+  author: string | null,
+): string => {
+  if (author === null) {
+    return narrowed === undefined
+      ? t('search.hint')
+      : t('search.hintIn', { channel: placeName(narrowed) });
+  }
+  return narrowed === undefined
+    ? t('search.hintFrom', { person: author })
+    : t('search.hintInFrom', { person: author, channel: placeName(narrowed) });
+};
+
 const SearchView = ({
   asked,
   channelId,
+  authorId,
 }: {
   readonly asked: string;
   readonly channelId: string | null;
+  /** Who wrote it (D-166); null is anyone. */
+  readonly authorId: string | null;
 }): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
+  const { user: me } = useSession();
   const { navigate } = useRoute();
   const ports = useFeedPorts();
   const [draft, setDraft] = useState(asked);
   const [tooShort, setTooShort] = useState(false);
-  const query = useSearch(workspace.id, asked, channelId);
+  const query = useSearch(workspace.id, asked, channelId, authorId);
   const whereId = useId();
+  const fromId = useId();
   const channels = useChannels(workspace.id);
+  const members = useMembers(workspace.id);
+  // Somebody no longer listed — they left, or the address came from another workspace — is still
+  // searched for, and said as "Someone" rather than as an id.
+  const author =
+    authorId === null
+      ? null
+      : (members.data?.find((m) => m.user.id === authorId)?.user.displayName ??
+        t('search.someone'));
+  const go = (next: { channelId?: string | null; authorId?: string | null }): void => {
+    navigate(
+      searchHref(
+        workspace.slug,
+        asked,
+        next.channelId === undefined ? channelId : next.channelId,
+        next.authorId === undefined ? authorId : next.authorId,
+      ),
+    );
+  };
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const places = useMemo(
     () =>
@@ -186,9 +240,16 @@ const SearchView = ({
       <section className="flex flex-col items-center gap-3 py-6 text-center">
         <h2 className="text-title text-ink">{t('state.search.empty.title', { words: asked })}</h2>
         <p className="text-body text-ink-muted">
-          {narrowed === undefined
-            ? t('state.search.empty.body')
-            : t('state.search.empty.bodyIn', { channel: placeName(narrowed) })}
+          {author === null
+            ? narrowed === undefined
+              ? t('state.search.empty.body')
+              : t('state.search.empty.bodyIn', { channel: placeName(narrowed) })
+            : narrowed === undefined
+              ? t('state.search.empty.bodyFrom', { person: author })
+              : t('state.search.empty.bodyInFrom', {
+                  person: author,
+                  channel: placeName(narrowed),
+                })}
         </p>
       </section>
     );
@@ -241,7 +302,7 @@ const SearchView = ({
             const words = draft.trim();
             setTooShort(words.length < SEARCH_QUERY_MIN);
             if (words.length >= SEARCH_QUERY_MIN) {
-              navigate(searchHref(workspace.slug, words, channelId));
+              navigate(searchHref(workspace.slug, words, channelId, authorId));
             }
           }}
         >
@@ -254,36 +315,52 @@ const SearchView = ({
             {...(tooShort
               ? { error: t('search.tooShort', { min: String(SEARCH_QUERY_MIN) }) }
               : {
-                  hint: searching
-                    ? t('search.searching')
-                    : narrowed === undefined
-                      ? t('search.hint')
-                      : t('search.hintIn', { channel: placeName(narrowed) }),
+                  hint: searching ? t('search.searching') : hintFor(t, narrowed, author),
                 })}
             onChange={(event) => {
               setDraft(event.target.value);
             }}
           />
-          <div className="flex items-center gap-3">
-            <label htmlFor={whereId} className="text-label text-ink-muted">
-              {t('search.where')}
-            </label>
-            <Select
-              id={whereId}
-              value={channelId ?? ''}
-              className="min-w-0 max-w-field flex-1"
-              onChange={(event) => {
-                const chosen = event.target.value;
-                navigate(searchHref(workspace.slug, asked, chosen === '' ? null : chosen));
-              }}
-            >
-              <option value="">{t('search.everywhere')}</option>
-              {places.map((place) => (
-                <option key={place.id} value={place.id}>
-                  {place.name}
-                </option>
-              ))}
-            </Select>
+          {/* One line on a wide window; on a phone each label sits over its control, full width. */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 max-narrow:flex-col max-narrow:items-stretch">
+            <div className="flex min-w-0 flex-1 items-center gap-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:gap-1">
+              <label htmlFor={whereId} className="text-label text-ink-muted">
+                {t('search.where')}
+              </label>
+              <Select
+                id={whereId}
+                value={channelId ?? ''}
+                className="min-w-0 flex-1"
+                onChange={(event) => {
+                  const chosen = event.target.value;
+                  go({ channelId: chosen === '' ? null : chosen });
+                }}
+              >
+                <option value="">{t('search.everywhere')}</option>
+                {places.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex min-w-0 flex-1 items-center gap-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:gap-1">
+              <span id={fromId} className="text-label text-ink-muted">
+                {t('search.from')}
+              </span>
+              <span className="flex min-w-0 flex-1">
+                <AuthorPicker
+                  labelId={fromId}
+                  members={members.data ?? []}
+                  meId={me.id}
+                  value={authorId}
+                  chosenName={author}
+                  onChange={(chosen) => {
+                    go({ authorId: chosen });
+                  }}
+                />
+              </span>
+            </div>
           </div>
         </form>
         {body}

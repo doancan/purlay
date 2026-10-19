@@ -249,14 +249,20 @@ export const useSearch = (
   workspaceId: string,
   words: string,
   channelId: string | null = null,
+  authorId: string | null = null,
 ): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.search(workspaceId, words, channelId),
+    queryKey: keys.search(workspaceId, words, channelId, authorId),
     queryFn: ({ pageParam, signal }) =>
       api.search(
         workspaceId,
-        { q: words, before: pageParam, ...(channelId === null ? {} : { channelId }) },
+        {
+          q: words,
+          before: pageParam,
+          ...(channelId === null ? {} : { channelId }),
+          ...(authorId === null ? {} : { senderId: authorId }),
+        },
         signal,
       ),
     initialPageParam: undefined as string | undefined,

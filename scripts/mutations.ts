@@ -2287,6 +2287,23 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: SEARCH_TESTS,
   },
   {
+    id: 'search-by-author-not-narrowed-to-visible-channels',
+    why: 'naming an author searches everything they wrote in the workspace, a private channel the caller is not in among it',
+    file: SEARCH,
+    find: "    .where('messages.channel_id', 'in', channelIds)\n",
+    replace:
+      "    .where((eb) =>\n      query.senderId === undefined ? eb('messages.channel_id', 'in', channelIds) : eb.lit(true),\n    )\n",
+    tests: SEARCH_TESTS,
+  },
+  {
+    id: 'search-author-ignored',
+    why: 'From a person finds everybody’s words, so the filter says one thing and the list another',
+    file: SEARCH,
+    find: "    statement = statement.where('messages.sender_id', '=', query.senderId);\n",
+    replace: '',
+    tests: SEARCH_TESTS,
+  },
+  {
     id: 'search-case-sensitive',
     why: 'DEPLOY does not find deploy, which is not how a person searches',
     file: SEARCH,
@@ -2497,11 +2514,19 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {
+    id: 'search-author-dropped-by-where',
+    why: 'choosing where to look forgets who was chosen, and the list quietly widens to everybody',
+    file: 'apps/web/src/features/search/search-screen.tsx',
+    find: '        next.authorId === undefined ? authorId : next.authorId,\n',
+    replace: '        next.authorId ?? null,\n',
+    tests: ['apps/web/src/features/search/search-screen.test.tsx'],
+  },
+  {
     id: 'search-field-not-reset-by-the-address',
     why: 'Back to an earlier search shows its results under the later words still in the field',
     file: 'apps/web/src/features/search/search-screen.tsx',
-    find: '  return <SearchView key={asked} asked={asked} channelId={channelInSearch(search)} />;\n',
-    replace: '  return <SearchView asked={asked} channelId={channelInSearch(search)} />;\n',
+    find: '      key={asked}\n',
+    replace: '',
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {

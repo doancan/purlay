@@ -572,7 +572,7 @@ missing specified behaviour and does not merge.
 | View | Empty | Loading | Error |
 |---|---|---|---|
 | Channel feed | "No messages yet" + composer focused | Skeleton rows, no spinner | "Couldn't load messages · Retry" — the composer stays usable |
-| Search | "No matches for `<query>`" + scope hint | Inline progress in the input | Retry, query preserved |
+| Search | "No matches for `<query>`" + scope hint: where it looked, and whose words (D-166) | Inline progress in the input | Retry, query preserved |
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
 | Incident (panel) | "No incident" — declare one when something here is on fire; when the last was resolved | Skeleton, in the panel; the banner draws nothing until it knows | Retry in the panel; a timeline that fails says so with Retry, the controls still usable |

@@ -333,6 +333,13 @@ describe('http shapes', () => {
     expect(Value.Check(SearchQuery, { q: 'abc', channelId: id, before: id, limit: 5 })).toBe(true);
   });
 
+  test('a search may be narrowed to who wrote it, named by an id (D-166)', () => {
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: id })).toBe(true);
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: id, channelId: id })).toBe(true);
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: 'alice' })).toBe(false);
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: '' })).toBe(false);
+  });
+
   test('the inbox is one workspace, a page at a time, newest first', () => {
     expect(Value.Check(NotificationQuery, { workspaceId: id })).toBe(true);
     expect(Value.Check(NotificationQuery, { workspaceId: id, unreadOnly: true, before: id })).toBe(

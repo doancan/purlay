@@ -243,7 +243,7 @@ export const readSearch = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const url = new URL(request.url);
   const query = asPageQuery(url);
-  for (const key of ['q', 'channelId'] as const) {
+  for (const key of ['q', 'channelId', 'senderId'] as const) {
     const value = url.searchParams.get(key);
     if (value !== null) query[key] = key === 'q' ? value.trim() : value;
   }
