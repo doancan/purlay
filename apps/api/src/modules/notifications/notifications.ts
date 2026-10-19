@@ -23,7 +23,8 @@ import type {
   ReadNotificationsRequest,
   ReadThreadRequest,
 } from '@purlay/types';
-import { NEEDS_YOU } from '@purlay/types';
+import { excerptOf } from '@purlay/markdown';
+import { NEEDS_YOU, THREAD_EXCERPT_MAX } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { requireMessageById } from '../../platform/channels';
@@ -40,6 +41,20 @@ export interface Told {
 }
 
 const at = (value: Date | string): string => new Date(value).toISOString();
+
+/**
+ * A root's first line as the inbox quotes it (D-162): plain, as every excerpt is (#651), and cut to
+ * the contract's length with an ellipsis; null when it says nothing in words. Cut by UTF-16 unit, as
+ * the schema counts, never through the middle of a pair.
+ */
+const quoted = (content: string): string | null => {
+  const plain = excerptOf(content);
+  if (plain === '') return null;
+  if (plain.length <= THREAD_EXCERPT_MAX) return plain;
+  let cut = plain.slice(0, THREAD_EXCERPT_MAX - 1);
+  if (/[\uD800-\uDBFF]$/u.test(cut)) cut = cut.slice(0, -1);
+  return `${cut.trimEnd()}…`;
+};
 
 /**
  * Where a page stopped, as the row it names: the caller's own notification in this workspace, or a
@@ -92,8 +107,14 @@ export const inboxOf = async (
     .selectFrom('notifications')
     .innerJoin('messages', 'messages.id', 'notifications.message_id')
     .leftJoin('users', 'users.id', 'messages.sender_id')
+    // A reply's root, in the same statement (D-162): one page is one read, however many threads it
+    // names. It is in the reply's channel, so the visibility below is the root's too.
+    .leftJoin('messages as roots', 'roots.id', 'messages.parent_id')
     .select(MESSAGE_COLUMNS)
     .select([
+      'roots.content as root_content',
+      'roots.sender_id as root_sender_id',
+      'roots.deleted_at as root_deleted_at',
       'notifications.id as notification_id',
       'notifications.type as notification_type',
       'notifications.created_at as notified_at',
@@ -129,6 +150,14 @@ export const inboxOf = async (
         type: row.notification_type,
         channelId: row.channel_id,
         message,
+        thread:
+          row.parent_id === null
+            ? null
+            : {
+                rootId: row.parent_id,
+                excerpt: row.root_deleted_at === null ? quoted(row.root_content ?? '') : null,
+                authorId: row.root_sender_id,
+              },
         createdAt: at(row.notified_at),
         readAt: row.notification_read_at === null ? null : at(row.notification_read_at),
       };

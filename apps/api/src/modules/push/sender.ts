@@ -29,7 +29,7 @@ import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
 import { encryptPush, freshParts } from './encrypt';
 import { vapidAuthorization, vapidSigningKey, type VapidKeys } from './vapid';
-import { pushBody } from './words';
+import { pushBody, saidOf } from './words';
 
 /** Deliveries in a row a push service did not take before the device is forgotten. */
 export const PUSH_FAILURES_MAX = 5;
@@ -100,6 +100,8 @@ const devicesFor = async (
     .innerJoin('workspaces as w', 'w.id', 'n.workspace_id')
     .innerJoin('push_subscriptions as s', 's.user_id', 'n.user_id')
     .innerJoin('sessions as live', 'live.id', 's.session_id')
+    // A reply's root: whose thread it is decides what the reply is said as (D-162).
+    .leftJoin('messages as root', 'root.id', 'm.parent_id')
     .select([
       's.id',
       's.user_id as userId',
@@ -114,6 +116,7 @@ const devicesFor = async (
       'author.display_name',
       'c.name',
       'w.slug',
+      'root.sender_id as root_sender_id',
       // A group's people besides the one told, by name: what its notice is titled (D-127).
       sql<string | null>`(
         select string_agg(other.display_name, ', ' order by key_part.place)
@@ -153,7 +156,7 @@ const devicesFor = async (
           title: row.name !== null ? `#${row.name}` : (row.group_names ?? row.display_name),
           body: pushBody(
             row.locale === 'tr' ? 'tr' : 'en',
-            row.group_names !== null && reason === 'direct_message' ? 'group' : reason,
+            saidOf(reason, row.group_names !== null, row.root_sender_id, row.userId),
             row.display_name,
           ),
           url: `/w/${row.slug}/c/${row.channel_id}`,

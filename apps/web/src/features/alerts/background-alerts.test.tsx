@@ -76,6 +76,7 @@ const mention = (over: Partial<Notification> = {}): Notification => ({
   type: 'mention',
   channelId: IDS.deploys,
   message: aMessage(7, { channelId: IDS.deploys, sender: ALICE }),
+  thread: null,
   createdAt: '2026-09-09T12:00:00.000Z',
   readAt: null,
   ...over,

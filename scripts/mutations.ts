@@ -2385,8 +2385,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'inbox-reads-what-is-already-read',
     why: 'every notification opened asks the server again, read or not',
     file: 'apps/web/src/features/inbox/inbox-screen.tsx',
-    find: '    if (notification.readAt === null) {\n',
-    replace: '    if (notification.readAt === null || notification.readAt !== null) {\n',
+    find: '    if (ids.length === 0) return;\n',
+    replace: '',
     tests: ['apps/web/src/features/inbox/inbox-screen.test.tsx'],
   },
   {
