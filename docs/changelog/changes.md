@@ -32,6 +32,12 @@ Sign out; the workspace menu keeps the workspaces, Create, Invite people and Wor
 has a gear; the palette finds every page by name. The pages load as a chunk of their own. Controls —
 buttons, fields, selects — are 32px tall instead of 28px, and menus are as wide as the sidebar. Turkish
 role names are Sahip and Yönetici, no longer "Owner" and "Admin".
+### Feature — 2026-10-19: anybody may leave a workspace (D-152)
+
+There was no way to leave a workspace short of asking an admin to remove you. `DELETE
+/api/workspaces/:id/membership` takes the caller out of the workspace and its channels, tells their own
+devices, and records `member.left`; the last owner is refused with `LAST_OWNER` until somebody else is an
+owner. An invitation that was open before somebody left still lets them back.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

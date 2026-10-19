@@ -74,6 +74,8 @@ export const AuditPage = (): React.JSX.Element => {
           actor,
           target: person(entry.targetId ?? undefined),
         });
+      case 'member.left':
+        return t('audit.action.member.left', { actor });
       case 'member.joined':
         return t('audit.action.member.joined', { actor });
       case 'channel.created': {

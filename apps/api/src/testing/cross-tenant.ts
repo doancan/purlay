@@ -160,6 +160,11 @@ export interface CrossTenantCase {
   readonly body?: (now: Date, owner: OwnerIds) => unknown;
   /** The query string the request needs to be one the endpoint can answer (an upload's id and name). */
   readonly query?: string;
+  /**
+   * The workspace's member is made an owner before the owner's own request: for what the last owner
+   * may not do (leave, I-2), so the control still proves the request succeeds.
+   */
+  readonly secondOwner?: true;
   readonly visibility: Visibility;
 }
 
@@ -461,6 +466,15 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       kind: 'none',
       reason:
         'names a person and no channel; what they lose is every channel, told to their sockets (`revocation.integration.test.ts`)',
+    },
+  },
+  'DELETE /api/workspaces/:workspaceId/membership': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    secondOwner: true,
+    visibility: {
+      kind: 'none',
+      reason:
+        'the caller takes only themselves out; what they lose is every channel, told to their own sockets',
     },
   },
   'GET /api/attachments/:attachmentId': {

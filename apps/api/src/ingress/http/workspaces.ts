@@ -39,7 +39,7 @@ import {
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
-import { changeRole, removeMember } from '../../modules/workspaces/members';
+import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import {
@@ -219,6 +219,31 @@ export const removeWorkspaceMember = async (
   );
   await publishAfterCommit(log, [
     [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],
+  ]);
+};
+
+/**
+ * `DELETE /api/workspaces/:workspaceId/membership` — the caller leaves the workspace and its channels
+ * (D-152). Anybody's; the last owner is `409 LAST_OWNER`. Their own sockets are told, as a removed
+ * member's are.
+ */
+export const leaveWorkspaceMembership = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const caller = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
+  const { channelIds } = await atomicallyOn(database)(
+    async (transaction) => await leaveWorkspace(transaction, clock, context),
+  );
+  await publishAfterCommit(log, [
+    [
+      publication('ACCESS_REVOKED', () =>
+        publishAccessRevoked(bus, clock, caller.userId, channelIds),
+      ),
+    ],
   ]);
 };
 

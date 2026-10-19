@@ -259,6 +259,14 @@ describe('integration: cross-tenant isolation', () => {
           });
         }
 
+        if (crossing.secondOwner === true) {
+          await db
+            .updateTable('workspace_members')
+            .set({ role: 'owner' })
+            .where('workspace_id', '=', theirs.workspaceId)
+            .where('user_id', '=', theirs.memberId)
+            .execute();
+        }
         const own = await call(
           db,
           method,

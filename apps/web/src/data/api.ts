@@ -128,6 +128,8 @@ export interface Api {
   ) => Promise<WorkspaceMember>;
   /** Out of the workspace and its channels (D-111). */
   readonly removeMember: (workspaceId: string, userId: string) => Promise<void>;
+  /** The caller leaves the workspace and its channels (D-152). */
+  readonly leaveWorkspace: (workspaceId: string) => Promise<void>;
   /** An owner's or an admin's: the administrative trail, newest first (D-26). */
   readonly audit: (
     workspaceId: string,
@@ -404,6 +406,8 @@ export const createApi = (http: Http): Api => {
       ),
     removeMember: (workspaceId, userId) =>
       http.send('DELETE', `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`, options()),
+    leaveWorkspace: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/membership`, options()),
     members: (workspaceId, signal) =>
       http.request(
         'GET',

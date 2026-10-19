@@ -184,6 +184,7 @@ export const en = {
   'audit.unknown': '{actor}: {action}',
   'audit.action.member.role_changed': '{actor} changed {target}’s role from {from} to {to}',
   'audit.action.member.removed': '{actor} removed {target}',
+  'audit.action.member.left': '{actor} left the workspace',
   'audit.action.member.joined': '{actor} joined by an invitation link',
   'audit.action.channel.created': '{actor} created {channel}',
   'audit.action.channel.renamed': '{actor} renamed {from} to {to}',

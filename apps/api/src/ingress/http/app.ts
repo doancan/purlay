@@ -86,6 +86,7 @@ import {
   readGitHubIntegration,
   readAuditTrail,
   removeWorkspaceMember,
+  leaveWorkspaceMembership,
   updateMemberRole,
   readMe,
   readWorkspace,
@@ -597,6 +598,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     )
     .delete('/api/workspaces/:workspaceId/members/:userId', async ({ request, params, set }) => {
       await removeWorkspaceMember(sending, request, params.workspaceId, params.userId);
+      set.status = 204;
+      return null;
+    })
+    .delete('/api/workspaces/:workspaceId/membership', async ({ request, params, set }) => {
+      await leaveWorkspaceMembership(sending, request, params.workspaceId);
       set.status = 204;
       return null;
     })

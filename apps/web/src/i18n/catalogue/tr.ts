@@ -180,6 +180,7 @@ export const tr = {
   'audit.unknown': '{actor}: {action}',
   'audit.action.member.role_changed': '{actor}, {target} rolünü {from} yerine {to} yaptı',
   'audit.action.member.removed': '{actor}, {target} kişisini çıkardı',
+  'audit.action.member.left': '{actor} çalışma alanından ayrıldı',
   'audit.action.member.joined': '{actor} bir davet bağlantısıyla katıldı',
   'audit.action.channel.created': '{actor}, {channel} kanalını oluşturdu',
   'audit.action.channel.renamed': '{actor}, {from} kanalının adını {to} yaptı',

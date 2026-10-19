@@ -424,6 +424,7 @@ export type OlderPageQuery = Static<typeof OlderPageQuery>;
 export const AUDIT_ACTIONS = [
   'member.role_changed',
   'member.removed',
+  'member.left',
   'member.joined',
   'channel.created',
   'channel.renamed',
