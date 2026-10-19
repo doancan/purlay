@@ -150,7 +150,7 @@ describe('a root and its thread, closed', () => {
 
   test("its words are the person's language", async () => {
     const view = await mount({ locale: 'tr' });
-    expect(view.getByRole('button', { name: /Thread'i göster/ }).textContent).toContain(
+    expect(view.getByRole('button', { name: /Thread’i göster/ }).textContent).toContain(
       'Açık · 2 yanıt',
     );
     view.unmountAll();
