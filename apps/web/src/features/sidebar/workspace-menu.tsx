@@ -12,6 +12,7 @@
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
  */
 import { useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
@@ -22,7 +23,6 @@ import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useSession } from '../session/session';
 import { CreateWorkspace } from '../shell/home';
 import { useWorkspace } from '../shell/workspace';
-import { InviteDialog } from './invite-dialog';
 
 interface WorkspaceMenuProps {
   /** Which door: the rail's tile, or the name at the top of the sidebar. */
@@ -35,6 +35,8 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
   const { memberships, mayCreateWorkspace } = useSession();
   const { navigate } = useRoute();
   const [inviting, setInviting] = useState(false);
+  // The dialog is in the deferred chunk (D-163).
+  const deferred = useDeferred([inviting, setInviting]);
   const [creating, setCreating] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Inviting and the workspace's settings are an owner's and an admin's (D-115, D-146); a member is
@@ -116,7 +118,7 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
           </>
         )}
       </Menu>
-      <InviteDialog open={inviting} onOpenChange={setInviting} />
+      {deferred !== null && <deferred.InviteDialog open={inviting} onOpenChange={setInviting} />}
       <Dialog
         open={creating}
         onOpenChange={setCreating}

@@ -547,6 +547,7 @@ export const tr = {
   'viewer.close': 'Kapat',
   'viewer.position': '{index} / {count}',
   'viewer.loading': 'Görüntü yükleniyor',
+  'deferred.unavailable': 'Açılmadı. Bağlantını kontrol edip tekrar dene.',
   'viewer.unavailable': 'Görüntüleyici açılmadı. Bağlantını kontrol edip tekrar dene.',
   'message.deleted': 'Bu mesaj silindi.',
   'message.edit': 'Düzenle',

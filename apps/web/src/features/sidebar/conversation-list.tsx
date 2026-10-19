@@ -4,12 +4,12 @@
  * People.
  */
 import { useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { IconButton } from '../../ui/icon-button';
-import { NewConversationDialog } from '../conversations/new-conversation';
 import { useWorkspace } from '../shell/workspace';
 import { ChannelRow } from './channel-row';
 import { groups } from './ordering';
@@ -20,6 +20,8 @@ export const ConversationList = (): React.JSX.Element => {
   const channels = useChannels(workspace.id);
   const { match } = useRoute();
   const [starting, setStarting] = useState(false);
+  // The dialog is in the deferred chunk (D-163).
+  const deferred = useDeferred([starting, setStarting]);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
   // The channel list says when channels are loading or failed; this section only adds to it.
   const list = groups(channels.data ?? []);
@@ -66,7 +68,9 @@ export const ConversationList = (): React.JSX.Element => {
           })}
         </ul>
       )}
-      <NewConversationDialog open={starting} onOpenChange={setStarting} />
+      {deferred !== null && (
+        <deferred.NewConversationDialog open={starting} onOpenChange={setStarting} />
+      )}
     </section>
   );
 };

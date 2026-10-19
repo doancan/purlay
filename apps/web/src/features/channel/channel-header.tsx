@@ -10,6 +10,7 @@
  */
 import { nameOf } from '../messages/author';
 import { lazy, Suspense, useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -22,9 +23,7 @@ import { NavToggle } from '../shell/nav';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { IconButton } from '../../ui/icon-button';
-import { AddPeopleDialog } from './add-people';
 import { NotificationLevelMenu } from './notification-level-menu';
-import { GroupDetailsDialog } from '../conversations/group-details';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
 import { StarToggle } from './star-toggle';
@@ -94,6 +93,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
     if (open) setDetailsOpened(true);
     setDetailsOpen(open);
   };
+  const group = direct && channel.peers.length >= 2;
+  // Adding people and a group's details are in the deferred chunk (D-163).
+  const deferred = useDeferred([adding, setAdding], [group && details, setDetailsOpen]);
   const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
   const openText =
     open !== null && open.count > 0 ? `${format.number(open.count)}${open.more ? '+' : ''}` : null;
@@ -118,7 +120,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             />
           </HeaderTile>
         )}
-        {direct && channel.peers.length >= 2 ? (
+        {group ? (
           <>
             {/* A group's people open its details (D-127); a conversation of two has none. */}
             <h1 className="min-w-0 truncate text-title text-ink">
@@ -132,12 +134,14 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
                 {title}
               </button>
             </h1>
-            <GroupDetailsDialog
-              channel={channel}
-              title={title}
-              open={details}
-              onOpenChange={setDetails}
-            />
+            {deferred !== null && (
+              <deferred.GroupDetailsDialog
+                channel={channel}
+                title={title}
+                open={details}
+                onOpenChange={setDetails}
+              />
+            )}
           </>
         ) : direct && channel.peer !== null ? (
           <>
@@ -228,7 +232,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
               setAdding(true);
             }}
           />
-          <AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
+          {deferred !== null && (
+            <deferred.AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
+          )}
         </>
       )}
     </header>

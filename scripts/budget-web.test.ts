@@ -174,6 +174,39 @@ describe('the shape the budget protects', () => {
   });
 });
 
+describe('the files the first page is cut into', () => {
+  test('initial modules in more than one file are named; a locale catalogue beside the entry is not', () => {
+    const cut = aBuild(
+      { 'assets/index-aaa.js': 'x', 'assets/toast-bbb.js': 'x', 'theme-init.js': 'x' },
+      ['assets/toast-bbb.js'],
+    );
+    const problems = shapeProblems(cut, measure(cut));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('cut into 2 files (assets/index-aaa.js, assets/toast-bbb.js)');
+    const whole = aBuild({ 'assets/index-aaa.js': 'x', 'theme-init.js': 'x' });
+    expect(shapeProblems(whole, measure(whole))).toEqual([]);
+  });
+
+  test('a push worker that imports a chunk is named; one that imports nothing is not', () => {
+    for (const imports of ['import"./assets/index-aaa.js";', 'self.x = import("./a.js");']) {
+      const dist = aBuild({
+        'assets/index-aaa.js': 'x',
+        'theme-init.js': 'x',
+        'push-worker.js': imports,
+      });
+      const problems = shapeProblems(dist, measure(dist));
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('push-worker.js imports another file');
+    }
+    const alone = aBuild({
+      'assets/index-aaa.js': 'x',
+      'theme-init.js': 'x',
+      'push-worker.js': 'var important = 1; self.addEventListener("push", () => important);',
+    });
+    expect(shapeProblems(alone, measure(alone))).toEqual([]);
+  });
+});
+
 describe('the command', () => {
   test('passes quietly inside the budget, with the report on stdout', () => {
     const dist = aBuild({ 'assets/index-aaa.js': incompressible(10_000), 'theme-init.js': 'x' });
