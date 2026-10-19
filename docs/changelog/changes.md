@@ -10,6 +10,10 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 Channels in the sidebar are listed by name, so a message never reshuffles them; unread still shows as
 the row's weight and badge. People and group conversations stay newest first.
+### Polish — 2026-10-19: a muted channel says so in the sidebar
+
+A channel set to *Nothing* carries a struck-through bell after its name (read as "muted"), so it no longer
+looks like every other channel; it is still bold while unread, as D-107 keeps it.
 
 ### Polish — 2026-10-19: the list screens read as one product (D-158)
 

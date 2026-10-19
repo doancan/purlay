@@ -41,6 +41,8 @@ interface RowContentProps {
   readonly avatar?: React.ReactNode;
   readonly unread: boolean;
   readonly mentions: number;
+  /** Set to tell nothing (D-107): said by a bell struck through after the name, never by hiding. */
+  readonly muted?: boolean;
   readonly current: boolean;
   readonly children: React.ReactNode;
 }
@@ -52,6 +54,7 @@ const RowContent = ({
   incident = null,
   unread,
   mentions,
+  muted = false,
   children,
 }: Omit<RowContentProps, 'current'>): React.JSX.Element => {
   const { t } = useI18n();
@@ -64,6 +67,11 @@ const RowContent = ({
         {unread ? <VisuallyHidden>{t('sidebar.unread')} </VisuallyHidden> : null}
         {children}
       </span>
+      {muted && (
+        <span className="shrink-0 text-nav-ink-muted">
+          <Icon name="deep-work" size="sm" label={t('sidebar.muted')} />
+        </span>
+      )}
       {/* A state, not a count: what is on fire here, said in words to a screen reader. */}
       {incident !== null && (
         <span className={incidentClasses}>

@@ -68,7 +68,7 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
   you are; Deep Work for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is
   on, until when, the minutes left and its end; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
-  and **Sign out**. Unread channels are bold;
+  and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
   to a screen reader (D-137). A person has an avatar, and a

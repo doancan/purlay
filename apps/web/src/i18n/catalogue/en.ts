@@ -100,6 +100,7 @@ export const en = {
   'sidebar.workspaces': 'Workspaces',
   'sidebar.browse': 'Browse channels',
   'sidebar.questions.many': '99+',
+  'sidebar.muted': 'muted',
   'sidebar.unread': 'unread',
   'sidebar.dm.failed': 'The conversation could not be opened.',
   'sidebar.people.empty': 'Nobody else is here yet.',

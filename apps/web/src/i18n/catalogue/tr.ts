@@ -97,6 +97,7 @@ export const tr = {
   'sidebar.workspaces': 'Çalışma alanları',
   'sidebar.browse': 'Kanallara göz at',
   'sidebar.questions.many': '99+',
+  'sidebar.muted': 'sessize alındı',
   'sidebar.unread': 'okunmamış',
   'sidebar.dm.failed': 'Konuşma açılamadı.',
   'sidebar.people.empty': 'Burada henüz başka kimse yok.',
