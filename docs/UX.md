@@ -234,6 +234,10 @@ they were.
   with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
   card inside it, and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
   colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are centred.
+- **A person is named by their name** — the display name, as the sidebar names them — wherever they
+  are named in words: the feed, a direct message's header, the inbox, search, the open questions,
+  *Resolved by …*, and what a screen reader hears of a row. The handle appears only where it is the
+  point: an `@mention`, the profile's handle line, and beside the name where people are picked.
 - **The header line** is over a group's first bubble: the name and the time on the left, the time
   alone on the right, the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
@@ -325,7 +329,7 @@ On resolve:
    because a state change that reorganizes the reader's view needs to be *seen* to be understood.
    Focus returns to the root. Resolved by somebody else, an open panel stays and only its status
    changes (D-122).
-2. The affordance line becomes `✓ Resolved by alice · 4 replies`.
+2. The affordance line becomes `✓ Resolved by Alice Chen · 4 replies`.
 3. A `system_event` message is **not** posted. The resolution is metadata on the root, not
    another line of chatter in a product whose thesis is less noise.
 

@@ -26,6 +26,7 @@ import { Kbd } from '../../ui/kbd';
 import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useThreads } from './thread-context';
+import { nameOf } from '../messages/author';
 
 /** The id of the panel, which the line it opens from controls. */
 export const THREAD_PANEL_ID = 'thread-panel';
@@ -45,7 +46,10 @@ export const ThreadStatus = ({
     return (
       <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text">
         <Icon name="resolved" size="sm" />
-        {t('thread.resolved', { name: summary.resolvedBy?.username ?? '', replies: counted })}
+        {t('thread.resolved', {
+          name: summary.resolvedBy === null ? '' : nameOf(summary.resolvedBy, t('user.erased')),
+          replies: counted,
+        })}
       </span>
     );
   }

@@ -8,7 +8,7 @@
  * this channel's share of the number the sidebar shows, counted from the same cache entry
  * (`use-open-count.ts`), so the two cannot disagree.
  */
-import { handleOf, nameOf } from '../messages/author';
+import { nameOf } from '../messages/author';
 import { useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
@@ -64,8 +64,9 @@ export const useChannelTitle = (channel: Channel): string => {
       ? channel.peers.map((person) => nameOf(person, t('user.erased'))).join(', ')
       : (channel.name ?? '');
   }
-  const handle = handleOf(peer, t('user.erased'));
-  return peer.id === user.id ? t('feed.selfDm', { name: handle }) : handle;
+  // A person is named by their name, as the sidebar names them; the handle is their profile's.
+  const name = nameOf(peer, t('user.erased'));
+  return peer.id === user.id ? t('feed.selfDm', { name }) : name;
 };
 
 export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {

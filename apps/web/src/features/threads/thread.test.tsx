@@ -128,7 +128,7 @@ describe('a root and its thread, closed', () => {
   test('a resolved one says who, and its root is quiet: dimmed, not hidden', async () => {
     const view = await mount({ messages: page([aMessage(1), rootMessage({ thread: closed })]) });
     const line = view.getByRole('button', { name: /Show thread/ });
-    expect(line.textContent).toContain('Resolved by alice · 2 replies');
+    expect(line.textContent).toContain('Resolved by Alice · 2 replies');
     const text = within(rowOf(view, messageIdAt(ROOT))).getByText('Why is the backoff 4s?');
     expect(text.closest('.text-ink-muted')).not.toBeNull();
     expect(
@@ -395,7 +395,7 @@ describe('live', () => {
       ts: 1,
     });
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
-      'Resolved by alice · 3 replies',
+      'Resolved by Alice · 3 replies',
     );
     view.unmountAll();
   });
@@ -442,7 +442,7 @@ describe('live', () => {
     await settle();
     // Nothing here asked for it, so nothing here closes under the person reading or writing (D-122).
     const panel = sectionOf(view);
-    expect(within(panel).getByText('Resolved by alice · 2 replies')).toBeDefined();
+    expect(within(panel).getByText('Resolved by Alice · 2 replies')).toBeDefined();
     expect(within(panel).getByRole('button', { name: /Reopen/ })).toBeDefined();
     expect(animate).not.toHaveBeenCalled();
     animate.mockRestore();
@@ -482,7 +482,7 @@ describe('resolving and reopening', () => {
     expect(asked).toEqual([messageIdAt(ROOT)]);
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
-      'Resolved by alice',
+      'Resolved by Alice',
     );
     expectFocusOn(rowOf(view, messageIdAt(ROOT)));
     expect(view.getAllByRole('status').some((n) => n.textContent === 'Thread resolved')).toBe(true);

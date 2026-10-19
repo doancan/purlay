@@ -93,7 +93,7 @@ export const AddPeopleDialog = ({
               </span>
               {failed !== null && (
                 <span role="alert" className="text-caption text-danger-text">
-                  {`${t('people.addFailed', { name: person.username })} ${failed}`}
+                  {`${t('people.addFailed', { name: person.displayName })} ${failed}`}
                 </span>
               )}
               <Button

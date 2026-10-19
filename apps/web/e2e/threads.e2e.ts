@@ -150,7 +150,7 @@ test.describe('resolving', () => {
 
     await page.keyboard.press('ControlOrMeta+Shift+R');
     await expect(
-      page.getByRole('button', { name: /Resolved by dogancan · 2 replies/ }),
+      page.getByRole('button', { name: /Resolved by Doğancan · 2 replies/ }),
     ).toBeVisible();
     await expect(threadOf(page, made.rootId)).toHaveCount(0);
     // The browser's own shortcut would have reloaded the page and thrown this away.

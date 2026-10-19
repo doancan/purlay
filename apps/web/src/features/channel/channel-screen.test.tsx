@@ -247,7 +247,8 @@ describe('the header', () => {
       channels: [dm],
       messages: page([aMessage(1, { channelId: IDS.dm })]),
     });
-    expect(other.getByRole('heading', { level: 1 }).textContent).toBe('bob');
+    // Named as the sidebar names them, never by the handle (that is their profile's).
+    expect(other.getByRole('heading', { level: 1 }).textContent).toBe('Bob');
     // A conversation with a person is headed by the person's own avatar, not a glyph.
     expect(other.getByRole('heading', { level: 1 }).previousElementSibling?.textContent).toBe('BO');
     expect(other.queryByText('No topic yet')).toBeNull();
@@ -257,7 +258,7 @@ describe('the header', () => {
       channels: [self],
       messages: page([aMessage(1, { channelId: IDS.dm })]),
     });
-    expect(note.getByRole('heading', { level: 1 }).textContent).toBe('dogancan (you)');
+    expect(note.getByRole('heading', { level: 1 }).textContent).toBe('Dogancan (you)');
     note.unmountAll();
     const odd = await mountChannel({
       channelId: IDS.dm,

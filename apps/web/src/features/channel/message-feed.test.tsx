@@ -968,7 +968,7 @@ describe('the keyboard', () => {
 
   test('a row has a name a screen reader can use, and the feed is a feed', async () => {
     const view = await mountChannel({ messages: page(three) });
-    expect(rowsOf(view)[0]?.getAttribute('aria-label')).toContain('alice');
+    expect(rowsOf(view)[0]?.getAttribute('aria-label')).toContain('Alice');
     expect(view.getByRole('feed', { name: 'Messages in api' }).getAttribute('aria-busy')).toBe(
       'false',
     );

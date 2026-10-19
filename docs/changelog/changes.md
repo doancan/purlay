@@ -22,6 +22,10 @@ Defects found by a visual audit of the messaging screens, at 1440 and 390 wide i
 - **The header's open-questions count is the channel's own**, not the workspace's, and opens the view
   narrowed to the channel (`?in=`, with *Show every channel*). A direct message or a group shows the
   control only while it has open questions.
+- **A person is named by their display name everywhere they are named in words**: a direct message's
+  header, the inbox, search (its rows and the choice of where to look), the open questions, *Resolved
+  by …*, an add that failed, and a row's name for a screen reader. They said the handle while the feed
+  and the sidebar said the name. The handle stays where it is the point: a mention and the profile.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

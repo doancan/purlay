@@ -84,7 +84,7 @@ describe('opening it', () => {
       messages: page([]),
       channels: [direct, ...someChannels().filter((c) => c.id !== IDS.api)],
     });
-    await person().click(view.getByRole('button', { name: BOB.username }));
+    await person().click(view.getByRole('button', { name: BOB.displayName }));
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
     expect(view.getByRole('complementary', { name: /^Profile/ })).toBeDefined();

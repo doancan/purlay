@@ -56,7 +56,7 @@ const glyphOf = (type: Notification['type']): GlyphName => {
 const useWhy = (): ((notification: Notification, channel: Channel | undefined) => string) => {
   const { t } = useI18n();
   return (notification, channel) => {
-    const name = authorOf(notification.message, t('user.erased')).username;
+    const name = authorOf(notification.message, t('user.erased')).displayName;
     switch (notification.type) {
       case 'mention':
         return t('inbox.why.mention', { name });

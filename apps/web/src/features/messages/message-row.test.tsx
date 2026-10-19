@@ -191,7 +191,7 @@ describe("a repository's event (D-134)", () => {
     const row = view.getByRole('article');
     expect(row.dataset['outgoing']).toBeUndefined();
     expect(row.dataset['editable']).toBeUndefined();
-    expect(row.getAttribute('aria-label')).toContain('github');
+    expect(row.getAttribute('aria-label')).toContain('GitHub');
     expect(view.getByText('GitHub')).toBeDefined();
     const sentence = view.getByRole('link', { name: 'octocat merged pull request #42' });
     expect(sentence.getAttribute('href')).toBe('https://github.com/acme/api/pull/42');
@@ -219,7 +219,8 @@ describe('what a row shows', () => {
     expect(time?.textContent).toBe('5m ago');
     expect(time?.getAttribute('title')).toContain('2026');
     const article = view.getByRole('article');
-    expect(article.getAttribute('aria-label')).toContain('alice');
+    // The name the row shows, not the handle (a person is named by their name in prose).
+    expect(article.getAttribute('aria-label')).toContain('Alice,');
     expect(article.hasAttribute('data-message-row')).toBe(true);
     expect(article.getAttribute('data-message-id')).toBe(aMessage(1).id);
   });

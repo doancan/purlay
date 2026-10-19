@@ -97,7 +97,7 @@ const Found = ({
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 text-label text-ink-muted">
             <span className="text-body font-semibold text-ink">
-              {authorOf(message, t('user.erased')).username}
+              {authorOf(message, t('user.erased')).displayName}
             </span>
             <span aria-hidden="true">·</span>
             {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
@@ -127,7 +127,7 @@ const placeName = (channel: Channel): string => {
   if (channel.peer === null && channel.peers.length > 0) {
     return channel.peers.map((person) => person.displayName).join(', ');
   }
-  return `@${channel.peer?.username ?? channel.name ?? ''}`;
+  return channel.peer === null ? (channel.name ?? '') : channel.peer.displayName;
 };
 
 const SearchView = ({

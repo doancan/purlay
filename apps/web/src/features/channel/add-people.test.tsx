@@ -159,7 +159,7 @@ describe('the list', () => {
     await person().click(within(dialog).getByRole('button', { name: 'Add' }));
     await settle();
     expect(within(dialog).getByRole('alert').textContent).toContain(
-      `${ALICE.username} was not added.`,
+      `${ALICE.displayName} was not added.`,
     );
     expect(within(dialog).getByRole('button', { name: 'Add' }).hasAttribute('disabled')).toBe(
       false,

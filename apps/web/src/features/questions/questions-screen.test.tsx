@@ -105,7 +105,7 @@ describe('the list', () => {
       .map((h) => h.textContent);
     expect(headings).toEqual([
       'incidents·1 open question',
-      'bob·1 open question',
+      'Bob·1 open question',
       'api·1 open question',
     ]);
     // The dot is decoration: a screen reader hears the name and the count, not a symbol.
@@ -120,7 +120,7 @@ describe('the list', () => {
   test('each question says who, when, what, and how many replies and when the last came', async () => {
     const screen = await view();
     const row = screen.getByText('question 2?').closest('button') as HTMLElement;
-    expect(within(row).getByText('alice')).toBeDefined();
+    expect(within(row).getByText('Alice')).toBeDefined();
     expect(within(row).getByText(/3 replies · /)).toBeDefined();
     expect(screen.getByText(/1 reply · /)).toBeDefined();
     expect(screen.getByText(/finished answering/)).toBeDefined();

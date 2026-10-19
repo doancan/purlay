@@ -288,7 +288,7 @@ test.describe('at a phone width', () => {
     await signIn();
     await page.goto(`/w/${tenant.slug}/inbox`);
     const row = page.getByRole('button', { name: new RegExp(made.name) });
-    await expect(row).toContainText('carol mentioned you');
+    await expect(row).toContainText('Carol Reyes mentioned you');
     // The line the time sits on: one line tall, and the time one box on it (#679).
     const line = await row.locator('time').evaluate((time) => {
       const parent = time.parentElement;
