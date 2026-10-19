@@ -151,7 +151,7 @@ Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be bro
 window.
 
 **The inbox** (D-106, D-153). What the person was told in this workspace, newest first, in one centred
-column like the feed: **All** or **Unread** above it — Unread is asked of the server, so what waits is
+column like the feed — the shape the open questions, search and saved share (D-158): **All** or **Unread** above it — Unread is asked of the server, so what waits is
 found however old — then **Today** and **Earlier**, each a card of rows. A row says who, why and where,
 with the message under it in two lines at most; unread is a dot at its edge and the line in full ink,
 read is muted. Opening a row takes the person to the message and reads it; **Mark read**, beside the

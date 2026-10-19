@@ -6498,6 +6498,7 @@ clear, professional".
 **Amends D-124** §3 and §4 (what the account menu holds, the rail's gear) and its rejection of a
 Settings page. **Cost of reversing:** the route, the navigation, the pages (which reuse the dialogs'
 logic), and the menu items moved back.
+
 ### D-147. A reply is read in its thread, not by scrolling the feed past it — amends D-99 §4
 
 **Context.** An audit reproduced it twice. Bob asked in #incidents; Carol answered **in the thread**;
@@ -6553,51 +6554,6 @@ that you are never told about.
 reply cases in `delivery.ts`, `edit.ts` and `tombstone.ts`, the endpoint, `ReadThreadRequest`, the
 thread panel's `use-read-thread.ts`, and their tests. No schema or stored value depends on it.
 
-### D-151. Controls are 32px tall
-
-**Context.** `size-control` was 28px — every button, tab, select and text field — under UX §1's
-density rule ("controls at this height, no larger"). D-118 §6 had already moved density from how
-tightly things are set to what is shown. Looking at the running product on 2026-10-19 the owner called
-the menus and screens cramped; a 28px field beside a two-line label in a settings row reads as an
-afterthought, and a 28px button is a small pointer target for the actions people take most.
-
-**Decided.** `size-control` is **32px** — Linear's height for buttons and fields. Below the narrow
-breakpoint `size-touch` (44px) still applies. Sidebar rows stay `size-row` (32px), so a control and a
-row are now one height, and the header (48px) keeps its 8px of air above and below a control.
-
-**Rejected.** *36px or more* (Slack's fields): the composer's toolbar and the header would grow for
-little gain, and density in a chat product is still worth something. *Bigger only in Settings*: two
-heights for one kind of control is the drift a token exists to stop.
-
-**Amends** UX §1's density rule and D-118 §6's wording. **Cost of reversing:** one token.
-### D-152. Anybody may leave a workspace
-
-**Context.** A member could be removed by an owner or an admin, but could not leave: no endpoint, no
-door. Somebody invited into the wrong workspace, or done with a team, had to ask an admin to take them
-out — and the last owner, who must not leave a workspace with nobody to run it (I-2), had no rule
-written for leaving at all. Found by the settings audit (2026-10-19).
-
-**Decided.**
-
-1. `DELETE /api/workspaces/:workspaceId/membership` — the caller leaves the workspace and every channel
-   in it, by the same going as a removal (`takeOut` in `members.ts`), and their own sockets are told
-   `ACCESS_REVOKED` for every channel they could see.
-2. **Anybody's.** A member, an admin or an owner — except the **last** owner, who is `409 LAST_OWNER`
-   and told to make somebody else an owner first. The role is read under the workspace's lock, as every
-   change to members is, so two owners leaving at once cannot leave none.
-3. **Recorded as `member.left`**, the person as both actor and target — the trail says who went of
-   their own accord, apart from who was removed.
-4. **Leaving is not being removed.** A link that was open before they left still lets them back in: the
-   check that keeps a *removed* person out reads `member.removed` only (`invitations.ts`), because a
-   removal is somebody else's decision and leaving was theirs.
-
-**Rejected.** *`DELETE …/members/:userId` with one's own id* — that endpoint is an admin's and refuses
-one's own row on purpose (nobody changes their own role there); one path with two sets of rules is the
-confusion `members.ts` avoids. *Letting the last owner leave and deleting the workspace* — deleting a
-workspace is unbuilt (D-124 ①) and is not something to do as a side effect of a person leaving.
-
-**Cost of reversing:** one endpoint, its case in the cross-tenant table, an audit action, and a row
-on Sessions & account.
 ### D-148. An open tab in the background tells its person: a notice, a dot on its icon
 
 **Context.** With Purlay open in a tab that is not in front — another tab, another window — the only
@@ -6655,33 +6611,7 @@ workspace: the socket watches that workspace's channels.
 
 **Cost of reversing:** `features/alerts`, `features/push/notifier.ts`, the shared switch in `push.tsx`,
 two catalogue lines; no migration, no endpoint.
-### D-153. The inbox is for triage: an unread view, days, and reading without going
 
-**Context.** The inbox was one flat list, hung from the left at 760px with half the window empty, with
-"Mark all read" and "Load more" and nothing else: no way to see only what waits, nothing to tell this
-morning from last week, and a row could only be read by opening it. The notifications audit
-(2026-10-19) compared it with Slack's Activity and Linear's inbox.
-
-**Decided.**
-
-1. **All and Unread.** Unread is `GET /api/notifications?unreadOnly=true` (D-106 already serves it),
-   kept under the same cache prefix as All (`['notifications', workspaceId, 'unread']`), so every
-   refresh the inbox already hears refreshes both.
-2. **A row read stays where it is.** Marked read in the Unread view, it turns muted and stays until the
-   person looks again; dropping it at once would move the next row under the pointer that was aiming at
-   it.
-3. **Today and Earlier**, by the person's own day, each a card — the column centred like the feed's
-   (D-119), not hung from the left.
-4. **Mark read on the row**, beside its button rather than inside it, so each is its own control for a
-   keyboard and a screen reader.
-
-**Rejected.** *Filtering the loaded pages in the client* — an unread row older than what is loaded would
-not be found, and "Load more" could add pages that show nothing. *Grouping by thread* — the row carries
-the reply, not its root, so a group could not name what it groups without another read per row; left
-for when the contract carries the root's first line. *Archive and snooze* — PRD §6 refuses reminders,
-and an archive is a second "read".
-
-**Cost of reversing:** the filter control, the sections and the per-row button in `inbox-screen.tsx`.
 ### D-149. A link to a message: its own address, and the feed read around it
 
 **Context.** Nothing in Purlay could be pointed at. The only deep link was a thread's (`?thread=`);
@@ -6726,6 +6656,7 @@ feed with a hole in it is a feed every frame handler and the read position would
 
 **Cost of reversing:** one route and its contract, the window query and the address; links already
 pasted would open the channel at its bottom.
+
 ### D-150. A message's actions: one bar, in the empty corner of its own row
 
 **Amends D-119 §6 and `UX.md` §3.** The owner's audit of the message row (2026-10-19): the bar hung
@@ -6782,66 +6713,81 @@ together; on a phone Reply stood taller than the rest.
 **Cost of reversing:** `message-actions.tsx`, `active-row.ts`, the tiles in `ui/menu.tsx`, the `bar`
 size, and the chip's tooltip; no contract, route or stored fact depends on any of it.
 
-### D-158. The list screens share one shape
+### D-151. Controls are 32px tall
 
-**Context.** The inbox, the open questions, search and saved each drew their list their own way — hung
-from the left at the feed's width with half the window empty, rows as floating rounded hovers, saved
-items with two or three buttons under every row. After the inbox became cards (D-153), the other three
-read as a different product.
+**Context.** `size-control` was 28px — every button, tab, select and text field — under UX §1's
+density rule ("controls at this height, no larger"). D-118 §6 had already moved density from how
+tightly things are set to what is shown. Looking at the running product on 2026-10-19 the owner called
+the menus and screens cramped; a 28px field beside a two-line label in a settings row reads as an
+afterthought, and a 28px button is a small pointer target for the actions people take most.
 
-**Decided.** One shape, in `ui/list-column.tsx`: a centred column at the feed's width (D-119) on the
-ground a step below its cards; each list a card of rows divided by hairlines, with its heading (a day, a
-channel) above it; a row is one button, padded alike. A row's own actions (Mark read, a saved item's
-moves) sit beside its button, appearing over the row's meta line in its hover tone on a pointer's hover
-or a keyboard's focus, and stay below the words on a phone. Search's field and *where* sit in a card of
-their own above the results.
+**Decided.** `size-control` is **32px** — Linear's height for buttons and fields. Below the narrow
+breakpoint `size-touch` (44px) still applies. Sidebar rows stay `size-row` (32px), so a control and a
+row are now one height, and the header (48px) keeps its 8px of air above and below a control.
 
-**Rejected.** *Leaving each screen its own layout* — four answers to one question is the drift a shared
-primitive exists to stop. *Always-visible row buttons on a wide window* — three buttons under every
-saved item made the list a toolbar.
+**Rejected.** *36px or more* (Slack's fields): the composer's toolbar and the header would grow for
+little gain, and density in a chat product is still worth something. *Bigger only in Settings*: two
+heights for one kind of control is the drift a token exists to stop.
 
-**Cost of reversing:** the primitive and its four uses.
+**Amends** UX §1's density rule and D-118 §6's wording. **Cost of reversing:** one token.
 
-### D-157. The palette finds every place, and a query never ends in nothing
+### D-152. Anybody may leave a workspace
 
-**Context.** `PRD.md` §4.6 promises a palette over channels, DMs, people and settings, and UX §1.3 calls
-it the primary navigation. The messaging audit (2026-10-19) found it a channel switcher: "inbox",
-"saved", "search", a public channel not joined, a group conversation — none were found, and a query
-that matched nothing ended in "No match".
+**Context.** A member could be removed by an owner or an admin, but could not leave: no endpoint, no
+door. Somebody invited into the wrong workspace, or done with a team, had to ask an admin to take them
+out — and the last owner, who must not leave a workspace with nobody to run it (I-2), had no rule
+written for leaving at all. Found by the settings audit (2026-10-19).
 
-**Decided.** The palette lists the rail's places (Open questions, Inbox, Saved, Search) as views;
-public channels the person has not joined, with *Not joined* beside them (opening one shows its Join
-bar); group conversations by their people (D-127), found by any member's handle; every settings page
-the person may open (D-146). Whatever was typed is also offered as **Search messages for “…”**, in a
-group of its own that is always last, so arrows and Enter reach it in the order it is drawn; with no
-other match the palette still says "No match" above it.
+**Decided.**
 
-**Rejected.** *Actions that open dialogs (New channel, Invite)* — their dialogs are owned by the
-components that draw their doors; a second door would need the state lifted for one shortcut.
-*Keyboard shortcuts as an action* — the Settings page of that name is already listed; two rows with
-one name is a guess for the person.
+1. `DELETE /api/workspaces/:workspaceId/membership` — the caller leaves the workspace and every channel
+   in it, by the same going as a removal (`takeOut` in `members.ts`), and their own sockets are told
+   `ACCESS_REVOKED` for every channel they could see.
+2. **Anybody's.** A member, an admin or an owner — except the **last** owner, who is `409 LAST_OWNER`
+   and told to make somebody else an owner first. The role is read under the workspace's lock, as every
+   change to members is, so two owners leaving at once cannot leave none.
+3. **Recorded as `member.left`**, the person as both actor and target — the trail says who went of
+   their own accord, apart from who was removed.
+4. **Leaving is not being removed.** A link that was open before they left still lets them back in: the
+   check that keeps a *removed* person out reads `member.removed` only (`invitations.ts`), because a
+   removal is somebody else's decision and leaving was theirs.
 
-**Cost of reversing:** the items in `use-palette-items.ts` and the search row in `command-palette.tsx`.
+**Rejected.** *`DELETE …/members/:userId` with one's own id* — that endpoint is an admin's and refuses
+one's own row on purpose (nobody changes their own role there); one path with two sets of rules is the
+confusion `members.ts` avoids. *Letting the last owner leave and deleting the workspace* — deleting a
+workspace is unbuilt (D-124 ①) and is not something to do as a side effect of a person leaving.
 
-### D-160. Channels stay where they are; conversations come forward
+**Cost of reversing:** one endpoint, its case in the cross-tenant table, an audit action, and a row
+on Sessions & account.
 
-**Context.** The sidebar ordered channels by their last message, newest first. Every message moved a
-row: a mention put #deploys on top while the person was reaching for the row that had been there, and
-with no sound and no banner (D-12) the reshuffle was the loudest signal the product made. UX §1.4 says
-content never moves under the reader; the sidebar did exactly that. Found by two audits (2026-10-19).
+### D-153. The inbox is for triage: an unread view, days, and reading without going
 
-**Decided.** Joined channels are listed **by name**, as starred ones already were (D-132): a channel is a
-place, and a place stays put. What is unread is said by the row's weight and its badge, where it is.
-**People and group conversations stay newest first**: a conversation with someone is a correspondence,
-and the one being had is the one to find. `Alt+↑/↓` steps through unread in the sidebar's order, so it
-now walks channels alphabetically.
+**Context.** The inbox was one flat list, hung from the left at 760px with half the window empty, with
+"Mark all read" and "Load more" and nothing else: no way to see only what waits, nothing to tell this
+morning from last week, and a row could only be read by opening it. The notifications audit
+(2026-10-19) compared it with Slack's Activity and Linear's inbox.
 
-**Rejected.** *A setting for the order* (Slack's "Sort by activity / alphabetically") — a preference
-for what should simply be right is a second thing to maintain and test; reopen it if the team asks.
-*Activity order frozen while the pointer is over the sidebar* — the list still jumps the moment the
-pointer leaves, and the next look finds everything elsewhere.
+**Decided.**
 
-**Cost of reversing:** one sort in `ordering.ts`.
+1. **All and Unread.** Unread is `GET /api/notifications?unreadOnly=true` (D-106 already serves it),
+   kept under the same cache prefix as All (`['notifications', workspaceId, 'unread']`), so every
+   refresh the inbox already hears refreshes both.
+2. **A row read stays where it is.** Marked read in the Unread view, it turns muted and stays until the
+   person looks again; dropping it at once would move the next row under the pointer that was aiming at
+   it.
+3. **Today and Earlier**, by the person's own day, each a card — the column centred like the feed's
+   (D-119), not hung from the left.
+4. **Mark read on the row**, beside its button rather than inside it, so each is its own control for a
+   keyboard and a screen reader.
+
+**Rejected.** *Filtering the loaded pages in the client* — an unread row older than what is loaded would
+not be found, and "Load more" could add pages that show nothing. *Grouping by thread* — the row carries
+the reply, not its root, so a group could not name what it groups without another read per row; left
+for when the contract carries the root's first line. *Archive and snooze* — PRD §6 refuses reminders,
+and an archive is a second "read".
+
+**Cost of reversing:** the filter control, the sections and the per-row button in `inbox-screen.tsx`.
+
 ### D-154. A channel's details are a wide dialog with tabs, not one long column
 
 **Context.** D-123's details were one 480px dialog holding everything: the name and topic, the
@@ -6877,6 +6823,67 @@ still sit below the fold. *Keeping the bell in the details*: it is the header's 
 the details there is room to say the level.
 
 **Cost of reversing:** one component's layout, a `Dialog` size and a token; no contract changes.
+
+### D-157. The palette finds every place, and a query never ends in nothing
+
+**Context.** `PRD.md` §4.6 promises a palette over channels, DMs, people and settings, and UX §1.3 calls
+it the primary navigation. The messaging audit (2026-10-19) found it a channel switcher: "inbox",
+"saved", "search", a public channel not joined, a group conversation — none were found, and a query
+that matched nothing ended in "No match".
+
+**Decided.** The palette lists the rail's places (Open questions, Inbox, Saved, Search) as views;
+public channels the person has not joined, with *Not joined* beside them (opening one shows its Join
+bar); group conversations by their people (D-127), found by any member's handle; every settings page
+the person may open (D-146). Whatever was typed is also offered as **Search messages for “…”**, in a
+group of its own that is always last, so arrows and Enter reach it in the order it is drawn; with no
+other match the palette still says "No match" above it.
+
+**Rejected.** *Actions that open dialogs (New channel, Invite)* — their dialogs are owned by the
+components that draw their doors; a second door would need the state lifted for one shortcut.
+*Keyboard shortcuts as an action* — the Settings page of that name is already listed; two rows with
+one name is a guess for the person.
+
+**Cost of reversing:** the items in `use-palette-items.ts` and the search row in `command-palette.tsx`.
+
+### D-158. The list screens share one shape
+
+**Context.** The inbox, the open questions, search and saved each drew their list their own way — hung
+from the left at the feed's width with half the window empty, rows as floating rounded hovers, saved
+items with two or three buttons under every row. After the inbox became cards (D-153), the other three
+read as a different product.
+
+**Decided.** One shape, in `ui/list-column.tsx`: a centred column at the feed's width (D-119) on the
+ground a step below its cards; each list a card of rows divided by hairlines, with its heading (a day, a
+channel) above it; a row is one button, padded alike. A row's own actions (Mark read, a saved item's
+moves) sit beside its button, appearing over the row's meta line in its hover tone on a pointer's hover
+or a keyboard's focus, and stay below the words on a phone. Search's field and *where* sit in a card of
+their own above the results.
+
+**Rejected.** *Leaving each screen its own layout* — four answers to one question is the drift a shared
+primitive exists to stop. *Always-visible row buttons on a wide window* — three buttons under every
+saved item made the list a toolbar.
+
+**Cost of reversing:** the primitive and its four uses.
+
+### D-160. Channels stay where they are; conversations come forward
+
+**Context.** The sidebar ordered channels by their last message, newest first. Every message moved a
+row: a mention put #deploys on top while the person was reaching for the row that had been there, and
+with no sound and no banner (D-12) the reshuffle was the loudest signal the product made. UX §1.4 says
+content never moves under the reader; the sidebar did exactly that. Found by two audits (2026-10-19).
+
+**Decided.** Joined channels are listed **by name**, as starred ones already were (D-132): a channel is a
+place, and a place stays put. What is unread is said by the row's weight and its badge, where it is.
+**People and group conversations stay newest first**: a conversation with someone is a correspondence,
+and the one being had is the one to find. `Alt+↑/↓` steps through unread in the sidebar's order, so it
+now walks channels alphabetically.
+
+**Rejected.** *A setting for the order* (Slack's "Sort by activity / alphabetically") — a preference
+for what should simply be right is a second thing to maintain and test; reopen it if the team asks.
+*Activity order frozen while the pointer is over the sidebar* — the list still jumps the moment the
+pointer leaves, and the next look finds everything elsewhere.
+
+**Cost of reversing:** one sort in `ordering.ts`.
 
 ## Part D — Open, deliberately
 
