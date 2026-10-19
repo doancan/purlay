@@ -133,7 +133,11 @@ const DeviceCard = (): React.JSX.Element => {
             ? t('push.blocked')
             : status === 'on'
               ? t(closedTab ? 'settings.notifications.onBoth' : 'settings.notifications.onOpenTab')
-              : t(closedTab ? 'settings.notifications.askBoth' : 'settings.notifications.askOpenTab')
+              : t(
+                  closedTab
+                    ? 'settings.notifications.askBoth'
+                    : 'settings.notifications.askOpenTab',
+                )
         }
       >
         {status === 'on' ? (

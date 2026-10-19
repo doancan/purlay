@@ -138,7 +138,9 @@ describe('integration: managing members over HTTP', () => {
       ]);
       // Gone, so the workspace is no longer theirs to leave.
       expect(
-        await outcome(await call(db, 'DELETE', `/api/workspaces/${workspaceId}/membership`, member)),
+        await outcome(
+          await call(db, 'DELETE', `/api/workspaces/${workspaceId}/membership`, member),
+        ),
       ).toBe('404 WORKSPACE_NOT_FOUND');
     });
   });
