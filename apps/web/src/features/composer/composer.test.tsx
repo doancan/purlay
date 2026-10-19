@@ -286,7 +286,7 @@ describe('what it shows', () => {
 
   test('says its words in Turkish', async () => {
     const { view } = await mount({ locale: 'tr' });
-    expect(view.getByRole('textbox', { name: 'api için mesaj' })).toBeDefined();
+    expect(view.getByRole('textbox', { name: 'Mesaj: api' })).toBeDefined();
     expect(view.getByRole('button', { name: /Gönder/ })).toBeDefined();
   });
 
