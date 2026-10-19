@@ -874,6 +874,9 @@ export const tr = {
   'push.working': 'Bir saniye…',
   'push.blocked': 'Engellendi: tarayıcının site ayarlarından izin ver',
   'push.failed': 'Bu cihazdaki bildirimler değiştirilemedi.',
+  // Arka plandaki açık bir sekmenin söyledikleri (D-148).
+  'alerts.many': '{count} konuşma sizi bekliyor',
+  'alerts.waiting': 'Burada sizi bekleyen bir şey var',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
 
   // ── Notification level (D-107) ─────────────────────────────────────────
@@ -1002,10 +1005,14 @@ export const tr = {
   'settings.notifications.deepWorkStart': 'Deep Work’ü başlat',
   'settings.notifications.deepWorkOn': 'Deep Work açık',
   'settings.notifications.deviceHint': 'Purlay önünde açık değilken bu cihaza ne ulaşır.',
-  'settings.notifications.closedTab': 'Purlay kapalıyken',
-  'settings.notifications.closedTabOn': 'Purlay kapalıyken de bu cihaza haber verilir.',
   'settings.notifications.closedTabAsk':
     'Purlay kapalıyken de bu cihazda haber almak için aç. Önce tarayıcın izin isteyecek.',
+  'settings.notifications.away': 'Purlay önünde değilken',
+  'settings.notifications.onBoth': 'Purlay arka planda bir sekmedeyken de kapalıyken de bu cihaza haber verilir.',
+  'settings.notifications.onOpenTab': 'Purlay arka planda bir sekmede açıkken bu cihaza haber verilir.',
+  'settings.notifications.askBoth': 'Purlay arka plandayken ya da kapalıyken bu cihazda haber almak için aç. Önce tarayıcın izin ister.',
+  'settings.notifications.askOpenTab': 'Purlay arka planda bir sekmede açıkken bu cihazda haber almak için aç. Önce tarayıcın izin ister.',
+  'settings.notifications.unsupported': 'Bu tarayıcı bildirim gösteremiyor; bekleyenleri yalnızca sekmenin başlığı sayar.',
   'settings.notifications.closedTabOff':
     'Bu sunucu kapalı sekmeye bildirim göndermiyor; Purlay kapalıyken hiçbir şey duymazsın. Haber almak için bir sekmede açık tut.',
   'settings.notifications.unavailable': 'Burada kullanılamıyor',

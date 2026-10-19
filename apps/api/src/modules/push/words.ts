@@ -3,8 +3,7 @@
  * inbox's own words, never what was written. `words.test.ts` holds them to the web catalogue's
  * `inbox.why.*`, so a device and the inbox cannot say a thing two ways.
  */
-import type { PushLocale } from '@purlay/types';
-import type { NEEDS_YOU } from '../messages/delivery';
+import type { NEEDS_YOU, PushLocale } from '@purlay/types';
 
 /** Why the person was told — and, for a group conversation, that it was written to several (D-127). */
 type Said = (typeof NEEDS_YOU)[number] | 'group';

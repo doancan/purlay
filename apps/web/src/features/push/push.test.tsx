@@ -22,6 +22,7 @@ import { person } from '../../testing/user';
 import { StorageProvider } from '../../data/storage-provider';
 import { Toaster } from '../../ui/toast';
 import type { DeviceSubscription, PushDevice } from './device';
+import type { Notifier } from './notifier';
 import { PUSH_OWNER_KEY } from './push';
 
 installDom();
@@ -441,7 +442,8 @@ describe('on a later load', () => {
     const browser = aDevice({ held: SUBSCRIPTION, permission: 'denied' });
     const view = await open(api, browser.device, { owner: IDS.me });
     expect(sent).toEqual([]);
-    expect(browser.calls).toEqual(['subscribe BR', 'unsubscribe']);
+    // Not made again only to be refused: the permission is read first (D-148).
+    expect(browser.calls).toEqual(['unsubscribe']);
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
     expectBlocked(view);
     view.unmount();
@@ -495,4 +497,115 @@ test('a notice clicked opens its conversation in this tab', async () => {
   });
   expect(view.world.history.stack.at(-1)).toBe(path);
   view.unmount();
+});
+
+describe('one switch over the open tab and the closed one (D-148)', () => {
+  /** The page's own notices, sharing the device's one permission, as a browser's do. */
+  const aNotifier = (
+    start: NotificationPermission,
+  ): { notifier: Notifier; asked: () => number; permission: () => NotificationPermission } => {
+    let asked = 0;
+    let permission = start;
+    return {
+      asked: () => asked,
+      permission: () => permission,
+      notifier: {
+        permission: () => permission,
+        request: (): Promise<NotificationPermission> => {
+          asked += 1;
+          if (permission === 'default') permission = 'granted';
+          return Promise.resolve(permission);
+        },
+        show: () => true,
+        close: () => undefined,
+      },
+    };
+  };
+
+  const openWith = async (
+    api: Api,
+    device: PushDevice | null,
+    notifier: Notifier,
+    owner?: string,
+  ): Promise<View> => {
+    const view = await renderApp(
+      <>
+        <Outlet />
+        <Toaster dismissLabel="Close" />
+      </>,
+      { path: NOTIFICATIONS, api, push: device, notifier },
+    );
+    if (owner !== undefined) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
+    await settle();
+    await view.findByRole('heading', { level: 1, name: 'Notifications' });
+    await settle();
+    return view;
+  };
+
+  const NO_KEY = (): Promise<{ publicKey: null }> => Promise.resolve({ publicKey: null });
+
+  test('offered without push, for the open tab alone: asked once, nothing sent to the server', async () => {
+    const page = aNotifier('default');
+    const { api, sent } = aServer({ pushKey: NO_KEY });
+    const view = await openWith(api, aDevice().device, page.notifier);
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
+    await settle();
+    expect(page.asked()).toBe(1);
+    expect(sent).toEqual([]);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBe(IDS.me);
+    expect(offered(view)).toContain('Turn off');
+    view.unmount();
+  });
+
+  test('offered in a browser with no push at all, whose server is never asked for a key', async () => {
+    // `pushKey` is the fake API's refusal: a call fails the test.
+    const view = await openWith(aSignedInApi(), null, aNotifier('default').notifier);
+    // Offered for the open tab alone, and the card says a closed tab hears nothing here.
+    expect(offered(view)).toContain('Turn on');
+    expect(card(view).getByText(/does not send notifications to a closed tab/)).toBeDefined();
+    view.unmount();
+  });
+
+  test('refused by the person, blocked, and nothing remembered', async () => {
+    const page = aNotifier('denied');
+    const view = await openWith(aServer({ pushKey: NO_KEY }).api, null, page.notifier);
+    expectBlocked(view);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
+    view.unmount();
+  });
+
+  test('with push as well, one question covers both and the server is told', async () => {
+    const page = aNotifier('default');
+    const browser = aDevice({ permission: 'granted' });
+    const { api, sent } = aServer();
+    const view = await openWith(api, browser.device, page.notifier);
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
+    await settle();
+    expect(page.asked()).toBe(1);
+    expect(browser.calls).toEqual(['subscribe BK']);
+    expect(sent).toEqual([['subscribe', SUBSCRIPTION.endpoint, 'en']]);
+    view.unmount();
+  });
+
+  test('on a later load, still on for its owner while the browser allows it', async () => {
+    const view = await openWith(
+      aServer({ pushKey: NO_KEY }).api,
+      null,
+      aNotifier('granted').notifier,
+      IDS.me,
+    );
+    expect(offered(view)).toContain('Turn off');
+    view.unmount();
+  });
+
+  test('turned off, the open tab is off too, and the server it never told is not asked', async () => {
+    const { api, sent } = aServer({ pushKey: NO_KEY });
+    const view = await openWith(api, null, aNotifier('granted').notifier, IDS.me);
+    await person().click(card(view).getByRole('button', { name: 'Turn off' }));
+    await settle();
+    expect(sent).toEqual([]);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
+    expect(offered(view)).toContain('Turn on');
+    view.unmount();
+  });
 });

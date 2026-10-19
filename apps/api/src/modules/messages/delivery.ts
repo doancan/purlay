@@ -20,16 +20,9 @@
  * caller tell each of them their new numbers without a query per person.
  */
 import { sql, type Executor } from '@purlay/db';
-import type { ChannelState } from '@purlay/types';
+import type { ChannelState, NEEDS_YOU } from '@purlay/types';
 import type { ChannelContext } from '../../platform/channels';
 import { inDeepWork } from '../workspaces/deep-work';
-
-/**
- * The notifications that make a message one that needs the person (D-99 §1, D-107): every reason a
- * new message gives, strongest first. A resolution is told and not counted — it is not a message.
- * One list, read by the send that counts, the read that recounts and the delete that takes back.
- */
-export const NEEDS_YOU = ['mention', 'direct_message', 'thread_reply', 'channel_message'] as const;
 
 /** Strongest first — the order a person's one notification for a message is chosen in. */
 type Reason = (typeof NEEDS_YOU)[number];

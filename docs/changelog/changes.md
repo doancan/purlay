@@ -99,6 +99,18 @@ placeholders, so keys set in `production.env` never reached the container: `/api
 scheduler, empty meaning off as before, and `docker/production.env.example` lists them with how to make
 a key pair. The test that holds the stack now fails on any variable the API reads (`.env.example`) that
 the stack neither passes nor names with the reason it is withheld.
+### Feature — 2026-10-19: an open tab in the background tells its person (D-148)
+
+With Purlay open in a tab that was not in front, the only sign that something needed the person was
+`(N)` in the title — gone in a pinned tab, easy to miss — and D-143 held pushes while the page was
+open. Now, when a conversation's mention badge goes up while the page is hidden or unfocused, the
+browser shows a notice — the place, and who in the inbox's words, never the message — one per
+conversation and one for several at once, opening the conversation or thread when clicked; never in
+Deep Work, never for the person's own messages. The favicon carries a dot and an installed app's icon
+the count while anything is waiting. "Notifications on this device" is one switch for this and for
+Web Push, offered without the server's push keys too, and never asks on load. No sound: the
+operating system already sounds a notice. `NEEDS_YOU` moved to `@purlay/types`, so the client reads
+the server's one list.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

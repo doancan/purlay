@@ -22,7 +22,7 @@ import { renderApp } from '../../testing/render';
 import { settle } from '../../testing/channel-harness';
 import { person } from '../../testing/user';
 import { Toaster } from '../../ui/toast';
-import { targetOf } from './inbox-screen';
+import { targetOf } from './why';
 
 installDom();
 

@@ -891,6 +891,9 @@ export const en = {
   'push.working': 'One moment…',
   'push.blocked': 'Blocked: allow them in the browser’s site settings',
   'push.failed': 'Notifications on this device were not changed.',
+  // What an open tab in the background says (D-148).
+  'alerts.many': '{count} conversations need you',
+  'alerts.waiting': 'Something here needs you',
   'shortcuts.deepWork': 'Start or end Deep Work',
 
   // ── Notification level (D-107) ─────────────────────────────────────────
@@ -1022,10 +1025,14 @@ export const en = {
   'settings.notifications.deepWorkOn': 'Deep Work is on',
   'settings.notifications.deviceHint':
     'What reaches this device when Purlay is not open in front of you.',
-  'settings.notifications.closedTab': 'When Purlay is closed',
-  'settings.notifications.closedTabOn': 'This device is told, even with Purlay closed.',
   'settings.notifications.closedTabAsk':
     'Turn on to be told on this device even when Purlay is closed. Your browser will ask first.',
+  'settings.notifications.away': 'When Purlay is not in front of you',
+  'settings.notifications.onBoth': 'This device is told, with Purlay in a background tab or closed.',
+  'settings.notifications.onOpenTab': 'This device is told while Purlay is open in a background tab.',
+  'settings.notifications.askBoth': 'Turn on to be told on this device with Purlay in a background tab or closed. Your browser asks first.',
+  'settings.notifications.askOpenTab': 'Turn on to be told on this device while Purlay is open in a background tab. Your browser asks first.',
+  'settings.notifications.unsupported': 'This browser cannot show notifications, so only the tab’s title counts what waits.',
   'settings.notifications.closedTabOff':
     'This server does not send notifications to a closed tab, so with Purlay closed you hear nothing. Keep it open in a tab to be told.',
   'settings.notifications.unavailable': 'Not available here',

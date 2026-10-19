@@ -22,6 +22,7 @@ import type {
   NotificationQuery,
   ReadNotificationsRequest,
   ReadThreadRequest,
+  NEEDS_YOU,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
@@ -29,7 +30,6 @@ import { requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
-import { NEEDS_YOU } from '../messages/delivery';
 import { limitOf } from '../messages/threads';
 
 /** A channel with a notification newly read, as its row now is: what the caller's devices are told. */

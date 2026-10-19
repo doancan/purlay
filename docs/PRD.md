@@ -163,7 +163,9 @@ integration credentials, workspace and channel settings. Never message content.
 Pasting a PR or Issue URL renders a card: title, state (`open`/`closed`/`merged`), author, CI
 status, review decision. Cached in PostgreSQL (D-23). Workspace-level credential.
 
-> **Stated plainly:** Phase 1 notifies **in-app only**. With the tab closed, Purlay is silent —
+> **Stated plainly:** Phase 1 notifies **from the open page only**. A tab open in the background says
+> what needs the person with its title, a dot on its icon and — with notifications on for that
+> device — a notice from the browser (D-148). With the tab closed, Purlay is silent —
 > unless the server has Web Push keys and the person turned notifications on for that device, which
 > is Phase 2's, started early (D-125, D-126): then what needs them, and only that, reaches the
 > device. Hiding this would fail dogfooding on day one. (D-12)

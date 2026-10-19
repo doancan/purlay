@@ -5579,6 +5579,8 @@ people can aim.
    answer every signed-in page can ask for without an error, a subscription is `PUSH_UNAVAILABLE`, and
    production still starts, since the inbox is the record. Changing the pair
    leaves old subscriptions inert (each remembers the key it was made with); devices subscribe again.
+   *Amended by D-148:* the switch itself is still offered without keys, for the notices an open tab
+   in the background shows; push joins it where the keys are.
 8. **Sent by the node that committed the write,** not through the `EventBus`: a second node does not
    double it (D-7).
 9. **No dependency.** RFC 8291 and RFC 8292 with `crypto.subtle` (`docs/spikes/web-push.md`).
@@ -6595,6 +6597,63 @@ workspace is unbuilt (D-124 ①) and is not something to do as a side effect of 
 
 **Cost of reversing:** one endpoint, its case in the cross-tenant table, an audit action, and a row
 on Sessions & account.
+### D-148. An open tab in the background tells its person: a notice, a dot on its icon
+
+**Context.** With Purlay open in a tab that is not in front — another tab, another window — the only
+sign that something needed the person was `(N)` in the title (D-106, #491), which a pinned tab does not
+show and anybody can miss. Web Push (D-126) reaches a closed tab, but D-143 holds a push while the
+person's page is open, and it needs the operator's keys: an open tab in the background was told nothing.
+Slack's loop is a banner, a badge and a sound.
+
+**Decision.**
+1. **What interrupts is what the badge already counts — nothing is classified twice.** A conversation's
+   `unreadMentionCount` going up while the page is open is a new thing that needs the person (`NEEDS_YOU`:
+   a mention, a direct message, an answer in a thread they are part of, a channel at `all`). A
+   resolution is told in the inbox and not counted (D-106 §2), so it does not interrupt either; the
+   person's own messages never move their badge. `NEEDS_YOU` moved to `@purlay/types`, one list for the
+   server's send, read and delete and for the client.
+2. **A notice from the page itself**, through the browser's `Notification` — no worker, no server key —
+   only while the page is hidden or not focused, never in Deep Work, never on the first look at a list
+   (what was waiting when the page opened is not news). **Who and where, never what** (D-126 §2): the
+   title is the place (`#api`, the person, a group's people), the body the inbox's own words for why,
+   read from the inbox's newest page; a click focuses the window and opens what the inbox row would —
+   the thread for a reply. Unread, it says only where.
+3. **Coalesced, not a storm.** One tag per conversation, so its next notice replaces its last; several
+   conversations rising at once (a reconnect, a busy minute) are one notice, "3 conversations need you",
+   opening the inbox. A conversation read elsewhere takes its notice back.
+4. **One switch.** "Notifications on this device" (D-126) now covers both: offered wherever the browser
+   has notifications, it asks the browser once, and where the browser has push and the server has keys
+   it also subscribes. It is on while the person who turned it on is signed in here and the browser still
+   allows it; a permission taken back turns it off on the next load. The page never asks on load.
+5. **A dot on the favicon, and the app's badge.** While the title counts, the tab's icon is
+   `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`, bound to the
+   tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count
+   (`navigator.setAppBadge`, optional by its type where Firefox lacks it). Zero, or Deep Work, puts
+   both back.
+6. **No sound.** The operating system already sounds a notice by the person's own settings; a second,
+   product-made one would double it, and quiet is the product (D-12).
+7. **Small and late.** What tells is loaded the first time there is something to tell; the
+   always-loaded part is the comparison of two lists of numbers and the swap of an icon.
+
+**Rejected.**
+- *Reading each `MESSAGE_CREATED` for mentions, direct messages and thread membership* — a second
+  definition of "needs you" beside `NEEDS_YOU`, which D-106's amendment already refused for the title.
+- *Pushing to the open tab* (lifting D-143's hold for a hidden page) — it needs the operator's keys and
+  a worker, and costs a round trip through a push service for what the page already heard on its socket.
+- *A second switch for the open tab* — one browser permission, two controls that can disagree.
+- *Drawing the dot on a canvas from the linked favicon* — tried first: the picture is a `data:`
+  address, which the page's `img-src` refuses (D-39), as the browser suite showed. Loosening the
+  policy for a dot is the wrong trade; a second same-origin file costs four hundred bytes.
+- *A dot in the accent* — the favicon is filled with it, and the dot would vanish.
+- *A count drawn on the favicon* — illegible at sixteen pixels; the title says the number.
+- *A sound, on or off by default* — above; and off by default it is a setting nobody finds.
+
+**Accepted.** Chrome on Android refuses a page's `Notification` (only a worker may); there the page in
+the background is not running anyway, and push is what tells a phone. A tab tells only of its own
+workspace: the socket watches that workspace's channels.
+
+**Cost of reversing:** `features/alerts`, `features/push/notifier.ts`, the shared switch in `push.tsx`,
+two catalogue lines; no migration, no endpoint.
 
 ## Part D — Open, deliberately
 

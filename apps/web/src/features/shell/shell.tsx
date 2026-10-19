@@ -24,6 +24,7 @@ import { NotFound } from './not-found';
 import { NavProvider } from './nav';
 import { OverlayProvider } from './overlay';
 import { SidebarSlot } from './sidebar-slot';
+import { BackgroundAlerts } from '../alerts/background-alerts';
 import { AttentionReporter } from './attention';
 import { PresenceReader } from './presence-reader';
 import { TabTitle } from './tab-title';
@@ -45,6 +46,7 @@ export const Shell = ({
             <DeepWorkProvider>
               <GlobalKeys />
               <TabTitle />
+              <BackgroundAlerts />
               <PresenceReader />
               <AttentionReporter />
               <LostSends />

@@ -48,3 +48,31 @@ describe('the favicon', () => {
     expect(index).toContain('<link rel="icon" type="image/svg+xml" href="/favicon.svg" />');
   });
 });
+
+/** Every value a token has, in any theme. */
+const anyOf = (name: string): string[] => {
+  const token = tokens.find((candidate) => candidate.name === name);
+  if (token === undefined) throw new Error(`no colour token named ${name}`);
+  return typeof token.value === 'string' ? [token.value] : Object.values(token.value);
+};
+
+describe('the favicon while something needs the person (D-148)', () => {
+  const waiting = readFileSync(new URL('../public/favicon-waiting.svg', import.meta.url), 'utf8');
+
+  test('is the favicon, drawn the same, with a dot over it', () => {
+    expect(waiting.startsWith(favicon.trim().replace(/<\/svg>$/, ''))).toBe(true);
+    expect(waiting.match(/<circle /g)).toHaveLength(2);
+  });
+
+  test('the dot is danger, ringed in on-accent so it stands off the accent', () => {
+    const fills = [...waiting.matchAll(/<circle [^>]*fill="(#[0-9a-f]+)"/gi)].map((m) => m[1]);
+    expect(fills[0]).toBe(single('on-accent'));
+    expect(anyOf('danger')).toContain(fills[1] ?? '');
+  });
+
+  test('holds no colour that is not a token', () => {
+    const colours = new Set(waiting.match(/#[0-9a-f]{3,8}\b/gi) ?? []);
+    const allowed = new Set([single('accent'), single('on-accent'), ...anyOf('danger')]);
+    for (const colour of colours) expect(allowed).toContain(colour);
+  });
+});

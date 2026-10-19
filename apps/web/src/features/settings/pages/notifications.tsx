@@ -107,41 +107,51 @@ const DeepWorkCard = (): React.JSX.Element | null => {
 const DeviceCard = (): React.JSX.Element => {
   const { t } = useI18n();
   const push = usePushControls();
-  return (
-    <SettingsCard title={t('push.label')} description={t('settings.notifications.deviceHint')}>
-      {push === null ? (
+  if (push === null) {
+    // A browser that can show nothing: said plainly, as PRD §4.5 owes.
+    return (
+      <SettingsCard title={t('push.label')} description={t('settings.notifications.deviceHint')}>
         <SettingsRow
-          label={t('settings.notifications.closedTab')}
-          description={t('settings.notifications.closedTabOff')}
+          label={t('settings.notifications.away')}
+          description={t('settings.notifications.unsupported')}
         >
           <span className="inline-flex items-center gap-2 text-label text-ink-muted">
             <Icon name="info" size="sm" />
             {t('settings.notifications.unavailable')}
           </span>
         </SettingsRow>
-      ) : (
-        <SettingsRow
-          label={t('settings.notifications.closedTab')}
-          description={
-            push.status === 'blocked'
-              ? t('push.blocked')
-              : push.status === 'on'
-                ? t('settings.notifications.closedTabOn')
-                : t('settings.notifications.closedTabAsk')
-          }
-        >
-          {push.status === 'on' ? (
-            <Button onClick={push.turnOff}>{t('push.turnOff')}</Button>
-          ) : push.status === 'off' ? (
-            <Button variant="primary" glyph="notifications" onClick={push.turnOn}>
-              {t('push.turnOn')}
-            </Button>
-          ) : (
-            <Button disabled busy={push.status !== 'blocked'}>
-              {t(push.status === 'blocked' ? 'settings.notifications.blocked' : 'push.working')}
-            </Button>
-          )}
-        </SettingsRow>
+      </SettingsCard>
+    );
+  }
+  const { status, closedTab } = push;
+  return (
+    <SettingsCard title={t('push.label')} description={t('settings.notifications.deviceHint')}>
+      <SettingsRow
+        label={t('settings.notifications.away')}
+        description={
+          status === 'blocked'
+            ? t('push.blocked')
+            : status === 'on'
+              ? t(closedTab ? 'settings.notifications.onBoth' : 'settings.notifications.onOpenTab')
+              : t(closedTab ? 'settings.notifications.askBoth' : 'settings.notifications.askOpenTab')
+        }
+      >
+        {status === 'on' ? (
+          <Button onClick={push.turnOff}>{t('push.turnOff')}</Button>
+        ) : status === 'off' ? (
+          <Button variant="primary" glyph="notifications" onClick={push.turnOn}>
+            {t('push.turnOn')}
+          </Button>
+        ) : (
+          <Button disabled busy={status !== 'blocked'}>
+            {t(status === 'blocked' ? 'settings.notifications.blocked' : 'push.working')}
+          </Button>
+        )}
+      </SettingsRow>
+      {!closedTab && (
+        <p className="mx-6 mb-5 rounded-lg bg-surface-200 px-4 py-3 text-label font-normal text-ink-muted max-narrow:mx-4">
+          {t('settings.notifications.closedTabOff')}
+        </p>
       )}
     </SettingsCard>
   );

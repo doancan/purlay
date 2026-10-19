@@ -21,7 +21,6 @@ import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useChannels, useNotifications } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { href, threadHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
@@ -36,6 +35,7 @@ import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
+import { targetOf, whyOf } from './why';
 
 const glyphOf = (type: Notification['type']): GlyphName => {
   switch (type) {
@@ -50,39 +50,6 @@ const glyphOf = (type: Notification['type']): GlyphName => {
     case 'channel_message':
       return 'channel';
   }
-};
-
-/** Why the person was told, in words: who did it, except for a resolution of their own question. */
-const useWhy = (): ((notification: Notification, channel: Channel | undefined) => string) => {
-  const { t } = useI18n();
-  return (notification, channel) => {
-    const name = authorOf(notification.message, t('user.erased')).displayName;
-    switch (notification.type) {
-      case 'mention':
-        return t('inbox.why.mention', { name });
-      case 'direct_message':
-        // In a group it was written to several people, not to you alone (D-127).
-        return channel !== undefined && channel.peers.length >= 2
-          ? t('inbox.why.group', { name })
-          : t('inbox.why.direct', { name });
-      case 'thread_reply':
-        return t('inbox.why.reply', { name });
-      case 'thread_resolved':
-        return t('inbox.why.resolved');
-      case 'channel_message':
-        return t('inbox.why.channel', { name });
-    }
-  };
-};
-
-/** Where a notification takes the person: the thread a reply or a resolution belongs to, or the channel. */
-export const targetOf = (slug: string, notification: Notification): string => {
-  const { message } = notification;
-  if (message.parentId !== null) return threadHref(slug, message.channelId, message.parentId);
-  if (notification.type === 'thread_resolved' || notification.type === 'thread_reply') {
-    return threadHref(slug, message.channelId, message.id);
-  }
-  return href('channel', { slug, channelId: message.channelId });
 };
 
 /** Marks these read in the cache, before the server is asked (CONTRIBUTING §1.9). */
@@ -123,7 +90,6 @@ const Row = ({
   const { t, format } = useI18n();
   const textOf = useMessageText();
   const { message } = notification;
-  const why = useWhy();
   const unread = notification.readAt === null;
   const withOne =
     channel?.type === 'direct_message' && channel.peer !== null && channel.peers.length < 2;
@@ -146,7 +112,7 @@ const Row = ({
             <Icon name={glyphOf(notification.type)} size="sm" />
             <span className={cn('min-w-0 truncate', unread && 'font-medium text-ink')}>
               {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
-              {why(notification, channel)}
+              {whyOf(t, notification, channel)}
             </span>
             {/* A conversation with one other person is that person, already named (#631). */}
             {!withOne && (

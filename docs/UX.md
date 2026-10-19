@@ -128,8 +128,20 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
-  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). It is the only
-  signal a tab in the background has in Phase 1.
+  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). The tab's icon
+  says the same with a dot, which a pinned tab still shows (D-148).
+- **What reaches a person, by where Purlay is** (D-148). What *needs* them is one thing everywhere —
+  what the mention badges count: a mention, a direct message, an answer in a thread they are part of,
+  a channel set to every message. Never their own messages, and in Deep Work nothing interrupts.
+  - **The tab in front of them:** the page says it — the badges, the inbox dot, the title. Nothing
+    pops up and no device buzzes (D-143).
+  - **The tab open but not in front** (another tab, another window): the title's count, a dot on the
+    tab's icon, the installed app's badge; and, with notifications on for this device, a notice from
+    the browser — the place and who, never the words — one per conversation, the next replacing the
+    last, several at once as one. Clicking it brings the tab forward on the conversation or thread.
+  - **The tab closed:** nothing, unless the server has push and the person turned notifications on
+    for this device — then the same notice reaches the device (D-126). Without push, the inbox has it
+    all when they come back.
 
 **Below 900px** the rail and the sidebar become one overlay and the channel fills the window. An
 open thread, or the files, covers the channel — header and composer included — and its close control is the way
@@ -211,8 +223,9 @@ it. On a narrow window the navigation opens as the sidebar does.
 
 - **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away.
 - **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
-- **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126)
-  with where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
+- **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126,
+  D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
+  where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
 - **Keyboard shortcuts** — the reference, as a page.
 - **Sessions & account** — *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told to
   make somebody else an owner first) and *Erase my account…*, each asking first.

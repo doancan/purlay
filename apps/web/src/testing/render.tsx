@@ -23,6 +23,7 @@ import { en } from '../i18n/catalogue/en';
 import { tr } from '../i18n/catalogue/tr';
 import type { Locale } from '../i18n/types';
 import type { PushDevice } from '../features/push/device';
+import type { Notifier } from '../features/push/notifier';
 import { anApi } from './fake-api';
 import { fakeColourScheme, fakeHistory, fakeSchedule, fakeSockets, memoryStorage } from './fakes';
 
@@ -38,11 +39,21 @@ export interface WorldOptions {
   readonly api?: Api;
   /** This browser's Web Push. Absent, the browser has none, and nothing about it is drawn. */
   readonly push?: PushDevice | null;
+  /** The page's own notices (D-148). Absent, the browser has none. */
+  readonly notifier?: Notifier | null;
 }
 
 export const renderApp = async (
   ui: React.ReactElement,
-  { locale = 'en', path = '/', dark = false, theme, api = anApi(), push = null }: WorldOptions = {},
+  {
+    locale = 'en',
+    path = '/',
+    dark = false,
+    theme,
+    api = anApi(),
+    push = null,
+    notifier = null,
+  }: WorldOptions = {},
 ): Promise<RenderResult & { readonly world: ReturnType<typeof makeWorld> }> => {
   const world = makeWorld({ locale, path, dark, ...(theme === undefined ? {} : { theme }) });
   const result = render(
@@ -62,6 +73,7 @@ export const renderApp = async (
         api,
         storage: world.storage,
         push,
+        notifier,
         realtime: {
           openSocket: world.sockets.openSocket,
           schedule: world.timers.schedule,
