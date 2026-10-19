@@ -54,9 +54,7 @@ export const ConversationList = (): React.JSX.Element => {
                   slug={workspace.slug}
                   channel={group}
                   current={current}
-                  avatar={
-                    <GroupFace peers={group.peers} surface={current ? 'nav-current' : 'nav'} />
-                  }
+                  avatar={<GroupFace peers={group.peers} surface={current ? 'current' : 'nav'} />}
                   unread={(group.state?.unreadCount ?? 0) > 0}
                   mentions={group.state?.unreadMentionCount ?? 0}
                   muted={group.notificationLevel === 'none'}

@@ -19,12 +19,12 @@ import { cn } from '../../ui/cn';
 import { nameOf } from '../messages/author';
 
 /** What the face is drawn on: the sidebar's row, the row you are in, a page, a selected option. */
-export type FaceSurface = 'nav' | 'nav-current' | 'surface' | 'selected';
+export type FaceSurface = 'nav' | 'current' | 'surface' | 'selected';
 
 /** The cut-out's colour: the surface's own, following a sidebar row's hover. */
 const EDGE = {
   nav: 'border-hairline border-nav-surface group-hover:border-nav-hover',
-  'nav-current': 'border-hairline border-accent',
+  current: 'border-hairline border-accent',
   surface: 'border-hairline border-surface-100',
   selected: 'border-hairline border-accent-subtle',
 } as const satisfies Record<FaceSurface, string>;
@@ -32,7 +32,7 @@ const EDGE = {
 /** The "+N" chip: quiet on its surface, legible on it. */
 const MORE = {
   nav: 'bg-nav-border text-nav-ink',
-  'nav-current': 'bg-nav-border text-nav-ink',
+  current: 'bg-nav-border text-nav-ink',
   surface: 'bg-surface-200 text-ink-muted',
   selected: 'bg-surface-200 text-ink-muted',
 } as const satisfies Record<FaceSurface, string>;
