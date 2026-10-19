@@ -549,6 +549,7 @@ export const en = {
   'viewer.close': 'Close',
   'viewer.position': '{index} of {count}',
   'viewer.loading': 'Loading the image',
+  'deferred.unavailable': 'That did not open. Check your connection and try again.',
   'viewer.unavailable': 'The image viewer did not open. Check your connection and try again.',
   'message.deleted': 'This message was deleted.',
   'message.edit': 'Edit',

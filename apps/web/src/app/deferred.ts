@@ -1,14 +1,24 @@
 /**
- * What the first page does not need to read a conversation, in one chunk (D-49, D-159): the
- * settings (D-146) and the image viewer. Each door asks for this module with `import()`, and nothing
- * imports it statically, so none of it counts against the initial budget.
+ * What the first page does not need to read a conversation, in one chunk (D-49, D-159, D-163): the
+ * settings (D-146), the image viewer, and the overlays a person opens on purpose — the command
+ * palette, the shortcut reference, the sidebar's dialogs, a group's details and adding people to a
+ * channel. Each door asks for this module with `import()`, and nothing imports it statically, so none
+ * of it counts against the initial budget.
  *
- * **One chunk, not one per feature, because two were measured to cost more than none.** The bundler
- * (rolldown, under Vite 8) folds what a lazy chunk shares with the entry back into the entry when one
- * lazy chunk shares React with it, and does not when two do: it emitted a third, preloaded chunk of
- * every shared module that reaches React, and the split cost the first page 1.9 KB gzipped — more
- * than the viewer itself weighs. A later deferred feature joins this module rather than becoming a
- * second `import()`; `bun run budget:web` says so if it does not.
+ * **One chunk, so one preload fetches every door.** The shell asks for it once the first screen is
+ * drawn (`deferred-door.ts`): an overlay opened by a key has no pointer to preload it on. D-159's
+ * first reason is gone — two lazy chunks no longer push what they share with the entry into a third,
+ * preloaded chunk, because the build puts every initial module in the entry (`vite.config.ts`) — but
+ * a second deferred chunk would be a second preload to remember. A later deferred feature joins this
+ * module rather than becoming another `import()`.
  */
 export { SettingsNav, SettingsScreen } from '../features/settings/settings-screen';
 export { ImageViewer } from '../features/messages/image-viewer';
+export { CommandPalette } from '../features/palette/command-palette';
+export { ShortcutsDialog } from '../features/shortcuts/shortcuts-dialog';
+export { NewChannelDialog } from '../features/sidebar/new-channel-dialog';
+export { BrowseChannelsDialog } from '../features/sidebar/browse-channels-dialog';
+export { InviteDialog } from '../features/sidebar/invite-dialog';
+export { NewConversationDialog } from '../features/conversations/new-conversation';
+export { GroupDetailsDialog } from '../features/conversations/group-details';
+export { AddPeopleDialog } from '../features/channel/add-people';

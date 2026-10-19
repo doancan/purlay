@@ -8,15 +8,14 @@
  * them, so focus returns to the button that was pressed.
  */
 import { useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { IconButton } from '../../ui/icon-button';
 import { useWorkspace } from '../shell/workspace';
-import { BrowseChannelsDialog } from './browse-channels-dialog';
 import { ChannelRow } from './channel-row';
-import { NewChannelDialog } from './new-channel-dialog';
 import { joinedChannels, starredChannels } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
@@ -27,6 +26,8 @@ export const ChannelList = (): React.JSX.Element => {
   const { match } = useRoute();
   const [creating, setCreating] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  // Both dialogs are in the deferred chunk (D-163).
+  const deferred = useDeferred([creating, setCreating], [browsing, setBrowsing]);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
   const mine = joinedChannels(channels.data ?? []);
   // In no channel at all is the empty state; in channels that are all starred is not (D-132).
@@ -102,8 +103,12 @@ export const ChannelList = (): React.JSX.Element => {
           ))}
         </ul>
       )}
-      <NewChannelDialog open={creating} onOpenChange={setCreating} />
-      <BrowseChannelsDialog open={browsing} onOpenChange={setBrowsing} />
+      {deferred !== null && (
+        <>
+          <deferred.NewChannelDialog open={creating} onOpenChange={setCreating} />
+          <deferred.BrowseChannelsDialog open={browsing} onOpenChange={setBrowsing} />
+        </>
+      )}
     </nav>
   );
 };
