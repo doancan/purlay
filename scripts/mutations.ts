@@ -2922,6 +2922,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/members.integration.test.ts'],
   },
   {
+    id: 'last-owner-leaves',
+    why: 'the last owner walks out, and the workspace is left with nobody who may run it (I-2)',
+    file: 'apps/api/src/modules/workspaces/members.ts',
+    find: "  if (row.role === 'owner') await keepAnOwner(executor, context);\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/members.integration.test.ts'],
+  },
+  {
     id: 'member-acts-on-a-stale-role',
     why: 'an owner demoted a moment ago still acts as one, from the role read when the request began',
     file: 'apps/api/src/modules/workspaces/members.ts',
