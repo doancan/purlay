@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-19: the palette finds every place (D-157)
+
+`Cmd/Ctrl+K` now finds the inbox, saved items and search; public channels not yet joined (marked so);
+group conversations by their people; and every settings page. Whatever is typed can be searched for in
+the messages from the palette's last row, so a query never ends in "No match" alone.
+
 ### Polish — 2026-10-19: the first two screens a person sees
 
 **Sign in** carries GitHub's mark on its button (the icon set dropped brand marks, so the mark is a

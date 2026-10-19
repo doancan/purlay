@@ -1124,12 +1124,15 @@ export const tr = {
   'user.menuFor': 'Hesap: {name}',
 
   // ── Komut paleti (D-98) ─────────────────────────────────────────────────
+  'palette.notJoined': 'Katılmadın',
+  'palette.searchFor': 'Mesajlarda ara: “{query}”',
   'palette.title': 'Komut paleti',
   'palette.placeholder': 'Bir kanala, kişiye ya da görünüme git…',
   'palette.empty': '“{query}” için eşleşme yok',
   'palette.group.views': 'Görünümler',
   'palette.group.channels': 'Kanallar',
   'palette.group.people': 'Kişiler',
+  'palette.group.search': 'Ara',
   'palette.group.settings': 'Ayarlar',
   'palette.hint.move': 'gez',
   'palette.hint.open': 'aç',

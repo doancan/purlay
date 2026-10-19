@@ -480,7 +480,7 @@ trade a certain cost for a hypothetical benefit.
 
 | Key | Action |
 |---|---|
-| `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
+| `Cmd/Ctrl+K` | Command palette — the views (open questions, inbox, saved, search), channels (public ones not joined, marked so), group conversations, people, every settings page the person may open, the theme and language; and, whatever was typed, **Search messages for “…”** as its last row, so a query never ends in nothing (D-157) |
 | `Cmd/Ctrl+/` | Shortcut reference |
 | `Cmd/Ctrl+,` | Settings (D-146) |
 | `Esc` | Close the topmost thing — palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |

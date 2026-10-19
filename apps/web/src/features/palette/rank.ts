@@ -18,7 +18,8 @@
 import type { GlyphName } from '../../components/icon';
 import { matchText } from './match';
 
-export type PaletteGroup = 'views' | 'channels' | 'people' | 'settings';
+/** `search` holds one row, searching the messages for what was typed: always last. */
+export type PaletteGroup = 'views' | 'channels' | 'people' | 'settings' | 'search';
 
 /** The order the groups are shown in. */
 export const GROUPS = [
@@ -26,6 +27,7 @@ export const GROUPS = [
   'channels',
   'people',
   'settings',
+  'search',
 ] as const satisfies readonly PaletteGroup[];
 
 /** The most results a query can show. */
