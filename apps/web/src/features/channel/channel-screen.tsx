@@ -23,7 +23,7 @@
  * to a public channel is useful before they are in it.
  */
 import { useDescribeFailure } from '../../data/failure';
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { useActions } from '../../data/actions-provider';
 import { useChannels } from '../../data/queries';
@@ -48,7 +48,6 @@ import { ThreadPanel } from '../threads/thread';
 import { FilesPanel } from './files-panel';
 import { PinsPanel } from '../pins/pins-panel';
 import { IncidentBanner } from '../incidents/incident-banner';
-import { IncidentPanel } from '../incidents/incident-panel';
 import { ProfilePanel } from '../profile/profile-panel';
 import { PinIntentsProvider } from '../pins/use-pin';
 import { SidePanelProvider, useSidePanel } from './side-panel';
@@ -188,7 +187,11 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
                 channelLabel={conversation ? title : `#${title}`}
               />
               <PinsPanel channelId={channel.id} channelLabel={conversation ? title : `#${title}`} />
-              {!conversation && <IncidentPanel channel={channel} channelLabel={`#${title}`} />}
+              {!conversation && (
+                <Suspense fallback={null}>
+                  <IncidentPanel channel={channel} channelLabel={`#${title}`} />
+                </Suspense>
+              )}
               <ProfilePanel person={conversation ? channel.peer : null} />
             </div>
           </PinIntentsProvider>
@@ -197,6 +200,14 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
     </EditingProvider>
   );
 };
+
+/**
+ * The incident panel, a chunk of its own (#687): only a channel with an incident, or a person declaring
+ * one, opens it — not every first load.
+ */
+const IncidentPanel = lazy(async () => ({
+  default: (await import('../incidents/incident-panel')).IncidentPanel,
+}));
 
 export const ChannelScreen = ({ channelId }: { readonly channelId: string }): React.JSX.Element => {
   const { t } = useI18n();

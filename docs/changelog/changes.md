@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Performance — 2026-10-19: rarely opened surfaces load when first opened
+
+With every surface of this round in, the initial JavaScript reached 246.6 KB of its 250 KB budget
+(D-49). Channel details, the incident panel and the diff viewer are now chunks of their own — the
+lever D-50 names first — and the first load is 243.5 KB (97%). A ```diff block shows as a plain code
+block for the moment its viewer takes to arrive; nothing is ever blank.
+
 ### Fix — 2026-10-19: a new message no longer moves the channel you were reaching for (D-160)
 
 Channels in the sidebar are listed by name, so a message never reshuffles them; unread still shows as

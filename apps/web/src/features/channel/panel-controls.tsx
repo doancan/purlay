@@ -12,7 +12,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { IconButton } from '../../ui/icon-button';
 import { Menu, MenuItem } from '../../ui/menu';
 import { PINS_PANEL_ID } from '../pins/pins-panel';
-import { INCIDENT_PANEL_ID } from '../incidents/incident-panel';
+import { INCIDENT_PANEL_ID } from '../incidents/panel-id';
 import { FILES_PANEL_ID } from './files-panel';
 import { useSidePanel } from './side-panel';
 import { useStar } from './star-toggle';

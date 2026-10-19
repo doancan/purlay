@@ -9,7 +9,7 @@
  * (`use-open-count.ts`), so the two cannot disagree.
  */
 import { nameOf } from '../messages/author';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -23,7 +23,6 @@ import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { IconButton } from '../../ui/icon-button';
 import { AddPeopleDialog } from './add-people';
-import { ChannelDetailsDialog } from './channel-details';
 import { NotificationLevelMenu } from './notification-level-menu';
 import { GroupDetailsDialog } from '../conversations/group-details';
 import { PanelControls } from './panel-controls';
@@ -31,6 +30,15 @@ import { PeerHeading } from '../profile/peer-heading';
 import { StarToggle } from './star-toggle';
 import { useOnline } from '../../realtime/realtime-provider';
 import { VisuallyHidden } from '../../ui/visually-hidden';
+
+/**
+ * Channel details, a chunk of its own (D-49, #687): opened by a click on the name a few times a
+ * week, it is not paid for by every first load. Mounted on first opening and kept, so it closes as a
+ * dialog closes and opens again at once.
+ */
+const ChannelDetailsDialog = lazy(async () => ({
+  default: (await import('./channel-details')).ChannelDetailsDialog,
+}));
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -80,7 +88,12 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   // A member brings people in (D-104); a direct message is between its two people.
   const canAdd = !direct && channel.state !== null;
   const [adding, setAdding] = useState(false);
-  const [details, setDetails] = useState(false);
+  const [details, setDetailsOpen] = useState(false);
+  const [detailsOpened, setDetailsOpened] = useState(false);
+  const setDetails = (open: boolean): void => {
+    if (open) setDetailsOpened(true);
+    setDetailsOpen(open);
+  };
   const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
   const openText =
     open !== null && open.count > 0 ? `${format.number(open.count)}${open.more ? '+' : ''}` : null;
@@ -164,7 +177,11 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             >
               {channel.topic ?? t('header.noTopic')}
             </button>
-            <ChannelDetailsDialog channel={channel} open={details} onOpenChange={setDetails} />
+            {detailsOpened && (
+              <Suspense fallback={null}>
+                <ChannelDetailsDialog channel={channel} open={details} onOpenChange={setDetails} />
+              </Suspense>
+            )}
           </>
         )}
       </div>
