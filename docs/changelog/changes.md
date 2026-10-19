@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Polish — 2026-10-19: the header's bell shows the channel's level
+
+Every message, mentions and replies, and nothing each draw their own bell in a channel's header, so what
+a channel tells is seen without opening the menu.
+
 ### Performance — 2026-10-19: rarely opened surfaces load when first opened
 
 With every surface of this round in, the initial JavaScript reached 246.6 KB of its 250 KB budget

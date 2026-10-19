@@ -58,7 +58,10 @@ export const NotificationLevelMenu = ({
       trigger={
         <IconButton
           label={t('level.button', { level: t(`level.${current}.short`) })}
-          glyph={current === 'none' ? 'deep-work' : 'notifications'}
+          // Each level its own bell, so what a channel tells is seen without opening the menu (UX §2).
+          glyph={
+            current === 'none' ? 'deep-work' : current === 'all' ? 'notify-all' : 'notifications'
+          }
         />
       }
     >

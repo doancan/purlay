@@ -94,6 +94,8 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
+- The header's **bell** is drawn by the channel's level — ringing for every message, plain for mentions and
+  replies, struck through for nothing — so the level shows without opening its menu (D-107).
 - **On a narrow window** the Files and Pinned messages controls, and the channel's star, are one
   menu, **Channel menu**, so the channel's name keeps its room in the header.
 - **A conversation with one other person** is headed by them: their name, which opens their

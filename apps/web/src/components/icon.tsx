@@ -31,6 +31,7 @@ import {
   PinOff,
   Bold,
   BellOff,
+  BellRing,
   Check,
   ChevronDown,
   ChevronRight,
@@ -117,6 +118,8 @@ const glyphs = {
   settings: Settings,
   preferences: Settings2,
   notifications: Bell,
+  /** A channel set to tell every message (D-107): the bell ringing, apart from the default bell. */
+  'notify-all': BellRing,
   star: Star,
   save: Bookmark,
   saved: BookmarkCheck,

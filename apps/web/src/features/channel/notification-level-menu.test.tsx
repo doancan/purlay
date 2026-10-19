@@ -35,6 +35,23 @@ describe('the notification level', () => {
     view.unmountAll();
   });
 
+  test('each level draws its own bell, so the level shows without opening the menu', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      api: { setNotificationLevel: () => new Promise<void>(() => undefined) },
+    });
+    const bell = (): string =>
+      view
+        .getByRole('button', { name: /^Notifications:/ })
+        .querySelector('svg')
+        ?.getAttribute('class') ?? '';
+    expect(bell()).toContain('lucide-bell ');
+    await person().click(view.getByRole('button', { name: /^Notifications:/ }));
+    await person().click(view.getByRole('menuitemradio', { name: /Every message/ }));
+    expect(bell()).toContain('bell-ring');
+    view.unmountAll();
+  });
+
   test('refused, the level it had comes back and the toast says why', async () => {
     const view = await mountChannel({
       messages: page([]),
