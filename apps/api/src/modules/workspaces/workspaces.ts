@@ -27,6 +27,7 @@ import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, PROFILE_COLUMNS } from '../users/profile';
+import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -151,6 +152,7 @@ export const meOf = async (
   executor: Executor,
   clock: Clock,
   userId: string,
+  creators: WorkspaceCreators,
 ): Promise<MeResponse> => {
   const user = await executor
     .selectFrom('users')
@@ -178,6 +180,7 @@ export const meOf = async (
     },
     profile: asProfile(user),
     memberships: [...(await membershipsOf(executor, clock, userId))],
+    mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
   };
 };
 

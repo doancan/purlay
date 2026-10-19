@@ -276,6 +276,11 @@ export const en = {
   'workspace.create.invalid':
     'Use lowercase letters, numbers and hyphens, starting with a letter or number.',
   'workspace.create.failed': 'The workspace was not created.',
+  'workspace.create.notAllowed':
+    'This server does not let you make a workspace. Ask someone in your team for an invitation.',
+  'workspace.closed.title': 'Ask for an invitation',
+  'workspace.closed.body':
+    'You are signed in, but not in a workspace, and this server lets only the people its operator chose make one. Ask someone in your team for an invitation link, and open it.',
   'state.session.error.title': "Couldn't reach Purlay",
   'state.session.error.body': 'The server did not answer. You are still signed in; try again.',
   'state.channel.missing.title': 'That channel is not here',

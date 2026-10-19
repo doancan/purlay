@@ -246,6 +246,24 @@ describe('loading configuration', () => {
     expect(accepted).toEqual([]);
   });
 
+  test('who may make a workspace: logins, comma-separated, or `*`; anything else is refused (D-155)', () => {
+    expect(loadConfig(valid).WORKSPACE_CREATORS).toBeUndefined();
+    expect(loadConfig({ ...valid, WORKSPACE_CREATORS: '' }).WORKSPACE_CREATORS).toBeUndefined();
+    for (const value of ['*', 'dogancan', ' Alice, bob-2 ,carol ']) {
+      expect(loadConfig({ ...valid, WORKSPACE_CREATORS: value }).WORKSPACE_CREATORS).toBe(value);
+    }
+    for (const value of [
+      '@alice',
+      'alice bob',
+      'alice,,bob',
+      '-alice',
+      'alice,*',
+      'a'.repeat(40),
+    ]) {
+      expect(refusal({ ...valid, WORKSPACE_CREATORS: value })).toContain('WORKSPACE_CREATORS');
+    }
+  });
+
   test('an invalid enumerated value is refused rather than coerced', () => {
     expect(() => loadConfig({ ...valid, NODE_ENV: 'staging' })).toThrow(ConfigurationError);
   });

@@ -11,7 +11,11 @@ import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { attempt, inSavepoint } from '../../testing/attempt';
 import { aRoom, type Room } from '../../testing/rooms';
 import { meOf, membersIn } from '../workspaces/workspaces';
+import { workspaceCreatorsOf } from '../workspaces/creators';
 import { updateProfile } from './profile';
+
+/** What `/api/me` answers here is not about who may make a workspace (D-155). */
+const ANYONE = workspaceCreatorsOf('*');
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -43,7 +47,7 @@ describe('integration: a profile', () => {
         timeZone: 'Europe/Istanbul',
         status: 'On call this week',
       });
-      expect((await meOf(db, clock, alice)).profile).toEqual(set.profile);
+      expect((await meOf(db, clock, alice, ANYONE)).profile).toEqual(set.profile);
 
       const kept = await updateProfile(db, alice, { status: '   ' });
       expect(kept.profile).toEqual({
@@ -54,7 +58,7 @@ describe('integration: a profile', () => {
 
       const cleared = await updateProfile(db, alice, { title: null, timeZone: null });
       expect(cleared.profile).toEqual({ title: null, timeZone: null, status: null });
-      expect((await meOf(db, clock, alice)).profile).toEqual(cleared.profile);
+      expect((await meOf(db, clock, alice, ANYONE)).profile).toEqual(cleared.profile);
     });
   });
 
@@ -67,7 +71,7 @@ describe('integration: a profile', () => {
       )) as { code?: string; details?: { fields?: Record<string, string> } };
       expect(body.code).toBe('VALIDATION_FAILED');
       expect(Object.keys(body.details?.fields ?? {})).toEqual(['timeZone']);
-      expect((await meOf(db, clock, alice)).profile.title).toBeNull();
+      expect((await meOf(db, clock, alice, ANYONE)).profile.title).toBeNull();
     });
   });
 

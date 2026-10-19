@@ -187,8 +187,8 @@ renames the workspace: a name field and **Save**, and a sentence saying the addr
 so links already shared keep working. Saved, the name changes at once in the tab and, without a reload,
 in every open tab of every member.
 
-**Another workspace** (D-124). **Create workspace…** in the same menu, anybody's, opens the form `/`
-shows a person with none — a name and an address — and goes to the new workspace, with Back to where
+**Another workspace** (D-124). **Create workspace…** in the same menu — offered only to a person this
+server lets make one (`WORKSPACE_CREATORS`, D-155) — opens the form `/` shows a person with none — a name and an address — and goes to the new workspace, with Back to where
 they were.
 
 ---
@@ -427,6 +427,7 @@ missing specified behaviour and does not merge.
 | Channels to join (after an invitation) | "There are no public channels to join yet" + the way into the workspace | Skeleton rows | Retry; a join that fails part way names the channels and why, keeps them picked, focus on the button that tries again |
 | Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
+| No workspace (`/`) | "You are not in a workspace yet" + the form to make one, where this server would let the person; otherwise "Ask for an invitation" and no form — never a form that would be refused (D-155). A refusal anyway, the rule having changed under the form, says to ask for an invitation above its button | n/a — the session gate's skeleton | The form's failures above its button or under the field they name |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
 | Sign-in | n/a — always GitHub's button; the email form under it only where the server sends mail, and not until it has said so (D-138) | n/a for GitHub; the email form's button is busy while it asks | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121). The email form: the same sentence whatever the address once asked, a refused address under the field, "switched off" or the failure above its button |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |

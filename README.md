@@ -74,7 +74,7 @@ On a server with Docker and the compose plugin, and a public name whose ports 80
 
 That is all: the database migrates as the API starts, the object store is prepared on the way, and
 the certificate is issued. Sign in, and make the first workspace from the screen you land on; you are
-its owner. Every variable is in [`docs/CONFIG.md`](docs/CONFIG.md), with backups, restores and
+its owner. Nobody else may make one unless `WORKSPACE_CREATORS` names them; everyone else is invited. Every variable is in [`docs/CONFIG.md`](docs/CONFIG.md), with backups, restores and
 upgrades ("Production deployment"), and what personal data the instance holds, and how to erase it,
 is [`docs/DATA.md`](docs/DATA.md).
 
@@ -88,7 +88,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 145 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 155 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |

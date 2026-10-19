@@ -276,6 +276,11 @@ export const tr = {
   'workspace.create.taken': 'Bu adres alınmış. Başka bir tane seç.',
   'workspace.create.invalid': 'Küçük harf, rakam ve tire kullan; harf ya da rakamla başla.',
   'workspace.create.failed': 'Çalışma alanı oluşturulamadı.',
+  'workspace.create.notAllowed':
+    'Bu sunucu senin çalışma alanı oluşturmana izin vermiyor. Ekibinden birinden davet iste.',
+  'workspace.closed.title': 'Davet iste',
+  'workspace.closed.body':
+    'Giriş yaptın ama bir çalışma alanında değilsin ve bu sunucuda yalnızca yöneticisinin seçtiği kişiler çalışma alanı oluşturabiliyor. Ekibinden birinden bir davet bağlantısı iste ve onu aç.',
   'state.session.error.title': "Purlay'e ulaşılamadı",
   'state.session.error.body': 'Sunucu yanıt vermedi. Oturumun açık; tekrar dene.',
   'state.channel.missing.title': 'Bu kanal burada değil',

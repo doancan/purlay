@@ -36,7 +36,7 @@ interface WorkspaceMenuProps {
 export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { memberships } = useSession();
+  const { memberships, mayCreateWorkspace } = useSession();
   const { navigate } = useRoute();
   const [inviting, setInviting] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -91,14 +91,17 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
             {membership.workspace.name}
           </MenuItem>
         ))}
-        <MenuItem
-          glyph="add"
-          onSelect={() => {
-            setCreating(true);
-          }}
-        >
-          {t('workspace.create.entry')}
-        </MenuItem>
+        {/* Offered only where the server would accept it (D-155). */}
+        {mayCreateWorkspace && (
+          <MenuItem
+            glyph="add"
+            onSelect={() => {
+              setCreating(true);
+            }}
+          >
+            {t('workspace.create.entry')}
+          </MenuItem>
+        )}
         {mayInvite && (
           <MenuItem
             glyph="person"

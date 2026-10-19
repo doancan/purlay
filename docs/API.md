@@ -81,7 +81,7 @@ without disclosing it. (D-33)
 | ○ | `POST` | `/auth/email/consume` | `EmailSignInToken` (the token the link carried in its fragment) → `204` with the session cookie: the link is spent, and an address no account has becomes an account. One answer for a link unknown, used or expired, or into an account that signs in with GitHub: `404 SIGN_IN_LINK_NOT_FOUND` (D-138 §2, §4) |
 | ○ | `POST` | `/auth/logout` | Revokes the current session, and the devices subscribed in it stop being told (D-126) |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
-| ○ | `GET` | `/api/me` | Current user, their `profile`, and workspace memberships |
+| ○ | `GET` | `/api/me` | Current user, their `profile`, workspace memberships, and `mayCreateWorkspace` — whether `POST /api/workspaces` would let them (D-155) |
 | ○ | `PATCH` | `/api/me/profile` | `{ title?, timeZone?, status? }` (`UpdateProfileRequest`): each left out is kept, `null` clears it, words are trimmed, and nothing but spaces is `400`; a time zone is a named zone the runtime knows, stored as it spells it, else `400` on `timeZone`. Answers the `Profile`. A change sends `WORKSPACE_UPDATED` to everyone in each workspace the caller is in, who read the members again (D-131) |
 | ○ | `PUT` | `/api/me/locale` | `{ locale: 'en' \| 'tr' }` (`SetLocaleRequest`) — the language the server writes the caller's notifications in (D-41, D-126); `204` |
 | ○ | `GET` | `/api/auth/methods` | Public — `AuthMethods`: whether this server signs in by email as well as by GitHub, so the sign-in screen offers only what works; `email` is false without both of `SMTP_URL` and `MAIL_FROM` (D-138 §6) |
@@ -126,7 +126,7 @@ an instance-administrator role this product does not have.
 | | Method | Path | Role |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces` | — (own memberships) |
-| ○ | `POST` | `/api/workspaces` | — (creator becomes `owner`) |
+| ○ | `POST` | `/api/workspaces` | Whom `WORKSPACE_CREATORS` names — GitHub logins, or `*` for anybody; unset, only the first person to sign in, while the instance has no workspace (D-155). Anybody else is `403 FORBIDDEN` and nothing is made. The creator becomes `owner` |
 | ○ | `GET` | `/api/workspaces/:workspaceId` | member |
 | ○ | `PATCH` | `/api/workspaces/:workspaceId` | admin — `{ name }` (`UpdateWorkspaceRequest`); answers the `Workspace`. The name only: the slug is its address and stays (D-124). The same name is `200` and changes nothing; a member is `403 FORBIDDEN`. On the audit trail with the name before and after; each member's sockets are told `WORKSPACE_UPDATED` and read their memberships again |
 | ① | `DELETE` | `/api/workspaces/:workspaceId` | owner — not built |
