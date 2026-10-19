@@ -129,6 +129,14 @@ describe('a root and its thread, closed', () => {
     expect(line.getAttribute('aria-expanded')).toBe('false');
     expect(line.textContent).toContain('Open · 2 replies · last');
     expect(within(line).getByText('T')).toBeDefined();
+    // On a phone it stays one line: the status is cut, “Show thread” is never broken in two.
+    const words = within(line).getByText(/Open · 2 replies/);
+    expect(words.className.split(' ')).toContain('truncate');
+    expect(words.parentElement?.className.split(' ')).toContain('whitespace-nowrap');
+    const open = within(line).getByText('Show thread');
+    expect(open.className.split(' ')).toEqual(
+      expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+    );
     await expectNoAxeViolations(view.container);
     view.unmountAll();
   });

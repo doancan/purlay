@@ -31,6 +31,10 @@ import { nameOf } from '../messages/author';
 /** The id of the panel, which the line it opens from controls. */
 export const THREAD_PANEL_ID = 'thread-panel';
 
+/** One line however narrow the column: the words are cut, the pill never grows a second line. */
+const PILL =
+  'inline-flex h-6 min-w-0 items-center gap-1 whitespace-nowrap rounded-pill px-2 text-caption font-medium';
+
 /** The thread's state as a pill: the same words in the feed and in the panel. */
 export const ThreadStatus = ({
   root,
@@ -44,21 +48,23 @@ export const ThreadStatus = ({
   const counted = t('thread.replies', { count: summary?.replyCount ?? 0 });
   if (summary?.resolvedAt != null) {
     return (
-      <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text">
+      <span className={cn(PILL, 'bg-success-subtle text-success-text')}>
         <Icon name="resolved" size="sm" />
-        {t('thread.resolved', {
-          name: summary.resolvedBy === null ? '' : nameOf(summary.resolvedBy, t('user.erased')),
-          replies: counted,
-        })}
+        <span className="truncate">
+          {t('thread.resolved', {
+            name: summary.resolvedBy === null ? '' : nameOf(summary.resolvedBy, t('user.erased')),
+            replies: counted,
+          })}
+        </span>
       </span>
     );
   }
   const whenLast =
     summary?.lastReplyAt == null ? '' : format.time(summary.lastReplyAt, new Date(nowMinute));
   return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-pill bg-warning-subtle px-2 text-caption font-medium text-warning-text">
+    <span className={cn(PILL, 'bg-warning-subtle text-warning-text')}>
       <Icon name="open-question" size="sm" />
-      {t('thread.open', { replies: counted, when: whenLast })}
+      <span className="truncate">{t('thread.open', { replies: counted, when: whenLast })}</span>
     </span>
   );
 };
@@ -162,7 +168,12 @@ const ThreadSummaryView = ({
         )}
       >
         <ThreadStatus root={root} nowMinute={nowMinute} />
-        <span className={cn('inline-flex items-center gap-2', outgoing ? 'mr-auto' : 'ml-auto')}>
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-2 whitespace-nowrap',
+            outgoing ? 'mr-auto' : 'ml-auto',
+          )}
+        >
           {t(open ? 'thread.shown' : 'thread.show')}
           <Kbd>T</Kbd>
         </span>
