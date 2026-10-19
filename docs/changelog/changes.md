@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: an answer in a thread is read in the thread, not by scrolling the feed past it (D-147)
+
+Reading a channel to its newest message marked read every notification at or behind the position,
+replies included: an answer somebody gave in a thread the person never opened went from unread to read
+— its badge, the tab title's count and the inbox's unread state with it — as soon as anything newer was
+said in the feed. The read position now reads the roots only. A reply's notification waits for its
+thread, which the panel reads while it is open in front of the person (`PUT
+/api/messages/:messageId/thread/read`, up to the newest reply it has), or for the inbox; until then it
+counts as unread, so the badge stays within the unread count (I-6) without vanishing.
+
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 
 With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the

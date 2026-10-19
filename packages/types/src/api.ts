@@ -281,6 +281,16 @@ export type ReadChannelRequest = Static<typeof ReadChannelRequest>;
 export const ReadChannelResponse = ChannelState;
 export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
 
+/**
+ * `PUT /api/messages/:messageId/thread/read` — the newest reply the person has seen in the thread
+ * of this root. A reply is read here, not by the channel's read position (D-147): the caller's
+ * notifications for this thread's replies up to and including it are read. Nothing is stored but
+ * that, so a bound behind an earlier one changes nothing; the answer is `204`, and the channel's new
+ * state goes to the caller's devices as `CHANNEL_STATE`.
+ */
+export const ReadThreadRequest = FromClient({ lastReadMessageId: Uuid });
+export type ReadThreadRequest = Static<typeof ReadThreadRequest>;
+
 /** `PUT`/`DELETE /api/messages/:messageId/reactions/:emoji` — idempotent; answers the message's reactions. */
 export const ReactionsResponse = Type.Object({ reactions: Type.Array(Reaction) });
 export type ReactionsResponse = Static<typeof ReactionsResponse>;

@@ -22,7 +22,15 @@ import {
   type ChannelView,
 } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, aMessage, messageIdAt } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  aChannel,
+  aMessage,
+  messageIdAt,
+  someChannels,
+} from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { ACK_DEADLINE_MS } from '../../realtime/engine';
 import { expectFocusOn } from '../../testing/focus';
@@ -991,6 +999,91 @@ describe('the cache is what the screen shows', () => {
     });
     await showThread(view);
     expect(view.getByText('answer 3')).toBeDefined();
+    view.unmountAll();
+  });
+});
+
+describe('a thread open in front of the person is read (D-147)', () => {
+  /** The channels as the sidebar has them, with `api` holding what needs the person. */
+  const waitingInApi = (unreadMentionCount: number): ReturnType<typeof someChannels> =>
+    someChannels().map((channel) =>
+      channel.id === IDS.api
+        ? aChannel(IDS.api, 'api', {
+            state: { lastReadMessageId: messageIdAt(5), unreadCount: 1, unreadMentionCount },
+          })
+        : channel,
+    );
+
+  const recording = (): {
+    readonly calls: [string, string][];
+    readonly readThread: (rootId: string, id: string) => Promise<void>;
+  } => {
+    const calls: [string, string][] = [];
+    return {
+      calls,
+      readThread: (rootId, id): Promise<void> => {
+        calls.push([rootId, id]);
+        return Promise.resolve();
+      },
+    };
+  };
+
+  test('reads its replies up to the newest one the panel has, once', async () => {
+    const reads = recording();
+    const view = await mount({
+      channels: waitingInApi(1),
+      api: { readThread: reads.readThread },
+    });
+    await showThread(view);
+    expect(reads.calls).toEqual([[messageIdAt(ROOT), messageIdAt(4)]]);
+    view.unmountAll();
+  });
+
+  test('asks nothing when nothing in the channel needs the person', async () => {
+    const reads = recording();
+    const view = await mount({
+      channels: waitingInApi(0),
+      api: { readThread: reads.readThread },
+    });
+    await showThread(view);
+    expect(sectionOf(view)).toBeDefined();
+    expect(reads.calls).toEqual([]);
+    view.unmountAll();
+  });
+
+  test('a hidden page is not reading: the thread is read when it is shown', async () => {
+    const reads = recording();
+    const view = await mount({
+      channels: waitingInApi(1),
+      api: { readThread: reads.readThread },
+    });
+    act(() => {
+      view.feed.setPageVisible(false);
+    });
+    await showThread(view);
+    expect(reads.calls).toEqual([]);
+    act(() => {
+      view.feed.setPageVisible(true);
+    });
+    await settle();
+    expect(reads.calls).toEqual([[messageIdAt(ROOT), messageIdAt(4)]]);
+    view.unmountAll();
+  });
+
+  test('a read the server refused is not asked again in a loop', async () => {
+    let calls = 0;
+    const view = await mount({
+      channels: waitingInApi(1),
+      api: {
+        readThread: (): Promise<void> => {
+          calls += 1;
+          return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        },
+      },
+    });
+    await showThread(view);
+    await settle();
+    expect(calls).toBe(1);
     view.unmountAll();
   });
 });

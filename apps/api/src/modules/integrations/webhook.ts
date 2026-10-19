@@ -288,7 +288,13 @@ export const receiveDelivery = async (
       })
       .execute();
     // Unread for everybody, and needing nobody: an event names nobody and tells nobody (D-134 §7).
-    const recipients = await countArrival(transaction, feed.channel_id, id, null, []);
+    const recipients = await countArrival(
+      transaction,
+      feed.channel_id,
+      { id, reply: false },
+      null,
+      [],
+    );
     await transaction
       .updateTable('github_repo_feeds')
       .set(seen)

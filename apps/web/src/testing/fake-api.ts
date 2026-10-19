@@ -75,6 +75,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   notifications: unexpected('notifications'),
   search: unexpected('search'),
   readNotifications: unexpected('readNotifications'),
+  readThread: unexpected('readThread'),
   react: unexpected('react'),
   unreact: unexpected('unreact'),
   editMessage: unexpected('editMessage'),

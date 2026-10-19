@@ -150,17 +150,19 @@ type Reasons = ReadonlyMap<string, Reason>;
  * one already holding a notification of that kind for this message is not told again.
  *
  * A membership that has muted the channel is told nothing, and the author never. Somebody who
- * has read past the message is told for the inbox, already read; so is somebody who joined the
- * channel after it was written (`writtenAt`), for whom it was never counted unread.
+ * has read the feed past a root is told for the inbox, already read; so is somebody who joined the
+ * channel after it was written (`writtenAt`), for whom it was never counted unread. A reply is not
+ * read by the feed (D-147): its notification waits for its thread wherever the position is.
  */
 export const notify = async (
   executor: Executor,
   context: ChannelContext,
-  messageId: string,
+  message: { readonly id: string; readonly reply: boolean },
   reasons: Reasons,
   now: Date,
   writtenAt?: Date,
 ): Promise<readonly string[]> => {
+  const messageId = message.id;
   const candidates = [...reasons.keys()].filter((userId) => userId !== context.userId);
   if (candidates.length === 0) return [];
   const muted = new Set<string>();
@@ -173,7 +175,8 @@ export const notify = async (
     .execute();
   for (const row of levels) {
     if (row.notification_level === 'none') muted.add(row.user_id);
-    if (isBehind(row.last_read_message_id, messageId)) alreadyRead.add(row.user_id);
+    if (!message.reply && isBehind(row.last_read_message_id, messageId))
+      alreadyRead.add(row.user_id);
     if (writtenAt !== undefined && new Date(row.joined_at) > writtenAt)
       alreadyRead.add(row.user_id);
   }
@@ -196,7 +199,7 @@ export const notify = async (
                 message_id: messageId,
                 type,
                 suppressed_by_deep_work: deep.has(userId),
-                // Behind the person's position: it exists for the inbox and needs nothing.
+                // A root behind the person's position: it exists for the inbox and needs nothing.
                 ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),
               },
             ];
@@ -285,10 +288,17 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
     for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }
 
-  const notified = await notify(executor, context, messageId, reasons, now);
+  const reply = thread !== null;
+  const notified = await notify(executor, context, { id: messageId, reply }, reasons, now);
 
   return {
-    recipients: await countArrival(executor, context.channelId, messageId, sender, notified),
+    recipients: await countArrival(
+      executor,
+      context.channelId,
+      { id: messageId, reply },
+      sender,
+      notified,
+    ),
     told: notified,
   };
 };
@@ -301,16 +311,21 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
  * Counted only for a member whose position is before this message. One whose position is at or
  * past it has read beyond it, and the read recount (`id > position`) would not find it: counting it
  * here left the stored number above the recount, and a badge `PUT /read` could not clear because it
- * is a no-op for a position that does not move (H-API 1).
+ * is a no-op for a position that does not move (H-API 1). A reply that needs a member is the
+ * exception, wherever their position is: the feed does not read it, its thread does (D-147), and the
+ * recount counts it as unread until then.
  */
 export const countArrival = async (
   executor: Executor,
   channelId: string,
-  messageId: string,
+  message: { readonly id: string; readonly reply: boolean },
   writer: string | null,
   notified: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
+  const messageId = message.id;
   const ahead = sql<boolean>`(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)`;
+  const needs = sql<boolean>`(user_id = any(${notified}::uuid[]))`;
+  const counted = message.reply ? sql<boolean>`(${ahead} or ${needs})` : ahead;
   // The rows are locked first, in one order (#668). An `UPDATE` of several rows locks them in the
   // order it reaches them, which follows where each row's newest version happens to lie for this
   // snapshot: two senders could each hold a row the other needed, and one send failed with a
@@ -331,8 +346,8 @@ export const countArrival = async (
   const changed = await executor
     .updateTable('channel_members')
     .set({
-      unread_count: sql<number>`unread_count + case when ${ahead} then 1 else 0 end`,
-      unread_mention_count: sql<number>`unread_mention_count + case when ${ahead} and user_id = any(${notified}::uuid[]) then 1 else 0 end`,
+      unread_count: sql<number>`unread_count + case when ${counted} then 1 else 0 end`,
+      unread_mention_count: sql<number>`unread_mention_count + case when ${counted} and ${needs} then 1 else 0 end`,
       // Counted with the numbers it describes, in the one statement, under the row lock it
       // takes: the order of versions is the order of commits (0015).
       state_version: sql<number>`state_version + 1`,

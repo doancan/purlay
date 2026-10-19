@@ -347,9 +347,11 @@ describe('the endpoints', () => {
     ]);
     await inbox.api.readNotifications({ ids: [ID] });
     await inbox.api.readNotifications({ workspaceId: ID, before: ID });
+    await inbox.api.readThread(ID, ID);
     expect(inbox.calls.slice(2)).toEqual([
       { method: 'PUT', url: '/api/notifications/read', body: { ids: [ID] } },
       { method: 'PUT', url: '/api/notifications/read', body: { workspaceId: ID, before: ID } },
+      { method: 'PUT', url: `/api/messages/${ID}/thread/read`, body: { lastReadMessageId: ID } },
     ]);
     // A row the contract does not describe is refused, not shown.
     const wrong = harness({ data: [{ ...notification, type: 'everyone' }], nextCursor: null });

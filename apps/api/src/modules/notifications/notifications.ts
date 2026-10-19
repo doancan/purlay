@@ -9,7 +9,11 @@
  * notifications still waiting in it (D-99 §4), so marking one read counts that channel's badge
  * again from the rows — the same expression the read position uses — and answers each channel where
  * one was newly read, for the caller's other devices to be told. The read position itself does not move: the
- * messages are still unread, they no longer need the person.
+ * messages are still unread, they no longer need the person — except a reply the feed has already
+ * been read past, which was unread only because its notification waited (D-147).
+ *
+ * **A thread is read here too** (D-147): opening it reads the caller's notifications for its
+ * replies, by the same path, since that is all reading a thread changes.
  */
 import { sql, type Executor, type RawBuilder, type Transaction } from '@purlay/db';
 import type {
@@ -17,12 +21,15 @@ import type {
   NotificationPage,
   NotificationQuery,
   ReadNotificationsRequest,
+  ReadThreadRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
+import { requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
+import { NEEDS_YOU } from '../messages/delivery';
 import { limitOf } from '../messages/threads';
 
 /** A channel with a notification newly read, as its row now is: what the caller's devices are told. */
@@ -158,7 +165,51 @@ export const readNotifications = async (
     }
   }
 
-  const targets = await unread.select(['notifications.id', 'notifications.channel_id']).execute();
+  return await readAndCount(
+    transaction,
+    clock,
+    userId,
+    await unread.select(['notifications.id', 'notifications.channel_id']).execute(),
+  );
+};
+
+/**
+ * Reads the caller's notifications for the replies of one thread, up to and including
+ * `lastReadMessageId` — what opening the thread reads (D-147). The root is asked of the guard first,
+ * so a thread the caller cannot see is the stranger's `404`; a reply has no thread, as reading one
+ * does not (`API.md` §5). Nothing else is stored: the bound is only a bound.
+ */
+export const readThreadNotifications = async (
+  transaction: Transaction,
+  clock: Clock,
+  userId: string,
+  rootId: string,
+  input: ReadThreadRequest,
+): Promise<readonly Told[]> => {
+  // A deleted root with replies keeps its thread, and so what is waiting in it (D-103 §7).
+  const root = await requireMessageById(transaction, userId, rootId, { deleted: 'include' });
+  if (root.parentId !== null) {
+    throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+  }
+  const targets = await transaction
+    .selectFrom('notifications')
+    .innerJoin('messages', 'messages.id', 'notifications.message_id')
+    .select(['notifications.id', 'notifications.channel_id'])
+    .where('notifications.user_id', '=', userId)
+    .where('notifications.read_at', 'is', null)
+    .where('messages.parent_id', '=', rootId)
+    .where('notifications.message_id', '<=', input.lastReadMessageId)
+    .execute();
+  return await readAndCount(transaction, clock, userId, targets);
+};
+
+/** Marks these of the caller's notifications read and counts each channel touched again. */
+const readAndCount = async (
+  transaction: Transaction,
+  clock: Clock,
+  userId: string,
+  targets: readonly { readonly id: string; readonly channel_id: string }[],
+): Promise<readonly Told[]> => {
   if (targets.length === 0) return [];
   const touched = [...new Set(targets.map((row) => row.channel_id))].sort();
 
@@ -183,17 +234,28 @@ export const readNotifications = async (
       targets.map((row) => row.id),
     )
     .where('read_at', 'is', null)
-    .returning('channel_id')
+    .returning(['id', 'channel_id'])
     .execute();
   const channelIds = [...new Set(newlyRead.map((row) => row.channel_id))];
   if (channelIds.length === 0) return [];
 
+  // A reply at or behind the position was unread only because its notification waited (D-147):
+  // read now, it is unread no longer. The rest are still unread messages past the position.
+  const position = sql.ref('channel_members.last_read_message_id');
+  const channel = sql.ref('channel_members.channel_id');
+  const unread = sql<number>`greatest(unread_count - (
+    select count(*)::int from notifications n
+    join messages m on m.id = n.message_id and m.deleted_at is null and m.parent_id is not null
+    where n.id = any(${newlyRead.map((row) => row.id)}::uuid[]) and n.channel_id = ${channel}
+      and n.type in (${sql.join(NEEDS_YOU)}) and n.message_id <= ${position}
+  ), 0)`;
   const rows = await transaction
     .updateTable('channel_members')
     .set({
       state_version: sql<number>`state_version + 1`,
+      unread_count: unread,
       // The lesser of the two, as the read position counts it (I-6).
-      unread_mention_count: sql<number>`least(unread_count, ${waitingNotifications(userId, sql.ref('channel_members.channel_id'))})`,
+      unread_mention_count: sql<number>`least(${unread}, ${waitingNotifications(userId, channel)})`,
     })
     .where('user_id', '=', userId)
     .where('channel_id', 'in', channelIds)

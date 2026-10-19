@@ -1,11 +1,17 @@
 /**
- * The inbox endpoints (`API.md` §6, D-106).
+ * The inbox endpoints (`API.md` §6, D-106), and reading a thread, which reads its notifications
+ * (`API.md` §5, D-147).
  *
  * The workspace is named in the query or the body rather than the path, and is asked of the guard
  * before anything else is read: a stranger, a workspace that never existed and an id that is not
  * one are the same `404` (D-34), whatever else the request says.
  */
-import { NotificationQuery, ReadNotificationsRequest, type NotificationPage } from '@purlay/types';
+import {
+  NotificationQuery,
+  ReadNotificationsRequest,
+  ReadThreadRequest,
+  type NotificationPage,
+} from '@purlay/types';
 import { visibleChannelIds } from '../../platform/channels';
 import {
   NO_LOG,
@@ -15,7 +21,12 @@ import {
 } from '../../platform/events';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
-import { inboxOf, readNotifications } from '../../modules/notifications/notifications';
+import {
+  inboxOf,
+  readNotifications,
+  readThreadNotifications,
+  type Told,
+} from '../../modules/notifications/notifications';
 import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
@@ -49,12 +60,42 @@ export const markNotificationsRead = async (
   request: Request,
   body: unknown,
 ): Promise<void> => {
-  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const input = validated(ReadNotificationsRequest, body);
   const told = await atomicallyOn(database)(
     async (transaction) => await readNotifications(transaction, clock, userId, input),
   );
+  await tell(dependencies, userId, told);
+};
+
+/**
+ * `PUT /api/messages/:messageId/thread/read` — the thread of this root has been read up to and
+ * including a reply: the caller's notifications for its replies are read (D-147), and the channel's
+ * new numbers go to the caller's devices after the commit, as the inbox's do.
+ */
+export const markThreadRead = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  rootId: string,
+  body: unknown,
+): Promise<void> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const input = validated(ReadThreadRequest, body);
+  const told = await atomicallyOn(database)(
+    async (transaction) => await readThreadNotifications(transaction, clock, userId, rootId, input),
+  );
+  await tell(dependencies, userId, told);
+};
+
+/** Each channel with a notification newly read, told to the caller's own devices. */
+const tell = async (
+  dependencies: ChannelWriteDependencies,
+  userId: string,
+  told: readonly Told[],
+): Promise<void> => {
+  const { clock, bus, log = NO_LOG } = dependencies;
   await publishAfterCommit(log, [
     told.map((channel) =>
       publication('CHANNEL_STATE', () =>
