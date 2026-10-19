@@ -677,6 +677,15 @@ describe('the workspace menu', () => {
     expect(items).not.toContain('Create workspace…');
   });
 
+  test('Create workspace… is put away by its Cancel, and nothing is made', async () => {
+    const view = await open();
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = await view.findByRole('dialog');
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
+  });
+
   test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
     const view = await open();
     const sidebar = within(view.getByRole('complementary'));
