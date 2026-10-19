@@ -187,6 +187,14 @@ const press = async (user: ReturnType<typeof person>, keys: string): Promise<voi
 };
 
 describe('what it shows', () => {
+  test('names where it writes in Turkish without a suffix to agree with a channel or a person', async () => {
+    const { box } = await mount({
+      locale: 'tr',
+      props: { channelId: IDS.api, channelName: 'Alice Chen' },
+    });
+    expect(box().getAttribute('placeholder')).toBe('Mesaj yaz: Alice Chen');
+  });
+
   test('is a labelled textarea for the channel, in one card with a send button, and no prompt prefix', async () => {
     const { view, box } = await mount();
     expect(view.getByRole('textbox', { name: 'Message api' })).toBe(box());

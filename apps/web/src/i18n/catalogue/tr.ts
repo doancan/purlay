@@ -841,7 +841,7 @@ export const tr = {
   'mention.hint.insert': 'ekle',
   'mention.hint.close': 'kapat',
   'composer.label': '{channel} için mesaj',
-  'composer.placeholder': '{channel} için yaz',
+  'composer.placeholder': 'Mesaj yaz: {channel}',
   'composer.send': 'Gönder',
   'composer.pasted': 'Yapıştırılan metin kod bloğuna dönüştü',
   'composer.tooLong': {
