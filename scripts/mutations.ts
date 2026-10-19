@@ -2385,8 +2385,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'search-words-sent-untrimmed',
     why: 'spaces around the words go into the address, and a search for " deploy" is a different search from "deploy"',
     file: 'apps/web/src/features/search/search-screen.tsx',
-    find: '              const words = draft.trim();\n',
-    replace: '              const words = draft;\n',
+    find: '            const words = draft.trim();\n',
+    replace: '            const words = draft;\n',
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {
