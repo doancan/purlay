@@ -27,6 +27,7 @@ const channel = {
   incident: null,
   peer: null,
   peers: [],
+  memberCount: 1,
 };
 const message = {
   id: ID,

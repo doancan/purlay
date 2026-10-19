@@ -79,6 +79,7 @@ describe('publishing the wedge', () => {
       starred: false,
       peer: user,
       peers: [user],
+      memberCount: 2,
     };
     await publishChannelState(bus, clock, OTHER, ID, state, 5);
     await publishChannelAdded(bus, clock, OTHER, channel);

@@ -85,6 +85,7 @@ describe('models', () => {
       incident: null,
       peer: user,
       peers: [user],
+      memberCount: 1,
     };
     expect(Value.Check(Channel, dm)).toBe(true);
     expect(Value.Check(Channel, { ...dm, type: 'nonsense' })).toBe(false);
@@ -617,6 +618,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
           incident: null,
           peer: user,
           peers: [user],
+          memberCount: 1,
         },
         ts: 1,
       },
