@@ -6758,10 +6758,7 @@ together; on a phone Reply stood taller than the rest.
 4. **More is on every message.** Copy text (the words as written, through the content ports' clipboard),
    Save and Pin again for whoever looks there, then Edit and Delete on one's own. An owner or an admin
    gets Delete on anybody's — the API already allows it and puts it on the audit trail (D-103 §7,
-   D-26) — and the question before it says so. **No Copy link:** a message has no address of its own
-   yet on this line of work (`?thread=` names a root's thread, not a message). The permalink work
-   (`features/messages/message-link.ts`, `useCopyMessageLink`) is being built beside it; when the two
-   meet, Copy link is one `MenuItem` at the top of More, before Copy text, and nothing else changes.
+   D-26) — and the question before it says so. **Copy link** is first in More, the message's own address (D-149): the two were built side by side and met at that one item.
 5. **A reaction chip says who** in its tooltip: "You, Alice and Bob reacted with 👍", the person first
    as You, past three two names and "N others" — names from the workspace's members as the screen
    already read them, joined by `Intl.ListFormat` in the interface's language.
