@@ -71,6 +71,11 @@ const aRoom = async (db: Executor, owner: SignedInUser): Promise<Room> => {
     .values({ workspace_id: workspace.id, name: 'general', type: 'public' })
     .returning('id')
     .executeTakeFirstOrThrow();
+  // In it: reacting is a member's (D-156).
+  await db
+    .insertInto('channel_members')
+    .values({ channel_id: channel.id, user_id: owner.userId })
+    .execute();
   const write = async (deleted: boolean): Promise<string> => {
     const id = messageId(NOW);
     await db
@@ -87,6 +92,23 @@ const aRoom = async (db: Executor, owner: SignedInUser): Promise<Room> => {
     return id;
   };
   return { owner, root: await write(false), deleted: await write(true) };
+};
+
+/** Somebody brought into the workspace and the channel of this message: a reacting member (D-156). */
+const aMemberOf = async (db: Executor, message: string, userId: string): Promise<void> => {
+  const { workspace_id: workspaceId, channel_id: channelId } = await db
+    .selectFrom('messages')
+    .select(['workspace_id', 'channel_id'])
+    .where('id', '=', message)
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('workspace_members')
+    .values({ workspace_id: workspaceId, user_id: userId, role: 'member' })
+    .execute();
+  await db
+    .insertInto('channel_members')
+    .values({ channel_id: channelId, user_id: userId })
+    .execute();
 };
 
 const errorOf = async (response: Response): Promise<{ code: string; fields?: unknown }> => {
@@ -250,20 +272,7 @@ describe('integration: reacting over HTTP', () => {
       expect((await errorOf(over)).fields).toMatchObject({ emoji: expect.any(String) as string });
 
       const bob = await aSignedInUser(db, clock, 'rxh-j2');
-      await db
-        .insertInto('workspace_members')
-        .values({
-          workspace_id: (
-            await db
-              .selectFrom('messages')
-              .select('workspace_id')
-              .where('id', '=', room.root)
-              .executeTakeFirstOrThrow()
-          ).workspace_id,
-          user_id: bob.userId,
-          role: 'member',
-        })
-        .execute();
+      await aMemberOf(db, room.root, bob.userId);
       const joined = await call(db, 'PUT', reactionPath(room.root, kinds[0] ?? ''), bob.cookie);
       expect(joined.status).toBe(200);
     });
@@ -294,20 +303,7 @@ describe('integration: two people adding a new kind at the limit', () => {
     const alice = await aSignedInUser(cloned.db, clock, 'rxh-race-a');
     const bob = await aSignedInUser(cloned.db, clock, 'rxh-race-b');
     const room = await aRoom(cloned.db, alice);
-    await cloned.db
-      .insertInto('workspace_members')
-      .values({
-        workspace_id: (
-          await cloned.db
-            .selectFrom('messages')
-            .select('workspace_id')
-            .where('id', '=', room.root)
-            .executeTakeFirstOrThrow()
-        ).workspace_id,
-        user_id: bob.userId,
-        role: 'member',
-      })
-      .execute();
+    await aMemberOf(cloned.db, room.root, bob.userId);
     for (let index = 0; index < REACTION_KINDS_MAX - 1; index += 1) {
       await call(
         cloned.db,

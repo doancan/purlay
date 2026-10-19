@@ -15,7 +15,7 @@
 import { sql, type Executor } from '@purlay/db';
 import type { ReactionsResponse } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireMessageById } from '../../platform/channels';
+import { requireChannelMember, requireMessageById } from '../../platform/channels';
 import { AppError } from '../../platform/errors';
 import {
   NO_LOG,
@@ -100,6 +100,8 @@ export const setReaction = async (
 
     let changed: boolean;
     if (present) {
+      // Adding one is writing in the channel, a member's (D-156); taking one's own back is not.
+      await requireChannelMember(transaction, context, 'Join the channel to react in it.');
       if (await wouldExceedKinds(transaction, messageId, emoji)) {
         throw new AppError({
           code: 'VALIDATION_FAILED',

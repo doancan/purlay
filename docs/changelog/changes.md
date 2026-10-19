@@ -174,6 +174,15 @@ and, unset, only the first person to sign in while the instance has none, so the
 still works; anybody else is `403 FORBIDDEN`. Signing in stays open. `GET /api/me` says
 `mayCreateWorkspace`: a person with no workspace who may not sees **Ask for an invitation** instead of a
 form, and **Create workspace…** is offered only where it would be accepted.
+### Fix — 2026-10-19: writing in a channel needs membership of it (closes #690, D-156)
+
+Any member of a workspace could post to a public channel they had not joined — the client offered no
+composer there, but the API checked only that the channel was visible. A message or a thread reply
+from somebody who can see the channel and is not in it is now `403 NOT_A_CHANNEL_MEMBER`, over HTTP and
+the socket alike, and so are adding a reaction, editing one's own message and resolving or reopening a
+thread; what was already a member's (pins, incidents, the name and topic, bringing people in) answers
+the same code instead of `FORBIDDEN`. Deleting one's own words and taking back one's own reaction stay
+open. A send in flight that meets it fails saying the person is not in the channel and should join.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

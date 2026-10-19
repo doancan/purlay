@@ -44,6 +44,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('FORBIDDEN'),
   /** The one irreversible act needs a sign-in from the last minutes, not an old session (D-139 §5). */
   Type.Literal('REAUTHENTICATION_REQUIRED'),
+  /**
+   * Writing in a channel the caller can see and is not in: a public channel they have not joined.
+   * Joining it is the way on (D-156). Never for a channel they cannot see — that is its `404`.
+   */
+  Type.Literal('NOT_A_CHANNEL_MEMBER'),
   // Absence, and everything a boundary turns into absence
   /** No such route. Distinct from a resource that does not exist, or is not yours. */
   Type.Literal('ROUTE_NOT_FOUND'),
@@ -174,6 +179,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   FORBIDDEN: 403,
   REAUTHENTICATION_REQUIRED: 403,
+  NOT_A_CHANNEL_MEMBER: 403,
   EMAIL_REQUIRED: 403,
 
   ROUTE_NOT_FOUND: 404,
