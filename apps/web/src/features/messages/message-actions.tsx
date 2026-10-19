@@ -41,6 +41,8 @@ interface MessageActionsProps {
   readonly mine: boolean;
   /** On the right edge of the conversation: the bar goes to the left corner. */
   readonly outgoing: boolean;
+  /** The row the bar is on, held while a menu from it is open (`active-row.ts`). */
+  readonly rowKey: string;
   /** Whether this is the one row showing its bar (`active-row.ts`). */
   readonly shown: boolean;
   /** Reply, from the thread slice, after React. */
@@ -52,6 +54,7 @@ export const MessageActions = ({
   meId,
   mine,
   outgoing,
+  rowKey,
   shown,
   actions,
 }: MessageActionsProps): React.JSX.Element => {
@@ -61,7 +64,7 @@ export const MessageActions = ({
   // While a menu from the bar is open, the bar stays: focus and the pointer are in the menu.
   const opened = (open: boolean): void => {
     if (open) setBoundary(bar.current?.closest(LIST) ?? null);
-    holdRow(message.id, open);
+    holdRow(rowKey, open);
   };
   return (
     <div

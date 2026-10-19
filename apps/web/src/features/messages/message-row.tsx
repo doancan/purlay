@@ -21,7 +21,7 @@
  * the cache's, and the cache keeps untouched messages as they were), so React's shallow
  * comparison is the whole check.
  */
-import { memo } from 'react';
+import { memo, useId } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
@@ -118,8 +118,10 @@ const MessageRowView = ({
   const editing = useEditing().editingId === message.id && mine;
   // Whether this is the one row showing its actions: the row under the pointer, or the focused row
   // when the keyboard is in use, across the feed and the thread panel together (D-150). The nearest
-  // row answers, so a row placed inside another never lights up both.
-  const on = useActiveRow(message.id);
+  // row answers, so a row placed inside another never lights up both. Keyed by the row, not the
+  // message: a thread's root is drawn in the feed and the panel at once, and is two rows.
+  const rowKey = useId();
+  const on = useActiveRow(rowKey);
 
   // Which edge the message sits on: the person's own on the right, everyone else's on the left.
   const outgoing = isMine(message, meId);
@@ -145,6 +147,7 @@ const MessageRowView = ({
       data-landed={landed ? '' : undefined}
       data-message-row=""
       data-message-id={message.id}
+      data-row-key={rowKey}
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: author.displayName, when: absolute })}
       className={cn(
@@ -276,6 +279,7 @@ const MessageRowView = ({
           meId={meId}
           mine={mine}
           outgoing={outgoing}
+          rowKey={rowKey}
           shown={on}
           actions={actions}
         />

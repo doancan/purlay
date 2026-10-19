@@ -12,6 +12,11 @@
  * **The nearest row answers.** A row inside another row is its own: what is under the pointer is
  * found by `closest`, so a nested row never lights its parent up.
  *
+ * **A row is a place on the page, not a message.** The thread's root is drawn twice while its thread
+ * is open — in the feed and at the top of the panel — so a row is known by a key of its own
+ * (`data-row-key`), never by the message's id: two copies of one message are two rows, and only the
+ * one under the pointer is the one.
+ *
  * **A finger is not a pointer.** A touch leaves as soon as it lifts, so on a phone the row tapped
  * stays the one until another row, or something else, is tapped.
  */
@@ -32,11 +37,9 @@ let state = fresh();
 let active: string | null = null;
 const listeners = new Set<() => void>();
 
-/** The row an event happened in, by its id; null outside any row, or in a row with no id. */
+/** The row an event happened in, by its key; null outside any row, or in a row with no key. */
 const rowOf = (target: EventTarget | null): string | null =>
-  target instanceof Element
-    ? (target.closest<HTMLElement>(ROW)?.dataset['messageId'] ?? null)
-    : null;
+  target instanceof Element ? (target.closest<HTMLElement>(ROW)?.dataset['rowKey'] ?? null) : null;
 
 const decide = (next: Partial<State>): void => {
   state = { ...state, ...next };
@@ -113,31 +116,31 @@ const subscribe = (listener: () => void): (() => void) => {
 };
 
 /** Whether this row is the one showing its actions. */
-export const useActiveRow = (messageId: string): boolean => {
+export const useActiveRow = (rowKey: string): boolean => {
   const on = useSyncExternalStore(
     subscribe,
-    () => active === messageId,
+    () => active === rowKey,
     () => false,
   );
   // A row that goes while it is the one — deleted under the pointer — leaves nothing behind.
   useEffect(
     () => (): void => {
       const { pointer, focus, held } = state;
-      if (pointer === messageId || focus === messageId || held === messageId) {
+      if (pointer === rowKey || focus === rowKey || held === rowKey) {
         decide({
-          pointer: pointer === messageId ? null : pointer,
-          focus: focus === messageId ? null : focus,
-          held: held === messageId ? null : held,
+          pointer: pointer === rowKey ? null : pointer,
+          focus: focus === rowKey ? null : focus,
+          held: held === rowKey ? null : held,
         });
       }
     },
-    [messageId],
+    [rowKey],
   );
   return on;
 };
 
 /** Keeps a row the one while something it opened — a menu — is open outside it. */
-export const holdRow = (messageId: string, holding: boolean): void => {
-  if (holding) decide({ held: messageId });
-  else if (state.held === messageId) decide({ held: null });
+export const holdRow = (rowKey: string, holding: boolean): void => {
+  if (holding) decide({ held: rowKey });
+  else if (state.held === rowKey) decide({ held: null });
 };

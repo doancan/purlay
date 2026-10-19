@@ -654,6 +654,26 @@ describe('the bar of actions (D-150)', () => {
     expect(shown()).toEqual([false, false]);
   });
 
+  test("is shown on the copy under the pointer only, when one message is drawn twice — a thread's root in the feed and the panel", async () => {
+    const message = aMessage(1, { sender: BOB });
+    await mount(props({ message }));
+    await renderApp(<MessageRow {...props({ message })} />);
+    const [feed, panel] = Array.from(
+      document.querySelectorAll<HTMLElement>(`[data-message-id="${message.id}"]`),
+    );
+    if (feed === undefined || panel === undefined) throw new Error('two copies were not drawn');
+    const shown = (): boolean[] =>
+      [feed, panel].map((row) => !barOf(row).className.includes('opacity-0'));
+    act(() => {
+      fireEvent.pointerOver(feed);
+    });
+    expect(shown()).toEqual([true, false]);
+    act(() => {
+      fireEvent.pointerOver(panel);
+    });
+    expect(shown()).toEqual([false, true]);
+  });
+
   test('stays while its menu is open, though focus and the pointer are in the menu', async () => {
     const view = await mount(props({ message: aMessage(1, { sender: BOB }) }));
     const row = view.getByRole('article');

@@ -2100,6 +2100,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/web/src/features/messages/message-row.test.tsx'],
   },
   {
+    id: 'two-bars-on-one-message',
+    why: "a thread's root, drawn in the feed and in the panel, shows its bar on both copies when the pointer is on one",
+    file: 'apps/web/src/features/messages/active-row.ts',
+    find: "dataset['rowKey']",
+    replace: "dataset['messageId']",
+    tests: ['apps/web/src/features/messages/message-row.test.tsx'],
+  },
+  {
     id: 'edit-tells-the-room-of-no-change',
     why: 'a retried edit tells every open screen the message changed when it did not',
     file: 'apps/api/src/modules/messages/edit.ts',

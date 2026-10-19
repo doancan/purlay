@@ -321,8 +321,9 @@ page of the same name.
   (D-150, amending D-119 §6). It never reaches above its row, so it never covers the row above or
   the name over a bubble; it never reflows the row, and the row itself is not tinted. **One bar on
   the page**, across the feed and the thread panel: the row under the pointer, or the focused row
-  while the keyboard is in use; a row whose menu is open keeps its bar. On a phone the row tapped is
-  the one.
+  while the keyboard is in use; a row whose menu is open keeps its bar. A thread's root, drawn in the
+  feed and at the top of the open panel, is two rows: only the copy under the pointer shows it. On a
+  phone the row tapped is the one.
 - **The bar holds** React · Reply (a thread's root) · Save · Pin · More, each the same square
   control on every window, each with its tooltip and its key where it has one (Reply `R`). **More
   is on every message**: Copy text, Save and Pin again, then Edit (`E`) and Delete on your own; an
