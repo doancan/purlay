@@ -78,7 +78,11 @@ describe('the channels section', () => {
     for (const name of ['Browse channels', 'New channel']) {
       const button = within(nav).getByRole('button', { name });
       // Nothing between the button and its section may hide it until a pointer passes over.
-      for (let node: HTMLElement | null = button; node !== null && node !== nav; node = node.parentElement) {
+      for (
+        let node: HTMLElement | null = button;
+        node !== null && node !== nav;
+        node = node.parentElement
+      ) {
         expect(node.className).not.toContain('opacity-0');
       }
     }
