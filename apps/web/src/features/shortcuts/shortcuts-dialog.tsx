@@ -25,6 +25,7 @@ type RowKey =
   | 'shortcuts.settings'
   | 'shortcuts.close'
   | 'shortcuts.channels'
+  | 'shortcuts.rowMenu'
   | 'shortcuts.deepWork'
   | 'shortcuts.move'
   | 'shortcuts.thread'
@@ -59,6 +60,7 @@ const GROUPS: readonly { readonly title: GroupKey; readonly rows: readonly Row[]
           [k.alt, '↓'],
         ],
       },
+      { label: 'shortcuts.rowMenu', keys: (k) => [[k.shift, 'F10']] },
       { label: 'shortcuts.deepWork', keys: (k) => [[k.mod, k.shift, 'D']] },
     ],
   },

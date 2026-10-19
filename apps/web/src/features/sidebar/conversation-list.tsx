@@ -49,7 +49,7 @@ export const ConversationList = (): React.JSX.Element => {
               <li key={group.id}>
                 <ChannelRow
                   slug={workspace.slug}
-                  channelId={group.id}
+                  channel={group}
                   current={group.id === currentId}
                   avatar={
                     first === undefined ? null : (
@@ -58,6 +58,7 @@ export const ConversationList = (): React.JSX.Element => {
                   }
                   unread={(group.state?.unreadCount ?? 0) > 0}
                   mentions={group.state?.unreadMentionCount ?? 0}
+                  muted={group.notificationLevel === 'none'}
                 >
                   {group.peers.map((person) => person.displayName).join(', ')}
                 </ChannelRow>

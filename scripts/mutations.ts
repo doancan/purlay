@@ -3746,4 +3746,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '    report.peakP99 <= burst\n',
     tests: ['apps/api/src/cli/frame-report.test.ts'],
   },
+  {
+    id: 'row-menu-offers-leave-on-a-conversation',
+    why: 'a direct message or a group offers Leave channel…, which the server refuses with 404 — a conversation’s people never change (D-127, D-163)',
+    file: 'apps/web/src/features/sidebar/row-menu-body.tsx',
+    find: "  kindOf(channel) === 'channel' && channel.state !== null;\n",
+    replace: '  channel.state !== null;\n',
+    tests: ['apps/web/src/features/sidebar/row-menu.test.tsx'],
+  },
 ];

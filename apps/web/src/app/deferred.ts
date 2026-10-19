@@ -1,6 +1,6 @@
 /**
  * What the first page does not need to read a conversation, in one chunk (D-49, D-159): the
- * settings (D-146) and the image viewer. Each door asks for this module with `import()`, and nothing
+ * settings (D-146), the image viewer and a sidebar row's context menu (D-163). Each door asks for this module with `import()`, and nothing
  * imports it statically, so none of it counts against the initial budget.
  *
  * **One chunk, not one per feature, because two were measured to cost more than none.** The bundler
@@ -12,3 +12,4 @@
  */
 export { SettingsNav, SettingsScreen } from '../features/settings/settings-screen';
 export { ImageViewer } from '../features/messages/image-viewer';
+export { RowMenu } from '../features/sidebar/row-menu-body';
