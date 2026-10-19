@@ -43,6 +43,19 @@ own card, with the product's select.
 `Cmd/Ctrl+K` now finds the inbox, saved items and search; public channels not yet joined (marked so);
 group conversations by their people; and every settings page. Whatever is typed can be searched for in
 the messages from the palette's last row, so a query never ends in "No match" alone.
+### Feature — 2026-10-19: pictures open in a viewer; a failed upload says why (D-159)
+
+**A picture opens in place.** Clicking an image in a message or in the channel's Files panel opens an
+image viewer over the window instead of a raw file in a new tab: the picture fitted to the window, its
+name, who shared it, its size and when, **Download** and **Open original**, with Esc, the close button
+or a click beside it to close, and focus back on the thumbnail. `←` `→` step through the message's
+pictures, or the Files panel's. ⌘/Ctrl-click still opens a tab. The viewer's code loads on first use
+and costs the first page nothing.
+
+**A failed upload says why.** The chip under a file that did not upload names the reason — larger than
+25 MB, an image too large or unreadable, the workspace's storage full *and how much room is left*, too
+many files waiting, no connection, the server busy — and offers Retry only where trying again can work.
+The API's `STORAGE_QUOTA_EXCEEDED` now carries `details.remainingBytes`.
 
 ### Polish — 2026-10-19: the first two screens a person sees
 

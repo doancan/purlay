@@ -256,6 +256,16 @@ export const LastOwnerDetails = Type.Object({
 });
 export type LastOwnerDetails = Static<typeof LastOwnerDetails>;
 
+/**
+ * How much room the workspace still has, in bytes, when a file did not fit: what the quota leaves
+ * after what is stored and what is waiting to be sent, so the person is told how large a file would
+ * still go (D-159). The quota is the workspace's own number, and every member uploads into it.
+ */
+export const StorageQuotaDetails = Type.Object({
+  remainingBytes: Type.Integer({ minimum: 0 }),
+});
+export type StorageQuotaDetails = Static<typeof StorageQuotaDetails>;
+
 export const AppErrorBody = Type.Union([
   Type.Object({
     code: Type.Literal('VALIDATION_FAILED'),
@@ -268,11 +278,20 @@ export const AppErrorBody = Type.Union([
     details: Type.Optional(LastOwnerDetails),
   }),
   Type.Object({
+    code: Type.Literal('STORAGE_QUOTA_EXCEEDED'),
+    message: Type.String(),
+    details: Type.Optional(StorageQuotaDetails),
+  }),
+  Type.Object({
     // Derived, so the codes are listed once. A new code lands here automatically
     // rather than in a second list somebody has to remember to update.
     code: Type.Exclude(
       ErrorCode,
-      Type.Union([Type.Literal('VALIDATION_FAILED'), Type.Literal('LAST_OWNER')]),
+      Type.Union([
+        Type.Literal('VALIDATION_FAILED'),
+        Type.Literal('LAST_OWNER'),
+        Type.Literal('STORAGE_QUOTA_EXCEEDED'),
+      ]),
     ),
     message: Type.String(),
   }),

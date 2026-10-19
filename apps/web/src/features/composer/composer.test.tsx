@@ -1158,9 +1158,9 @@ describe('attaching files (D-109, #370)', () => {
     const uploads = held();
     const { view, box, sent, user } = await mount({ api: aSignedInApi(uploads.api) });
     paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
-    uploads.refuse(0, new ApiError(413, 'STORAGE_QUOTA_EXCEEDED', 'full'));
+    uploads.refuse(0, new ApiError(503, 'STORAGE_UNAVAILABLE', 'down'));
     await settle();
-    expect(view.getByText('Didn’t upload')).toBeDefined();
+    expect(view.getByText('File storage is unavailable')).toBeDefined();
     await user.type(box(), 'look{Enter}');
     expect(sent()).toEqual([]);
     expect(view.getByRole('alert').textContent).toContain('A file did not upload');
@@ -1171,6 +1171,113 @@ describe('attaching files (D-109, #370)', () => {
     // The same file, under the same id: a retry of an upload that did land is the same upload.
     expect(uploads.calls[1]?.id).toBe(uploads.calls[0]?.id);
   });
+
+  // Why, in words, from the code the upload was refused with (D-159); Retry only where trying the
+  // same bytes again can be answered differently, and Remove always.
+  const refusals: readonly [
+    string,
+    ApiError | Error,
+    { readonly en: string; readonly tr: string; readonly retry: boolean },
+  ][] = [
+    [
+      'too large at the edge',
+      new ApiError(413, 'PAYLOAD_TOO_LARGE', 'big'),
+      { en: 'Larger than 25 MB', tr: '25 MB sınırından büyük', retry: false },
+    ],
+    [
+      'an image past the bounds',
+      new ApiError(413, 'IMAGE_TOO_LARGE', 'big'),
+      {
+        en: 'Image too large: 16,384 px a side, 40 MP at most',
+        tr: 'Görüntü çok büyük: kenarı en çok 16.384 px, en çok 40 MP',
+        retry: false,
+      },
+    ],
+    [
+      'an image that does not decode',
+      new ApiError(400, 'IMAGE_UNREADABLE', 'bad'),
+      {
+        en: 'Not a PNG, JPEG, GIF or WebP that can be read',
+        tr: 'Okunabilir bir PNG, JPEG, GIF ya da WebP değil',
+        retry: false,
+      },
+    ],
+    [
+      'a type refused',
+      new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'type'),
+      {
+        en: 'This type of file is not accepted',
+        tr: 'Bu dosya türü kabul edilmiyor',
+        retry: false,
+      },
+    ],
+    [
+      'the quota, with the room left',
+      new ApiError(413, 'STORAGE_QUOTA_EXCEEDED', 'full', {}, undefined, [], 3 * 1024 * 1024),
+      {
+        en: 'Workspace storage is full: 3 MB left',
+        tr: 'Çalışma alanının depolaması dolu: 3 MB kaldı',
+        retry: true,
+      },
+    ],
+    [
+      'the quota, with no room left',
+      new ApiError(413, 'STORAGE_QUOTA_EXCEEDED', 'full', {}, undefined, [], 0),
+      { en: 'Workspace storage is full', tr: 'Çalışma alanının depolaması dolu', retry: true },
+    ],
+    [
+      'too many waiting',
+      new ApiError(409, 'TOO_MANY_PENDING_UPLOADS', 'many'),
+      {
+        en: 'Too many files waiting: send or remove some',
+        tr: 'Bekleyen dosya çok: gönder ya da birini kaldır',
+        retry: true,
+      },
+    ],
+    [
+      'the network',
+      new ApiError(0, 'NETWORK', 'offline'),
+      { en: 'No connection', tr: 'Bağlantı yok', retry: true },
+    ],
+    [
+      'a busy node',
+      new ApiError(429, 'RATE_LIMITED', 'busy'),
+      { en: 'The server is busy', tr: 'Sunucu meşgul', retry: true },
+    ],
+    [
+      'the session',
+      new ApiError(401, 'UNAUTHENTICATED', 'who'),
+      {
+        en: 'Session ended: sign in again',
+        tr: 'Oturumun sona erdi: tekrar giriş yap',
+        retry: true,
+      },
+    ],
+    [
+      'anything nobody described',
+      new Error('boom'),
+      { en: 'Didn’t upload', tr: 'Yüklenmedi', retry: true },
+    ],
+  ];
+
+  for (const [name, error, said] of refusals) {
+    for (const locale of ['en', 'tr'] as const) {
+      test(`a failed upload says why — ${name} (${locale})`, async () => {
+        const uploads = held();
+        const { view, box } = await mount({ api: aSignedInApi(uploads.api), locale });
+        paste(box(), [new File([new Uint8Array([1])], 'a.png')]);
+        uploads.refuse(0, error);
+        await settle();
+        const chip = view.getByText('a.png').closest('li');
+        if (chip === null) throw new Error('no chip');
+        expect(within(chip).getByText(said[locale])).toBeDefined();
+        const retry = locale === 'en' ? 'Retry a.png' : 'a.png: yeniden dene';
+        expect(within(chip).queryByRole('button', { name: retry }) !== null).toBe(said.retry);
+        const remove = locale === 'en' ? 'Remove a.png' : 'a.png: kaldır';
+        expect(within(chip).getByRole('button', { name: remove })).toBeDefined();
+      });
+    }
+  }
 
   test('a file over the limit is refused before anything is sent, in words', async () => {
     const uploads = held();
