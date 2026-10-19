@@ -6826,6 +6826,93 @@ the details there is room to say the level.
 
 **Cost of reversing:** one component's layout, a `Dialog` size and a token; no contract changes.
 
+### D-155. Who may make a workspace: the operator names them — #633
+
+**Context.** Signing in is open — an invited person has to be able to — and making a workspace asked
+only for a session, so on an instance reachable from the internet anybody with a GitHub account could
+sign in and make any number of workspaces, each with its own attachment quota (D-109 §5): disk without
+a bound, for a stranger who found the address. Joining a workspace was already closed (an invitation,
+D-115); making one was not. Decided in the owner's standing instruction to decide and proceed, and open
+to their reversal.
+
+**Decided.**
+
+1. **The operator names who may: `WORKSPACE_CREATORS`** (`CONFIG.md`), GitHub logins, comma-separated
+   and compared in any case, or `*` for anybody signed in — what a cloud or a demo wants. A login
+   matches the username of an account signed in with GitHub, which is the login as GitHub last gave
+   it; an account made by an email link (D-138) has no login, whatever its username spells, because
+   its name came from an address anybody can own. A malformed value refuses to start.
+2. **Unset, nobody may but the first person to sign in, and only while the instance has no
+   workspace** — the earliest living account, while `workspaces` is empty. The one-command install
+   (D-144) still ends with its operator owning the first workspace, and a stranger who signs in after
+   them cannot make a second. Two first workspaces asked for at once take turns on a lock, so only one
+   is first.
+3. **One check, in the transaction that makes the workspace** (`modules/workspaces/creators.ts`).
+   Refused, it is `403 FORBIDDEN` — the endpoint is no resource of anybody's to hide — and nothing is
+   made. Signing in is untouched.
+4. **The client asks before it offers.** `GET /api/me` carries `mayCreateWorkspace`; a person with no
+   workspace who may not is told to ask for an invitation, with no form, and the workspace menu's
+   **Create workspace…** (D-124 §8) is offered only where it would be accepted. A refusal anyway — the
+   first workspace made a moment ago — says the same above the form's button.
+5. **Recorded as the create already is.** The audit trail is a workspace's (D-26), and a refusal has
+   none to belong to; the request log carries the `403` and its code, as it does for every refusal.
+
+**Rejected.** *An allowlist of who may sign in* (#633's option 2) — it closes the door earlier, but every
+invitation would then need the operator to add the person too. *Leaving it open and bounding the
+instance's storage instead* (option 3) — it bounds the disk, not the stranger's workspaces or what they
+put in them. *Matching every account's username* — an email link would let anybody take an allowlisted
+login that has not signed in yet. *The first workspace for whoever asks first* — the person who signed
+in first is the one the install is for.
+
+**Cost of reversing:** the variable, `creators.ts`, the field on `/api/me` (a client older than it reads
+it as absent and offers the form, as before) and the screen; no migration.
+
+### D-156. Writing in a channel is a member's — #690
+
+**Context.** The client gives a person who has not joined a public channel no composer — a bar that
+says they are reading without being a member, and **Join** — but the API checked only that the channel
+was visible to them (ARCHITECTURE §7.5), and every member of the workspace can see a public channel. A
+script signed in as somebody outside `#design` posted to it, every message `201`; the channel's members
+were notified by a person its member list does not show, and the writer had no read position, no
+unread place for a reply, nothing in their sidebar. The spec said nothing either way. Decided in the
+owner's standing instruction to decide and proceed, and open to their reversal.
+
+**Decided.**
+
+1. **Writing requires membership** — Slack's `not_in_channel`. Sending a message or a thread reply to
+   a channel the caller can see and is not in is `403 NOT_A_CHANNEL_MEMBER`, over HTTP and the socket's
+   `MESSAGE_SEND` alike, since both are `sendMessage`; nothing is written and nobody is told. Seeing
+   stays as it was: reading, searching and the thread panel are anybody's who can see the channel.
+2. **One code for every write of a visible non-member**, from the one guard (`requireChannelMember`):
+   adding a reaction, editing one's own message, resolving or reopening a thread — each changes what the
+   members see, and a reaction or an edit can tell somebody — and what was already a member's (D-104,
+   D-123, D-130, D-137): pins, the incident, the channel's name and topic, bringing people in. Those
+   were `403 FORBIDDEN`; they keep the status and gain the code, so a client can say *join to do this*
+   rather than *not allowed*. A direct message is unchanged: who is in it is fixed, and its refusals say
+   so as before.
+3. **Taking one's own back is not writing**: deleting one's own message (or an earlier version of it),
+   taking back one's own reaction, and saving for oneself stay open to somebody who has left. A
+   moderator's delete is an owner's or an admin's, as it was (D-103 §7).
+4. **The client already behaves this way** (the bar and **Join**); what it gains is the reason. A send
+   in flight that meets the refusal is `failed` with *you are not in this channel; join it to write
+   here*, and Retry sends it again (UX §3.1); every other surface says the same through the shared
+   failure table, which the compiler holds to every code.
+5. **A read, not a lock.** The guard reads the membership row. A send locks the channel's memberships
+   in one order after its own row is written (#668), and a purge or a delete takes them all first; a
+   lock taken before either would be a second order beside theirs, and the deadlock #668 and #669
+   removed. So a leave in the same instant as a write can let that one write land — from somebody who
+   was in the channel when it was checked.
+
+**Rejected.** *Writing joins* (#690's option 2) — a message would quietly change who is in the
+channel, and the member list and its notifications would follow from a side effect. *Keeping it as it
+was* (option 3) — a member list that does not include the people writing is the surprise an admin of a
+regulated workspace (audit, export, erasure by member) does not expect. *A second code only for sends,
+`FORBIDDEN` for the rest* — two answers to one condition. *Holding the membership row `FOR KEY SHARE`*
+— see 5: it deadlocked against the retention purge in its own race test.
+
+**Cost of reversing:** the guard's calls in `sendMessage`, `reviseMessage`, `setReaction` and
+`setResolved`, and the code — back to `FORBIDDEN` for the rest; no migration.
+
 ### D-157. The palette finds every place, and a query never ends in nothing
 
 **Context.** `PRD.md` §4.6 promises a palette over channels, DMs, people and settings, and UX §1.3 calls
@@ -6886,91 +6973,6 @@ for what should simply be right is a second thing to maintain and test; reopen i
 pointer leaves, and the next look finds everything elsewhere.
 
 **Cost of reversing:** one sort in `ordering.ts`.
-### D-155. Who may make a workspace: the operator names them — #633
-
-**Context.** Signing in is open — an invited person has to be able to — and making a workspace asked
-only for a session, so on an instance reachable from the internet anybody with a GitHub account could
-sign in and make any number of workspaces, each with its own attachment quota (D-109 §5): disk without
-a bound, for a stranger who found the address. Joining a workspace was already closed (an invitation,
-D-115); making one was not. Decided in the owner's standing instruction to decide and proceed, and open
-to their reversal.
-
-**Decided.**
-
-1. **The operator names who may: `WORKSPACE_CREATORS`** (`CONFIG.md`), GitHub logins, comma-separated
-   and compared in any case, or `*` for anybody signed in — what a cloud or a demo wants. A login
-   matches the username of an account signed in with GitHub, which is the login as GitHub last gave
-   it; an account made by an email link (D-138) has no login, whatever its username spells, because
-   its name came from an address anybody can own. A malformed value refuses to start.
-2. **Unset, nobody may but the first person to sign in, and only while the instance has no
-   workspace** — the earliest living account, while `workspaces` is empty. The one-command install
-   (D-144) still ends with its operator owning the first workspace, and a stranger who signs in after
-   them cannot make a second. Two first workspaces asked for at once take turns on a lock, so only one
-   is first.
-3. **One check, in the transaction that makes the workspace** (`modules/workspaces/creators.ts`).
-   Refused, it is `403 FORBIDDEN` — the endpoint is no resource of anybody's to hide — and nothing is
-   made. Signing in is untouched.
-4. **The client asks before it offers.** `GET /api/me` carries `mayCreateWorkspace`; a person with no
-   workspace who may not is told to ask for an invitation, with no form, and the workspace menu's
-   **Create workspace…** (D-124 §8) is offered only where it would be accepted. A refusal anyway — the
-   first workspace made a moment ago — says the same above the form's button.
-5. **Recorded as the create already is.** The audit trail is a workspace's (D-26), and a refusal has
-   none to belong to; the request log carries the `403` and its code, as it does for every refusal.
-
-**Rejected.** *An allowlist of who may sign in* (#633's option 2) — it closes the door earlier, but every
-invitation would then need the operator to add the person too. *Leaving it open and bounding the
-instance's storage instead* (option 3) — it bounds the disk, not the stranger's workspaces or what they
-put in them. *Matching every account's username* — an email link would let anybody take an allowlisted
-login that has not signed in yet. *The first workspace for whoever asks first* — the person who signed
-in first is the one the install is for.
-
-**Cost of reversing:** the variable, `creators.ts`, the field on `/api/me` (a client older than it reads
-it as absent and offers the form, as before) and the screen; no migration.
-### D-156. Writing in a channel is a member's — #690
-
-**Context.** The client gives a person who has not joined a public channel no composer — a bar that
-says they are reading without being a member, and **Join** — but the API checked only that the channel
-was visible to them (ARCHITECTURE §7.5), and every member of the workspace can see a public channel. A
-script signed in as somebody outside `#design` posted to it, every message `201`; the channel's members
-were notified by a person its member list does not show, and the writer had no read position, no
-unread place for a reply, nothing in their sidebar. The spec said nothing either way. Decided in the
-owner's standing instruction to decide and proceed, and open to their reversal.
-
-**Decided.**
-
-1. **Writing requires membership** — Slack's `not_in_channel`. Sending a message or a thread reply to
-   a channel the caller can see and is not in is `403 NOT_A_CHANNEL_MEMBER`, over HTTP and the socket's
-   `MESSAGE_SEND` alike, since both are `sendMessage`; nothing is written and nobody is told. Seeing
-   stays as it was: reading, searching and the thread panel are anybody's who can see the channel.
-2. **One code for every write of a visible non-member**, from the one guard (`requireChannelMember`):
-   adding a reaction, editing one's own message, resolving or reopening a thread — each changes what the
-   members see, and a reaction or an edit can tell somebody — and what was already a member's (D-104,
-   D-123, D-130, D-137): pins, the incident, the channel's name and topic, bringing people in. Those
-   were `403 FORBIDDEN`; they keep the status and gain the code, so a client can say *join to do this*
-   rather than *not allowed*. A direct message is unchanged: who is in it is fixed, and its refusals say
-   so as before.
-3. **Taking one's own back is not writing**: deleting one's own message (or an earlier version of it),
-   taking back one's own reaction, and saving for oneself stay open to somebody who has left. A
-   moderator's delete is an owner's or an admin's, as it was (D-103 §7).
-4. **The client already behaves this way** (the bar and **Join**); what it gains is the reason. A send
-   in flight that meets the refusal is `failed` with *you are not in this channel; join it to write
-   here*, and Retry sends it again (UX §3.1); every other surface says the same through the shared
-   failure table, which the compiler holds to every code.
-5. **A read, not a lock.** The guard reads the membership row. A send locks the channel's memberships
-   in one order after its own row is written (#668), and a purge or a delete takes them all first; a
-   lock taken before either would be a second order beside theirs, and the deadlock #668 and #669
-   removed. So a leave in the same instant as a write can let that one write land — from somebody who
-   was in the channel when it was checked.
-
-**Rejected.** *Writing joins* (#690's option 2) — a message would quietly change who is in the
-channel, and the member list and its notifications would follow from a side effect. *Keeping it as it
-was* (option 3) — a member list that does not include the people writing is the surprise an admin of a
-regulated workspace (audit, export, erasure by member) does not expect. *A second code only for sends,
-`FORBIDDEN` for the rest* — two answers to one condition. *Holding the membership row `FOR KEY SHARE`*
-— see 5: it deadlocked against the retention purge in its own race test.
-
-**Cost of reversing:** the guard's calls in `sendMessage`, `reviseMessage`, `setReaction` and
-`setResolved`, and the code — back to `FORBIDDEN` for the rest; no migration.
 
 ## Part D — Open, deliberately
 
