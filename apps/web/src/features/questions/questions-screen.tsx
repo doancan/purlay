@@ -20,7 +20,7 @@ import type { Channel, Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannels, useUnresolved, readingOrder } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { threadHref } from '../../router/routes';
+import { channelInSearch, threadHref } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { Avatar } from '../../ui/avatar';
@@ -67,14 +67,18 @@ export const groupByChannel = (questions: readonly Message[]): Group[] => {
     });
 };
 
-const Header = (): React.JSX.Element => {
+const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.Element => {
   const { t, format } = useI18n();
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
-  const open = useOpenCount(workspace.id);
+  const open = useOpenCount(workspace.id, narrowed);
   const joined = (channels.data ?? []).filter((c) => c.state !== null);
-  const remembered = lastChannel(workspace.id);
-  const back = joined.find((c) => c.id === remembered) ?? joined[0];
+  const remembered = narrowed ?? lastChannel(workspace.id);
+  // Narrowed to a channel, Feed goes back to it, whether or not the person is in it.
+  const back =
+    (channels.data ?? []).find((c) => c.id === narrowed) ??
+    joined.find((c) => c.id === remembered) ??
+    joined[0];
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
@@ -219,13 +223,49 @@ const QuestionRow = ({
   );
 };
 
+/** Narrowed to one channel (from its header): which, and the way back to every channel. */
+const Narrowed = ({ channel }: { readonly channel: Channel | undefined }): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  return (
+    <p className="flex flex-wrap items-center gap-2 px-3 text-label text-ink-muted">
+      {channel === undefined ? null : <NarrowedName channel={channel} />}
+      <Link
+        to="questions"
+        params={{ slug: workspace.slug }}
+        className="rounded-sm text-accent-text hover:underline"
+      >
+        {t('questions.everyChannel')}
+      </Link>
+    </p>
+  );
+};
+
+const NarrowedName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+  const { t } = useI18n();
+  const title = useChannelTitle(channel);
+  return (
+    <span>
+      {t('questions.only', { name: channel.type === 'direct_message' ? title : `#${title}` })}
+    </span>
+  );
+};
+
 export const QuestionsScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
+  const { search } = useRoute();
+  const narrowed = channelInSearch(search);
   const ports = useFeedPorts();
   const query = useUnresolved(workspace.id);
   const channels = useChannels(workspace.id);
-  const questions = useMemo(() => readingOrder(query.data), [query.data]);
+  const questions = useMemo(
+    () =>
+      readingOrder(query.data).filter(
+        (question) => narrowed === null || question.channelId === narrowed,
+      ),
+    [query.data, narrowed],
+  );
   const groups = useMemo(() => groupByChannel(questions), [questions]);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const now = ports.clock.now();
@@ -256,18 +296,26 @@ export const QuestionsScreen = (): React.JSX.Element => {
         }}
       />
     );
-  } else if (groups.length === 0) {
+  } else if (groups.length === 0 && !query.hasNextPage) {
     body = (
-      <GlyphEmptyState
-        glyph="resolved"
-        tone="success"
-        title={t('state.questions.empty.title')}
-        body={t('state.questions.empty.body')}
-      />
+      <>
+        <GlyphEmptyState
+          glyph="resolved"
+          tone="success"
+          title={t('state.questions.empty.title')}
+          body={t('state.questions.empty.body')}
+        />
+        {narrowed !== null && (
+          <div className="flex justify-center pb-6">
+            <Narrowed channel={undefined} />
+          </div>
+        )}
+      </>
     );
   } else {
     body = (
       <div className="flex w-full max-w-feed flex-col gap-6 px-3 py-4">
+        {narrowed !== null && <Narrowed channel={byId.get(narrowed)} />}
         {groups.map((group) => {
           const id = `questions-${group.channelId}`;
           return (
@@ -305,7 +353,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
 
   return (
     <>
-      <Header />
+      <Header narrowed={narrowed} />
       <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
     </>
   );

@@ -267,6 +267,54 @@ describe('live', () => {
   });
 });
 
+describe('narrowed to one channel', () => {
+  test('lists only its questions, counts only them, and offers every channel again', async () => {
+    rememberChannel(IDS.workspace, IDS.incidents);
+    const screen = await renderApp(<Outlet />, {
+      path: `/w/acme/questions?in=${IDS.api}`,
+      api: aSignedInApi({
+        unresolved: () =>
+          Promise.resolve(
+            asPage([question(2, IDS.api), question(3, IDS.api), question(6, IDS.incidents)]),
+          ),
+        channels: () => Promise.resolve(channels()),
+        members: () => Promise.resolve([]),
+      }),
+    });
+    await settle();
+    expect(screen.getByText('question 2?')).toBeDefined();
+    expect(screen.queryByText('question 6?')).toBeNull();
+    const views = screen.getByRole('navigation', { name: 'Channel views' });
+    const current = within(views)
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('aria-current') === 'page');
+    expect(current.map((a) => a.textContent)).toEqual(['Open questions2']);
+    // Feed goes back to the channel the view was narrowed to, not the last one remembered.
+    expect(within(views).getByRole('link', { name: 'Feed' }).getAttribute('href')).toBe(
+      `/w/acme/c/${IDS.api}`,
+    );
+    await person().click(screen.getByRole('link', { name: 'Show every channel' }));
+    await settle();
+    expect(screen.getByText('question 6?')).toBeDefined();
+    expect(screen.world.history.stack.at(-1)).toBe('/w/acme/questions');
+  });
+
+  test('a channel with none says so, and still offers every channel', async () => {
+    const screen = await renderApp(<Outlet />, {
+      path: `/w/acme/questions?in=${IDS.api}`,
+      api: aSignedInApi({
+        unresolved: () => Promise.resolve(asPage([question(6, IDS.incidents)])),
+        channels: () => Promise.resolve(channels()),
+        members: () => Promise.resolve([]),
+      }),
+    });
+    await settle();
+    expect(screen.queryByText('question 6?')).toBeNull();
+    expect(screen.getByText('Every thread is resolved')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Show every channel' })).toBeDefined();
+  });
+});
+
 describe('the tabs', () => {
   test('say which view this is, with the same count the sidebar shows, and Feed goes back to the last channel', async () => {
     rememberChannel(IDS.workspace, IDS.incidents);

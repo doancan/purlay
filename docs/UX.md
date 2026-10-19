@@ -77,8 +77,12 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
-  carries the two views as a segmented control: the feed, and **open questions** with its live count,
-  which is the product's argument and so is always one click away. The channel's **name opens its
+  carries the two views as a segmented control: the feed, and **open questions** with the live count
+  of *this channel's* — never the workspace's, which is the rail's and the sidebar's — opening the view
+  narrowed to the channel (§4.4). In a channel it is always there, being the product's argument; a
+  conversation (a direct message or a group) carries it only while it has open questions, since an
+  empty view there is one more control. The name is cut with an ellipsis before anything is drawn
+  over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
@@ -333,6 +337,9 @@ parent message. Reopening is the same control, inverted.
 Reached from the palette (`Cmd+K` → "Open questions") or the workspace header. It lists
 unresolved root messages that have at least one reply, workspace-wide, newest first, grouped by
 channel — backed by `idx_messages_unresolved`.
+
+Opened from a channel's header it is **narrowed to that channel** (`?in=`): only its questions, its
+count on the tab, Feed back to it, and *Show every channel* to widen it again.
 
 This view is the product's argument in one screen: *these are the questions your team has not
 finished answering.* Slack cannot produce it at any price. It ships in Phase 1, not later.

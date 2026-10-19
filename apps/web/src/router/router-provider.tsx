@@ -52,6 +52,8 @@ export const useRoute = (): UseRoute => {
 
 type LinkProps<N extends RouteName> = Omit<React.ComponentPropsWithoutRef<'a'>, 'href'> & {
   readonly to: N;
+  /** A query for the address, without its `?` (`narrowedTo` in `routes.ts`). */
+  readonly search?: string;
 } & (keyof RouteParams<N> extends never
     ? { readonly params?: undefined }
     : { readonly params: RouteParams<N> });
@@ -69,11 +71,12 @@ const handledByBrowser = (event: React.MouseEvent<HTMLAnchorElement>): boolean =
 export const Link = <N extends RouteName>({
   to,
   params,
+  search,
   onClick,
   ...rest
 }: LinkProps<N>): React.JSX.Element => {
   const { navigate, pathname } = useRoute();
-  const address = spell(to, params);
+  const address = search === undefined ? spell(to, params) : `${spell(to, params)}?${search}`;
   return (
     <a
       {...rest}

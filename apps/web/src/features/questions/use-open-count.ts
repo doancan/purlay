@@ -18,11 +18,25 @@ export interface OpenCount {
   readonly more: boolean;
 }
 
-/** `null` while the first page has not arrived (and when it failed): show nothing, not zero. */
-export const useOpenCount = (workspaceId: string): OpenCount | null => {
+/**
+ * `null` while the first page has not arrived (and when it failed): show nothing, not zero.
+ * With a channel, only that channel's questions are counted, from the same pages: a channel's
+ * header says its own number, the rail and the sidebar the workspace's (`UX.md` §2).
+ */
+export const useOpenCount = (
+  workspaceId: string,
+  channelId: string | null = null,
+): OpenCount | null => {
   const { data } = useUnresolved(workspaceId);
   if (data === undefined) return null;
   const last = data.pages.at(-1);
-  const count = data.pages.reduce((sum, page) => sum + page.data.length, 0);
+  const count = data.pages.reduce(
+    (sum, page) =>
+      sum +
+      (channelId === null
+        ? page.data.length
+        : page.data.filter((question) => question.channelId === channelId).length),
+    0,
+  );
   return { count, more: last !== undefined && last.nextCursor !== null };
 };

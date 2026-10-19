@@ -17,6 +17,11 @@ Defects found by a visual audit of the messaging screens, at 1440 and 390 wide i
 - **Browse channels and New channel are always shown** beside the Channels heading, in the navigation's
   quiet tone with their tooltips; they were invisible until the heading was hovered. New message beside
   Conversations takes the same tone and alignment (it was drawn in the content's tone on the navy).
+- **A long channel name no longer runs under the header's controls on a phone.** The name could not
+  shrink, so it overflowed its box; it is now cut with an ellipsis, and the topic gives way first.
+- **The header's open-questions count is the channel's own**, not the workspace's, and opens the view
+  narrowed to the channel (`?in=`, with *Show every channel*). A direct message or a group shows the
+  control only while it has open questions.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

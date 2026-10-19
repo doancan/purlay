@@ -145,11 +145,18 @@ export const searchHref = (
   return query === '' ? href('search', { slug }) : `${href('search', { slug })}?${query}`;
 };
 
+/**
+ * The query that narrows a list to one channel: a search (`PRD.md` §4.6), or the open questions,
+ * which a channel's header opens narrowed to the channel it counts (`UX.md` §2).
+ */
+export const narrowedTo = (channelId: string): string =>
+  new URLSearchParams({ [CHANNEL_PARAM]: channelId }).toString();
+
 /** The words an address searches for, trimmed; empty when it asks for none. */
 export const wordsInSearch = (search: string): string =>
   (new URLSearchParams(search).get(WORDS_PARAM) ?? '').trim();
 
-/** The channel an address narrows a search to; null for every channel, or for anything not an id. */
+/** The channel an address narrows a list to; null for every channel, or for anything not an id. */
 export const channelInSearch = (search: string): string | null => {
   const named = new URLSearchParams(search).get(CHANNEL_PARAM);
   return named !== null && CHANNEL_ID.test(named) ? named : null;

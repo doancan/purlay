@@ -930,6 +930,8 @@ export const en = {
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
+  'questions.only': 'Only {name}',
+  'questions.everyChannel': 'Show every channel',
   'questions.more': 'Load more questions',
   'questions.unnamed': 'A channel you can no longer see',
 

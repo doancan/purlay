@@ -912,6 +912,8 @@ export const tr = {
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
+  'questions.only': 'Yalnızca {name}',
+  'questions.everyChannel': 'Tüm kanalları göster',
   'questions.more': 'Daha fazla soru yükle',
   'questions.unnamed': 'Artık göremediğin bir kanal',
 
