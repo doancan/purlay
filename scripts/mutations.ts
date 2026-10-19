@@ -2517,8 +2517,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'search-field-not-reset-by-the-address',
     why: 'Back to an earlier search shows its results under the later words still in the field',
     file: 'apps/web/src/features/search/search-screen.tsx',
-    find: '  return <SearchView key={asked} asked={asked} channelId={channelInSearch(search)} />;\n',
-    replace: '  return <SearchView asked={asked} channelId={channelInSearch(search)} />;\n',
+    find: '      key={asked}\n',
+    replace: '',
     tests: ['apps/web/src/features/search/search-screen.test.tsx'],
   },
   {
