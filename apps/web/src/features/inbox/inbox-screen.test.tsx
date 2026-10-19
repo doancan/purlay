@@ -3,6 +3,7 @@
  * reading all — painted first, and what a refusal leaves — and the three states.
  */
 import { describe, expect, test } from 'bun:test';
+import { within } from '@testing-library/react';
 import type { Notification, NotificationPage, ReadNotificationsRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
@@ -154,6 +155,12 @@ describe('the list', () => {
     expect(rows[1]).not.toContain('unread');
     expect(rows[2]).toContain('Your question was resolved');
     expect(rows[3]).toContain('Bob wrote');
+    // On a narrow window the reason is cut before the channel: the place keeps its share (a third).
+    const [first] = view.getAllByRole('button', { name: /words/ });
+    const place = first === undefined ? [] : within(first).getByText('api').className.split(' ');
+    expect(['max-w-1/3', 'shrink-0', 'truncate'].filter((name) => !place.includes(name))).toEqual(
+      [],
+    );
     await expectNoAxeViolations(view.container);
     view.unmount();
   });

@@ -89,8 +89,11 @@ const sameDay = (a: Date, b: Date): boolean =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
+/** Where it happened keeps up to a third of the line, so a narrow window cuts the reason first. */
+const PLACE = 'max-w-1/3 shrink-0 truncate';
+
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
-  <span className="min-w-0 truncate">{useChannelTitle(channel)}</span>
+  <span className={PLACE}>{useChannelTitle(channel)}</span>
 );
 
 /** The thread a reply row names (D-162): by its root's first line, and how many when gathered. */
@@ -154,7 +157,7 @@ const Row = ({
         />
         <Avatar name={author.displayName} username={author.username} />
         <span className="min-w-0 flex-1">
-          {/* One line at any width: the reason and the channel give way, the time never breaks (#679). */}
+          {/* One line at any width: the reason gives way before the channel, the time never breaks (#679). */}
           <span className="flex items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
             <Icon name={glyphOf(notification.type)} size="sm" />
             <span className={cn('min-w-0 truncate', unread && 'font-semibold text-ink')}>
@@ -166,7 +169,7 @@ const Row = ({
               <>
                 <span aria-hidden="true">·</span>
                 {channel === undefined ? (
-                  <span className="min-w-0 truncate">{t('questions.unnamed')}</span>
+                  <span className={PLACE}>{t('questions.unnamed')}</span>
                 ) : (
                   <ChannelName channel={channel} />
                 )}
