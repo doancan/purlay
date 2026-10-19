@@ -196,7 +196,15 @@ describe('general', () => {
   test('Create workspace… opens the form for another', async () => {
     const view = await openPage({});
     await person().click(main(view).getByRole('button', { name: 'Create workspace…' }));
-    expect(view.getByRole('dialog', { name: 'Create a workspace' })).toBeDefined();
+    const dialog = view.getByRole('dialog', { name: 'Create a workspace' });
+    // Its footer is every dialog's: Cancel, then the action, at the right; Cancel closes it.
+    const buttons = within(dialog)
+      .getAllByRole('button')
+      .map((button) => button.textContent)
+      .filter((words) => words !== '');
+    expect(buttons.slice(-2)).toEqual(['Cancel', 'Create workspace']);
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog', { name: 'Create a workspace' })).toBeNull();
     view.unmount();
   });
 

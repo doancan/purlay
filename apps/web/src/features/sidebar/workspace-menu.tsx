@@ -129,6 +129,9 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
           onCreated={() => {
             setCreating(false);
           }}
+          onCancel={() => {
+            setCreating(false);
+          }}
         />
       </Dialog>
     </>

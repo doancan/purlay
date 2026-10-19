@@ -157,6 +157,9 @@ export const GeneralPage = (): React.JSX.Element => {
           onCreated={() => {
             setCreating(false);
           }}
+          onCancel={() => {
+            setCreating(false);
+          }}
         />
       </Dialog>
     </SettingsPage>

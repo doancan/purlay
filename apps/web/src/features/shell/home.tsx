@@ -17,6 +17,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { LogoMark } from './notice';
 import { TextField } from '../../ui/text-field';
@@ -38,11 +39,14 @@ interface CreateWorkspaceProps {
   readonly framed?: boolean;
   /** Made: the dialog closes. The page goes to the new workspace either way. */
   readonly onCreated?: () => void;
+  /** In a dialog: Cancel beside the submit, at the right, as every other dialog's footer is. */
+  readonly onCancel?: () => void;
 }
 
 export const CreateWorkspace = ({
   framed = true,
   onCreated,
+  onCancel,
 }: CreateWorkspaceProps): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
@@ -141,7 +145,8 @@ export const CreateWorkspace = ({
           {error.message}
         </p>
       )}
-      <div>
+      <div className={cn(onCancel !== undefined && 'flex justify-end gap-2')}>
+        {onCancel !== undefined && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
         <Button type="submit" variant="primary" busy={busy}>
           {t('workspace.create.submit')}
         </Button>
