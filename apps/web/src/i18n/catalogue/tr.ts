@@ -327,6 +327,9 @@ export const tr = {
   'conversations.dialog.description':
     'En fazla {max} kişi. Aynı kişiler her zaman aynı konuşmayı açar.',
   'conversations.to': 'Kime: {names}',
+  'conversations.toLabel': 'Kime',
+  'conversations.nobody': 'Aşağıdan kişi seç',
+  'conversations.unpick': '{name} kişisini çıkar',
   'conversations.toNobody': 'Kime: henüz kimse',
   'conversations.pick': 'Seç',
   'conversations.picked': 'Seçildi',

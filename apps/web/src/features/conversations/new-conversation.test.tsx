@@ -166,6 +166,19 @@ describe('New message', () => {
     view.unmount();
   });
 
+  test('a picked person is a chip in To:, and taken off from it', async () => {
+    const view = await open();
+    await startNew(view);
+    await person().click(view.getByRole('button', { name: `Pick ${ALICE.displayName}` }));
+    const off = view.getByRole('button', { name: `Take ${ALICE.displayName} off` });
+    await person().click(off);
+    expect(
+      view.getByRole('button', { name: `Pick ${ALICE.displayName}` }).getAttribute('aria-pressed'),
+    ).toBe('false');
+    expect(view.queryByRole('button', { name: `Take ${ALICE.displayName} off` })).toBeNull();
+    view.unmount();
+  });
+
   test('refused by the server, it says why and keeps what was picked', async () => {
     const view = await open({
       openConversation: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),

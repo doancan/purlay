@@ -13,10 +13,13 @@ import { useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
+import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { useMinute, useTimeAt } from '../profile/local-time';
@@ -132,30 +135,43 @@ export const NewConversationDialog = ({
     if (shown.length === 0)
       return <p className="text-body text-ink-muted">{t('people.noMatch')}</p>;
     return (
-      <ul className="flex max-h-palette-list flex-col gap-1 overflow-y-auto">
+      <ul className="max-h-palette-list overflow-y-auto rounded-lg border-hairline border-border-subtle">
         {shown.map((person) => {
           const chosen = picked.includes(person.id);
           return (
-            <li key={person.id} className="flex items-center gap-2">
-              <Avatar name={person.displayName} username={person.username} size="sm" />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-body text-ink">
-                  {person.displayName}
-                  <span className="text-ink-muted">{` @${person.username}`}</span>
-                </span>
-                <PersonDetail profile={profiles.get(person.id)} now={now} />
-              </span>
-              <Button
-                variant={chosen ? 'primary' : 'secondary'}
+            <li key={person.id} className="not-first:border-t-hairline border-border-subtle">
+              {/* The whole row is the choice, as a list of people is picked from (D-127). */}
+              <button
+                type="button"
                 aria-pressed={chosen}
                 aria-label={`${chosen ? t('conversations.picked') : t('conversations.pick')} ${person.displayName}`}
                 disabled={!chosen && full}
                 onClick={() => {
                   toggle(person.id);
                 }}
+                className={cn(
+                  'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:text-ink-muted',
+                  chosen ? 'bg-accent-subtle' : 'hover:bg-surface-050',
+                )}
               >
-                {chosen ? t('conversations.picked') : t('conversations.pick')}
-              </Button>
+                <Avatar name={person.displayName} username={person.username} size="md" />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-label text-ink">
+                    {person.displayName}
+                    <span className="font-normal text-ink-muted">{` @${person.username}`}</span>
+                  </span>
+                  <PersonDetail profile={profiles.get(person.id)} now={now} />
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-pill border-hairline',
+                    chosen ? 'border-accent bg-accent text-on-accent' : 'border-border-strong',
+                  )}
+                >
+                  {chosen && <Icon name="confirm" size="sm" />}
+                </span>
+              </button>
             </li>
           );
         })}
@@ -176,9 +192,40 @@ export const NewConversationDialog = ({
         </Button>
       }
     >
-      <p aria-live="polite" className="text-label text-ink">
-        {picked.length === 0 ? t('conversations.toNobody') : t('conversations.to', { names })}
-      </p>
+      {/* Who it is to, as chips that can be taken off; said in words for a screen reader. */}
+      <div className="flex min-h-control flex-wrap items-center gap-2 rounded-lg border-hairline border-border-subtle bg-surface-000 px-3 py-2">
+        <span className="text-label text-ink-muted">{t('conversations.toLabel')}</span>
+        {picked.length === 0 ? (
+          <span className="text-label font-normal text-ink-subtle">
+            {t('conversations.nobody')}
+          </span>
+        ) : (
+          others
+            .filter((person) => picked.includes(person.id))
+            .map((person) => (
+              <span
+                key={person.id}
+                className="inline-flex h-control items-center gap-2 rounded-pill bg-surface-100 pr-1 pl-1 text-label text-ink shadow-card"
+              >
+                <Avatar name={person.displayName} username={person.username} size="sm" />
+                {person.displayName}
+                <button
+                  type="button"
+                  aria-label={t('conversations.unpick', { name: person.displayName })}
+                  onClick={() => {
+                    toggle(person.id);
+                  }}
+                  className="inline-flex size-avatar-sm items-center justify-center rounded-pill text-ink-muted hover:bg-surface-200 hover:text-ink"
+                >
+                  <Icon name="close" size="sm" />
+                </button>
+              </span>
+            ))
+        )}
+        <VisuallyHidden aria-live="polite">
+          {picked.length === 0 ? t('conversations.toNobody') : t('conversations.to', { names })}
+        </VisuallyHidden>
+      </div>
       <TextField
         label={t('people.filter')}
         value={filter}

@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Polish — 2026-10-19: picking people for a conversation
+
+New message shows who it is to as chips that can be taken off, and each person is one row to pick —
+avatar, name, handle, local time and a check — instead of a list of Pick buttons.
+
 ### Polish — 2026-10-19: the header's bell shows the channel's level
 
 Every message, mentions and replies, and nothing each draw their own bell in a channel's header, so what

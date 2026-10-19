@@ -328,6 +328,9 @@ export const en = {
   'conversations.dialog.description':
     'Up to {max} people. The same people always open the same conversation.',
   'conversations.to': 'To: {names}',
+  'conversations.toLabel': 'To',
+  'conversations.nobody': 'Pick people below',
+  'conversations.unpick': 'Take {name} off',
   'conversations.toNobody': 'To: nobody yet',
   'conversations.pick': 'Pick',
   'conversations.picked': 'Picked',
