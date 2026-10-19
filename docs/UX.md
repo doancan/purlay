@@ -340,6 +340,9 @@ page of the same name.
   while the keyboard is in use; a row whose menu is open keeps its bar. A thread's root, drawn in the
   feed and at the top of the open panel, is two rows: only the copy under the pointer shows it. On a
   phone the row tapped is the one.
+- **A message's controls are reached from its row** (D-168): the list is one Tab stop, and Tab from
+  the focused row walks that row's links, blocks, files, cards, chips and bar before leaving the list
+  (§7). Every control stays clickable and readable on every row.
 - **The bar holds** React · Reply (a thread's root) · Save · Pin · More, each the same square
   control on every window, each with its tooltip and its key where it has one (Reply `R`). **More
   is on every message**: Copy text, Save and Pin again, then Edit (`E`) and Delete on your own; an
@@ -556,7 +559,8 @@ trade a certain cost for a hypothetical benefit.
 | `Cmd/Ctrl+,` | Settings (D-146) |
 | `Esc` | Close the topmost thing — the image viewer, palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
 | `←` `→` | In the image viewer: the previous / next picture of the message, or of the files panel (D-159) |
-| `↑` `↓` | Move message focus |
+| `Tab` | Into a list of messages — the feed, a thread's panel — lands on its one row: the one the keyboard was last on, or the feed's newest and the panel's root; from that row, through **its** controls (links, code, files, cards, reactions, the thread's line, then its bar) and on out of the list; `Shift+Tab` from after it comes back to the row. Other rows' controls are not Tab stops; the pointer and a screen reader's browse mode reach them as before (D-168) |
+| `↑` `↓` `Home` `End` | Move message focus, in the feed and in a thread's panel |
 | `T` | Open the focused message's thread in the panel, and move focus there |
 | `R` | Reply to the focused message |
 | `E` | Edit (own messages) |
