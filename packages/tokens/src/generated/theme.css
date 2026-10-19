@@ -47,6 +47,7 @@
   --color-success-text: var(--success-text);
   --color-danger-subtle: var(--danger-subtle);
   --color-warning-subtle: var(--warning-subtle);
+  --color-match: var(--match);
   --color-success-subtle: var(--success-subtle);
   --color-scrim: var(--scrim);
   --color-syntax-keyword: var(--syntax-keyword);

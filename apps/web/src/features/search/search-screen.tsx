@@ -56,7 +56,7 @@ const Excerpt = ({
       ) : (
         <>
           {marked.before}
-          <mark className="rounded-sm bg-warning-subtle text-ink">{marked.match}</mark>
+          <mark className="rounded-sm bg-match text-ink">{marked.match}</mark>
           {marked.after}
         </>
       )}

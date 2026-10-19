@@ -113,6 +113,8 @@ describe('asking', () => {
     await settle();
     const marks = [...view.container.querySelectorAll('mark')].map((mark) => mark.textContent);
     expect(marks).toEqual(['deploy', 'Deploy']);
+    // Marked in the match tone, full enough to find in a line — not a status pill's faint ground.
+    expect(view.container.querySelector('mark')?.className.split(' ')).toContain('bg-match');
     const second = view.container.querySelectorAll('mark')[1]?.parentElement?.textContent ?? '';
     expect(second.startsWith('…')).toBe(true);
     expect(second).toContain('Then the Deploy window moved');

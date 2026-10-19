@@ -132,6 +132,7 @@
   --success-text: #4ade80;
   --danger-subtle: #2a1515;
   --warning-subtle: #2a2010;
+  --match: #5a4512;
   --success-subtle: #12261a;
   --scrim: rgba(0, 0, 0, 0.55);
   --syntax-keyword: #c4c4ee;
@@ -185,6 +186,7 @@
   --success-text: #15803d;
   --danger-subtle: #fef2f2;
   --warning-subtle: #fffbeb;
+  --match: #fde68a;
   --success-subtle: #f0fdf4;
   --scrim: rgba(24, 24, 27, 0.4);
   --syntax-keyword: #2c2c54;

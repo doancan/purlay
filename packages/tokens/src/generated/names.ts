@@ -47,6 +47,7 @@ export const colorTokens = [
   'success-text',
   'danger-subtle',
   'warning-subtle',
+  'match',
   'success-subtle',
   'scrim',
   'syntax-keyword',
