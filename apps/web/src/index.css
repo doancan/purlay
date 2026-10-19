@@ -66,3 +66,31 @@
 @utility animate-overlay-in {
   animation: overlay-in var(--duration-overlay) var(--easing-standard);
 }
+
+/*
+ * A thin scrollbar that is always drawn, in the theme's tones: what scrolls sideways — a long line
+ * of code — says so before it is scrolled. macOS hides an overlay scrollbar until then, which left a
+ * line cut at the block's edge with no sign of more. Chromium and Safari draw a styled one always;
+ * the standard properties are for the browsers without the pseudo-elements (Firefox), since setting
+ * them in Chromium switches its styled one off.
+ */
+@utility scrollbar-thin {
+  &::-webkit-scrollbar {
+    width: var(--space-2);
+    height: var(--space-2);
+  }
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: var(--radius-pill);
+    background-color: var(--border-strong);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ink-subtle);
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}

@@ -670,6 +670,7 @@ export const tr = {
   'diff.split': 'Yan yana',
   'diff.label': 'Fark, {added} eklendi, {removed} silindi',
   'message.code.copy': 'Kodu kopyala',
+  'message.code.wrap': 'Satırları kaydır',
   'message.code.expand': 'Tüm {count} satırı göster',
   'message.code.collapse': 'Daha az satır göster',
   'message.code.lines': {

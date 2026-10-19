@@ -256,7 +256,7 @@ const Diff = ({
           data-diff=""
           aria-label={t('diff.label', { added: diff.added, removed: diff.removed })}
           className={cn(
-            'overflow-x-auto text-code text-ink',
+            'scrollbar-thin overflow-x-auto text-code text-ink',
             clamped && 'max-h-code overflow-y-hidden',
           )}
         >

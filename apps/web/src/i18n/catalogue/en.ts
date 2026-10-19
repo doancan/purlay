@@ -677,6 +677,7 @@ export const en = {
   'diff.split': 'Split',
   'diff.label': 'Diff, {added} added, {removed} removed',
   'message.code.copy': 'Copy code',
+  'message.code.wrap': 'Wrap lines',
   'message.code.expand': 'Show all {count} lines',
   'message.code.collapse': 'Show fewer lines',
   'message.code.lines': {

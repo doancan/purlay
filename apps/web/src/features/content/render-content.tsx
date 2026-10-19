@@ -214,7 +214,7 @@ const Table = ({
       role="group"
       aria-label={t('message.table')}
       tabIndex={0}
-      className="my-1 max-w-full overflow-x-auto"
+      className="scrollbar-thin my-1 max-w-full overflow-x-auto"
     >
       <table className="border-collapse">
         {head !== undefined && (
