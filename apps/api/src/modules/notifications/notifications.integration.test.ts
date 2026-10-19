@@ -10,7 +10,7 @@ import {
   type Executor,
   type Transaction,
 } from '@purlay/db';
-import { messageId, type ReadNotificationsRequest } from '@purlay/types';
+import { messageId, THREAD_EXCERPT_MAX, type ReadNotificationsRequest } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { visibleChannelIds } from '../../platform/channels';
@@ -170,6 +170,149 @@ describe('integration: the inbox', () => {
         const refusal = await refusalOf(inbox(db, room, member(room, 'carol').userId, { before }));
         expect(refusal.body.code).toBe('VALIDATION_FAILED');
       }
+    });
+  });
+});
+
+/**
+ * The same executor, counting the statements it is asked to run: Kysely calls a plugin once per
+ * executed query, so the count is exact.
+ */
+const counting = (db: Executor): { readonly db: Executor; readonly count: () => number } => {
+  let statements = 0;
+  const counted = db.withPlugin({
+    transformQuery: (args) => args.node,
+    transformResult: (args) => {
+      statements += 1;
+      return Promise.resolve(args.result);
+    },
+  });
+  return { db: counted, count: () => statements };
+};
+
+const reply = async (
+  db: Executor,
+  room: Room,
+  as: string,
+  rootId: string,
+  content: string,
+): Promise<Sent> =>
+  await sendMessage(db, clock, member(room, as).context, {
+    id: nextId(),
+    content,
+    parentId: rootId,
+  });
+
+const pageOf = async (
+  db: Executor,
+  room: Room,
+  userId: string,
+): Promise<Awaited<ReturnType<typeof inboxOf>>> => {
+  const context = await requireWorkspaceMembership(db, userId, room.workspaceId);
+  return await inboxOf(db, context, await visibleChannelIds(db, context), {
+    workspaceId: room.workspaceId,
+  });
+};
+
+describe('integration: a reply’s thread, in brief (D-162)', () => {
+  test('a reply names its root by its first line, plain, and says whose it is; anything else carries none', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob', 'carol']);
+      const bob = member(room, 'bob').userId;
+      const carol = member(room, 'carol').userId;
+      const mine = await post(db, room, 'bob', '**Deploy** checklist for `friday`');
+      await reply(db, room, 'alice', mine.message.id, 'done');
+      // Carol's question, which Bob only answered: he is in it, it is not his.
+      const theirs = await post(db, room, 'carol', 'Who owns the cache?');
+      await reply(db, room, 'bob', theirs.message.id, 'me');
+      await reply(db, room, 'alice', theirs.message.id, 'or me');
+      await mentions(db, room, ['plain']);
+
+      const page = await pageOf(db, room, bob);
+      expect(page.data.map((n) => [n.type, n.thread])).toEqual([
+        ['mention', null],
+        [
+          'thread_reply',
+          { rootId: theirs.message.id, excerpt: 'Who owns the cache?', authorId: carol },
+        ],
+        [
+          'thread_reply',
+          { rootId: mine.message.id, excerpt: 'Deploy checklist for friday', authorId: bob },
+        ],
+      ]);
+    });
+  });
+
+  test('a long root is cut to one line of the contract’s length, and a deleted one is not quoted', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').userId;
+      const long = await post(db, room, 'bob', `${'word '.repeat(60)}\n\nsecond paragraph`);
+      await reply(db, room, 'alice', long.message.id, 'seen');
+      const gone = await post(db, room, 'bob', 'a secret that was taken back');
+      await reply(db, room, 'alice', gone.message.id, 'answered');
+      await db
+        .updateTable('messages')
+        .set({ deleted_at: NOW })
+        .where('id', '=', gone.message.id)
+        .execute();
+
+      const [answered, seen] = (await pageOf(db, room, bob)).data;
+      expect(answered?.thread).toEqual({ rootId: gone.message.id, excerpt: null, authorId: bob });
+      expect(JSON.stringify(answered)).not.toContain('secret');
+      const excerpt = seen?.thread?.excerpt ?? '';
+      expect(excerpt.length).toBeLessThanOrEqual(THREAD_EXCERPT_MAX);
+      expect(excerpt.endsWith('…')).toBe(true);
+      expect(excerpt.startsWith('word word')).toBe(true);
+      expect(excerpt).not.toContain('\n');
+    });
+  });
+
+  test('a thread in a channel the person can no longer see is not in the inbox at all', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { type: 'private' });
+      const bob = member(room, 'bob').userId;
+      const root = await post(db, room, 'bob', 'private plans');
+      await reply(db, room, 'alice', root.message.id, 'yes');
+      expect((await pageOf(db, room, bob)).data.map((n) => n.thread?.excerpt)).toEqual([
+        'private plans',
+      ]);
+      await db
+        .deleteFrom('channel_members')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', bob)
+        .execute();
+      expect((await pageOf(db, room, bob)).data).toEqual([]);
+    });
+  });
+
+  test('costs the same however many threads the page names: no read per row', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').userId;
+      const context = await requireWorkspaceMembership(db, bob, room.workspaceId);
+      const visible = await visibleChannelIds(db, context);
+      const cost = async (): Promise<{ statements: number; rows: number }> => {
+        const meter = counting(db);
+        const page = await inboxOf(meter.db, context, visible, { workspaceId: room.workspaceId });
+        return { statements: meter.count(), rows: page.data.length };
+      };
+      const threads = async (n: number): Promise<void> => {
+        for (let i = 0; i < n; i += 1) {
+          const root = await post(db, room, 'bob', `question ${String(i)}`);
+          await reply(db, room, 'alice', root.message.id, 'answer');
+        }
+      };
+
+      await threads(2);
+      const few = await cost();
+      await threads(10);
+      const many = await cost();
+
+      // A meter that counted nothing, or a page that held nothing, would pass for the wrong reason.
+      expect(few).toMatchObject({ rows: 2 });
+      expect(few.statements).toBeGreaterThan(0);
+      expect(many).toEqual({ statements: few.statements, rows: 12 });
     });
   });
 });

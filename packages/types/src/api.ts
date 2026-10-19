@@ -380,12 +380,32 @@ export const NEEDS_YOU = [
 export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
 export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;
 
-/** One thing waiting for the caller in the inbox, with the message it is about (D-106). */
+/** How much of a thread's root the inbox quotes to name it (D-162): one line, not the message. */
+export const THREAD_EXCERPT_MAX = 120;
+
+/**
+ * The thread a reply belongs to, in brief (D-162): enough to name it and to say whose it is, so the
+ * inbox can gather one thread's replies under its first line. `excerpt` is the root's text, plain and
+ * on one line, at most `THREAD_EXCERPT_MAX` characters — null when there is nothing to quote: the root
+ * was deleted (D-9), or it says nothing in words. `authorId` is null for a root nobody wrote.
+ */
+export const NotificationThread = Type.Object({
+  rootId: Uuid,
+  excerpt: Type.Union([Type.String({ maxLength: THREAD_EXCERPT_MAX }), Type.Null()]),
+  authorId: Type.Union([Uuid, Type.Null()]),
+});
+export type NotificationThread = Static<typeof NotificationThread>;
+
+/**
+ * One thing waiting for the caller in the inbox, with the message it is about (D-106) and, when that
+ * message is a reply, its thread in brief (D-162) — null when it is not one.
+ */
 export const Notification = Type.Object({
   id: Uuid,
   type: NotificationType,
   channelId: Uuid,
   message: Message,
+  thread: Type.Union([NotificationThread, Type.Null()]),
   createdAt: Timestamp,
   readAt: Type.Union([Timestamp, Type.Null()]),
 });

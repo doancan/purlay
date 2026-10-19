@@ -946,7 +946,29 @@ export const en = {
   'inbox.why.direct': '{name} wrote to you',
   'inbox.why.group': '{name} wrote to the conversation',
   'inbox.why.reply': '{name} replied in your thread',
+  'inbox.why.replyIn': '{name} replied in a thread you’re in',
   'inbox.why.resolved': 'Your question was resolved',
+  'inbox.others': {
+    one: '{count} other',
+    other: '{count} others',
+  },
+  'inbox.thread.in': 'In “{excerpt}”',
+  'inbox.thread.new': {
+    one: '{count} new reply in “{excerpt}”',
+    other: '{count} new replies in “{excerpt}”',
+  },
+  'inbox.thread.seen': {
+    one: '{count} reply in “{excerpt}”',
+    other: '{count} replies in “{excerpt}”',
+  },
+  'inbox.thread.newBare': {
+    one: '{count} new reply',
+    other: '{count} new replies',
+  },
+  'inbox.thread.seenBare': {
+    one: '{count} reply',
+    other: '{count} replies',
+  },
   'inbox.why.channel': '{name} wrote',
   'inbox.readAll': 'Mark all read',
   'inbox.readFailed': 'Not marked read.',

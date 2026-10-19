@@ -7,13 +7,17 @@ import type { Translate } from '../../i18n/types';
 import { href, threadHref } from '../../router/routes';
 import { authorOf } from '../messages/author';
 
-/** Why the person was told, in words: who did it, except for a resolution of their own question. */
+/**
+ * Why the person was told, in words: who did it, except for a resolution of their own question.
+ * `me` decides whose thread a reply is in (D-162); `name` says who, when a row gathers several.
+ */
 export const whyOf = (
   t: Translate,
   notification: Notification,
   channel: Channel | undefined,
+  me: string,
+  name: string = authorOf(notification.message, t('user.erased')).displayName,
 ): string => {
-  const name = authorOf(notification.message, t('user.erased')).displayName;
   switch (notification.type) {
     case 'mention':
       return t('inbox.why.mention', { name });
@@ -23,7 +27,10 @@ export const whyOf = (
         ? t('inbox.why.group', { name })
         : t('inbox.why.direct', { name });
     case 'thread_reply':
-      return t('inbox.why.reply', { name });
+      // Told because they started it, or because they replied in it: the root's author says which.
+      return notification.thread === null || notification.thread.authorId === me
+        ? t('inbox.why.reply', { name })
+        : t('inbox.why.replyIn', { name });
     case 'thread_resolved':
       return t('inbox.why.resolved');
     case 'channel_message':

@@ -64,7 +64,7 @@ export const tell = async (telling: Telling): Promise<void> => {
   const said = newestFor(await newest(telling), channelId, me);
   notices.show({
     title: (channel === undefined ? null : placeOf(t, channel, me)) ?? workspace.name,
-    body: said === null ? t('alerts.waiting') : whyOf(t, said, channel),
+    body: said === null ? t('alerts.waiting') : whyOf(t, said, channel, me),
     tag: tagOf(channelId),
     onOpen: () => {
       open(

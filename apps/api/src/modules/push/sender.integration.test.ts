@@ -167,7 +167,13 @@ const sending = async (
   recording = aRecordingLogger(),
   heard: Attention = attention,
 ): Promise<{
-  readonly say: (room: Room, as: string, content: string, id?: string) => Promise<string>;
+  readonly say: (
+    room: Room,
+    as: string,
+    content: string,
+    id?: string,
+    parentId?: string,
+  ) => Promise<string>;
   readonly settled: () => Promise<void>;
 }> => {
   const push = await createPushSender({
@@ -180,14 +186,18 @@ const sending = async (
   });
   let at = 0;
   return {
-    say: async (room, as, content, id): Promise<string> => {
+    say: async (room, as, content, id, parentId): Promise<string> => {
       at += 1;
       const context = room.members[as]?.context;
       if (context === undefined) throw new Error(`no member ${as}`);
       const sent = await send(
         { atomically: atomicallyOn(db), clock, bus: quietBus, push },
         context,
-        { id: id ?? messageId(new Date(NOW.getTime() + at)), content },
+        {
+          id: id ?? messageId(new Date(NOW.getTime() + at)),
+          content,
+          ...(parentId === undefined ? {} : { parentId }),
+        },
       );
       return sent.id;
     },
@@ -249,6 +259,33 @@ describe('integration: a device is told', () => {
       expect(read).toMatchObject({ body: 'alice wrote to the conversation' });
       const title = (read as { title: string }).title;
       expect(title.split(', ').sort()).toEqual(others);
+    });
+  });
+
+  test('of a reply, saying whose thread it is: theirs, or one they are only in (D-162)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob', 'carol']);
+      const bob = await aBrowser();
+      const carol = await aBrowser();
+      await subscribeDevice(db, room, 'bob', bob);
+      await subscribeDevice(db, room, 'carol', carol);
+      const service = aPushService();
+      const { say, settled } = await sending(db, service.post);
+      const root = await say(room, 'carol', 'who owns the cache?');
+      await say(room, 'bob', 'me', undefined, root);
+      await settled();
+      service.sent.length = 0;
+      await say(room, 'alice', 'or me', undefined, root);
+      await settled();
+      const bodies = new Map<string, unknown>();
+      for (const push of service.sent) {
+        const device = push.url.endsWith('/bob') ? bob : carol;
+        bodies.set(push.url, ((await device.read(push.body)) as { body: string }).body);
+      }
+      expect(Object.fromEntries(bodies)).toEqual({
+        'https://push.example.com/send/bob': 'alice replied in a thread you’re in',
+        'https://push.example.com/send/carol': 'alice replied in your thread',
+      });
     });
   });
 

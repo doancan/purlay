@@ -11,6 +11,7 @@ const CATALOGUE_KEY = {
   mention: 'inbox.why.mention',
   direct_message: 'inbox.why.direct',
   thread_reply: 'inbox.why.reply',
+  reply_in: 'inbox.why.replyIn',
   channel_message: 'inbox.why.channel',
   group: 'inbox.why.group',
 } as const;

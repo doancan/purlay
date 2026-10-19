@@ -335,6 +335,7 @@ describe('the endpoints', () => {
       type: 'mention',
       channelId: ID,
       message,
+      thread: null,
       createdAt: WHEN,
       readAt: null,
     };
