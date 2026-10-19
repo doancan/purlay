@@ -61,9 +61,10 @@ export const BrowseChannelsDialog = ({
       closeLabel={t('common.close')}
     >
       {channels.isPending ? (
-        <SectionLoading label={t('browse.loading')} />
+        <SectionLoading flush label={t('browse.loading')} />
       ) : channels.isError ? (
         <SectionError
+          flush
           title={t('browse.error.title')}
           body={t('browse.error.body')}
           retryLabel={t('common.retry')}
@@ -72,7 +73,7 @@ export const BrowseChannelsDialog = ({
           }}
         />
       ) : joinable.length === 0 ? (
-        <SectionEmpty title={t('browse.empty.title')} body={t('browse.empty.body')} />
+        <SectionEmpty flush title={t('browse.empty.title')} body={t('browse.empty.body')} />
       ) : (
         <ul className="flex max-h-screen flex-col gap-1 overflow-y-auto">
           {joinable.map((channel) => (

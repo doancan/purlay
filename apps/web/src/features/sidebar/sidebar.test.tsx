@@ -997,6 +997,10 @@ describe('browsing channels', () => {
       aSignedInApi({ channels: () => Promise.resolve(someChannels().slice(0, 3)) }),
     );
     expect(view.getByText('Nothing to join')).toBeDefined();
+    // In the dialog it sits at the dialog's edge, under its title, not inset as a sidebar row's words.
+    expect(view.getByText('Nothing to join').parentElement?.className.split(' ')).not.toContain(
+      'px-2',
+    );
   });
 
   test('loads as skeleton rows', async () => {
