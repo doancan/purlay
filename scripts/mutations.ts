@@ -3770,4 +3770,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '  channel.state !== null;\n',
     tests: ['apps/web/src/features/sidebar/row-menu.test.tsx'],
   },
+  {
+    id: 'channel-member-count-counts-the-erased',
+    why: 'Browse says a channel holds more people than its members list shows: an erased account is counted (D-166)',
+    file: 'apps/api/src/modules/channels/channels.ts',
+    find: "    .where('counted_user.deleted_at', 'is', null)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/channels/channels.integration.test.ts'],
+  },
 ];
