@@ -39,6 +39,8 @@ import {
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
+import { requireMayCreateWorkspace, workspaceCreatorsOf } from '../../modules/workspaces/creators';
+import type { Config } from '../../platform/config';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
@@ -66,6 +68,11 @@ export interface WorkspaceDependencies {
   readonly clock: Clock;
 }
 
+/** What answers whether the caller may make a workspace (D-155). */
+export interface CreatorDependencies extends WorkspaceDependencies {
+  readonly config: Pick<Config, 'WORKSPACE_CREATORS'>;
+}
+
 /**
  * `GET /api/me` — who the caller is, and what they belong to.
  *
@@ -74,12 +81,12 @@ export interface WorkspaceDependencies {
  * why it is Phase 0 and why nothing else can stand in for it.
  */
 export const readMe = async (
-  dependencies: WorkspaceDependencies,
+  dependencies: CreatorDependencies,
   request: Request,
 ): Promise<MeResponse> => {
-  const { database, clock } = dependencies;
+  const { database, clock, config } = dependencies;
   const { userId } = await requireSession(database, clock, request);
-  return await meOf(database, clock, userId);
+  return await meOf(database, clock, userId, workspaceCreatorsOf(config.WORKSPACE_CREATORS));
 };
 
 export const listMyWorkspaces = async (
@@ -92,16 +99,18 @@ export const listMyWorkspaces = async (
 };
 
 export const createMyWorkspace = async (
-  dependencies: WorkspaceDependencies,
+  dependencies: CreatorDependencies,
   request: Request,
   body: unknown,
 ): Promise<Workspace> => {
-  const { database, clock } = dependencies;
+  const { database, clock, config } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const input = validated(CreateWorkspaceRequest, body);
-  return await atomicallyOn(database)(
-    async (transaction) => await createWorkspace(transaction, clock, userId, input),
-  );
+  const creators = workspaceCreatorsOf(config.WORKSPACE_CREATORS);
+  return await atomicallyOn(database)(async (transaction) => {
+    await requireMayCreateWorkspace(transaction, creators, userId);
+    return await createWorkspace(transaction, clock, userId, input);
+  });
 };
 
 export const readWorkspace = async (

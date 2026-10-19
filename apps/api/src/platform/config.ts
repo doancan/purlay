@@ -77,6 +77,16 @@ export const Environment = Type.Object({
   ENCRYPTION_KEY: Type.String({ minLength: 44 }),
   SESSION_TTL_DAYS: Type.Integer({ minimum: 1, maximum: 365, default: 30 }),
 
+  /** Who may make a workspace (D-155): GitHub logins, comma-separated, any case; or `*`, anybody
+   *  signed in. Unset is nobody but the first person to sign in, while the instance has none — the
+   *  one-command install. Signing in stays open: an invited person must be able to. */
+  WORKSPACE_CREATORS: Type.Optional(
+    Type.String({
+      pattern:
+        '^\\s*(\\*|[A-Za-z0-9][A-Za-z0-9-]{0,38}(\\s*,\\s*[A-Za-z0-9][A-Za-z0-9-]{0,38})*)\\s*$',
+    }),
+  ),
+
   /** The built client this process serves from the one origin (D-61), an absolute path.
    *  Unset means none is served: Vite serves it in development. Opened, and refused
    *  without an `index.html`, by the composition root (`ingress/http/client.ts`). */

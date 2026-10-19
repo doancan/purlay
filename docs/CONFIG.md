@@ -53,6 +53,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38) |
 | `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
+| `WORKSPACE_CREATORS` | — | unset | Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against accounts signed in with GitHub (an account made by an email link has no login), or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is reachable from the internet if more than its first person should make workspaces; a malformed value refuses to start |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
@@ -61,7 +62,8 @@ the client's origin **and** the API's: the browser talks to one origin, and deve
 proxied so it matches (D-61). There is no separate API URL to configure.
 
 **Nobody is joined to a workspace by signing in.** The first person creates one; everyone after
-is invited with a link (D-115). `WORKSPACE_OPEN_JOIN_SLUG`, which joined every signed-in user to
+is invited with a link (D-115), and makes a workspace of their own only if `WORKSPACE_CREATORS`
+names them (D-155). `WORKSPACE_OPEN_JOIN_SLUG`, which joined every signed-in user to
 one workspace in Phase 0 (D-37), is retired: set, the API refuses to start and says so, rather than
 ignoring it and leaving an operator to wonder why nobody is let in.
 
@@ -190,7 +192,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
-`SESSION_TTL_DAYS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
+`SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
 `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack
@@ -217,7 +219,9 @@ nothing to do. Its output is `docker compose … logs storage-init`. `scripts/pr
 the same by hand, through Garage's CLI, and is kept for a stack from before this service.
 
 **The first person in** signs in with GitHub and makes the first workspace from the screen they land
-on; they are its owner. Who else may join is decided by them, with invitation links (D-115).
+on; they are its owner. Who else may join is decided by them, with invitation links (D-115). Nobody
+else may make a workspace unless `WORKSPACE_CREATORS` names them (D-155): somebody who finds the
+address and signs in is told to ask for an invitation.
 
 **Memory and processes are bounded per container** (#639): `API_MEMORY_LIMIT` (default `768m`),
 `SCHEDULER_MEMORY_LIMIT` (`512m`), `STORAGE_INIT_MEMORY_LIMIT` (`256m`), `POSTGRES_MEMORY_LIMIT`

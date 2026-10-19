@@ -667,6 +667,16 @@ describe('the workspace menu', () => {
     expect(new Set(glyphs).size, JSON.stringify(places)).toBe(glyphs.length);
   });
 
+  test('Create workspace… is not offered where the server would refuse it (D-155)', async () => {
+    const view = await open(
+      aSignedInApi({ me: () => Promise.resolve({ ...aSession(), mayCreateWorkspace: false }) }),
+    );
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    const items = view.getAllByRole('menuitem').map((i) => i.textContent);
+    expect(items).toContain('Invite people…');
+    expect(items).not.toContain('Create workspace…');
+  });
+
   test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
     const view = await open();
     const sidebar = within(view.getByRole('complementary'));

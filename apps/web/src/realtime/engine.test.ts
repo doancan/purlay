@@ -1309,6 +1309,7 @@ describe('is the session still there', () => {
       user: { ...ME, email: 'a@example.test' },
       profile: NO_PROFILE,
       memberships: [],
+      mayCreateWorkspace: true,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

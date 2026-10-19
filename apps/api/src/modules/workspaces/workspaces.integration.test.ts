@@ -15,6 +15,10 @@ import { fixedClock } from '../../platform/clock';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
 import { createWorkspace, membersIn, membershipsOf, meOf, workspaceIn } from './workspaces';
+import { workspaceCreatorsOf } from './creators';
+
+/** What `/api/me` answers here is not about who may make a workspace (D-155). */
+const ANYONE = workspaceCreatorsOf('*');
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -83,22 +87,22 @@ describe('integration: tombstones are not listed', () => {
       expect((await membershipsOf(db, clock, user.userId)).map((m) => m.workspace.id)).toEqual([
         kept.id,
       ]);
-      expect((await meOf(db, clock, user.userId)).memberships.map((m) => m.workspace.id)).toEqual([
-        kept.id,
-      ]);
+      expect(
+        (await meOf(db, clock, user.userId, ANYONE)).memberships.map((m) => m.workspace.id),
+      ).toEqual([kept.id]);
     });
   });
 
   test('a deleted user has no /me', async () => {
     await withRollback(async (db) => {
       const user = await aUserRow(db, 'leaving');
-      expect((await meOf(db, clock, user.userId)).user.id).toBe(user.userId);
+      expect((await meOf(db, clock, user.userId, ANYONE)).user.id).toBe(user.userId);
       await db
         .updateTable('users')
         .set({ deleted_at: DELETED })
         .where('id', '=', user.userId)
         .execute();
-      expect(await fails(meOf(db, clock, user.userId))).toBe(true);
+      expect(await fails(meOf(db, clock, user.userId, ANYONE))).toBe(true);
     });
   });
 

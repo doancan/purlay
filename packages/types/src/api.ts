@@ -85,6 +85,12 @@ export const MeResponse = Type.Object({
   /** The caller's own profile, for the dialog that changes it (D-131). */
   profile: Profile,
   memberships: Type.Array(Membership),
+  /**
+   * Whether this server would let the caller make a workspace (D-155): the operator's
+   * `WORKSPACE_CREATORS`, or, unset, only the first person to sign in while there is none. The client
+   * offers the form only where it would be accepted.
+   */
+  mayCreateWorkspace: Type.Boolean(),
 });
 export type MeResponse = Static<typeof MeResponse>;
 

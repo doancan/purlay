@@ -172,7 +172,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   // The history is sent in bulk by four people, which the production write budget
   // would (rightly) refuse; the seed is not a client to rate-limit.
   const app = createApp({
-    config,
+    // The seed stands in for the operator, whatever WORKSPACE_CREATORS says (D-155).
+    config: { ...config, WORKSPACE_CREATORS: '*' },
     database,
     clock,
     log: createLogger({ level: 'silent' }),

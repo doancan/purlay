@@ -166,6 +166,14 @@ while the keyboard is used. React, Reply, Save, Pin and More are one square each
 their key; More is on every message (Copy text, Save, Pin; Edit and Delete on one's own; Delete on
 anybody's for an owner or an admin). A reaction chip names who reacted; the quick reactions are one
 row of tiles that never opens over the composer; "edited" and "Pinned" are apart on one line.
+### Fix — 2026-10-19: only the people the operator names make a workspace (closes #633, D-155)
+
+Anybody who could sign in could make any number of workspaces, each with an attachment quota of its
+own. `POST /api/workspaces` now takes only whom `WORKSPACE_CREATORS` names — GitHub logins, or `*` —
+and, unset, only the first person to sign in while the instance has none, so the one-command install
+still works; anybody else is `403 FORBIDDEN`. Signing in stays open. `GET /api/me` says
+`mayCreateWorkspace`: a person with no workspace who may not sees **Ask for an invitation** instead of a
+form, and **Create workspace…** is offered only where it would be accepted.
 
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 

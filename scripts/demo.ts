@@ -134,6 +134,8 @@ const api = Bun.spawn(['bun', 'run', 'apps/api/src/index.ts'], {
     GITHUB_CLIENT_ID: 'demo',
     GITHUB_CLIENT_SECRET: 'demo',
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
+    // A sandbox: the browser tests' outsiders make workspaces of their own (D-124, D-155).
+    WORKSPACE_CREATORS: '*',
     ...(files === null ? {} : { STORAGE_DIRECTORY: files }),
     // The API serves the build itself, as the image does (D-61).
     CLIENT_DIST: join(root, 'apps/web/dist'),

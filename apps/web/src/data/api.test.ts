@@ -70,6 +70,7 @@ describe('the endpoints', () => {
       user: { ...user, email: 'a@example.test' },
       profile: NO_PROFILE,
       memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
+      mayCreateWorkspace: false,
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
