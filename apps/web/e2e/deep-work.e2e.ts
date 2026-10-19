@@ -14,7 +14,9 @@ const palette = async (page: Page, choose: string): Promise<void> => {
   const dialog = page.getByRole('dialog', { name: 'Command palette' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('combobox').fill(choose);
-  await dialog.getByRole('option', { name: new RegExp(choose) }).click();
+  // The choice itself — "Deep Work: For 2 hours", "End Deep Work" — not the palette's last row, which
+  // offers to search messages for whatever was typed (D-157).
+  await dialog.getByRole('option', { name: new RegExp(`(^|: )${choose}$`) }).click();
 };
 
 test.describe('Deep Work', () => {
