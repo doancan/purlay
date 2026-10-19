@@ -1,6 +1,6 @@
 /**
  * What the palette shows: the groups in their fixed order, the best match first inside
- * each, the cap, and the menu an empty query offers.
+ * each (Views and Settings in their own order), the cap, and the menu an empty query offers.
  */
 import { describe, expect, test } from 'bun:test';
 import { EMPTY_QUERY_RECENT, GROUPS, RESULT_CAP, rank, type PaletteItem } from './rank';
@@ -69,6 +69,17 @@ describe('an empty query', () => {
 });
 
 describe('a query', () => {
+  test('keeps a settings group in the order it was given, not the alphabet’s', () => {
+    const whiles = ['For 30 minutes', 'For 1 hour', 'For 2 hours', 'Until tomorrow'];
+    const given = whiles.map((label, n) =>
+      item(`while-${String(n)}`, 'settings', `Deep Work: ${label}`),
+    );
+    expect(ids(rank(given, 'deep work'))).toEqual(['while-0', 'while-1', 'while-2', 'while-3']);
+    // Channels with no time are still by name.
+    const named = [item('b', 'channels', 'deep-b'), item('a', 'channels', 'deep-a')];
+    expect(ids(rank(named, 'deep'))).toEqual(['a', 'b']);
+  });
+
   test('puts the best match first inside its group, then the more recent, then the alphabetical', () => {
     const shown = rank(
       [

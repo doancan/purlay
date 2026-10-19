@@ -5,7 +5,8 @@
  * person who has used the palette twice knows where to look, and a list that
  * reorders its sections by score is a list nobody learns. **Inside a group** the best
  * match is first, then the more recently active, then alphabetical, which is also
- * a total order: the same query always gives the same list.
+ * a total order: the same query always gives the same list. Views and Settings are the
+ * exception: a short menu in an order of its own, so a query only picks which of it shows.
  *
  * With nothing typed the palette is a menu of where a person probably wants to go:
  * every view and setting, and the few most recent channels and people — not two
@@ -63,6 +64,13 @@ export interface Shown {
 const byGroup = (a: Shown, b: Shown): number =>
   GROUPS.indexOf(a.item.group) - GROUPS.indexOf(b.item.group);
 
+/**
+ * Groups whose order is the builder's: a match decides whether a row is shown, not where — Deep
+ * Work's whiles stay shortest to longest, where the score put "1 hour" before "30 minutes" for
+ * being the shorter label.
+ */
+const KEEP_ORDER: readonly PaletteGroup[] = ['views', 'settings'];
+
 const newestFirst = (a: PaletteItem, b: PaletteItem): number =>
   a.recency < b.recency ? 1 : a.recency > b.recency ? -1 : a.label.localeCompare(b.label);
 
@@ -96,8 +104,10 @@ export const rank = (items: readonly PaletteItem[], query: string): readonly Sho
   }
   scored.sort((a, b) => b.score - a.score || newestFirst(a.shown.item, b.shown.item));
   // Array.prototype.sort is stable, so the best match of a group stays first inside it.
+  const given = new Map(items.map((entry, index) => [entry, index]));
+  const place = (shown: Shown): number => given.get(shown.item) ?? 0;
   return scored
     .slice(0, RESULT_CAP)
     .map((entry) => entry.shown)
-    .sort(byGroup);
+    .sort((a, b) => byGroup(a, b) || (KEEP_ORDER.includes(a.item.group) ? place(a) - place(b) : 0));
 };
