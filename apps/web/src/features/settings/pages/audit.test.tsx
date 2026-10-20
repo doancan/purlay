@@ -126,6 +126,23 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual(['History older than 30 days was cleared: 12 messages, 2 files']);
   });
 
+  test('a quota changed by the operator is said in sizes, and by no person (D-173 §4)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(1, {
+              action: 'storage.quota_changed',
+              actor: null,
+              targetType: 'workspace',
+              metadata: { from: String(5 * 1024 ** 3), to: String(10 * 1024 ** 3) },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual(['The storage quota was changed from 5 GB to 10 GB']);
+  });
+
   test('a window changed is said in the reader’s words, forever or in days (D-139 §4)', async () => {
     const view = await openPage({
       audit: () =>

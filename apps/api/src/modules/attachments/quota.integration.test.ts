@@ -5,6 +5,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
+import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { aRecordingLogger } from '../../testing/doubles';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
@@ -19,6 +20,7 @@ afterAll(async () => {
 });
 
 const NOW = Date.UTC(2026, 9, 20, 12, 0, 0);
+const CLOCK = fixedClock(new Date(NOW));
 let tick = 0;
 
 const contextOf = async (db: Executor, room: Room, name: string): Promise<WorkspaceContext> => {
@@ -90,12 +92,12 @@ describe('integration: the operator’s quota command', () => {
       const room = await aRoom(db, ['alice']);
       await setQuota(db, room, 1000, 40);
       const slug = await slugOf(db, room);
-      expect(await operateQuota(db, slug, null)).toEqual({
+      expect(await operateQuota(db, CLOCK, slug, null)).toEqual({
         workspaceId: room.workspaceId,
         quotaBytes: 1000n,
         usedBytes: 40n,
       });
-      expect(await operateQuota(db, slug, 50n)).toEqual({
+      expect(await operateQuota(db, CLOCK, slug, 50n)).toEqual({
         workspaceId: room.workspaceId,
         quotaBytes: 50n,
         usedBytes: 40n,
@@ -106,7 +108,34 @@ describe('integration: the operator’s quota command', () => {
         if (error instanceof AppError) refused = error.body.code;
       });
       expect(refused).toBe('STORAGE_QUOTA_EXCEEDED');
-      expect(await operateQuota(db, `${slug}-nobody`, 10n)).toBeNull();
+      expect(await operateQuota(db, CLOCK, `${slug}-nobody`, 10n)).toBeNull();
+    });
+  });
+
+  test('puts a change on the workspace’s trail, from and to, with no actor; the same quota again writes nothing', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      await setQuota(db, room, 1000, 0);
+      const slug = await slugOf(db, room);
+      const trail = async (): Promise<unknown[]> =>
+        await db
+          .selectFrom('audit_log')
+          .select(['actor_user_id', 'target_type', 'target_id', 'metadata'])
+          .where('workspace_id', '=', room.workspaceId)
+          .where('action', '=', 'storage.quota_changed')
+          .execute();
+      await operateQuota(db, CLOCK, slug, null);
+      expect(await trail()).toEqual([]);
+      await operateQuota(db, CLOCK, slug, 2048n);
+      await operateQuota(db, CLOCK, slug, 2048n);
+      expect(await trail()).toEqual([
+        {
+          actor_user_id: null,
+          target_type: 'workspace',
+          target_id: room.workspaceId,
+          metadata: { from: '1000', to: '2048' },
+        },
+      ]);
     });
   });
 
@@ -119,7 +148,7 @@ describe('integration: the operator’s quota command', () => {
         .set({ deleted_at: new Date(NOW) })
         .where('id', '=', room.workspaceId)
         .execute();
-      expect(await operateQuota(db, slug, 10n)).toBeNull();
+      expect(await operateQuota(db, CLOCK, slug, 10n)).toBeNull();
     });
   });
 });

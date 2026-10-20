@@ -142,7 +142,8 @@ configure what is not already a database constraint.
 > `bun run storage:quota <workspace slug> 20GiB` sets it — whole bytes or a whole number of `KiB`,
 > `MiB`, `GiB` or `TiB`, decimal units refused. It runs with the server's environment, as the jobs do,
 > and takes the workspace row's lock as an upload does. A quota below what is used deletes nothing;
-> uploads are refused until there is room. Owners see the same numbers on Settings → Data & retention.
+> uploads are refused until there is room. Owners see the same numbers on Settings → Data & retention,
+> and each change on the audit log as `storage.quota_changed`, from and to, by nobody in the workspace.
 
 ---
 
@@ -183,7 +184,7 @@ above, plus the four the stack itself needs:
 
 | Variable | Required | Notes |
 |---|---|---|
-| `PURLAY_IMAGE` | ✅ | The API image: `ghcr.io/<owner>/purlay-api@sha256:…` (a digest) or `:sha-<commit>`. Never a moving tag. Published by `image.yml` from main; while the pipeline cannot run, `scripts/release-image.sh` publishes a merged commit from a machine and prints the digest — without the workflow's attestations (D-92) |
+| `PURLAY_IMAGE` | ✅ | The API image: `ghcr.io/<owner>/purlay-api@sha256:…` (a digest) or `:sha-<commit>`. Never a moving tag. Published by `image.yml` from main; while the pipeline cannot run, `scripts/release-image.sh` publishes a merged commit from a machine of the server's architecture (Bun does not survive emulation, so it refuses another) and prints the digest — without the workflow's attestations (D-92) |
 | `POSTGRES_PASSWORD` | ✅ | **Secret.** Used as-is inside `DATABASE_URL`, so it must be URL-safe: `openssl rand -hex 16` |
 | `GARAGE_RPC_SECRET` | ✅ | **Secret.** 64 hex characters: `openssl rand -hex 32` |
 | `GARAGE_ADMIN_TOKEN` | ✅ | **Secret.** Garage's admin API, which the one-shot `storage-init` uses to prepare the store on `up`; reachable inside the stack only: `openssl rand -hex 32` (D-144) |

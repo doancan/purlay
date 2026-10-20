@@ -274,6 +274,7 @@ export const tr = {
   'export.failure.requesterGone': 'Hazırlanacağı sırada artık sahip değildin.',
   'export.inProgress': 'Bu çalışma alanının bir dışa aktarımı zaten hazırlanıyor.',
   'export.failed': 'Dışa aktarım istenemedi.',
+  'audit.action.storage.quota_changed': 'Depolama kotası {from} yerine {to} yapıldı',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',
   'github.entry': 'GitHub bağlantısı…',

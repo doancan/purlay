@@ -6,6 +6,15 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-20: a quota change is on the audit log
+
+- **The operator's `bun run storage:quota <slug> <size>` puts the change on the workspace's audit log**
+  as `storage.quota_changed`, from and to, with no actor (D-173 §4). An owner whose uploads begin to be
+  refused sees when the cap moved and to what. The same quota again writes nothing.
+- **`scripts/release-image.sh` refuses to build for another architecture before it starts.** Bun
+  crashes under emulation, so an amd64 image built on an arm64 laptop failed after a full verify; it
+  now says so at once and points at building on the server.
+
 ### Feature — 2026-10-20: a new workspace starts with `#general`
 
 - **A workspace starts with one public channel, `general`, its creator in it (D-174).** Made in the

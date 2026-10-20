@@ -92,6 +92,7 @@ exit 97`,
     join(bin, 'docker'),
     `case "$1 $2" in
   "buildx build") echo "\${@: -1}" > "${context}.path"; tar -cf "${context}" -C "\${@: -1}" . ;;
+  "version --format") echo "\${DOCKER_ARCH-amd64}" ;;
   "buildx imagetools") echo "\${REGISTRY_DIGEST-${DIGEST}}" ;;
   "push "*) exit "\${PUSH_EXIT:-0}" ;;
   "inspect --format") echo "\${LOCAL_DIGEST-${IMAGE}@${DIGEST}}" ;;
@@ -168,6 +169,21 @@ describe('what it refuses to release', () => {
     expect(outcome.stderr).toContain('DATABASE_URL is unset');
     expect(outcome.calls).toEqual([]);
   });
+
+  test('an image for another architecture, before the gate: Bun crashes under emulation', () => {
+    const outcome = release(sandbox(), { ...WITH_DATABASE, DOCKER_ARCH: 'arm64' });
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain('Docker here builds arm64, not amd64');
+    expect(called(outcome, 'bun run verify')).toBe(false);
+    expect(called(outcome, 'docker buildx')).toBe(false);
+  });
+
+  test('no Docker daemon, before the gate', () => {
+    const outcome = release(sandbox(), { ...WITH_DATABASE, DOCKER_ARCH: '' });
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.stderr).toContain('nothing (no daemon)');
+    expect(called(outcome, 'bun run verify')).toBe(false);
+  });
 });
 
 describe('a release', () => {
@@ -223,7 +239,11 @@ describe('a release', () => {
   });
 
   test('builds for another platform when told to', () => {
-    const outcome = release(sandbox(), { ...WITH_DATABASE, PLATFORM: 'linux/arm64' });
+    const outcome = release(sandbox(), {
+      ...WITH_DATABASE,
+      PLATFORM: 'linux/arm64',
+      DOCKER_ARCH: 'arm64',
+    });
     expect(outcome.calls.find((call) => call.startsWith('docker buildx build'))).toContain(
       '--platform linux/arm64',
     );
@@ -234,7 +254,7 @@ describe('what stops a release part-way', () => {
   test('a gate that fails builds nothing', () => {
     const outcome = release(sandbox(), { ...WITH_DATABASE, VERIFY_EXIT: '1' });
     expect(outcome.code).not.toBe(0);
-    expect(called(outcome, 'docker')).toBe(false);
+    expect(called(outcome, 'docker buildx')).toBe(false);
   });
 
   test('a smoke test that fails pushes nothing', () => {
