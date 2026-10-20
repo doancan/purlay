@@ -277,8 +277,13 @@ it. On a narrow window the navigation opens as the sidebar does.
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
   where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
 - **Keyboard shortcuts** — the reference, as a page.
-- **Sessions & account** — *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told to
-  make somebody else an owner first) and *Erase my account…*, each asking first.
+- **Sessions & account** — first *How you sign in* (D-176): the address, and whether a link sent to it
+  signs in; and GitHub — the login connected, or **Connect GitHub** for an account made by email. Connect
+  leaves for GitHub and comes back to this page, the card's foot saying how it went in words: connected,
+  or why not — cancelled, expired, signed out or somebody else signed in meanwhile, that GitHub account
+  already another Purlay account's, this one connected already, GitHub or Purlay unavailable — and that
+  nothing was connected. Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
+  to make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), and *Create workspace…*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
@@ -616,6 +621,7 @@ missing specified behaviour and does not merge.
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
+| How you sign in (Sessions & account) | n/a — always an address; GitHub is a login or **Connect GitHub** | Skeleton in the card; **Connect GitHub** is busy while it asks | Retry in the card; a connect that could not start says why under the card, and one GitHub sent back says how it went there, in words (D-176) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |

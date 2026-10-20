@@ -38,6 +38,8 @@ import type { Config } from '../../platform/config';
 import type { GitHubClient } from '../../modules/auth/github';
 import {
   abandonSignIn,
+  readMySignIn,
+  startConnectGitHub,
   completeSignIn,
   signOut,
   eraseMyAccount,
@@ -353,12 +355,15 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.headers['retry-after'] = String(wait);
       throw new AppError({ code: 'RATE_LIMITED', message: 'Too many requests. Slow down.' });
     })
-    .onError(({ code, error, set, path }) => {
+    .onError(async ({ code, error, set, path, request }) => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
       // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
       if (path === SIGN_IN_CALLBACK) {
-        return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code));
+        return respond(
+          set,
+          await abandonSignIn(dependencies, request, error, refusal.body.error.code),
+        );
       }
       // The client is told INTERNAL and nothing else; the cause is written here.
       if (refusal.status === 500) log.error('request failed', { err: error, path });
@@ -452,6 +457,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
     )
     .get('/api/me', async ({ request }) => await readMe(dependencies, request))
+    .get('/api/me/sign-in', async ({ request }) => await readMySignIn(dependencies, request))
+    .post('/api/me/github/connect', async ({ request, body, set }) => {
+      const started = await startConnectGitHub(dependencies, request, body);
+      set.headers['set-cookie'] = [...started.setCookie];
+      return started.body;
+    })
     .patch(
       '/api/me/profile',
       async ({ request, body }) => await updateMyProfile(sending, request, body),

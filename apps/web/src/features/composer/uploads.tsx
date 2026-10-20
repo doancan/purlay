@@ -227,6 +227,8 @@ const uploadRefusal = (
     case 'MALFORMED':
     case 'UNKNOWN':
     case 'ACCOUNT_EMAIL_CONFLICT':
+    case 'GITHUB_ACCOUNT_TAKEN':
+    case 'GITHUB_ALREADY_CONNECTED':
     case 'CHANNEL_NAME_TAKEN':
     case 'CHANNEL_NOT_FOUND':
     case 'EMAIL_REQUIRED':

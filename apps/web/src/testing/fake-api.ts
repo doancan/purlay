@@ -98,6 +98,9 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   setDeepWork: unexpected('setDeepWork'),
   deleteMessage: unexpected('deleteMessage'),
   eraseAccount: unexpected('eraseAccount'),
+  mySignIn: () =>
+    Promise.resolve({ email: 'ada@example.test', emailLinks: false, github: { login: 'ada' } }),
+  connectGitHub: unexpected('connectGitHub'),
   signOut: unexpected('signOut'),
   renameWorkspace: unexpected('renameWorkspace'),
   signOutEverywhere: unexpected('signOutEverywhere'),

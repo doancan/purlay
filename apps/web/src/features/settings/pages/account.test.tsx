@@ -3,7 +3,7 @@
  * out here, signing out everywhere — which asks first — and erasing the account, which asks for the
  * username.
  */
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { BoundFunctions, queries } from '@testing-library/react';
 import { Outlet } from '../../../app/outlet';
@@ -16,6 +16,9 @@ import { aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import { Toaster } from '../../../ui/toast';
+import { connectGitHubHref } from '@purlay/types';
+import { href } from '../../../router/routes';
+import { leaveFor } from './account';
 
 installDom();
 
@@ -388,5 +391,144 @@ describe('leaving the workspace (D-152)', () => {
     await settle();
     expect(here(view)).not.toBe('/w/acme/settings/account');
     view.unmount();
+  });
+});
+
+describe('how you sign in (D-176)', () => {
+  const opened = async (
+    api: Partial<Api>,
+    path = '/w/acme/settings/account',
+  ): Promise<{ view: View; card: Scope }> => {
+    const view = await renderApp(<Outlet />, { path, api: aSignedInApi(api) });
+    await settle();
+    await view.findByRole('heading', { level: 1, name: 'Sessions & account' });
+    const card = within(view.getByRole('region', { name: 'How you sign in' }));
+    return { view, card };
+  };
+
+  const emailAccount: Partial<Api> = {
+    mySignIn: () => Promise.resolve({ email: 'ada@example.test', emailLinks: true, github: null }),
+  };
+
+  test('an account made by email shows its address and offers Connect GitHub, which leaves for GitHub', async () => {
+    const asked: string[] = [];
+    const left: string[] = [];
+    const leave = leaveFor.go;
+    leaveFor.go = (location): void => {
+      left.push(location);
+    };
+    try {
+      const { view, card } = await opened({
+        ...emailAccount,
+        connectGitHub: (workspace) => {
+          asked.push(workspace);
+          return Promise.resolve({ location: 'https://github.com/login/oauth/authorize?state=s' });
+        },
+      });
+      expect(card.getByText('ada@example.test')).toBeDefined();
+      expect(card.getByText('A sign-in link sent to this address signs you in.')).toBeDefined();
+      await expectNoAxeViolations(view.getByRole('main'));
+      await person().click(card.getByRole('button', { name: 'Connect GitHub' }));
+      await settle();
+      // From the workspace the page is in, which is where GitHub sends the browser back to.
+      expect(asked).toEqual(['acme']);
+      expect(left).toEqual(['https://github.com/login/oauth/authorize?state=s']);
+      view.unmount();
+    } finally {
+      leaveFor.go = leave;
+    }
+  });
+
+  test('a connected account shows the login and no button', async () => {
+    const { view, card } = await opened({
+      mySignIn: () =>
+        Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: true,
+          github: { login: 'ada-gh' },
+        }),
+    });
+    expect(card.getByText('ada-gh')).toBeDefined();
+    expect(card.queryByRole('button', { name: 'Connect GitHub' })).toBeNull();
+    view.unmount();
+  });
+
+  test('an account GitHub made says it signs in with GitHub, not by link', async () => {
+    const { view, card } = await opened({
+      mySignIn: () =>
+        Promise.resolve({ email: 'ada@example.test', emailLinks: false, github: { login: 'ada' } }),
+    });
+    expect(card.getByText('Your GitHub account’s address. You sign in with GitHub.')).toBeDefined();
+    view.unmount();
+  });
+
+  test('says how a connect came back, in words, from the address GitHub sent the browser to', async () => {
+    const cases = [
+      ['connected', 'status', 'GitHub is connected — you can sign in with it from now on.'],
+      ['session', 'alert', /^You were signed out, or signed in as somebody else/],
+      ['taken', 'alert', /^That GitHub account already signs in to another Purlay account/],
+      ['nonsense', 'alert', 'Connecting GitHub did not finish — try again.'],
+    ] as const;
+    for (const [outcome, role, words] of cases) {
+      const { view, card } = await opened(
+        emailAccount,
+        `/w/acme/settings/account?github=${outcome}`,
+      );
+      expect(card.getByRole(role).textContent).toMatch(words);
+      view.unmount();
+    }
+  });
+
+  test('a connect that cannot start says why, and an account connected meanwhile is read again', async () => {
+    let reads = 0;
+    const { view, card } = await opened({
+      mySignIn: () => {
+        reads += 1;
+        return Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: true,
+          github: reads > 1 ? { login: 'ada-gh' } : null,
+        });
+      },
+      connectGitHub: () => Promise.reject(new ApiError(409, 'GITHUB_ALREADY_CONNECTED', 'already')),
+    });
+    await person().click(card.getByRole('button', { name: 'Connect GitHub' }));
+    await settle();
+    expect(card.getByRole('alert').textContent).toBe(
+      'GitHub could not be opened. This account has a GitHub account connected already.',
+    );
+    expect(await card.findByText('ada-gh')).toBeDefined();
+    view.unmount();
+  });
+
+  test('loading, then a failure to read it, with Retry', async () => {
+    let fail = true;
+    const { view, card } = await opened({
+      mySignIn: () =>
+        fail
+          ? Promise.reject(new ApiError(500, 'INTERNAL', 'x'))
+          : Promise.resolve({ email: 'ada@example.test', emailLinks: true, github: null }),
+    });
+    expect(await card.findByRole('button', { name: 'Retry' })).toBeDefined();
+    fail = false;
+    await person().click(card.getByRole('button', { name: 'Retry' }));
+    expect(await card.findByText('ada@example.test')).toBeDefined();
+    view.unmount();
+  });
+
+  test('leaving for GitHub is the browser leaving the page, to where the server said', () => {
+    const assign = spyOn(window.location, 'assign').mockImplementation(() => undefined);
+    try {
+      leaveFor.go('https://github.com/login/oauth/authorize?state=s');
+      expect(assign).toHaveBeenCalledWith('https://github.com/login/oauth/authorize?state=s');
+    } finally {
+      assign.mockRestore();
+    }
+  });
+
+  test('the address GitHub sends the browser back to is this page’s', () => {
+    expect(connectGitHubHref('acme', 'connected').split('?')[0]).toBe(
+      href('settings', { slug: 'acme', section: 'account' }),
+    );
   });
 });

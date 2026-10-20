@@ -17,6 +17,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type {
+  MySignIn,
   Channel,
   MeResponse,
   Message,
@@ -53,6 +54,15 @@ export const useMe = (): UseQueryResult<MeResponse> => {
       claimFor(storage, me.user.id);
       return me;
     },
+  });
+};
+
+/** The ways the caller signs in, and the GitHub account connected, if any (D-176). */
+export const useMySignIn = (): UseQueryResult<MySignIn> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.mySignIn,
+    queryFn: ({ signal }) => api.mySignIn(signal),
   });
 };
 

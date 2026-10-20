@@ -599,6 +599,10 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
+  'GET /api/me/sign-in':
+    'the ways the caller signs in, their own only, and names no workspace (D-176)',
+  'POST /api/me/github/connect':
+    'connects GitHub to the caller’s own account; the workspace it names is only the page the browser comes back to, a path on this origin (D-176)',
   'PATCH /api/me/profile':
     'sets the caller’s own profile and names no workspace; who reads it is the members list’s (D-131)',
   'GET /api/push/key': 'the server’s public push key, the same for everyone signed in (D-126)',

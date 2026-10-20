@@ -244,6 +244,7 @@ export const COLUMNS: Columns = {
     // Identity with another service, and a person's own settings and traces.
     github_id: 'omit',
     github_login: 'omit',
+    github_connected_at: 'omit',
     locale: 'omit',
     last_seen_at: 'omit',
     updated_at: 'omit',
