@@ -4693,7 +4693,8 @@ bounds the wire, these bound the process. The numbers are bound to the database'
 *Measured 2026-10-12 (Bun 1.4.2, macOS arm64), one 40-million-pixel PNG re-encoded at a time and
 several at once: +118 MiB RSS for one decode, +258 MiB for two, +450 MiB for four, 136–158 ms each.*
 Two keeps a node's peak near a quarter of a gigabyte above its idle; a freed slot is handed to the next
-waiter, never given back, so a newcomer cannot make it three.
+waiter, never given back, so a newcomer cannot make it three. *Amended by D-170:* at most eight wait,
+and the image proxy holds at most one of the two.
 
 **3 · `POST /api/workspaces/:workspaceId/uploads?id=&name=`, raw bytes, `application/octet-stream`.**
 The workspace is the quota's axis; there is no channel until the message. `id` is a UUIDv7 the client
@@ -6844,7 +6845,8 @@ to their reversal.
    and compared in any case, or `*` for anybody signed in — what a cloud or a demo wants. A login
    matches the username of an account signed in with GitHub, which is the login as GitHub last gave
    it; an account made by an email link (D-138) has no login, whatever its username spells, because
-   its name came from an address anybody can own. A malformed value refuses to start.
+   its name came from an address anybody can own. A malformed value refuses to start. *Amended by
+   D-169:* matched against the login itself, kept in a column of its own — a username is not one.
 2. **Unset, nobody may but the first person to sign in, and only while the instance has no
    workspace** — the earliest living account, while `workspaces` is empty. The one-command install
    (D-144) still ends with its operator owning the first workspace, and a stranger who signs in after
@@ -7437,6 +7439,77 @@ instruction to decide and proceed, and is open to their reversal.
 
 **Cost of reversing:** `row-stops.ts` and its one call in `message-row.tsx`, the panel's roving row in
 `thread.tsx`, and their tests. No contract, route or stored fact depends on any of it.
+
+### D-169. `WORKSPACE_CREATORS` is matched against the GitHub login, kept in a column of its own — amends D-155 §1
+
+**Context.** D-155 matched a listed login against the username of an account signed in with GitHub,
+taking the username to be "the login as GitHub last gave it". It is not: a login another account
+already holds here is stored with a `-N` (`availableUsername`), an email link names its account after
+the address's local part (D-138), and a login shaped like an erased account's is given `user-` before
+it (D-139 §5). A security review (2026-10-20) showed both directions: a stranger who signs in by email
+as `alice@…` before GitHub's `alice` does makes her `alice-1`, and she is refused; a listed `bob-1`
+lets in GitHub's `bob`, stored as `bob-1`. Decided under the owner's standing instruction to decide and
+proceed, and open to their reversal.
+
+**Decided.**
+
+1. **`users.github_login`: the login as GitHub gave it at the latest sign-in** (migration 0045,
+   `SCHEMA.md` §3.1). Written on every GitHub sign-in, as GitHub sent it — `TEXT`, never cut to the
+   username's 39, since a cut login is another login. `NULL` for an account made by an email link.
+2. **A sign-in takes its login from any other account that still holds it**, in any case. GitHub lets a
+   login be given up and taken by somebody else; whoever signs in with it now is the one GitHub says it
+   is, and an account renamed away keeps no claim until it signs in under its new one.
+3. **`WORKSPACE_CREATORS` is compared with `github_login` alone** (`modules/workspaces/creators.ts`),
+   in any case. The username plays no part.
+4. **Existing accounts are filled where the username is the login unaltered** — a GitHub account whose
+   username has no `-N` and no `user-` before it. Any other is `NULL` until its person next signs in:
+   refused for a while rather than let in on a name that may be somebody else's.
+5. **Personal, as `github_id` is.** Erasure clears it (I-11); an export omits it (D-140).
+
+**Rejected.** *Not suffixing a GitHub login on collision, renaming the email account instead* — it
+moves somebody's name under them and still leaves a username that only usually is a login. *Listing
+GitHub ids instead of logins* — exact, but an operator knows logins, and the id is one GitHub API call
+away for each, at configuration time. *A `UNIQUE` index on the login* — two sign-ins at once would each
+take it from the other, and the loser's sign-in would fail; without it they share it a moment, which
+only refuses neither more than it should. *Resolving the listed logins with GitHub at start-up* — a
+network call to start, and still stale after a rename.
+
+**Cost of reversing:** the column and its index (a migration dropping them), `holdLogin` in
+`auth/identity.ts`, the one comparison in `creators.ts`, a line each in erasure and the export's
+table.
+
+### D-170. Decodes wait in a bounded line, and the image proxy holds at most one — amends D-109 §2
+
+**Context.** At most two decodes ran at once per node (D-109 §2), but the line for them had no bound,
+and the image proxy decoded after its fetch slot was released, so its own bound (four fetching,
+sixteen waiting) did not cover decoding. A security review (2026-10-20) measured a 6300×6300 PNG of
+128 KB taking about 287 ms to decode; two members at their costly-read budget (D-81) made an unrelated
+small upload wait 17 s, and growing — one member could stall every upload on the node.
+
+**Decided.**
+
+1. **At most eight wait for a decode slot, per node.** At about 290 ms a decode at the pixel bound, the
+   last of eight waits about a second and a quarter, as long as an upload should sit before it is told
+   the server is busy. Past it a decode is refused at once, `429 RATE_LIMITED` — what the upload's own
+   gate already answers, and what the composer says as "busy", with Retry. Never a 500.
+2. **The proxy has a share of its own: one decode at a time, four waiting** — a round of its four
+   fetches finishing together. Holding at most one of the node's two slots, a feed of pictures never
+   keeps an upload waiting behind it; past its line, or the node's, the picture is not available now,
+   the same `404 IMAGE_NOT_AVAILABLE` as any failure, with the reason in the log.
+3. **Eight is above what today's callers can make wait at once** (four uploads per node, and the
+   proxy's one), so the node's bound refuses only a caller that has lost its own gate.
+
+Measured after (the review's own script, 2026-10-20): the same small upload decoded in 1 ms after ten
+seconds of two members at budget.
+
+**Rejected.** *Holding the proxy's fetch slot through its decode* — #110's review separated them on
+purpose: a slow server would then hold a decode's turn as well, and the fetch line would wait for both.
+*A longer node line* — a wait nobody sits through, and memory for every buffered image in it. *Ordering
+uploads before proxy decodes in one line* — a priority queue to say what a share says with a second
+`slots`.
+
+**Cost of reversing:** two numbers in `attachments/images.ts`, the share in `images/proxy.ts`, and
+their tests.
 
 ## Part D — Open, deliberately
 

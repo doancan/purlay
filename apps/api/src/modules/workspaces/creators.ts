@@ -7,9 +7,9 @@
  * but the first person to sign in, and only while the instance has no workspace — which is how the
  * one-command install still ends with its operator in a workspace of their own (D-144).
  *
- * A login is matched against the username of an account signed in with GitHub, which is the login
- * as GitHub last gave it (`identity.ts` refreshes it on every sign-in). An account made by an email
- * link has no login, whatever its username says: its name came from an address anybody can own.
+ * A login is matched against `users.github_login`: the login as GitHub last gave it, written on every
+ * GitHub sign-in (`identity.ts`) — never the username, which takes a `-N` when the name is already
+ * somebody's here, or an email link's address (D-169). An account made by an email link has no login.
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import { AppError } from '../../platform/errors';
@@ -63,13 +63,13 @@ export const mayCreateWorkspace = async (
     case 'listed': {
       const user = await executor
         .selectFrom('users')
-        .select(['username', 'github_id'])
+        .select('github_login')
         .where('id', '=', userId)
         .where('deleted_at', 'is', null)
         .executeTakeFirst();
-      // No GitHub id, no login: an email link's account is never on the list.
-      const login = user?.github_id === null ? undefined : user?.username;
-      return login !== undefined && creators.logins.has(login.toLowerCase());
+      // No login: an email link's account, or one GitHub has since given its login to another.
+      const login = user?.github_login ?? null;
+      return login !== null && creators.logins.has(login.toLowerCase());
     }
   }
 };

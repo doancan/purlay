@@ -6,6 +6,20 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-20: three findings of a security review
+
+- **A workspace creator is the GitHub login, not a username that looks like one (D-169).** A stranger
+  who signed in by email as `alice@…` before GitHub's `alice` made her `alice-1`, and refused her; a
+  listed `bob-1` let in GitHub's `bob`. The login GitHub gives is now kept in `users.github_login`,
+  written on every GitHub sign-in and taken from any account renamed away from it, and
+  `WORKSPACE_CREATORS` is matched against it alone. Erasure clears it; an export omits it.
+- **Image decodes wait in a bounded line (D-170).** Two members asking the proxy for large images
+  made an unrelated upload wait 17 seconds and growing. Eight may wait for the node's two decode
+  slots, and the proxy holds at most one of them; past that an upload is refused as busy (`429`,
+  Retry) and a proxied picture is not available now (`404`). The same upload now decodes in 1 ms.
+- **An export download asked for by an id that is no UUID is `404 EXPORT_NOT_FOUND`**, not the
+  database's error as a 500.
+
 ### Fix — 2026-10-19: the browser tests that failed only under a loaded parallel run
 
 Four specs passed alone and failed beside the rest of the suite. Each cause was found in a trace or a

@@ -243,6 +243,7 @@ export const COLUMNS: Columns = {
     status_text: 'members',
     // Identity with another service, and a person's own settings and traces.
     github_id: 'omit',
+    github_login: 'omit',
     locale: 'omit',
     last_seen_at: 'omit',
     updated_at: 'omit',

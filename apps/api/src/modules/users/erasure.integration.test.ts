@@ -82,6 +82,7 @@ describe('integration: erasing an account', () => {
         .updateTable('users')
         .set({
           github_id: '424242',
+          github_login: 'Ada-On-GitHub',
           avatar_url: 'https://avatars.example.test/ada',
           title: 'Engineer',
           time_zone: 'Europe/Istanbul',
@@ -164,6 +165,7 @@ describe('integration: erasing an account', () => {
       expect(row).toMatchObject({
         email: `erased-${ada.userId}@erased.invalid`,
         github_id: null,
+        github_login: null,
         avatar_url: null,
         title: null,
         time_zone: null,

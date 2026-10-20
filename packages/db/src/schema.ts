@@ -311,6 +311,7 @@ export interface Users {
   display_name: string;
   email: string;
   github_id: Int8 | null;
+  github_login: string | null;
   id: Generated<string>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;

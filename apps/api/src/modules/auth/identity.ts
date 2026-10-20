@@ -10,7 +10,7 @@
  * test (D-46).
  */
 import { isErased } from '@purlay/types';
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { GitHubEmail, GitHubProfile } from './github';
@@ -129,6 +129,28 @@ export const availableUsername = async (
   throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
 };
 
+/**
+ * The login is this GitHub account's now: written on its row, and taken from any other account that
+ * still holds it in any case — renamed away from it at GitHub, and not signed in since. It is what
+ * `WORKSPACE_CREATORS` is matched against (D-169), never the username, which only starts from it.
+ */
+const holdLogin = async (executor: Executor, githubId: string, login: string): Promise<void> => {
+  await executor
+    .updateTable('users')
+    .set({ github_login: null })
+    .where(sql<string>`lower(github_login)`, '=', login.toLowerCase())
+    .where((where) =>
+      where.or([where('github_id', 'is', null), where('github_id', '!=', githubId)]),
+    )
+    .execute();
+  await executor
+    .updateTable('users')
+    .set({ github_login: login })
+    .where('github_id', '=', githubId)
+    .where('deleted_at', 'is', null)
+    .execute();
+};
+
 export const resolveIdentity = async (
   executor: Executor,
   clock: Clock,
@@ -172,6 +194,7 @@ export const resolveIdentity = async (
         message: 'That account is gone. Sign in again.',
       });
     }
+    await holdLogin(executor, String(profile.id), profile.login);
     return {
       userId: existing.id,
       ...(username === profile.login
@@ -235,7 +258,10 @@ export const resolveIdentity = async (
       .where('deleted_at', 'is', null)
       .returning('id')
       .executeTakeFirst();
-    if (winner !== undefined) return { userId: winner.id };
+    if (winner !== undefined) {
+      await holdLogin(executor, String(profile.id), profile.login);
+      return { userId: winner.id };
+    }
     const stranger = await executor
       .selectFrom('users')
       .select('id')
@@ -254,6 +280,7 @@ export const resolveIdentity = async (
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
 
+  await holdLogin(executor, String(profile.id), profile.login);
   return {
     userId: created.id,
     ...(username === profile.login

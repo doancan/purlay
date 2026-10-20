@@ -23,7 +23,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Executor, Transaction } from '@purlay/db';
-import { EXPORT_KEPT_HOURS, ExportFailure, messageId, type WorkspaceExport } from '@purlay/types';
+import {
+  EXPORT_KEPT_HOURS,
+  ExportFailure,
+  Uuid,
+  messageId,
+  type WorkspaceExport,
+} from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import type { Clock } from '../../platform/clock';
 import { HOUR_MS } from '../../platform/clock';
@@ -407,8 +413,8 @@ export const exportQueue = (
 
 /**
  * Claims a ready export for its one download, in the statement that checks it is ready, not expired,
- * this workspace's and the caller's own; answers where its archive is. Anything else is the one
- * `EXPORT_NOT_FOUND`.
+ * this workspace's and the caller's own; answers where its archive is. Anything else — an id that is no
+ * UUID among it — is the one `EXPORT_NOT_FOUND`.
  */
 export const claimDownload = async (
   transaction: Transaction,
@@ -417,6 +423,8 @@ export const claimDownload = async (
   exportId: string,
 ): Promise<{ readonly key: string; readonly size: number }> => {
   if (context.role !== 'owner') throw ownersOnly();
+  // An id that is no UUID names no export; asked of a uuid column it would be the database's error.
+  if (!Value.Check(Uuid, exportId)) throw notFound();
   const now = clock.now();
   const claimed = await transaction
     .updateTable('workspace_exports')

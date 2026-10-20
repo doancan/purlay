@@ -9,20 +9,28 @@
  *   and a clock.
  * - **Re-encoded** (`images.ts`): decoded within the attachment bounds and written as WebP, so what the
  *   reader gets is our bytes — never the origin's, its headers or its EXIF.
- * - **One answer for every failure**, `404 IMAGE_NOT_AVAILABLE`: refused, unreachable, not an image
- *   and too large look the same from outside, and the reason is in the log with the host alone — the
- *   rest of an address may carry somebody's token.
+ * - **One answer for every failure**, `404 IMAGE_NOT_AVAILABLE`: refused, unreachable, not an image,
+ *   too large and too busy to decode now look the same from outside, and the reason is in the log
+ *   with the host alone — the rest of an address may carry somebody's token.
  */
 import { isIP } from 'node:net';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
-import { readImage } from '../attachments/images';
+import { SlotsFull, readImage, slots, type OpenImage } from '../attachments/images';
 import { checkingLookup, fetchExternal, systemResolver, type Fetched } from './fetch-external';
 
 /** How much of an external image is read before it is refused. */
 const EXTERNAL_IMAGE_BYTES_MAX = 10 * 1024 * 1024;
 /** How long its server has to send it all. */
 const EXTERNAL_IMAGE_TIMEOUT_MS = 5_000;
+
+/**
+ * The proxy's share of the node's decodes (D-170): one at a time, four waiting — a round of the
+ * route's four fetches finishing together. The node has two decode slots; holding at most one, a feed
+ * full of pictures can never keep an upload waiting behind it. Past the line, the picture is not
+ * available now, like any other failure.
+ */
+const decoding = slots(1, 4);
 
 export type ExternalFetch = (url: URL) => Promise<Fetched>;
 
@@ -62,11 +70,13 @@ export const externalImageAddress = (raw: string): URL | null => {
 export interface ProxyDependencies {
   readonly fetch: ExternalFetch;
   readonly log: Logger;
+  /** How a fetched image is opened; `Bun.Image` unless a test holds its decodes. */
+  readonly open?: OpenImage;
 }
 
 /** The image at the address, re-encoded as WebP; or the one refusal. */
 export const proxyImage = async (
-  { fetch, log }: ProxyDependencies,
+  { fetch, log, open }: ProxyDependencies,
   raw: string,
 ): Promise<Uint8Array> => {
   const url = externalImageAddress(raw);
@@ -81,10 +91,15 @@ export const proxyImage = async (
   }
   let image: Awaited<ReturnType<typeof readImage>>;
   try {
-    image = await readImage(fetched.bytes);
+    image = await decoding(async () => await readImage(fetched.bytes, open));
   } catch (error) {
-    // The decoder's own refusals (too large, unreadable) are the image's; anything else is ours and is
-    // a 500 — it says something about a public image and our decoder, nothing about the network.
+    if (error instanceof SlotsFull) {
+      log.info('external image not decoded', { host: url.hostname, reason: error.message });
+      throw notAvailable();
+    }
+    // The decoder's own refusals (too large, unreadable, the node's decode line full) are the image's;
+    // anything else is ours and is a 500 — it says something about a public image and our decoder,
+    // nothing about the network.
     if (!(error instanceof AppError)) throw error;
     log.info('external image not readable', { host: url.hostname, reason: error.body.code });
     throw notAvailable();

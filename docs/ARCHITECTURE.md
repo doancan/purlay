@@ -674,7 +674,9 @@ stored representation. (D-36)
    host and no address inside the network is reachable through it. It is charged to the reader's
    budget for costly reads — not the one they send with (D-81) — and only the fetch holds one of the
    node's four slots, with at most sixteen waiting for one: past that line a picture is not available
-   now, the same 404 as any failure, rather than another connection held. **Accepted, stated:** a name
+   now, the same 404 as any failure, rather than another connection held. Its decode then takes at
+   most one of the node's two decode slots, four waiting (D-170), so pictures never keep an upload
+   waiting. **Accepted, stated:** a name
    refused by policy fails in the time DNS takes and a reachable host in the time it answers, so an
    attacker can tell which names resolve privately; and a public service that trusts this server's
    address can be sent a GET — to a name with a publicly trusted certificate, returning nothing but an
