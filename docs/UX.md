@@ -187,8 +187,8 @@ words, unread while any of them is. Opening it, or its **Mark read**, reads ever
 chat the team already uses.
 - **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link
   opens, and **Join**. A person already in it is offered **Open** instead. Joined, they are offered
-  the workspace's public channels to join — the three busiest marked **Active** and picked — joined
-  together in one press or skipped; a join that fails part way names the channels it could not join
+  the workspace's public channels to join (in a new workspace, the `#general` it starts with, D-174),
+  the three busiest marked **Active** and picked, joined together in one press or skipped; a join that fails part way names the channels it could not join
   and keeps them picked (D-132). A person not signed in
   signs in first and comes back to the same card. The token leaves the address bar as the page loads,
   so it is not left in the history or a screenshot. A link that does not open says so in one
@@ -258,7 +258,8 @@ in every open tab of every member.
 
 **Another workspace** (D-124). **Create workspace…** in the same menu — offered only to a person this
 server lets make one (`WORKSPACE_CREATORS`, D-155) — opens the form `/` shows a person with none — a name and an address — and goes to the new workspace, with Back to where
-they were.
+they were. **A new workspace starts with `#general`** (D-174), its maker in it, and that is where the
+form leaves them — from `/` or from the menu — never on the welcome step, which is an invited person's.
 
 **Settings** (D-146). A page, `/w/<slug>/settings/<section>`, opened from the rail's gear, the
 account menu, the workspace menu's **Workspace settings** and the palette. The sidebar's place holds

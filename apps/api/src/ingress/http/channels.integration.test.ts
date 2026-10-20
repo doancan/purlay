@@ -71,7 +71,7 @@ describe('integration: channels', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'chn-alice');
       const workspaceId = await aWorkspace(db, alice.cookie, 'chn-acme');
-      const channelId = await aChannel(db, alice.cookie, workspaceId, 'general');
+      const channelId = await aChannel(db, alice.cookie, workspaceId, 'deploys');
 
       const row = await db
         .selectFrom('channels')
@@ -97,11 +97,11 @@ describe('integration: channels', () => {
       const alice = await signedIn(db, 'chn-name');
       const mine = await aWorkspace(db, alice.cookie, 'chn-mine');
       const other = await aWorkspace(db, alice.cookie, 'chn-other');
-      await aChannel(db, alice.cookie, mine, 'General');
+      await aChannel(db, alice.cookie, mine, 'Deploys');
 
       const clash = await call(db, 'POST', `/api/workspaces/${mine}/channels`, {
         cookie: alice.cookie,
-        body: { name: 'general' },
+        body: { name: 'deploys' },
       });
       expect(clash.status).toBe(409);
       expect(await clash.json()).toMatchObject({ error: { code: 'CHANNEL_NAME_TAKEN' } });
@@ -109,7 +109,7 @@ describe('integration: channels', () => {
       // A name is unique per workspace, not per instance.
       const elsewhere = await call(db, 'POST', `/api/workspaces/${other}/channels`, {
         cookie: alice.cookie,
-        body: { name: 'general' },
+        body: { name: 'deploys' },
       });
       expect(elsewhere.status).toBe(201);
     });
@@ -120,7 +120,7 @@ describe('integration: channels', () => {
       const alice = await signedIn(db, 'chn-list');
       const mine = await aWorkspace(db, alice.cookie, 'chn-list-mine');
       const other = await aWorkspace(db, alice.cookie, 'chn-list-other');
-      await aChannel(db, alice.cookie, mine, 'general');
+      await aChannel(db, alice.cookie, mine, 'deploys');
       await aChannel(db, alice.cookie, mine, 'random');
       await aChannel(db, alice.cookie, other, 'elsewhere');
 
@@ -128,7 +128,12 @@ describe('integration: channels', () => {
         cookie: alice.cookie,
       });
       const channels = (await response.json()) as { name: string }[];
-      expect(channels.map((channel) => channel.name).sort()).toEqual(['general', 'random']);
+      // With the channel the workspace started with (D-174).
+      expect(channels.map((channel) => channel.name).sort()).toEqual([
+        'deploys',
+        'general',
+        'random',
+      ]);
     });
   });
 
@@ -154,9 +159,10 @@ describe('integration: channels', () => {
         cookie: alice.cookie,
       });
       const channels = (await response.json()) as { id: string; name: string }[];
-      expect(channels.map((channel) => channel.name)).toEqual(['busy', 'quiet']);
+      // `general`, the channel the workspace started with (D-174), is silent too.
+      expect(channels.map((channel) => channel.name)).toEqual(['busy', 'general', 'quiet']);
       expect(channels[0]?.id).toBe(busy);
-      expect(channels[1]?.id).toBe(quiet);
+      expect(channels[2]?.id).toBe(quiet);
     });
   });
 
@@ -169,7 +175,7 @@ describe('integration: channels', () => {
         .insertInto('workspace_members')
         .values({ workspace_id: workspaceId, user_id: bob.userId })
         .execute();
-      const channelId = await aChannel(db, alice.cookie, workspaceId, 'general');
+      const channelId = await aChannel(db, alice.cookie, workspaceId, 'deploys');
 
       expect(
         (await call(db, 'POST', `/api/channels/${channelId}/join`, { cookie: bob.cookie })).status,
@@ -192,7 +198,7 @@ describe('integration: channels', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'chn-anon');
       const workspaceId = await aWorkspace(db, alice.cookie, 'chn-anon-ws');
-      const channelId = await aChannel(db, alice.cookie, workspaceId, 'general');
+      const channelId = await aChannel(db, alice.cookie, workspaceId, 'deploys');
 
       for (const [method, path, body] of [
         ['GET', `/api/workspaces/${workspaceId}/channels`, undefined],

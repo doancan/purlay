@@ -70,7 +70,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug: aUniqueSlug(slug) }),
   );
   const channelId = await created(
-    await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'general' }),
+    await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, { name: 'ops' }),
   );
   // A root with one reply, so every message endpoint the owner crosses has something to
   // succeed on: a thread to read, one that can be resolved, one that can be reopened.

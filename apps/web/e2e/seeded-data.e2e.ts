@@ -65,6 +65,8 @@ test.describe('the seeded workspace, as the viewer sees it', () => {
       'deploys',
       'design',
       'dogancan',
+      // The channel every workspace starts with (D-174), made with it.
+      'general',
       'incidents',
     ]);
     expect(channels.some((c) => c.id === world.channels.security)).toBe(false);

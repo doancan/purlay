@@ -23,7 +23,7 @@ test.describe('saved items', () => {
     );
     await alice.post('/api/invitations/accept', { token });
     const channel = await bob.post<{ id: string }>(`/api/workspaces/${workspace.id}/channels`, {
-      name: 'general',
+      name: 'ops',
     });
     await alice.post(`/api/channels/${channel.id}/join`);
     const words = `come back to this ${crypto.randomUUID().slice(0, 6)}`;

@@ -24,6 +24,7 @@ import {
 } from '../platform/events';
 import { createLogger } from '../platform/logging';
 import { aUniqueSlug } from '../testing/users';
+import { theDefaultChannelOf } from '../testing/channels';
 import { inProcessBackplane, type InspectableEventBus } from './bus';
 
 const origin = 'https://purlay.test';
@@ -106,7 +107,7 @@ const aRoom = async (): Promise<Room> => {
   const channelId = (
     (await (
       await http('POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-        name: 'general',
+        name: 'ops',
       })
     ).json()) as { id: string }
   ).id;
@@ -348,9 +349,11 @@ describe('integration: a membership that ends', () => {
       (frames) => frames.some((f) => f.event === 'ACCESS_REVOKED'),
       'the notice of the removal',
     );
-    expect(bob.frames.find((f) => f.event === 'ACCESS_REVOKED')?.data).toEqual({
-      channelIds: [room.channelId],
-    });
+    // Every channel the workspace showed him: his, and the public one it started with (D-174).
+    const revoked = bob.frames.find((f) => f.event === 'ACCESS_REVOKED');
+    expect(
+      revoked?.event === 'ACCESS_REVOKED' ? [...revoked.data.channelIds].sort() : null,
+    ).toEqual([room.channelId, await theDefaultChannelOf(cloned.db, room.workspaceId)].sort());
     await post(room.alice.cookie, room.channelId, 2);
     await settle(bob);
     expect(created(bob.frames)).toEqual([before]);

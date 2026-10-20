@@ -133,7 +133,7 @@ const aChannel = async (user: SignedInUser): Promise<string> => {
     ).json()) as { id: string };
   const slug = aUniqueSlug('lim');
   const workspace = await post('/api/workspaces', { name: slug, slug });
-  return (await post(`/api/workspaces/${workspace.id}/channels`, { name: 'general' })).id;
+  return (await post(`/api/workspaces/${workspace.id}/channels`, { name: 'ops' })).id;
 };
 
 describe('integration: one user’s sockets share one write budget', () => {

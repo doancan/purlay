@@ -126,7 +126,7 @@ an instance-administrator role this product does not have.
 | | Method | Path | Role |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces` | — (own memberships) |
-| ○ | `POST` | `/api/workspaces` | Whom `WORKSPACE_CREATORS` names — GitHub logins, or `*` for anybody; unset, only the first person to sign in, while the instance has no workspace (D-155). Anybody else is `403 FORBIDDEN` and nothing is made. The creator becomes `owner` |
+| ○ | `POST` | `/api/workspaces` | Whom `WORKSPACE_CREATORS` names — GitHub logins, or `*` for anybody; unset, only the first person to sign in, while the instance has no workspace (D-155). Anybody else is `403 FORBIDDEN` and nothing is made. The creator becomes `owner`, and the workspace starts with one public channel, `general`, with no topic and the creator in it — made in the same transaction, on the trail as `channel.created` (D-174) |
 | ○ | `GET` | `/api/workspaces/:workspaceId` | member |
 | ○ | `PATCH` | `/api/workspaces/:workspaceId` | admin — `{ name }` (`UpdateWorkspaceRequest`); answers the `Workspace`. The name only: the slug is its address and stays (D-124). The same name is `200` and changes nothing; a member is `403 FORBIDDEN`. On the audit trail with the name before and after; each member's sockets are told `WORKSPACE_UPDATED` and read their memberships again |
 | ① | `DELETE` | `/api/workspaces/:workspaceId` | owner — not built |

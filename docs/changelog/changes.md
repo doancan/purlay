@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-20: a new workspace starts with `#general`
+
+- **A workspace starts with one public channel, `general`, its creator in it (D-174).** Made in the
+  transaction that makes the workspace, on the audit log as `channel.created`. The person who made it
+  lands in it instead of on an empty workspace, and the first person they invite is offered it on the
+  welcome step. Nothing marks it afterwards: it is renamed, left and archived as any channel is.
+- **The first run is walked end to end in the browser** (`e2e/first-run.e2e.ts`): signing in with no
+  workspace, making one, inviting by a link, the invited person joining and writing, the first person
+  seeing it live — and a third person who opened nothing staying outside.
+
 ### Fix — 2026-10-20: three findings of a security review
 
 - **A workspace creator is the GitHub login, not a username that looks like one (D-169).** A stranger

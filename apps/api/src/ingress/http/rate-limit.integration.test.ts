@@ -82,7 +82,7 @@ describe('integration: the per-user write limit', () => {
       ).json()) as { id: string };
       const channel = (await (
         await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
-          name: 'general',
+          name: 'ops',
         })
       ).json()) as { id: string };
 
@@ -129,7 +129,7 @@ describe('integration: the per-user write limit', () => {
       ).json()) as { id: string };
       const channel = (await (
         await post(app, user.cookie, `/api/workspaces/${workspace.id}/channels`, {
-          name: 'general',
+          name: 'ops',
         })
       ).json()) as { id: string };
 

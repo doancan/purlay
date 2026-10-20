@@ -10,11 +10,11 @@ import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { installDom } from '../../testing/dom';
 import { anApi } from '../../testing/fake-api';
-import { IDS, aSession, aSignedInApi, aChannel } from '../../testing/fixtures';
+import { IDS, WHEN, aSession, aSignedInApi, aChannel } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
-import { signInFailureHref } from '@purlay/types';
+import { DEFAULT_CHANNEL_NAME, signInFailureHref } from '@purlay/types';
 import { PERSON_KEY } from '../../data/browser-storage';
 import { page as aPage } from '../../testing/channel-harness';
 
@@ -289,6 +289,46 @@ describe('a person with no workspace', () => {
     await user.click(view.getByRole('button', { name: 'Create workspace' }));
     await settle();
     expect(created).toEqual([{ name: 'Acme Engineering!', slug: 'acme-engineering' }]);
+  });
+
+  test('made, they are in the channel it starts with — not on an empty workspace, not picking channels (D-174)', async () => {
+    const made = { id: IDS.workspace, name: 'Acme', slug: 'acme-new', avatarUrl: null };
+    let exists = false;
+    const asked: string[] = [];
+    const view = await visit(
+      '/',
+      aSignedInApi({
+        me: () =>
+          Promise.resolve({
+            ...aSession(),
+            memberships: exists
+              ? [{ workspace: made, role: 'owner' as const, joinedAt: WHEN, deepWorkUntil: null }]
+              : [],
+          }),
+        createWorkspace: () => {
+          exists = true;
+          return Promise.resolve(made);
+        },
+        channels: (workspaceId) => {
+          asked.push(workspaceId);
+          return Promise.resolve([aChannel(IDS.api, DEFAULT_CHANNEL_NAME)]);
+        },
+        messages: () => Promise.resolve({ data: [], nextCursor: null }),
+      }),
+    );
+    const user = person();
+    await user.type(view.getByLabelText('Name'), 'Acme');
+    await user.clear(view.getByLabelText('Address'));
+    await user.type(view.getByLabelText('Address'), 'acme-new');
+    await user.click(view.getByRole('button', { name: 'Create workspace' }));
+    await settle();
+
+    expect(asked).toContain(IDS.workspace);
+    expect(here(view)).toBe(`/w/acme-new/c/${IDS.api}`);
+    expect(view.queryByRole('heading', { name: 'Pick a channel' })).toBeNull();
+    expect(view.queryByRole('heading', { name: /^Welcome to/ })).toBeNull();
+    // `/` only ever redirects: Back does not return to the form.
+    expect(view.world.history.stack).not.toContain('/');
   });
 
   test('one this server would not let make a workspace is told to ask for an invitation, with no form (D-155)', async () => {

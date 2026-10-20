@@ -77,7 +77,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     .values({ workspace_id: workspaceId, user_id: member.userId, role: 'member', joined_at: NOW })
     .execute();
   const channels = `/api/workspaces/${workspaceId}/channels`;
-  const publicChannel = await idOf(await call('POST', channels, owner, { name: 'general' }));
+  const publicChannel = await idOf(await call('POST', channels, owner, { name: 'ops' }));
   const privateChannel = await idOf(
     await call('POST', channels, owner, { name: 'secret', type: 'private' }),
   );

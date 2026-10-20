@@ -48,7 +48,7 @@ const aChannel = async (db: Executor, who: SignedInUser): Promise<string> => {
     ).json()) as { id: string };
   const slug = aUniqueSlug('order');
   const workspace = await post('/api/workspaces', { name: slug, slug });
-  return (await post(`/api/workspaces/${workspace.id}/channels`, { name: 'general' })).id;
+  return (await post(`/api/workspaces/${workspace.id}/channels`, { name: 'ops' })).id;
 };
 
 interface Rig {

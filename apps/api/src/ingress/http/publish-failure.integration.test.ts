@@ -194,7 +194,7 @@ describe('integration: a read and a direct message announce through the same doo
         .values({ workspace_id: workspace.id, user_id: bob.userId, role: 'member', joined_at: NOW })
         .execute();
       const channel = (await (
-        await post(`/api/workspaces/${workspace.id}/channels`, { name: 'general' }, alice.cookie)
+        await post(`/api/workspaces/${workspace.id}/channels`, { name: 'ops' }, alice.cookie)
       ).json()) as { id: string };
       await post(`/api/channels/${channel.id}/join`, {}, bob.cookie);
       const first = idAt(0);
