@@ -673,6 +673,26 @@ describe('the endpoints', () => {
     expect(everywhere.calls[0]).toMatchObject({ method: 'POST', url: '/auth/logout-all' });
   });
 
+  test('the ways the caller signs in, and connecting GitHub (D-172)', async () => {
+    const read = harness({ email: 'a@example.test', emailLinks: true, github: null });
+    expect(await read.api.mySignIn()).toEqual({
+      email: 'a@example.test',
+      emailLinks: true,
+      github: null,
+    });
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
+
+    const started = harness({ location: 'https://github.com/login/oauth/authorize?state=s' });
+    expect(await started.api.connectGitHub('acme')).toEqual({
+      location: 'https://github.com/login/oauth/authorize?state=s',
+    });
+    expect(started.calls[0]).toEqual({
+      method: 'POST',
+      url: '/api/me/github/connect',
+      body: { workspace: 'acme' },
+    });
+  });
+
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
     const methods = harness({ email: true });
     expect(await methods.api.authMethods()).toEqual({ email: true });
