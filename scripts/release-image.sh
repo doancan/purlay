@@ -12,7 +12,9 @@
 # 2. `bun run verify`, with the database — the gate CI would have run. Without DATABASE_URL
 #    it refuses rather than releasing on the unit tests alone.
 # 3. One build, for the server's platform (a laptop is often arm64 and a server amd64; an
-#    image for the wrong one stops with `exec format error` at the worst moment).
+#    image for the wrong one stops with `exec format error` at the worst moment). Built natively
+#    or not at all: Bun does not survive emulation, so another architecture is refused before
+#    the gate rather than after it.
 # 4. `scripts/image-smoke.sh` against that image — the one that is pushed next, not a rebuild.
 # 5. Push `sha-<commit>`, and print the digest to put in `PURLAY_IMAGE`. No moving tag: the
 #    compose file wants a digest (D-86).
@@ -42,6 +44,11 @@ echo "releasing $SHA as $TAG for $PLATFORM"
 
 # ── 2. The gate ──────────────────────────────────────────────────────────────
 [ -n "${DATABASE_URL:-}" ] || fail "DATABASE_URL is unset: verify would run the unit tests alone (CONTRIBUTING §2)"
+# Before the gate's minutes, not after them: an image for another architecture is built under
+# emulation, and Bun crashes there (MemoryExhaustion) part-way through the build.
+DAEMON="$(docker version --format '{{.Server.Arch}}' || true)"
+[ "$DAEMON" = "${PLATFORM#linux/}" ] ||
+  fail "Docker here builds ${DAEMON:-nothing (no daemon)}, not ${PLATFORM#linux/}: Bun crashes under emulation; build on a ${PLATFORM#linux/} machine, such as the server"
 bun run verify
 
 # ── 3. One build, of the commit and nothing beside it ────────────────────────

@@ -9,6 +9,7 @@
  */
 import { createDatabase } from '@purlay/db';
 import { operateQuota, parseQuota, saidBytes } from '../modules/attachments/quota';
+import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { databaseConnection } from '../platform/database';
 import { createLogger } from '../platform/logging';
@@ -28,7 +29,7 @@ if (slug === undefined || rest.length > 0 || (size !== undefined && quota === nu
   const database = createDatabase({ ...databaseConnection(config, log), poolSize: 1 });
   try {
     const report = await atomicallyOn(database)(
-      async (transaction) => await operateQuota(transaction, slug, quota),
+      async (transaction) => await operateQuota(transaction, systemClock, slug, quota),
     );
     if (report === null) {
       process.stderr.write(`no workspace has the slug ${slug}\n`);

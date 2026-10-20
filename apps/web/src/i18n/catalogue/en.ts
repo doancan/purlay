@@ -275,6 +275,7 @@ export const en = {
   'export.failure.requesterGone': 'You were no longer an owner when it was to be made.',
   'export.inProgress': 'An export of this workspace is already being made.',
   'export.failed': 'The export was not asked for.',
+  'audit.action.storage.quota_changed': 'The storage quota was changed from {from} to {to}',
   'audit.action.retention.purged':
     'History older than {days} days was cleared: {messages} messages, {files} files',
   'github.entry': 'GitHub connection…',

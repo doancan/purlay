@@ -7638,6 +7638,11 @@ instruction to decide and proceed, and open to their reversal.
 3. **The quota is the operator's**, not the owner's: it is their disk. It is set with
    `bun run storage:quota <slug> [<size>]` (`CONFIG.md`), whole bytes or binary units; a quota below
    what is used deletes nothing and refuses uploads until there is room. There is **no in-app control**.
+4. **A change is on the trail** *(amended 2026-10-20)*: `storage.quota_changed`, `from` and `to` in
+   bytes, written in the command's transaction with no actor — the operator is nobody in the workspace,
+   as with the nightly purge (D-139 §3) — and said on the audit log in the reader's units. The same
+   quota again writes nothing. An owner whose uploads start being refused can see when the cap moved,
+   and to what, without asking the operator.
 
 **Rejected.** *An owner raises their own quota* — the cap exists because self-hosters pay for the disk
 (D-16); a control the person who does not pay can turn is not a cap. *An instance-wide default in an

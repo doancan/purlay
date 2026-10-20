@@ -12,8 +12,10 @@
  */
 import { sql, type Executor } from '@purlay/db';
 import type { StorageUsage } from '@purlay/types';
+import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
+import { recordAudit } from '../audit/audit';
 
 export interface Storage {
   readonly quotaBytes: bigint;
@@ -109,9 +111,13 @@ export interface QuotaReport {
  * The row is locked as an upload locks it, so an upload in flight is checked against one quota or the
  * other, never half of each. A quota below what is used is allowed: nothing is deleted, and uploads
  * are refused until there is room. Null when no live workspace has the slug.
+ *
+ * A change is on the workspace's trail as `storage.quota_changed`, from and to in bytes, with no actor:
+ * the operator is nobody in the workspace (D-173 §4). The same quota again writes nothing.
  */
 export const operateQuota = async (
   executor: Executor,
+  clock: Clock,
   slug: string,
   quotaBytes: bigint | null,
 ): Promise<QuotaReport | null> => {
@@ -123,11 +129,20 @@ export const operateQuota = async (
     .executeTakeFirst();
   if (workspace === undefined) return null;
   const now = await storageOf(executor, workspace.id, { lock: quotaBytes !== null });
-  if (quotaBytes === null) return { workspaceId: workspace.id, ...now };
+  if (quotaBytes === null || quotaBytes === now.quotaBytes)
+    return { workspaceId: workspace.id, ...now };
   await executor
     .updateTable('workspaces')
     .set({ storage_quota_bytes: String(quotaBytes) })
     .where('id', '=', workspace.id)
     .execute();
+  await recordAudit(executor, clock, {
+    workspaceId: workspace.id,
+    actorUserId: null,
+    action: 'storage.quota_changed',
+    targetType: 'workspace',
+    targetId: workspace.id,
+    metadata: { from: String(now.quotaBytes), to: String(quotaBytes) },
+  });
   return { workspaceId: workspace.id, quotaBytes, usedBytes: now.usedBytes };
 };

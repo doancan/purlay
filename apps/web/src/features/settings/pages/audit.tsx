@@ -178,6 +178,12 @@ export const AuditPage = (): React.JSX.Element => {
           messages: entry.metadata['messages'] ?? '0',
           files: entry.metadata['files'] ?? '0',
         });
+      // The operator's command, which is nobody in the workspace (D-173 §4): sizes in the reader's units.
+      case 'storage.quota_changed':
+        return t('audit.action.storage.quota_changed', {
+          from: format.bytes(Number(entry.metadata['from'] ?? '0')),
+          to: format.bytes(Number(entry.metadata['to'] ?? '0')),
+        });
       case undefined:
         return t('audit.unknown', { actor, action: entry.action });
     }
