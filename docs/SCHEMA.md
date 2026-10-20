@@ -91,6 +91,13 @@ CREATE TABLE users (
     -- resurrecting the one they asked to have removed (D-38). UNIQUE permits many NULLs.
     github_id     BIGINT UNIQUE,
 
+    -- The login as GitHub last gave it, written on every GitHub sign-in and taken from any other
+    -- account still holding it; NULL for an email link's account and after erasure. What
+    -- WORKSPACE_CREATORS is matched against — never `username`, which takes a `-N` or an
+    -- address. TEXT: GitHub's value, compared as given. Not unique: two sign-ins at once may
+    -- briefly share it. (D-169)
+    github_login  TEXT COLLATE "C",
+
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
     email         TEXT COLLATE "C" NOT NULL UNIQUE,
@@ -124,6 +131,9 @@ CREATE TABLE users (
         AND (status_text IS NULL OR btrim(status_text) <> '')
     )
 );
+
+-- A sign-in takes its login from any other account holding it, found by the login as compared. (D-169)
+CREATE INDEX idx_users_github_login ON users (lower(github_login)) WHERE github_login IS NOT NULL;
 ```
 
 ### 3.2. `sessions`
@@ -1442,7 +1452,7 @@ Rules the schema cannot express. Each has a named test. (D-21)
 | I-8 | A resolved thread's root has `parent_id IS NULL` and `thread_reply_count > 0`. | `threads.service` |
 | I-9 | `audit_log` is append-only: no service issues `UPDATE` or `DELETE` against it. | `audit/audit.ts`; held by `audit/append-only.test.ts` |
 | I-10 | The retention purge deletes nothing when `retention_days IS NULL`, and never a message newer than the window. Every run writes one `audit_log` entry for each workspace with retention set (D-139 §3). | `modules/retention/purge.ts` |
-| I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`**, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5) | `modules/users/erasure.ts` |
+| I-11 | An erased user has no personal data on `users`, no live session, **no `github_id`** and no `github_login`, and every message they authored still exists. Erasure never cascades, and a later sign-in creates a new account rather than resurrecting the erased one. (D-27, D-38, D-139 §5) | `modules/users/erasure.ts` |
 
 **What the database enforces, and what stays with the service.** I-3, I-4 and I-6 are constraints now (the
 last with the read-state service, D-99), and I-1 and I-5 are constraints in part (D-90). Four things stay service-level on purpose:
@@ -1519,6 +1529,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0042_object_deletions_due.sql object_deletions.due_at: an upload's keys, written ahead, due after a grace  (D-141 §4)
 0043_messages_search_folded.sql purlay_fold + idx_messages_search_folded replace idx_messages_search: case by Unicode  (D-105 §1, #700)
 0044_thread_follows.sql      thread_follows: a person's choice to follow a thread, or let it go  (D-161)
+0045_users_github_login.sql  users.github_login: the login as GitHub last gave it, for WORKSPACE_CREATORS  (D-169)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

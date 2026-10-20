@@ -6,8 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
-### Fix — 2026-10-20: two findings of a security review
+### Fix — 2026-10-20: three findings of a security review
 
+- **A workspace creator is the GitHub login, not a username that looks like one (D-169).** A stranger
+  who signed in by email as `alice@…` before GitHub's `alice` made her `alice-1`, and refused her; a
+  listed `bob-1` let in GitHub's `bob`. The login GitHub gives is now kept in `users.github_login`,
+  written on every GitHub sign-in and taken from any account renamed away from it, and
+  `WORKSPACE_CREATORS` is matched against it alone. Erasure clears it; an export omits it.
 - **Image decodes wait in a bounded line (D-170).** Two members asking the proxy for large images
   made an unrelated upload wait 17 seconds and growing. Eight may wait for the node's two decode
   slots, and the proxy holds at most one of them; past that an upload is refused as busy (`429`,

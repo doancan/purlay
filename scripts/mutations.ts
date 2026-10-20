@@ -320,6 +320,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {
+    id: 'erasure-keeps-the-github-login',
+    why: 'an erased person’s GitHub login stays on the tombstone, and a listed creator’s name with it (I-11)',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: '      github_login: null,\n',
+    replace: '',
+    tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
+  },
+  {
     id: 'erasure-keeps-the-session-address',
     why: 'the address each session was used from outlives the person (D-81)',
     file: 'apps/api/src/modules/users/erasure.ts',
@@ -2867,6 +2875,31 @@ export const MUTATIONS: readonly Mutation[] = [
     find: '  if (!Value.Check(Uuid, exportId)) throw notFound();\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
+    id: 'workspace-creators-match-the-username',
+    why: 'a listed GitHub login is matched against the username, which a stranger’s earlier email account can take, leaving the real person a refused `-1`',
+    file: 'apps/api/src/modules/workspaces/creators.ts',
+    find: '      const login = user?.github_login ?? null;\n',
+    replace:
+      "      const login = user === undefined ? null : (await executor.selectFrom('users').select('username').where('id', '=', userId).executeTakeFirstOrThrow()).username;\n",
+    tests: ['apps/api/src/ingress/http/workspace-creators.integration.test.ts'],
+  },
+  {
+    id: 'github-login-kept-by-a-renamed-account',
+    why: 'an account renamed away at GitHub keeps the login it gave up, and a listed creator’s right goes to two people',
+    file: 'apps/api/src/modules/auth/identity.ts',
+    find: '    .set({ github_login: null })\n',
+    replace: '    .set({ github_login: sql<string>`github_login` })\n',
+    tests: ['apps/api/src/ingress/http/workspace-creators.integration.test.ts'],
+  },
+  {
+    id: 'github-login-not-written-on-sign-in',
+    why: 'a GitHub sign-in leaves the login as it was, and a person renamed at GitHub is matched by their old one',
+    file: 'apps/api/src/modules/auth/identity.ts',
+    find: '    .set({ github_login: login })\n',
+    replace: '    .set({ updated_at: sql<Date>`updated_at` })\n',
+    tests: ['apps/api/src/ingress/http/workspace-creators.integration.test.ts'],
   },
   {
     id: 'image-thumbnail-left-behind',

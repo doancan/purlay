@@ -251,9 +251,12 @@ describe('integration: exporting a workspace', () => {
       const byId = new Map(people.map((person) => [person['id'], person]));
       expect(byId.get(pat.userId)?.['email']).toEqual(expect.stringContaining('@'));
       expect(byId.get(fay.userId)).toMatchObject({ email: null, title: null, time_zone: null });
-      expect(people.every((person) => !('github_id' in person) && !('locale' in person))).toBe(
-        true,
-      );
+      expect(
+        people.every(
+          (person) =>
+            !('github_id' in person) && !('github_login' in person) && !('locale' in person),
+        ),
+      ).toBe(true);
 
       // Owner-only, and the trail says it was exported, by nobody in the workspace.
       expect((await stat(target)).mode & 0o777).toBe(0o700);
