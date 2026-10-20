@@ -36,6 +36,8 @@ import {
   RetentionSetting,
   WorkspaceExport,
   AuthMethods,
+  ConnectGitHubResponse,
+  MySignIn,
   EmailSignInPreview,
   type EmailSignInRequest,
   NotificationPage,
@@ -305,6 +307,13 @@ export interface Api {
   readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
+  /** The ways the caller signs in: their address, and the GitHub account connected, if any (D-172). */
+  readonly mySignIn: (signal?: AbortSignal) => Promise<MySignIn>;
+  /**
+   * Starts connecting GitHub to the caller's account (D-172): the answer sets the state's cookie and
+   * says where to send the browser; GitHub sends it back to this workspace's Sessions & account.
+   */
+  readonly connectGitHub: (workspace: string) => Promise<ConnectGitHubResponse>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -747,6 +756,14 @@ export const createApi = (http: Http): Api => {
         options(),
       ),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
+    mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
+    connectGitHub: (workspace) =>
+      http.request(
+        'POST',
+        '/api/me/github/connect',
+        ConnectGitHubResponse,
+        options({ body: { workspace } }),
+      ),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),

@@ -9,6 +9,8 @@
  */
 export const keys = {
   me: ['me'] as const,
+  /** The ways the caller signs in, and the GitHub account connected (D-172). */
+  mySignIn: ['my-sign-in'] as const,
   /** Which ways in this server offers (D-138 §6). */
   authMethods: ['auth-methods'] as const,
   /** A sign-in link's address, read before it is spent (D-138 §4). */

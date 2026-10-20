@@ -40,6 +40,7 @@ export type FailureKey =
   | 'failure.incidentResolved'
   | 'failure.incidentRespondersLimit'
   | 'failure.incidentPostmortemChanged'
+  | 'failure.githubAlreadyConnected'
   | 'failure.generic';
 
 /**
@@ -110,6 +111,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.incidentRespondersLimit';
     case 'INCIDENT_POSTMORTEM_CHANGED':
       return 'failure.incidentPostmortemChanged';
+    // Connecting GitHub to an account that has it (D-172): the page reads the account again.
+    case 'GITHUB_ALREADY_CONNECTED':
+      return 'failure.githubAlreadyConnected';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':
@@ -125,6 +129,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'MESSAGE_ID_CONFLICT':
     case 'INCIDENT_ID_CONFLICT':
     case 'ACCOUNT_EMAIL_CONFLICT':
+    // Said only by the callback, on the settings page, in its own words (D-172).
+    case 'GITHUB_ACCOUNT_TAKEN':
       return 'failure.refused';
     case 'DATABASE_UNAVAILABLE':
     case 'STORAGE_UNAVAILABLE':

@@ -52,7 +52,7 @@ export const tr = {
   'signIn.emailRequired':
     'GitHub hesabında doğrulanmış birincil e-posta yok — GitHub’da birini doğrula, sonra yeniden giriş yap.',
   'signIn.emailTaken':
-    'Bu e-posta başka bir Purlay hesabına ait — o hesabı açtığın GitHub hesabıyla giriş yap.',
+    'Bu e-posta başka bir Purlay hesabına ait. O hesabı e-posta bağlantısıyla açtıysan bağlantıyla giriş yap, sonra Ayarlar → Oturumlar ve hesap’tan GitHub’ı bağla; başka bir GitHub hesabıyla açtıysan onunla giriş yap.',
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden dene.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
@@ -1066,6 +1066,7 @@ export const tr = {
     'Bir olaya müdahale edebilecek kişi sınırına ulaşıldı. Önce birini çıkar.',
   'failure.incidentPostmortemChanged':
     'Sen başladığından beri başka biri postmortemi kaydetti. Yazdığın duruyor: önce onunkini oku, sonra yeniden kaydet.',
+  'failure.githubAlreadyConnected': 'Bu hesaba zaten bir GitHub hesabı bağlı.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',
@@ -1146,6 +1147,31 @@ export const tr = {
   'settings.notifications.noChannels': 'Henüz hiçbir kanalda değilsin.',
   'settings.account.title': 'Oturumlar ve hesap',
   'settings.account.description': 'Nerelerde oturum açık olduğu ve hesabının kendisi.',
+  'settings.account.signIn': 'Nasıl giriş yapıyorsun',
+  'settings.account.email': 'E-posta',
+  'settings.account.emailLinks': 'Bu adrese gönderilen giriş bağlantısıyla giriş yaparsın.',
+  'settings.account.emailGitHub': 'GitHub hesabının adresi. GitHub ile giriş yaparsın.',
+  'settings.account.github': 'GitHub',
+  'settings.account.githubNone':
+    'Bağlı değil. GitHub hesabını bağla; e-postanın yanında onunla da giriş yap.',
+  'settings.account.githubSignsIn': 'Bu GitHub hesabıyla giriş yapabilirsin.',
+  'settings.account.githubConnected': 'Bağlı',
+  'settings.account.githubConnect': 'GitHub’ı bağla',
+  'settings.account.githubConnectFailed': 'GitHub açılamadı.',
+  'settings.account.github.connected': 'GitHub bağlandı — artık onunla da giriş yapabilirsin.',
+  'settings.account.github.cancelled': 'GitHub’da iptal ettin — hiçbir şey bağlanmadı.',
+  'settings.account.github.expired':
+    'Bu bağlamanın süresi doldu ya da başka bir tarayıcıda başlatıldı — hiçbir şey bağlanmadı. “GitHub’ı bağla”ya yeniden bas.',
+  'settings.account.github.session':
+    'GitHub yanıt vermeden önce çıkış yapıldı ya da başka biri olarak giriş yapıldı — hiçbir şey bağlanmadı. “GitHub’ı bağla”ya yeniden bas.',
+  'settings.account.github.taken':
+    'Bu GitHub hesabıyla zaten başka bir Purlay hesabına giriş yapılıyor — hiçbir şey bağlanmadı. GitHub’da kastettiğin hesapla giriş yap, sonra yeniden dene.',
+  'settings.account.github.already': 'Bu hesaba zaten bir GitHub hesabı bağlı.',
+  'settings.account.github.unavailable':
+    'GitHub’a ulaşılamadı — hiçbir şey bağlanmadı. Biraz bekleyip yeniden dene.',
+  'settings.account.github.busy':
+    'Purlay şu an yoğun — hiçbir şey bağlanmadı. Bir dakika bekleyip yeniden dene.',
+  'settings.account.github.failed': 'GitHub bağlanamadı — yeniden dene.',
   'settings.account.sessions': 'Oturumlar',
   'settings.account.here': 'Bu cihaz',
   'settings.account.hereHint': 'Yalnızca bu tarayıcıda Purlay’den çık.',
