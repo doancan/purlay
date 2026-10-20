@@ -2837,6 +2837,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: IMAGES_TESTS,
   },
   {
+    id: 'export-download-id-not-checked',
+    why: 'a download asked for by an id that is no UUID reaches the uuid column, and the database’s error is a 500',
+    file: 'apps/api/src/modules/export/requests.ts',
+    find: '  if (!Value.Check(Uuid, exportId)) throw notFound();\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
+  },
+  {
     id: 'image-thumbnail-left-behind',
     why: 'a refused image’s thumbnail stays in the bucket with no row pointing at it',
     file: 'apps/api/src/modules/attachments/uploads.ts',

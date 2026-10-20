@@ -6,6 +6,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-20: one finding of a security review
+
+- **An export download asked for by an id that is no UUID is `404 EXPORT_NOT_FOUND`**, not the
+  database's error as a 500.
+
 ### Fix — 2026-10-19: the browser tests that failed only under a loaded parallel run
 
 Four specs passed alone and failed beside the rest of the suite. Each cause was found in a trace or a
