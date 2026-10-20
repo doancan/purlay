@@ -220,10 +220,10 @@
   --radius-2xl: 12px;
   --radius-pill: 9999px;
   --size-rail: 56px;
-  --size-sidebar: 240px;
+  --size-sidebar: 264px;
   --size-members: 200px;
-  --size-thread: 380px;
-  --size-feed-max: 760px;
+  --size-thread: 440px;
+  --size-feed-max: 1040px;
   --size-narrow: 900px;
   --size-attachment: 320px;
   --size-control: 32px;
@@ -232,10 +232,10 @@
   --size-badge: 18px;
   --size-dot: 8px;
   --size-code-clamp: 280px;
-  --size-dialog: 480px;
-  --size-settings: 720px;
-  --size-field: 320px;
-  --size-dialog-lg: 640px;
+  --size-dialog: 520px;
+  --size-settings: 960px;
+  --size-field: 360px;
+  --size-dialog-lg: 760px;
   --size-palette: 560px;
   --size-palette-list: 360px;
   --size-toast: 360px;
