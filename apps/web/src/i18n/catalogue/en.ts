@@ -218,6 +218,8 @@ export const en = {
   'audit.action.channel.archived': '{actor} archived {channel}',
   'audit.action.channel.member_added': '{actor} added {target} to a channel',
   'audit.action.channel.member_added_to': '{actor} added {target} to {channel}',
+  'audit.action.channel.member_removed': '{actor} removed {target} from a channel',
+  'audit.action.channel.member_removed_from': '{actor} removed {target} from {channel}',
   'audit.action.integration.token_set': '{actor} set the GitHub token',
   'audit.action.integration.token_removed': '{actor} removed the GitHub token',
   'audit.action.integration.feed_created': '{actor} connected {repository} to a channel',
@@ -248,6 +250,13 @@ export const en = {
     'Every night, messages and files older than {days} days will be deleted for good. This cannot be undone, and the audit trail will say you chose it.',
   'retention.failed': 'The setting was not saved.',
   'retention.saved': 'Saved.',
+  'storage.description':
+    'Files sent here, and files waiting to be sent, count against the workspace’s quota. The server’s operator sets the quota.',
+  'storage.label': 'Storage used',
+  'storage.used': '{used} of {quota}',
+  'storage.left': '{left} left',
+  'storage.full':
+    'No room is left: files are refused until the server’s operator raises the quota.',
   'export.entry': 'Export workspace…',
   'export.title': 'Export {workspace}',
   'export.description':
@@ -322,6 +331,9 @@ export const en = {
   'state.channel.left.title': 'You left this channel',
   'state.channel.left.body':
     'You left it on another screen. Join it again from Browse channels if it is public.',
+  'state.channel.removed.title': 'You were removed from this channel',
+  'state.channel.removed.body':
+    'Somebody took you out of it. Its conversation stays with its members, and one of them can bring you back.',
   'state.workspace.empty.title': 'Pick a channel',
   'state.workspace.empty.body': 'Choose one from the list, or create the first.',
 
@@ -417,6 +429,14 @@ export const en = {
     'Archive #{name}? Nobody will see it any more. Its conversation is kept, and its name is free again.',
   'details.archiveFailed': 'The channel was not archived.',
   'details.archived': '#{name} was archived.',
+  'details.remove': 'Remove',
+  'details.removeLabel': 'Remove {name} from the channel',
+  'details.removeAsk.public':
+    'Remove {name} from #{channel}? Their messages stay, and they can join again.',
+  'details.removeAsk.private':
+    'Remove {name} from #{channel}? They stop seeing it, and their messages stay.',
+  'details.removeFailed': '{name} was not removed.',
+  'details.removeForbidden': 'Only an owner or an admin can remove {name}.',
 
   // ── Messages ────────────────────────────────────────────────────────────
   'message.react': 'React',
@@ -1239,8 +1259,9 @@ export const en = {
   'settings.audit.title': 'Audit log',
   'settings.data.title': 'Data & retention',
   'settings.data.description':
-    'How long the workspace keeps what is said, and taking a copy of it.',
+    'What its files take up, how long it keeps what is said, and taking a copy of it.',
   'settings.data.retention': 'History',
+  'settings.data.storage': 'Storage',
   'settings.data.forever': 'Forever',
   'settings.data.years': { one: '{count} year', other: '{count} years' },
   'settings.data.export': 'Export',

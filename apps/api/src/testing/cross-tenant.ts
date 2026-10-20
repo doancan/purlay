@@ -241,6 +241,13 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'the workspace’s own setting; no channel is named or listed',
     },
   },
+  'GET /api/workspaces/:workspaceId/storage': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace’s own storage and quota; no channel is named or listed',
+    },
+  },
   'PUT /api/workspaces/:workspaceId/retention': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ retentionDays: 90 }),
@@ -282,6 +289,12 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'POST /api/channels/:channelId/leave': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/members': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  // The member named is the crossing's own member: taken out by the owner as the control, and on the
+  // visibility axis the caller itself — which is leaving, served to anybody in the channel (D-172).
+  'DELETE /api/channels/:channelId/members/:userId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/members': {
     refusal: 'CHANNEL_NOT_FOUND',

@@ -586,6 +586,15 @@ describe('the endpoints', () => {
     });
   });
 
+  test('taking somebody out of a channel names them in the path, and reads no answer (D-172)', async () => {
+    const removed = harness(null);
+    await removed.api.removeChannelMember(ID, ID);
+    expect(removed.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/channels/${ID}/members/${ID}`,
+    });
+  });
+
   test('an upload is the file’s bytes to its workspace, with the id and the name in the query, its progress told as a fraction, read as an attachment', async () => {
     const attachment: Attachment = {
       id: ID,
@@ -711,6 +720,12 @@ describe('the endpoints', () => {
       url: `/api/workspaces/${ID}/retention`,
       body: { retentionDays: 90 },
     });
+  });
+
+  test('a workspace’s storage and its quota (D-173): read', async () => {
+    const read = harness({ usedBytes: 1024, quotaBytes: 5 * 1024 ** 3 });
+    expect(await read.api.storage(ID)).toEqual({ usedBytes: 1024, quotaBytes: 5 * 1024 ** 3 });
+    expect(read.calls[0]).toMatchObject({ method: 'GET', url: `/api/workspaces/${ID}/storage` });
   });
 
   test('an owner’s exports (D-140): listed, and one asked for', async () => {

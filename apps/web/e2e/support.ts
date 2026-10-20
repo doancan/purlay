@@ -183,6 +183,8 @@ export interface RoomOptions {
   readonly members?: readonly Persona[];
   /** Messages to put in it, by the people who are in it, in order. */
   readonly messages?: readonly { readonly by: Persona; readonly text: string }[];
+  /** Seen by its members only (D-104); public when left out. */
+  readonly private?: true;
 }
 
 /** A channel of its own, with its people in it and its history written. */
@@ -197,7 +199,11 @@ export const makeRoom = async (tenant: Tenant, options: RoomOptions = {}): Promi
   const name = uniqueName('room');
   const made = await apiAs(tenant, creator).post<{ id: string }>(
     `/api/workspaces/${tenant.workspaceId}/channels`,
-    { name, topic: 'a channel a test made for itself' },
+    {
+      name,
+      topic: 'a channel a test made for itself',
+      ...(options.private === true ? { type: 'private' } : {}),
+    },
   );
   // Brought in by the creator (D-104), not each joining: a join is a write charged to the person
   // who joins, and every room of a run joining dogancan and alice spent the budget their pages

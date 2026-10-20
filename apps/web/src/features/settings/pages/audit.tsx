@@ -104,6 +104,14 @@ export const AuditPage = (): React.JSX.Element => {
           ? t('audit.action.channel.member_added', { actor, target })
           : t('audit.action.channel.member_added_to', { actor, target, channel: `#${name}` });
       }
+      // Named only to a viewer who can see the channel, as a feed's is (D-172).
+      case 'channel.member_removed': {
+        const target = person(entry.targetId ?? undefined);
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        return name == null
+          ? t('audit.action.channel.member_removed', { actor, target })
+          : t('audit.action.channel.member_removed_from', { actor, target, channel: `#${name}` });
+      }
       case 'integration.token_set':
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':

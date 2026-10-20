@@ -588,6 +588,9 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 | Connect a repository's feed to a channel they can see (D-134) | ✅ | ✅ | — |
 | Create channels | ✅ | ✅ | ✅ |
 | Archive channels (D-123) | ✅ | ✅ | — |
+| Take somebody out of a channel they can see — an owner only an owner's (D-172) | ✅ | ✅ | — |
+| Take another member (role `member`) out of a private channel they are in (D-172) | ✅ | ✅ | ✅ |
+| See the workspace's storage and quota (D-173) | ✅ | — | — |
 | Delete any message | ✅ | ✅ | — |
 | Edit / delete own message | ✅ | ✅ | ✅ |
 | Resolve a thread | ✅ | ✅ | ✅ |

@@ -136,8 +136,13 @@ configure what is not already a database constraint.
 > Attachment size is **not** configurable here either: it is enforced by the `attachment_size_limit`
 > CHECK constraint in `SCHEMA.md` §7.2. Changing it is a migration, deliberately — a limit the
 > database enforces cannot be silently widened by an environment variable.
-> Per-workspace storage quota is a column (`workspaces.storage_quota_bytes`), not an env var,
-> because it varies per workspace.
+> Per-workspace storage quota is a column (`workspaces.storage_quota_bytes`, 5 GiB by default), not an
+> env var, because it varies per workspace. It is the operator's to set, never an owner's (D-173):
+> `bun run storage:quota <workspace slug>` prints what the workspace uses of it, and
+> `bun run storage:quota <workspace slug> 20GiB` sets it — whole bytes or a whole number of `KiB`,
+> `MiB`, `GiB` or `TiB`, decimal units refused. It runs with the server's environment, as the jobs do,
+> and takes the workspace row's lock as an upload does. A quota below what is used deletes nothing;
+> uploads are refused until there is room. Owners see the same numbers on Settings → Data & retention.
 
 ---
 

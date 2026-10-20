@@ -226,8 +226,9 @@ export const ChannelScreen = ({ channelId }: { readonly channelId: string }): Re
     );
   }
   if (channel === undefined) {
-    // Archived, or left on another screen, while it was open: said as what happened (D-123).
-    const why = gone === 'archived' ? 'archived' : gone === 'left' ? 'left' : 'missing';
+    // Archived, left on another screen, or taken out by somebody else while it was open: said as
+    // what happened (D-123, D-172).
+    const why = gone ?? 'missing';
     return (
       <>
         <ScreenBar />

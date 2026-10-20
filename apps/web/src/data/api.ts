@@ -34,6 +34,7 @@ import {
   InvitationPage,
   InvitationPreview,
   RetentionSetting,
+  StorageUsage,
   WorkspaceExport,
   AuthMethods,
   EmailSignInPreview,
@@ -153,6 +154,8 @@ export interface Api {
   readonly channelMembers: (channelId: string, signal?: AbortSignal) => Promise<ChannelMemberList>;
   /** Brings somebody from the workspace into the channel (D-104); they are told by the server. */
   readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
+  /** Takes somebody out of the channel (D-172); they are told by the server. */
+  readonly removeChannelMember: (channelId: string, userId: string) => Promise<void>;
   /** The caller's own Deep Work in a workspace (D-108). */
   readonly setDeepWork: (
     workspaceId: string,
@@ -296,6 +299,8 @@ export interface Api {
   readonly consumeEmailSignIn: (token: string) => Promise<void>;
   /** How long the workspace keeps its history; an owner's (D-139 §4). */
   readonly retention: (workspaceId: string, signal?: AbortSignal) => Promise<RetentionSetting>;
+  /** An owner's: the workspace's storage used and its quota (D-173). */
+  readonly storage: (workspaceId: string, signal?: AbortSignal) => Promise<StorageUsage>;
   readonly setRetention: (
     workspaceId: string,
     retentionDays: number | null,
@@ -458,6 +463,8 @@ export const createApi = (http: Http): Api => {
       ),
     addChannelMember: (channelId, userId) =>
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
+    removeChannelMember: (channelId, userId) =>
+      http.send('DELETE', `/api/channels/${at(channelId)}/members/${at(userId)}`, options()),
     setDeepWork: (workspaceId, input) =>
       http.request(
         'PUT',
@@ -723,6 +730,13 @@ export const createApi = (http: Http): Api => {
         'GET',
         `/api/workspaces/${at(workspaceId)}/retention`,
         RetentionSetting,
+        options({}, signal),
+      ),
+    storage: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/storage`,
+        StorageUsage,
         options({}, signal),
       ),
     setRetention: (workspaceId, retentionDays) =>

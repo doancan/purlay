@@ -27,7 +27,7 @@ export interface Formatters {
   readonly number: (value: number) => string;
   /** Names joined as the language joins them: "Alice, Bob and 3 others", "Alice, Bob ve 3 kişi daha". */
   readonly list: (items: readonly string[]) => string;
-  /** A file's size: bytes, then kilobytes and megabytes of 1024, one decimal at most. */
+  /** A size: bytes, then kilobytes, megabytes and gigabytes of 1024, one decimal at most. */
   readonly bytes: (value: number) => string;
 }
 
@@ -77,12 +77,13 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
   const year = new Intl.DateTimeFormat('en-CA', { year: 'numeric', ...zone });
   const numbers = new Intl.NumberFormat(locale);
   const names = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
-  const inUnit = (unit: 'byte' | 'kilobyte' | 'megabyte'): Intl.NumberFormat =>
+  const inUnit = (unit: 'byte' | 'kilobyte' | 'megabyte' | 'gigabyte'): Intl.NumberFormat =>
     new Intl.NumberFormat(locale, { style: 'unit', unit, maximumFractionDigits: 1 });
-  const [inBytes, inKilobytes, inMegabytes] = [
+  const [inBytes, inKilobytes, inMegabytes, inGigabytes] = [
     inUnit('byte'),
     inUnit('kilobyte'),
     inUnit('megabyte'),
+    inUnit('gigabyte'),
   ];
 
   // Yesterday is a calendar day, not 24 hours ago: on the two days a year the
@@ -118,6 +119,8 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
         ? inBytes.format(value)
         : value < 1024 * 1024
           ? inKilobytes.format(value / 1024)
-          : inMegabytes.format(value / (1024 * 1024)),
+          : value < 1024 * 1024 * 1024
+            ? inMegabytes.format(value / (1024 * 1024))
+            : inGigabytes.format(value / (1024 * 1024 * 1024)),
   };
 };

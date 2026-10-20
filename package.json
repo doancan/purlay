@@ -42,6 +42,7 @@
     "job": "bun run apps/api/src/cli/jobs.ts",
     "export:workspace": "bun run apps/api/src/cli/export-workspace.ts",
     "erase:content": "bun run apps/api/src/cli/erase-content.ts",
+    "storage:quota": "bun run apps/api/src/cli/storage-quota.ts",
     "knip": "knip",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -137,11 +137,13 @@ unresolved threads.
 
 **4.3 · Channels & DMs**
 Public and private channels · DMs, workspace-scoped (D-6) · a DM to yourself, which is also the
-scratchpad · invites and roles (owner/admin/member) · per-channel notification level
+scratchpad · invites and roles (owner/admin/member) · bringing people into a channel and taking
+them out (D-104, D-172) · per-channel notification level
 
 **4.4 · Attachments** (D-16)
 Paste-to-upload for images · file size capped by the `attachment_size_limit` constraint
-(`SCHEMA.md` §7.2, currently 25 MiB) · image thumbnails · per-workspace storage quota
+(`SCHEMA.md` §7.2, currently 25 MiB) · image thumbnails · per-workspace storage quota, shown
+to owners and set by the operator (D-173)
 
 **4.5 · Noise control** (D-12, D-15, D-29)
 `@username` mentions · **thread participation** — a reply notifies the root author and everyone

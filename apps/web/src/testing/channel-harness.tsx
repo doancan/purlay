@@ -46,7 +46,7 @@ export interface ChannelOptions {
   /** The workspace's members, by username, for mentions. */
   readonly members?: readonly {
     readonly user: User;
-    readonly role?: 'member' | 'owner';
+    readonly role?: 'member' | 'admin' | 'owner';
     readonly profile?: Profile;
   }[];
   readonly messages?: MessagePage | (() => Promise<MessagePage>);

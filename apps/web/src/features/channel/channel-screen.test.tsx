@@ -55,6 +55,11 @@ describe('a channel that goes away while it is open (D-123)', () => {
   test.each([
     ['archived by an admin', 'archived' as const, 'This channel was archived'],
     ['left on another screen', 'left' as const, 'You left this channel'],
+    [
+      'taken out by somebody else (D-172)',
+      'removed' as const,
+      'You were removed from this channel',
+    ],
   ])('%s: the screen says so, not that it was never there', async (_why, reason, title) => {
     const view = await mountChannel({ messages: page([]) });
     view.engine().store.setState({ gone: { [IDS.api]: reason } });

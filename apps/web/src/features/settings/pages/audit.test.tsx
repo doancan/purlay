@@ -332,6 +332,33 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('somebody taken out of a channel is said with who, naming the channel only to a viewer who can see it (D-172)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'channel.member_removed',
+              targetType: 'user',
+              targetId: BOB.id,
+              // A private channel this viewer is not in stays unnamed.
+              metadata: { channelId: entryId(99) },
+            }),
+            anEntry(1, {
+              action: 'channel.member_removed',
+              targetType: 'user',
+              targetId: BOB.id,
+              metadata: { channelId: IDS.api },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} removed ${BOB.displayName} from a channel`,
+      `${ME.displayName} removed ${BOB.displayName} from #api`,
+    ]);
+  });
+
   test('an action this client does not know is said by its name; an erased actor or a gone channel is said as such', async () => {
     const view = await openPage({
       audit: () =>

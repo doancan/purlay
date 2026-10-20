@@ -92,6 +92,7 @@ import {
   readWorkspace,
   updateWorkspace,
   readRetentionSetting,
+  readStorageUsage,
   updateRetentionSetting,
 } from './workspaces';
 import { readPushKey, setMyLocale, subscribeDevice, unsubscribeDevice } from './push';
@@ -108,6 +109,7 @@ import {
   archive,
   changeChannel,
   leave,
+  removeFromChannel,
   listChannelMembers,
 } from './channels';
 import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
@@ -590,6 +592,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         await updateRetentionSetting(dependencies, request, params.workspaceId, body),
     )
     .get(
+      '/api/workspaces/:workspaceId/storage',
+      async ({ request, params }) =>
+        await readStorageUsage(dependencies, request, params.workspaceId),
+    )
+    .get(
       '/api/workspaces/:workspaceId/audit',
       async ({ request, params }) =>
         await readAuditTrail(dependencies, request, params.workspaceId),
@@ -776,6 +783,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
     .post('/api/channels/:channelId/leave', async ({ request, params, set }) => {
       await leave(sending, request, params.channelId);
+      set.status = 204;
+      return null;
+    })
+    .delete('/api/channels/:channelId/members/:userId', async ({ request, params, set }) => {
+      await removeFromChannel(sending, request, params.channelId, params.userId);
       set.status = 204;
       return null;
     })
