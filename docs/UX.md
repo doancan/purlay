@@ -58,7 +58,7 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the
+- **Sidebar (264px)** — the workspace name with a chevron, which opens the **workspace menu** (the
   workspaces to switch to, **Create workspace…**, and for an owner or an admin **Invite people…** and
   **Workspace settings**, D-146), the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
@@ -100,10 +100,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   empty view there is one more control. The name is cut with an ellipsis before anything is drawn
   over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
-- **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
-  eye does not travel back across the window to find where a line starts.
+- **Feed** — the single column. Max width 1040px, centred in the space beside the sidebar (D-119 §7,
+  D-175), so a wide window is used and a line is still read without travelling across it.
 - **Member list** — collapsed by default. Presence is decoration, not information.
-- **Thread panel (380px)** — on the right of the channel, only while a thread is open (§4, D-122).
+- **Thread panel (440px)** — on the right of the channel, only while a thread is open (§4, D-122).
   The feed keeps the rest of the width.
 - **Files panel** — the same place, opened by the header's **Files** control (D-129): every file
   shared in the channel, newest first, each with who shared it, when and its size. An image shows its

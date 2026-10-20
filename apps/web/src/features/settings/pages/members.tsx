@@ -4,8 +4,9 @@
  *
  * What is offered is what the server would allow, so nothing here is refused for being forbidden: an
  * admin manages members and admins and does not touch an owner's row or make an owner; an owner does
- * all of it. Nobody changes their own row — the way to stop being an owner is another owner. The
- * server stays the authority: the last owner (I-2) comes back as `LAST_OWNER` and is said in words,
+ * all of it. A person's own role is theirs to change too — an owner steps down once there is another
+ * — asked in the row first, since only somebody else can change it back; removing oneself is leaving,
+ * not offered here. The server stays the authority: the last owner (I-2) comes back as `LAST_OWNER` and is said in words,
  * and the list is read again after every change, so what is shown is what the server kept.
  *
  * Removing someone costs them every channel at once, so it asks first, in the row itself. The list is
