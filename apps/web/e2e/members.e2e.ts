@@ -17,8 +17,9 @@ test.describe('members and roles', () => {
     const main = await openSettings(page, tenant.slug, 'members', 'Members');
     const carol = world.personas.carol.username;
     const role = main.getByRole('combobox', { name: /^Role of / });
-    // The owner's own row offers nothing; the others offer a role each.
-    await expect(role).toHaveCount(3);
+    // Every row offers a role, the owner's own included: an owner may step down once there is
+    // another, asked in the row first (D-111).
+    await expect(role).toHaveCount(4);
     const carolsRole = main.locator('li', { hasText: `@${carol}` }).getByRole('combobox');
     await carolsRole.selectOption('admin');
     await expect(carolsRole).toHaveValue('admin');
