@@ -4479,7 +4479,7 @@ can narrow it with a role. **Rejected: deferring private channels to #50/#51.** 
 channel a stranger to it cannot read before it moves in (S-1).
 
 **Not yet:** leaving and removing (`POST …/leave`, Phase 1, with #51's roles), and the client's half
-— the option when creating, and bringing people in — which is a `web` issue. *Leaving is D-123.*
+— the option when creating, and bringing people in — which is a `web` issue. *Leaving is D-123.* *Removing is D-172.*
 
 **Amended 2026-10-13 (#520) — a private channel's name is not private.** Channel names are unique per
 workspace across public and private channels (`idx_channels_unique_name`), so creating or renaming a
@@ -4693,7 +4693,8 @@ bounds the wire, these bound the process. The numbers are bound to the database'
 *Measured 2026-10-12 (Bun 1.4.2, macOS arm64), one 40-million-pixel PNG re-encoded at a time and
 several at once: +118 MiB RSS for one decode, +258 MiB for two, +450 MiB for four, 136–158 ms each.*
 Two keeps a node's peak near a quarter of a gigabyte above its idle; a freed slot is handed to the next
-waiter, never given back, so a newcomer cannot make it three.
+waiter, never given back, so a newcomer cannot make it three. *Amended by D-170:* at most eight wait,
+and the image proxy holds at most one of the two.
 
 **3 · `POST /api/workspaces/:workspaceId/uploads?id=&name=`, raw bytes, `application/octet-stream`.**
 The workspace is the quota's axis; there is no channel until the message. `id` is a UUIDv7 the client
@@ -5409,11 +5410,13 @@ to decide and proceed, and open to their reversal.
    member of a private channel is refused**, `409 LAST_CHANNEL_MEMBER`: only a member brings people
    into one (D-104), so with nobody left it could never be reached again. They bring somebody in
    first, or ask an admin to archive it. A public channel may be left empty — anybody can join it.
+   *Taking somebody else out, and naming yourself, is D-172.*
 4. **A direct message has none of these**: `404 CHANNEL_NOT_FOUND`, the answer `join` gives for a
    channel the endpoint does not serve. It has no name, and it *is* its two people (I-5).
 5. **There is no default channel.** A workspace starts with none and an invitation joins none
    (D-115), so nothing needs protecting from being left or archived. A default channel, if one is
-   ever made, decides that for itself.
+   ever made, decides that for itself. *Amended by D-174:* a workspace starts with `general`, and
+   nothing marks or protects it — it is left and archived by these rules.
 6. **Every open screen is told** (D-85). A rename is `CHANNEL_UPDATED` on the channel's topic — the
    name and topic whole, at the channel row's own count of its changes (`channels.state_version`,
    migration `0023`), so a late frame cannot undo a newer rename, as `CHANNEL_STATE` cannot. An
@@ -6133,7 +6136,9 @@ them.
    pre-hijack this closes: somebody who once held the address — a shared mailbox, a former colleague, a
    recycled domain — makes the email account first and keeps its session, and the victim's GitHub
    sign-in would otherwise walk into it. Connecting the two deliberately, from a signed-in session, is
-   not built here; it is its own decision when somebody needs it.
+   not built here; it is its own decision when somebody needs it. *Amended 2026-10-20 by D-176:* it is
+   built — from a session signed in as the email account, bound to that session; the refusal here stands
+   for every unlinked sign-in, and now names that way through.
 4. **The link carries its token in the fragment**: `APP_URL/sign-in/email#<token>`. A path is logged on
    every request (ARCHITECTURE §10), and mail scanners that open links do not send the fragment. The page
    shows the address the link was sent to — somebody who forwarded their own link cannot sign a victim
@@ -6844,7 +6849,8 @@ to their reversal.
    and compared in any case, or `*` for anybody signed in — what a cloud or a demo wants. A login
    matches the username of an account signed in with GitHub, which is the login as GitHub last gave
    it; an account made by an email link (D-138) has no login, whatever its username spells, because
-   its name came from an address anybody can own. A malformed value refuses to start.
+   its name came from an address anybody can own. A malformed value refuses to start. *Amended by
+   D-169:* matched against the login itself, kept in a column of its own — a username is not one.
 2. **Unset, nobody may but the first person to sign in, and only while the instance has no
    workspace** — the earliest living account, while `workspaces` is empty. The one-command install
    (D-144) still ends with its operator owning the first workspace, and a stranger who signs in after
@@ -7438,6 +7444,359 @@ instruction to decide and proceed, and is open to their reversal.
 **Cost of reversing:** `row-stops.ts` and its one call in `message-row.tsx`, the panel's roving row in
 `thread.tsx`, and their tests. No contract, route or stored fact depends on any of it.
 
+### D-169. `WORKSPACE_CREATORS` is matched against the GitHub login, kept in a column of its own — amends D-155 §1
+
+**Context.** D-155 matched a listed login against the username of an account signed in with GitHub,
+taking the username to be "the login as GitHub last gave it". It is not: a login another account
+already holds here is stored with a `-N` (`availableUsername`), an email link names its account after
+the address's local part (D-138), and a login shaped like an erased account's is given `user-` before
+it (D-139 §5). A security review (2026-10-20) showed both directions: a stranger who signs in by email
+as `alice@…` before GitHub's `alice` does makes her `alice-1`, and she is refused; a listed `bob-1`
+lets in GitHub's `bob`, stored as `bob-1`. Decided under the owner's standing instruction to decide and
+proceed, and open to their reversal.
+
+**Decided.**
+
+1. **`users.github_login`: the login as GitHub gave it at the latest sign-in** (migration 0045,
+   `SCHEMA.md` §3.1). Written on every GitHub sign-in, as GitHub sent it — `TEXT`, never cut to the
+   username's 39, since a cut login is another login. `NULL` for an account made by an email link —
+   until it connects GitHub, which holds the login as a sign-in does (D-176).
+2. **A sign-in takes its login from any other account that still holds it**, in any case. GitHub lets a
+   login be given up and taken by somebody else; whoever signs in with it now is the one GitHub says it
+   is, and an account renamed away keeps no claim until it signs in under its new one.
+3. **`WORKSPACE_CREATORS` is compared with `github_login` alone** (`modules/workspaces/creators.ts`),
+   in any case. The username plays no part.
+4. **Existing accounts are filled where the username is the login unaltered** — a GitHub account whose
+   username has no `-N` and no `user-` before it. Any other is `NULL` until its person next signs in:
+   refused for a while rather than let in on a name that may be somebody else's.
+5. **Personal, as `github_id` is.** Erasure clears it (I-11); an export omits it (D-140).
+
+**Rejected.** *Not suffixing a GitHub login on collision, renaming the email account instead* — it
+moves somebody's name under them and still leaves a username that only usually is a login. *Listing
+GitHub ids instead of logins* — exact, but an operator knows logins, and the id is one GitHub API call
+away for each, at configuration time. *A `UNIQUE` index on the login* — two sign-ins at once would each
+take it from the other, and the loser's sign-in would fail; without it they share it a moment, which
+only refuses neither more than it should. *Resolving the listed logins with GitHub at start-up* — a
+network call to start, and still stale after a rename.
+
+**Cost of reversing:** the column and its index (a migration dropping them), `holdLogin` in
+`auth/identity.ts`, the one comparison in `creators.ts`, a line each in erasure and the export's
+table.
+
+### D-170. Decodes wait in a bounded line, and the image proxy holds at most one — amends D-109 §2
+
+**Context.** At most two decodes ran at once per node (D-109 §2), but the line for them had no bound,
+and the image proxy decoded after its fetch slot was released, so its own bound (four fetching,
+sixteen waiting) did not cover decoding. A security review (2026-10-20) measured a 6300×6300 PNG of
+128 KB taking about 287 ms to decode; two members at their costly-read budget (D-81) made an unrelated
+small upload wait 17 s, and growing — one member could stall every upload on the node.
+
+**Decided.**
+
+1. **At most eight wait for a decode slot, per node.** At about 290 ms a decode at the pixel bound, the
+   last of eight waits about a second and a quarter, as long as an upload should sit before it is told
+   the server is busy. Past it a decode is refused at once, `429 RATE_LIMITED` — what the upload's own
+   gate already answers, and what the composer says as "busy", with Retry. Never a 500.
+2. **The proxy has a share of its own: one decode at a time, four waiting** — a round of its four
+   fetches finishing together. Holding at most one of the node's two slots, a feed of pictures never
+   keeps an upload waiting behind it; past its line, or the node's, the picture is not available now,
+   the same `404 IMAGE_NOT_AVAILABLE` as any failure, with the reason in the log.
+3. **Eight is above what today's callers can make wait at once** (four uploads per node, and the
+   proxy's one), so the node's bound refuses only a caller that has lost its own gate.
+
+Measured after (the review's own script, 2026-10-20): the same small upload decoded in 1 ms after ten
+seconds of two members at budget.
+
+**Rejected.** *Holding the proxy's fetch slot through its decode* — #110's review separated them on
+purpose: a slow server would then hold a decode's turn as well, and the fetch line would wait for both.
+*A longer node line* — a wait nobody sits through, and memory for every buffered image in it. *Ordering
+uploads before proxy decodes in one line* — a priority queue to say what a share says with a second
+`slots`.
+
+**Cost of reversing:** two numbers in `attachments/images.ts`, the share in `images/proxy.ts`, and
+their tests.
+### D-171. A send waiting on its files is the place's, not the composer's; a reply box and a non-member are not heard typing
+
+**Amends `UX.md` §5 and D-114.** An audit of main (2026-10-20) found two things the composer said it did and
+did not. *Send while an upload is in flight* held the send and the files in the composer's own state, and
+the composer is remounted on a channel switch (`<ChannelView key=…>`) and unmounted when a thread's panel
+closes: the words came back as a draft, the files and the send did not — a person who pressed Send and
+moved on believed something had gone that never would. And a thread's reply box announced typing to the
+channel, so its members read "Alice is typing…" and nothing ever arrived in their feed; the server let
+anybody who could *see* a public channel announce there, though only a member may send (D-156).
+
+**Decided.**
+
+1. **The files and the waiting send are held per place, above the composer** — keyed as the draft is (a
+   channel, or one thread in it), for the life of the signed-in page (`features/composer/outbox.ts`, mounted
+   in the shell below the engine). A channel switch, another screen of the workspace or a closed panel
+   loses neither; going back shows the files with their state and *Sends when the files finish uploading*.
+2. **While a composer for the place is on the screen, it sends; while none is, the outbox does**, the moment
+   the last file lands: the words the box held when it went, with the files, to where they were written,
+   and the draft is cleared as a send from the box clears it. The row then paints and reconciles like any
+   other send (`CONTRIBUTING.md` §1.9).
+3. **A file that fails while nobody is looking holds the send back, and says so at once** in a toast naming
+   the place — *Not sent to api: a file did not upload. The message is still there.* — and it is: the words,
+   the files and the reason, with Retry and Remove, when the person goes back. Nothing is sent without a
+   file the person attached.
+4. **A reply box does not announce typing.** `UX.md` §5 already said a reply composer shows nobody typing,
+   because typing belongs to the channel; it now also says nothing to it. No thread-scoped indicator is
+   specified, and none is built: a `TYPING` frame names a channel only.
+5. **The server hears typing only from a channel member.** A visible non-member's announcement is dropped,
+   answered with nothing as every announcement is, and takes no place in the registry.
+
+**Rejected.**
+
+- *Keep the composer mounted per channel, hidden.* Every channel visited would hold a live composer, its
+  effects and its member list; and it does not cover a thread's panel, which is closed, not hidden.
+- *Refuse to switch, or ask, while a send is waiting.* It turns a promise the composer made — send while it
+  uploads — into a dialog the person did not ask for, at the moment they chose to move on.
+- *Send what is ready and drop what failed.* A message that arrives without the file it was about says
+  something other than what was written.
+- *Survive a reload.* The files are in the page's memory; keeping them across a reload means writing blobs
+  to the browser's storage, a client-side store D-7 refuses without a measurement. A reload still keeps the
+  words (the draft).
+
+**Cost of reversing:** `composer/outbox.ts`, its provider and hook in `composer/uploads.tsx`, the provider in
+`shell.tsx` and the two test trees; one condition in `composer.tsx` and one in `realtime/router.ts`; their
+tests and mutation entries. No contract or stored fact depends on any of it.
+### D-172. Somebody can be taken out of a channel — amends D-104, D-123
+
+**Context.** Only leaving existed (D-123); D-104 left *removing* for later. Somebody brought into a
+private channel by mistake could only leave on their own, or be removed from the whole workspace
+(D-111). An audit before a team's daily use found it, and the owner asked for it (2026-10-20). How it
+is built was decided under their standing instruction to decide and proceed, and is open to their
+reversal.
+
+**Decided.**
+
+1. **`DELETE /api/channels/:channelId/members/:userId`**, the path a person's membership has, beside
+   `POST …/members` that brings them in. `204`, and the person is out of the channel; **their messages
+   stay** (D-9), by their name.
+2. **Who may.** An **owner or an admin**, from any channel they can see — a role is not a way round
+   visibility, so a private channel they are not in is the stranger's `404` (D-34), as archiving is
+   (D-123 §2). As for the workspace, **an owner is an owner's to take out** (D-111 §1): an admin is
+   `403` for one. A **member of a private channel** takes out another member of it whose workspace
+   role is `member`: whoever is in a private channel brings people in (D-104), so taking out somebody
+   brought in by mistake is theirs too, and waiting for an admin would leave the mistake in the room.
+   They do not take out an owner or an admin — those run the workspace, and a member removing them is
+   a demotion by another door. **In a public channel a member takes out nobody** (`403`): anybody can
+   join it again, so it would only be a quarrel with a button.
+3. **Yourself is leaving.** Naming yourself is `POST …/leave` by another door — the same last-member
+   refusal, the same `reason: "left"`, nothing on the trail. A refusal would teach a client a second way
+   to say *leave* is wrong; a removal of oneself would put leaving on the audit trail.
+4. **Never in a direct message or a group** (D-127): a conversation's people are its identity and
+   never change. The stranger's `404 CHANNEL_NOT_FOUND`, as leaving and renaming answer one (D-123 §4).
+5. **The last member of a private channel stays** (`409 LAST_CHANNEL_MEMBER`), the rule leaving keeps
+   (D-123 §3): with nobody in it, nobody could reach it again. Somebody who removes must be able to
+   see it, so they are in it and this is reached only by a race, but it is checked under the lock.
+6. **The same discipline as a workspace's removal** (`modules/workspaces/members.ts`): the workspace
+   row first (shared, so a role change waits and the roles read are the ones that hold at the commit,
+   D-111 §2), then the person's membership, then the channel row (#669's order); the roles — the
+   caller's too — are read inside the transaction. Somebody not in the workspace is
+   `404 USER_NOT_FOUND`; somebody not in the channel is `204` again and tells nobody.
+7. **Every open screen of theirs is told** (D-85): their sockets are sent `ACCESS_REVOKED` on their
+   own topic with a new reason, **`removed`**, so a person reading the channel is told what happened
+   — *You were removed from this channel* — rather than that it is not there. Their sidebar loses it at
+   once; a public one comes back to their list as one not joined. What they are told about it stops
+   with the membership: nothing from a private channel, and from a public one only what reaches anybody
+   not in it — a mention of their name, a thread they follow (D-29, D-161).
+8. **On the audit trail** as `channel.member_removed`, the person as its target and the channel by id
+   only, so the audit page names it to a reader who can see it and says "a channel" to anybody else —
+   the rule feeds' entries keep (#691).
+9. **Offered in the channel's details** (D-154, *Members*), on each row the person may remove and not
+   their own: Remove asks in the row first, as Settings → Members does, the row goes at once, and a
+   refusal puts it back and says why. **Not in the sidebar's menu** (D-165): that menu is the person's
+   own relationship to the channel, and taking somebody else out is not one.
+
+**Rejected.** *Any member removes anybody, as D-104 lets any member add* — in a public channel it is a
+quarrel nobody can settle, and in a private one it lets a member take out the people who run the
+workspace. *Owners and admins only* — the people who bring somebody into a private channel are the ones
+who notice the mistake. *Refusing to remove oneself* — a second answer for a request whose outcome is
+exactly leaving. *Telling the rest of the channel* — nobody's screen depends on it; the members list is
+read when it is opened.
+
+**Cost of reversing:** `removeChannelMember` in `modules/channels/settings.ts`, its route, a reason in
+the contract, a row on the audit page and the details' Remove; no table changes shape.
+
+### D-173. A workspace's storage is shown to its owners; its quota stays the operator's
+
+**Context.** D-16 caps uploads per workspace, and the cap is enforced (`modules/attachments/uploads.ts`)
+— but nothing showed it: an owner learned of it when a file was refused, and only SQL changed it.
+`CONFIG.md` said the quota "varies per workspace" and not how. Decided under the owner's standing
+instruction to decide and proceed, and open to their reversal.
+
+**Decided.**
+
+1. **Owners see it**: `GET /api/workspaces/:workspaceId/storage` answers `StorageUsage`, the bytes used
+   and the quota, and Settings → Data & retention shows a meter with the numbers ("1.2 GB of 5 GB"),
+   what is left, the warning tone from nine tenths and the danger tone with a sentence once it is full.
+   An owner's, as retention and exports are: it is what the workspace costs the operator.
+2. **One reading for both.** *Used* is the stored bytes and the uploads still waiting to be sent, the
+   sum the upload check refuses by — the same function (`modules/attachments/quota.ts`) — so the meter
+   never says there is room a refused upload then denies.
+3. **The quota is the operator's**, not the owner's: it is their disk. It is set with
+   `bun run storage:quota <slug> [<size>]` (`CONFIG.md`), whole bytes or binary units; a quota below
+   what is used deletes nothing and refuses uploads until there is room. There is **no in-app control**.
+
+**Rejected.** *An owner raises their own quota* — the cap exists because self-hosters pay for the disk
+(D-16); a control the person who does not pay can turn is not a cap. *An instance-wide default in an
+environment variable* — the quota is per workspace, and a default is already the column's.
+*A documented `UPDATE` instead of a command* — it takes no lock, so an upload in flight could pass
+against the old quota, and a typo in bytes is silent; the command parses and locks.
+
+**Cost of reversing:** a route, a card and a command; no table changes shape.
+
+### D-174. A workspace starts with one channel, `general`, its creator in it — amends D-123 §5
+
+**Context.** Making a workspace made the workspace and its owner's membership and nothing else
+(`modules/workspaces/workspaces.ts`). The person who had just made it landed on *Pick a channel* with
+nothing to pick, and the first person they invited before making one passed a welcome step that
+offered nothing (D-132 §5) and landed on the same empty screen. The first five minutes of the product
+were two empty states. Slack- and Linear-class products start a workspace with a place to talk.
+Decided under the owner's standing instruction to decide and proceed, and open to their reversal.
+
+**Decided.**
+
+1. **A new workspace starts with one public channel named `general`**, its creator in it
+   (`DEFAULT_CHANNEL_NAME`, `packages/types`). Made in the transaction that makes the workspace, by the
+   same `createChannel` a person's **New channel** runs, through the membership guard the creator has
+   just passed: a workspace never exists without it, and it is a channel like any other from its first
+   moment.
+2. **On the trail as every channel made is**: `channel.created` by the creator (D-26), the first entry
+   of every workspace's audit log.
+3. **Named, not described.** A name is what the whole workspace finds a channel by (D-123 §1), and
+   `general` is the one teams already know from every other chat product, Turkish-speaking ones
+   included. **No topic:** the server would have to write it in one language, and the second person
+   may read another. An owner who wants `genel` renames it.
+4. **Nothing marks it afterwards.** No column, no flag: it is renamed, left and archived by D-123's rules,
+   and a workspace whose people archive it is a workspace with no channel, as any other can become.
+   D-123 §5's *there is no default channel* now reads: there is a first channel, and nothing protects it.
+5. **An invitation still joins nothing** (D-115). The welcome step offers `general` with the rest of the
+   public channels by D-132 §5's rules — silent, it is offered and not picked. Joining a channel is the
+   person's choice; the step is where they make it.
+6. **The creator lands in it.** The form goes to `/w/<slug>`, which opens the first channel the person
+   is in (`workspace-home.tsx`): now `general`, never the welcome step, which is the invited person's.
+
+**Rejected.**
+
+- *A default channel joined by every invitation, Slack's `#general`.* It needs the channel marked (a
+  column, and a rule for what happens when it is archived or renamed) and overrides D-115's choice that
+  joining is the person's. The welcome step already puts it one tick away.
+- *The name in the creator's language.* Two people in one workspace may not share one; a name is an
+  identifier, not a sentence.
+- *Making it in the client after the workspace is made.* Two requests, and a workspace with no channel
+  whenever the second fails — the empty state this removes.
+- *A welcome message posted in it.* Words nobody wrote, under somebody's name or a system's, in a
+  product whose history is what people said.
+
+**Cost of reversing:** one call in `createWorkspace`, the constant, their tests and the mutation entry;
+the integration tests that stand on an API-made workspace name their own channel and would still pass.
+No migration: channels already made stay.
+
+
+### D-175. The layout takes the width a desktop window has
+
+**Context.** The columns were sized for a laptop: the feed at most 760px, Settings 720px, the thread
+panel 380px, the sidebar 240px, dialogs 480px and 640px. On a 1440px window the feed left about 190px
+empty on each side, and on a 1920px one about 450px; Settings sat in a column of 640px usable width.
+The owner, judging it live, found the product too narrow. The widths are tokens
+(`packages/tokens/tokens.json`), so the change is the tokens and nothing beside them.
+
+**Decided.**
+
+1. `size-feed-max` 760px → 1040px: the feed, the composer under it and the list screens that share
+   its column (D-158). A bubble is still at most five sixths of the feed (D-119), so a line stays
+   readable while a code block, a diff and a card get the room they lacked.
+2. `size-settings` 720px → 960px, and `size-field` 320px → 360px, so a settings row's label and its
+   control both breathe and a description is not wrapped into a column.
+3. `size-thread` 380px → 440px: a reply's code and the panel's composer toolbar (D-164) fit without
+   the key hints being the only thing dropped.
+4. `size-sidebar` 240px → 264px: longer channel names and a group's faces (D-167) are cut later.
+5. `size-dialog` 480px → 520px and `size-dialog-lg` 640px → 760px, in step with the rest.
+
+Below `size-narrow` nothing changes: every column is the window's width there already.
+
+**Amends** D-110 (the sidebar and the feed's width), D-119 §7, D-122 §3 (the panel's width), D-146 (the
+Settings column) and D-154 (`size-dialog-lg`). Those entries keep the numbers they were decided with;
+this one is where the widths are now.
+
+**Rejected: a fluid feed with no maximum.** On an ultrawide window a line of a few hundred characters
+is not read; the cap is moved, not removed. **Rejected: a density setting** (compact / comfortable) —
+one layout the product is judged in until somebody needs the other.
+
+### D-176. Connecting GitHub to an account made by email, from a session signed in as it — answers D-138 §3
+
+**Context.** The owner's team signs in both ways: with GitHub, and by email link (D-138). D-138 §3 refuses
+a GitHub sign-in whose verified address is an email account's — the pre-hijack it closes is real — and
+left "connecting the two deliberately, from a signed-in session" to a decision of its own. Without it,
+somebody who first came in by link can never use GitHub: their GitHub sign-in is `ACCOUNT_EMAIL_CONFLICT`
+for good. Decided under the owner's standing instruction to decide and proceed, and open to their
+reversal.
+
+**Decided.**
+
+1. **Only an account without a GitHub account connects one, only from a session signed in as it.**
+   Settings → Sessions & account shows *How you sign in* — the address and whether a link to it signs in,
+   and the GitHub login or **Connect GitHub** — and the button is `POST /api/me/github/connect`: a
+   same-origin JSON `POST`, so D-39 §2 refuses it from any other site, and there is no `GET` a link or an
+   image could make. It answers where to send the browser and sets the state cookie.
+2. **The state is a sign-in's, bound to who asked.** The same `__Host-` cookie and ten minutes as D-62,
+   the same HMAC, under a key derived for this purpose alone (`purlay:oauth-connect-state:v1`): the
+   random state, its expiry, the user, the session and the workspace slug to come back to. A sign-in's
+   cookie is never read as a connect's nor the other way round; one this server did not sign as a
+   connect — forged, rewritten, another key — is a sign-in's failure (`expired`), and connects nothing.
+3. **The callback finishes it only in the session that asked.** It is the one callback GitHub knows
+   (D-61); the cookie says which handshake it is. Before GitHub is asked anything, the session signed in
+   in this browser must be the very one named — not merely the same person — so a sign-out between the
+   halves, a browser where somebody else has signed in since, or a cookie carried to another browser
+   ends it (`session`), and the code is never spent. As the account is written the session is held
+   live (`FOR SHARE`, D-85), the row locked, and one connect of a GitHub account runs at a time.
+4. **Never merged, never moved.** A GitHub account another Purlay account signs in with is refused —
+   `GITHUB_ACCOUNT_TAKEN`, `409`, with the unique index behind the check — and so is an account that
+   has one already, `GITHUB_ALREADY_CONNECTED`. What is connected is the account GitHub vouches for with
+   the code; the address plays no part, and nothing the browser sends names it.
+5. **It changes the GitHub columns and the picture, nothing else.** `github_id`, `github_login` — taken
+   from any other account still holding the login, as a sign-in takes it (D-169 §2) — `github_connected_at`
+   (migration 0046), and `avatar_url`, since pictures are GitHub's (D-11) and an account made by email
+   has none of its own to lose. The address, the username and the display name stay the person's; no
+   session is issued. A line is logged at `info` with the user and the session. No audit row: the trail is
+   a workspace's, and connecting touches none.
+6. **After it, the account signs in both ways.** A GitHub sign-in finds it by `github_id` and refreshes
+   the picture and the login only — never the names, which were never GitHub's (D-38's refresh is for an
+   account GitHub made). Its email link still signs in: D-138 §2 keeps links from accounts **GitHub
+   made**, which is what `github_connected_at` tells apart once both have a `github_id`.
+7. **The way through is said where the refusal is.** D-138 §3's refusal stands for every unlinked
+   GitHub sign-in — nothing is ever linked silently — and the sign-in screen's `email-taken` now says it:
+   made with an email link, sign in by link and connect GitHub in Settings → Sessions & account; made with
+   another GitHub account, sign in with that one.
+8. **How it came out is said in words on the page it began on** — `APP_URL/w/<slug>/settings/account?
+   github=<outcome>`, a closed set (`ConnectGitHubOutcome`, `API.md` §2), as D-121 does for a sign-in.
+9. **Erasure and export.** Erasure clears `github_connected_at` with `github_id` and `github_login`
+   (I-11); an export omits it as it omits them (D-140).
+
+**Not built: disconnecting.** An account keeps every way in it has. An account made by email that
+connected GitHub could lose GitHub and keep its link, but nothing needs that yet, and an account GitHub
+made has no other way in — disconnecting it would lock its person out. When it is needed it is its own
+decision: who may, from how recent a sign-in, and what of `WORKSPACE_CREATORS` (D-169) then.
+
+**Rejected.** *Connecting by matching addresses* — D-138 §3, the takeover it closes. *Binding the state
+to the user alone* — a connect would outlive the sign-out of the session that asked, and finish in any of
+the person's browsers. *A second cookie for a connect* — two handshakes in one browser would each find
+the other's state; one cookie, the latest started, is what a person who pressed twice means. *A `GET`
+that starts it, as `/auth/github` does* — a sign-in begun by a third party signs nobody into anything
+they did not hold, but a connect begun by one would start binding an identity to the victim's account.
+*Taking GitHub's name and login as the account's names on connect* — they would move under the person,
+silently. *Merging two accounts when the GitHub account is taken* — one person's messages, memberships
+and audit rows becoming another's is not a sign-in decision. *An audit row in each workspace* — tells
+every workspace's admins about a person's identity elsewhere, which an export already withholds.
+
+**Cost of reversing:** `modules/auth/connect-github.ts`, the connect half of `state.ts`, the branch in
+`ingress/http/auth.ts`'s callback, the two routes, the column (a migration dropping it) and its three
+readers (`identity.ts`, `email-sign-in.ts`, erasure), the card on the account page, the two error codes
+and the outcome set in `@purlay/types`. Accounts already connected keep their `github_id` and become
+accounts that sign in with GitHub and — by D-138 §2 — no longer by link.
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.
@@ -7459,11 +7818,9 @@ Recorded so they are not silently assumed. None block Phase 0.
   which must be zero for legitimate use. Both are recorded: each socket's closing line carries
   `frames`, `peakPerSecond` and `refused` (#61, `realtime/frame-meter.ts`), so the week is a query
   over the log — `bun run report:frames <log>` is that query, and says whether the week closes it.
-- **O-7 · What the command palette is built on.** D-52 named a Radix combobox; Radix does not
-  publish one (`docs/spikes/frontend-budget.md`). `cmdk` is built on Radix and is what the budget
-  measurement used; a listbox hand-built on `@radix-ui/react-popover` is the alternative, and the
-  argument for primitives — that focus and ARIA fail *silently* when hand-written — applies hardest
-  to exactly this component. *Decide with #138, and measure it.*
+- ~~**O-7 · What the command palette is built on.**~~ **Closed by D-98 §7:** a Radix `Dialog`
+  holding a hand-written listbox that follows the WAI-ARIA combobox pattern, held by `axe` and a
+  keyboard-path test; `cmdk` is not adopted.
 - ~~**O-6 · The two markdown packages D-36 named as categories.**~~ **Closed by D-101:** one
   engine, `mdast-util-from-markdown` with four GFM extensions, on both sides, narrowed to what the
   product renders and bounded so a body past the bounds is shown as typed.

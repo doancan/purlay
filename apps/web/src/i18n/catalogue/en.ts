@@ -52,7 +52,7 @@ export const en = {
   'signIn.emailRequired':
     'Your GitHub account has no verified primary email — verify one on GitHub, then sign in again.',
   'signIn.emailTaken':
-    'That email already belongs to another Purlay account — sign in with the GitHub account it was made with.',
+    'That email already belongs to another Purlay account. If you made it with an email link, sign in with a link, then connect GitHub in Settings → Sessions & account; if you made it with another GitHub account, sign in with that one.',
   'signIn.githubUnavailable': 'GitHub could not be reached — wait a moment and try again.',
   'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',
   'signIn.failed': 'Sign-in did not finish — try again.',
@@ -190,6 +190,8 @@ export const en = {
   'members.role.admin': 'Admin',
   'members.role.owner': 'Owner',
   'members.you': 'you',
+  'members.selfAsk': 'Make yourself {role}? Only another owner or admin can change it back.',
+  'members.selfConfirm': 'Change my role',
   'members.remove': 'Remove',
   'members.removeLabel': 'Remove {name}',
   'members.removeAsk': 'Remove {name}? They lose every channel of the workspace.',
@@ -201,6 +203,7 @@ export const en = {
   'audit.description':
     'Who did which administrative thing, newest first. Never what anybody wrote.',
   'audit.empty': 'Nothing administrative has happened yet.',
+  'audit.olderFailed': 'Older entries did not load.',
   'audit.older': 'Load older',
   'audit.someone': 'Someone',
   'audit.someoneElse': 'someone',
@@ -213,6 +216,10 @@ export const en = {
   'audit.action.channel.created': '{actor} created {channel}',
   'audit.action.channel.renamed': '{actor} renamed {from} to {to}',
   'audit.action.channel.archived': '{actor} archived {channel}',
+  'audit.action.channel.member_added': '{actor} added {target} to a channel',
+  'audit.action.channel.member_added_to': '{actor} added {target} to {channel}',
+  'audit.action.channel.member_removed': '{actor} removed {target} from a channel',
+  'audit.action.channel.member_removed_from': '{actor} removed {target} from {channel}',
   'audit.action.integration.token_set': '{actor} set the GitHub token',
   'audit.action.integration.token_removed': '{actor} removed the GitHub token',
   'audit.action.integration.feed_created': '{actor} connected {repository} to a channel',
@@ -243,6 +250,13 @@ export const en = {
     'Every night, messages and files older than {days} days will be deleted for good. This cannot be undone, and the audit trail will say you chose it.',
   'retention.failed': 'The setting was not saved.',
   'retention.saved': 'Saved.',
+  'storage.description':
+    'Files sent here, and files waiting to be sent, count against the workspace’s quota. The server’s operator sets the quota.',
+  'storage.label': 'Storage used',
+  'storage.used': '{used} of {quota}',
+  'storage.left': '{left} left',
+  'storage.full':
+    'No room is left: files are refused until the server’s operator raises the quota.',
   'export.entry': 'Export workspace…',
   'export.title': 'Export {workspace}',
   'export.description':
@@ -317,6 +331,9 @@ export const en = {
   'state.channel.left.title': 'You left this channel',
   'state.channel.left.body':
     'You left it on another screen. Join it again from Browse channels if it is public.',
+  'state.channel.removed.title': 'You were removed from this channel',
+  'state.channel.removed.body':
+    'Somebody took you out of it. Its conversation stays with its members, and one of them can bring you back.',
   'state.workspace.empty.title': 'Pick a channel',
   'state.workspace.empty.body': 'Choose one from the list, or create the first.',
 
@@ -412,6 +429,14 @@ export const en = {
     'Archive #{name}? Nobody will see it any more. Its conversation is kept, and its name is free again.',
   'details.archiveFailed': 'The channel was not archived.',
   'details.archived': '#{name} was archived.',
+  'details.remove': 'Remove',
+  'details.removeLabel': 'Remove {name} from the channel',
+  'details.removeAsk.public':
+    'Remove {name} from #{channel}? Their messages stay, and they can join again.',
+  'details.removeAsk.private':
+    'Remove {name} from #{channel}? They stop seeing it, and their messages stay.',
+  'details.removeFailed': '{name} was not removed.',
+  'details.removeForbidden': 'Only an owner or an admin can remove {name}.',
 
   // ── Messages ────────────────────────────────────────────────────────────
   'message.react': 'React',
@@ -851,6 +876,7 @@ export const en = {
   'composer.attach': 'Attach a file',
   'composer.files': 'Files to send',
   'composer.waiting': 'Sends when the files finish uploading.',
+  'composer.notSent': 'Not sent to {channel}: a file did not upload. The message is still there.',
   'typing.one': '{name} is typing…',
   'typing.two': '{first} and {second} are typing…',
   'typing.several': 'Several people are typing…',
@@ -1095,6 +1121,7 @@ export const en = {
     'That is as many people as an incident has responding. Take somebody off first.',
   'failure.incidentPostmortemChanged':
     'Somebody else saved the postmortem since you began. Your text is kept: read theirs, then save again.',
+  'failure.githubAlreadyConnected': 'This account has a GitHub account connected already.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
@@ -1176,6 +1203,31 @@ export const en = {
   'settings.notifications.noChannels': 'You are in no channels yet.',
   'settings.account.title': 'Sessions & account',
   'settings.account.description': 'Where you are signed in, and your account itself.',
+  'settings.account.signIn': 'How you sign in',
+  'settings.account.email': 'Email',
+  'settings.account.emailLinks': 'A sign-in link sent to this address signs you in.',
+  'settings.account.emailGitHub': 'Your GitHub account’s address. You sign in with GitHub.',
+  'settings.account.github': 'GitHub',
+  'settings.account.githubNone':
+    'Not connected. Connect your GitHub account to sign in with it as well as by email.',
+  'settings.account.githubSignsIn': 'You can sign in with this GitHub account.',
+  'settings.account.githubConnected': 'Connected',
+  'settings.account.githubConnect': 'Connect GitHub',
+  'settings.account.githubConnectFailed': 'GitHub could not be opened.',
+  'settings.account.github.connected': 'GitHub is connected — you can sign in with it from now on.',
+  'settings.account.github.cancelled': 'You cancelled on GitHub — nothing was connected.',
+  'settings.account.github.expired':
+    'That connect expired or was started in another browser — nothing was connected. Press Connect GitHub again.',
+  'settings.account.github.session':
+    'You were signed out, or signed in as somebody else, before GitHub answered — nothing was connected. Press Connect GitHub again.',
+  'settings.account.github.taken':
+    'That GitHub account already signs in to another Purlay account — nothing was connected. On GitHub, sign in as the account you mean, then try again.',
+  'settings.account.github.already': 'This account has a GitHub account connected already.',
+  'settings.account.github.unavailable':
+    'GitHub could not be reached — nothing was connected. Wait a moment and try again.',
+  'settings.account.github.busy':
+    'Purlay is busy right now — nothing was connected. Wait a minute and try again.',
+  'settings.account.github.failed': 'Connecting GitHub did not finish — try again.',
   'settings.account.sessions': 'Sessions',
   'settings.account.here': 'This device',
   'settings.account.hereHint': 'Sign out of Purlay in this browser only.',
@@ -1233,8 +1285,9 @@ export const en = {
   'settings.audit.title': 'Audit log',
   'settings.data.title': 'Data & retention',
   'settings.data.description':
-    'How long the workspace keeps what is said, and taking a copy of it.',
+    'What its files take up, how long it keeps what is said, and taking a copy of it.',
   'settings.data.retention': 'History',
+  'settings.data.storage': 'Storage',
   'settings.data.forever': 'Forever',
   'settings.data.years': { one: '{count} year', other: '{count} years' },
   'settings.data.export': 'Export',
@@ -1253,7 +1306,7 @@ export const en = {
   'user.signOutEverywhere.entry': 'Sign out everywhere…',
   'user.signOutEverywhere.title': 'Sign out everywhere?',
   'user.signOutEverywhere.body':
-    'Every browser and device signed in as you is signed out, this one included. You sign in again with GitHub.',
+    'Every browser and device signed in as you is signed out, this one included. You sign in again the way you usually do.',
   'user.menuFor': 'Account: {name}',
 
   // ── Command palette (D-98) ──────────────────────────────────────────────

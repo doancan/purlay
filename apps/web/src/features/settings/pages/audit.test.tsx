@@ -280,6 +280,33 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('somebody added to a channel is said with whom, and the channel only to a viewer who can see it', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'channel.member_added',
+              targetType: 'user',
+              targetId: ALICE.id,
+              // A private channel this viewer is not in stays unnamed, as a feed's does (#691).
+              metadata: { channelId: entryId(99) },
+            }),
+            anEntry(1, {
+              action: 'channel.member_added',
+              targetType: 'user',
+              targetId: BOB.id,
+              metadata: { channelId: IDS.api },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} added ${ALICE.displayName} to a channel`,
+      `${ME.displayName} added ${BOB.displayName} to #api`,
+    ]);
+  });
+
   test('a feed entry names its channel to a viewer who can see it, and only to them (#691)', async () => {
     const view = await openPage({
       audit: () =>
@@ -302,6 +329,33 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual([
       `${ME.displayName} disconnected acme/api from a channel`,
       `${ME.displayName} connected acme/api to #api`,
+    ]);
+  });
+
+  test('somebody taken out of a channel is said with who, naming the channel only to a viewer who can see it (D-172)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'channel.member_removed',
+              targetType: 'user',
+              targetId: BOB.id,
+              // A private channel this viewer is not in stays unnamed.
+              metadata: { channelId: entryId(99) },
+            }),
+            anEntry(1, {
+              action: 'channel.member_removed',
+              targetType: 'user',
+              targetId: BOB.id,
+              metadata: { channelId: IDS.api },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} removed ${BOB.displayName} from a channel`,
+      `${ME.displayName} removed ${BOB.displayName} from #api`,
     ]);
   });
 
@@ -338,6 +392,29 @@ describe('the audit log', () => {
     expect(asked).toEqual([undefined, entryId(2)]);
     expect(lines(view)).toHaveLength(2);
     expect(within(view.getByRole('main')).queryByRole('button', { name: 'Load older' })).toBeNull();
+  });
+
+  test('an older page that fails says so with the reason, and Load older asks again', async () => {
+    let older = 0;
+    const view = await openPage({
+      audit: (_workspace, before) => {
+        if (before === undefined) return Promise.resolve(page([anEntry(2, {})], entryId(2)));
+        older += 1;
+        return older === 1
+          ? Promise.reject(new ApiError(0, 'NETWORK', 'down'))
+          : Promise.resolve(page([anEntry(1, {})]));
+      },
+    });
+    const main = within(view.getByRole('main'));
+    await person().click(main.getByRole('button', { name: 'Load older' }));
+    await settle();
+    // Not silent: the end of the log and a failed request no longer look the same.
+    expect(main.getByRole('alert').textContent).toContain('Older entries did not load.');
+    expect(lines(view)).toHaveLength(1);
+    await person().click(main.getByRole('button', { name: 'Load older' }));
+    await settle();
+    expect(main.queryByRole('alert')).toBeNull();
+    expect(lines(view)).toHaveLength(2);
   });
 
   test('empty, it says so; failing, it says why with Retry; reading, it is a status', async () => {

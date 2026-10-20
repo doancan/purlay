@@ -235,7 +235,8 @@ What the shape is for, which the types do not say:
   an open inbox reads it again (D-106); a channel starred or
   let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
-  hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
+  hears it only from a member — what a non-member types could not be sent (D-156) — and from a
+  channel's box, never a thread's reply box (D-171); it hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. `ACTIVE` is the client's
   word that its page is in front of the person in a workspace: answered with nothing, heard only by the
   push sender, which holds that workspace's pushes for its window (D-143). Each frame joined the union
@@ -485,9 +486,10 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
    `/user/emails`**.
 3. Resolve identity (D-38): take the primary **verified** email, or refuse with `EMAIL_REQUIRED`.
    Upsert `users` by `github_id`. A different `github_id` carrying an already-registered email is
-   refused with `ACCOUNT_EMAIL_CONFLICT` — **never linked silently** (D-5). `username` is
-   refreshed from GitHub's `login` and is display-only; a collision caused by a rename is stored
-   with a numeric suffix and logged.
+   refused with `ACCOUNT_EMAIL_CONFLICT` — **never linked silently** (D-5), an email link's account
+   included (D-138 §3). `username` is refreshed from GitHub's `login` and is display-only; a
+   collision caused by a rename is stored with a numeric suffix and logged. An account made by email
+   that connected GitHub keeps its own names (below, D-176).
 4. Generate a 32-byte random token. Store **only its SHA-256** in `sessions`. (D-11)
 5. Set the session cookie — named, with its attributes, in `apps/api/src/platform/cookies.ts`: `__Host-`-prefixed, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30-day expiry — and spend the `state` cookie, on this and every other outcome. (D-62)
 6. Any refusal on the way is a redirect to the sign-in screen with a reason, never a JSON body: the
@@ -498,6 +500,20 @@ victims into an attacker's account. The cookie carrying it is **signed**, with a
 `ENCRYPTION_KEY` rather than a second secret: a sibling subdomain can write a cookie for this
 origin, so an equality check alone would still let an attacker supply both halves (D-62). Every way
 the handshake can be wrong produces the same refusal.
+
+**Connecting GitHub to an account made by email** (D-176). An email link's account has no
+`github_id`, and a GitHub sign-in on its address is refused (step 3, D-138 §3). The person connects
+the two deliberately, from a session signed in as that account: `POST /api/me/github/connect` — a
+same-origin JSON `POST`, never a `GET` — issues a state that names the user and the session, in the
+same `__Host-` cookie and with the same lifetime as a sign-in's, signed under a key derived for this
+purpose alone, and sends the browser to GitHub. The one callback tells the two handshakes apart by
+what was signed, and for a connect requires the session signed in in this browser to be the very one
+that asked — checked before GitHub is asked, and held live (`FOR SHARE`, D-85) as the account is
+written — the account to have no GitHub account, and the GitHub account to be nobody else's. It sets
+`github_id`, `github_login` and the picture, never the address, the username or the display name, and
+issues no session. From then on a GitHub sign-in finds the account by `github_id` (step 3) and leaves
+its names alone, and its email link still signs in. There is no disconnecting yet: an account keeps
+every way in it has.
 
 **Validating one.** The token is looked up by its hash, and a session resolves only while it is
 unexpired, unrevoked, and owned by a user who has not been deleted — a soft-deleted account does
@@ -587,6 +603,9 @@ endpoints those are is read from `API.md` and checked by the build rather than r
 | Connect a repository's feed to a channel they can see (D-134) | ✅ | ✅ | — |
 | Create channels | ✅ | ✅ | ✅ |
 | Archive channels (D-123) | ✅ | ✅ | — |
+| Take somebody out of a channel they can see — an owner only an owner's (D-172) | ✅ | ✅ | — |
+| Take another member (role `member`) out of a private channel they are in (D-172) | ✅ | ✅ | ✅ |
+| See the workspace's storage and quota (D-173) | ✅ | — | — |
 | Delete any message | ✅ | ✅ | — |
 | Edit / delete own message | ✅ | ✅ | ✅ |
 | Resolve a thread | ✅ | ✅ | ✅ |
@@ -674,7 +693,9 @@ stored representation. (D-36)
    host and no address inside the network is reachable through it. It is charged to the reader's
    budget for costly reads — not the one they send with (D-81) — and only the fetch holds one of the
    node's four slots, with at most sixteen waiting for one: past that line a picture is not available
-   now, the same 404 as any failure, rather than another connection held. **Accepted, stated:** a name
+   now, the same 404 as any failure, rather than another connection held. Its decode then takes at
+   most one of the node's two decode slots, four waiting (D-170), so pictures never keep an upload
+   waiting. **Accepted, stated:** a name
    refused by policy fails in the time DNS takes and a reachable host in the time it answers, so an
    attacker can tell which names resolve privately; and a public service that trusts this server's
    address can be sent a GET — to a name with a publicly trusted certificate, returning nothing but an
@@ -703,7 +724,8 @@ stored representation. (D-36)
 ```
 Client detects a GitHub URL
       └─▶ POST /api/integrations/github/unfurl { url }
-              ├─ hash the workspace and the URL (D-112)
+              ├─ no token → return null (a plain link at once, whatever is cached)
+              ├─ hash the workspace, the token's version (its updated_at) and the URL (D-112)
               ├─ SELECT FROM link_previews WHERE url_hash = $1 AND expires_at > NOW()
               │     └─ hit  → return
               └─ miss → GitHub API with the WORKSPACE token (D-23)
@@ -713,7 +735,9 @@ Client detects a GitHub URL
 ```
 
 Negative caching matters: without it, one broken link pasted in a busy channel re-hits the API
-on every render for every viewer.
+on every render for every viewer. The token's version is in the key so a token replaced is asked
+again at once: "not there" was what the old token could see, and an admin who fixed it should not
+wait out the hour.
 
 ```typescript
 export interface GitHubCardMetadata {

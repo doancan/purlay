@@ -53,7 +53,7 @@ const aWorld = async (db: Executor): Promise<World> => {
   });
   const workspaceId = ((await created.json()) as { id: string }).id;
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   return { alice: alice.cookie, outsider: outsider.cookie, channelId };

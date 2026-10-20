@@ -53,7 +53,7 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 | `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38) |
 | `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
-| `WORKSPACE_CREATORS` | — | unset | Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against accounts signed in with GitHub (an account made by an email link has no login), or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is reachable from the internet if more than its first person should make workspaces; a malformed value refuses to start |
+| `WORKSPACE_CREATORS` | — | unset | Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against the login GitHub last gave each account signed in with it — never its username here, which may carry a `-N` (D-169); an account made by an email link has no login, or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is reachable from the internet if more than its first person should make workspaces; a malformed value refuses to start |
 | `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
@@ -136,8 +136,13 @@ configure what is not already a database constraint.
 > Attachment size is **not** configurable here either: it is enforced by the `attachment_size_limit`
 > CHECK constraint in `SCHEMA.md` §7.2. Changing it is a migration, deliberately — a limit the
 > database enforces cannot be silently widened by an environment variable.
-> Per-workspace storage quota is a column (`workspaces.storage_quota_bytes`), not an env var,
-> because it varies per workspace.
+> Per-workspace storage quota is a column (`workspaces.storage_quota_bytes`, 5 GiB by default), not an
+> env var, because it varies per workspace. It is the operator's to set, never an owner's (D-173):
+> `bun run storage:quota <workspace slug>` prints what the workspace uses of it, and
+> `bun run storage:quota <workspace slug> 20GiB` sets it — whole bytes or a whole number of `KiB`,
+> `MiB`, `GiB` or `TiB`, decimal units refused. It runs with the server's environment, as the jobs do,
+> and takes the workspace row's lock as an upload does. A quota below what is used deletes nothing;
+> uploads are refused until there is room. Owners see the same numbers on Settings → Data & retention.
 
 ---
 

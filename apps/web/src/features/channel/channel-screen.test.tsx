@@ -17,6 +17,7 @@ import {
   aMessage,
   someChannels,
   messageIdAt,
+  openQuestionsOf,
 } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 
@@ -54,6 +55,11 @@ describe('a channel that goes away while it is open (D-123)', () => {
   test.each([
     ['archived by an admin', 'archived' as const, 'This channel was archived'],
     ['left on another screen', 'left' as const, 'You left this channel'],
+    [
+      'taken out by somebody else (D-172)',
+      'removed' as const,
+      'You were removed from this channel',
+    ],
   ])('%s: the screen says so, not that it was never there', async (_why, reason, title) => {
     const view = await mountChannel({ messages: page([]) });
     view.engine().store.setState({ gone: { [IDS.api]: reason } });
@@ -189,14 +195,11 @@ describe('the header', () => {
     const view = await mountChannel({
       messages: page([aMessage(1)]),
       api: {
-        unresolved: () =>
-          Promise.resolve(
-            page([
-              aMessage(7, { channelId: IDS.incidents }),
-              aMessage(6),
-              aMessage(5, { channelId: IDS.deploys }),
-            ]),
-          ),
+        unresolved: openQuestionsOf([
+          aMessage(7, { channelId: IDS.incidents }),
+          aMessage(6),
+          aMessage(5, { channelId: IDS.deploys }),
+        ]),
       },
     });
     expect(view.getByRole('link', { name: /Open questions/ }).getAttribute('aria-label')).toBe(
@@ -206,7 +209,7 @@ describe('the header', () => {
 
     const elsewhere = await mountChannel({
       messages: page([aMessage(1)]),
-      api: { unresolved: () => Promise.resolve(page([aMessage(7, { channelId: IDS.incidents })])) },
+      api: { unresolved: openQuestionsOf([aMessage(7, { channelId: IDS.incidents })]) },
     });
     expect(elsewhere.getByRole('link', { name: /Open questions/ }).textContent).toBe(
       'Open questions',
@@ -220,7 +223,7 @@ describe('the header', () => {
       channelId: IDS.dm,
       channels: [dm],
       messages: page([aMessage(1, { channelId: IDS.dm })]),
-      api: { unresolved: () => Promise.resolve(page([aMessage(7)])) },
+      api: { unresolved: openQuestionsOf([aMessage(7)]) },
     });
     expect(quiet.queryByRole('navigation', { name: 'Channel views' })).toBeNull();
     quiet.unmountAll();
@@ -230,7 +233,7 @@ describe('the header', () => {
       channels: [dm],
       messages: page([aMessage(1, { channelId: IDS.dm })]),
       api: {
-        unresolved: () => Promise.resolve(page([aMessage(7), aMessage(6, { channelId: IDS.dm })])),
+        unresolved: openQuestionsOf([aMessage(7), aMessage(6, { channelId: IDS.dm })]),
       },
     });
     const questions = asking.getByRole('link', { name: /Open questions/ });

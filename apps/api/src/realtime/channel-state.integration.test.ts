@@ -88,7 +88,7 @@ const aRoom = async (): Promise<Room> => {
   const channelId = (
     (await (
       await http('POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-        name: 'general',
+        name: 'ops',
       })
     ).json()) as { id: string }
   ).id;

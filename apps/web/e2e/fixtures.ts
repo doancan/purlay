@@ -187,7 +187,7 @@ interface Fixtures {
   readonly world: World;
   /** Carries the genuine session cookie of one of the seeded people; returns where it signed in. */
   readonly signIn: (persona?: Persona) => Promise<void>;
-  /** Fails with every violation, named, if axe finds any on the page as it is now. */
+  /** Fails with every violation, named, if axe finds any on the page as it is now — the scope’s page, when one is given. */
   readonly expectNoAxe: (scope?: Locator) => Promise<void>;
   /** The workspace as the API clients see it. */
   readonly tenant: Tenant;
@@ -459,10 +459,17 @@ export const test = base.extend<Fixtures>({
 
   expectNoAxe: async ({ page }, use) => {
     await use(async (scope) => {
-      let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
+      // The page the scope is on: another person's browser (`newcomer`) is audited as their own.
+      const audited = scope?.page() ?? page;
+      let builder = new AxeBuilder({ page: audited }).withTags([
+        'wcag2a',
+        'wcag2aa',
+        'wcag21a',
+        'wcag21aa',
+      ]);
       if (scope !== undefined) builder = builder.include(await scope.evaluate(selectorOf));
       const { violations: found } = await builder.analyze();
-      const violations = await withoutRowsOut(page, found);
+      const violations = await withoutRowsOut(audited, found);
       const summary = violations.map(
         (violation) =>
           `${violation.id} (${violation.impact ?? 'unknown'}): ${violation.help}\n` +

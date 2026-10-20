@@ -178,7 +178,7 @@ const aWorld = async (db: Executor): Promise<World> => {
 
   const visible = await created(
     await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, owner.cookie, {
-      name: 'general',
+      name: 'ops',
     }),
   );
   expect((await call(db, 'POST', `/api/channels/${visible}/join`, outsider.cookie)).ok).toBe(true);

@@ -107,6 +107,13 @@ export const CreateWorkspaceRequest = FromClient({
 export type CreateWorkspaceRequest = Static<typeof CreateWorkspaceRequest>;
 
 /**
+ * The channel a new workspace starts with, its creator in it, so the first screen is a place to talk
+ * and an invited person has somewhere to go (D-174). A name, as every channel's is — renamed, left or
+ * archived like any other; nothing marks it afterwards.
+ */
+export const DEFAULT_CHANNEL_NAME = 'general';
+
+/**
  * `PATCH /api/workspaces/:workspaceId` — an owner or an admin renames the workspace (D-124). The name
  * only: the slug is its address, in every link already pasted, and does not move (D-124).
  */
@@ -134,6 +141,18 @@ export const RetentionSetting = Type.Object({ retentionDays: RetentionDays });
 export type RetentionSetting = Static<typeof RetentionSetting>;
 export const SetRetentionRequest = FromClient({ retentionDays: RetentionDays });
 export type SetRetentionRequest = Static<typeof SetRetentionRequest>;
+
+/**
+ * `GET /api/workspaces/:workspaceId/storage` — how much of its quota the workspace's files take, an
+ * owner's to read (D-173). `usedBytes` is what the upload check counts — the files sent and the uploads
+ * still waiting to be — so the meter and a refused upload never disagree. The quota is the operator's
+ * to set (`bun run storage:quota`), never the owner's: it is the operator's disk.
+ */
+export const StorageUsage = Type.Object({
+  usedBytes: Type.Integer({ minimum: 0 }),
+  quotaBytes: Type.Integer({ minimum: 0 }),
+});
+export type StorageUsage = Static<typeof StorageUsage>;
 
 /** A member as the rest of the workspace sees them — never their email address. */
 export const WorkspaceMember = Type.Object({
@@ -302,6 +321,21 @@ export type ThreadPage = Static<typeof ThreadPage>;
  */
 export const UnresolvedPage = Page(Message);
 export type UnresolvedPage = Static<typeof UnresolvedPage>;
+
+/**
+ * Its query: a page, and optionally one channel's questions alone — what a channel's header counts
+ * and its narrowed view lists. A channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as search
+ * answers it: narrowing never widens the visible set (D-34).
+ */
+export const UnresolvedQuery = FromClient({
+  channelId: Type.Optional(Uuid),
+  before: Type.Optional(Uuid),
+  after: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type UnresolvedQuery = Static<typeof UnresolvedQuery>;
 
 /**
  * `PUT /api/channels/:channelId/read` — the newest message the person has seen.
@@ -517,6 +551,8 @@ export const AUDIT_ACTIONS = [
   'channel.created',
   'channel.renamed',
   'channel.archived',
+  'channel.member_added',
+  'channel.member_removed',
   'integration.token_set',
   'integration.token_removed',
   'integration.feed_created',
@@ -1101,3 +1137,32 @@ export type EmailSignInToken = Static<typeof EmailSignInToken>;
 /** What the page shows before the person signs in: the address the link was sent to (D-138 §4). */
 export const EmailSignInPreview = Type.Object({ email: Type.String() });
 export type EmailSignInPreview = Static<typeof EmailSignInPreview>;
+
+/**
+ * `GET /api/me/sign-in` — the ways the caller signs in (D-176): their address, whether a link sent to
+ * it signs them in (an account made by email, connected to GitHub or not — never one GitHub made,
+ * D-138 §2), and the GitHub account connected, if any. `login` is null for a GitHub account whose
+ * login is not known yet (D-169 §4). Only ever the caller's own.
+ */
+export const MySignIn = Type.Object({
+  email: Type.String(),
+  emailLinks: Type.Boolean(),
+  github: Type.Union([
+    Type.Object({ login: Type.Union([Type.String(), Type.Null()]) }),
+    Type.Null(),
+  ]),
+});
+export type MySignIn = Static<typeof MySignIn>;
+
+/**
+ * `POST /api/me/github/connect` — start connecting GitHub to the caller's account (D-176), from the
+ * settings page of this workspace, which is where the person comes back to.
+ */
+export const ConnectGitHubRequest = FromClient({
+  workspace: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+});
+export type ConnectGitHubRequest = Static<typeof ConnectGitHubRequest>;
+
+/** Where to send the browser: GitHub's authorization page, with this connect's `state`. */
+export const ConnectGitHubResponse = Type.Object({ location: Type.String() });
+export type ConnectGitHubResponse = Static<typeof ConnectGitHubResponse>;

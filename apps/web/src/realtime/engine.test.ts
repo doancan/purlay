@@ -855,6 +855,20 @@ describe('the frames', () => {
     expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
   });
 
+  test('a channel somebody took the person out of is remembered as removed, and the list is asked for again (D-172)', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason: 'removed' }, ts: T0 }),
+    );
+    expect(w.engine.store.getState().gone).toEqual({ [CH]: 'removed' });
+    expect(w.client.getQueryData<Channel[]>(keys.channels(WS))).toEqual([channel(CH2)]);
+    // A public channel is still there to see and join again, as one not joined.
+    expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
+  });
+
   test('a channel given back forgets why it went: a later removal does not read as the old reason (D-123)', () => {
     const w = world();
     w.client.setQueryData(keys.channels(WS), [channel(CH)]);

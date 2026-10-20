@@ -58,7 +58,7 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   (D-128). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the
+- **Sidebar (264px)** — the workspace name with a chevron, which opens the **workspace menu** (the
   workspaces to switch to, **Create workspace…**, and for an owner or an admin **Invite people…** and
   **Workspace settings**, D-146), the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
@@ -100,10 +100,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   empty view there is one more control. The name is cut with an ellipsis before anything is drawn
   over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
-- **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
-  eye does not travel back across the window to find where a line starts.
+- **Feed** — the single column. Max width 1040px, centred in the space beside the sidebar (D-119 §7,
+  D-175), so a wide window is used and a line is still read without travelling across it.
 - **Member list** — collapsed by default. Presence is decoration, not information.
-- **Thread panel (380px)** — on the right of the channel, only while a thread is open (§4, D-122).
+- **Thread panel (440px)** — on the right of the channel, only while a thread is open (§4, D-122).
   The feed keeps the rest of the width.
 - **Files panel** — the same place, opened by the header's **Files** control (D-129): every file
   shared in the channel, newest first, each with who shared it, when and its size. An image shows its
@@ -187,8 +187,8 @@ words, unread while any of them is. Opening it, or its **Mark read**, reads ever
 chat the team already uses.
 - **Opening one** shows a card like the sign-in screen's: the workspace's name, until when the link
   opens, and **Join**. A person already in it is offered **Open** instead. Joined, they are offered
-  the workspace's public channels to join — the three busiest marked **Active** and picked — joined
-  together in one press or skipped; a join that fails part way names the channels it could not join
+  the workspace's public channels to join (in a new workspace, the `#general` it starts with, D-174),
+  the three busiest marked **Active** and picked, joined together in one press or skipped; a join that fails part way names the channels it could not join
   and keeps them picked (D-132). A person not signed in
   signs in first and comes back to the same card. The token leaves the address bar as the page loads,
   so it is not left in the history or a screenshot. A link that does not open says so in one
@@ -199,8 +199,11 @@ chat the team already uses.
 
 **Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
 with a role each: a labelled select where the person may change it, the role in words where they may
-not — an admin does not touch an owner or make one, and nobody changes their own row. **Remove** asks
-in the row first, because it costs the person every channel. The last owner is said as such.
+not — an admin does not touch an owner or make one. A person's own role is theirs to change (D-111): an
+owner steps down once there is another, an admin becomes a member; the row asks first, because only
+somebody else can change it back. **Remove** is on everyone's row but one's own — that is leaving
+(Sessions & account) — and asks in the row first, because it costs the person every channel. The last
+owner is said as such.
 
 **The audit log** (D-26). **Audit log…** in the same menu, an owner's or an admin's, reads the trail
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
@@ -220,7 +223,14 @@ The last member of a private channel is told to bring somebody in first or ask a
 **Members**, its count in the tab: who is in it, a field to find one by name once there are more than
 eight, and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed,
 those who can be added first with **Add**, and anybody already in the channel after them, saying
-*Member* quietly with nothing to press, and a sentence above them when that is everybody).
+*Member* quietly with nothing to press, and a sentence above them when that is everybody), and
+**Remove** on each row the person may take out (D-172) — never their own (that is Leave): an owner any
+row, an admin any but an owner's, a member of a private channel another member's, and nobody's in a
+public channel for a member. It asks in the row first — the question says, for a public channel, that
+their messages stay and they can join again, and for a private one that they stop seeing it — and on
+yes the row goes at once; a refusal puts it back and is said under the list. The person removed, if
+they are reading the channel, is told *You were removed from this channel* in its place (a private
+one) or sees it as one not joined (a public one), and their sidebar loses it at once.
 **Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
 the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
 **Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
@@ -248,7 +258,8 @@ in every open tab of every member.
 
 **Another workspace** (D-124). **Create workspace…** in the same menu — offered only to a person this
 server lets make one (`WORKSPACE_CREATORS`, D-155) — opens the form `/` shows a person with none — a name and an address — and goes to the new workspace, with Back to where
-they were.
+they were. **A new workspace starts with `#general`** (D-174), its maker in it, and that is where the
+form leaves them — from `/` or from the menu — never on the welcome step, which is an invited person's.
 
 **Settings** (D-146). A page, `/w/<slug>/settings/<section>`, opened from the rail's gear, the
 account menu, the workspace menu's **Workspace settings** and the palette. The sidebar's place holds
@@ -266,15 +277,23 @@ it. On a narrow window the navigation opens as the sidebar does.
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
   where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
 - **Keyboard shortcuts** — the reference, as a page.
-- **Sessions & account** — *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told to
-  make somebody else an owner first) and *Erase my account…*, each asking first.
+- **Sessions & account** — first *How you sign in* (D-176): the address, and whether a link sent to it
+  signs in; and GitHub — the login connected, or **Connect GitHub** for an account made by email. Connect
+  leaves for GitHub and comes back to this page, the card's foot saying how it went in words: connected,
+  or why not — cancelled, expired, signed out or somebody else signed in meanwhile, that GitHub account
+  already another Purlay account's, this one connected already, GitHub or Purlay unavailable — and that
+  nothing was connected. Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
+  to make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), and *Create workspace…*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
 - **Integrations** — the GitHub connection, as below.
 - **Audit log** — the trail as a table, newest first, a page at a time.
-- **Data & retention** — how long history is kept, and exports.
+- **Data & retention** — the workspace's **storage**: a meter with what is used and the quota in words
+  ("1.2 GB of 5 GB") and what is left, in the warning tone from nine tenths and the danger tone, with a
+  sentence, once full; the quota is the server operator's to set and the card says so, with nothing to
+  change it (D-173) — then how long history is kept, and exports.
 
 The sections below say what each does; where they say a dialog from the workspace menu, it is now the
 page of the same name.
@@ -490,7 +509,10 @@ drawn (a screen reader still reads them) and Send is the icon alone.
 | `@` and a letter | Member autocomplete: who a mention here would reach, found by display name or handle without case or accents; `↑` `↓` move, `Enter` or `Tab` writes `@handle`, `Esc` closes it, and `Enter` while it is open never sends (D-110 §8). **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
-the upload is still in flight. **A file that did not upload says why under its name** (D-159), in
+the upload is still in flight, and it goes when the files land **even if the person has moved to another
+channel or closed the thread** (D-171): the files and the waiting send belong to the place, not to the box
+on the screen, and are there when the person goes back. If a file fails meanwhile the send is held, a
+toast says where it was not sent, and the words and files wait there with the reason. **A file that did not upload says why under its name** (D-159), in
 words from what the server answered: larger than the limit, an image past the side or pixel bound, an
 image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
 too many files waiting, no connection, the server busy, file storage unavailable, the session ended, no
@@ -505,7 +527,8 @@ switch is unforgivable in a tool people live in.
 **Who else is typing** is said quietly in the channel composer's footer, beside the hints — "Alice is
 typing…", two by name, more as "Several people are typing…" — in a row that is always there, so nothing
 moves when it appears (D-114). Never yourself; gone when their message arrives or after a few quiet
-seconds. A reply composer shows none: typing belongs to the channel.
+seconds. A reply composer shows none and announces none: typing belongs to the channel, and what is typed in a
+thread never arrives in its feed (D-171). Only a member of the channel is heard typing in it.
 
 ---
 
@@ -598,6 +621,7 @@ missing specified behaviour and does not merge.
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
+| How you sign in (Sessions & account) | n/a — always an address; GitHub is a login or **Connect GitHub** | Skeleton in the card; **Connect GitHub** is busy while it asks | Retry in the card; a connect that could not start says why under the card, and one GitHub sent back says how it went there, in words (D-176) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
@@ -658,8 +682,8 @@ Decided here so Phase 0 does not invent one at random.
 
 ## 10. Not in Phase 1
 
-Custom themes · resizable panes · message pinning · saved items · reminders · rich link previews
-for non-GitHub URLs · emoji picker beyond a recent/frequent row · read receipts · user status
-messages · threads in a popped-out window.
+Custom themes · resizable panes · reminders · rich link previews for non-GitHub URLs · emoji
+picker beyond a recent/frequent row · read receipts · threads in a popped-out window. Pinning,
+saved items and a status line were pulled into Phase 1 (D-130, D-128, D-131) and are in §2.
 
 Some are permanent non-goals (`PRD.md` §6); the rest are simply not the wedge.

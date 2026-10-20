@@ -92,7 +92,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     ])
     .execute();
   const channel = await call('POST', `/api/workspaces/${workspaceId}/channels`, owner, {
-    name: 'general',
+    name: 'ops',
   });
   expect(channel.status).toBe(201);
   const channelId = ((await channel.json()) as { id: string }).id;
@@ -175,7 +175,7 @@ describe('integration: renaming a channel and setting its topic', () => {
       expect(await trail(world)).toEqual([
         {
           action: 'channel.renamed',
-          metadata: { from: 'general', to: 'genel-sohbet' },
+          metadata: { from: 'ops', to: 'genel-sohbet' },
           target_id: world.channelId,
         },
       ]);
@@ -191,7 +191,7 @@ describe('integration: renaming a channel and setting its topic', () => {
       expect(await cleared.json()).toMatchObject({ topic: null });
       world.published.splice(0);
 
-      for (const body of [{ name: 'general', topic: null }, {}]) {
+      for (const body of [{ name: 'ops', topic: null }, {}]) {
         const same = await world.call('PATCH', path, world.owner, body);
         expect(same.status).toBe(200);
       }
@@ -220,7 +220,7 @@ describe('integration: renaming a channel and setting its topic', () => {
       expect(world.published).toEqual([]);
 
       // Its own name in another case is not taken by itself.
-      expect((await world.call('PATCH', path, world.owner, { name: 'General' })).status).toBe(200);
+      expect((await world.call('PATCH', path, world.owner, { name: 'Ops' })).status).toBe(200);
 
       expect((await world.call('DELETE', `/api/channels/${otherId}`, world.admin)).status).toBe(
         204,
@@ -331,7 +331,7 @@ describe('integration: archiving a channel', () => {
         .execute();
       expect(members).toHaveLength(2);
       expect(await trail(world)).toEqual([
-        { action: 'channel.archived', metadata: { name: 'general' }, target_id: world.channelId },
+        { action: 'channel.archived', metadata: { name: 'ops' }, target_id: world.channelId },
       ]);
 
       const again = await world.call('DELETE', `/api/channels/${world.channelId}`, world.admin);
@@ -340,7 +340,7 @@ describe('integration: archiving a channel', () => {
         'POST',
         `/api/workspaces/${world.workspaceId}/channels`,
         world.owner,
-        { name: 'general' },
+        { name: 'ops' },
       );
       expect(reused.status).toBe(201);
     });

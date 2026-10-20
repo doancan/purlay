@@ -129,7 +129,7 @@ const aRoom = async (): Promise<{
     .values({ workspace_id: workspaceId, user_id: bob.id, role: 'member', joined_at: NOW })
     .execute();
   const channel = await http('POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   expect((await http('POST', `/api/channels/${channelId}/join`, bob.cookie)).ok).toBe(true);

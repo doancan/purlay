@@ -105,7 +105,7 @@ export const requestSignInLink = async (
   );
   const account = await executor
     .selectFrom('users')
-    .select(['github_id', 'deleted_at'])
+    .select(['github_id', 'github_connected_at', 'deleted_at'])
     .where('email', '=', email)
     .executeTakeFirst();
   // Every message counts — a link or a word about GitHub — so neither can flood a mailbox. Counted
@@ -128,7 +128,7 @@ export const requestSignInLink = async (
     created_at: now,
     expires_at: new Date(now.getTime() + SIGN_IN_LINK_TTL_MS),
   };
-  if (account?.github_id != null) {
+  if (account !== undefined && madeByGitHub(account)) {
     await executor
       .insertInto('email_sign_ins')
       .values({ ...sent, kind: 'github', token_hash: null })
@@ -217,7 +217,7 @@ export const consumeSignInLink = async (
   if (spent === undefined) throw linkNotFound();
   const account = await accountOf(executor, spent.email);
   if (account !== undefined) {
-    if (account.github_id !== null || account.deleted_at !== null) throw linkNotFound();
+    if (madeByGitHub(account) || account.deleted_at !== null) throw linkNotFound();
     return { userId: account.id, created: false };
   }
   // Nothing to make a name of: a random one, not `user-1` … `user-99`, which a hundred such
@@ -246,19 +246,33 @@ export const consumeSignInLink = async (
     throw new Error('sign-in by link: the username was taken at the same instant');
   }
   // The other link's account, made a moment ago — by email, or since, by GitHub (§2).
-  if (made.github_id !== null || made.deleted_at !== null) throw linkNotFound();
+  if (madeByGitHub(made) || made.deleted_at !== null) throw linkNotFound();
   return { userId: made.id, created: true };
 };
+
+/**
+ * An account GitHub made, which never signs in by link (D-138 §2). One made by email keeps its link
+ * once it has connected GitHub too (D-176): connecting adds a way in and takes none away.
+ */
+export const madeByGitHub = (account: {
+  readonly github_id: string | null;
+  readonly github_connected_at: Date | null;
+}): boolean => account.github_id !== null && account.github_connected_at === null;
 
 const accountOf = async (
   executor: Executor,
   email: string,
 ): Promise<
-  | { readonly id: string; readonly github_id: string | null; readonly deleted_at: Date | null }
+  | {
+      readonly id: string;
+      readonly github_id: string | null;
+      readonly github_connected_at: Date | null;
+      readonly deleted_at: Date | null;
+    }
   | undefined
 > =>
   await executor
     .selectFrom('users')
-    .select(['id', 'github_id', 'deleted_at'])
+    .select(['id', 'github_id', 'github_connected_at', 'deleted_at'])
     .where('email', '=', email)
     .executeTakeFirst();

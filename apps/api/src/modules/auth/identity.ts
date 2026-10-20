@@ -10,7 +10,7 @@
  * test (D-46).
  */
 import { isErased } from '@purlay/types';
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { GitHubEmail, GitHubProfile } from './github';
@@ -40,7 +40,7 @@ const CONTROLS = new RegExp(CONTROL.source, 'g');
  * (D-78): control characters are removed, a login with nothing left becomes a name
  * made from the immutable id, and an avatar address with one is dropped.
  */
-const cleaned = (given: GitHubProfile): GitHubProfile => {
+export const cleanedProfile = (given: GitHubProfile): GitHubProfile => {
   const login = given.login.replace(CONTROLS, '');
   const name = given.name?.replace(CONTROLS, '') ?? '';
   return {
@@ -129,13 +129,39 @@ export const availableUsername = async (
   throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
 };
 
+/**
+ * The login is this GitHub account's now: written on its row, and taken from any other account that
+ * still holds it in any case — renamed away from it at GitHub, and not signed in since. It is what
+ * `WORKSPACE_CREATORS` is matched against (D-169), never the username, which only starts from it.
+ */
+export const holdLogin = async (
+  executor: Executor,
+  githubId: string,
+  login: string,
+): Promise<void> => {
+  await executor
+    .updateTable('users')
+    .set({ github_login: null })
+    .where(sql<string>`lower(github_login)`, '=', login.toLowerCase())
+    .where((where) =>
+      where.or([where('github_id', 'is', null), where('github_id', '!=', githubId)]),
+    )
+    .execute();
+  await executor
+    .updateTable('users')
+    .set({ github_login: login })
+    .where('github_id', '=', githubId)
+    .where('deleted_at', 'is', null)
+    .execute();
+};
+
 export const resolveIdentity = async (
   executor: Executor,
   clock: Clock,
   given: GitHubProfile,
   emails: readonly GitHubEmail[],
 ): Promise<ResolvedIdentity> => {
-  const profile = cleaned(given);
+  const profile = cleanedProfile(given);
   const email = anchorEmail(emails);
   const displayName = fitted(
     cleanedName(profile.name ?? '') || cleanedName(profile.login) || profile.login,
@@ -145,20 +171,24 @@ export const resolveIdentity = async (
 
   const existing = await executor
     .selectFrom('users')
-    .select(['id', 'username'])
+    .select(['id', 'username', 'github_connected_at'])
     .where('github_id', '=', String(profile.id))
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
 
   if (existing !== undefined) {
-    const username = await availableUsername(executor, livingName(profile.login), existing.id);
+    // An account made by email that connected GitHub (D-176): its name and username were never
+    // GitHub's and stay its own. The picture is GitHub's (D-11), and the login is held as always.
+    const ownNames = existing.github_connected_at !== null;
+    const username = ownNames
+      ? existing.username
+      : await availableUsername(executor, livingName(profile.login), existing.id);
     // Only while it is live: an erasure that committed after the read above leaves this row a
     // tombstone, and the person's identity must not be written back onto it (D-139 §5, I-11).
     const refreshed = await executor
       .updateTable('users')
       .set({
-        username,
-        display_name: displayName,
+        ...(ownNames ? {} : { username, display_name: displayName }),
         avatar_url: profile.avatarUrl,
         updated_at: now,
       })
@@ -172,9 +202,10 @@ export const resolveIdentity = async (
         message: 'That account is gone. Sign in again.',
       });
     }
+    await holdLogin(executor, String(profile.id), profile.login);
     return {
       userId: existing.id,
-      ...(username === profile.login
+      ...(ownNames || username === profile.login
         ? {}
         : { usernameCollision: { wanted: profile.login, stored: username } }),
     };
@@ -235,7 +266,10 @@ export const resolveIdentity = async (
       .where('deleted_at', 'is', null)
       .returning('id')
       .executeTakeFirst();
-    if (winner !== undefined) return { userId: winner.id };
+    if (winner !== undefined) {
+      await holdLogin(executor, String(profile.id), profile.login);
+      return { userId: winner.id };
+    }
     const stranger = await executor
       .selectFrom('users')
       .select('id')
@@ -254,6 +288,7 @@ export const resolveIdentity = async (
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
 
+  await holdLogin(executor, String(profile.id), profile.login);
   return {
     userId: created.id,
     ...(username === profile.login

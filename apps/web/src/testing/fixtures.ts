@@ -130,3 +130,18 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     incident: () => Promise.resolve({ incident: null }),
     ...overrides,
   });
+
+/**
+ * The open questions as the server answers them: the workspace's, or with `channelId` that channel's
+ * alone — so a test that counts one channel's questions proves the client asked for that channel, not
+ * that it filtered a workspace page it was handed. Newest first, one page.
+ */
+export const openQuestionsOf =
+  (questions: readonly Message[]): Api['unresolved'] =>
+  (_workspaceId, query = {}) =>
+    Promise.resolve({
+      data: questions
+        .filter((m) => query.channelId === undefined || m.channelId === query.channelId)
+        .sort((a, b) => (a.id < b.id ? 1 : -1)),
+      nextCursor: null,
+    });

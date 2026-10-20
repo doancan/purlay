@@ -18,6 +18,7 @@ import {
   aSignedInApi,
   messageIdAt,
   someChannels,
+  openQuestionsOf,
 } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
@@ -273,10 +274,11 @@ describe('narrowed to one channel', () => {
     const screen = await renderApp(<Outlet />, {
       path: `/w/acme/questions?in=${IDS.api}`,
       api: aSignedInApi({
-        unresolved: () =>
-          Promise.resolve(
-            asPage([question(2, IDS.api), question(3, IDS.api), question(6, IDS.incidents)]),
-          ),
+        unresolved: openQuestionsOf([
+          question(2, IDS.api),
+          question(3, IDS.api),
+          question(6, IDS.incidents),
+        ]),
         channels: () => Promise.resolve(channels()),
         members: () => Promise.resolve([]),
       }),
@@ -303,7 +305,7 @@ describe('narrowed to one channel', () => {
     const screen = await renderApp(<Outlet />, {
       path: `/w/acme/questions?in=${IDS.api}`,
       api: aSignedInApi({
-        unresolved: () => Promise.resolve(asPage([question(6, IDS.incidents)])),
+        unresolved: openQuestionsOf([question(6, IDS.incidents)]),
         channels: () => Promise.resolve(channels()),
         members: () => Promise.resolve([]),
       }),

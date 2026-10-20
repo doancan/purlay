@@ -50,6 +50,7 @@ import {
   archiveChannel,
   channelMembers,
   leaveChannel,
+  removeChannelMember,
   updateChannel,
 } from '../../modules/channels/settings';
 import { requireSession } from './session';
@@ -340,6 +341,34 @@ export const leave = async (
       [
         publication('ACCESS_REVOKED', () =>
           publishAccessRevoked(bus, clock, userId, [channelId], 'left'),
+        ),
+      ],
+    ]);
+  }
+};
+
+/**
+ * `DELETE /api/channels/:channelId/members/:userId` — somebody taken out of the channel (D-172), or
+ * the caller leaving it by naming themself. The person's own sockets stop receiving it and are told
+ * why; not being in it is the same `204`, and tells nobody.
+ */
+export const removeFromChannel = async (
+  dependencies: ChannelWriteDependencies,
+  request: Request,
+  channelId: string,
+  memberId: string,
+): Promise<void> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireChannelById(database, userId, channelId);
+  const removal = await atomicallyOn(database)(
+    async (transaction) => await removeChannelMember(transaction, clock, context, memberId),
+  );
+  if (removal !== null) {
+    await publishAfterCommit(log, [
+      [
+        publication('ACCESS_REVOKED', () =>
+          publishAccessRevoked(bus, clock, memberId, [channelId], removal),
         ),
       ],
     ]);

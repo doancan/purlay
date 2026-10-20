@@ -39,6 +39,7 @@ import { workspacePrefix, type ObjectStore } from '../../platform/storage';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
 import { readImage } from './images';
+import { storageOf } from './quota';
 
 export interface UploadDependencies {
   readonly atomically: Atomically;
@@ -166,12 +167,7 @@ export const storeUpload = async (
   try {
     return await atomically(async (transaction) => {
       // Uploads into one workspace take turns from here, so its quota is checked once per byte.
-      const workspace = await transaction
-        .selectFrom('workspaces')
-        .select(['storage_quota_bytes', 'storage_used_bytes'])
-        .where('id', '=', context.workspaceId)
-        .forUpdate()
-        .executeTakeFirstOrThrow();
+      const kept = await storageOf(transaction, context.workspaceId, { lock: true });
 
       const raced = await transaction
         .selectFrom('attachments')
@@ -186,11 +182,9 @@ export const storeUpload = async (
 
       const waiting = await transaction
         .selectFrom('attachments')
-        .select([
-          sql<string>`count(*) filter (where uploader_id = ${context.userId})`.as('mine'),
-          sql<string>`coalesce(sum(size_bytes), 0)`.as('bytes'),
-        ])
+        .select(sql<string>`count(*)`.as('mine'))
         .where('workspace_id', '=', context.workspaceId)
+        .where('uploader_id', '=', context.userId)
         .where('message_id', 'is', null)
         .executeTakeFirstOrThrow();
       if (Number(waiting.mine) >= PENDING_UPLOADS_MAX) {
@@ -199,11 +193,8 @@ export const storeUpload = async (
           message: `At most ${String(PENDING_UPLOADS_MAX)} files may wait to be sent.`,
         });
       }
-      // BIGINT arrives as text: summed as integers, never as strings.
-      const room =
-        BigInt(workspace.storage_quota_bytes) -
-        BigInt(workspace.storage_used_bytes) -
-        BigInt(waiting.bytes);
+      // The reading the owner is shown (`quota.ts`), so the two never disagree (D-173).
+      const room = kept.quotaBytes - kept.usedBytes;
       if (BigInt(stored.length) > room) {
         // The room is said, so the person knows how large a file would still go (D-159): never
         // below nothing, and never more than a file may be, so it is a safe number on the wire.

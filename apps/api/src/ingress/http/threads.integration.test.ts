@@ -63,7 +63,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member', joined_at: NOW })
     .execute();
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   expect((await call(db, 'POST', `/api/channels/${channelId}/join`, bob.cookie)).ok).toBe(true);
@@ -308,6 +308,63 @@ describe('integration: the open questions over HTTP', () => {
       const firstOnly = await read('?limit=1');
       expect(firstOnly.data).toHaveLength(1);
       expect(firstOnly.nextCursor).toBe(open[2] ?? null);
+    });
+  });
+});
+
+describe('integration: one channel’s open questions over HTTP', () => {
+  test('narrow to that channel, count past the first page of the workspace, and never widen', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      // A second channel Bob is in, busier than the first, and a private one he is not in.
+      const busy = (
+        (await (
+          await call(db, 'POST', `/api/workspaces/${world.workspaceId}/channels`, world.alice, {
+            name: 'busy',
+          })
+        ).json()) as { id: string }
+      ).id;
+      expect((await call(db, 'POST', `/api/channels/${busy}/join`, world.bob)).ok).toBe(true);
+      const secret = (
+        (await (
+          await call(db, 'POST', `/api/workspaces/${world.workspaceId}/channels`, world.alice, {
+            name: 'secret',
+            type: 'private',
+          })
+        ).json()) as { id: string }
+      ).id;
+      const askIn = async (channelId: string, content: string): Promise<string> => {
+        const root = await sentId(await send(db, { ...world, channelId }, world.alice, content));
+        await sentId(await send(db, { ...world, channelId }, world.bob, 'a', root));
+        return root;
+      };
+      const quiet = await askIn(world.channelId, 'the quiet channel’s question');
+      // More open questions elsewhere than one page of the workspace holds, all newer.
+      for (let n = 0; n < 3; n += 1) await askIn(busy, `busy ${String(n)}`);
+
+      const page = async (query: string, as = world.bob): Promise<Response> =>
+        await call(db, 'GET', `/api/workspaces/${world.workspaceId}/unresolved${query}`, as);
+
+      // Asked for by channel, the quiet one has its one question and none of the busy one's — whatever
+      // order the workspace's pages put them in, so a channel's count needs no workspace page at all.
+      const narrowed = await page(`?channelId=${world.channelId}`);
+      expect(narrowed.status).toBe(200);
+      const body: unknown = await narrowed.json();
+      expect(Value.Check(MessagePage, body)).toBe(true);
+      expect((body as { data: { id: string }[] }).data.map((m) => m.id)).toEqual([quiet]);
+      const busyPage = (await (await page(`?channelId=${busy}`)).json()) as {
+        data: { channelId: string }[];
+      };
+      expect(busyPage.data).toHaveLength(3);
+      expect(busyPage.data.every((m) => m.channelId === busy)).toBe(true);
+
+      // A channel Bob cannot see is not found, as search says it; and an id that is not one is 400.
+      const hidden = await page(`?channelId=${secret}`);
+      expect(hidden.status).toBe(404);
+      expect(((await hidden.json()) as { error: { code: string } }).error.code).toBe(
+        'CHANNEL_NOT_FOUND',
+      );
+      expect((await page('?channelId=not-an-id')).status).toBe(400);
     });
   });
 });

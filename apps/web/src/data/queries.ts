@@ -17,6 +17,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type {
+  MySignIn,
   Channel,
   MeResponse,
   Message,
@@ -53,6 +54,15 @@ export const useMe = (): UseQueryResult<MeResponse> => {
       claimFor(storage, me.user.id);
       return me;
     },
+  });
+};
+
+/** The ways the caller signs in, and the GitHub account connected, if any (D-176). */
+export const useMySignIn = (): UseQueryResult<MySignIn> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.mySignIn,
+    queryFn: ({ signal }) => api.mySignIn(signal),
   });
 };
 
@@ -208,12 +218,23 @@ export const useChannelFiles = (
   });
 };
 
-/** The open-questions view: unresolved roots with replies, newest first. */
-export const useUnresolved = (workspaceId: string): UseInfiniteQueryResult<Pages> => {
+/**
+ * The open-questions view: unresolved roots with replies, newest first — the workspace's, or with a
+ * channel that channel's alone, asked of the server so its count and list need no workspace page.
+ */
+export const useUnresolved = (
+  workspaceId: string,
+  channelId: string | null = null,
+): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
   return useInfiniteQuery({
-    queryKey: keys.unresolved(workspaceId),
-    queryFn: ({ pageParam, signal }) => api.unresolved(workspaceId, { before: pageParam }, signal),
+    queryKey: keys.unresolved(workspaceId, channelId),
+    queryFn: ({ pageParam, signal }) =>
+      api.unresolved(
+        workspaceId,
+        { before: pageParam, ...(channelId === null ? {} : { channelId }) },
+        signal,
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     ...KEEP_MESSAGES,

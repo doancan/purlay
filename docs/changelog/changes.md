@@ -6,6 +6,44 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-20: a new workspace starts with `#general`
+
+- **A workspace starts with one public channel, `general`, its creator in it (D-174).** Made in the
+  transaction that makes the workspace, on the audit log as `channel.created`. The person who made it
+  lands in it instead of on an empty workspace, and the first person they invite is offered it on the
+  welcome step. Nothing marks it afterwards: it is renamed, left and archived as any channel is.
+- **The first run is walked end to end in the browser** (`e2e/first-run.e2e.ts`): signing in with no
+  workspace, making one, inviting by a link, the invited person joining and writing, the first person
+  seeing it live — and a third person who opened nothing staying outside.
+
+### Fix — 2026-10-20: three findings of a security review
+
+- **A workspace creator is the GitHub login, not a username that looks like one (D-169).** A stranger
+  who signed in by email as `alice@…` before GitHub's `alice` made her `alice-1`, and refused her; a
+  listed `bob-1` let in GitHub's `bob`. The login GitHub gives is now kept in `users.github_login`,
+  written on every GitHub sign-in and taken from any account renamed away from it, and
+  `WORKSPACE_CREATORS` is matched against it alone. Erasure clears it; an export omits it.
+- **Image decodes wait in a bounded line (D-170).** Two members asking the proxy for large images
+  made an unrelated upload wait 17 seconds and growing. Eight may wait for the node's two decode
+  slots, and the proxy holds at most one of them; past that an upload is refused as busy (`429`,
+  Retry) and a proxied picture is not available now (`404`). The same upload now decodes in 1 ms.
+- **An export download asked for by an id that is no UUID is `404 EXPORT_NOT_FOUND`**, not the
+  database's error as a 500.
+### Feature — 2026-10-20: taking somebody out of a channel (D-172), and a workspace's storage shown (D-173)
+
+- **Remove, in a channel's details.** `DELETE /api/channels/:channelId/members/:userId`: an owner or
+  an admin takes somebody out of a channel they can see (an owner only an owner's), and a member of a
+  private channel takes out another member of it. Never in a conversation; naming yourself is leaving;
+  the last member of a private channel stays. The person's sockets are told with a new reason,
+  `removed`, so a page reading the channel says so; their messages stay; the trail records
+  `channel.member_removed`, naming the channel only to a reader who can see it. In the details'
+  Members tab each removable row has **Remove**, asked in the row, gone at once and put back on a
+  refusal.
+- **Storage on Settings → Data & retention.** `GET /api/workspaces/:workspaceId/storage`, an
+  owner's, answers what the files take — sent and waiting, the sum the upload check refuses by — and
+  the quota; the page draws it as a meter with the numbers. The quota stays the operator's:
+  `bun run storage:quota <slug> [<size>]` reads and sets it (`CONFIG.md`).
+
 ### Fix — 2026-10-19: the browser tests that failed only under a loaded parallel run
 
 Four specs passed alone and failed beside the rest of the suite. Each cause was found in a trace or a

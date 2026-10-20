@@ -225,6 +225,16 @@ describe('integration: an owner’s export', () => {
     expect(theirs.store.keys()).toHaveLength(1);
   });
 
+  test('a download asked for by an id that is no id: not found, never a database error', async () => {
+    const world = await aWorld();
+    const ask = await world.as('ada');
+    for (const id of ['not-a-uuid', '1', "0' or '1'='1"]) {
+      expect(
+        await codeOf(await ask('GET', `${world.exports}/${encodeURIComponent(id)}/download`)),
+      ).toEqual([404, 'EXPORT_NOT_FOUND']);
+    }
+  });
+
   test('a download the store cuts off is spent, and its archive still leaves the store', async () => {
     const world = await aWorld();
     const ask = await world.as('ada');

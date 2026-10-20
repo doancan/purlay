@@ -68,7 +68,7 @@ const aRoom = async (db: Executor): Promise<Room> => {
     .execute();
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, {
     cookie: alice.cookie,
-    body: { name: 'general' },
+    body: { name: 'ops' },
   });
   const channelId = (await json(channel))['id'] as string;
   expect(
@@ -95,9 +95,10 @@ describe('integration: the channel list and reads carry the caller’s state', (
         await call(db, 'GET', `/api/workspaces/${room.workspaceId}/channels`, {
           cookie: room.bob.cookie,
         })
-      ).json()) as { state: unknown; peer: unknown }[];
-      expect(listed).toHaveLength(1);
-      expect(listed[0]).toMatchObject({
+      ).json()) as { id: string; state: unknown; peer: unknown }[];
+      // Bob's channel, and the one the workspace started with (D-174), which he has not joined.
+      expect(listed).toHaveLength(2);
+      expect(listed.find((channel) => channel.id === room.channelId)).toMatchObject({
         state: { lastReadMessageId: null, unreadCount: 0, unreadMentionCount: 0 },
         peer: null,
       });

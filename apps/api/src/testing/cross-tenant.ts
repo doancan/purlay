@@ -241,6 +241,13 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
       reason: 'the workspace’s own setting; no channel is named or listed',
     },
   },
+  'GET /api/workspaces/:workspaceId/storage': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the workspace’s own storage and quota; no channel is named or listed',
+    },
+  },
   'PUT /api/workspaces/:workspaceId/retention': {
     refusal: 'WORKSPACE_NOT_FOUND',
     body: () => ({ retentionDays: 90 }),
@@ -282,6 +289,12 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'POST /api/channels/:channelId/leave': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/members': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  // The member named is the crossing's own member: taken out by the owner as the control, and on the
+  // visibility axis the caller itself — which is leaving, served to anybody in the channel (D-172).
+  'DELETE /api/channels/:channelId/members/:userId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
   'POST /api/channels/:channelId/join': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'POST /api/channels/:channelId/members': {
     refusal: 'CHANNEL_NOT_FOUND',
@@ -419,6 +432,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/workspaces/:workspaceId/unresolved': {
     refusal: 'WORKSPACE_NOT_FOUND',
+    alsoWith: { 'one of its channels': 'channelId=:channelId' },
     visibility: { kind: 'workspace-wide' },
   },
   'GET /api/workspaces/:workspaceId/search': {
@@ -585,6 +599,10 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'PUT /api/me/locale': 'sets the caller’s own language and names no workspace (D-126)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
+  'GET /api/me/sign-in':
+    'the ways the caller signs in, their own only, and names no workspace (D-176)',
+  'POST /api/me/github/connect':
+    'connects GitHub to the caller’s own account; the workspace it names is only the page the browser comes back to, a path on this origin (D-176)',
   'PATCH /api/me/profile':
     'sets the caller’s own profile and names no workspace; who reads it is the members list’s (D-131)',
   'GET /api/push/key': 'the server’s public push key, the same for everyone signed in (D-126)',

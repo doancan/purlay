@@ -96,6 +96,22 @@ export const AuditPage = (): React.JSX.Element => {
           actor,
           channel: `#${entry.metadata['name'] ?? ''}`,
         });
+      // Named as a feed's channel is: only one this viewer can see, else "a channel" (#691).
+      case 'channel.member_added': {
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        const target = person(entry.targetId ?? undefined);
+        return name == null
+          ? t('audit.action.channel.member_added', { actor, target })
+          : t('audit.action.channel.member_added_to', { actor, target, channel: `#${name}` });
+      }
+      // Named only to a viewer who can see the channel, as a feed's is (D-172).
+      case 'channel.member_removed': {
+        const target = person(entry.targetId ?? undefined);
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        return name == null
+          ? t('audit.action.channel.member_removed', { actor, target })
+          : t('audit.action.channel.member_removed_from', { actor, target, channel: `#${name}` });
+      }
       case 'integration.token_set':
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':
@@ -224,6 +240,17 @@ export const AuditPage = (): React.JSX.Element => {
               </li>
             ))}
           </ol>
+        )}
+        {/* An older page that failed says so where it was asked for: silent, "the end of the log" and
+            "the request failed" looked the same. The button below asks again. */}
+        {trail.isFetchNextPageError && (
+          <p
+            role="alert"
+            className="flex items-center gap-2 border-t-hairline border-border-subtle px-6 py-3 text-label text-danger-text max-narrow:px-4"
+          >
+            <Icon name="failed" size="sm" />
+            {`${t('audit.olderFailed')} ${describe(trail.error)}`}
+          </p>
         )}
         {trail.hasNextPage && (
           <footer className="flex justify-center border-t-hairline border-border-subtle px-6 py-3">

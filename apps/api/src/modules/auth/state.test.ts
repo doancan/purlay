@@ -9,7 +9,13 @@
 import { describe, expect, test } from 'bun:test';
 import { fixedClock } from '../../platform/clock';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
-import { issueState, verifyState } from './state';
+import {
+  connectIntentOf,
+  issueConnectState,
+  issueState,
+  verifyConnectState,
+  verifyState,
+} from './state';
 
 const KEY = DEVELOPMENT_ENCRYPTION_KEY;
 const OTHER_KEY = 'YW5vdGhlci1kZXZlbG9wbWVudC1vbmx5LWtleS0zMi1ieQ==';
@@ -96,5 +102,74 @@ describe('the OAuth state', () => {
     expect(await verifyState(KEY, at(0), cookieValue, undefined)).toBe(false);
     expect(await verifyState(KEY, at(0), 'not-a-cookie', state)).toBe(false);
     expect(await verifyState(KEY, at(0), '', state)).toBe(false);
+  });
+});
+
+describe('the state of a connect (D-176)', () => {
+  const INTENT = {
+    userId: '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b',
+    sessionId: '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c',
+    workspace: 'acme-eng',
+  };
+
+  test('names who asked, from which session, and where to come back to', async () => {
+    const { state, cookieValue } = await issueConnectState(KEY, at(0), INTENT);
+    expect(await verifyConnectState(KEY, at(1), cookieValue, state)).toEqual(INTENT);
+    expect(await connectIntentOf(KEY, cookieValue)).toEqual(INTENT);
+  });
+
+  test('a sign-in’s cookie is never a connect’s, nor a connect’s a sign-in’s', async () => {
+    const signIn = await issueState(KEY, at(0));
+    expect(await verifyConnectState(KEY, at(0), signIn.cookieValue, signIn.state)).toBeUndefined();
+    expect(await connectIntentOf(KEY, signIn.cookieValue)).toBeUndefined();
+    const connect = await issueConnectState(KEY, at(0), INTENT);
+    expect(await verifyState(KEY, at(0), connect.cookieValue, connect.state)).toBe(false);
+    // Shaped as a connect, signed as a sign-in: the keys are not the same key.
+    const [, , , , , , signature] = connect.cookieValue.split('.');
+    const payload = connect.cookieValue.slice(0, -1 - (signature ?? '').length);
+    const asSignIn = await issueState(KEY, at(0));
+    const crossed = `${payload}.${asSignIn.cookieValue.split('.')[2] ?? ''}`;
+    expect(await connectIntentOf(KEY, crossed)).toBeUndefined();
+  });
+
+  test('another person, another session or another page is not what was signed', async () => {
+    const { state, cookieValue } = await issueConnectState(KEY, at(0), INTENT);
+    for (const [from, to] of [
+      [INTENT.userId, INTENT.sessionId],
+      [INTENT.sessionId, INTENT.userId],
+      ['acme-eng', 'evil'],
+    ] as const) {
+      const rewritten = cookieValue.replace(from, to);
+      expect(rewritten).not.toBe(cookieValue);
+      expect(await verifyConnectState(KEY, at(0), rewritten, state)).toBeUndefined();
+      expect(await connectIntentOf(KEY, rewritten)).toBeUndefined();
+    }
+    const other = await issueConnectState(OTHER_KEY, at(0), INTENT);
+    expect(await connectIntentOf(KEY, other.cookieValue)).toBeUndefined();
+  });
+
+  test('it expires, and it must be the state GitHub was given; where to return outlives both', async () => {
+    const { state, cookieValue } = await issueConnectState(KEY, at(0), INTENT);
+    expect(await verifyConnectState(KEY, at(11), cookieValue, state)).toBeUndefined();
+    expect(await verifyConnectState(KEY, at(0), cookieValue, 'f'.repeat(32))).toBeUndefined();
+    expect(await verifyConnectState(KEY, at(0), cookieValue, undefined)).toBeUndefined();
+    expect(await verifyConnectState(KEY, at(0), undefined, state)).toBeUndefined();
+    expect(await connectIntentOf(KEY, cookieValue)).toEqual(INTENT);
+    expect(await connectIntentOf(KEY, undefined)).toBeUndefined();
+  });
+
+  test('a value that would not survive the cookie’s shape is refused before it is signed', async () => {
+    for (const bad of [
+      { ...INTENT, workspace: 'a.b' },
+      { ...INTENT, workspace: '//evil.example' },
+      { ...INTENT, userId: 'not-a-uuid' },
+      { ...INTENT, sessionId: `${INTENT.sessionId}.x` },
+    ]) {
+      const refusal = await issueConnectState(KEY, at(0), bad).then(
+        () => 'signed',
+        (error: unknown) => String(error),
+      );
+      expect(refusal).toContain('a connect intent must name');
+    }
   });
 });

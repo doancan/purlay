@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { SIGN_IN_PATH, SignInFailure, signInFailureHref, signInFailureIn } from './sign-in';
+import {
+  ConnectGitHubOutcome,
+  SIGN_IN_PATH,
+  SignInFailure,
+  connectGitHubHref,
+  connectGitHubOutcomeIn,
+  signInFailureHref,
+  signInFailureIn,
+} from './sign-in';
 
 const EVERY_FAILURE = SignInFailure.anyOf.map((literal) => literal.const);
 
@@ -35,5 +43,24 @@ describe('the address a failed sign-in comes back to', () => {
     expect(signInFailureIn('?error=1')).toBe('failed');
     expect(signInFailureIn('?error=<script>')).toBe('failed');
     expect(signInFailureIn('?error=')).toBe('failed');
+  });
+});
+
+describe('the address a connect of GitHub comes back to (D-176)', () => {
+  const EVERY_OUTCOME = ConnectGitHubOutcome.anyOf.map((literal) => literal.const);
+
+  for (const outcome of EVERY_OUTCOME) {
+    test(`\`${outcome}\` is written on the account page's address and read back as itself`, () => {
+      const address = new URL(connectGitHubHref('acme-eng', outcome), 'https://purlay.test');
+      expect(address.origin).toBe('https://purlay.test');
+      expect(address.pathname).toBe('/w/acme-eng/settings/account');
+      expect([...address.searchParams.keys()]).toEqual(['github']);
+      expect(connectGitHubOutcomeIn(address.search)).toBe(outcome);
+    });
+  }
+
+  test('an address with no outcome reads as none, and one outside the set as a failure', () => {
+    expect(connectGitHubOutcomeIn('')).toBeNull();
+    expect(connectGitHubOutcomeIn('?github=<script>')).toBe('failed');
   });
 });

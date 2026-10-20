@@ -310,7 +310,9 @@ export interface Users {
   deleted_at: Timestamp | null;
   display_name: string;
   email: string;
+  github_connected_at: Timestamp | null;
   github_id: Int8 | null;
+  github_login: string | null;
   id: Generated<string>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;

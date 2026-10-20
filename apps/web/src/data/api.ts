@@ -34,8 +34,11 @@ import {
   InvitationPage,
   InvitationPreview,
   RetentionSetting,
+  StorageUsage,
   WorkspaceExport,
   AuthMethods,
+  ConnectGitHubResponse,
+  MySignIn,
   EmailSignInPreview,
   type EmailSignInRequest,
   NotificationPage,
@@ -153,6 +156,8 @@ export interface Api {
   readonly channelMembers: (channelId: string, signal?: AbortSignal) => Promise<ChannelMemberList>;
   /** Brings somebody from the workspace into the channel (D-104); they are told by the server. */
   readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
+  /** Takes somebody out of the channel (D-172); they are told by the server. */
+  readonly removeChannelMember: (channelId: string, userId: string) => Promise<void>;
   /** The caller's own Deep Work in a workspace (D-108). */
   readonly setDeepWork: (
     workspaceId: string,
@@ -247,9 +252,10 @@ export interface Api {
   ) => Promise<ThreadPage>;
   readonly resolve: (messageId: string) => Promise<Message>;
   readonly reopen: (messageId: string) => Promise<Message>;
+  /** The open questions; with `channelId`, that channel's alone (a channel it cannot see is 404). */
   readonly unresolved: (
     workspaceId: string,
-    page?: PageQuery,
+    page?: PageQuery & { readonly channelId?: string | undefined },
     signal?: AbortSignal,
   ) => Promise<UnresolvedPage>;
   /** The caller's inbox in one workspace, newest first (D-106). */
@@ -295,6 +301,8 @@ export interface Api {
   readonly consumeEmailSignIn: (token: string) => Promise<void>;
   /** How long the workspace keeps its history; an owner's (D-139 §4). */
   readonly retention: (workspaceId: string, signal?: AbortSignal) => Promise<RetentionSetting>;
+  /** An owner's: the workspace's storage used and its quota (D-173). */
+  readonly storage: (workspaceId: string, signal?: AbortSignal) => Promise<StorageUsage>;
   readonly setRetention: (
     workspaceId: string,
     retentionDays: number | null,
@@ -304,6 +312,13 @@ export interface Api {
   readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
+  /** The ways the caller signs in: their address, and the GitHub account connected, if any (D-176). */
+  readonly mySignIn: (signal?: AbortSignal) => Promise<MySignIn>;
+  /**
+   * Starts connecting GitHub to the caller's account (D-176): the answer sets the state's cookie and
+   * says where to send the browser; GitHub sends it back to this workspace's Sessions & account.
+   */
+  readonly connectGitHub: (workspace: string) => Promise<ConnectGitHubResponse>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -457,6 +472,8 @@ export const createApi = (http: Http): Api => {
       ),
     addChannelMember: (channelId, userId) =>
       http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
+    removeChannelMember: (channelId, userId) =>
+      http.send('DELETE', `/api/channels/${at(channelId)}/members/${at(userId)}`, options()),
     setDeepWork: (workspaceId, input) =>
       http.request(
         'PUT',
@@ -724,6 +741,13 @@ export const createApi = (http: Http): Api => {
         RetentionSetting,
         options({}, signal),
       ),
+    storage: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/storage`,
+        StorageUsage,
+        options({}, signal),
+      ),
     setRetention: (workspaceId, retentionDays) =>
       http.request(
         'PUT',
@@ -746,6 +770,14 @@ export const createApi = (http: Http): Api => {
         options(),
       ),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
+    mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
+    connectGitHub: (workspace) =>
+      http.request(
+        'POST',
+        '/api/me/github/connect',
+        ConnectGitHubResponse,
+        options({ body: { workspace } }),
+      ),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),

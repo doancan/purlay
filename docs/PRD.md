@@ -2,7 +2,8 @@
 
 > Authority: `DECISIONS.md` records *why* and is binding. This file records *what we are
 > building and for whom*. `ARCHITECTURE.md` and `SCHEMA.md` record *how*.
-> **Status:** Phase 0 not started.
+> **Status:** Phase 1 — MVP, gated on S-1. What is done is `bun run queue`, not a line here
+> (`OVERVIEW.md`, Current status).
 
 ---
 
@@ -136,11 +137,13 @@ unresolved threads.
 
 **4.3 · Channels & DMs**
 Public and private channels · DMs, workspace-scoped (D-6) · a DM to yourself, which is also the
-scratchpad · invites and roles (owner/admin/member) · per-channel notification level
+scratchpad · invites and roles (owner/admin/member) · bringing people into a channel and taking
+them out (D-104, D-172) · per-channel notification level
 
 **4.4 · Attachments** (D-16)
 Paste-to-upload for images · file size capped by the `attachment_size_limit` constraint
-(`SCHEMA.md` §7.2, currently 25 MiB) · image thumbnails · per-workspace storage quota
+(`SCHEMA.md` §7.2, currently 25 MiB) · image thumbnails · per-workspace storage quota, shown
+to owners and set by the operator (D-173)
 
 **4.5 · Noise control** (D-12, D-15, D-29)
 `@username` mentions · **thread participation** — a reply notifies the root author and everyone
@@ -283,11 +286,12 @@ entity · magic-link auth in MVP · GitHub webhook feeds in MVP · Tauri in MVP 
 
 ## 7. Open Questions
 
-Four questions are deliberately unresolved — O-3 was closed by D-27. None blocks Phase 0. Each
-is recorded with its context, its candidate answers and the phase it must be decided in.
+Two questions are deliberately unresolved, O-4 and O-5; both are closed by measuring Phase 1 in use.
+Each is recorded with its context, its candidate answers and the phase it must be decided in.
 
 > **Single source of truth:** `DECISIONS.md` Part D. Summarised here only as a pointer —
 > ~~O-1 message editing~~ (closed by D-103) · ~~O-2 invitations~~ (closed by D-115) · ~~O-3 retention & export~~ (closed by D-27) ·
+> ~~O-6 the markdown packages~~ (closed by D-101) · ~~O-7 the palette's base~~ (closed by D-98 §7) ·
 > O-4 rate limiting · O-5 list virtualization.
 
 A task that runs into one of these has found a decision to be made, not a gap to be filled

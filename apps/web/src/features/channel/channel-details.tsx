@@ -2,7 +2,7 @@
  * A channel's details (D-123), opened from its name in the header: the product's wide dialog with
  * tabs (D-154). **About** — its name and topic, what the person is told about said in words, and at
  * the foot a danger zone with Leave and (for an owner or an admin) Archive; **Members** — who is in
- * it, found by name when there are many, with Add people; **Integrations** — the repositories it
+ * it, found by name when there are many, with Add people and — for whoever may (D-172) — Remove; **Integrations** — the repositories it
  * hears from, an owner's or an admin's only (D-134), and absent for anybody else. Files and pins are
  * not here (#485).
  *
@@ -13,14 +13,15 @@
  * first, in place, as removing a member does.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import type { Channel, UpdateChannelRequest } from '@purlay/types';
+import type { Channel, ChannelMember, UpdateChannelRequest, UserRole } from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { fold } from '../composer/mention-suggest';
 import { useActions } from '../../data/actions-provider';
+import { useApi } from '../../data/api-provider';
 import { isApiError } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
-import { useChannelMembers } from '../../data/queries';
+import { useChannelMembers, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
@@ -32,6 +33,7 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { FINDABLE_FROM, TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
+import { useWorkspaceRole } from '../settings/role';
 import { useWorkspace } from '../shell/workspace';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
@@ -194,16 +196,51 @@ const Notifications = ({ channel }: { readonly channel: Channel }): React.JSX.El
   );
 };
 
-/** Who is in it, found by name when there are many, and the way to bring somebody else in. */
+/**
+ * Whether this person may take that one out of the channel — what the server allows (D-172): an owner
+ * anybody, an admin anybody but an owner, and a member of a private channel another member whose role
+ * is `member`. Never themself (that is Leave), and never in a conversation, whose people never change.
+ */
+const mayRemove = (
+  channel: Channel,
+  actor: UserRole | undefined,
+  target: UserRole | undefined,
+): boolean =>
+  channel.type !== 'direct_message' &&
+  target !== undefined &&
+  (actor === 'owner' ||
+    (actor === 'admin' && target !== 'owner') ||
+    (channel.type === 'private' && channel.state !== null && target === 'member'));
+
+/** Who is in it, found by name when there are many, the way to bring somebody else in, and to take somebody out. */
 const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t, format } = useI18n();
   const describe = useDescribeFailure();
   const client = useQueryClient();
+  const api = useApi();
   const { user } = useSession();
+  const { workspace } = useWorkspace();
+  const actor = useWorkspaceRole();
+  const people = useMembers(workspace.id);
   const members = useChannelMembers(channel.id);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
+  const [asking, setAsking] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const headingId = useId();
+  const list = useRef<HTMLUListElement>(null);
+  // Which row asked, so Cancel gives focus back to its Remove: the question replaces nothing, but
+  // focus left on Cancel as it goes falls to the dialog itself.
+  const asked = useRef<string | null>(null);
+  useEffect(() => {
+    if (asking !== null) {
+      asked.current = asking;
+      list.current?.querySelector<HTMLElement>('[data-answer="cancel"]')?.focus();
+    } else if (asked.current !== null) {
+      list.current?.querySelector<HTMLElement>(`[data-remove="${asked.current}"]`)?.focus();
+      asked.current = null;
+    }
+  }, [asking]);
   const all = members.data ?? [];
   const wanted = fold(query.trim());
   const shown =
@@ -213,6 +250,33 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
           ({ user: person }) =>
             fold(person.displayName).includes(wanted) || fold(person.username).includes(wanted),
         );
+  const roleOf = (userId: string): UserRole | undefined =>
+    people.data?.find((member) => member.user.id === userId)?.role;
+
+  /** Out of the list at once, and back in it if the server refuses — with the refusal said. */
+  const remove = async (person: ChannelMember['user']): Promise<void> => {
+    const key = keys.channelMembers(channel.id);
+    const before = client.getQueryData<ChannelMember[]>(key);
+    asked.current = null;
+    setAsking(null);
+    setProblem(null);
+    client.setQueryData<ChannelMember[]>(key, (now) =>
+      now?.filter((member) => member.user.id !== person.id),
+    );
+    try {
+      await api.removeChannelMember(channel.id, person.id);
+      // The count the sidebar and Browse show is the server's (D-167).
+      void client.invalidateQueries({ queryKey: keys.channels(workspace.id) });
+    } catch (failure) {
+      client.setQueryData(key, before);
+      setProblem(
+        isApiError(failure) && failure.code === 'FORBIDDEN'
+          ? t('details.removeForbidden', { name: person.displayName })
+          : `${t('details.removeFailed', { name: person.displayName })} ${describe(failure)}`,
+      );
+      void client.invalidateQueries({ queryKey: key });
+    }
+  };
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
@@ -270,25 +334,91 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
               {t('details.noMatch', { query: query.trim() })}
             </p>
           ) : (
-            <ul className="flex max-h-palette-list flex-col overflow-y-auto rounded-lg border-hairline border-border-subtle">
-              {shown.map(({ user: person }) => (
-                <li
-                  key={person.id}
-                  className="flex min-h-row items-center gap-3 border-border-subtle px-3 py-2 not-first:border-t-hairline max-narrow:min-h-touch"
-                >
-                  <Avatar name={person.displayName} username={person.username} size="md" />
-                  <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                    <span className="truncate text-body text-ink">{person.displayName}</span>
-                    <span className="truncate text-caption text-ink-muted">@{person.username}</span>
-                  </span>
-                  {person.id === user.id && (
-                    <span className="shrink-0 text-caption text-ink-muted">{t('details.you')}</span>
-                  )}
-                </li>
-              ))}
+            <ul
+              ref={list}
+              className="flex max-h-palette-list flex-col overflow-y-auto rounded-lg border-hairline border-border-subtle"
+            >
+              {shown.map(({ user: person }) => {
+                const you = person.id === user.id;
+                const removable = !you && mayRemove(channel, actor, roleOf(person.id));
+                return (
+                  <li
+                    key={person.id}
+                    className="flex flex-col border-border-subtle not-first:border-t-hairline"
+                  >
+                    <div className="flex min-h-row items-center gap-3 px-3 py-2 max-narrow:min-h-touch">
+                      <Avatar name={person.displayName} username={person.username} size="md" />
+                      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                        <span className="truncate text-body text-ink">{person.displayName}</span>
+                        <span className="truncate text-caption text-ink-muted">
+                          @{person.username}
+                        </span>
+                      </span>
+                      {you && (
+                        <span className="shrink-0 text-caption text-ink-muted">
+                          {t('details.you')}
+                        </span>
+                      )}
+                      {removable && asking !== person.id && (
+                        <Button
+                          variant="dangerQuiet"
+                          data-remove={person.id}
+                          aria-label={t('details.removeLabel', { name: person.displayName })}
+                          onClick={() => {
+                            setProblem(null);
+                            setAsking(person.id);
+                          }}
+                        >
+                          {t('details.remove')}
+                        </Button>
+                      )}
+                    </div>
+                    {asking === person.id && (
+                      <div
+                        role="group"
+                        aria-label={t('details.removeLabel', { name: person.displayName })}
+                        className="flex items-center gap-3 bg-danger-subtle px-3 py-2 max-narrow:flex-col max-narrow:items-stretch"
+                      >
+                        <p className="min-w-0 flex-1 text-label text-danger-text">
+                          {t(
+                            channel.type === 'private'
+                              ? 'details.removeAsk.private'
+                              : 'details.removeAsk.public',
+                            { name: person.displayName, channel: channel.name ?? '' },
+                          )}
+                        </p>
+                        <span className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            data-answer="cancel"
+                            onClick={() => {
+                              setAsking(null);
+                            }}
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() => {
+                              void remove(person);
+                            }}
+                          >
+                            {t('details.remove')}
+                          </Button>
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </>
+      )}
+      {problem !== null && (
+        <p role="alert" className="text-label text-danger-text">
+          {problem}
+        </p>
       )}
       {channel.state !== null && (
         <AddPeopleDialog

@@ -52,7 +52,7 @@ export const tr = {
   'signIn.emailRequired':
     'GitHub hesabında doğrulanmış birincil e-posta yok — GitHub’da birini doğrula, sonra yeniden giriş yap.',
   'signIn.emailTaken':
-    'Bu e-posta başka bir Purlay hesabına ait — o hesabı açtığın GitHub hesabıyla giriş yap.',
+    'Bu e-posta başka bir Purlay hesabına ait. O hesabı e-posta bağlantısıyla açtıysan bağlantıyla giriş yap, sonra Ayarlar → Oturumlar ve hesap’tan GitHub’ı bağla; başka bir GitHub hesabıyla açtıysan onunla giriş yap.',
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden dene.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
@@ -185,6 +185,9 @@ export const tr = {
   'members.role.admin': 'Yönetici',
   'members.role.owner': 'Sahip',
   'members.you': 'sen',
+  'members.selfAsk':
+    'Kendi rolünü {role} yapmak istiyor musun? Bunu yalnızca başka bir sahip ya da yönetici geri alabilir.',
+  'members.selfConfirm': 'Rolümü değiştir',
   'members.remove': 'Çıkar',
   'members.removeLabel': '{name} kişisini çıkar',
   'members.removeAsk': '{name} çıkarılsın mı? Çalışma alanının tüm kanallarını kaybeder.',
@@ -196,6 +199,7 @@ export const tr = {
   'audit.description':
     'Kim, hangi yönetim işini yaptı; en yenisi önce. Kimsenin yazdıkları burada görünmez.',
   'audit.empty': 'Henüz yönetimsel bir şey olmadı.',
+  'audit.olderFailed': 'Daha eski kayıtlar yüklenmedi.',
   'audit.older': 'Daha eskileri yükle',
   'audit.someone': 'Biri',
   'audit.someoneElse': 'biri',
@@ -208,6 +212,11 @@ export const tr = {
   'audit.action.channel.created': '{actor}, {channel} kanalını oluşturdu',
   'audit.action.channel.renamed': '{actor}, {from} kanalının adını {to} yaptı',
   'audit.action.channel.archived': '{actor}, {channel} kanalını arşivledi',
+  'audit.action.channel.member_added': '{actor}, {target} kişisini bir kanala ekledi',
+  'audit.action.channel.member_added_to': '{actor}, {target} kişisini {channel} kanalına ekledi',
+  'audit.action.channel.member_removed': '{actor}, {target} kişisini bir kanaldan çıkardı',
+  'audit.action.channel.member_removed_from':
+    '{actor}, {target} kişisini {channel} kanalından çıkardı',
   'audit.action.integration.token_set': '{actor} GitHub tokenını ayarladı',
   'audit.action.integration.token_removed': '{actor} GitHub tokenını kaldırdı',
   'audit.action.integration.feed_created': '{actor}, {repository} deposunu bir kanala bağladı',
@@ -241,6 +250,12 @@ export const tr = {
     'Her gece {days} günden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterir.',
   'retention.failed': 'Ayar kaydedilmedi.',
   'retention.saved': 'Kaydedildi.',
+  'storage.description':
+    'Buraya gönderilen dosyalar ve gönderilmeyi bekleyenler çalışma alanının kotasından düşer. Kotayı sunucunun yöneticisi belirler.',
+  'storage.label': 'Kullanılan depolama',
+  'storage.used': '{used} / {quota}',
+  'storage.left': 'Kalan: {left}',
+  'storage.full': 'Yer kalmadı: sunucunun yöneticisi kotayı artırana kadar dosya yüklenemez.',
   'export.entry': 'Çalışma alanını dışa aktar…',
   'export.title': '{workspace} çalışma alanını dışa aktar',
   'export.description':
@@ -316,6 +331,9 @@ export const tr = {
   'state.channel.left.title': 'Bu kanaldan ayrıldın',
   'state.channel.left.body':
     'Başka bir ekranda ayrıldın. Herkese açıksa Kanallara göz at’tan yeniden katılabilirsin.',
+  'state.channel.removed.title': 'Bu kanaldan çıkarıldın',
+  'state.channel.removed.body':
+    'Biri seni kanaldan çıkardı. Konuşması üyelerinde kalır; içlerinden biri seni yeniden ekleyebilir.',
   'state.workspace.empty.title': 'Bir kanal seç',
   'state.workspace.empty.body': 'Listeden birini seç ya da ilkini oluştur.',
 
@@ -410,6 +428,14 @@ export const tr = {
     '#{name} arşivlensin mi? Artık kimse görmeyecek. Konuşması saklanır, adı yeniden kullanılabilir.',
   'details.archiveFailed': 'Kanal arşivlenmedi.',
   'details.archived': '#{name} arşivlendi.',
+  'details.remove': 'Çıkar',
+  'details.removeLabel': '{name} kişisini kanaldan çıkar',
+  'details.removeAsk.public':
+    '{name} kişisi #{channel} kanalından çıkarılsın mı? Mesajları kalır, kanala yeniden katılabilir.',
+  'details.removeAsk.private':
+    '{name} kişisi #{channel} kanalından çıkarılsın mı? Kanalı artık görmez, mesajları kalır.',
+  'details.removeFailed': '{name} çıkarılmadı.',
+  'details.removeForbidden': '{name} kişisini yalnızca bir sahip ya da yönetici çıkarabilir.',
 
   // ── Mesajlar ────────────────────────────────────────────────────────────
   'message.react': 'Tepki ver',
@@ -838,6 +864,7 @@ export const tr = {
   'composer.attach': 'Dosya ekle',
   'composer.files': 'Gönderilecek dosyalar',
   'composer.waiting': 'Dosyaların yüklenmesi bitince gönderilecek.',
+  'composer.notSent': 'Gönderilmedi: {channel}. Bir dosya yüklenmedi; mesaj orada duruyor.',
   'typing.one': '{name} yazıyor…',
   'typing.two': '{first} ve {second} yazıyor…',
   'typing.several': 'Birkaç kişi yazıyor…',
@@ -1059,6 +1086,7 @@ export const tr = {
     'Bir olaya müdahale edebilecek kişi sınırına ulaşıldı. Önce birini çıkar.',
   'failure.incidentPostmortemChanged':
     'Sen başladığından beri başka biri postmortemi kaydetti. Yazdığın duruyor: önce onunkini oku, sonra yeniden kaydet.',
+  'failure.githubAlreadyConnected': 'Bu hesaba zaten bir GitHub hesabı bağlı.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',
@@ -1139,6 +1167,31 @@ export const tr = {
   'settings.notifications.noChannels': 'Henüz hiçbir kanalda değilsin.',
   'settings.account.title': 'Oturumlar ve hesap',
   'settings.account.description': 'Nerelerde oturum açık olduğu ve hesabının kendisi.',
+  'settings.account.signIn': 'Nasıl giriş yapıyorsun',
+  'settings.account.email': 'E-posta',
+  'settings.account.emailLinks': 'Bu adrese gönderilen giriş bağlantısıyla giriş yaparsın.',
+  'settings.account.emailGitHub': 'GitHub hesabının adresi. GitHub ile giriş yaparsın.',
+  'settings.account.github': 'GitHub',
+  'settings.account.githubNone':
+    'Bağlı değil. GitHub hesabını bağla; e-postanın yanında onunla da giriş yap.',
+  'settings.account.githubSignsIn': 'Bu GitHub hesabıyla giriş yapabilirsin.',
+  'settings.account.githubConnected': 'Bağlı',
+  'settings.account.githubConnect': 'GitHub’ı bağla',
+  'settings.account.githubConnectFailed': 'GitHub açılamadı.',
+  'settings.account.github.connected': 'GitHub bağlandı — artık onunla da giriş yapabilirsin.',
+  'settings.account.github.cancelled': 'GitHub’da iptal ettin — hiçbir şey bağlanmadı.',
+  'settings.account.github.expired':
+    'Bu bağlamanın süresi doldu ya da başka bir tarayıcıda başlatıldı — hiçbir şey bağlanmadı. “GitHub’ı bağla”ya yeniden bas.',
+  'settings.account.github.session':
+    'GitHub yanıt vermeden önce çıkış yapıldı ya da başka biri olarak giriş yapıldı — hiçbir şey bağlanmadı. “GitHub’ı bağla”ya yeniden bas.',
+  'settings.account.github.taken':
+    'Bu GitHub hesabıyla zaten başka bir Purlay hesabına giriş yapılıyor — hiçbir şey bağlanmadı. GitHub’da kastettiğin hesapla giriş yap, sonra yeniden dene.',
+  'settings.account.github.already': 'Bu hesaba zaten bir GitHub hesabı bağlı.',
+  'settings.account.github.unavailable':
+    'GitHub’a ulaşılamadı — hiçbir şey bağlanmadı. Biraz bekleyip yeniden dene.',
+  'settings.account.github.busy':
+    'Purlay şu an yoğun — hiçbir şey bağlanmadı. Bir dakika bekleyip yeniden dene.',
+  'settings.account.github.failed': 'GitHub bağlanamadı — yeniden dene.',
   'settings.account.sessions': 'Oturumlar',
   'settings.account.here': 'Bu cihaz',
   'settings.account.hereHint': 'Yalnızca bu tarayıcıda Purlay’den çık.',
@@ -1197,8 +1250,9 @@ export const tr = {
   'settings.audit.title': 'Denetim kaydı',
   'settings.data.title': 'Veri ve saklama',
   'settings.data.description':
-    'Çalışma alanının yazılanları ne kadar tuttuğu ve bir kopyasını almak.',
+    'Dosyaların kapladığı yer, yazılanların ne kadar tutulduğu ve bir kopyasını almak.',
   'settings.data.retention': 'Geçmiş',
+  'settings.data.storage': 'Depolama',
   'settings.data.forever': 'Süresiz',
   'settings.data.years': { other: '{count} yıl' },
   'settings.data.export': 'Dışa aktarma',
@@ -1217,7 +1271,7 @@ export const tr = {
   'user.signOutEverywhere.entry': 'Her yerden çıkış yap…',
   'user.signOutEverywhere.title': 'Her yerden çıkış yapılsın mı?',
   'user.signOutEverywhere.body':
-    'Senin adınla giriş yapılmış her tarayıcı ve cihazdan, bu da dahil, çıkış yapılır. Yeniden GitHub ile giriş yaparsın.',
+    'Senin adınla giriş yapılmış her tarayıcı ve cihazdan, bu da dahil, çıkış yapılır. Sonra her zamanki yolunla yeniden giriş yaparsın.',
   'user.menuFor': 'Hesap: {name}',
 
   // ── Komut paleti (D-98) ─────────────────────────────────────────────────

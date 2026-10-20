@@ -9,6 +9,8 @@
  */
 export const keys = {
   me: ['me'] as const,
+  /** The ways the caller signs in, and the GitHub account connected (D-176). */
+  mySignIn: ['my-sign-in'] as const,
   /** Which ways in this server offers (D-138 §6). */
   authMethods: ['auth-methods'] as const,
   /** A sign-in link's address, read before it is spent (D-138 §4). */
@@ -26,7 +28,11 @@ export const keys = {
   thread: (messageId: string) => ['thread', messageId] as const,
   /** Whether the caller follows a root's thread (D-161): theirs alone, so not under `thread`. */
   threadFollow: (rootId: string) => ['thread-follow', rootId] as const,
-  unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
+  /** The workspace's open questions, or one channel's (`UX.md` §2): one prefix, so a change to a thread reaches both. */
+  unresolved: (workspaceId: string, channelId: string | null = null) =>
+    channelId === null
+      ? (['unresolved', workspaceId] as const)
+      : (['unresolved', workspaceId, channelId] as const),
   /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
   notifications: (workspaceId: string, filter?: 'unread') =>
     filter === undefined
@@ -48,6 +54,7 @@ export const keys = {
   audit: (workspaceId: string) => ['audit', workspaceId] as const,
   /** How long a workspace keeps its history, an owner's to read (D-139 §4). */
   retention: (workspaceId: string) => ['retention', workspaceId] as const,
+  storage: (workspaceId: string) => ['storage', workspaceId] as const,
   /** An owner's own exports of a workspace (D-140). */
   exports: (workspaceId: string) => ['exports', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,

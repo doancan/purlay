@@ -96,8 +96,8 @@ describe('integration: a unique race is a 409, never a 500', () => {
 
     try {
       const [first, second] = await Promise.all([
-        post(path, alice.cookie, { name: 'general' }),
-        post(path, alice.cookie, { name: 'General' }),
+        post(path, alice.cookie, { name: 'ops' }),
+        post(path, alice.cookie, { name: 'Ops' }),
       ]);
 
       expect([first.status, second.status].sort()).toEqual([201, 409]);

@@ -66,3 +66,52 @@ export const signInFailureIn = (search: string): SignInFailure | null => {
   if (value === null) return null;
   return isFailure(value) ? value : 'failed';
 };
+
+/**
+ * How connecting GitHub to a signed-in account came out (D-176), said on the settings page it started
+ * from — a closed set in the address, as a sign-in's failure is, and for the same reasons.
+ */
+export const ConnectGitHubOutcome = Type.Union([
+  /** Connected: the account now signs in with this GitHub account as well. */
+  Type.Literal('connected'),
+  /** They pressed Cancel on GitHub's screen. */
+  Type.Literal('cancelled'),
+  /** The `state` check failed: expired, or not the one this browser was given. */
+  Type.Literal('expired'),
+  /** The session that started it is not the one signed in here now: signed out, or another person. */
+  Type.Literal('session'),
+  /** That GitHub account is another Purlay account's already (`GITHUB_ACCOUNT_TAKEN`). Never merged. */
+  Type.Literal('taken'),
+  /** This account has a GitHub account already (`GITHUB_ALREADY_CONNECTED`). */
+  Type.Literal('already'),
+  /** GitHub could not be reached, refused, or answered something unusable. */
+  Type.Literal('github-unavailable'),
+  /** Too many requests from here, or no database connection in time: wait, then retry. */
+  Type.Literal('busy'),
+  /** Anything else. The cause is in the server's log, never in the address. */
+  Type.Literal('failed'),
+]);
+export type ConnectGitHubOutcome = Static<typeof ConnectGitHubOutcome>;
+
+/** The query parameter the outcome travels in, on the Sessions & account page. */
+const CONNECT_PARAM = 'github';
+
+const OUTCOMES: ReadonlySet<string> = new Set(
+  ConnectGitHubOutcome.anyOf.map((literal) => literal.const),
+);
+
+const isOutcome = (value: string): value is ConnectGitHubOutcome => OUTCOMES.has(value);
+
+/**
+ * Where the browser is sent once a connect is over: that workspace's Sessions & account page. A path,
+ * so the API prefixes its own origin; the slug is `[a-z0-9-]`, so it is a path and nothing else.
+ */
+export const connectGitHubHref = (workspace: string, outcome: ConnectGitHubOutcome): string =>
+  `/w/${encodeURIComponent(workspace)}/settings/account?${new URLSearchParams({ [CONNECT_PARAM]: outcome }).toString()}`;
+
+/** The outcome an address carries, or null; a value outside the set reads as `failed`. */
+export const connectGitHubOutcomeIn = (search: string): ConnectGitHubOutcome | null => {
+  const value = new URLSearchParams(search).get(CONNECT_PARAM);
+  if (value === null) return null;
+  return isOutcome(value) ? value : 'failed';
+};

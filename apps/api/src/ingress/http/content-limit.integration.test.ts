@@ -48,7 +48,7 @@ const aChannel = async (
     return ((await response.json()) as { id: string }).id;
   };
   const workspaceId = await post('/api/workspaces', { name, slug: aUniqueSlug(name) });
-  const channelId = await post(`/api/workspaces/${workspaceId}/channels`, { name: 'general' });
+  const channelId = await post(`/api/workspaces/${workspaceId}/channels`, { name: 'ops' });
   return { cookie, userId: user.id, workspaceId, channelId };
 };
 
