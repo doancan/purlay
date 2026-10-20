@@ -340,6 +340,29 @@ describe('the audit log', () => {
     expect(within(view.getByRole('main')).queryByRole('button', { name: 'Load older' })).toBeNull();
   });
 
+  test('an older page that fails says so with the reason, and Load older asks again', async () => {
+    let older = 0;
+    const view = await openPage({
+      audit: (_workspace, before) => {
+        if (before === undefined) return Promise.resolve(page([anEntry(2, {})], entryId(2)));
+        older += 1;
+        return older === 1
+          ? Promise.reject(new ApiError(0, 'NETWORK', 'down'))
+          : Promise.resolve(page([anEntry(1, {})]));
+      },
+    });
+    const main = within(view.getByRole('main'));
+    await person().click(main.getByRole('button', { name: 'Load older' }));
+    await settle();
+    // Not silent: the end of the log and a failed request no longer look the same.
+    expect(main.getByRole('alert').textContent).toContain('Older entries did not load.');
+    expect(lines(view)).toHaveLength(1);
+    await person().click(main.getByRole('button', { name: 'Load older' }));
+    await settle();
+    expect(main.queryByRole('alert')).toBeNull();
+    expect(lines(view)).toHaveLength(2);
+  });
+
   test('empty, it says so; failing, it says why with Retry; reading, it is a status', async () => {
     const empty = await openPage({ audit: () => Promise.resolve(page([])) });
     expect(

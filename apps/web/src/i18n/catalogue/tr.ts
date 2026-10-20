@@ -196,6 +196,7 @@ export const tr = {
   'audit.description':
     'Kim, hangi yönetim işini yaptı; en yenisi önce. Kimsenin yazdıkları burada görünmez.',
   'audit.empty': 'Henüz yönetimsel bir şey olmadı.',
+  'audit.olderFailed': 'Daha eski kayıtlar yüklenmedi.',
   'audit.older': 'Daha eskileri yükle',
   'audit.someone': 'Biri',
   'audit.someoneElse': 'biri',
