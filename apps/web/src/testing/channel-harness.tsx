@@ -19,6 +19,7 @@ import { SessionGate } from '../features/session/session';
 import { SaveIntentsProvider } from '../features/saved/save-toggle';
 import { WorkspaceScopeProvider } from '../features/shell/workspace';
 import { RealtimeProvider, useEngine } from '../realtime/realtime-provider';
+import { OutboxProvider } from '../features/composer/uploads';
 import type { Engine } from '../realtime/engine';
 import { feedWorld, installScrollMetrics, type FeedWorld, type ScrollMetrics } from './feed-world';
 import { IDS, WHEN, aSignedInApi, NO_PROFILE } from './fixtures';
@@ -141,14 +142,16 @@ export const mountChannel = async (options: ChannelOptions = {}): Promise<Channe
         <SessionGate>
           <WorkspaceScopeProvider slug="acme" notFound={null}>
             <RealtimeProvider>
-              <SaveIntentsProvider>
-                <Region
-                  channelId={options.channelId ?? IDS.api}
-                  capture={(found) => {
-                    engine = found;
-                  }}
-                />
-              </SaveIntentsProvider>
+              <OutboxProvider>
+                <SaveIntentsProvider>
+                  <Region
+                    channelId={options.channelId ?? IDS.api}
+                    capture={(found) => {
+                      engine = found;
+                    }}
+                  />
+                </SaveIntentsProvider>
+              </OutboxProvider>
             </RealtimeProvider>
           </WorkspaceScopeProvider>
         </SessionGate>

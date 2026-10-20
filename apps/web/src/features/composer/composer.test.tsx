@@ -42,6 +42,7 @@ import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
 import { Composer, DRAFT_DEBOUNCE_MS, type ComposerProps } from './composer';
 import { ComposerPortsContext } from './composer-ports';
+import { OutboxProvider } from './uploads';
 import { draftKey, type DraftStorage } from './drafts';
 import { PERSON_KEY } from '../../data/browser-storage';
 import { expectFocusOn } from '../../testing/focus';
@@ -99,6 +100,8 @@ interface Mounted {
     next: Partial<ComposerProps>,
     without?: readonly (keyof ComposerProps)[],
   ) => void;
+  /** Takes the composer off the page and puts it back, as closing and opening a thread's panel does. */
+  readonly shown: (shown: boolean) => void;
 }
 
 const mount = async (options: Options = {}): Promise<Mounted> => {
@@ -106,19 +109,24 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
   const storage = options.storage === undefined ? memory() : options.storage;
   let props: ComposerProps = { channelId: IDS.api, channelName: 'api', ...options.props };
   let setProps: (next: ComposerProps) => void = () => undefined;
+  let setShown: (next: boolean) => void = () => undefined;
   /** Holds the composer's props in state, so a test can change them the way a route change does. */
-  const Holder = (): React.JSX.Element => {
+  const Holder = (): React.JSX.Element | null => {
     const [current, set] = useState(props);
+    const [visible, show] = useState(true);
     setProps = set;
-    return <Composer {...current} />;
+    setShown = show;
+    return visible ? <Composer {...current} /> : null;
   };
   const tree = (): React.ReactElement => (
     <SessionGate>
       <WorkspaceScopeProvider slug="acme" notFound={null}>
         <RealtimeProvider>
-          <ComposerPortsContext.Provider value={{ storage, schedule: timers.schedule }}>
-            <Holder />
-          </ComposerPortsContext.Provider>
+          <OutboxProvider>
+            <ComposerPortsContext.Provider value={{ storage, schedule: timers.schedule }}>
+              <Holder />
+            </ComposerPortsContext.Provider>
+          </OutboxProvider>
           <Toaster dismissLabel="Close" />
         </RealtimeProvider>
       </WorkspaceScopeProvider>
@@ -167,6 +175,11 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
       props = merged as unknown as ComposerProps;
       act(() => {
         setProps(props);
+      });
+    },
+    shown: (next): void => {
+      act(() => {
+        setShown(next);
       });
     },
   };
@@ -1166,6 +1179,108 @@ describe('attaching files (D-109, #370)', () => {
     ]);
   });
 
+  // A send that is waiting on its files belongs to where it was written, not to the composer on the
+  // screen: leaving the channel, or closing a thread's panel, neither sends it early nor loses it.
+  test('a send waiting on its files still goes once they land, after the person has moved to another channel', async () => {
+    const uploads = held();
+    const { view, box, sent, user, rerender, storage } = await mount({
+      api: aSignedInApi(uploads.api),
+    });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    await user.type(box(), 'look{Enter}');
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    expect(sent()).toEqual([]);
+    // Not this channel's: neither its file nor its waiting is drawn here.
+    expect(view.queryByText('a.txt')).toBeNull();
+    expect(view.queryByText('Sends when the files finish uploading.')).toBeNull();
+    uploads.finish(0);
+    await settle();
+    expect(sent()).toEqual([
+      { channelId: IDS.api, content: 'look', attachmentIds: [uploads.calls[0]?.id] },
+    ]);
+    // What was sent is gone from where it was written.
+    expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    rerender({ channelId: IDS.api, channelName: 'api' });
+    expect(box().value).toBe('');
+    expect(view.queryByText('a.txt')).toBeNull();
+    expect(view.queryByText('Sends when the files finish uploading.')).toBeNull();
+    expect(sent()).toHaveLength(1);
+  });
+
+  test('a waiting send whose file fails while the person is away is not sent, is said, and is all there on coming back', async () => {
+    const uploads = held();
+    const { view, box, sent, user, rerender } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    await user.type(box(), 'look{Enter}');
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    uploads.refuse(0, new ApiError(503, 'STORAGE_UNAVAILABLE', 'down'));
+    await settle();
+    expect(sent()).toEqual([]);
+    expect(
+      view.getByText('Not sent to api: a file did not upload. The message is still there.'),
+    ).toBeDefined();
+    rerender({ channelId: IDS.api, channelName: 'api' });
+    expect(box().value).toBe('look');
+    expect(view.getByText('File storage is unavailable')).toBeDefined();
+    expect(view.getByRole('button', { name: 'Retry a.txt' })).toBeDefined();
+    expect(view.queryByText('Sends when the files finish uploading.')).toBeNull();
+  });
+
+  test('files attached and not sent are still there after a channel switch, and go with the message', async () => {
+    const uploads = held();
+    const { view, box, sent, user, rerender } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    expect(view.queryByText('a.txt')).toBeNull();
+    uploads.finish(0);
+    await settle();
+    rerender({ channelId: IDS.api, channelName: 'api' });
+    expect(view.getByText('a.txt')).toBeDefined();
+    await user.type(box(), 'here{Enter}');
+    expect(sent()).toEqual([
+      { channelId: IDS.api, content: 'here', attachmentIds: [uploads.calls[0]?.id] },
+    ]);
+  });
+
+  test('coming back while it still uploads finds the send waiting, and it goes once, from here', async () => {
+    const uploads = held();
+    const { view, box, sent, user, rerender } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    await user.type(box(), 'look{Enter}');
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    rerender({ channelId: IDS.api, channelName: 'api' });
+    expect(box().value).toBe('look');
+    expect(view.getByText('Sends when the files finish uploading.')).toBeDefined();
+    uploads.finish(0);
+    await settle();
+    expect(sent()).toEqual([
+      { channelId: IDS.api, content: 'look', attachmentIds: [uploads.calls[0]?.id] },
+    ]);
+    expect(box().value).toBe('');
+  });
+
+  test("a reply waiting on its files still goes once they land, after the thread's panel is closed", async () => {
+    const uploads = held();
+    const root = aMessage(1).id;
+    const { box, sent, user, shown } = await mount({
+      api: aSignedInApi(uploads.api),
+      props: { parentId: root },
+    });
+    paste(box(), [new File([new Uint8Array([1])], 'a.txt')]);
+    await user.type(box(), 'see{Enter}');
+    shown(false);
+    uploads.finish(0);
+    await settle();
+    expect(sent()).toEqual([
+      {
+        channelId: IDS.api,
+        content: 'see',
+        parentId: root,
+        attachmentIds: [uploads.calls[0]?.id],
+      },
+    ]);
+  });
+
   test('a failed upload says why, holds the send back, and Retry uploads it again', async () => {
     const uploads = held();
     const { view, box, sent, user } = await mount({ api: aSignedInApi(uploads.api) });
@@ -1461,6 +1576,12 @@ describe('typing', () => {
     await settle();
     expect(line(view)).toBe('Biri ve Alice yazıyor…');
     await expectNoAxeViolations(view.container);
+  });
+
+  test('typing in a reply box says nothing to the channel: nothing will arrive in its feed', async () => {
+    const { view, box, user } = await mount({ props: { parentId: aMessage(1).id } });
+    await user.type(box(), 'hello');
+    expect(view.world.sockets.sent('TYPING')).toEqual([]);
   });
 
   test('a reply composer shows no line: typing is the channel’s, and its composer shows it', async () => {

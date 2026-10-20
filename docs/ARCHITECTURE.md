@@ -235,7 +235,8 @@ What the shape is for, which the types do not say:
   an open inbox reads it again (D-106); a channel starred or
   let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
-  hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
+  hears it only from a member — what a non-member types could not be sent (D-156) — and from a
+  channel's box, never a thread's reply box (D-171); it hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. `ACTIVE` is the client's
   word that its page is in front of the person in a workspace: answered with nothing, heard only by the
   push sender, which holds that workspace's pushes for its window (D-143). Each frame joined the union
