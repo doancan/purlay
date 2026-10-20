@@ -703,7 +703,8 @@ stored representation. (D-36)
 ```
 Client detects a GitHub URL
       └─▶ POST /api/integrations/github/unfurl { url }
-              ├─ hash the workspace and the URL (D-112)
+              ├─ no token → return null (a plain link at once, whatever is cached)
+              ├─ hash the workspace, the token's version (its updated_at) and the URL (D-112)
               ├─ SELECT FROM link_previews WHERE url_hash = $1 AND expires_at > NOW()
               │     └─ hit  → return
               └─ miss → GitHub API with the WORKSPACE token (D-23)
@@ -713,7 +714,9 @@ Client detects a GitHub URL
 ```
 
 Negative caching matters: without it, one broken link pasted in a busy channel re-hits the API
-on every render for every viewer.
+on every render for every viewer. The token's version is in the key so a token replaced is asked
+again at once: "not there" was what the old token could see, and an admin who fixed it should not
+wait out the hour.
 
 ```typescript
 export interface GitHubCardMetadata {

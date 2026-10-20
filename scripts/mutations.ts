@@ -3846,4 +3846,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '? focusedId : null;\n',
     tests: ['apps/web/src/features/threads/thread.test.tsx'],
   },
+  {
+    id: 'card-cache-outlives-its-token',
+    why: 'a card, or GitHub’s “not there”, remembered under one token is served under the next, so a fixed token shows plain links for up to an hour',
+    file: 'apps/api/src/modules/integrations/unfurl.ts',
+    find: '.update(`${context.workspaceId}\\n${version}\\n${url}`)',
+    replace: '.update(`${context.workspaceId}\\n${url}`)',
+    tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+  },
+  {
+    id: 'card-drawn-after-its-token-is-removed',
+    why: 'a workspace that removed its GitHub token keeps drawing cards it fetched with it until they expire',
+    file: 'apps/api/src/modules/integrations/unfurl.ts',
+    find: "    .where('access_token_encrypted', 'is not', null)\n    .executeTakeFirst();\n  if (integration === undefined) return null;",
+    replace: '    .executeTakeFirst();\n  if (integration === undefined) return null;',
+    tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+  },
 ];

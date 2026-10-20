@@ -206,8 +206,22 @@ export const unfurl = async (
   if (parts === null) return null;
   const [, owner = '', repo = '', kind = '', number = ''] = parts;
   const now = clock.now();
+  // Which token the card would be fetched with, read before the cache: without one a link is a plain
+  // link at once — a card kept from before the token was removed is not drawn — and the token's own
+  // version is part of the key, so a card (or "nothing there") remembered under the old token is never
+  // read under the new one. The old entries expire as every entry does (`jobs.ts`).
+  const integration = await database
+    .selectFrom('github_integrations')
+    .select('updated_at')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('access_token_encrypted', 'is not', null)
+    .executeTakeFirst();
+  if (integration === undefined) return null;
+  const version = new Date(integration.updated_at).toISOString();
   // The workspace is part of the key: a card is this workspace's, fetched with its token.
-  const key = createHash('sha256').update(`${context.workspaceId}\n${url}`).digest('hex');
+  const key = createHash('sha256')
+    .update(`${context.workspaceId}\n${version}\n${url}`)
+    .digest('hex');
 
   const cached = await database
     .selectFrom('link_previews')
