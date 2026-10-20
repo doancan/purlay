@@ -3846,4 +3846,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '? focusedId : null;\n',
     tests: ['apps/web/src/features/threads/thread.test.tsx'],
   },
+  {
+    id: 'general-offers-a-refused-workspace',
+    why: 'Settings → General offers Create workspace to an owner the server will refuse (D-155): a form that can only be refused',
+    file: 'apps/web/src/features/settings/pages/general.tsx',
+    find: '{mayCreateWorkspace && (',
+    replace: '{(mayCreateWorkspace || true) && (',
+    tests: ['apps/web/src/features/settings/pages/general.test.tsx'],
+  },
 ];

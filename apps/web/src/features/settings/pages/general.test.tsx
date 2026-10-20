@@ -193,6 +193,22 @@ describe('general', () => {
     view.unmount();
   });
 
+  test('another workspace is offered only to whom the server lets make one (D-155)', async () => {
+    const session = aSession();
+    const view = await openPage({
+      me: () =>
+        Promise.resolve({
+          ...session,
+          memberships: session.memberships.map((m) => ({ ...m, role: 'owner' as const })),
+          mayCreateWorkspace: false,
+        }),
+    });
+    // An owner the server would refuse sees no form to be refused by.
+    expect(main(view).queryByRole('button', { name: 'Create workspace…' })).toBeNull();
+    expect(main(view).queryByText('Another workspace')).toBeNull();
+    view.unmount();
+  });
+
   test('Create workspace… opens the form for another', async () => {
     const view = await openPage({});
     await person().click(main(view).getByRole('button', { name: 'Create workspace…' }));
