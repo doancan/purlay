@@ -419,6 +419,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'DELETE /api/messages/:messageId/resolve': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'GET /api/workspaces/:workspaceId/unresolved': {
     refusal: 'WORKSPACE_NOT_FOUND',
+    alsoWith: { 'one of its channels': 'channelId=:channelId' },
     visibility: { kind: 'workspace-wide' },
   },
   'GET /api/workspaces/:workspaceId/search': {

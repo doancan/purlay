@@ -16,13 +16,14 @@ import {
   type SearchPage,
   SendMessageRequest,
   SetThreadFollowRequest,
+  UnresolvedQuery,
   type Message,
   type ThreadFollow,
   type MessagePage,
   type MessageWindow,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import { requireChannelById, requireMessageById } from '../../platform/channels';
+import { channelNotFound, requireChannelById, requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { visibleChannelIds } from '../../platform/channels';
 import {
@@ -225,8 +226,17 @@ export const readUnresolved = async (
   const { database, clock } = dependencies;
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  const query = validated(PageQuery, asPageQuery(new URL(request.url)));
-  return await unresolvedIn(database, context, await visibleChannelIds(database, context), query);
+  const url = new URL(request.url);
+  const channelId = url.searchParams.get('channelId');
+  const { channelId: one, ...query } = validated(UnresolvedQuery, {
+    ...asPageQuery(url),
+    ...(channelId === null ? {} : { channelId }),
+  });
+  // One channel's questions narrow the visible set and never widen it: a channel the caller cannot
+  // see is not found, as search says it (D-34).
+  const visible = await visibleChannelIds(database, context);
+  if (one !== undefined && !visible.includes(one)) throw channelNotFound();
+  return await unresolvedIn(database, context, one === undefined ? visible : [one], query);
 };
 
 /**

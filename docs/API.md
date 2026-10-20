@@ -222,7 +222,7 @@ repaired. Nobody else hears it.
 | ○ | `DELETE` | `/api/messages/:messageId/pin` | Lets the pin go, a deleted message's included. `204`, idempotent; a member's, as pinning is; the channel hears `PINS_UPDATED` when there was one |
 | ○ | `PUT` | `/api/messages/:messageId/saved` | `{ state? }` (`SaveMessageRequest`): saves the message for the caller, or moves its save to `state`; without `state` a new save is `in_progress` and an existing one keeps its state. `204`, idempotent. A deleted message is `404`; past `SAVED_MAX` saves shown in the workspace, a new save is `409 SAVED_LIMIT`. The caller's devices are told `SAVED_UPDATED` (D-128) |
 | ○ | `DELETE` | `/api/messages/:messageId/saved` | Lets the caller's save go, a deleted message's included. `204`, idempotent; tells their devices `SAVED_UPDATED` |
-| ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34) |
+| ○ | `GET` | `/api/workspaces/:workspaceId/unresolved` | Open-questions view (`idx_messages_unresolved`): roots with a reply and no resolution, newest first, keyset. **Restricted to channels the caller can see** (D-34). `?channelId=` narrows it to that channel — what a channel's header counts and its narrowed view lists; a channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as in search |
 
 A reply, a resolution and a reopening publish `THREAD_UPDATED` after the commit; a reply also moves the
 caller-independent counters and tells each recipient their own numbers (`CHANNEL_STATE`, D-99). A send,

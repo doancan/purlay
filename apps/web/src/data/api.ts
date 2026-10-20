@@ -247,9 +247,10 @@ export interface Api {
   ) => Promise<ThreadPage>;
   readonly resolve: (messageId: string) => Promise<Message>;
   readonly reopen: (messageId: string) => Promise<Message>;
+  /** The open questions; with `channelId`, that channel's alone (a channel it cannot see is 404). */
   readonly unresolved: (
     workspaceId: string,
-    page?: PageQuery,
+    page?: PageQuery & { readonly channelId?: string | undefined },
     signal?: AbortSignal,
   ) => Promise<UnresolvedPage>;
   /** The caller's inbox in one workspace, newest first (D-106). */

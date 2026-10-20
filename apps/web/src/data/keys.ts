@@ -26,7 +26,11 @@ export const keys = {
   thread: (messageId: string) => ['thread', messageId] as const,
   /** Whether the caller follows a root's thread (D-161): theirs alone, so not under `thread`. */
   threadFollow: (rootId: string) => ['thread-follow', rootId] as const,
-  unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
+  /** The workspace's open questions, or one channel's (`UX.md` §2): one prefix, so a change to a thread reaches both. */
+  unresolved: (workspaceId: string, channelId: string | null = null) =>
+    channelId === null
+      ? (['unresolved', workspaceId] as const)
+      : (['unresolved', workspaceId, channelId] as const),
   /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
   notifications: (workspaceId: string, filter?: 'unread') =>
     filter === undefined

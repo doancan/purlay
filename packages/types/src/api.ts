@@ -304,6 +304,21 @@ export const UnresolvedPage = Page(Message);
 export type UnresolvedPage = Static<typeof UnresolvedPage>;
 
 /**
+ * Its query: a page, and optionally one channel's questions alone — what a channel's header counts
+ * and its narrowed view lists. A channel the caller cannot see is `404 CHANNEL_NOT_FOUND`, as search
+ * answers it: narrowing never widens the visible set (D-34).
+ */
+export const UnresolvedQuery = FromClient({
+  channelId: Type.Optional(Uuid),
+  before: Type.Optional(Uuid),
+  after: Type.Optional(Uuid),
+  limit: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+  ),
+});
+export type UnresolvedQuery = Static<typeof UnresolvedQuery>;
+
+/**
  * `PUT /api/channels/:channelId/read` — the newest message the person has seen.
  * Never moves the position backwards, and a message that is not in this channel is
  * refused (I-3). The answer is the new state, so the client does not recompute it.

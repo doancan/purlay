@@ -3846,4 +3846,23 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '? focusedId : null;\n',
     tests: ['apps/web/src/features/threads/thread.test.tsx'],
   },
+  {
+    id: 'open-questions-not-narrowed-on-the-server',
+    why: 'one channel’s open questions are the workspace’s visible ones, so a channel’s header and narrowed view count what is not theirs',
+    file: 'apps/api/src/ingress/http/messages.ts',
+    find: 'one === undefined ? visible : [one]',
+    replace: 'visible',
+    tests: ['apps/api/src/ingress/http/threads.integration.test.ts'],
+  },
+  {
+    id: 'open-questions-channel-not-asked-for',
+    why: 'a channel’s count is read from the workspace’s pages, so a quiet channel’s questions past them go uncounted',
+    file: 'apps/web/src/data/queries.ts',
+    find: '{ before: pageParam, ...(channelId === null ? {} : { channelId }) }',
+    replace: '{ before: pageParam }',
+    tests: [
+      'apps/web/src/features/channel/channel-screen.test.tsx',
+      'apps/web/src/features/questions/questions-screen.test.tsx',
+    ],
+  },
 ];

@@ -263,15 +263,11 @@ export const QuestionsScreen = (): React.JSX.Element => {
   const { search } = useRoute();
   const narrowed = channelInSearch(search);
   const ports = useFeedPorts();
-  const query = useUnresolved(workspace.id);
+  // Narrowed, the server is asked for that channel's questions: filtered from the workspace's pages,
+  // a quiet channel's sat behind other channels' and needed Load more to appear.
+  const query = useUnresolved(workspace.id, narrowed);
   const channels = useChannels(workspace.id);
-  const questions = useMemo(
-    () =>
-      readingOrder(query.data).filter(
-        (question) => narrowed === null || question.channelId === narrowed,
-      ),
-    [query.data, narrowed],
-  );
+  const questions = useMemo(() => readingOrder(query.data), [query.data]);
   const groups = useMemo(() => groupByChannel(questions), [questions]);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const now = ports.clock.now();
