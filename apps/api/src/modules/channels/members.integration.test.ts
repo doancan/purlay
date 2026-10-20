@@ -119,6 +119,37 @@ describe('integration: a member brings somebody in', () => {
     });
   });
 
+  test('is the audit trail’s: who brought whom into which channel, once — not again for somebody already in', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { type: 'private', outsiders: ['olga'] });
+      const trail = async (): Promise<
+        { actor: string | null; target: string | null; channel: unknown }[]
+      > =>
+        (
+          await db
+            .selectFrom('audit_log')
+            .select(['actor_user_id', 'target_id', 'metadata'])
+            .where('workspace_id', '=', room.workspaceId)
+            .where('action', '=', 'channel.member_added')
+            .execute()
+        ).map((row) => ({
+          actor: row.actor_user_id,
+          target: row.target_id,
+          channel: (row.metadata as Record<string, unknown>)['channelId'],
+        }));
+      await addMember(db, clock, member(room, 'alice').context, outsider(room, 'olga'));
+      expect(await trail()).toEqual([
+        {
+          actor: member(room, 'alice').userId,
+          target: outsider(room, 'olga'),
+          channel: room.channelId,
+        },
+      ]);
+      await addMember(db, clock, member(room, 'alice').context, member(room, 'bob').userId);
+      expect(await trail()).toHaveLength(1);
+    });
+  });
+
   test('somebody outside the workspace, or who never was, is not there', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice'], { type: 'private' });

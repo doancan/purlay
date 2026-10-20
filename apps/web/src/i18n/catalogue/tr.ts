@@ -208,6 +208,8 @@ export const tr = {
   'audit.action.channel.created': '{actor}, {channel} kanalını oluşturdu',
   'audit.action.channel.renamed': '{actor}, {from} kanalının adını {to} yaptı',
   'audit.action.channel.archived': '{actor}, {channel} kanalını arşivledi',
+  'audit.action.channel.member_added': '{actor}, {target} kişisini bir kanala ekledi',
+  'audit.action.channel.member_added_to': '{actor}, {target} kişisini {channel} kanalına ekledi',
   'audit.action.integration.token_set': '{actor} GitHub tokenını ayarladı',
   'audit.action.integration.token_removed': '{actor} GitHub tokenını kaldırdı',
   'audit.action.integration.feed_created': '{actor}, {repository} deposunu bir kanala bağladı',

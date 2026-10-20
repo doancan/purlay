@@ -9,6 +9,7 @@ import type { Clock } from '../../platform/clock';
 import { requireChannelMember, type ChannelContext } from '../../platform/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
+import { recordAudit } from '../audit/audit';
 import { channelFor } from './channels';
 
 /**
@@ -89,6 +90,18 @@ export const addMember = async (
     .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
     .returning('user_id')
     .executeTakeFirst();
+  // Who brought whom into which channel is the trail's: "who added X to #private?" has an answer.
+  // Somebody already in it was not added, and is not recorded again.
+  if (inserted !== undefined) {
+    await recordAudit(executor, clock, {
+      workspaceId: context.workspaceId,
+      actorUserId: context.userId,
+      action: 'channel.member_added',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { channelId: context.channelId },
+    });
+  }
   return {
     forMember:
       inserted === undefined ? null : await channelFor(executor, userId, context.channelId),

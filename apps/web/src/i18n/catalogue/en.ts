@@ -213,6 +213,8 @@ export const en = {
   'audit.action.channel.created': '{actor} created {channel}',
   'audit.action.channel.renamed': '{actor} renamed {from} to {to}',
   'audit.action.channel.archived': '{actor} archived {channel}',
+  'audit.action.channel.member_added': '{actor} added {target} to a channel',
+  'audit.action.channel.member_added_to': '{actor} added {target} to {channel}',
   'audit.action.integration.token_set': '{actor} set the GitHub token',
   'audit.action.integration.token_removed': '{actor} removed the GitHub token',
   'audit.action.integration.feed_created': '{actor} connected {repository} to a channel',
