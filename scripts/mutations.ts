@@ -3929,12 +3929,16 @@ export const MUTATIONS: readonly Mutation[] = [
       'apps/web/src/features/channel/channel-screen.test.tsx',
       'apps/web/src/features/questions/questions-screen.test.tsx',
     ],
+  },
+  {
     id: 'audit-older-fails-silently',
     why: 'an older page of the audit log that fails says nothing, so an admin reads a failed request as the end of the log',
     file: 'apps/web/src/features/settings/pages/audit.tsx',
     find: '{trail.isFetchNextPageError && (',
     replace: '{false && (',
     tests: ['apps/web/src/features/settings/pages/audit.test.tsx'],
+  },
+  {
     id: 'card-cache-outlives-its-token',
     why: 'a card, or GitHub’s “not there”, remembered under one token is served under the next, so a fixed token shows plain links for up to an hour',
     file: 'apps/api/src/modules/integrations/unfurl.ts',
@@ -3949,12 +3953,16 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "    .where('access_token_encrypted', 'is not', null)\n    .executeTakeFirst();\n  if (integration === undefined) return null;",
     replace: '    .executeTakeFirst();\n  if (integration === undefined) return null;',
     tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+  },
+  {
     id: 'general-offers-a-refused-workspace',
     why: 'Settings → General offers Create workspace to an owner the server will refuse (D-155): a form that can only be refused',
     file: 'apps/web/src/features/settings/pages/general.tsx',
     find: '{mayCreateWorkspace && (',
     replace: '{(mayCreateWorkspace || true) && (',
     tests: ['apps/web/src/features/settings/pages/general.test.tsx'],
+  },
+  {
     id: 'own-role-changed-without-asking',
     why: 'a person’s own role is sent the moment they pick it, though they may not be able to change it back themself (D-111)',
     file: 'apps/web/src/features/settings/pages/members.tsx',
@@ -3969,6 +3977,8 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'member.user.id !== user.id && mayChangeRole(member);',
     replace: 'mayChangeRole(member);',
     tests: ['apps/web/src/features/settings/pages/members.test.tsx'],
+  },
+  {
     id: 'channel-member-added-unrecorded',
     why: 'somebody brought into a channel leaves no trail, so “who added X to #private?” has no answer (PRD §4.6: membership changes)',
     file: 'apps/api/src/modules/channels/members.ts',
