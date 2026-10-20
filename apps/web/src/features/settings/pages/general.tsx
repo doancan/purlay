@@ -19,6 +19,7 @@ import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
+import { useSession } from '../../session/session';
 import { CreateWorkspace } from '../../shell/home';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
@@ -29,6 +30,7 @@ export const GeneralPage = (): React.JSX.Element => {
   const { show } = useToast();
   const { copy } = useContentPorts();
   const { workspace } = useWorkspace();
+  const { mayCreateWorkspace } = useSession();
   const { renameWorkspace } = useActions();
   // What was typed; until something is, the field shows the name as it is now, so a rename in
   // another tab appears here.
@@ -130,21 +132,24 @@ export const GeneralPage = (): React.JSX.Element => {
           </SettingsRow>
         </SettingsCard>
       </form>
-      <SettingsCard title={t('settings.general.another')}>
-        <SettingsRow
-          label={t('workspace.create.title')}
-          description={t('settings.general.anotherHint')}
-        >
-          <Button
-            glyph="add"
-            onClick={() => {
-              setCreating(true);
-            }}
+      {/* Offered only to whom the server lets make one (D-155): never a form that would be refused. */}
+      {mayCreateWorkspace && (
+        <SettingsCard title={t('settings.general.another')}>
+          <SettingsRow
+            label={t('workspace.create.title')}
+            description={t('settings.general.anotherHint')}
           >
-            {t('workspace.create.entry')}
-          </Button>
-        </SettingsRow>
-      </SettingsCard>
+            <Button
+              glyph="add"
+              onClick={() => {
+                setCreating(true);
+              }}
+            >
+              {t('workspace.create.entry')}
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      )}
       <Dialog
         open={creating}
         onOpenChange={setCreating}

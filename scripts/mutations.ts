@@ -3884,5 +3884,11 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "    .where('access_token_encrypted', 'is not', null)\n    .executeTakeFirst();\n  if (integration === undefined) return null;",
     replace: '    .executeTakeFirst();\n  if (integration === undefined) return null;',
     tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
+    id: 'general-offers-a-refused-workspace',
+    why: 'Settings → General offers Create workspace to an owner the server will refuse (D-155): a form that can only be refused',
+    file: 'apps/web/src/features/settings/pages/general.tsx',
+    find: '{mayCreateWorkspace && (',
+    replace: '{(mayCreateWorkspace || true) && (',
+    tests: ['apps/web/src/features/settings/pages/general.test.tsx'],
   },
 ];
