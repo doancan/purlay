@@ -34,7 +34,7 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../platform/errors';
-import { requireChannelById, requireChannelsById } from '../platform/channels';
+import { isChannelMember, requireChannelById, requireChannelsById } from '../platform/channels';
 import { send, type missedIn } from '../modules/messages/messages';
 import type { PushSender } from '../modules/push/sender';
 import { replaySince } from '../modules/messages/replay';
@@ -360,6 +360,10 @@ export const routeFrame = async (
           identity.userId,
           parsed.payload.channelId,
         );
+        // Seeing a public channel is not being in it: what a non-member types could not be sent
+        // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement
+        // is not a request, and it takes no place in memory either.
+        if (!(await isChannelMember(database, context))) return [];
         if (dependencies.presence.startTyping(context.channelId, identity.userId, TYPING_TTL_MS)) {
           await bus.publish(
             channelTopic(context.channelId),

@@ -154,6 +154,46 @@ describe('integration: typing', () => {
     });
   });
 
+  test('somebody who can see a public channel but is not in it is not heard there; a member still is', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ty-ana6', 'ty-ben6'], { outsiders: ['ty-cem6'] });
+      const cem = room.outsiders['ty-cem6'];
+      const ana = room.members['ty-ana6'];
+      if (cem === undefined || ana === undefined) throw new Error('no cem or ana');
+      const node = aNode(db);
+      node.listen(room.channelId, 'ben-socket');
+
+      // An announcement is not a request: nothing to answer, and nothing for the room to hear —
+      // what they would type could not be sent (D-156), so "Cem is typing…" would be a lie.
+      expect(await node.route(cem, typing(room.channelId))).toEqual([]);
+      expect(node.heard('ben-socket')).toEqual([]);
+      expect(node.held()).toBe(0);
+
+      await node.route(ana, typing(room.channelId));
+      expect(typingFrames(node.heard('ben-socket'))).toMatchObject([
+        { data: { userId: ana.userId } },
+      ]);
+    });
+  });
+
+  test('somebody who has left the channel is no longer heard typing in it', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['ty-ana7', 'ty-ben7']);
+      const ana = room.members['ty-ana7'];
+      if (ana === undefined) throw new Error('no ana');
+      const node = aNode(db);
+      node.listen(room.channelId, 'ben-socket');
+      await db
+        .deleteFrom('channel_members')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', ana.userId)
+        .execute();
+
+      expect(await node.route(ana, typing(room.channelId))).toEqual([]);
+      expect(node.heard('ben-socket')).toEqual([]);
+    });
+  });
+
   test('a channel in another workspace is refused the same way, public or not', async () => {
     await withRollback(async (db) => {
       const theirs = await aRoom(db, ['ty-dan5']);

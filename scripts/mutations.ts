@@ -3385,7 +3385,7 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'typing-into-a-channel-unseen',
     why: 'anybody signed in can announce typing into any channel id, private ones included, and the room hears it',
     file: 'apps/api/src/realtime/router.ts',
-    find: '        const context = await requireChannelById(\n          database,\n          identity.userId,\n          parsed.payload.channelId,\n        );\n        if (dependencies.presence.startTyping(',
+    find: '        const context = await requireChannelById(\n          database,\n          identity.userId,\n          parsed.payload.channelId,\n        );\n        // Seeing a public channel is not being in it: what a non-member types could not be sent\n        // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement\n        // is not a request, and it takes no place in memory either.\n        if (!(await isChannelMember(database, context))) return [];\n        if (dependencies.presence.startTyping(',
     replace:
       '        const context = { channelId: parsed.payload.channelId };\n        if (dependencies.presence.startTyping(',
     tests: ['apps/api/src/realtime/typing.integration.test.ts'],
@@ -3430,6 +3430,14 @@ export const MUTATIONS: readonly Mutation[] = [
     find: "    if (next.trim() !== '') engine.announceTyping(channelId);\n",
     replace: '    engine.announceTyping(channelId);\n',
     tests: ['apps/web/src/features/composer/composer.test.tsx'],
+  },
+  {
+    id: 'typing-heard-from-a-non-member',
+    why: 'somebody who can see a public channel but is not in it is announced as typing there, though they cannot send (D-156, D-169)',
+    file: 'apps/api/src/realtime/router.ts',
+    find: '        if (!(await isChannelMember(database, context))) return [];\n',
+    replace: '',
+    tests: ['apps/api/src/realtime/typing.integration.test.ts'],
   },
   {
     id: 'composer-shows-nobody-typing',
