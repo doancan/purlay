@@ -532,6 +532,7 @@ export const AUDIT_ACTIONS = [
   'channel.created',
   'channel.renamed',
   'channel.archived',
+  'channel.member_added',
   'integration.token_set',
   'integration.token_removed',
   'integration.feed_created',

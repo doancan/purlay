@@ -96,6 +96,14 @@ export const AuditPage = (): React.JSX.Element => {
           actor,
           channel: `#${entry.metadata['name'] ?? ''}`,
         });
+      // Named as a feed's channel is: only one this viewer can see, else "a channel" (#691).
+      case 'channel.member_added': {
+        const name = channels.data?.find((c) => c.id === entry.metadata['channelId'])?.name;
+        const target = person(entry.targetId ?? undefined);
+        return name == null
+          ? t('audit.action.channel.member_added', { actor, target })
+          : t('audit.action.channel.member_added_to', { actor, target, channel: `#${name}` });
+      }
       case 'integration.token_set':
         return t('audit.action.integration.token_set', { actor });
       case 'integration.token_removed':

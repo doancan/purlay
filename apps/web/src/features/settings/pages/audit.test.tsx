@@ -280,6 +280,33 @@ describe('the audit log', () => {
     ]);
   });
 
+  test('somebody added to a channel is said with whom, and the channel only to a viewer who can see it', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'channel.member_added',
+              targetType: 'user',
+              targetId: ALICE.id,
+              // A private channel this viewer is not in stays unnamed, as a feed's does (#691).
+              metadata: { channelId: entryId(99) },
+            }),
+            anEntry(1, {
+              action: 'channel.member_added',
+              targetType: 'user',
+              targetId: BOB.id,
+              metadata: { channelId: IDS.api },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} added ${ALICE.displayName} to a channel`,
+      `${ME.displayName} added ${BOB.displayName} to #api`,
+    ]);
+  });
+
   test('a feed entry names its channel to a viewer who can see it, and only to them (#691)', async () => {
     const view = await openPage({
       audit: () =>

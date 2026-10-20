@@ -3904,5 +3904,11 @@ export const MUTATIONS: readonly Mutation[] = [
     find: 'member.user.id !== user.id && mayChangeRole(member);',
     replace: 'mayChangeRole(member);',
     tests: ['apps/web/src/features/settings/pages/members.test.tsx'],
+    id: 'channel-member-added-unrecorded',
+    why: 'somebody brought into a channel leaves no trail, so “who added X to #private?” has no answer (PRD §4.6: membership changes)',
+    file: 'apps/api/src/modules/channels/members.ts',
+    find: '  if (inserted !== undefined) {\n    await recordAudit(',
+    replace: '  if (inserted === null) {\n    await recordAudit(',
+    tests: ['apps/api/src/modules/channels/members.integration.test.ts'],
   },
 ];
