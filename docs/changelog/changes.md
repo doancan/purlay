@@ -6,6 +6,21 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Feature — 2026-10-20: taking somebody out of a channel (D-172), and a workspace's storage shown (D-173)
+
+- **Remove, in a channel's details.** `DELETE /api/channels/:channelId/members/:userId`: an owner or
+  an admin takes somebody out of a channel they can see (an owner only an owner's), and a member of a
+  private channel takes out another member of it. Never in a conversation; naming yourself is leaving;
+  the last member of a private channel stays. The person's sockets are told with a new reason,
+  `removed`, so a page reading the channel says so; their messages stay; the trail records
+  `channel.member_removed`, naming the channel only to a reader who can see it. In the details'
+  Members tab each removable row has **Remove**, asked in the row, gone at once and put back on a
+  refusal.
+- **Storage on Settings → Data & retention.** `GET /api/workspaces/:workspaceId/storage`, an
+  owner's, answers what the files take — sent and waiting, the sum the upload check refuses by — and
+  the quota; the page draws it as a meter with the numbers. The quota stays the operator's:
+  `bun run storage:quota <slug> [<size>]` reads and sets it (`CONFIG.md`).
+
 ### Fix — 2026-10-19: the browser tests that failed only under a loaded parallel run
 
 Four specs passed alone and failed beside the rest of the suite. Each cause was found in a trace or a

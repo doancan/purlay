@@ -220,7 +220,14 @@ The last member of a private channel is told to bring somebody in first or ask a
 **Members**, its count in the tab: who is in it, a field to find one by name once there are more than
 eight, and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed,
 those who can be added first with **Add**, and anybody already in the channel after them, saying
-*Member* quietly with nothing to press, and a sentence above them when that is everybody).
+*Member* quietly with nothing to press, and a sentence above them when that is everybody), and
+**Remove** on each row the person may take out (D-172) — never their own (that is Leave): an owner any
+row, an admin any but an owner's, a member of a private channel another member's, and nobody's in a
+public channel for a member. It asks in the row first — the question says, for a public channel, that
+their messages stay and they can join again, and for a private one that they stop seeing it — and on
+yes the row goes at once; a refusal puts it back and is said under the list. The person removed, if
+they are reading the channel, is told *You were removed from this channel* in its place (a private
+one) or sees it as one not joined (a public one), and their sidebar loses it at once.
 **Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
 the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
 **Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
@@ -274,7 +281,10 @@ it. On a narrow window the navigation opens as the sidebar does.
 - **Invitations** — making a link and the links still open, as *Invitations* below says.
 - **Integrations** — the GitHub connection, as below.
 - **Audit log** — the trail as a table, newest first, a page at a time.
-- **Data & retention** — how long history is kept, and exports.
+- **Data & retention** — the workspace's **storage**: a meter with what is used and the quota in words
+  ("1.2 GB of 5 GB") and what is left, in the warning tone from nine tenths and the danger tone, with a
+  sentence, once full; the quota is the server operator's to set and the card says so, with nothing to
+  change it (D-173) — then how long history is kept, and exports.
 
 The sections below say what each does; where they say a dialog from the workspace menu, it is now the
 page of the same name.
