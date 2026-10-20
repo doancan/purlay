@@ -78,10 +78,12 @@ without disclosing it. (D-33)
 | ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL`. **Never answers JSON:** a failure is a 302 to the sign-in screen with a reason (below, D-121) |
 | ○ | `POST` | `/auth/email` | `EmailSignInRequest` (an address, the language to write in, and an invitation the tab holds, carried in the link's fragment) → `202` whatever the address, so whether an account has it is never said; the message is sent after the answer — a link for an address no account has or an email account's, a word to sign in with GitHub for a GitHub account's, nothing past five an hour. Off without mail configured: `503 EMAIL_SIGN_IN_UNAVAILABLE` (D-138) |
 | ○ | `POST` | `/auth/email/preview` | `EmailSignInToken` → `EmailSignInPreview`, the address the link was sent to, for the page to show before anyone signs in; spends nothing, so a mail scanner that opens the page signs nobody in. `404 SIGN_IN_LINK_NOT_FOUND` as for consume (D-138 §4) |
-| ○ | `POST` | `/auth/email/consume` | `EmailSignInToken` (the token the link carried in its fragment) → `204` with the session cookie: the link is spent, and an address no account has becomes an account. One answer for a link unknown, used or expired, or into an account that signs in with GitHub: `404 SIGN_IN_LINK_NOT_FOUND` (D-138 §2, §4) |
+| ○ | `POST` | `/auth/email/consume` | `EmailSignInToken` (the token the link carried in its fragment) → `204` with the session cookie: the link is spent, and an address no account has becomes an account. One answer for a link unknown, used or expired, or into an account GitHub made: `404 SIGN_IN_LINK_NOT_FOUND` (D-138 §2, §4). An account made by email that has connected GitHub keeps its link (D-172) |
 | ○ | `POST` | `/auth/logout` | Revokes the current session, and the devices subscribed in it stop being told (D-126) |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user, their `profile`, workspace memberships, and `mayCreateWorkspace` — whether `POST /api/workspaces` would let them (D-155) |
+| ○ | `GET` | `/api/me/sign-in` | `MySignIn` — the caller's own ways in: their address, whether a link sent to it signs them in (`emailLinks`: an account made by email, connected or not — never one GitHub made, D-138 §2), and the GitHub account connected, `{ login }` or `null` (D-172) |
+| ○ | `POST` | `/api/me/github/connect` | `ConnectGitHubRequest` — the workspace whose Sessions & account page the browser comes back to — from a signed-in session, as a same-origin JSON `POST` (D-39 §2): there is no `GET` that starts one. Answers `ConnectGitHubResponse` `{ location }`, GitHub's authorization page, and sets the `state` cookie — a connect's, naming the user and the session that asked and signed under a key of its own. An account that has GitHub already is `409 GITHUB_ALREADY_CONNECTED`. The callback finishes it (below, D-172) |
 | ○ | `PATCH` | `/api/me/profile` | `{ title?, timeZone?, status? }` (`UpdateProfileRequest`): each left out is kept, `null` clears it, words are trimmed, and nothing but spaces is `400`; a time zone is a named zone the runtime knows, stored as it spells it, else `400` on `timeZone`. Answers the `Profile`. A change sends `WORKSPACE_UPDATED` to everyone in each workspace the caller is in, who read the members again (D-131) |
 | ○ | `PUT` | `/api/me/locale` | `{ locale: 'en' \| 'tr' }` (`SetLocaleRequest`) — the language the server writes the caller's notifications in (D-41, D-126); `204` |
 | ○ | `GET` | `/api/auth/methods` | Public — `AuthMethods`: whether this server signs in by email as well as by GitHub, so the sign-in screen offers only what works; `email` is false without both of `SMTP_URL` and `MAIL_FROM` (D-138 §6) |
@@ -91,8 +93,9 @@ without disclosing it. (D-33)
 | ○ | `POST` | `/api/me/erase` | `EraseAccountRequest` — the caller's username, typed — from a session signed in within `ERASURE_SIGN_IN_MINUTES`, else `403 REAUTHENTICATION_REQUIRED`; a wrong username is `400` on `confirm`. `204` with the cookie cleared: the account's personal data is cleared (the address to a placeholder, the name to `deleted-user-…`, the GitHub id and profile), every session revoked and its sockets ended, its devices, pending sign-in links, saved items and notifications deleted, and each workspace told to read its members again; the person's sockets end with `SESSION_ENDED { reason: 'account-deleted' }`. **Never cascades to messages**, reactions or memberships (D-27, I-11). The last live owner of a workspace with another live member is `409 LAST_OWNER` with `details.workspaceIds` naming each to hand over; a workspace left with nobody live in it has its open links revoked (I-2, D-139 §5–§6) |
 
 Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
-and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id`.
-Neither case is linked silently. (D-38)
+and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id` — an
+account made by email included. Neither case is linked silently (D-38, D-138 §3); the way through for
+an account made by email is to sign in by link and connect GitHub from Sessions & account (D-172).
 
 **A refused callback is a redirect, not an error body.** Only a browser GitHub redirected ever
 arrives at the callback, so every way it can fail — the rate limit and `INTERNAL` included — answers
@@ -105,10 +108,35 @@ message, nothing GitHub said. The cause is written to the log. (D-121)
 | `cancelled` | GitHub returned `error=access_denied`: the person pressed Cancel |
 | `expired` | `OAUTH_STATE_INVALID` — no state cookie, an expired one, a mismatch, or no `code`; one reason for all of them (D-62) |
 | `email-required` | `EMAIL_REQUIRED` |
-| `email-taken` | `ACCOUNT_EMAIL_CONFLICT`, including a lost race on the email index |
+| `email-taken` | `ACCOUNT_EMAIL_CONFLICT`, including a lost race on the email index; the screen says the way through — a link, then Connect GitHub (D-172) |
 | `github-unavailable` | GitHub could not be reached, refused, or answered something that is not a usable identity |
 | `busy` | `RATE_LIMITED` or `DATABASE_UNAVAILABLE` |
 | `failed` | Anything else — another GitHub `error` value, or `INTERNAL` |
+
+**Connecting GitHub to an account made by email** finishes at the same callback (D-172): the `state`
+cookie says which handshake it is, by what this server signed. A connect's callback requires the state
+to be this browser's, unexpired and the one GitHub returned; the session signed in in this browser to
+be the very one that asked, still live as the account is written; the account to have no GitHub
+account; and the GitHub account GitHub vouches for to be no other Purlay account's — else
+`GITHUB_ACCOUNT_TAKEN`, never merged. It sets `github_id` and `github_login` (the login taken from any
+other account holding it, D-169 §2) and the picture, and nothing else — no session is issued. It
+answers `302` to `APP_URL/w/<workspace>/settings/account?github=<outcome>`, the state spent, with one of
+`ConnectGitHubOutcome` in `@purlay/types`:
+
+| Outcome | When |
+|---|---|
+| `connected` | Done: the account signs in with this GitHub account as well |
+| `cancelled` | GitHub returned `error=access_denied` |
+| `expired` | `OAUTH_STATE_INVALID` — expired, a mismatch, or no `code` |
+| `session` | `UNAUTHENTICATED` — the session that asked is signed out, gone, or not the one signed in here; GitHub is not asked |
+| `taken` | `GITHUB_ACCOUNT_TAKEN`, including a lost race on the GitHub id's index |
+| `already` | `GITHUB_ALREADY_CONNECTED` |
+| `github-unavailable` | GitHub could not be reached, refused, or answered something unusable |
+| `busy` | `RATE_LIMITED` or `DATABASE_UNAVAILABLE` |
+| `failed` | Anything else |
+
+A cookie this server did not sign as a connect — forged, tampered, under another key — is not one: it
+is a sign-in's failure, `expired`, on the sign-in screen.
 
 Every other route here, `/auth/github` and both logouts included, answers as §1 says.
 

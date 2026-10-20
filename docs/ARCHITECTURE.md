@@ -486,9 +486,10 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
    `/user/emails`**.
 3. Resolve identity (D-38): take the primary **verified** email, or refuse with `EMAIL_REQUIRED`.
    Upsert `users` by `github_id`. A different `github_id` carrying an already-registered email is
-   refused with `ACCOUNT_EMAIL_CONFLICT` — **never linked silently** (D-5). `username` is
-   refreshed from GitHub's `login` and is display-only; a collision caused by a rename is stored
-   with a numeric suffix and logged.
+   refused with `ACCOUNT_EMAIL_CONFLICT` — **never linked silently** (D-5), an email link's account
+   included (D-138 §3). `username` is refreshed from GitHub's `login` and is display-only; a
+   collision caused by a rename is stored with a numeric suffix and logged. An account made by email
+   that connected GitHub keeps its own names (below, D-172).
 4. Generate a 32-byte random token. Store **only its SHA-256** in `sessions`. (D-11)
 5. Set the session cookie — named, with its attributes, in `apps/api/src/platform/cookies.ts`: `__Host-`-prefixed, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30-day expiry — and spend the `state` cookie, on this and every other outcome. (D-62)
 6. Any refusal on the way is a redirect to the sign-in screen with a reason, never a JSON body: the
@@ -499,6 +500,20 @@ victims into an attacker's account. The cookie carrying it is **signed**, with a
 `ENCRYPTION_KEY` rather than a second secret: a sibling subdomain can write a cookie for this
 origin, so an equality check alone would still let an attacker supply both halves (D-62). Every way
 the handshake can be wrong produces the same refusal.
+
+**Connecting GitHub to an account made by email** (D-172). An email link's account has no
+`github_id`, and a GitHub sign-in on its address is refused (step 3, D-138 §3). The person connects
+the two deliberately, from a session signed in as that account: `POST /api/me/github/connect` — a
+same-origin JSON `POST`, never a `GET` — issues a state that names the user and the session, in the
+same `__Host-` cookie and with the same lifetime as a sign-in's, signed under a key derived for this
+purpose alone, and sends the browser to GitHub. The one callback tells the two handshakes apart by
+what was signed, and for a connect requires the session signed in in this browser to be the very one
+that asked — checked before GitHub is asked, and held live (`FOR SHARE`, D-85) as the account is
+written — the account to have no GitHub account, and the GitHub account to be nobody else's. It sets
+`github_id`, `github_login` and the picture, never the address, the username or the display name, and
+issues no session. From then on a GitHub sign-in finds the account by `github_id` (step 3) and leaves
+its names alone, and its email link still signs in. There is no disconnecting yet: an account keeps
+every way in it has.
 
 **Validating one.** The token is looked up by its hash, and a session resolves only while it is
 unexpired, unrevoked, and owned by a user who has not been deleted — a soft-deleted account does
