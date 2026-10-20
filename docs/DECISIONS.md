@@ -7459,11 +7459,9 @@ Recorded so they are not silently assumed. None block Phase 0.
   which must be zero for legitimate use. Both are recorded: each socket's closing line carries
   `frames`, `peakPerSecond` and `refused` (#61, `realtime/frame-meter.ts`), so the week is a query
   over the log — `bun run report:frames <log>` is that query, and says whether the week closes it.
-- **O-7 · What the command palette is built on.** D-52 named a Radix combobox; Radix does not
-  publish one (`docs/spikes/frontend-budget.md`). `cmdk` is built on Radix and is what the budget
-  measurement used; a listbox hand-built on `@radix-ui/react-popover` is the alternative, and the
-  argument for primitives — that focus and ARIA fail *silently* when hand-written — applies hardest
-  to exactly this component. *Decide with #138, and measure it.*
+- ~~**O-7 · What the command palette is built on.**~~ **Closed by D-98 §7:** a Radix `Dialog`
+  holding a hand-written listbox that follows the WAI-ARIA combobox pattern, held by `axe` and a
+  keyboard-path test; `cmdk` is not adopted.
 - ~~**O-6 · The two markdown packages D-36 named as categories.**~~ **Closed by D-101:** one
   engine, `mdast-util-from-markdown` with four GFM extensions, on both sides, narrowed to what the
   product renders and bounded so a body past the bounds is shown as typed.

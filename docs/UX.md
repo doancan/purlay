@@ -658,8 +658,8 @@ Decided here so Phase 0 does not invent one at random.
 
 ## 10. Not in Phase 1
 
-Custom themes · resizable panes · message pinning · saved items · reminders · rich link previews
-for non-GitHub URLs · emoji picker beyond a recent/frequent row · read receipts · user status
-messages · threads in a popped-out window.
+Custom themes · resizable panes · reminders · rich link previews for non-GitHub URLs · emoji
+picker beyond a recent/frequent row · read receipts · threads in a popped-out window. Pinning,
+saved items and a status line were pulled into Phase 1 (D-130, D-128, D-131) and are in §2.
 
 Some are permanent non-goals (`PRD.md` §6); the rest are simply not the wedge.

@@ -129,10 +129,10 @@ from the browser, not a second codebase. (`DECISIONS.md` D-14, D-51)
 
 ## Current status
 
-**Phase 0 — Walking Skeleton.**
+**Phase 1 — MVP.** Phase 0, the walking skeleton, is behind it.
 
-Exit criterion: two browser tabs, signed in as two different GitHub users, exchange a message in
-real time, and the message survives an API restart.
+Exit criterion: S-1 (`PRD.md` §3) — the owner's team stops opening Slack for internal discussion,
+and stays off it for 30 consecutive days.
 
 How much of it is done is deliberately not written here: a progress line is stale the moment a
 pull request merges, and a document that says "not started" about a repository with code in it
