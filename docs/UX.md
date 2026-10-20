@@ -147,7 +147,7 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   says they were not kept, or were removed; one deleted while its history is open says so there.
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
-  direct message, or the screen's name. While anything needs the person it starts with the same count
+  direct message, the screen's name, or a page of Settings as `Members · Settings`. While anything needs the person it starts with the same count
   as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). The tab's icon
   says the same with a dot, which a pinned tab still shows (D-148).
 - **What reaches a person, by where Purlay is** (D-148). What *needs* them is one thing everywhere —

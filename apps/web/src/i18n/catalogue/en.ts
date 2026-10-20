@@ -33,6 +33,7 @@ export const en = {
   'app.notFound.home': 'Go to your channels',
   'app.tab': '{place} · {workspace} · Purlay',
   'app.tab.workspace': '{workspace} · Purlay',
+  'app.tab.settings': '{section} · Settings',
   'app.tab.waiting': '({count}) {title}',
   'app.failed.screen': 'This screen stopped working',
   'app.failed.app': 'Purlay stopped working',

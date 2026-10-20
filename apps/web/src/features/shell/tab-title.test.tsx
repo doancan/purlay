@@ -128,6 +128,15 @@ describe('the title of the tab', () => {
     expect(document.title).toBe('Open questions · acme-eng · Purlay');
   });
 
+  test('names the page of Settings as the navigation does, and only Settings for one not offered', async () => {
+    await visit('/w/acme/settings/members', someChannels());
+    expect(document.title).toBe('Members · Settings · acme-eng · Purlay');
+    await visit('/w/acme/settings', someChannels());
+    expect(document.title).toBe('Profile · Settings · acme-eng · Purlay');
+    await visit('/w/acme/settings/nowhere', someChannels());
+    expect(document.title).toBe('Settings · acme-eng · Purlay');
+  });
+
   test('in Deep Work it counts nothing, as the badges draw nothing', async () => {
     const me = aSession();
     const quiet: MeResponse = {

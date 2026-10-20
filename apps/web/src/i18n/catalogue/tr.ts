@@ -34,6 +34,7 @@ export const tr = {
   'app.notFound.home': 'Kanallarına git',
   'app.tab': '{place} · {workspace} · Purlay',
   'app.tab.workspace': '{workspace} · Purlay',
+  'app.tab.settings': '{section} · Ayarlar',
   'app.tab.waiting': '({count}) {title}',
   'app.failed.screen': 'Bu ekran çalışmayı durdurdu',
   'app.failed.app': 'Purlay çalışmayı durdurdu',
