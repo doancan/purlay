@@ -157,6 +157,7 @@ export const eraseAccount = async (
       last_seen_at: null,
       github_id: null,
       github_login: null,
+      github_connected_at: null,
       deleted_at: now,
       updated_at: now,
     })

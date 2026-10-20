@@ -77,6 +77,10 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('THREAD_NOT_RESOLVABLE'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
+  /** Connecting GitHub to an account that has a GitHub account already (D-172). */
+  Type.Literal('GITHUB_ALREADY_CONNECTED'),
+  /** Connecting a GitHub account another Purlay account already signs in with (D-172): never merged. */
+  Type.Literal('GITHUB_ACCOUNT_TAKEN'),
   /** The channel already has a feed from this repository (D-134 §1). */
   Type.Literal('GITHUB_FEED_EXISTS'),
   /** Declaring an incident in a channel that has one open (D-137 §1). */
@@ -195,6 +199,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   MESSAGE_ID_CONFLICT: 409,
   THREAD_NOT_RESOLVABLE: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
+  GITHUB_ALREADY_CONNECTED: 409,
+  GITHUB_ACCOUNT_TAKEN: 409,
 
   UNSUPPORTED_MEDIA_TYPE: 415,
 

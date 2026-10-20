@@ -1117,3 +1117,32 @@ export type EmailSignInToken = Static<typeof EmailSignInToken>;
 /** What the page shows before the person signs in: the address the link was sent to (D-138 §4). */
 export const EmailSignInPreview = Type.Object({ email: Type.String() });
 export type EmailSignInPreview = Static<typeof EmailSignInPreview>;
+
+/**
+ * `GET /api/me/sign-in` — the ways the caller signs in (D-172): their address, whether a link sent to
+ * it signs them in (an account made by email, connected to GitHub or not — never one GitHub made,
+ * D-138 §2), and the GitHub account connected, if any. `login` is null for a GitHub account whose
+ * login is not known yet (D-169 §4). Only ever the caller's own.
+ */
+export const MySignIn = Type.Object({
+  email: Type.String(),
+  emailLinks: Type.Boolean(),
+  github: Type.Union([
+    Type.Object({ login: Type.Union([Type.String(), Type.Null()]) }),
+    Type.Null(),
+  ]),
+});
+export type MySignIn = Static<typeof MySignIn>;
+
+/**
+ * `POST /api/me/github/connect` — start connecting GitHub to the caller's account (D-172), from the
+ * settings page of this workspace, which is where the person comes back to.
+ */
+export const ConnectGitHubRequest = FromClient({
+  workspace: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
+});
+export type ConnectGitHubRequest = Static<typeof ConnectGitHubRequest>;
+
+/** Where to send the browser: GitHub's authorization page, with this connect's `state`. */
+export const ConnectGitHubResponse = Type.Object({ location: Type.String() });
+export type ConnectGitHubResponse = Static<typeof ConnectGitHubResponse>;

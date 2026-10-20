@@ -40,7 +40,7 @@ const CONTROLS = new RegExp(CONTROL.source, 'g');
  * (D-78): control characters are removed, a login with nothing left becomes a name
  * made from the immutable id, and an avatar address with one is dropped.
  */
-const cleaned = (given: GitHubProfile): GitHubProfile => {
+export const cleanedProfile = (given: GitHubProfile): GitHubProfile => {
   const login = given.login.replace(CONTROLS, '');
   const name = given.name?.replace(CONTROLS, '') ?? '';
   return {
@@ -134,7 +134,11 @@ export const availableUsername = async (
  * still holds it in any case — renamed away from it at GitHub, and not signed in since. It is what
  * `WORKSPACE_CREATORS` is matched against (D-169), never the username, which only starts from it.
  */
-const holdLogin = async (executor: Executor, githubId: string, login: string): Promise<void> => {
+export const holdLogin = async (
+  executor: Executor,
+  githubId: string,
+  login: string,
+): Promise<void> => {
   await executor
     .updateTable('users')
     .set({ github_login: null })
@@ -157,7 +161,7 @@ export const resolveIdentity = async (
   given: GitHubProfile,
   emails: readonly GitHubEmail[],
 ): Promise<ResolvedIdentity> => {
-  const profile = cleaned(given);
+  const profile = cleanedProfile(given);
   const email = anchorEmail(emails);
   const displayName = fitted(
     cleanedName(profile.name ?? '') || cleanedName(profile.login) || profile.login,
@@ -167,20 +171,24 @@ export const resolveIdentity = async (
 
   const existing = await executor
     .selectFrom('users')
-    .select(['id', 'username'])
+    .select(['id', 'username', 'github_connected_at'])
     .where('github_id', '=', String(profile.id))
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
 
   if (existing !== undefined) {
-    const username = await availableUsername(executor, livingName(profile.login), existing.id);
+    // An account made by email that connected GitHub (D-172): its name and username were never
+    // GitHub's and stay its own. The picture is GitHub's (D-11), and the login is held as always.
+    const ownNames = existing.github_connected_at !== null;
+    const username = ownNames
+      ? existing.username
+      : await availableUsername(executor, livingName(profile.login), existing.id);
     // Only while it is live: an erasure that committed after the read above leaves this row a
     // tombstone, and the person's identity must not be written back onto it (D-139 §5, I-11).
     const refreshed = await executor
       .updateTable('users')
       .set({
-        username,
-        display_name: displayName,
+        ...(ownNames ? {} : { username, display_name: displayName }),
         avatar_url: profile.avatarUrl,
         updated_at: now,
       })
@@ -197,7 +205,7 @@ export const resolveIdentity = async (
     await holdLogin(executor, String(profile.id), profile.login);
     return {
       userId: existing.id,
-      ...(username === profile.login
+      ...(ownNames || username === profile.login
         ? {}
         : { usernameCollision: { wanted: profile.login, stored: username } }),
     };

@@ -83,6 +83,8 @@ describe('integration: erasing an account', () => {
         .set({
           github_id: '424242',
           github_login: 'Ada-On-GitHub',
+          // Connected to an account made by email (D-172): when, is a trace of the identity too.
+          github_connected_at: NOW,
           avatar_url: 'https://avatars.example.test/ada',
           title: 'Engineer',
           time_zone: 'Europe/Istanbul',
@@ -166,6 +168,7 @@ describe('integration: erasing an account', () => {
         email: `erased-${ada.userId}@erased.invalid`,
         github_id: null,
         github_login: null,
+        github_connected_at: null,
         avatar_url: null,
         title: null,
         time_zone: null,

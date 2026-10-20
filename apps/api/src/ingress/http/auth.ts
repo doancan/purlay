@@ -16,7 +16,16 @@
  * is `APP_URL` itself (D-61), and the way back from a sign-in that did not finish
  * is the sign-in screen with a reason from a closed set (D-121).
  */
-import { EraseAccountRequest } from '@purlay/types';
+import {
+  ConnectGitHubRequest,
+  EraseAccountRequest,
+  connectGitHubHref,
+  type ConnectGitHubOutcome,
+  type ConnectGitHubResponse,
+  type MySignIn,
+} from '@purlay/types';
+import { beginConnect, completeConnect, mySignIn } from '../../modules/auth/connect-github';
+import { connectIntentOf, type ConnectIntent } from '../../modules/auth/state';
 import { eraseAccount } from '../../modules/users/erasure';
 import {
   publication,
@@ -92,6 +101,40 @@ const sentBack = (config: Pick<Config, 'APP_URL'>, failure: SignInFailure): Auth
   location: `${config.APP_URL}${signInFailureHref(failure)}`,
 });
 
+/** The answer to a connect that is over, either way: the state spent, and the page it began on. */
+const connectSentBack = (
+  config: Pick<Config, 'APP_URL'>,
+  intent: ConnectIntent,
+  outcome: ConnectGitHubOutcome,
+): AuthResponse => ({
+  setCookie: [clearedStateCookie()],
+  location: `${config.APP_URL}${connectGitHubHref(intent.workspace, outcome)}`,
+});
+
+/** As `FAILURE_FOR_CODE`, for a connect (D-172): each refusal the person can act on, in words. */
+const CONNECT_OUTCOME_FOR_CODE: Readonly<Partial<Record<ErrorCode, ConnectGitHubOutcome>>> = {
+  OAUTH_STATE_INVALID: 'expired',
+  UNAUTHENTICATED: 'session',
+  GITHUB_ACCOUNT_TAKEN: 'taken',
+  GITHUB_ALREADY_CONNECTED: 'already',
+  RATE_LIMITED: 'busy',
+  DATABASE_UNAVAILABLE: 'busy',
+};
+
+/**
+ * The connect this browser's state cookie was signed for, if it is one — whether or not it is still
+ * good. Only where the person is sent back turns on it; whether the connect may finish is
+ * `completeConnect`'s to decide, against the state that came back and the session signed in.
+ */
+const connectIntentIn = async (
+  config: Pick<Config, 'ENCRYPTION_KEY'>,
+  request: Request,
+): Promise<ConnectIntent | undefined> =>
+  await connectIntentOf(
+    config.ENCRYPTION_KEY,
+    readCookie(request.headers.get('cookie'), STATE_COOKIE),
+  );
+
 /**
  * The codes the callback can meet that the person can act on. Partial on purpose: any
  * other code reaching the callback is this server's surprise, and the person can only
@@ -125,11 +168,25 @@ const failureFor = (error: unknown, code: ErrorCode): SignInFailure =>
  * unexpected, as every other `INTERNAL` is, and at `warn` for GitHub, which is
  * somebody else's outage rather than this server's defect.
  */
-export const abandonSignIn = (
+export const abandonSignIn = async (
   { config, log }: Pick<AuthDependencies, 'config' | 'log'>,
+  request: Request,
   error: unknown,
   code: ErrorCode,
-): AuthResponse => {
+): Promise<AuthResponse> => {
+  // A connect that did not finish is said on the settings page it began on, not the sign-in screen:
+  // the person is signed in, and the sign-in screen would only send them home without a word.
+  const intent = await connectIntentIn(config, request);
+  if (intent !== undefined) {
+    const outcome =
+      error instanceof GitHubUnavailableError
+        ? 'github-unavailable'
+        : (CONNECT_OUTCOME_FOR_CODE[code] ?? 'failed');
+    if (outcome === 'github-unavailable') log.warn('GitHub failed a connect', { err: error });
+    else if (code === 'INTERNAL')
+      log.error('request failed', { err: error, path: SIGN_IN_CALLBACK });
+    return connectSentBack(config, intent, outcome);
+  }
   const failure = failureFor(error, code);
   if (failure === 'github-unavailable') log.warn('GitHub failed a sign-in', { err: error });
   else if (code === 'INTERNAL') log.error('request failed', { err: error, path: SIGN_IN_CALLBACK });
@@ -142,6 +199,8 @@ export const completeSignIn = async (
   ipAddress?: string,
 ): Promise<AuthResponse> => {
   const url = new URL(request.url);
+  const intent = await connectIntentIn(dependencies.config, request);
+  if (intent !== undefined) return await finishConnect(dependencies, request, url, intent);
   // GitHub came back without a code: the person said no, or the OAuth app is
   // misconfigured. There is nothing to verify and nothing to exchange.
   const declined = url.searchParams.get('error');
@@ -164,6 +223,72 @@ export const completeSignIn = async (
     setCookie: [sessionCookie(session), clearedStateCookie()],
     location: dependencies.config.APP_URL,
   };
+};
+
+/**
+ * The callback, for a connect this server signed (D-172): GitHub's no is said as one, and anything
+ * else is `completeConnect`'s to accept or refuse — a refusal reaches `abandonSignIn` and is said on
+ * the same page.
+ */
+const finishConnect = async (
+  dependencies: AuthDependencies,
+  request: Request,
+  url: URL,
+  intent: ConnectIntent,
+): Promise<AuthResponse> => {
+  const declined = url.searchParams.get('error');
+  if (declined !== null) {
+    if (declined === DECLINED) return connectSentBack(dependencies.config, intent, 'cancelled');
+    dependencies.log.warn('GitHub refused a connect', {
+      githubError: declined.slice(0, LOGGED_ERROR_LENGTH),
+    });
+    return connectSentBack(dependencies.config, intent, 'failed');
+  }
+  const connected = await completeConnect(dependencies, {
+    code: url.searchParams.get('code') ?? undefined,
+    returnedState: url.searchParams.get('state') ?? undefined,
+    stateCookie: readCookie(request.headers.get('cookie'), STATE_COOKIE),
+    sessionToken: sessionTokenFrom(request.headers.get('cookie')),
+  });
+  return connectSentBack(dependencies.config, connected, 'connected');
+};
+
+/** What `POST /api/me/github/connect` answers: where to send the browser, and the state's cookie. */
+export interface ConnectStart {
+  readonly setCookie: readonly string[];
+  readonly body: ConnectGitHubResponse;
+}
+
+/**
+ * `POST /api/me/github/connect` — from a signed-in session, a same-origin `POST` (D-39 §2): a page on
+ * another site can neither make it nor read where it says to go (D-172).
+ */
+export const startConnectGitHub = async (
+  dependencies: AuthDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ConnectStart> => {
+  const { userId, sessionId } = await requireSession(
+    dependencies.database,
+    dependencies.clock,
+    request,
+  );
+  const { workspace } = validated(ConnectGitHubRequest, body);
+  const { stateCookieValue, redirectTo } = await beginConnect(dependencies, {
+    userId,
+    sessionId,
+    workspace,
+  });
+  return { setCookie: [stateCookie(stateCookieValue)], body: { location: redirectTo } };
+};
+
+/** `GET /api/me/sign-in` — the ways the caller signs in, their own only (D-172). */
+export const readMySignIn = async (
+  dependencies: Pick<AuthDependencies, 'database' | 'clock'>,
+  request: Request,
+): Promise<MySignIn> => {
+  const { userId } = await requireSession(dependencies.database, dependencies.clock, request);
+  return await mySignIn(dependencies.database, userId);
 };
 
 export const signOut = async (
