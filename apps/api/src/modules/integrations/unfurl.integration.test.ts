@@ -11,7 +11,7 @@ import { credentialCipher } from '../../platform/crypto';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
-import { setGitHubToken } from './github';
+import { removeGitHubToken, setGitHubToken } from './github';
 import {
   NEGATIVE_TTL_MS,
   UNAVAILABLE_TTL_MS,
@@ -258,6 +258,44 @@ describe('integration: unfurling a GitHub link', () => {
       expect(asked).toHaveLength(1);
       await unfurl(dependencies(db, new Date(NOW.getTime() + NEGATIVE_TTL_MS)), context, issue);
       expect(asked).toHaveLength(2);
+    });
+  });
+
+  test('a token replaced is asked again at once: what the old one could not see is not remembered for it', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      // The first token cannot see the private repository: GitHub says it is not there.
+      answer = (): Response => new Response('{"message":"Not Found"}', { status: 404 });
+      const context = await aWorkspaceWithToken(db, 'ghp_cannot_see');
+      expect(await unfurl(dependencies(db), context, PR)).toBeNull();
+      // The admin fixes the token a minute later; well inside the hour "not there" is kept for.
+      const later = new Date(NOW.getTime() + 60_000);
+      await setGitHubToken(db, fixedClock(later), cipher, context, 'ghp_can_see');
+      answer = (path): Response =>
+        path === '/repos/acme/api/pulls/42'
+          ? Response.json(pull)
+          : path === '/graphql'
+            ? Response.json(checks(null, null))
+            : new Response('{}', { status: 404 });
+      const card = await unfurl(dependencies(db, later), context, PR);
+      expect(card?.title).toBe('Retry the socket with backoff');
+      expect(asked.at(-1)?.authorization).toBe('Bearer ghp_can_see');
+    });
+  });
+
+  test('a token removed draws no card at once, though one was cached under it', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (path): Response =>
+        path === '/repos/acme/api/pulls/42'
+          ? Response.json(pull)
+          : path === '/graphql'
+            ? Response.json(checks(null, null))
+            : new Response('{}', { status: 404 });
+      const context = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      expect(await unfurl(dependencies(db), context, PR)).not.toBeNull();
+      await removeGitHubToken(db, fixedClock(NOW), context);
+      expect(await unfurl(dependencies(db), context, PR)).toBeNull();
     });
   });
 
