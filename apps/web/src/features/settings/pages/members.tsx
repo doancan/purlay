@@ -71,6 +71,9 @@ export const MembersPage = (): React.JSX.Element => {
   const members = useMembers(workspace.id);
   const actor = useWorkspaceRole();
   const [asking, setAsking] = useState<string | null>(null);
+  // A role the person chose for their own row, asked about in the row before it is sent: they may not
+  // be able to change it back themself (D-111).
+  const [stepping, setStepping] = useState<UserRole | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<UserRole | typeof ALL>(ALL);
@@ -79,10 +82,15 @@ export const MembersPage = (): React.JSX.Element => {
     await client.invalidateQueries({ queryKey: keys.members(workspace.id) });
   };
 
-  /** What this person may do to a row: nothing to their own, nothing to an owner's unless an owner. */
-  const mayManage = (member: WorkspaceMember): boolean =>
-    member.user.id !== user.id &&
-    (actor === 'owner' || (actor === 'admin' && member.role !== 'owner'));
+  /**
+   * Whose role this person may change (D-111): an owner's only if an owner — their own included, so an
+   * owner steps down once there is another — and an admin anyone else's, themself included.
+   */
+  const mayChangeRole = (member: WorkspaceMember): boolean =>
+    actor === 'owner' || (actor === 'admin' && member.role !== 'owner');
+  /** Whom this person may remove: as above, but never themself — that is leaving (Sessions & account). */
+  const mayRemove = (member: WorkspaceMember): boolean =>
+    member.user.id !== user.id && mayChangeRole(member);
   const offered = ROLES.filter((option) => actor === 'owner' || option !== 'owner');
 
   const changeRole = async (member: WorkspaceMember, next: UserRole): Promise<void> => {
@@ -96,8 +104,10 @@ export const MembersPage = (): React.JSX.Element => {
           : `${t('members.roleFailed')} ${describe(failure)}`,
       );
     }
-    // Either way, what is shown is what the server kept.
+    // Either way, what is shown is what the server kept; and changing one's own role changes what this
+    // person may open, which the session says.
     await reread();
+    if (member.user.id === user.id) await client.invalidateQueries({ queryKey: keys.me });
   };
 
   const remove = async (member: WorkspaceMember): Promise<void> => {
@@ -236,7 +246,8 @@ export const MembersPage = (): React.JSX.Element => {
           <ul aria-label={t('settings.members.title')} className="flex flex-col">
             {shown.map((member) => {
               const name = member.user.displayName;
-              const manage = mayManage(member);
+              const manage = mayChangeRole(member);
+              const removable = mayRemove(member);
               const you = member.user.id === user.id;
               return (
                 <li
@@ -268,7 +279,9 @@ export const MembersPage = (): React.JSX.Element => {
                           className="w-full"
                           onChange={(event) => {
                             const next = ROLES.find((option) => option === event.target.value);
-                            if (next !== undefined) void changeRole(member, next);
+                            if (next === undefined || next === member.role) return;
+                            if (you) setStepping(next);
+                            else void changeRole(member, next);
                           }}
                         >
                           {offered.map((option) => (
@@ -283,7 +296,7 @@ export const MembersPage = (): React.JSX.Element => {
                           {t(`members.role.${member.role}`)}
                         </span>
                       )}
-                      {manage && (
+                      {removable && (
                         <span className="flex justify-end">
                           <Button
                             variant="dangerQuiet"
@@ -298,6 +311,33 @@ export const MembersPage = (): React.JSX.Element => {
                       )}
                     </span>
                   </div>
+                  {you && stepping !== null && (
+                    <div className="flex items-center gap-3 bg-warning-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
+                      <p className="min-w-0 flex-1 text-label text-warning-text">
+                        {t('members.selfAsk', { role: t(`members.role.${stepping}`) })}
+                      </p>
+                      <span className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setStepping(null);
+                          }}
+                        >
+                          {t('common.cancel')}
+                        </Button>
+                        <Button
+                          variant="primary"
+                          onClick={() => {
+                            const next = stepping;
+                            setStepping(null);
+                            void changeRole(member, next);
+                          }}
+                        >
+                          {t('members.selfConfirm')}
+                        </Button>
+                      </span>
+                    </div>
+                  )}
                   {asking === member.user.id && (
                     <div className="flex items-center gap-3 bg-danger-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
                       <p className="min-w-0 flex-1 text-label text-danger-text">

@@ -199,8 +199,11 @@ chat the team already uses.
 
 **Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
 with a role each: a labelled select where the person may change it, the role in words where they may
-not — an admin does not touch an owner or make one, and nobody changes their own row. **Remove** asks
-in the row first, because it costs the person every channel. The last owner is said as such.
+not — an admin does not touch an owner or make one. A person's own role is theirs to change (D-111): an
+owner steps down once there is another, an admin becomes a member; the row asks first, because only
+somebody else can change it back. **Remove** is on everyone's row but one's own — that is leaving
+(Sessions & account) — and asks in the row first, because it costs the person every channel. The last
+owner is said as such.
 
 **The audit log** (D-26). **Audit log…** in the same menu, an owner's or an admin's, reads the trail
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to

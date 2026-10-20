@@ -103,7 +103,7 @@ describe('members and roles', () => {
     expect(admin.getByRole('link', { name: 'Members' }).getAttribute('aria-current')).toBe('page');
   });
 
-  test('an owner changes a role, the change is sent and the list read again; their own row is not theirs to change', async () => {
+  test('an owner changes a role, the change is sent and the list read again; their own row has no Remove', async () => {
     let members = team({ dogancan: 'owner' });
     const sent: string[] = [];
     const view = await openPage({
@@ -114,7 +114,9 @@ describe('members and roles', () => {
         return Promise.resolve({ user: ALICE, role, joinedAt: WHEN, profile: NO_PROFILE });
       },
     });
-    expect(main(view).queryByRole('combobox', { name: `Role of ${ME.displayName}` })).toBeNull();
+    // Their own role is theirs to change (D-111), but removing themself is leaving, done elsewhere.
+    expect(roleOf(view, ME.displayName)).toBeDefined();
+    expect(main(view).queryByRole('button', { name: `Remove ${ME.displayName}` })).toBeNull();
     const alice = roleOf(view, ALICE.displayName);
     expect([...alice.options].map((option) => option.textContent)).toEqual([
       'Owner',
@@ -125,6 +127,42 @@ describe('members and roles', () => {
     await settle();
     expect(sent).toEqual([`${IDS.workspace}/${ALICE.id}:admin`]);
     expect(roleOf(view, ALICE.displayName).value).toBe('admin');
+  });
+
+  test('an owner steps down from their own row, after saying so there; Cancel sends nothing (D-111)', async () => {
+    let members = team({ dogancan: 'owner', alice: 'owner' });
+    const sent: string[] = [];
+    let asksForMe = 0;
+    const session = aSession();
+    const view = await openPage({
+      me: () => {
+        asksForMe += 1;
+        return Promise.resolve(session);
+      },
+      members: () => Promise.resolve(members),
+      updateMemberRole: (_workspaceId, userId, role) => {
+        sent.push(`${userId}:${role}`);
+        members = members.map((m) => (m.user.id === userId ? { ...m, role } : m));
+        return Promise.resolve({ user: ME, role, joinedAt: WHEN, profile: NO_PROFILE });
+      },
+    });
+    const mine = (): HTMLSelectElement => roleOf(view, ME.displayName);
+    await person().selectOptions(mine(), 'admin');
+    // Asked in the row first: they may not be able to change it back themself.
+    const ask = main(view).getByText(/Make yourself Admin\?/);
+    expect(ask.textContent).toContain('Only another owner or admin can change it back.');
+    expect(sent).toEqual([]);
+    await person().click(main(view).getByRole('button', { name: 'Cancel' }));
+    expect(main(view).queryByText(/Make yourself/)).toBeNull();
+    expect(sent).toEqual([]);
+
+    await person().selectOptions(mine(), 'admin');
+    const before = asksForMe;
+    await person().click(main(view).getByRole('button', { name: 'Change my role' }));
+    await settle();
+    expect(sent).toEqual([`${ME.id}:admin`]);
+    // What they may open changed with their role: the session is read again.
+    expect(asksForMe).toBeGreaterThan(before);
   });
 
   test('an admin may not touch an owner, nor make one', async () => {

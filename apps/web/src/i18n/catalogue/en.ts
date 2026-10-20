@@ -190,6 +190,8 @@ export const en = {
   'members.role.admin': 'Admin',
   'members.role.owner': 'Owner',
   'members.you': 'you',
+  'members.selfAsk': 'Make yourself {role}? Only another owner or admin can change it back.',
+  'members.selfConfirm': 'Change my role',
   'members.remove': 'Remove',
   'members.removeLabel': 'Remove {name}',
   'members.removeAsk': 'Remove {name}? They lose every channel of the workspace.',
