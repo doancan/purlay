@@ -3342,8 +3342,8 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'unfurl-cache-shared-across-workspaces',
     why: 'a private repository’s card fetched with one workspace’s token is served to every other',
     file: 'apps/api/src/modules/integrations/unfurl.ts',
-    find: "createHash('sha256').update(`${context.workspaceId}\\n${url}`)",
-    replace: "createHash('sha256').update(url)",
+    find: '.update(`${context.workspaceId}\\n${version}\\n${url}`)',
+    replace: '.update(`${version}\\n${url}`)',
     tests: ['apps/api/src/modules/integrations/unfurl.integration.test.ts'],
   },
   {

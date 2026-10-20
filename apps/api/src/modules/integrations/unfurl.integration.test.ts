@@ -312,6 +312,23 @@ describe('integration: unfurling a GitHub link', () => {
     });
   });
 
+  test('two workspaces with tokens set at the same moment each ask GitHub with their own', async () => {
+    await withRollback(async (db) => {
+      asked.length = 0;
+      answer = (path): Response =>
+        path === '/graphql' ? Response.json(checks(null, null)) : Response.json(pull);
+      // Same clock, so the tokens' versions are equal: only the workspace in the key keeps them apart.
+      const theirs = await aWorkspaceWithToken(db, 'ghp_workspace_a');
+      const ours = await aWorkspaceWithToken(db, 'ghp_workspace_b');
+      await unfurl(dependencies(db), theirs, PR);
+      await unfurl(dependencies(db), ours, PR);
+      expect(asked.filter((a) => a.path !== '/graphql').map((a) => a.authorization)).toEqual([
+        'Bearer ghp_workspace_a',
+        'Bearer ghp_workspace_b',
+      ]);
+    });
+  });
+
   test('GitHub failing, or answering nonsense, is none for a minute, said in the log, and not a 500', async () => {
     await withRollback(async (db) => {
       asked.length = 0;
