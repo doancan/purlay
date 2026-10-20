@@ -125,9 +125,11 @@ apps/desktop/src-tauri/WixTools/
 # which IS tracked — these are personal working files and never reach the repository.
 .claude/
 .claude-flow/
-# Ruflo's local memory: the swarm's agent database and the vector store it keeps beside it.
+# Ruflo's local memory: the swarm's agent database, the vector stores it keeps beside it, and their locks.
 .swarm/
 ruvector.db
+agentdb.rvf
+agentdb.rvf.lock
 CLAUDE.md
 CLAUDE.local.md
 AGENTS.md
