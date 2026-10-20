@@ -490,7 +490,10 @@ drawn (a screen reader still reads them) and Send is the icon alone.
 | `@` and a letter | Member autocomplete: who a mention here would reach, found by display name or handle without case or accents; `↑` `↓` move, `Enter` or `Tab` writes `@handle`, `Esc` closes it, and `Enter` while it is open never sends (D-110 §8). **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
-the upload is still in flight. **A file that did not upload says why under its name** (D-159), in
+the upload is still in flight, and it goes when the files land **even if the person has moved to another
+channel or closed the thread** (D-169): the files and the waiting send belong to the place, not to the box
+on the screen, and are there when the person goes back. If a file fails meanwhile the send is held, a
+toast says where it was not sent, and the words and files wait there with the reason. **A file that did not upload says why under its name** (D-159), in
 words from what the server answered: larger than the limit, an image past the side or pixel bound, an
 image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
 too many files waiting, no connection, the server busy, file storage unavailable, the session ended, no
@@ -505,7 +508,8 @@ switch is unforgivable in a tool people live in.
 **Who else is typing** is said quietly in the channel composer's footer, beside the hints — "Alice is
 typing…", two by name, more as "Several people are typing…" — in a row that is always there, so nothing
 moves when it appears (D-114). Never yourself; gone when their message arrives or after a few quiet
-seconds. A reply composer shows none: typing belongs to the channel.
+seconds. A reply composer shows none and announces none: typing belongs to the channel, and what is typed in a
+thread never arrives in its feed (D-169). Only a member of the channel is heard typing in it.
 
 ---
 

@@ -30,6 +30,7 @@ import { PresenceReader } from './presence-reader';
 import { TabTitle } from './tab-title';
 import { WorkspaceScopeProvider } from './workspace';
 import { SaveIntentsProvider } from '../saved/save-toggle';
+import { OutboxProvider } from '../composer/uploads';
 
 export const Shell = ({
   slug,
@@ -41,31 +42,33 @@ export const Shell = ({
   <SessionGate>
     <WorkspaceScopeProvider slug={slug} notFound={<NotFound />}>
       <RealtimeProvider>
-        <OverlayProvider>
-          <SaveIntentsProvider>
-            <DeepWorkProvider>
-              <GlobalKeys />
-              <TabTitle />
-              <BackgroundAlerts />
-              <PresenceReader />
-              <AttentionReporter />
-              <LostSends />
-              <NavProvider>
-                <div className="flex h-screen bg-surface-100 text-ink">
-                  <SidebarSlot />
-                  <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                    <ConnectionBar />
-                    <UpdateBar />
-                    <DeepWorkBar />
-                    <Main className="flex min-h-0 flex-1 flex-col">
-                      <ScreenBoundary>{children}</ScreenBoundary>
-                    </Main>
+        <OutboxProvider>
+          <OverlayProvider>
+            <SaveIntentsProvider>
+              <DeepWorkProvider>
+                <GlobalKeys />
+                <TabTitle />
+                <BackgroundAlerts />
+                <PresenceReader />
+                <AttentionReporter />
+                <LostSends />
+                <NavProvider>
+                  <div className="flex h-screen bg-surface-100 text-ink">
+                    <SidebarSlot />
+                    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                      <ConnectionBar />
+                      <UpdateBar />
+                      <DeepWorkBar />
+                      <Main className="flex min-h-0 flex-1 flex-col">
+                        <ScreenBoundary>{children}</ScreenBoundary>
+                      </Main>
+                    </div>
                   </div>
-                </div>
-              </NavProvider>
-            </DeepWorkProvider>
-          </SaveIntentsProvider>
-        </OverlayProvider>
+                </NavProvider>
+              </DeepWorkProvider>
+            </SaveIntentsProvider>
+          </OverlayProvider>
+        </OutboxProvider>
       </RealtimeProvider>
     </WorkspaceScopeProvider>
   </SessionGate>

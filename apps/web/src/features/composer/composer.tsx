@@ -99,9 +99,6 @@ const Inner = ({
   const [error, setError] = useState<string | null>(null);
   // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
   const [focused, setFocused] = useState(false);
-  const uploads = useUploads();
-  // A send asked for while files were still uploading.
-  const [waiting, setWaiting] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const hintsId = useId();
   // Where the caret goes after a change that is made by script (a paste, an undo).
@@ -109,6 +106,17 @@ const Inner = ({
   const composing = useRef(false);
   const latest = useRef(text);
   latest.current = text;
+  // Held above the composer, per place, with a send asked for while they were still uploading: a
+  // channel switch or a closed thread loses neither, and the send still goes when they land (D-169).
+  const uploads = useUploads(key, () => latest.current);
+  const waiting = uploads.waiting;
+  const setWaiting = (wanted: boolean): void => {
+    uploads.wait(
+      wanted
+        ? { channelId, parentId, channelName, content: latest.current, storage: ports.storage }
+        : null,
+    );
+  };
   // Where the caret is, for the `@` list: it reads what was typed up to here.
   const [caretAt, setCaretAt] = useState(text.length);
   // The `@` whose list Esc closed; it stays closed until a mention starts somewhere else.
@@ -176,7 +184,8 @@ const Inner = ({
     // A new letter is a new list, and its best match is the one Enter takes.
     setActive(0);
     // Rationed by the engine; an emptied box says nothing, and the announcement runs out (D-114).
-    if (next.trim() !== '') engine.announceTyping(channelId);
+    // Not from a reply box: what is typed there never arrives in the channel's feed (`UX.md` §5).
+    if (parentId === undefined && next.trim() !== '') engine.announceTyping(channelId);
     // What was wrong with the old text is not known to be wrong with the new.
     setError(null);
   };

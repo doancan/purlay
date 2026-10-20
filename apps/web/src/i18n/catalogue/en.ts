@@ -851,6 +851,7 @@ export const en = {
   'composer.attach': 'Attach a file',
   'composer.files': 'Files to send',
   'composer.waiting': 'Sends when the files finish uploading.',
+  'composer.notSent': 'Not sent to {channel}: a file did not upload. The message is still there.',
   'typing.one': '{name} is typing…',
   'typing.two': '{first} and {second} are typing…',
   'typing.several': 'Several people are typing…',

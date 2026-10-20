@@ -838,6 +838,7 @@ export const tr = {
   'composer.attach': 'Dosya ekle',
   'composer.files': 'Gönderilecek dosyalar',
   'composer.waiting': 'Dosyaların yüklenmesi bitince gönderilecek.',
+  'composer.notSent': 'Gönderilmedi: {channel}. Bir dosya yüklenmedi; mesaj orada duruyor.',
   'typing.one': '{name} yazıyor…',
   'typing.two': '{first} ve {second} yazıyor…',
   'typing.several': 'Birkaç kişi yazıyor…',
