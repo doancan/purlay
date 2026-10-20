@@ -83,8 +83,9 @@ const aWorld = async (db: Executor): Promise<World> => {
       { workspace_id: workspaceId, user_id: carol.userId, role: 'member', joined_at: NOW },
     ])
     .execute();
+  // Not `general`: a new workspace already has it (D-174).
   const channel = await call('POST', `/api/workspaces/${workspaceId}/channels`, owner, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   for (const person of [admin, bob, carol]) {

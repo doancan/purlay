@@ -60,7 +60,7 @@ test.describe('opening and closing a thread', () => {
       expect(Math.abs((panel?.width ?? -1) - (main?.width ?? 0))).toBeLessThan(1.5);
     } else {
       // Beside the feed, at the token's width, and the question stayed where it was.
-      expect(Math.round(panel?.width ?? -1)).toBe(380); // `size-thread` (D-122)
+      expect(Math.round(panel?.width ?? -1)).toBe(440); // `size-thread` (D-122, D-175)
       expect((panel?.x ?? 0) + 1).toBeGreaterThanOrEqual(
         ((await page.getByRole('feed').boundingBox())?.x ?? 0) +
           ((await page.getByRole('feed').boundingBox())?.width ?? 0),
