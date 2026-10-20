@@ -3651,6 +3651,14 @@ export const MUTATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/invitations.integration.test.ts'],
   },
   {
+    id: 'workspace-starts-with-no-channel',
+    why: 'the person who made a workspace lands on “No channels yet”, and the first person they invite has nothing to join',
+    file: WORKSPACES,
+    find: '  await createChannel(executor, clock, context, { name: DEFAULT_CHANNEL_NAME });\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/workspaces.integration.test.ts'],
+  },
+  {
     id: 'invitation-join-answers-another-membership',
     why: 'somebody in two workspaces who joins a third is sent to the first',
     file: 'apps/api/src/modules/workspaces/workspaces.ts',

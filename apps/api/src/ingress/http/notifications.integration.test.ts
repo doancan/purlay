@@ -62,7 +62,7 @@ const aWorld = async (db: Executor): Promise<World> => {
     .values({ workspace_id: workspaceId, user_id: bob.userId, role: 'member', joined_at: NOW })
     .execute();
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   expect((await call(db, 'POST', `/api/channels/${channelId}/join`, bob.cookie)).ok).toBe(true);

@@ -107,6 +107,13 @@ export const CreateWorkspaceRequest = FromClient({
 export type CreateWorkspaceRequest = Static<typeof CreateWorkspaceRequest>;
 
 /**
+ * The channel a new workspace starts with, its creator in it, so the first screen is a place to talk
+ * and an invited person has somewhere to go (D-174). A name, as every channel's is — renamed, left or
+ * archived like any other; nothing marks it afterwards.
+ */
+export const DEFAULT_CHANNEL_NAME = 'general';
+
+/**
  * `PATCH /api/workspaces/:workspaceId` — an owner or an admin renames the workspace (D-124). The name
  * only: the slug is its address, in every link already pasted, and does not move (D-124).
  */

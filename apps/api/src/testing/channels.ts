@@ -5,6 +5,7 @@
  * that go through a request.
  */
 import type { Executor } from '@purlay/db';
+import { DEFAULT_CHANNEL_NAME } from '@purlay/types';
 import { requireChannelById, type ChannelContext } from '../platform/channels';
 import { aUniqueSlug, aUserRow } from './users';
 
@@ -31,3 +32,19 @@ export const aChannel = async (db: Executor): Promise<ChannelContext> => {
     .execute();
   return await requireChannelById(db, user.userId, channel.id);
 };
+
+/**
+ * The channel a workspace made through `POST /api/workspaces` starts with, its creator in it
+ * (D-174): the "workspace with a channel" a test through the API stands on. Read by its name, which
+ * is the only thing that marks it, and refused loudly when it is not there.
+ */
+export const theDefaultChannelOf = async (db: Executor, workspaceId: string): Promise<string> =>
+  (
+    await db
+      .selectFrom('channels')
+      .select('id')
+      .where('workspace_id', '=', workspaceId)
+      .where('name', '=', DEFAULT_CHANNEL_NAME)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirstOrThrow()
+  ).id;

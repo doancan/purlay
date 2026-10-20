@@ -51,7 +51,7 @@ const aWorld = async (
   });
   const workspaceId = ((await created.json()) as { id: string }).id;
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, cookie, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   const sent = await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {

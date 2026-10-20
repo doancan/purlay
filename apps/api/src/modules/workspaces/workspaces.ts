@@ -20,11 +20,18 @@
  * where it can be tested against something that actually tries.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import type { MeResponse, Membership, Workspace, WorkspaceMember } from '@purlay/types';
+import {
+  DEFAULT_CHANNEL_NAME,
+  type MeResponse,
+  type Membership,
+  type Workspace,
+  type WorkspaceMember,
+} from '@purlay/types';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
+import { createChannel } from '../channels/channels';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
@@ -50,10 +57,10 @@ export interface NewWorkspace {
 }
 
 /**
- * Creates a workspace and makes its creator the owner, **in one statement each
- * inside the caller's transaction**.
+ * Creates a workspace, makes its creator the owner and gives it its first channel
+ * with the creator in it (D-174), **inside the caller's transaction**.
  *
- * The two writes cannot be allowed to separate: a workspace with no owner
+ * The writes cannot be allowed to separate: a workspace with no owner
  * violates I-2 and cannot be recovered through any Phase 0 endpoint, because
  * every one of them requires a membership that does not exist. The caller passes
  * a transaction — the type refuses the pool — and this does not open one, so the
@@ -94,6 +101,12 @@ export const createWorkspace = async (
       joined_at: clock.now(),
     })
     .execute();
+
+  // The channel it starts with (D-174): made as the creator would make one — through the guard their
+  // new membership now passes, in this transaction, on the trail as `channel.created` — so it is an
+  // ordinary channel from its first moment, and a workspace never exists without it.
+  const context = await requireWorkspaceMembership(executor, creatorId, row.id);
+  await createChannel(executor, clock, context, { name: DEFAULT_CHANNEL_NAME });
 
   return asWorkspace(row);
 };

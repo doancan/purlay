@@ -166,11 +166,14 @@ describe('integration: managing members over HTTP', () => {
       const read = await call(db, 'GET', `/api/workspaces/${workspaceId}/audit?limit=10`, owner);
       expect(read.status).toBe(200);
       const page: unknown = await read.json();
-      expect(Value.Check(AuditPage, page)).toBe(true);
-      expect(page).toMatchObject({
-        data: [{ action: 'member.role_changed', metadata: { from: 'member', to: 'admin' } }],
-        nextCursor: null,
-      });
+      if (!Value.Check(AuditPage, page)) throw new Error('the page is not the contract’s');
+      // Under the change, the channel the workspace started with, made by its creator (D-174) — both
+      // at the frozen clock's one instant, so neither order is promised.
+      expect(page.data.map((entry) => [entry.action, entry.metadata]).sort()).toEqual([
+        ['channel.created', { type: 'public' }],
+        ['member.role_changed', { from: 'member', to: 'admin' }],
+      ]);
+      expect(page.nextCursor).toBeNull();
       await call(db, 'PATCH', `/api/workspaces/${workspaceId}/members/${member.userId}`, owner, {
         role: 'member',
       });

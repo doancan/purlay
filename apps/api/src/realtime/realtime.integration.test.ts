@@ -72,7 +72,7 @@ const aChannel = async (
   const workspaceId = ((await workspace.json()) as { id: string }).id;
   const channel = await call(db, 'POST', `/api/workspaces/${workspaceId}/channels`, {
     cookie: who.cookie,
-    body: { name: 'general' },
+    body: { name: 'ops' },
   });
   return { workspaceId, channelId: ((await channel.json()) as { id: string }).id };
 };

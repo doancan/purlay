@@ -86,7 +86,7 @@ const aRoom = async (): Promise<{
     )
     .execute();
   const channel = await http('POST', `/api/workspaces/${workspaceId}/channels`, alice.cookie, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   for (const user of [bob, carol]) {

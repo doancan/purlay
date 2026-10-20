@@ -76,7 +76,7 @@ const aWorld = async (db: Executor): Promise<World> => {
   }
   const world = { ...partial, workspaceId };
   const channel = await call(world, 'POST', `/api/workspaces/${workspaceId}/channels`, owner, {
-    name: 'general',
+    name: 'ops',
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   for (const person of [admin, member, target]) {
