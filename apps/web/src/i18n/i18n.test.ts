@@ -221,7 +221,7 @@ describe('numbers', () => {
     expect(createFormatters('tr').number(1234567)).toBe('1.234.567');
   });
 
-  test('a size in bytes, kilobytes or megabytes, in each language’s way', () => {
+  test('a size in bytes, kilobytes, megabytes or gigabytes, in each language’s way', () => {
     const en = createFormatters('en');
     const tr = createFormatters('tr');
     expect(en.bytes(512)).toBe('512 byte');
@@ -229,6 +229,11 @@ describe('numbers', () => {
     expect(en.bytes(3 * 1024 * 1024)).toBe('3 MB');
     expect(tr.bytes(1536)).toBe('1,5 kB');
     expect(tr.bytes(25 * 1024 * 1024)).toBe('25 MB');
+    // A workspace's storage and its quota (D-173).
+    expect(en.bytes(5 * 1024 ** 3)).toBe('5 GB');
+    expect(en.bytes(1.25 * 1024 ** 3)).toBe('1.3 GB');
+    expect(tr.bytes(1.25 * 1024 ** 3)).toBe('1,3 GB');
+    expect(en.bytes(1024 ** 3 - 1)).toBe('1,024 MB');
   });
 });
 

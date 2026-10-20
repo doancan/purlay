@@ -226,6 +226,15 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
       as,
     );
   },
+  'take somebody out of a public channel': async (world, as) =>
+    await call(
+      world,
+      'DELETE',
+      `/api/channels/${world.channelId}/members/${world.people.target.userId}`,
+      as,
+    ),
+  'read the workspace’s storage and quota': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/storage`, as),
   'archive a channel': async (world, as) =>
     await call(world, 'DELETE', `/api/channels/${world.channelId}`, as),
   'delete somebody else’s message': async (world, as) =>

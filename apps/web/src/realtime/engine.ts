@@ -654,8 +654,11 @@ export const createEngine = (options: EngineOptions): Engine => {
           for (const id of frame.data.channelIds) gone[id] = reason;
           store.setState({ gone });
         }
-        // A public channel left is still there to see and join again: the list is read again.
-        if (reason === 'left') void client.invalidateQueries({ queryKey: families.channels });
+        // A public channel left, or one the person was taken out of, is still there to see and join
+        // again: the list is read again (D-172).
+        if (reason === 'left' || reason === 'removed') {
+          void client.invalidateQueries({ queryKey: families.channels });
+        }
         // The server dropped these as it sent this: let go without a frame (#523).
         connection?.forget(frame.data.channelIds);
         for (const id of frame.data.channelIds) {

@@ -1,6 +1,6 @@
 /**
  * A channel's own settings, and leaving it (D-123): rename it or set what it is for, archive it,
- * leave it, see who is in it.
+ * leave it, take somebody else out of it (D-172), see who is in it.
  *
  * Each takes the `ChannelContext` the guard minted, so a channel the caller cannot see is the
  * stranger's `404` before anything here runs (D-34). **A direct message has none of these**: it has
@@ -12,7 +12,14 @@
  * what the other is about to change.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import type { Channel, ChannelMember, UpdateChannelRequest } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
+import {
+  Uuid,
+  type Channel,
+  type ChannelMember,
+  type UpdateChannelRequest,
+  type UserRole,
+} from '@purlay/types';
 import { recordAudit } from '../audit/audit';
 import type { Clock } from '../../platform/clock';
 import {
@@ -209,6 +216,127 @@ export const leaveChannel = async (
     .returning('user_id')
     .executeTakeFirst();
   return left !== undefined;
+};
+
+/** What a removal did, for the caller to tell the person's sockets after the commit; null: nothing. */
+export type Removal = 'left' | 'removed' | null;
+
+/**
+ * Takes somebody else out of the channel (D-172). Their messages stay (D-9); their sockets are told
+ * by the caller after the commit (D-85).
+ *
+ * - **Who may.** An owner or an admin, from any channel they can see — and, as for the workspace
+ *   (D-111), an owner is an owner's to take out. A member of a **private** channel takes out another
+ *   member of it whose workspace role is `member`: they brought people in (D-104), and a private
+ *   channel is reached no other way. In a public channel a member takes out nobody — anybody can join
+ *   it again. Anybody else is `403 FORBIDDEN`, for what the caller is.
+ * - **Yourself is leaving**, the same act by another door (`leaveChannel`), with the same last-member
+ *   refusal and the same `left` told to your sockets.
+ * - **A direct message or a group has none** (D-127): the stranger's `404`, as leaving answers — the
+ *   channel row's lock refuses one, as it does for every act here.
+ * - **Not in it** is `204` again and tells nobody; somebody not in the workspace `404 USER_NOT_FOUND`.
+ * - **The last member of a private channel stays**, as leaving keeps them (`409 LAST_CHANNEL_MEMBER`).
+ *
+ * The locks are taken in the order every other path takes them: the workspace row (shared, so a role
+ * change waits and the roles read here are the ones that hold at the commit; D-111 §2), then the
+ * person's membership, then the channel row (#669).
+ */
+export const removeChannelMember = async (
+  executor: Transaction,
+  clock: Clock,
+  context: ChannelContext,
+  userId: string,
+): Promise<Removal> => {
+  if (userId === context.userId) return (await leaveChannel(executor, context)) ? 'left' : null;
+  if (!Value.Check(Uuid, userId)) throw personNotFound();
+
+  await executor
+    .selectFrom('workspaces')
+    .select('id')
+    .where('id', '=', context.workspaceId)
+    .forShare()
+    .execute();
+  const { role: caller } = await requireWorkspaceMembership(
+    executor,
+    context.userId,
+    context.workspaceId,
+  );
+  const target = await executor
+    .selectFrom('workspace_members')
+    .select('role')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('user_id', '=', userId)
+    .executeTakeFirst();
+  if (target === undefined) throw personNotFound();
+
+  const theirs = await executor
+    .selectFrom('channel_members')
+    .select('user_id')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', userId)
+    .forUpdate()
+    .executeTakeFirst();
+  await lockNamed(executor, context);
+
+  if (!(await mayRemove(executor, context, caller, target.role))) {
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message:
+        context.channelType === 'private'
+          ? 'Only an owner or an admin takes an owner or an admin out of a channel.'
+          : 'Only an owner or an admin takes somebody out of a public channel.',
+    });
+  }
+  if (theirs === undefined) return null;
+  if (context.channelType === 'private') {
+    const members = await executor
+      .selectFrom('channel_members')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('channel_id', '=', context.channelId)
+      .executeTakeFirstOrThrow();
+    if (Number(members.count) <= 1) {
+      throw new AppError({
+        code: 'LAST_CHANNEL_MEMBER',
+        message: 'Nobody else is in this private channel. Bring somebody in first.',
+      });
+    }
+  }
+
+  await executor
+    .deleteFrom('channel_members')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', userId)
+    .execute();
+  // Somebody's access taken by another hand: a workspace-visible act (D-26). The channel is named by
+  // id only, so the trail names it to a reader who can see it and to nobody else (#691).
+  await recordAudit(executor, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'channel.member_removed',
+    targetType: 'user',
+    targetId: userId,
+    metadata: { channelId: context.channelId },
+  });
+  return 'removed';
+};
+
+const personNotFound = (): AppError =>
+  new AppError({ code: 'USER_NOT_FOUND', message: 'That person is not in this workspace.' });
+
+/** Whether a caller of this role may take a person of that role out of this channel (D-172). */
+const mayRemove = async (
+  executor: Executor,
+  context: ChannelContext,
+  caller: UserRole,
+  target: UserRole,
+): Promise<boolean> => {
+  if (caller === 'owner') return true;
+  if (caller === 'admin') return target !== 'owner';
+  return (
+    context.channelType === 'private' &&
+    target === 'member' &&
+    (await isChannelMember(executor, context))
+  );
 };
 
 /**

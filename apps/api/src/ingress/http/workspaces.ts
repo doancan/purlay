@@ -25,6 +25,7 @@ import {
   type Workspace,
   type WorkspaceMember,
   type RetentionSetting,
+  type StorageUsage,
   SetRetentionRequest,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -44,6 +45,7 @@ import type { Config } from '../../platform/config';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
+import { readStorage } from '../../modules/attachments/quota';
 import {
   githubIntegrationOf,
   removeGitHubToken,
@@ -279,6 +281,21 @@ export const readRetentionSetting = async (
   const { userId } = await requireSession(database, clock, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await readRetention(database, context);
+};
+
+/**
+ * `GET /api/workspaces/:workspaceId/storage` — how much of its quota the workspace's files take; an
+ * owner's (D-173).
+ */
+export const readStorageUsage = async (
+  dependencies: WorkspaceDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<StorageUsage> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  return await readStorage(database, context);
 };
 
 /**

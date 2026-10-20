@@ -315,7 +315,12 @@ export const SessionEndedFrame = Type.Object({
 });
 
 /** Why a channel went away, when that is worth telling somebody who was looking at it. */
-export const RevokedReason = Type.Union([Type.Literal('archived'), Type.Literal('left')]);
+export const RevokedReason = Type.Union([
+  Type.Literal('archived'),
+  Type.Literal('left'),
+  /** Somebody else took the person out of the channel (D-172). */
+  Type.Literal('removed'),
+]);
 export type RevokedReason = Static<typeof RevokedReason>;
 
 /**
@@ -334,7 +339,8 @@ export const AccessRevokedFrame = Type.Object({
     channelIds: Type.Array(Uuid, { minItems: 1, maxItems: ACCESS_REVOKED_MAX_CHANNELS }),
     /**
      * Why, when a person looking at the channel should be told something other than "not found":
-     * an admin archived it, or the person left it on another device (D-123). Absent for a removal.
+     * an admin archived it, the person left it on another device (D-123), or somebody took them out
+     * of it (D-172). Absent for a removal from the whole workspace.
      */
     reason: Type.Optional(RevokedReason),
   }),

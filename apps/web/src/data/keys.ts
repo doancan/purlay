@@ -48,6 +48,7 @@ export const keys = {
   audit: (workspaceId: string) => ['audit', workspaceId] as const,
   /** How long a workspace keeps its history, an owner's to read (D-139 §4). */
   retention: (workspaceId: string) => ['retention', workspaceId] as const,
+  storage: (workspaceId: string) => ['storage', workspaceId] as const,
   /** An owner's own exports of a workspace (D-140). */
   exports: (workspaceId: string) => ['exports', workspaceId] as const,
   unfurl: (workspaceId: string, url: string) => ['unfurl', workspaceId, url] as const,

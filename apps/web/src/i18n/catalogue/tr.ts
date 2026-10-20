@@ -208,6 +208,9 @@ export const tr = {
   'audit.action.channel.created': '{actor}, {channel} kanalını oluşturdu',
   'audit.action.channel.renamed': '{actor}, {from} kanalının adını {to} yaptı',
   'audit.action.channel.archived': '{actor}, {channel} kanalını arşivledi',
+  'audit.action.channel.member_removed': '{actor}, {target} kişisini bir kanaldan çıkardı',
+  'audit.action.channel.member_removed_from':
+    '{actor}, {target} kişisini {channel} kanalından çıkardı',
   'audit.action.integration.token_set': '{actor} GitHub tokenını ayarladı',
   'audit.action.integration.token_removed': '{actor} GitHub tokenını kaldırdı',
   'audit.action.integration.feed_created': '{actor}, {repository} deposunu bir kanala bağladı',
@@ -241,6 +244,12 @@ export const tr = {
     'Her gece {days} günden eski mesajlar ve dosyalar kalıcı olarak silinecek. Bu geri alınamaz ve denetim kaydı bunu senin seçtiğini gösterir.',
   'retention.failed': 'Ayar kaydedilmedi.',
   'retention.saved': 'Kaydedildi.',
+  'storage.description':
+    'Buraya gönderilen dosyalar ve gönderilmeyi bekleyenler çalışma alanının kotasından düşer. Kotayı sunucunun yöneticisi belirler.',
+  'storage.label': 'Kullanılan depolama',
+  'storage.used': '{used} / {quota}',
+  'storage.left': 'Kalan: {left}',
+  'storage.full': 'Yer kalmadı: sunucunun yöneticisi kotayı artırana kadar dosya yüklenemez.',
   'export.entry': 'Çalışma alanını dışa aktar…',
   'export.title': '{workspace} çalışma alanını dışa aktar',
   'export.description':
@@ -316,6 +325,9 @@ export const tr = {
   'state.channel.left.title': 'Bu kanaldan ayrıldın',
   'state.channel.left.body':
     'Başka bir ekranda ayrıldın. Herkese açıksa Kanallara göz at’tan yeniden katılabilirsin.',
+  'state.channel.removed.title': 'Bu kanaldan çıkarıldın',
+  'state.channel.removed.body':
+    'Biri seni kanaldan çıkardı. Konuşması üyelerinde kalır; içlerinden biri seni yeniden ekleyebilir.',
   'state.workspace.empty.title': 'Bir kanal seç',
   'state.workspace.empty.body': 'Listeden birini seç ya da ilkini oluştur.',
 
@@ -410,6 +422,14 @@ export const tr = {
     '#{name} arşivlensin mi? Artık kimse görmeyecek. Konuşması saklanır, adı yeniden kullanılabilir.',
   'details.archiveFailed': 'Kanal arşivlenmedi.',
   'details.archived': '#{name} arşivlendi.',
+  'details.remove': 'Çıkar',
+  'details.removeLabel': '{name} kişisini kanaldan çıkar',
+  'details.removeAsk.public':
+    '{name} kişisi #{channel} kanalından çıkarılsın mı? Mesajları kalır, kanala yeniden katılabilir.',
+  'details.removeAsk.private':
+    '{name} kişisi #{channel} kanalından çıkarılsın mı? Kanalı artık görmez, mesajları kalır.',
+  'details.removeFailed': '{name} çıkarılmadı.',
+  'details.removeForbidden': '{name} kişisini yalnızca bir sahip ya da yönetici çıkarabilir.',
 
   // ── Mesajlar ────────────────────────────────────────────────────────────
   'message.react': 'Tepki ver',
@@ -1197,8 +1217,9 @@ export const tr = {
   'settings.audit.title': 'Denetim kaydı',
   'settings.data.title': 'Veri ve saklama',
   'settings.data.description':
-    'Çalışma alanının yazılanları ne kadar tuttuğu ve bir kopyasını almak.',
+    'Dosyaların kapladığı yer, yazılanların ne kadar tutulduğu ve bir kopyasını almak.',
   'settings.data.retention': 'Geçmiş',
+  'settings.data.storage': 'Depolama',
   'settings.data.forever': 'Süresiz',
   'settings.data.years': { other: '{count} yıl' },
   'settings.data.export': 'Dışa aktarma',

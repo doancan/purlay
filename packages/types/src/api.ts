@@ -135,6 +135,18 @@ export type RetentionSetting = Static<typeof RetentionSetting>;
 export const SetRetentionRequest = FromClient({ retentionDays: RetentionDays });
 export type SetRetentionRequest = Static<typeof SetRetentionRequest>;
 
+/**
+ * `GET /api/workspaces/:workspaceId/storage` — how much of its quota the workspace's files take, an
+ * owner's to read (D-173). `usedBytes` is what the upload check counts — the files sent and the uploads
+ * still waiting to be — so the meter and a refused upload never disagree. The quota is the operator's
+ * to set (`bun run storage:quota`), never the owner's: it is the operator's disk.
+ */
+export const StorageUsage = Type.Object({
+  usedBytes: Type.Integer({ minimum: 0 }),
+  quotaBytes: Type.Integer({ minimum: 0 }),
+});
+export type StorageUsage = Static<typeof StorageUsage>;
+
 /** A member as the rest of the workspace sees them — never their email address. */
 export const WorkspaceMember = Type.Object({
   user: User,
@@ -517,6 +529,7 @@ export const AUDIT_ACTIONS = [
   'channel.created',
   'channel.renamed',
   'channel.archived',
+  'channel.member_removed',
   'integration.token_set',
   'integration.token_removed',
   'integration.feed_created',

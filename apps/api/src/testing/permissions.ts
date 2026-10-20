@@ -92,6 +92,14 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'DELETE /api/workspaces/:workspaceId/invitations/:invitationId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'take somebody out of a public channel': {
+    endpoint: 'DELETE /api/channels/:channelId/members/:userId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'read the workspace’s storage and quota': {
+    endpoint: 'GET /api/workspaces/:workspaceId/storage',
+    allowed: { owner: true, admin: false, member: false },
+  },
   'archive a channel': {
     endpoint: 'DELETE /api/channels/:channelId',
     allowed: { owner: true, admin: true, member: false },

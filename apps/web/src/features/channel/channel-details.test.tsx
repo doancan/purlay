@@ -1,7 +1,8 @@
 /**
  * A channel's details, opened from its name in the header (D-123): its tabs and how a keyboard moves
  * between them (D-154), the name and topic, the notification level said in words, who is in it in
- * its three states (`UX.md` §8) and found by name when there are many, and Leave and Archive — who
+ * its three states (`UX.md` §8), found by name when there are many and taken out by whoever may
+ * (D-172), and Leave and Archive — who
  * is offered each, that each asks first, and what a refusal says.
  */
 import { describe, expect, test } from 'bun:test';
@@ -49,7 +50,8 @@ const asMember = (): MeResponse => {
 const openDetails = async (view: ChannelView): Promise<HTMLElement> => {
   await person().click(view.getByRole('button', { name: 'api' }));
   await settle();
-  return view.getByRole('dialog', { name: 'Details of #api' });
+  // The details are a deferred chunk (D-163): the first to open in a run waits for it to load.
+  return await view.findByRole('dialog', { name: 'Details of #api' });
 };
 
 const here = (view: ChannelView): string => view.world.history.stack.at(-1) ?? '';
@@ -343,6 +345,178 @@ describe('the members', () => {
     await showTab(dialog, /^Members/);
     expect(within(dialog).queryByLabelText('Find a member')).toBeNull();
     expect(within(dialog).getAllByRole('listitem')).toHaveLength(3);
+    view.unmountAll();
+  });
+});
+
+describe('taking somebody out (D-172)', () => {
+  const secret = (): Channel[] => [
+    { ...aChannel(IDS.api, 'api'), type: 'private' as const },
+    ...someChannels().filter((c) => c.id !== IDS.api),
+  ];
+
+  test('an owner is offered Remove on every row but their own; it asks first in the row, and Cancel gives focus back', async () => {
+    const removed: string[] = [];
+    const view = await mountChannel({
+      messages: page([]),
+      members: [{ user: ME, role: 'owner' }, { user: ALICE }, { user: BOB, role: 'admin' }],
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE, BOB)),
+        removeChannelMember: (_channel, userId) => {
+          removed.push(userId);
+          return Promise.resolve();
+        },
+      },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    expect(
+      within(dialog)
+        .getAllByRole('button', { name: /^Remove .* from the channel$/ })
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Remove Alice from the channel', 'Remove Bob from the channel']);
+    const ask = within(dialog).getByRole('button', { name: 'Remove Alice from the channel' });
+    await person().click(ask);
+    expect(removed).toEqual([]);
+    const question = within(dialog).getByRole('group', { name: 'Remove Alice from the channel' });
+    expect(question.textContent).toContain(
+      'Remove Alice from #api? Their messages stay, and they can join again.',
+    );
+    await expectNoAxeViolations(dialog);
+    expectFocusOn(within(question).getByRole('button', { name: 'Cancel' }));
+    await person().click(within(question).getByRole('button', { name: 'Cancel' }));
+    await settle();
+    expectFocusOn(within(dialog).getByRole('button', { name: 'Remove Alice from the channel' }));
+    expect(removed).toEqual([]);
+    view.unmountAll();
+  });
+
+  test('confirmed, the row goes at once — before the server answers — and stays gone', async () => {
+    let answer: () => void = () => undefined;
+    const view = await mountChannel({
+      messages: page([]),
+      members: [{ user: ME, role: 'owner' }, { user: ALICE }],
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+        removeChannelMember: () =>
+          new Promise<void>((resolve) => {
+            answer = resolve;
+          }),
+      },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    await person().click(
+      within(dialog).getByRole('button', { name: 'Remove Alice from the channel' }),
+    );
+    const question = within(dialog).getByRole('group', { name: 'Remove Alice from the channel' });
+    await person().click(within(question).getByRole('button', { name: 'Remove' }));
+    expect(within(dialog).queryByText('Alice')).toBeNull();
+    expect(within(dialog).getAllByRole('listitem')).toHaveLength(1);
+    await act(async () => {
+      answer();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(within(dialog).queryByText('Alice')).toBeNull();
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+    view.unmountAll();
+  });
+
+  test('a refusal puts the row back and says why', async () => {
+    let read = 0;
+    const view = await mountChannel({
+      messages: page([]),
+      members: [{ user: ME, role: 'owner' }, { user: ALICE }],
+      api: {
+        // Read once: the list asked for again after the refusal never answers, so only putting the
+        // row back at once can show her.
+        channelMembers: () =>
+          (read += 1) === 1
+            ? Promise.resolve(inChannel(ME, ALICE))
+            : new Promise<ChannelMember[]>(() => undefined),
+        removeChannelMember: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'no')),
+      },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    await person().click(
+      within(dialog).getByRole('button', { name: 'Remove Alice from the channel' }),
+    );
+    const question = within(dialog).getByRole('group', { name: 'Remove Alice from the channel' });
+    await person().click(within(question).getByRole('button', { name: 'Remove' }));
+    await settle();
+    expect(within(dialog).getByText('Alice')).toBeDefined();
+    expect(within(dialog).getByRole('alert').textContent).toBe(
+      'Only an owner or an admin can remove Alice.',
+    );
+    view.unmountAll();
+  });
+
+  test('a failure it cannot explain is said in words', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      members: [{ user: ME, role: 'owner' }, { user: ALICE }],
+      api: {
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+        removeChannelMember: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+      },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    await person().click(
+      within(dialog).getByRole('button', { name: 'Remove Alice from the channel' }),
+    );
+    await person().click(
+      within(within(dialog).getByRole('group')).getByRole('button', { name: 'Remove' }),
+    );
+    await settle();
+    expect(within(dialog).getByRole('alert').textContent).toContain('Alice was not removed.');
+    view.unmountAll();
+  });
+
+  test('a member is offered nothing in a public channel', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      members: [{ user: ME }, { user: ALICE }],
+      api: {
+        me: () => Promise.resolve(asMember()),
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+      },
+    });
+    const dialog = await openDetails(view);
+    await showTab(dialog, /^Members/);
+    expect(within(dialog).queryByRole('button', { name: /^Remove/ })).toBeNull();
+    view.unmountAll();
+  });
+
+  test('in a private channel a member may take out another member, not an admin or an owner — said in Turkish', async () => {
+    const view = await mountChannel({
+      messages: page([]),
+      locale: 'tr',
+      channels: secret(),
+      members: [{ user: ME }, { user: ALICE }, { user: BOB, role: 'admin' }],
+      api: {
+        me: () => Promise.resolve(asMember()),
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE, BOB)),
+      },
+    });
+    await person().click(view.getByRole('button', { name: 'api' }));
+    await settle();
+    const dialog = await view.findByRole('dialog', { name: '#api ayrıntıları' });
+    await showTab(dialog, /^Üyeler/);
+    expect(
+      within(dialog)
+        .getAllByRole('button', { name: /kanaldan çıkar$/ })
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Alice kişisini kanaldan çıkar']);
+    await person().click(
+      within(dialog).getByRole('button', { name: 'Alice kişisini kanaldan çıkar' }),
+    );
+    expect(within(dialog).getByRole('group').textContent).toContain(
+      'Alice kişisi #api kanalından çıkarılsın mı? Kanalı artık görmez, mesajları kalır.',
+    );
+    await expectNoAxeViolations(dialog);
     view.unmountAll();
   });
 });
