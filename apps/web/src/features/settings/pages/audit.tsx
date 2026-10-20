@@ -225,6 +225,17 @@ export const AuditPage = (): React.JSX.Element => {
             ))}
           </ol>
         )}
+        {/* An older page that failed says so where it was asked for: silent, "the end of the log" and
+            "the request failed" looked the same. The button below asks again. */}
+        {trail.isFetchNextPageError && (
+          <p
+            role="alert"
+            className="flex items-center gap-2 border-t-hairline border-border-subtle px-6 py-3 text-label text-danger-text max-narrow:px-4"
+          >
+            <Icon name="failed" size="sm" />
+            {`${t('audit.olderFailed')} ${describe(trail.error)}`}
+          </p>
+        )}
         {trail.hasNextPage && (
           <footer className="flex justify-center border-t-hairline border-border-subtle px-6 py-3">
             <Button

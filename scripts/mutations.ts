@@ -3864,5 +3864,11 @@ export const MUTATIONS: readonly Mutation[] = [
       'apps/web/src/features/channel/channel-screen.test.tsx',
       'apps/web/src/features/questions/questions-screen.test.tsx',
     ],
+    id: 'audit-older-fails-silently',
+    why: 'an older page of the audit log that fails says nothing, so an admin reads a failed request as the end of the log',
+    file: 'apps/web/src/features/settings/pages/audit.tsx',
+    find: '{trail.isFetchNextPageError && (',
+    replace: '{false && (',
+    tests: ['apps/web/src/features/settings/pages/audit.test.tsx'],
   },
 ];

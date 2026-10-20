@@ -201,6 +201,7 @@ export const en = {
   'audit.description':
     'Who did which administrative thing, newest first. Never what anybody wrote.',
   'audit.empty': 'Nothing administrative has happened yet.',
+  'audit.olderFailed': 'Older entries did not load.',
   'audit.older': 'Load older',
   'audit.someone': 'Someone',
   'audit.someoneElse': 'someone',
