@@ -12,7 +12,7 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useNowMinute } from '../channel/now-minute';
 import { useSidePanel } from '../channel/side-panel';
-import { INCIDENT_PANEL_ID } from './incident-panel';
+import { INCIDENT_PANEL_ID } from './panel-id';
 import { useIncident } from './use-incident';
 
 export const IncidentBanner = ({

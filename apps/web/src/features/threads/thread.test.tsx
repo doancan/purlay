@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
-import type { Message, ThreadPage } from '@purlay/types';
+import type { Attachment, Message, ThreadFollow, ThreadPage } from '@purlay/types';
 import { ApiError } from '../../data/errors';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -22,10 +22,19 @@ import {
   type ChannelView,
 } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { ALICE, BOB, IDS, aMessage, messageIdAt } from '../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  ME,
+  aChannel,
+  aMessage,
+  messageIdAt,
+  someChannels,
+} from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { ACK_DEADLINE_MS } from '../../realtime/engine';
-import { expectFocusOn } from '../../testing/focus';
+import { expectFocusOn, pressTab, tabOrder } from '../../testing/focus';
 
 installDom();
 
@@ -121,6 +130,12 @@ describe('a root and its thread, closed', () => {
     expect(line.getAttribute('aria-expanded')).toBe('false');
     expect(line.textContent).toContain('Open · 2 replies · last');
     expect(within(line).getByText('T')).toBeDefined();
+    // On a phone it stays one line: the status is cut, “Show thread” is never broken in two.
+    const words = within(line).getByText(/Open · 2 replies/);
+    expect(words.className.split(' ')).toContain('truncate');
+    expect(words.parentElement?.className.split(' ')).toContain('whitespace-nowrap');
+    const open = within(line).getByText('Show thread').className.split(' ');
+    expect(['shrink-0', 'whitespace-nowrap'].filter((name) => !open.includes(name))).toEqual([]);
     await expectNoAxeViolations(view.container);
     view.unmountAll();
   });
@@ -128,7 +143,7 @@ describe('a root and its thread, closed', () => {
   test('a resolved one says who, and its root is quiet: dimmed, not hidden', async () => {
     const view = await mount({ messages: page([aMessage(1), rootMessage({ thread: closed })]) });
     const line = view.getByRole('button', { name: /Show thread/ });
-    expect(line.textContent).toContain('Resolved by alice · 2 replies');
+    expect(line.textContent).toContain('Resolved by Alice · 2 replies');
     const text = within(rowOf(view, messageIdAt(ROOT))).getByText('Why is the backoff 4s?');
     expect(text.closest('.text-ink-muted')).not.toBeNull();
     expect(
@@ -142,7 +157,7 @@ describe('a root and its thread, closed', () => {
 
   test("its words are the person's language", async () => {
     const view = await mount({ locale: 'tr' });
-    expect(view.getByRole('button', { name: /Thread'i göster/ }).textContent).toContain(
+    expect(view.getByRole('button', { name: /Thread’i göster/ }).textContent).toContain(
       'Açık · 2 yanıt',
     );
     view.unmountAll();
@@ -305,7 +320,12 @@ describe('replying', () => {
   test('a root nobody answered can be: Reply opens a thread that is only the box, then the first reply makes it a thread', async () => {
     const view = await mount({ messages: page([aMessage(1), aMessage(2, { content: 'quiet' })]) });
     const row = rowOf(view, messageIdAt(2));
-    await person().click(within(row).getByRole('button', { name: 'Reply' }));
+    const reply = within(row).getByRole('button', { name: 'Reply' });
+    // The same square as React beside it on every window: on a phone it once stood taller (D-150).
+    expect(reply.className).toBe(
+      within(row).getByRole('button', { name: 'Add reaction' }).className,
+    );
+    await person().click(reply);
     await settle();
     const section = view.container.querySelector<HTMLElement>('[data-thread-root]');
     if (section === null) throw new Error('the reply box did not open');
@@ -333,6 +353,60 @@ describe('replying', () => {
     });
     const mine = rowAround(within(section).getByText('because of the rate limit'));
     expect(within(mine).getByLabelText('Sending')).toBeDefined();
+    view.unmountAll();
+  });
+
+  // The thread's box has the channel's buttons (D-164): a reply formats and carries files like any message.
+  test('the thread’s box has the channel’s buttons, and a file attached in it goes with the reply', async () => {
+    const uploaded: string[] = [];
+    const view = await mount({
+      api: {
+        upload: (_workspaceId, { id, name, file }): Promise<Attachment> => {
+          uploaded.push(id);
+          return Promise.resolve({
+            id,
+            fileName: name,
+            mimeType: 'text/plain',
+            sizeBytes: file.size,
+            kind: 'file',
+            width: null,
+            height: null,
+          });
+        },
+      },
+    });
+    connect(view);
+    await showThread(view);
+    const section = sectionOf(view);
+    for (const name of ['Bold', 'Code block', 'Mention someone', 'Attach a file']) {
+      expect(within(section).getByRole('button', { name })).toBeDefined();
+    }
+    const box = within(section).getByLabelText<HTMLTextAreaElement>('Message a thread in api');
+    await person().click(within(section).getByRole('button', { name: 'Bold' }));
+    expect(box.value).toBe('****');
+    const picker = section.querySelector<HTMLInputElement>('input[type="file"]');
+    if (picker === null) throw new Error('no file picker in the thread');
+    act(() => {
+      fireEvent.change(picker, {
+        target: { files: [new File([new Uint8Array([1, 2])], 'trace.txt')] },
+      });
+    });
+    await settle();
+    expect(within(section).getByText('trace.txt')).toBeDefined();
+    // Typed where the button left the caret: between the marks.
+    await person().type(box, 'the trace{Enter}', { skipClick: true });
+    await settle();
+    expect(uploaded).toHaveLength(1);
+    expect(view.world.sockets.sent('MESSAGE_SEND').at(-1)?.payload).toMatchObject({
+      channelId: IDS.api,
+      content: '**the trace**',
+      parentId: messageIdAt(ROOT),
+      attachmentIds: uploaded,
+    });
+    // The chip went with the reply, which carries the file in the thread.
+    expect(within(section).queryByRole('list', { name: 'Files to send' })).toBeNull();
+    expect(rowAround(within(section).getByText('the trace')).textContent).toContain('trace.txt');
+    await expectNoAxeViolations(section);
     view.unmountAll();
   });
 
@@ -395,7 +469,7 @@ describe('live', () => {
       ts: 1,
     });
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
-      'Resolved by alice · 3 replies',
+      'Resolved by Alice · 3 replies',
     );
     view.unmountAll();
   });
@@ -442,7 +516,7 @@ describe('live', () => {
     await settle();
     // Nothing here asked for it, so nothing here closes under the person reading or writing (D-122).
     const panel = sectionOf(view);
-    expect(within(panel).getByText('Resolved by alice · 2 replies')).toBeDefined();
+    expect(within(panel).getByText('Resolved by Alice · 2 replies')).toBeDefined();
     expect(within(panel).getByRole('button', { name: /Reopen/ })).toBeDefined();
     expect(animate).not.toHaveBeenCalled();
     animate.mockRestore();
@@ -482,7 +556,7 @@ describe('resolving and reopening', () => {
     expect(asked).toEqual([messageIdAt(ROOT)]);
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
     expect(view.getByRole('button', { name: /Show thread/ }).textContent).toContain(
-      'Resolved by alice',
+      'Resolved by Alice',
     );
     expectFocusOn(rowOf(view, messageIdAt(ROOT)));
     expect(view.getAllByRole('status').some((n) => n.textContent === 'Thread resolved')).toBe(true);
@@ -785,6 +859,87 @@ describe('the keyboard (UX §7)', () => {
   });
 });
 
+describe('the panel’s list is one Tab stop, as the feed is (D-168)', () => {
+  const linked = (): ThreadPage => ({
+    data: [
+      reply(3, { content: 'see https://example.com/three' }),
+      reply(4, { content: 'and https://example.com/four' }),
+    ],
+    nextCursor: null,
+  });
+  const named = (stop: Element | null): string =>
+    stop === null
+      ? 'nothing'
+      : stop.matches('[data-message-row]')
+        ? `row ${stop.getAttribute('data-message-id') ?? ''}`
+        : stop.matches('textarea')
+          ? 'composer'
+          : (stop.getAttribute('aria-label') ?? stop.textContent.trim());
+  const tab = (shift = false): string => {
+    let reached: HTMLElement | null = null;
+    act(() => {
+      reached = pressTab(shift);
+    });
+    return named(reached);
+  };
+  const walkToComposer = (): string[] => {
+    const walk: string[] = [];
+    for (let press = 0; press < 20; press++) {
+      const stop = tab();
+      walk.push(stop);
+      if (stop === 'composer') break;
+    }
+    return walk;
+  };
+
+  test('from Close, Tab reaches the root, its controls, Resolve and the reply box; no reply’s link is on the way', async () => {
+    const view = await mount({ thread: () => Promise.resolve(linked()) });
+    await showThread(view);
+    const panel = sectionOf(view);
+    const list = panel.querySelector('[data-message-list]');
+    if (list === null) throw new Error('the panel has no list');
+    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-message-row]'));
+    expect(tabOrder(list).filter((stop) => stop.matches('[data-message-row]'))).toEqual(
+      rows.slice(0, 1),
+    );
+    act(() => {
+      within(panel).getByRole('button', { name: 'Close thread' }).focus();
+    });
+    expect(tab()).toBe(`row ${messageIdAt(ROOT)}`);
+    const walk = walkToComposer();
+    expect(walk.at(-1)).toBe('composer');
+    expect(walk.some((stop) => stop.startsWith('Resolve'))).toBe(true);
+    expect(walk.some((stop) => stop.startsWith('https://example.com'))).toBe(false);
+    expect(walk.some((stop) => stop.startsWith('row'))).toBe(false);
+    view.unmountAll();
+  });
+
+  test('↓ moves to a reply, whose link Tab then reaches, and the row it left is where Shift+Tab comes back', async () => {
+    const view = await mount({ thread: () => Promise.resolve(linked()) });
+    await showThread(view);
+    const [root] = within(sectionOf(view)).getAllByRole('article');
+    if (root === undefined) throw new Error('the panel has no root');
+    act(() => {
+      root.focus();
+    });
+    fireEvent.keyDown(root, { key: 'ArrowDown' });
+    const [, second] = within(sectionOf(view)).getAllByRole('article');
+    if (second === undefined) throw new Error('the panel has no reply');
+    expectFocusOn(second);
+    const walk = walkToComposer();
+    expect(walk[0]).toMatch(/^https:\/\/example.com\/three/);
+    expect(walk.some((stop) => stop.startsWith('https://example.com/four'))).toBe(false);
+    expect(walk.at(-1)).toBe('composer');
+    expect(tab(true)).toBe(`row ${messageIdAt(3)}`);
+    // A reply's link that is not the current row's still opens under the pointer: it is a link.
+    const four = within(sectionOf(view)).getByRole('link', { name: /example.com\/four/ });
+    expect(four.getAttribute('tabindex')).toBe('-1');
+    expect(four.getAttribute('href')).toBe('https://example.com/four');
+    await expectNoAxeViolations(sectionOf(view));
+    view.unmountAll();
+  });
+});
+
 describe('the feed and the panel keep their places', () => {
   test('opening a thread does not move the feed: nothing is pushed, so nothing is scrolled', async () => {
     const view = await mount(); // 1000 tall in a 400 box, the reader at the bottom: 600
@@ -991,6 +1146,228 @@ describe('the cache is what the screen shows', () => {
     });
     await showThread(view);
     expect(view.getByText('answer 3')).toBeDefined();
+    view.unmountAll();
+  });
+});
+
+describe('a thread open in front of the person is read (D-147)', () => {
+  /** The channels as the sidebar has them, with `api` holding what needs the person. */
+  const waitingInApi = (unreadMentionCount: number): ReturnType<typeof someChannels> =>
+    someChannels().map((channel) =>
+      channel.id === IDS.api
+        ? aChannel(IDS.api, 'api', {
+            state: { lastReadMessageId: messageIdAt(5), unreadCount: 1, unreadMentionCount },
+          })
+        : channel,
+    );
+
+  const recording = (): {
+    readonly calls: [string, string][];
+    readonly readThread: (rootId: string, id: string) => Promise<void>;
+  } => {
+    const calls: [string, string][] = [];
+    return {
+      calls,
+      readThread: (rootId, id): Promise<void> => {
+        calls.push([rootId, id]);
+        return Promise.resolve();
+      },
+    };
+  };
+
+  test('reads its replies up to the newest one the panel has, once', async () => {
+    const reads = recording();
+    const view = await mount({
+      channels: waitingInApi(1),
+      api: { readThread: reads.readThread },
+    });
+    await showThread(view);
+    expect(reads.calls).toEqual([[messageIdAt(ROOT), messageIdAt(4)]]);
+    view.unmountAll();
+  });
+
+  test('asks nothing when nothing in the channel needs the person', async () => {
+    const reads = recording();
+    const view = await mount({
+      channels: waitingInApi(0),
+      api: { readThread: reads.readThread },
+    });
+    await showThread(view);
+    expect(sectionOf(view)).toBeDefined();
+    expect(reads.calls).toEqual([]);
+    view.unmountAll();
+  });
+
+  test('a hidden page is not reading: the thread is read when it is shown', async () => {
+    const reads = recording();
+    const view = await mount({
+      channels: waitingInApi(1),
+      api: { readThread: reads.readThread },
+    });
+    act(() => {
+      view.feed.setPageVisible(false);
+    });
+    await showThread(view);
+    expect(reads.calls).toEqual([]);
+    act(() => {
+      view.feed.setPageVisible(true);
+    });
+    await settle();
+    expect(reads.calls).toEqual([[messageIdAt(ROOT), messageIdAt(4)]]);
+    view.unmountAll();
+  });
+
+  test('a read the server refused is not asked again in a loop', async () => {
+    let calls = 0;
+    const view = await mount({
+      channels: waitingInApi(1),
+      api: {
+        readThread: (): Promise<void> => {
+          calls += 1;
+          return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        },
+      },
+    });
+    await showThread(view);
+    await settle();
+    expect(calls).toBe(1);
+    view.unmountAll();
+  });
+});
+
+describe('following it (D-161)', () => {
+  const followButton = (view: ChannelView): HTMLElement =>
+    within(sectionOf(view)).getByRole('button', { name: 'Follow' });
+
+  /** A request the test answers when it chooses. */
+  const held = (): {
+    readonly promise: Promise<ThreadFollow>;
+    readonly answer: (value: ThreadFollow) => void;
+  } => {
+    let answer: (value: ThreadFollow) => void = () => undefined;
+    const promise = new Promise<ThreadFollow>((resolve) => {
+      answer = resolve;
+    });
+    return { promise, answer };
+  };
+
+  test('the header says whether the person follows the thread, as a toggle with one name', async () => {
+    const view = await mount({
+      api: { threadFollow: () => Promise.resolve({ following: true }) },
+    });
+    await showThread(view);
+    const button = followButton(view);
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(button.hasAttribute('disabled')).toBe(false);
+    await expectNoAxeViolations(view.container);
+    view.unmountAll();
+  });
+
+  test('until it is known the control is there and does nothing', async () => {
+    const view = await mount({
+      api: { threadFollow: () => new Promise<ThreadFollow>(() => undefined) },
+    });
+    await showThread(view);
+    expect(followButton(view).hasAttribute('disabled')).toBe(true);
+    view.unmountAll();
+  });
+
+  test('unfollowing paints at once, before the server answers, and keeps what the server says', async () => {
+    const asked: [string, boolean][] = [];
+    const request = held();
+    const view = await mount({
+      api: {
+        threadFollow: () => Promise.resolve({ following: true }),
+        setThreadFollow: (rootId, following) => {
+          asked.push([rootId, following]);
+          return request.promise;
+        },
+      },
+    });
+    await showThread(view);
+    await person().click(followButton(view));
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    expect(asked).toEqual([[messageIdAt(ROOT), false]]);
+    await act(async () => {
+      request.answer({ following: false });
+      await Promise.resolve();
+    });
+    await settle();
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    view.unmountAll();
+  });
+
+  test('following a thread one never wrote in asks the server to follow it', async () => {
+    const asked: boolean[] = [];
+    const view = await mount({
+      api: {
+        setThreadFollow: (_rootId, following) => {
+          asked.push(following);
+          return Promise.resolve({ following });
+        },
+      },
+    });
+    await showThread(view);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    await person().click(followButton(view));
+    await settle();
+    expect(asked).toEqual([true]);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    view.unmountAll();
+  });
+
+  test('a refusal puts it back and says so, with Retry when trying again could help', async () => {
+    let attempts = 0;
+    const view = await mount({
+      api: {
+        threadFollow: () => Promise.resolve({ following: true }),
+        setThreadFollow: (_rootId, following) => {
+          attempts += 1;
+          return attempts === 1
+            ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+            : Promise.resolve({ following });
+        },
+      },
+    });
+    await showThread(view);
+    await person().click(followButton(view));
+    await settle();
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    expect(view.getByText(/You are still following this thread\./)).toBeDefined();
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(attempts).toBe(2);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    view.unmountAll();
+  });
+
+  test('a reply of the person’s own reads the state again: answering a thread follows it', async () => {
+    let reads = 0;
+    const view = await mount({
+      api: {
+        threadFollow: () => {
+          reads += 1;
+          return Promise.resolve({ following: reads > 1 });
+        },
+      },
+    });
+    connect(view);
+    await showThread(view);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('false');
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: reply(6, { content: 'mine', sender: ME }),
+      ts: 1,
+    });
+    expect(reads).toBe(2);
+    expect(followButton(view).getAttribute('aria-pressed')).toBe('true');
+    // Somebody else's reply changes nothing about whether this person follows.
+    await arrive(view, {
+      event: 'MESSAGE_CREATED',
+      data: reply(7, { content: 'theirs' }),
+      ts: 2,
+    });
+    expect(reads).toBe(2);
     view.unmountAll();
   });
 });

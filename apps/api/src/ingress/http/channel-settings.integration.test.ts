@@ -256,7 +256,7 @@ describe('integration: renaming a channel and setting its topic', () => {
         topic: 'mine now',
       });
       expect(outside.status).toBe(403);
-      expect(await outside.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+      expect(await outside.json()).toMatchObject({ error: { code: 'NOT_A_CHANNEL_MEMBER' } });
 
       const dm = await aDirectMessage(world);
       const direct = await world.call('PATCH', `/api/channels/${dm}`, world.owner, { name: 'x' });

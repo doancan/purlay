@@ -1,35 +1,44 @@
 /**
  * The channel's header: its name, what it is for, and the two ways to look at it —
- * the feed and the workspace's open questions, with their live count (`UX.md` §2, §4.4).
+ * the feed and its open questions, with their live count (`UX.md` §2, §4.4).
  *
  * A channel's name is set in the mono face with a `#`, like the sidebar's (the approved
  * prototype's choice: this is where code gets pasted). A direct message has no name, so it
  * shows the other person; a note to oneself says so. The count beside "Open questions" is
- * the same number the sidebar shows and comes from the same cache entry
- * (`use-open-count.ts`), so the two cannot differ.
+ * this channel's share of the number the sidebar shows, counted from the same cache entry
+ * (`use-open-count.ts`), so the two cannot disagree.
  */
-import { handleOf, nameOf } from '../messages/author';
-import { useState } from 'react';
+import { nameOf } from '../messages/author';
+import { lazy, Suspense, useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import type { Channel } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
+import { narrowedTo } from '../../router/routes';
 import { Avatar } from '../../ui/avatar';
+import { GroupFace } from '../conversations/group-face';
 import { cn } from '../../ui/cn';
 import { useOpenCount } from '../questions/use-open-count';
 import { NavToggle } from '../shell/nav';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { IconButton } from '../../ui/icon-button';
-import { AddPeopleDialog } from './add-people';
-import { ChannelDetailsDialog } from './channel-details';
 import { NotificationLevelMenu } from './notification-level-menu';
-import { GroupDetailsDialog } from '../conversations/group-details';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
 import { StarToggle } from './star-toggle';
 import { useOnline } from '../../realtime/realtime-provider';
 import { VisuallyHidden } from '../../ui/visually-hidden';
+
+/**
+ * Channel details, a chunk of its own (D-49, #687): opened by a click on the name a few times a
+ * week, it is not paid for by every first load. Mounted on first opening and kept, so it closes as a
+ * dialog closes and opens again at once.
+ */
+const ChannelDetailsDialog = lazy(async () => ({
+  default: (await import('./channel-details')).ChannelDetailsDialog,
+}));
 
 /** One segment of the header's two-way control: the feed, or the open questions. */
 export const segmentClasses =
@@ -63,8 +72,9 @@ export const useChannelTitle = (channel: Channel): string => {
       ? channel.peers.map((person) => nameOf(person, t('user.erased'))).join(', ')
       : (channel.name ?? '');
   }
-  const handle = handleOf(peer, t('user.erased'));
-  return peer.id === user.id ? t('feed.selfDm', { name: handle }) : handle;
+  // A person is named by their name, as the sidebar names them; the handle is their profile's.
+  const name = nameOf(peer, t('user.erased'));
+  return peer.id === user.id ? t('feed.selfDm', { name }) : name;
 };
 
 export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
@@ -72,12 +82,21 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const { workspace } = useWorkspace();
   const { user: me } = useSession();
   const title = useChannelTitle(channel);
-  const open = useOpenCount(workspace.id);
+  // This channel's open questions, not the workspace's: the number beside its name is its own.
+  const open = useOpenCount(workspace.id, channel.id);
   const direct = channel.type === 'direct_message';
   // A member brings people in (D-104); a direct message is between its two people.
   const canAdd = !direct && channel.state !== null;
   const [adding, setAdding] = useState(false);
-  const [details, setDetails] = useState(false);
+  const [details, setDetailsOpen] = useState(false);
+  const [detailsOpened, setDetailsOpened] = useState(false);
+  const setDetails = (open: boolean): void => {
+    if (open) setDetailsOpened(true);
+    setDetailsOpen(open);
+  };
+  const group = direct && channel.peers.length >= 2;
+  // Adding people and a group's details are in the deferred chunk (D-163).
+  const deferred = useDeferred([adding, setAdding], [group && details, setDetailsOpen]);
   const peerOnline = useOnline(channel.peer?.id ?? '', me.id);
   const openText =
     open !== null && open.count > 0 ? `${format.number(open.count)}${open.more ? '+' : ''}` : null;
@@ -85,7 +104,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
     openText === null ? t('header.questions') : `${t('header.questions')} ${openText}`;
 
   return (
-    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-4">
+    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline max-narrow:gap-1 border-border-subtle px-4">
       <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
         <NavToggle />
         {direct && channel.peer !== null ? (
@@ -95,6 +114,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             size="sm"
             online={peerOnline}
           />
+        ) : group ? (
+          // A group shows the faces it is named by, as its sidebar row does (D-167).
+          <GroupFace peers={channel.peers} surface="surface" />
         ) : (
           <HeaderTile>
             <Icon
@@ -102,10 +124,10 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             />
           </HeaderTile>
         )}
-        {direct && channel.peers.length >= 2 ? (
+        {group ? (
           <>
             {/* A group's people open its details (D-127); a conversation of two has none. */}
-            <h1 className="min-w-0 shrink-0 truncate text-title text-ink">
+            <h1 className="min-w-0 truncate text-title text-ink">
               <button
                 type="button"
                 className="max-w-full truncate rounded-sm hover:text-accent-text"
@@ -116,12 +138,14 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
                 {title}
               </button>
             </h1>
-            <GroupDetailsDialog
-              channel={channel}
-              title={title}
-              open={details}
-              onOpenChange={setDetails}
-            />
+            {deferred !== null && (
+              <deferred.GroupDetailsDialog
+                channel={channel}
+                title={title}
+                open={details}
+                onOpenChange={setDetails}
+              />
+            )}
           </>
         ) : direct && channel.peer !== null ? (
           <>
@@ -130,11 +154,11 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             {peerOnline === true && <VisuallyHidden>{t('presence.online')}</VisuallyHidden>}
           </>
         ) : direct ? (
-          <h1 className="shrink-0 truncate text-title text-ink">{title}</h1>
+          <h1 className="min-w-0 truncate text-title text-ink">{title}</h1>
         ) : (
           <>
             {/* The name opens the channel's details (D-123); the heading's name stays the channel's. */}
-            <h1 className="min-w-0 shrink-0 truncate text-title text-ink">
+            <h1 className="min-w-0 truncate text-title text-ink">
               <button
                 type="button"
                 className="max-w-full truncate rounded-sm hover:text-accent-text"
@@ -154,43 +178,52 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
               type="button"
               tabIndex={-1}
               aria-hidden="true"
-              className="truncate text-left text-label text-ink-muted hover:text-ink max-narrow:hidden"
+              className="min-w-0 flex-1 basis-0 truncate text-left text-label text-ink-muted hover:text-ink max-narrow:hidden"
               onClick={() => {
                 setDetails(true);
               }}
             >
               {channel.topic ?? t('header.noTopic')}
             </button>
-            <ChannelDetailsDialog channel={channel} open={details} onOpenChange={setDetails} />
+            {detailsOpened && (
+              <Suspense fallback={null}>
+                <ChannelDetailsDialog channel={channel} open={details} onOpenChange={setDetails} />
+              </Suspense>
+            )}
           </>
         )}
       </div>
-      <nav aria-label={t('header.views')} className={segmentTrackClasses}>
-        <Link
-          to="channel"
-          params={{ slug: workspace.slug, channelId: channel.id }}
-          aria-current="page"
-          className={cn(segmentClasses, activeSegmentClasses)}
-        >
-          {t('header.feed')}
-        </Link>
-        <Link
-          to="questions"
-          params={{ slug: workspace.slug }}
-          aria-label={questionsName}
-          className={cn(segmentClasses, 'text-ink-muted')}
-        >
-          {/* On a narrow window the glyph stands for the words, which the link's name still says:
+      {/* A channel always offers its open questions — they are the product's argument; a
+      conversation only while it has some, where an empty view would be one more control. */}
+      {(!direct || openText !== null) && (
+        <nav aria-label={t('header.views')} className={segmentTrackClasses}>
+          <Link
+            to="channel"
+            params={{ slug: workspace.slug, channelId: channel.id }}
+            aria-current="page"
+            className={cn(segmentClasses, activeSegmentClasses)}
+          >
+            {t('header.feed')}
+          </Link>
+          <Link
+            to="questions"
+            params={{ slug: workspace.slug }}
+            search={narrowedTo(channel.id)}
+            aria-label={questionsName}
+            className={cn(segmentClasses, 'text-ink-muted')}
+          >
+            {/* On a narrow window the glyph stands for the words, which the link's name still says:
           a phone's width cannot give them room and keep the channel's name readable (#624). */}
-          <span aria-hidden="true" className="hidden max-narrow:inline-flex">
-            <Icon name="open-question" />
-          </span>
-          <span className="max-narrow:hidden">{t('header.questions')}</span>
-          {openText !== null && (
-            <span className="font-mono text-caption text-warning-text">{openText}</span>
-          )}
-        </Link>
-      </nav>
+            <span aria-hidden="true" className="hidden max-narrow:inline-flex">
+              <Icon name="open-question" />
+            </span>
+            <span className="max-narrow:hidden">{t('header.questions')}</span>
+            {openText !== null && (
+              <span className="font-mono text-caption text-warning-text">{openText}</span>
+            )}
+          </Link>
+        </nav>
+      )}
       {!direct && <StarToggle channel={channel} />}
       <PanelControls direct={direct} channel={channel} />
       <NotificationLevelMenu channel={channel} />
@@ -203,7 +236,9 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
               setAdding(true);
             }}
           />
-          <AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
+          {deferred !== null && (
+            <deferred.AddPeopleDialog channel={channel} open={adding} onOpenChange={setAdding} />
+          )}
         </>
       )}
     </header>

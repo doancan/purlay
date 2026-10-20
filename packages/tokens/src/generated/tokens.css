@@ -132,6 +132,7 @@
   --success-text: #4ade80;
   --danger-subtle: #2a1515;
   --warning-subtle: #2a2010;
+  --match: #5a4512;
   --success-subtle: #12261a;
   --scrim: rgba(0, 0, 0, 0.55);
   --syntax-keyword: #c4c4ee;
@@ -185,6 +186,7 @@
   --success-text: #15803d;
   --danger-subtle: #fef2f2;
   --warning-subtle: #fffbeb;
+  --match: #fde68a;
   --success-subtle: #f0fdf4;
   --scrim: rgba(24, 24, 27, 0.4);
   --syntax-keyword: #2c2c54;
@@ -208,6 +210,9 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -221,13 +226,16 @@
   --size-feed-max: 760px;
   --size-narrow: 900px;
   --size-attachment: 320px;
-  --size-control: 28px;
+  --size-control: 32px;
   --size-touch: 44px;
   --size-header: 48px;
   --size-badge: 18px;
   --size-dot: 8px;
   --size-code-clamp: 280px;
   --size-dialog: 480px;
+  --size-settings: 720px;
+  --size-field: 320px;
+  --size-dialog-lg: 640px;
   --size-palette: 560px;
   --size-palette-list: 360px;
   --size-toast: 360px;

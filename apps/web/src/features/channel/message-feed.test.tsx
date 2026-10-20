@@ -35,7 +35,8 @@ import { ACK_DEADLINE_MS } from '../../realtime/engine';
 import * as Content from '../content/render-content';
 import { SEEK_LIMIT_PAGES } from './message-feed';
 import { READ_DEBOUNCE_MS } from './use-mark-read';
-import { expectFocusOn } from '../../testing/focus';
+import { expectNoAxeViolations } from '../../testing/axe';
+import { expectFocusOn, pressTab, tabOrder } from '../../testing/focus';
 
 installDom();
 
@@ -310,6 +311,28 @@ describe('what arrives while the reader is somewhere', () => {
     view.unmountAll();
   });
 
+  test('the late report of our own move to the bottom, after the list grew, keeps the reader there', async () => {
+    // A picture drawn a frame after the feed went to the bottom: the browser reports that scroll
+    // only once the list is already taller, before the resize is heard (seen live, 1 send in 3).
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300;
+    scrollTo(view, BOTTOM); // where the bottom was; nothing moved upward
+    expect(view.metrics.assigned).toContain(900);
+    view.unmountAll();
+  });
+
+  test('a scroll upward after the list grew is the reader leaving the bottom', async () => {
+    const view = await mountChannel({ messages: page(first) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300;
+    scrollTo(view, BOTTOM - 200);
+    expect(view.metrics.assigned).toEqual([]);
+    view.unmountAll();
+  });
+
   test('a box that changes size before a scroll up is reported leaves the reader alone', async () => {
     const view = await mountChannel({ messages: page(first) });
     open(view);
@@ -404,6 +427,22 @@ describe('a message somebody revised', () => {
     expect(view.getByText('better words')).toBeDefined();
     expect(view.queryByText('message 1')).toBeNull();
     expect(view.getByText('edited')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('a reader at the bottom stays there when the last message grows in place', async () => {
+    // A message that changes without a newer one arriving — its pictures drawn, its words edited
+    // longer — makes the list taller; the reader at the bottom must not be left above it (#feed).
+    const original = aMessage(1, { sender: BOB });
+    const view = await mountChannel({ messages: page([original]) });
+    open(view);
+    view.metrics.assigned.length = 0;
+    view.metrics.scrollHeight = 1300; // the revised message is 300px taller
+    await revise(view, original, { content: 'a much longer message', editedAt: EDITED }, 2);
+    act(() => {
+      view.feed.resize();
+    });
+    expect(view.metrics.assigned).toContain(900);
     view.unmountAll();
   });
 
@@ -838,6 +877,29 @@ describe('a send on its way', () => {
     view.unmountAll();
   });
 
+  test('a send refused because the person is not in the channel says so, and how to get in (D-156)', async () => {
+    const view = await mountChannel({ messages: page([aMessage(1, { sender: BOB })]) });
+    open(view);
+    let id = '';
+    act(() => {
+      id = view.engine().send({ channelId: IDS.api, content: 'in flight' });
+    });
+    act(() => {
+      view.world.sockets.deliver({
+        event: 'ERROR',
+        data: { code: 'NOT_A_CHANNEL_MEMBER', message: 'Join the channel to write in it.' },
+        refId: id,
+        ts: 1,
+      });
+    });
+    expect(view.getByText('Failed to send')).toBeDefined();
+    expect(
+      view.getByText('You are not in this channel. Join it to write here, then try again.'),
+    ).toBeDefined();
+    expect(view.getByRole('button', { name: 'Retry' })).toBeDefined();
+    view.unmountAll();
+  });
+
   test("Delete takes a failed send away, and the reason is shown in words, not the server's", async () => {
     const view = await mountChannel({ messages: page([aMessage(1, { sender: BOB })]) });
     open(view);
@@ -968,7 +1030,7 @@ describe('the keyboard', () => {
 
   test('a row has a name a screen reader can use, and the feed is a feed', async () => {
     const view = await mountChannel({ messages: page(three) });
-    expect(rowsOf(view)[0]?.getAttribute('aria-label')).toContain('alice');
+    expect(rowsOf(view)[0]?.getAttribute('aria-label')).toContain('Alice');
     expect(view.getByRole('feed', { name: 'Messages in api' }).getAttribute('aria-busy')).toBe(
       'false',
     );
@@ -991,6 +1053,148 @@ describe('the keyboard', () => {
     });
     press(b, 'Escape');
     expectFocusOn(b);
+    view.unmountAll();
+  });
+});
+
+describe('the feed is one Tab stop (D-168)', () => {
+  // Every kind of control a message holds, in the rows above the newest: a link, a reaction, a
+  // code block's buttons and the block, a thread's line.
+  const busy = (): Message[] => [
+    aMessage(1, {
+      content: 'see https://example.com/a for it',
+      reactions: [{ emoji: '👍', userIds: [BOB.id] }],
+    }),
+    aMessage(2, {
+      sender: BOB,
+      content: '```ts\nconst a = 1;\n```',
+      thread: { replyCount: 2, lastReplyAt: WHEN, resolvedAt: null, resolvedBy: null },
+    }),
+    aMessage(3, { sender: BOB, content: 'the newest, with a link https://example.com/c' }),
+  ];
+  const rowsOf = (view: ChannelView): HTMLElement[] =>
+    Array.from(view.container.querySelectorAll<HTMLElement>('[data-message-row]'));
+  const describeStop = (stop: Element | null): string =>
+    stop === null
+      ? 'nothing'
+      : stop.matches('[data-message-row]')
+        ? 'row'
+        : stop.matches('textarea')
+          ? 'composer'
+          : (stop.getAttribute('aria-label') ?? stop.textContent.trim());
+  const tab = (shift = false): string => {
+    let reached: HTMLElement | null = null;
+    act(() => {
+      reached = pressTab(shift);
+    });
+    return describeStop(reached);
+  };
+  const feedStops = (view: ChannelView): HTMLElement[] =>
+    tabOrder().filter((stop) => view.getByRole('feed').contains(stop));
+
+  test('from the header, Tab reaches the newest row, and the next Tab leaves it: no control of another row is on the way', async () => {
+    const view = await mountChannel({ messages: page(busy()) });
+    const [, , newest] = rowsOf(view) as [HTMLElement, HTMLElement, HTMLElement];
+    // Nothing focused in the feed: one stop in it, the newest row.
+    expect(feedStops(view)).toEqual([newest]);
+    // From the header's last control.
+    const header = view.getByRole('heading', { level: 1 }).closest('header');
+    const last = header === null ? undefined : tabOrder(header).at(-1);
+    if (last === undefined) throw new Error('the header has no control');
+    act(() => {
+      last.focus();
+    });
+    expect(tab()).toBe('row');
+    expectFocusOn(newest);
+    // Its own link, then its bar, then out to the composer.
+    const walk: string[] = [];
+    for (let press = 0; press < 10; press++) {
+      const stop = tab();
+      walk.push(stop);
+      if (stop === 'composer') break;
+    }
+    expect(walk[0]).toMatch(/^https:\/\/example.com\/c/);
+    expect(walk.at(-1)).toBe('composer');
+    expect(walk).not.toContain('Copy code');
+    expect(walk.some((stop) => stop.startsWith('👍'))).toBe(false);
+    for (const stop of walk.slice(0, -1)) expect(stop).not.toBe('row');
+    // Shift+Tab from the composer comes back to the row, not to the last control it passed.
+    expect(tab(true)).toBe('row');
+    expectFocusOn(newest);
+    view.unmountAll();
+  });
+
+  test('↑ moves to another row, and Tab then walks that row’s controls, only that row’s', async () => {
+    const view = await mountChannel({ messages: page(busy()) });
+    const [first, second, newest] = rowsOf(view) as [HTMLElement, HTMLElement, HTMLElement];
+    act(() => {
+      newest.focus();
+    });
+    fireEvent.keyDown(newest, { key: 'ArrowUp' });
+    expectFocusOn(second);
+    // The code block's buttons, the block itself and the thread's line are this row's stops.
+    const inSecond = feedStops(view).filter((stop) => second.contains(stop) && stop !== second);
+    const named = inSecond.map(describeStop);
+    expect(named).toContain('Copy code');
+    expect(named).toContain('ts, 1 line');
+    expect(feedStops(view).some((stop) => first.contains(stop))).toBe(false);
+    expect(feedStops(view).some((stop) => newest.contains(stop))).toBe(false);
+    fireEvent.keyDown(second, { key: 'ArrowUp' });
+    expectFocusOn(first);
+    const walk: string[] = [];
+    for (let press = 0; press < 12; press++) {
+      const stop = tab();
+      walk.push(stop);
+      if (stop === 'composer') break;
+    }
+    expect(walk[0]).toMatch(/^https:\/\/example.com\/a/);
+    expect(walk.some((stop) => stop.startsWith('👍'))).toBe(true);
+    expect(walk).not.toContain('Copy code');
+    expect(walk.at(-1)).toBe('composer');
+    // And the row the keyboard left is the one Tab comes back to.
+    expect(tab(true)).toBe('row');
+    expectFocusOn(first);
+    view.unmountAll();
+  });
+
+  test('a control of a row that is not the current one still answers the pointer', async () => {
+    const calls: string[] = [];
+    const view = await mountChannel({
+      messages: page(busy()),
+      api: {
+        unreact: (_id, emoji) => {
+          calls.push(`unreact ${emoji}`);
+          return Promise.resolve({ reactions: [] });
+        },
+        react: (_id, emoji) => {
+          calls.push(`react ${emoji}`);
+          return Promise.resolve({ reactions: [{ emoji, userIds: [BOB.id, ME.id] }] });
+        },
+      },
+    });
+    const [first] = rowsOf(view) as [HTMLElement];
+    const chip = Array.from(first.querySelectorAll('button')).find((b) =>
+      (b.getAttribute('aria-label') ?? '').startsWith('👍'),
+    );
+    const link = first.querySelector('a[href="https://example.com/a"]');
+    if (chip === undefined || link === null) throw new Error('the first row was not drawn whole');
+    expect(chip.getAttribute('tabindex')).toBe('-1');
+    expect(link.getAttribute('tabindex')).toBe('-1');
+    // Still a link with its address, still a named button: browse mode and a click both reach them.
+    expect(link.closest('[inert], [aria-hidden="true"]')).toBeNull();
+    fireEvent.click(chip);
+    await settle();
+    expect(calls).toEqual(['react 👍']);
+    view.unmountAll();
+  });
+
+  test('the feed with its rows out of the Tab order passes the accessibility audit', async () => {
+    const view = await mountChannel({ messages: page(busy()) });
+    await expectNoAxeViolations(view.getByRole('feed'));
+    act(() => {
+      rowsOf(view)[0]?.focus();
+    });
+    await expectNoAxeViolations(view.getByRole('feed'));
     view.unmountAll();
   });
 });

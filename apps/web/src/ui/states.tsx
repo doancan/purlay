@@ -34,7 +34,7 @@ export const EmptyState = ({
 }: EmptyStateProps): React.JSX.Element => (
   <section className="flex flex-col items-start gap-2 px-4 py-8">
     <Title className="text-display text-ink">{title}</Title>
-    <p className="max-w-feed text-body text-ink-muted">{body}</p>
+    <p className="max-w-feed text-balance text-body text-ink-muted">{body}</p>
     {action}
   </section>
 );
@@ -77,7 +77,7 @@ export const GlyphEmptyState = ({
       <Icon name={glyph} size="lg" />
     </span>
     <Title className="text-title text-ink">{title}</Title>
-    <p className="text-body text-ink-muted">{body}</p>
+    <p className="text-balance text-body text-ink-muted">{body}</p>
   </section>
 );
 
@@ -100,7 +100,7 @@ export const ErrorState = ({
       <Icon name="failed" />
       <h2 className="text-label">{title}</h2>
     </div>
-    <p className="max-w-feed text-body text-ink-muted">{body}</p>
+    <p className="max-w-feed text-balance text-body text-ink-muted">{body}</p>
     <Button onClick={onRetry}>{retryLabel}</Button>
   </section>
 );

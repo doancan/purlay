@@ -81,6 +81,7 @@ describe('the single-value reads', () => {
           user: { ...user, email: 'a@example.test' },
           profile: NO_PROFILE,
           memberships: [],
+          mayCreateWorkspace: true,
         });
       },
       channels: (workspaceId) => {

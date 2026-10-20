@@ -2,10 +2,11 @@
  * `/` — somewhere to go, or somewhere to start.
  *
  * A person with a workspace is sent to the first one (`replace`, so Back does not
- * land on a page that only redirects). A person with none sees why, and — because a
- * workspace is the one thing the API lets anybody create — a form to make the first, on a card
- * with the product's mark like the sign-in screen it follows (D-100). The same form is the
- * workspace menu's **Create workspace…**, for a person who has one already (D-124).
+ * land on a page that only redirects). A person with none sees why, on a card with the product's
+ * mark like the sign-in screen it follows (D-100): with a form to make the first where this server
+ * would let them, and otherwise told to ask for an invitation — never a form that would be refused
+ * (D-155). The same form is the workspace menu's **Create workspace…**, for a person who has one
+ * already and may make another (D-124).
  */
 import { WORKSPACE_NAME_MAX } from '@purlay/types';
 import { useDescribeFailure } from '../../data/failure';
@@ -16,6 +17,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { LogoMark } from './notice';
 import { TextField } from '../../ui/text-field';
@@ -37,11 +39,14 @@ interface CreateWorkspaceProps {
   readonly framed?: boolean;
   /** Made: the dialog closes. The page goes to the new workspace either way. */
   readonly onCreated?: () => void;
+  /** In a dialog: Cancel beside the submit, at the right, as every other dialog's footer is. */
+  readonly onCancel?: () => void;
 }
 
 export const CreateWorkspace = ({
   framed = true,
   onCreated,
+  onCancel,
 }: CreateWorkspaceProps): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
@@ -72,7 +77,10 @@ export const CreateWorkspace = ({
       navigate(href('workspace', { slug: workspace.slug }), { replace: framed });
     } catch (failure) {
       setBusy(false);
-      if (isApiError(failure) && failure.code === 'WORKSPACE_SLUG_TAKEN') {
+      if (isApiError(failure) && failure.code === 'FORBIDDEN') {
+        // The server's rule moved under the form — the first workspace made a moment ago (D-155).
+        setError({ field: 'form', message: t('workspace.create.notAllowed') });
+      } else if (isApiError(failure) && failure.code === 'WORKSPACE_SLUG_TAKEN') {
         setError({ field: 'slug', message: t('workspace.create.taken') });
       } else if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
         // Said under the field the server named: a refused name is not an address problem.
@@ -137,7 +145,8 @@ export const CreateWorkspace = ({
           {error.message}
         </p>
       )}
-      <div>
+      <div className={cn(onCancel !== undefined && 'flex justify-end gap-2')}>
+        {onCancel !== undefined && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
         <Button type="submit" variant="primary" busy={busy}>
           {t('workspace.create.submit')}
         </Button>
@@ -148,7 +157,7 @@ export const CreateWorkspace = ({
 
 export const Home = (): React.JSX.Element | null => {
   const { t } = useI18n();
-  const { memberships } = useSession();
+  const { memberships, mayCreateWorkspace } = useSession();
   const { navigate } = useRoute();
   const first = memberships[0]?.workspace.slug;
   // Back from signing in with an invitation in hand: that is where the person was going (D-115).
@@ -166,11 +175,20 @@ export const Home = (): React.JSX.Element | null => {
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
       <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
         <LogoMark />
-        <section className="flex flex-col gap-2">
-          <h1 className="text-display">{t('workspace.none.title')}</h1>
-          <p className="text-body text-ink-muted">{t('workspace.none.body')}</p>
-        </section>
-        <CreateWorkspace />
+        {mayCreateWorkspace ? (
+          <>
+            <section className="flex flex-col gap-2">
+              <h1 className="text-display">{t('workspace.none.title')}</h1>
+              <p className="text-body text-ink-muted">{t('workspace.none.body')}</p>
+            </section>
+            <CreateWorkspace />
+          </>
+        ) : (
+          <section className="flex flex-col gap-2">
+            <h1 className="text-display">{t('workspace.closed.title')}</h1>
+            <p className="text-body text-ink-muted">{t('workspace.closed.body')}</p>
+          </section>
+        )}
       </div>
     </Main>
   );

@@ -11,6 +11,8 @@
  *   owner, or that it is the last.
  * - **A removed member loses the workspace's channels**: their memberships go, and the channels
  *   they could see are answered, for the caller to tell their sockets after the commit (D-85).
+ * - **Anybody may leave** (D-152): the same going as being removed, chosen by the person — except the
+ *   last owner, who hands the workspace on first (I-2).
  */
 import { sql, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
@@ -32,18 +34,23 @@ const forbidden = (): AppError =>
 const notFound = (): AppError =>
   new AppError({ code: 'USER_NOT_FOUND', message: 'That person is not in this workspace.' });
 
-/** The caller's and the target's roles as they are under the workspace's lock. */
-const rolesUnderLock = async (
-  executor: Executor,
-  context: WorkspaceContext,
-  userId: string,
-): Promise<{ caller: UserRole; target: UserRole }> => {
+/** Takes the workspace row's lock, which every change to its members waits on. */
+const lockWorkspace = async (executor: Executor, context: WorkspaceContext): Promise<void> => {
   await executor
     .selectFrom('workspaces')
     .select('id')
     .where('id', '=', context.workspaceId)
     .forUpdate()
     .execute();
+};
+
+/** The caller's and the target's roles as they are under the workspace's lock. */
+const rolesUnderLock = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  userId: string,
+): Promise<{ caller: UserRole; target: UserRole }> => {
+  await lockWorkspace(executor, context);
   const rows = await executor
     .selectFrom('workspace_members')
     .select(['user_id', 'role'])
@@ -127,6 +134,32 @@ export const changeRole = async (
   };
 };
 
+/**
+ * Takes a person out of the workspace and every channel in it, and answers the channels they could
+ * see — read by the one visibility rule before it stops being theirs.
+ */
+const takeOut = async (
+  executor: Executor,
+  workspaceId: string,
+  userId: string,
+): Promise<readonly string[]> => {
+  const theirs = await requireWorkspaceMembership(executor, userId, workspaceId);
+  const channelIds = await visibleChannelIds(executor, theirs);
+  await executor
+    .deleteFrom('channel_members')
+    .where('user_id', '=', userId)
+    .where('channel_id', 'in', (eb) =>
+      eb.selectFrom('channels').select('id').where('workspace_id', '=', workspaceId),
+    )
+    .execute();
+  await executor
+    .deleteFrom('workspace_members')
+    .where('workspace_id', '=', workspaceId)
+    .where('user_id', '=', userId)
+    .execute();
+  return channelIds;
+};
+
 /** Inside the caller's transaction. Answers the channels the removed member could see. */
 export const removeMember = async (
   executor: Executor,
@@ -139,21 +172,7 @@ export const removeMember = async (
   const { caller, target } = await rolesUnderLock(executor, context, userId);
   if (!mayManage(caller, target)) throw forbidden();
   if (target === 'owner') await keepAnOwner(executor, context);
-  // What they could see, by the one rule, before it stops being theirs.
-  const theirs = await requireWorkspaceMembership(executor, userId, context.workspaceId);
-  const channelIds = await visibleChannelIds(executor, theirs);
-  await executor
-    .deleteFrom('channel_members')
-    .where('user_id', '=', userId)
-    .where('channel_id', 'in', (eb) =>
-      eb.selectFrom('channels').select('id').where('workspace_id', '=', context.workspaceId),
-    )
-    .execute();
-  await executor
-    .deleteFrom('workspace_members')
-    .where('workspace_id', '=', context.workspaceId)
-    .where('user_id', '=', userId)
-    .execute();
+  const channelIds = await takeOut(executor, context.workspaceId, userId);
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
     actorUserId: context.userId,
@@ -161,6 +180,36 @@ export const removeMember = async (
     targetType: 'user',
     targetId: userId,
     metadata: { role: target },
+  });
+  return { channelIds };
+};
+
+/**
+ * Inside the caller's transaction: the caller leaves (D-152). Their role is read under the
+ * workspace's lock, as every change here reads it, so two owners leaving at once cannot leave none.
+ * Answers the channels they could see, for their own sockets to be told after the commit.
+ */
+export const leaveWorkspace = async (
+  executor: Executor,
+  clock: Clock,
+  context: WorkspaceContext,
+): Promise<{ readonly channelIds: readonly string[] }> => {
+  await lockWorkspace(executor, context);
+  const row = await executor
+    .selectFrom('workspace_members')
+    .select('role')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('user_id', '=', context.userId)
+    .executeTakeFirstOrThrow();
+  if (row.role === 'owner') await keepAnOwner(executor, context);
+  const channelIds = await takeOut(executor, context.workspaceId, context.userId);
+  await recordAudit(executor, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'member.left',
+    targetType: 'user',
+    targetId: context.userId,
+    metadata: { role: row.role },
   });
   return { channelIds };
 };

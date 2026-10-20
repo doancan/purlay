@@ -9,7 +9,7 @@ import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
-import { BOB, ME, aMessage } from '../../testing/fixtures';
+import { BOB, ME, aMessage, aSession } from '../../testing/fixtures';
 import { person } from '../../testing/user';
 import { expectFocusOn } from '../../testing/focus';
 
@@ -34,15 +34,89 @@ const open = (view: ChannelView): void => {
   });
 };
 
-describe('the menu', () => {
-  test("is on one's own message and not on anybody else's", async () => {
-    const view = await mountChannel({ messages: page([mine, theirs]) });
+/** The person as a plain member of the workspace, who moderates nothing. */
+const asMember = {
+  me: (): Promise<ReturnType<typeof aSession>> =>
+    Promise.resolve({
+      ...aSession(),
+      memberships: aSession().memberships.map((m) => ({ ...m, role: 'member' as const })),
+    }),
+};
+
+const items = (view: ChannelView): string[] =>
+  view.getAllByRole('menuitem').map((item) => item.textContent.replace(/E$/, ''));
+
+describe('the menu (D-150)', () => {
+  test("is on every message: Copy link, Copy text, Save and Pin on anybody's, Edit and Delete on one's own", async () => {
+    const view = await mountChannel({ messages: page([mine, theirs]), api: asMember });
     open(view);
-    expect(within(rowOf(view, mine)).getByRole('button', { name: 'More' })).toBeDefined();
-    expect(within(rowOf(view, theirs)).queryByRole('button', { name: 'More' })).toBeNull();
     await openMenu(view, mine);
-    expect(view.getByRole('menuitem', { name: /Edit/ })).toBeDefined();
-    expect(view.getByRole('menuitem', { name: /Delete/ })).toBeDefined();
+    expect(items(view)).toEqual([
+      'Copy link',
+      'Copy text',
+      'Save for later',
+      'Pin',
+      'Edit',
+      'Delete',
+    ]);
+    await expectNoAxeViolations(view.getByRole('menu'));
+    await person().keyboard('{Escape}');
+    await openMenu(view, theirs);
+    expect(items(view)).toEqual(['Copy link', 'Copy text', 'Save for later', 'Pin']);
+    view.unmountAll();
+  });
+
+  test('Copy text puts the words as written on the clipboard, and says so', async () => {
+    const copied: string[] = [];
+    const view = await mountChannel({
+      messages: page([theirs]),
+      copy: (text) => {
+        copied.push(text);
+        return Promise.resolve();
+      },
+    });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: /Copy text/ }));
+    expect(copied).toEqual(['from bob']);
+    expect(await view.findByText('Copied')).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('Copy text the browser refuses says so, and how to copy it instead', async () => {
+    const view = await mountChannel({
+      messages: page([theirs]),
+      copy: () => Promise.reject(new Error('clipboard blocked')),
+    });
+    open(view);
+    await openMenu(view, theirs);
+    await person().click(view.getByRole('menuitem', { name: /Copy text/ }));
+    expect(
+      await view.findByText("Couldn't copy. Select the text and copy it yourself."),
+    ).toBeDefined();
+    expect(view.queryByText('Copied')).toBeNull();
+    view.unmountAll();
+  });
+
+  test("an owner may delete anybody's message, and is told it is on the audit trail", async () => {
+    const asked: string[] = [];
+    const view = await mountChannel({
+      messages: page([theirs]),
+      api: {
+        deleteMessage: (id) => {
+          asked.push(id);
+          return Promise.resolve();
+        },
+      },
+    });
+    open(view);
+    await openMenu(view, theirs);
+    expect(view.queryByRole('menuitem', { name: /Edit/ })).toBeNull();
+    await person().click(view.getByRole('menuitem', { name: /Delete/ }));
+    const dialog = await view.findByRole('dialog', { name: 'Delete this message?' });
+    expect(dialog.textContent).toContain('on the audit trail');
+    await person().click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(asked).toEqual([theirs.id]);
     view.unmountAll();
   });
 });

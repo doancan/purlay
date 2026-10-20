@@ -132,7 +132,7 @@ describe('integration: declaring an incident', () => {
       const room = await aRoom(db, ['alice'], { outsiders: ['erin'] });
       const erinId = room.outsiders['erin']?.userId ?? '';
       const erin = await requireChannelById(db, erinId, room.channelId);
-      expect(await attempt(db, () => declared(db, erin))).toBe('FORBIDDEN');
+      expect(await attempt(db, () => declared(db, erin))).toBe('NOT_A_CHANNEL_MEMBER');
       // She can read it, though: seeing a public channel is seeing its incident.
       expect(await channelIncident(db, erin)).toBeNull();
 
@@ -232,7 +232,7 @@ describe('integration: changing an incident', () => {
       );
       expect(
         await attempt(db, () => changeIncident(db, clock, erin, id, { status: 'mitigating' })),
-      ).toBe('FORBIDDEN');
+      ).toBe('NOT_A_CHANNEL_MEMBER');
     });
   });
 });

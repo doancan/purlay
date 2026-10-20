@@ -1,8 +1,9 @@
 /**
  * A channel's pinned messages, in the panel beside its conversation (D-130, `UX.md` §2).
  *
- * Newest pin first, each with who said it and when, its words, and who pinned it; a reply opens its
- * thread here, in the panel's place, and a member lets a pin go from its row. What is listed is the
+ * Newest pin first, each with who said it and when, its words, and who pinned it; **Go to message**
+ * opens the message's address (D-149) — the feed around it, or a reply's thread in the panel's place —
+ * and a member lets a pin go from its row. What is listed is the
  * server's pins with what has been asked laid over them (`use-pin.ts`), so the row goes as Unpin is
  * pressed and comes back if it is refused. The states are the panel's own (§8): loading, failed
  * with Retry, a list that could not be brought up to date, and empty.
@@ -27,7 +28,9 @@ import {
   type PanelFocus,
 } from '../channel/panel-frame';
 import { useSidePanel } from '../channel/side-panel';
-import { useThreads } from '../threads/thread-context';
+import { messageHref } from '../../router/routes';
+import { useRoute } from '../../router/router-provider';
+import { useWorkspace } from '../shell/workspace';
 import { usePin, useShownPins } from './use-pin';
 import { authorOf } from '../messages/author';
 import { useMessageText } from '../content/github-event';
@@ -56,10 +59,10 @@ const PinRow = ({
 }): React.JSX.Element => {
   const { t, format } = useI18n();
   const textOf = useMessageText();
-  const threads = useThreads();
+  const { navigate } = useRoute();
+  const { workspace } = useWorkspace();
   const { canPin, toggle } = usePin(pin.message);
   const { message } = pin;
-  const parentId = message.parentId;
   const name = authorOf(message, t('user.erased')).displayName;
   return (
     <li className="flex flex-col gap-2 rounded-lg px-2 py-2 hover:bg-surface-200">
@@ -84,35 +87,32 @@ const PinRow = ({
           </span>
         </div>
       </div>
-      {(parentId !== null || canPin) && (
-        <div className="flex flex-wrap gap-2 pl-8">
-          {parentId !== null && (
-            <Button
-              variant="ghost"
-              aria-label={t('pins.threadOf', { name })}
-              onClick={() => {
-                threads.open(parentId);
-              }}
-            >
-              {t('pins.inThread')}
-            </Button>
-          )}
-          {canPin && (
-            <Button
-              variant="ghost"
-              glyph="unpin"
-              data-unpin=""
-              aria-label={t('pins.unpinOf', { name })}
-              onClick={(event) => {
-                focusAfter(event.currentTarget, focus);
-                toggle();
-              }}
-            >
-              {t('pins.unpin')}
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2 pl-8">
+        {/* The message's own address (D-149): the feed opens around it, or its thread does. */}
+        <Button
+          variant="ghost"
+          aria-label={t('pins.jumpTo', { name })}
+          onClick={() => {
+            navigate(messageHref(workspace.slug, message.channelId, message.id));
+          }}
+        >
+          {t('pins.jump')}
+        </Button>
+        {canPin && (
+          <Button
+            variant="ghost"
+            glyph="unpin"
+            data-unpin=""
+            aria-label={t('pins.unpinOf', { name })}
+            onClick={(event) => {
+              focusAfter(event.currentTarget, focus);
+              toggle();
+            }}
+          >
+            {t('pins.unpin')}
+          </Button>
+        )}
+      </div>
     </li>
   );
 };

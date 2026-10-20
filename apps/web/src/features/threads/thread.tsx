@@ -1,6 +1,6 @@
 /**
  * The thread panel (`UX.md` §4.2, D-122): one root's thread, on the right of the feed — a header
- * that names it and closes it, the root, the replies under an "N replies" rule, and the box to
+ * that names it, follows it (D-161) and closes it, the root, the replies under an "N replies" rule, and the box to
  * answer in at the bottom.
  *
  * **Beside the conversation, not instead of it.** On a wide window the panel is a fixed width
@@ -16,13 +16,23 @@
  * person sent but the server has not yet answered is in the list as `sending` or `failed` like any
  * message.
  *
+ * **A link to a reply opens here** (`?message=`, D-149): the feed opens its root's thread, and the
+ * panel reads on until the reply is in, brings it into view, marks it for a moment and focuses it.
+ *
  * A thread that is open but has no replies yet exists for one reason, the person pressed Reply,
  * and it holds the box to write in. A reply arriving near the end keeps the end in view (`UX.md`
  * §6); anywhere else the reader stays where they are.
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
-import { readingOrder, repliesOf, useMembers, useMessages, useThread } from '../../data/queries';
+import {
+  readingOrder,
+  repliesOf,
+  useChannels,
+  useMembers,
+  useMessages,
+  useThread,
+} from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useEngine, usePending } from '../../realtime/realtime-provider';
 import { Button } from '../../ui/button';
@@ -34,12 +44,15 @@ import { useNowMinute } from '../channel/now-minute';
 import { Composer } from '../composer/composer';
 import { useEditing } from '../messages/editing';
 import { MessageRow } from '../messages/message-row';
+import { LANDED_MS } from '../messages/message-link';
 import { handleRowKeys } from '../messages/row-keys';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
+import { FollowToggle } from './follow-toggle';
 import { useOpenThread, useThreads } from './thread-context';
 import { THREAD_PANEL_ID, ThreadStatus } from './thread-summary';
 import { buildReplies } from './thread-model';
+import { useReadThread } from './use-read-thread';
 
 /** A reply arriving this near the end of a thread, or less, keeps the end in view (`UX.md` §6). */
 const NEAR_END_PX = 80;
@@ -50,6 +63,8 @@ export interface ThreadPanelProps {
   readonly channelLabel: string;
   /** The channel's name, for the reply box's label. */
   readonly channelName: string;
+  /** The message a link names, when the feed is the window around it (D-149). */
+  readonly around?: string | null;
 }
 
 const ThreadPanelView = ({
@@ -57,6 +72,7 @@ const ThreadPanelView = ({
   channelId,
   channelLabel,
   channelName,
+  around = null,
 }: ThreadPanelProps & { readonly rootId: string }): React.JSX.Element | null => {
   const { t } = useI18n();
   const threads = useThreads();
@@ -69,7 +85,9 @@ const ThreadPanelView = ({
   const { workspace } = useWorkspace();
   const membersQuery = useMembers(workspace.id);
   const pendingAll = usePending();
-  const feed = useMessages(channelId);
+  // The feed's own pages — the window around a linked message, when there is one — so the root is
+  // found where the feed read it.
+  const feed = useMessages(channelId, around);
   const headingId = useId();
 
   const panel = useRef<HTMLElement>(null);
@@ -106,6 +124,52 @@ const ThreadPanelView = ({
     [membersQuery.data],
   );
   const items = useMemo(() => buildReplies({ replies, pending, me }), [replies, pending, me]);
+  const repliedByMe = useMemo(
+    () => replies.filter((m) => m.sender?.id === user.id && m.deletedAt === null).length,
+    [replies, user.id],
+  );
+
+  // ── Open in front of the person, the thread is read (D-147) ─────────────
+  const channels = useChannels(workspace.id);
+  const waiting =
+    (channels.data?.find((c) => c.id === channelId)?.state?.unreadMentionCount ?? 0) > 0;
+  const newestReplyId = useMemo(
+    () => replies.reduce<string | null>((n, r) => (n === null || r.id > n ? r.id : n), null),
+    [replies],
+  );
+  useReadThread({ workspaceId: workspace.id, rootId, newestReplyId, waiting, ports });
+  // ── A linked reply is read to, brought into view, marked and focused ────
+  const landing = useMemo(() => {
+    const target = feed.data?.pages.find((page) => page.target !== undefined)?.target;
+    return target?.parentId === rootId ? target.id : null;
+  }, [feed.data, rootId]);
+  const landedOnce = useRef(false);
+  const [landed, setLanded] = useState<string | null>(null);
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = query;
+  const readingTo =
+    landing !== null && !landedOnce.current && !replies.some((m) => m.id === landing);
+  useEffect(() => {
+    if (readingTo && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+      void fetchNextPage();
+    }
+  }, [readingTo, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
+  useLayoutEffect(() => {
+    if (landing === null || landedOnce.current) return;
+    const row = scroller.current?.querySelector<HTMLElement>(
+      `[data-message-row][data-message-id="${landing}"]`,
+    );
+    if (row === null || row === undefined) return;
+    landedOnce.current = true;
+    row.scrollIntoView({ block: 'center' });
+    row.focus({ preventScroll: true });
+    setLanded(landing);
+  });
+  useEffect(() => {
+    if (landed === null) return undefined;
+    return ports.schedule(() => {
+      setLanded(null);
+    }, LANDED_MS);
+  }, [landed, ports]);
 
   // ── Focus moves in when the panel opens, to where the person asked ──────
   // The heading is there at once, whatever the root's state — loading, failed, gone (#555); the reply
@@ -147,6 +211,16 @@ const ThreadPanelView = ({
     handleRowKeys(event, rows, editing.start);
   };
 
+  // ── One row in the Tab order, as in the feed (`row-stops.ts`, D-168) ────
+  // The row focus was last in, while it is still here; otherwise the root, the list's first row.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const tabbable =
+    focusedId !== null && items.some((item) => item.key === focusedId) ? focusedId : rootId;
+  const onFocusRow = (event: React.FocusEvent<HTMLElement>): void => {
+    const id = event.target.closest<HTMLElement>('[data-message-id]')?.dataset['messageId'];
+    if (id !== undefined) setFocusedId(id);
+  };
+
   const counted = t('thread.replies', { count: replyCount });
 
   return (
@@ -168,14 +242,17 @@ const ThreadPanelView = ({
           {t('thread.panel.title')}{' '}
           <span className="font-normal text-ink-muted">{`· ${channelLabel}`}</span>
         </h2>
-        <IconButton
-          label={t('thread.close')}
-          glyph="close"
-          shortcut="Esc"
-          onClick={() => {
-            threads.close();
-          }}
-        />
+        <div className="flex shrink-0 items-center gap-1">
+          {root !== undefined && <FollowToggle rootId={rootId} repliedByMe={repliedByMe} />}
+          <IconButton
+            label={t('thread.close')}
+            glyph="close"
+            shortcut="Esc"
+            onClick={() => {
+              threads.close();
+            }}
+          />
+        </div>
       </div>
 
       {root === undefined && rootFailed ? (
@@ -205,14 +282,19 @@ const ThreadPanelView = ({
           <Skeleton className="w-sidebar" />
         </LoadingStatus>
       ) : (
-        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <div
+          ref={scroller}
+          data-message-list=""
+          onFocusCapture={onFocusRow}
+          className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
+        >
           <MessageRow
             message={root}
             meId={user.id}
             nowMinute={nowMinute}
             members={members}
             dimmed={resolved}
-            tabIndex={-1}
+            tabIndex={tabbable === rootId ? 0 : -1}
           />
           {/* Wraps rather than widening the panel: on a narrow window the button takes a line of its own. */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-2">
@@ -277,10 +359,11 @@ const ThreadPanelView = ({
                 failure={item.failure}
                 grouped={item.grouped}
                 compact
+                landed={item.key === landed}
                 meId={user.id}
                 nowMinute={nowMinute}
                 members={members}
-                tabIndex={-1}
+                tabIndex={item.key === tabbable ? 0 : -1}
                 onRetry={engine.retry}
                 onDiscard={engine.discard}
               />

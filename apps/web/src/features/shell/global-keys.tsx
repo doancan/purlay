@@ -23,15 +23,14 @@
  * (`Cmd+K` focuses the address bar in some browsers, `Alt+←` is Back).
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useDeferred, usePreloadDeferred } from '../../app/deferred-door';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { displayName, inSidebarOrder, stepUnread } from '../palette/channels';
-import { CommandPalette } from '../palette/command-palette';
 import { isMacPlatform, type PlatformSource } from '../shortcuts/platform';
-import { ShortcutsDialog } from '../shortcuts/shortcuts-dialog';
 import { useSession } from '../session/session';
 import { useOverlay } from './overlay';
 import { useWorkspace } from './workspace';
@@ -50,6 +49,19 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
   const { overlay, setOverlay } = useOverlay();
   const [announcement, setAnnouncement] = useState('');
   const mac = useMemo(() => isMacPlatform(platform ?? navigator), [platform]);
+  // Both overlays are in the deferred chunk (D-163). A key has no pointer to preload it on, so it
+  // is fetched here, once the first screen is drawn and the browser is idle.
+  usePreloadDeferred();
+  const palette = (open: boolean): void => {
+    setOverlay(open ? 'palette' : null);
+  };
+  const shortcuts = (open: boolean): void => {
+    setOverlay(open ? 'shortcuts' : null);
+  };
+  const deferred = useDeferred(
+    [overlay === 'palette', palette],
+    [overlay === 'shortcuts', shortcuts],
+  );
 
   const slug = workspace.slug;
   const currentId = match.name === 'channel' ? match.params.channelId : null;
@@ -62,6 +74,13 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
       if (command && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setOverlay((now) => (now === 'palette' ? null : 'palette'));
+        return;
+      }
+      // Settings (D-146), where the platforms put an application's preferences.
+      if (command && !event.altKey && !event.shiftKey && event.key === ',') {
+        event.preventDefault();
+        setOverlay(null);
+        navigate(href('settingsHome', { slug }));
         return;
       }
       // `/` is a shifted key on some layouts, so Shift is not held against it.
@@ -100,19 +119,16 @@ export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => 
 
   return (
     <>
-      <CommandPalette
-        open={overlay === 'palette'}
-        onOpenChange={(open) => {
-          setOverlay(open ? 'palette' : null);
-        }}
-      />
-      <ShortcutsDialog
-        open={overlay === 'shortcuts'}
-        mac={mac}
-        onOpenChange={(open) => {
-          setOverlay(open ? 'shortcuts' : null);
-        }}
-      />
+      {deferred !== null && (
+        <>
+          <deferred.CommandPalette open={overlay === 'palette'} onOpenChange={palette} />
+          <deferred.ShortcutsDialog
+            open={overlay === 'shortcuts'}
+            mac={mac}
+            onOpenChange={shortcuts}
+          />
+        </>
+      )}
       <VisuallyHidden role="status" aria-live="polite">
         {announcement}
       </VisuallyHidden>

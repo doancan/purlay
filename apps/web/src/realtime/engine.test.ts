@@ -86,6 +86,7 @@ const channel = (id: string, over: Partial<Channel> = {}): Channel => ({
   starred: false,
   peer: null,
   peers: [],
+  memberCount: 1,
   ...over,
 });
 
@@ -489,6 +490,7 @@ describe('a reconnect', () => {
     w.client.setQueryData(keys.thread('root'), { pageParams: [], pages: [] });
     w.client.setQueryData(keys.unresolved(WS), { pageParams: [], pages: [] });
     w.client.setQueryData(keys.incident(CH), { incident: null });
+    w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
     w.engine.start();
     w.open();
     const waiting = w.engine.send({ channelId: CH, content: 'a' });
@@ -514,6 +516,8 @@ describe('a reconnect', () => {
     expect(w.client.getQueryState(keys.unresolved(WS))?.isInvalidated).toBe(true);
     // An incident moved in the gap told a socket that was down (D-137): read again.
     expect(w.client.getQueryState(keys.incident(CH))?.isInvalidated).toBe(true);
+    // So did a notification: its frame went to the person's topic while nobody listened.
+    expect(w.client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(true);
     expect(w.engine.store.getState().status).toBe('open');
   });
 
@@ -1063,6 +1067,19 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(w.client.getQueryState(keys.channels(IDS.browse))?.isInvalidated).toBe(false);
   });
 
+  test('a notification of any kind, a resolution included, asks the inbox again, in that workspace only (D-106)', () => {
+    const w = world();
+    w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
+    w.client.setQueryData(keys.notifications(IDS.browse), { pageParams: [], pages: [] });
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'NOTIFICATIONS_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    const stale = (workspaceId: string): boolean | undefined =>
+      w.client.getQueryState(keys.notifications(workspaceId))?.isInvalidated;
+    expect(stale(WS)).toBe(true);
+    expect(stale(IDS.browse)).toBe(false);
+  });
+
   test('saved messages changed elsewhere are read again, in that workspace only (D-128)', () => {
     const w = world();
     w.client.setQueryData([...keys.saved(WS), 'ids'], []);
@@ -1293,6 +1310,7 @@ describe('is the session still there', () => {
       user: { ...ME, email: 'a@example.test' },
       profile: NO_PROFILE,
       memberships: [],
+      mayCreateWorkspace: true,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

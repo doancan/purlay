@@ -58,6 +58,47 @@ test.describe('an attachment', () => {
       .toBeGreaterThan(0);
   });
 
+  test('a thumbnail opens the image viewer over the window, and Esc gives the feed back (D-159)', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room({ messages: [{ by: 'alice', text: 'what does it look like' }] });
+    await signIn();
+    await page.goto(made.path);
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'diagram.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    const files = page.getByRole('list', { name: 'Files' });
+    await expect(files.getByText('diagram.png')).toBeVisible();
+    await expect(files.getByText(/Uploading/)).toHaveCount(0);
+    const composer = page.getByRole('textbox', { name: `Message ${made.name}` });
+    await composer.fill('like this');
+    await composer.press('Enter');
+
+    const thumbnail = rowWith(page, 'like this').getByRole('link', { name: 'Open diagram.png' });
+    await thumbnail.click();
+    const viewer = page.getByRole('dialog', { name: 'diagram.png' });
+    await expect(viewer).toBeVisible();
+    // The full image, from the API, decoded in place: not a new tab.
+    const full = viewer.getByRole('img', { name: 'diagram.png' });
+    await expect
+      .poll(async () => await full.evaluate((element: HTMLImageElement) => element.naturalWidth))
+      .toBeGreaterThan(0);
+    expect(await full.getAttribute('src')).toMatch(/^\/api\/attachments\/[0-9a-f-]+$/);
+    await expect(viewer.getByRole('link', { name: 'Download' })).toHaveAttribute(
+      'download',
+      'diagram.png',
+    );
+    expect(page.context().pages()).toHaveLength(1);
+
+    await page.keyboard.press('Escape');
+    await expect(viewer).toBeHidden();
+    await expect(thumbnail).toBeFocused();
+  });
+
   test('shared by one person, it appears in the other’s Files panel as it arrives (D-129)', async ({
     page,
     signIn,

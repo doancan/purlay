@@ -14,9 +14,10 @@
  * that names the dependency that arrived gets a decision.
  *
  * It also judges the *shape* the budget exists to protect: no syntax-highlighting grammar
- * in the initial chunks (they load on first use, D-36) and at most one locale catalogue
- * (the other is loaded only if asked for, D-41). Both are cheap to break and invisible
- * until the number moves.
+ * in the initial chunks (they load on first use, D-36), at most one locale catalogue
+ * (the other is loaded only if asked for, D-41), the initial modules in one file and the
+ * push worker in one of its own (D-163). Each is cheap to break and invisible until the
+ * number moves.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -108,6 +109,9 @@ const kb = (bytes: number): string => `${(bytes / 1024).toFixed(2)} KB`;
  */
 const GRAMMAR = /\btextmate\b|"scopeName"|source\.(?:ts|js|python|rust|go)\b/;
 const LOCALE_CHUNK = /(?:^|\/)(?:en|tr)-[\w-]+\.js$/;
+const MODULE_CHUNK = /^assets\/[^/]+\.js$/;
+/** The push worker, an entry of its own that must stay one file (D-126). */
+const WORKER = 'push-worker.js';
 
 /** What is wrong with the initial chunks beyond their size, one sentence each. */
 export const shapeProblems = (dist: string, report: Report): string[] => {
@@ -116,6 +120,20 @@ export const shapeProblems = (dist: string, report: Report): string[] => {
   if (locales.length > 1) {
     problems.push(
       `the initial chunks carry ${String(locales.length)} locale catalogues (${locales.map((c) => c.file).join(', ')}); only the active one may load (D-41)`,
+    );
+  }
+  const modules = report.chunks.filter(
+    (chunk) => MODULE_CHUNK.test(chunk.file) && !LOCALE_CHUNK.test(chunk.file),
+  );
+  if (modules.length > 1) {
+    problems.push(
+      `the initial modules are cut into ${String(modules.length)} files (${modules.map((c) => c.file).join(', ')}); the build keeps them in the entry, where they compress together (D-163)`,
+    );
+  }
+  const worker = join(dist, WORKER);
+  if (existsSync(worker) && /^\s*import\b|\bimport\s*\(/m.test(readFileSync(worker, 'utf8'))) {
+    problems.push(
+      `${WORKER} imports another file; a worker is one file of its own and shares no chunk with the page (D-126, D-163)`,
     );
   }
   for (const chunk of report.chunks) {

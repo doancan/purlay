@@ -6,6 +6,247 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-19: the browser tests that failed only under a loaded parallel run
+
+Four specs passed alone and failed beside the rest of the suite. Each cause was found in a trace or a
+count, and none was the product's:
+
+- **The write budget of the people every test shares.** A room was made by carol and then *joined* by
+  each of its people, so every room of a run spent a write of dogancan's and alice's — the people the
+  pages are driven as. Counted per user in one loaded run, 520 of alice's 1,405 writes were joins, and
+  her page's reactions and reads were the `429`s (`live.e2e.ts`). The room's maker now brings its
+  people in (`POST /api/channels/:id/members`), so setup is charged to the maker alone.
+- **People of a test's own** (`newcomer` in `fixtures.ts`, `demo-session.ts --new`): a person made
+  for one test, in a workspace of their own. The permalink spec's forty-one-message history, written
+  as carol and bob behind every other test, took 27 of its 30 seconds under load; the Alt+↓ spec, as
+  alice, opened and read whichever room of another test was next unread; the revoked-invitation spec
+  opened its link as carol, whose budget the run's room-making spends. Each now uses its own people.
+- **A wait that passed on the wrong row.** The palette's last row searches for what was typed, so it
+  holds the typed channel name too; on a page whose channel list had not yet loaded it was the only
+  row, and Enter searched (the list arrived 27 ms after Enter in the trace). The spec now waits for
+  the selected row of the Channels group.
+
+### Fix — 2026-10-19: a reply in a thread can attach a file and format like any message (D-164)
+
+The thread panel's box now has the channel's buttons — Bold, Code block, Mention and Attach — so a file
+goes with a reply without pasting or dropping it. An upload refused because you are no longer in the
+workspace says so, with Remove and no Retry, instead of "Didn't upload".
+
+### Fix — 2026-10-19: sending a picture no longer leaves the feed a picture's height above the end
+
+When the last message grew in place — its pictures drawn after it was sent, its words edited longer —
+the feed remembered the taller list before the resize that follows could judge whether the reader had
+been at the bottom, and left them above the new picture. A row changed in place now keeps a reader who
+was at the bottom there.
+
+### Polish — 2026-10-19: picking people for a conversation
+
+New message shows who it is to as chips that can be taken off, and each person is one row to pick —
+avatar, name, handle, local time and a check — instead of a list of Pick buttons.
+
+### Polish — 2026-10-19: the header's bell shows the channel's level
+
+Every message, mentions and replies, and nothing each draw their own bell in a channel's header, so what
+a channel tells is seen without opening the menu.
+### Feature — 2026-10-19: follow a thread, or turn off its replies (D-161)
+
+The thread panel's header has **Follow**. Turn it off and the thread's replies stop notifying you —
+until you turn it on again; replying once more does not quietly turn it back on. Turn it on in a
+thread you never wrote in and you are told of its replies. A mention in the thread still reaches you,
+and a channel set to *Nothing* stays silent. Before, replying once subscribed you for good, and the
+only way out was muting the whole channel.
+
+### Performance — 2026-10-19: rarely opened surfaces load when first opened
+
+With every surface of this round in, the initial JavaScript reached 246.6 KB of its 250 KB budget
+(D-49). Channel details, the incident panel and the diff viewer are now chunks of their own — the
+lever D-50 names first — and the first load is 243.5 KB (97%). A ```diff block shows as a plain code
+block for the moment its viewer takes to arrive; nothing is ever blank.
+
+### Fix — 2026-10-19: a new message no longer moves the channel you were reaching for (D-160)
+
+Channels in the sidebar are listed by name, so a message never reshuffles them; unread still shows as
+the row's weight and badge. People and group conversations stay newest first.
+### Polish — 2026-10-19: a muted channel says so in the sidebar
+
+A channel set to *Nothing* carries a struck-through bell after its name (read as "muted"), so it no longer
+looks like every other channel; it is still bold while unread, as D-107 keeps it.
+
+### Polish — 2026-10-19: the list screens read as one product (D-158)
+
+The open questions, search and saved now share the inbox's shape: a centred column on a quieter ground,
+lists as cards with their heading above, rows divided by hairlines. Saved items' moves appear on hover or
+focus instead of under every row (and stay visible on a phone); search's field and *where* sit in their
+own card, with the product's select.
+### Feature — 2026-10-19: the palette finds every place (D-157)
+
+`Cmd/Ctrl+K` now finds the inbox, saved items and search; public channels not yet joined (marked so);
+group conversations by their people; and every settings page. Whatever is typed can be searched for in
+the messages from the palette's last row, so a query never ends in "No match" alone.
+### Feature — 2026-10-19: pictures open in a viewer; a failed upload says why (D-159)
+
+**A picture opens in place.** Clicking an image in a message or in the channel's Files panel opens an
+image viewer over the window instead of a raw file in a new tab: the picture fitted to the window, its
+name, who shared it, its size and when, **Download** and **Open original**, with Esc, the close button
+or a click beside it to close, and focus back on the thumbnail. `←` `→` step through the message's
+pictures, or the Files panel's. ⌘/Ctrl-click still opens a tab. The viewer's code loads on first use
+and costs the first page nothing.
+
+**A failed upload says why.** The chip under a file that did not upload names the reason — larger than
+25 MB, an image too large or unreadable, the workspace's storage full *and how much room is left*, too
+many files waiting, no connection, the server busy — and offers Retry only where trying again can work.
+The API's `STORAGE_QUOTA_EXCEEDED` now carries `details.remainingBytes`.
+
+### Polish — 2026-10-19: the first two screens a person sees
+
+**Sign in** carries GitHub's mark on its button (the icon set dropped brand marks, so the mark is a
+glyph of our own), the button is the touch height, and the lines below the title break evenly instead
+of leaving one word alone. **Welcome** — the channels to start in — is a centred column with the
+workspace's tile, the channels as rows of one card (picked ones tinted, the busiest marked *Active*,
+the topic under the name), and Skip and Join in the card's foot; the button reads *Join* rather than
+*Join 0 channels* while nothing is picked. Somebody already in every public channel is told so, rather
+than that there are none.
+
+### Feature — 2026-10-19: Settings is a page, and the menus are short again (D-146, D-151)
+
+The workspace menu had grown to nine items, each opening a 480px dialog, and the account menu to sixteen
+rows — the owner, looking at the running product, called them cramped and the screens undesigned. Settings
+is now a page, `/w/<slug>/settings/<section>`, with its own navigation in the sidebar's place: **Account**
+(Profile, Preferences, Notifications, Keyboard shortcuts, Sessions & account) and, for an owner or an
+admin, the workspace's pages (General, Members, Invitations, Integrations, Audit log, Data & retention).
+Every page has one shape — a title, a sentence, cards of labelled rows — on a ground a step below the
+cards, in both themes and down to a phone. Members is a table with counts, a search, a role filter and
+what each role can do; the audit log names who acted with their avatar; history windows read "Forever",
+"1 year", "5 years". Notifications says plainly what reaches a closed tab on this server, and lists every
+channel's level in one place. The account menu keeps Deep Work, Settings (`Cmd/Ctrl+,`), shortcuts and
+Sign out; the workspace menu keeps the workspaces, Create, Invite people and Workspace settings; the rail
+has a gear; the palette finds every page by name. The pages load as a chunk of their own. Controls —
+buttons, fields, selects — are 32px tall instead of 28px, and menus are as wide as the sidebar. Turkish
+role names are Sahip and Yönetici, no longer "Owner" and "Admin".
+### Feature — 2026-10-19: anybody may leave a workspace (D-152)
+
+There was no way to leave a workspace short of asking an admin to remove you. `DELETE
+/api/workspaces/:id/membership` takes the caller out of the workspace and its channels, tells their own
+devices, and records `member.left`; the last owner is refused with `LAST_OWNER` until somebody else is an
+owner. An invitation that was open before somebody left still lets them back.
+### Fix — 2026-10-19: an answer in a thread is read in the thread, not by scrolling the feed past it (D-147)
+
+Reading a channel to its newest message marked read every notification at or behind the position,
+replies included: an answer somebody gave in a thread the person never opened went from unread to read
+— its badge, the tab title's count and the inbox's unread state with it — as soon as anything newer was
+said in the feed. The read position now reads the roots only. A reply's notification waits for its
+thread, which the panel reads while it is open in front of the person (`PUT
+/api/messages/:messageId/thread/read`, up to the newest reply it has), or for the inbox; until then it
+counts as unread, so the badge stays within the unread count (I-6) without vanishing.
+### Feature — 2026-10-19: the inbox is for triage (D-153)
+
+The inbox shows **All** or **Unread** (asked of the server, so an old unread one is found), groups what
+it holds under **Today** and **Earlier** in cards centred like the feed, marks unread with a dot as well
+as full ink, and reads one row without opening it with **Mark read**. With nothing waiting, Unread says
+*All caught up*.
+### Change — 2026-10-19: channel details in tabs (D-154)
+
+- **A channel's details are a wide dialog with tabs** — About, Members, Integrations — instead of one
+  480px column that grew to 886px at 900 wide and past a phone's height. On a narrow window it is a
+  sheet that fills the screen. A new size token, `size-dialog-lg` (640px), is `Dialog`'s `wide` size.
+- **The notification level is said in words**: three choices in About with the current one chosen,
+  where the details showed only the header's bell.
+- **Leave and Archive are a Danger zone at the foot of About**, each row saying what it costs; they
+  were below the fold under the GitHub form.
+- **Members carries its count in its tab**, Add people beside its heading, and a field to find a
+  member by name once there are more than eight.
+- **The GitHub repositories are their own Integrations tab**, which only an owner or an admin has.
+
+### Fix — 2026-10-19: messaging polish
+
+Defects found by a visual audit of the messaging screens, at 1440 and 390 wide in both themes.
+
+- **Channel details no longer opens on its name with the text selected.** Radix selected the first
+  field's text, so the first key typed renamed the channel. The dialog takes the first focus itself
+  (`Dialog`'s `focusFirst="dialog"`), and no dialog opens with a field's text selected: a first field
+  that already holds text gets the caret at its end.
+- **Browse channels and New channel are always shown** beside the Channels heading, in the navigation's
+  quiet tone with their tooltips; they were invisible until the heading was hovered. New message beside
+  Conversations takes the same tone and alignment (it was drawn in the content's tone on the navy).
+- **A long channel name no longer runs under the header's controls on a phone.** The name could not
+  shrink, so it overflowed its box; it is now cut with an ellipsis, and the topic gives way first.
+- **The header's open-questions count is the channel's own**, not the workspace's, and opens the view
+  narrowed to the channel (`?in=`, with *Show every channel*). A direct message or a group shows the
+  control only while it has open questions.
+- **A person is named by their display name everywhere they are named in words**: a direct message's
+  header, the inbox, search (its rows and the choice of where to look), the open questions, *Resolved
+  by …*, an add that failed, and a row's name for a screen reader. They said the handle while the feed
+  and the sidebar said the name. The handle stays where it is the point: a mention and the profile.
+- **The thread line under your own message is mirrored**: its status ends where your bubble ends,
+  instead of sitting at the feed's far left.
+- **A long line of code shows that it goes on.** A code block, a diff and a table scroll under a thin
+  scrollbar in the theme's tones that is always drawn (macOS hid it until scrolled), and a code block's
+  header has **Wrap lines**, a toggle that wraps the view without changing what Copy copies.
+- **Add people says who is already in the channel.** Its members are listed after the people who can be
+  added, each saying *Member* instead of offering an Add that did nothing.
+### Fix — 2026-10-19: an open inbox shows "your question was resolved" without a reload
+
+The client asked an open inbox again only when a channel's mention count rose, and a resolution moves no
+counter (D-99 §1), nor does a mention in a public channel the person is not in — so either appeared only
+after a reload. Every write that creates a notification now tells its person `NOTIFICATIONS_UPDATED` on
+their own topic after the commit (a send, an edit naming somebody new, a resolution), and the client reads
+that workspace's inbox again — once more after a read already on its way, however many arrive. The
+counters no longer ask as well, and a reconnect reads the inbox again, since the frame went to a socket
+that was down (D-106, amended).
+
+### Fix — 2026-10-19: the rail's inbox dot is quiet in Deep Work, as the badges are
+
+The dot on the rail's Inbox is the same fact as the mention badges (`UX.md` §2), and in Deep Work the
+badges and the tab's count draw nothing (D-15) — but the dot never asked whether Deep Work was on, so it
+stayed lit through it. It now reads Deep Work as the badges do; the inbox itself still lists everything.
+
+### Fix — 2026-10-19: the production stack passes the Web Push and sign-in mail settings to the API
+
+`docker-compose.production.yml` named every variable it hands the API, and `VAPID_*`, `SMTP_URL`,
+`MAIL_FROM` and `SMTP_ALLOW_PLAINTEXT` were not among them. `--env-file` only fills the file's
+placeholders, so keys set in `production.env` never reached the container: `/api/push/key` answered
+`{"publicKey":null}` and email sign-in stayed off, without a word. They are now passed to the API and the
+scheduler, empty meaning off as before, and `docker/production.env.example` lists them with how to make
+a key pair. The test that holds the stack now fails on any variable the API reads (`.env.example`) that
+the stack neither passes nor names with the reason it is withheld.
+### Feature — 2026-10-19: an open tab in the background tells its person (D-148)
+
+With Purlay open in a tab that was not in front, the only sign that something needed the person was
+`(N)` in the title — gone in a pinned tab, easy to miss — and D-143 held pushes while the page was
+open. Now, when a conversation's mention badge goes up while the page is hidden or unfocused, the
+browser shows a notice — the place, and who in the inbox's words, never the message — one per
+conversation and one for several at once, opening the conversation or thread when clicked; never in
+Deep Work, never for the person's own messages. The favicon carries a dot and an installed app's icon
+the count while anything is waiting. "Notifications on this device" is one switch for this and for
+Web Push, offered without the server's push keys too, and never asks on load. No sound: the
+operating system already sounds a notice. `NEEDS_YOU` moved to `@purlay/types`, so the client reads
+the server's one list.
+### Change — 2026-10-19: a message's actions, redesigned (D-150)
+
+The bar of actions sits on its own row's top edge, in the corner the message is not in, and no longer
+covers the author's name or the row above; only one row shows it — the pointer's, or the focused one
+while the keyboard is used. React, Reply, Save, Pin and More are one square each, with a tooltip and
+their key; More is on every message (Copy text, Save, Pin; Edit and Delete on one's own; Delete on
+anybody's for an owner or an admin). A reaction chip names who reacted; the quick reactions are one
+row of tiles that never opens over the composer; "edited" and "Pinned" are apart on one line.
+### Fix — 2026-10-19: only the people the operator names make a workspace (closes #633, D-155)
+
+Anybody who could sign in could make any number of workspaces, each with an attachment quota of its
+own. `POST /api/workspaces` now takes only whom `WORKSPACE_CREATORS` names — GitHub logins, or `*` —
+and, unset, only the first person to sign in while the instance has none, so the one-command install
+still works; anybody else is `403 FORBIDDEN`. Signing in stays open. `GET /api/me` says
+`mayCreateWorkspace`: a person with no workspace who may not sees **Ask for an invitation** instead of a
+form, and **Create workspace…** is offered only where it would be accepted.
+### Fix — 2026-10-19: writing in a channel needs membership of it (closes #690, D-156)
+
+Any member of a workspace could post to a public channel they had not joined — the client offered no
+composer there, but the API checked only that the channel was visible. A message or a thread reply
+from somebody who can see the channel and is not in it is now `403 NOT_A_CHANNEL_MEMBER`, over HTTP and
+the socket alike, and so are adding a reaction, editing one's own message and resolving or reopening a
+thread; what was already a member's (pins, incidents, the name and topic, bringing people in) answers
+the same code instead of `FORBIDDEN`. Deleting one's own words and taking back one's own reaction stay
+open. A send in flight that meets it fails saying the person is not in the channel and should join.
+
 ### Fix — 2026-10-15: an object store that is down is 503 STORAGE_UNAVAILABLE, not 500 (closes #708)
 
 With the bucket configured and Garage stopped, an upload and a download answered `500 INTERNAL` and the

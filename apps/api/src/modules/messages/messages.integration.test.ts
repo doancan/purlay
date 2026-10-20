@@ -252,6 +252,10 @@ const anotherChannel = async (db: Executor, first: ChannelContext): Promise<Chan
     .values({ workspace_id: first.workspaceId, name: 'random', type: 'public' })
     .returning('id')
     .executeTakeFirstOrThrow();
+  await db
+    .insertInto('channel_members')
+    .values({ channel_id: channel.id, user_id: first.userId })
+    .execute();
   return await requireChannelById(db, first.userId, channel.id);
 };
 

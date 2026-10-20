@@ -11,6 +11,7 @@
  * that belong to no project are lint parse errors, and the check added in #158
  * fails on exactly that.
  */
+import { fileURLToPath } from 'node:url';
 import packageJson from './package.json' with { type: 'json' };
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -26,6 +27,9 @@ const buildTarget = (queries: readonly string[]): string[] =>
   });
 
 const { browserslist } = packageJson;
+
+/** The push worker's sources: an entry of their own, never part of the page's chunk. */
+const workerDirectory = fileURLToPath(new URL('./worker/', import.meta.url));
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -69,6 +73,20 @@ export default defineConfig({
       // script cannot load a chunk. `e2e/push-worker.e2e.ts` checks what the build serves.
       input: { index: 'index.html', 'push-worker': 'worker/push-worker.ts' },
       output: {
+        // Every module the first page needs, in the entry (D-163). Left to itself the bundler cut
+        // what the entry shares with the lazy chunks into five more preloaded files — downloaded
+        // all the same, but compressed apart and joined by import lists: measured, 5.3 KB gzipped
+        // more than one file of the same modules. The worker is an entry too, and must stay one
+        // file of its own, so its modules are not the page's.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'index',
+              tags: ['$initial'],
+              test: (id: string): boolean => !id.startsWith(workerDirectory),
+            },
+          ],
+        },
         entryFileNames: (chunk) =>
           chunk.name === 'push-worker' ? 'push-worker.js' : 'assets/[name]-[hash].js',
       },

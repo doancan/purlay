@@ -259,6 +259,11 @@ describe('a membership that ends, on two nodes', () => {
       data: { workspaceId: 'w' },
       ts: 1,
     });
+    await publisher.bus.publish(userTopic('alice'), {
+      event: 'NOTIFICATIONS_UPDATED',
+      data: { workspaceId: 'w' },
+      ts: 1,
+    });
     await publisher.bus.publish(channelTopic(C1), aMessage(C1, 'kept'));
     await publishAccessRevoked(publisher.bus, clock, 'alice', [C1]);
     b.hub.reply('alice', []);
@@ -266,6 +271,7 @@ describe('a membership that ends, on two nodes', () => {
       'DEEP_WORK_UPDATED',
       'SAVED_UPDATED',
       'WORKSPACE_UPDATED',
+      'NOTIFICATIONS_UPDATED',
       'ACCESS_REVOKED',
     ]);
   });

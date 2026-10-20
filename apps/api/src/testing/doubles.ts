@@ -89,6 +89,8 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   SESSION_TTL_DAYS: 30,
   S3_REGION: 'us-east-1',
   SMTP_ALLOW_PLAINTEXT: false,
+  // Open, so a test makes the workspaces it needs; who may is the creators' own tests' (D-155).
+  WORKSPACE_CREATORS: '*',
   ...overrides,
 });
 

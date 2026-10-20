@@ -27,6 +27,7 @@ const channel = {
   incident: null,
   peer: null,
   peers: [],
+  memberCount: 1,
 };
 const message = {
   id: ID,
@@ -70,6 +71,7 @@ describe('the endpoints', () => {
       user: { ...user, email: 'a@example.test' },
       profile: NO_PROFILE,
       memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
+      mayCreateWorkspace: false,
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
@@ -279,6 +281,23 @@ describe('the endpoints', () => {
     ]);
   });
 
+  test('following a thread is read and set on its root, and the answer is checked (D-161)', async () => {
+    const call = harness({ following: false });
+    expect(await call.api.threadFollow(ID)).toEqual({ following: false });
+    expect(await call.api.setThreadFollow(ID, false)).toEqual({ following: false });
+    expect(call.calls).toEqual([
+      { method: 'GET', url: `/api/messages/${ID}/follow`, body: undefined },
+      { method: 'PUT', url: `/api/messages/${ID}/follow`, body: { following: false } },
+    ]);
+    const wrong = harness({ following: 'yes' });
+    expect(
+      await wrong.api.threadFollow(ID).then(
+        () => 'parsed',
+        () => 'refused',
+      ),
+    ).toBe('refused');
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);
@@ -334,6 +353,7 @@ describe('the endpoints', () => {
       type: 'mention',
       channelId: ID,
       message,
+      thread: null,
       createdAt: WHEN,
       readAt: null,
     };
@@ -347,9 +367,11 @@ describe('the endpoints', () => {
     ]);
     await inbox.api.readNotifications({ ids: [ID] });
     await inbox.api.readNotifications({ workspaceId: ID, before: ID });
+    await inbox.api.readThread(ID, ID);
     expect(inbox.calls.slice(2)).toEqual([
       { method: 'PUT', url: '/api/notifications/read', body: { ids: [ID] } },
       { method: 'PUT', url: '/api/notifications/read', body: { workspaceId: ID, before: ID } },
+      { method: 'PUT', url: `/api/messages/${ID}/thread/read`, body: { lastReadMessageId: ID } },
     ]);
     // A row the contract does not describe is refused, not shown.
     const wrong = harness({ data: [{ ...notification, type: 'everyone' }], nextCursor: null });

@@ -291,6 +291,18 @@ describe('a person with no workspace', () => {
     expect(created).toEqual([{ name: 'Acme Engineering!', slug: 'acme-engineering' }]);
   });
 
+  test('one this server would not let make a workspace is told to ask for an invitation, with no form (D-155)', async () => {
+    const view = await visit(
+      '/',
+      anApi({
+        me: () => Promise.resolve({ ...aSession(), memberships: [], mayCreateWorkspace: false }),
+      }),
+    );
+    expect(view.getByRole('heading', { level: 1, name: 'Ask for an invitation' })).toBeDefined();
+    expect(view.queryByLabelText('Name')).toBeNull();
+    expect(view.queryByRole('button', { name: 'Create workspace' })).toBeNull();
+  });
+
   test('an address they typed themselves is the one that is sent, and a bad one is refused before the server hears', async () => {
     const view = await visit('/', none());
     const user = person();
@@ -316,6 +328,11 @@ describe('a person with no workspace', () => {
       'a name the server refuses — one nobody can see — under the name, not the address',
       new ApiError(400, 'VALIDATION_FAILED', 'bad', { name: 'not a name' }),
       'Use a name people can see',
+    ],
+    [
+      'a refusal of who they are — the first workspace made a moment ago (D-155)',
+      new ApiError(403, 'FORBIDDEN', 'no'),
+      'Ask someone in your team for an invitation',
     ],
     [
       'a failure it cannot explain',
@@ -438,6 +455,15 @@ describe('the sign-in screen', () => {
     expect(view.getByRole('status').textContent).toContain(
       'Bu e-posta başka bir Purlay hesabına ait',
     );
+  });
+
+  test('says what Purlay is in Turkish as a Turkish reader says it: the question stays open', async () => {
+    const view = await renderApp(<Outlet />, { path: '/sign-in', api: out(), locale: 'tr' });
+    await settle();
+    expect(view.getByRole('heading', { level: 1, name: 'Purlay’e giriş yap' })).toBeDefined();
+    expect(
+      view.getByText('Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.'),
+    ).toBeDefined();
   });
 
   test('says nothing when nothing went wrong', async () => {

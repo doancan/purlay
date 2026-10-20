@@ -100,6 +100,35 @@ test.describe('opening and closing a thread', () => {
   });
 });
 
+test.describe('the line under a root', () => {
+  test('on your own message it sits under your bubble, at the edge the bubble is on', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    // Found by an audit: the status of your own question sat at the feed's far left, a column
+    // away from the bubble it belongs to.
+    const made = await room({ members: ['dogancan', 'alice', 'bob'] });
+    const question = `who owns the pool limits in ${made.name}?`;
+    const root = await api('alice').say(made.id, question);
+    await api('bob').say(made.id, 'the platform team', { parentId: root.id });
+    await signIn('alice');
+    await page.goto(made.path);
+    const row = rowWith(page, question).first();
+    const status = row.locator('[data-thread-summary]').getByText(/^Open · 1 reply/);
+    await expect(status).toBeVisible();
+    const bubble = await row.locator('[data-bubble]').first().boundingBox();
+    // The pill the words are cut inside, not the words: its edge is the one drawn.
+    const pill = await status.locator('xpath=..').boundingBox();
+    if (bubble === null || pill === null) throw new Error('the bubble or its status is not drawn');
+    expect(
+      Math.abs(bubble.x + bubble.width - (pill.x + pill.width)),
+      'the status ends where the bubble ends',
+    ).toBeLessThanOrEqual(12);
+  });
+});
+
 test.describe('answering', () => {
   test('from the panel’s reply box: the answer appears in the thread, the count follows, and the server has exactly one', async ({
     page,
@@ -129,6 +158,47 @@ test.describe('answering', () => {
   });
 });
 
+test.describe('following', () => {
+  test('Follow in the header: off for a thread one never wrote in, on with a press, told of the next reply, and off again stays off', async ({
+    page,
+    signIn,
+    room,
+    api,
+    tenant,
+  }) => {
+    const made = await aQuestion(room, api);
+    await signIn();
+    await page.goto(made.path);
+    await page.getByRole('button', { name: /Open · 2 replies/ }).click();
+    const follow = threadOf(page, made.rootId).getByRole('button', { name: 'Follow' });
+    await expect(follow).toHaveAttribute('aria-pressed', 'false');
+    await follow.click();
+    await expect(follow).toHaveAttribute('aria-pressed', 'true');
+    await expect
+      .poll(async () => {
+        const state = await api('dogancan').get<{ following: boolean }>(
+          `/api/messages/${made.rootId}/follow`,
+        );
+        return state.following;
+      })
+      .toBe(true);
+
+    const reply = await api('bob').say(made.id, 'one more data point', { parentId: made.rootId });
+    const told = await api('dogancan').get<{
+      data: { type: string; message: { id: string } }[];
+    }>(`/api/notifications?workspaceId=${tenant.workspaceId}&limit=100`);
+    expect(told.data.map((n) => [n.type, n.message.id])).toContainEqual(['thread_reply', reply.id]);
+
+    await follow.click();
+    await expect(follow).toHaveAttribute('aria-pressed', 'false');
+    await page.reload();
+    await page.getByRole('button', { name: /Open · 3 replies/ }).click();
+    await expect(
+      threadOf(page, made.rootId).getByRole('button', { name: 'Follow' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
 test.describe('resolving', () => {
   test('with Cmd/Ctrl+Shift+R: the panel closes and the thread reads as resolved, the page does not reload, and the same keys reopen it', async ({
     page,
@@ -150,7 +220,7 @@ test.describe('resolving', () => {
 
     await page.keyboard.press('ControlOrMeta+Shift+R');
     await expect(
-      page.getByRole('button', { name: /Resolved by dogancan · 2 replies/ }),
+      page.getByRole('button', { name: /Resolved by Doğancan · 2 replies/ }),
     ).toBeVisible();
     await expect(threadOf(page, made.rootId)).toHaveCount(0);
     // The browser's own shortcut would have reloaded the page and thrown this away.

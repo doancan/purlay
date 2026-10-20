@@ -148,7 +148,9 @@ purlay/
 │       ├── worker/          the push worker (D-126): built alone to `/push-worker.js`, its own
 │       │                    compiler project (the WebWorker library), importing nothing the page does
 │       └── src/
-│           ├── app/             providers (one tree, every port optional), the frame, the outlet
+│           ├── app/             providers (one tree, every port optional), the frame, the outlet,
+│           │                    and deferred.ts: the deferred chunk — settings, image viewer, the
+│           │                    overlays opened on purpose — fetched once the browser is idle (D-159, D-163)
 │           ├── features/        vertical slices: chat, threads, palette, notifications, auth
 │           ├── ui/              primitives on Radix where focus and ARIA fail silently; token classes only
 │           ├── components/      shared pieces: Icon (the one door to the icon set), CodeBlock, Markdown
@@ -228,7 +230,9 @@ What the shape is for, which the types do not say:
   author is `MESSAGE_VERSIONS_UPDATED` on the channel's topic, with the channel and the message, and a
   client with its history open reads it again (D-135). A change of the person's own Deep Work is `DEEP_WORK_UPDATED` on their `user:` topic, so
   their other tabs draw it (#526); a change of their saved messages is `SAVED_UPDATED` there too, with
-  nothing but the workspace in it, and the client reads what it shows again (D-128); a channel starred or
+  nothing but the workspace in it, and the client reads what it shows again (D-128); a notification
+  written for them, of any kind, is `NOTIFICATIONS_UPDATED` there, with nothing but the workspace, and
+  an open inbox reads it again (D-106); a channel starred or
   let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
@@ -679,7 +683,9 @@ stored representation. (D-36)
 ### 8.2. Rendering
 
 - Code blocks over 12 lines clamp to 280px with a gradient mask, and carry a language badge,
-  line count, expand/collapse and copy-raw.
+  line count, expand/collapse, copy-raw and **Wrap lines** (a pressed toggle, the view only). A long
+  line scrolls sideways under a thin, themed scrollbar that is always drawn (`scrollbar-thin` in
+  `index.css`), as do a diff and a table, so a line cut at the edge always shows there is more.
 - Syntax highlighting runs synchronously by default. It moves to a Web Worker **only where a
   measurement shows a dropped frame** — for a clamped 12-line block, the `postMessage`
   round-trip costs more than the highlight. (Corrects an earlier blanket rule.)

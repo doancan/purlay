@@ -157,6 +157,33 @@ export const freshSession = async (
   return (await issueSession(database, clock, user.id, SESSION_DAYS)).token;
 };
 
+/**
+ * Somebody new, in no workspace, signed in once — in a scratch database only. The write budget is
+ * per person (`WRITE_BUDGET`), and the four seeded people are shared by every test of a browser run
+ * at once: a test whose own writes are many, or whose page must not wait behind another test's, is
+ * given people nobody else spends.
+ */
+export const freshPerson = async (
+  database: Executor,
+  clock: Clock,
+  connectionString: string,
+  username: string,
+): Promise<{ readonly userId: string; readonly token: string }> => {
+  assertDemoDatabase(connectionString);
+  const user = await database
+    .insertInto('users')
+    .values({
+      email: `${username}@elsewhere.example`,
+      username,
+      display_name: username.charAt(0).toUpperCase() + username.slice(1),
+      github_id: null,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const { token } = await issueSession(database, clock, user.id, SESSION_DAYS);
+  return { userId: user.id, token };
+};
+
 export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   const { database, config } = options;
   assertDemoDatabase(config.DATABASE_URL);
@@ -172,7 +199,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   // The history is sent in bulk by four people, which the production write budget
   // would (rightly) refuse; the seed is not a client to rate-limit.
   const app = createApp({
-    config,
+    // The seed stands in for the operator, whatever WORKSPACE_CREATORS says (D-155).
+    config: { ...config, WORKSPACE_CREATORS: '*' },
     database,
     clock,
     log: createLogger({ level: 'silent' }),

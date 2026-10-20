@@ -146,6 +146,51 @@ describe('integration: what a channel says about the person asking', () => {
     });
   });
 
+  test('each channel says how many people are in it, joined or not, an erased account not among them', async () => {
+    await withRollback(async (db) => {
+      const { workspaceId, users } = await aConversation(
+        db,
+        'mc-alice',
+        'mc-bob',
+        'mc-carol',
+        'mc-dave',
+      );
+      const [alice, bob, carol, dave] = users as [
+        (typeof users)[0],
+        (typeof users)[0],
+        (typeof users)[0],
+        (typeof users)[0],
+      ];
+      const busy = await aChannelWith(db, workspaceId, 'mc-busy', alice, bob, carol);
+      const empty = await aChannelWith(db, workspaceId, 'mc-empty');
+      // Carol's account is erased (I-11): her membership stays, and her members list leaves her out.
+      await db
+        .updateTable('users')
+        .set({ deleted_at: new Date('2026-09-09T10:00:00.000Z') })
+        .where('id', '=', carol.userId)
+        .execute();
+      // The same people, and more, in another workspace: none of it is this one's to count.
+      const elsewhere = await aConversation(db, 'mc-other-1', 'mc-other-2');
+      await aChannelWith(db, elsewhere.workspaceId, 'mc-busy', alice, bob, ...elsewhere.users);
+
+      const context = await requireWorkspaceMembership(db, dave.userId, workspaceId);
+      const listed = await channelsVisibleIn(db, context);
+      const count = (id: string): number | undefined =>
+        listed.find((channel) => channel.id === id)?.memberCount;
+      // Dave has joined neither: he is told what is in them all the same.
+      expect(listed.find((channel) => channel.id === busy)?.state).toBeNull();
+      expect(count(busy)).toBe(2);
+      expect(count(empty)).toBe(0);
+      expect(listed.map((channel) => channel.workspaceId)).toEqual(listed.map(() => workspaceId));
+
+      // One channel's read says the same, and a join is counted in the answer to it.
+      expect((await channelFor(db, dave.userId, busy)).memberCount).toBe(2);
+      const channel = await requireChannelById(db, dave.userId, busy);
+      await joinChannel(db, clock, channel);
+      expect((await channelFor(db, dave.userId, busy)).memberCount).toBe(3);
+    });
+  });
+
   /**
    * The sidebar renders on every load, so a query per channel is the N+1 the rules
    * forbid: the number of statements must not depend on the number of channels.

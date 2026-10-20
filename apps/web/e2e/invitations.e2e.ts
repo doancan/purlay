@@ -7,7 +7,7 @@
  * a page's are; the screens that show her workspaces take no screenshot.
  */
 import { expect, test } from './fixtures';
-import { apiAs, openNav } from './support';
+import { apiAs, openNav, openSettings } from './support';
 
 test.describe('an invitation', () => {
   test('opened signed out, survives signing in, and joins the workspace it names', async ({
@@ -71,14 +71,20 @@ test.describe('an invitation', () => {
     await openNav(page);
     await page.getByRole('button', { name: 'Switch workspace' }).click();
     await page.getByRole('menuitem', { name: 'Invite people…' }).click();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: /^Invite people to / });
     await dialog.getByRole('button', { name: 'Make a link' }).click();
     const field = dialog.getByRole('textbox', { name: 'Invitation link' });
     await expect(field).toHaveValue(/\/invite#[0-9a-f]{64}$/);
     const link = await field.inputValue();
+
+    // The open links are the Invitations page's (D-146), a press away from the dialog.
+    await dialog.getByRole('link', { name: 'See and revoke open links' }).click();
+    await expect(dialog).toHaveCount(0);
+    const main = page.getByRole('main');
+    await expect(main.getByRole('heading', { level: 1, name: 'Invitations' })).toBeVisible();
     // Each open link is said whole, at either width: its end is the time, and a cut "11:22 …" hides
     // whether it is morning or night.
-    const rows = dialog.locator('li [id^="invitation-"]');
+    const rows = main.locator('li [id^="invitation-"]');
     await expect(rows.first()).toBeVisible();
     for (const row of await rows.all()) {
       expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
@@ -90,5 +96,49 @@ test.describe('an invitation', () => {
     const alice = await asPerson('alice');
     await alice.goto(new URL(link).pathname + new URL(link).hash);
     await expect(alice.getByRole('button', { name: 'Open', exact: true })).toBeVisible();
+  });
+
+  test('an open link is revoked on the Invitations page, and opens for nobody after', async ({
+    page,
+    signIn,
+    tenant,
+    newcomer,
+  }) => {
+    // A workspace of its own: every open link in it is revoked below, and in the shared one that
+    // would end the links the other tests here are in the middle of opening. Bob makes it and makes
+    // Alice an admin, so she may see its links; the page is hers.
+    const bob = apiAs(tenant, 'bob');
+    const slug = `revoked-${crypto.randomUUID().slice(0, 8)}`;
+    const workspace = await bob.post<{ id: string }>('/api/workspaces', {
+      name: 'Revoked',
+      slug,
+    });
+    const welcome = await bob.post<{ token: string }>(
+      `/api/workspaces/${workspace.id}/invitations`,
+    );
+    const alice = apiAs(tenant, 'alice');
+    await alice.post('/api/invitations/accept', { token: welcome.token });
+    const me = await alice.get<{ user: { id: string } }>('/api/me');
+    await bob.patch(`/api/workspaces/${workspace.id}/members/${me.user.id}`, { role: 'admin' });
+    const { token } = await bob.post<{ token: string }>(
+      `/api/workspaces/${workspace.id}/invitations`,
+    );
+
+    await signIn('alice');
+    const main = await openSettings(page, slug, 'invitations', 'Invitations');
+    const revoke = main.getByRole('button', { name: 'Revoke' });
+    // Every open link is ended, the one made above among them.
+    await expect(revoke).toHaveCount(2);
+    for (let open = 2; open > 0; open -= 1) {
+      await revoke.first().click();
+      await expect(revoke).toHaveCount(open - 1);
+    }
+    await expect(main.getByText('No links are open.')).toBeVisible();
+
+    // Somebody of the test's own opens it: the preview is a write on their budget, and carol's — the
+    // person every room of the run is made by (`support.ts`) — was spent by the time she got here.
+    const stranger = await (await newcomer('stranger')).page();
+    await stranger.goto(`/invite#${token}`);
+    await expect(stranger.getByText('This invitation does not open')).toBeVisible();
   });
 });

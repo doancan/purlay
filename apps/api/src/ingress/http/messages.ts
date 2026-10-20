@@ -15,14 +15,22 @@ import {
   SearchQuery,
   type SearchPage,
   SendMessageRequest,
+  SetThreadFollowRequest,
   type Message,
+  type ThreadFollow,
   type MessagePage,
+  type MessageWindow,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { requireChannelById, requireMessageById } from '../../platform/channels';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { visibleChannelIds } from '../../platform/channels';
-import { messageHistory, send, type SendDependencies } from '../../modules/messages/messages';
+import {
+  messageHistory,
+  messageWindow,
+  send,
+  type SendDependencies,
+} from '../../modules/messages/messages';
 import { edit } from '../../modules/messages/edit';
 import { deleteMessage } from '../../modules/messages/delete';
 import {
@@ -31,6 +39,7 @@ import {
   unresolvedIn,
   type ResolveDependencies,
 } from '../../modules/messages/threads';
+import { followState, setFollowing } from '../../modules/messages/follow';
 import { searchIn } from '../../modules/search/search';
 import { channelFiles } from '../../modules/attachments/files';
 import { requireSession } from './session';
@@ -119,6 +128,53 @@ export const readThread = async (
   return await threadReplies(database, root, query);
 };
 
+/**
+ * `GET /api/messages/:messageId/around` — the feed around a message, for a link to it (D-149). A
+ * message deleted, never sent, or in a channel the caller cannot see is the one `404` (D-34).
+ */
+export const readAround = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  messageId: string,
+): Promise<MessageWindow> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  return await messageWindow(database, await requireMessageById(database, userId, messageId));
+};
+
+/**
+ * `GET /api/messages/:messageId/follow` — whether the caller is told of this thread's replies (D-161).
+ * Anybody who can see the root may ask; a deleted root with replies keeps its thread (D-103 §7).
+ */
+export const readThreadFollow = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  messageId: string,
+): Promise<ThreadFollow> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
+  return await followState(database, root);
+};
+
+/**
+ * `PUT /api/messages/:messageId/follow` — the caller's own choice about this thread (D-161). Their own,
+ * as a save is: open to anybody who can see the root, a member of the channel or not (D-156 §3). Told
+ * to nobody else, and not to the caller's other devices — they read it when they open the thread.
+ */
+export const putThreadFollow = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  messageId: string,
+  body: unknown,
+): Promise<ThreadFollow> => {
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(database, clock, request);
+  const input = validated(SetThreadFollowRequest, body);
+  const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
+  return await setFollowing(database, clock, root, input.following);
+};
+
 /** `POST` and `DELETE /api/messages/:messageId/resolve` — close the thread, or reopen it. */
 export const setThreadResolution = async (
   dependencies: HistoryDependencies & ResolveDependencies,
@@ -187,7 +243,7 @@ export const readSearch = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const url = new URL(request.url);
   const query = asPageQuery(url);
-  for (const key of ['q', 'channelId'] as const) {
+  for (const key of ['q', 'channelId', 'senderId'] as const) {
     const value = url.searchParams.get(key);
     if (value !== null) query[key] = key === 'q' ? value.trim() : value;
   }

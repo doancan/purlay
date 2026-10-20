@@ -1,7 +1,7 @@
 /**
  * The browser tab's title: where the person is, in which workspace, and how much needs them
- * (`UX.md` §2). Phase 1 tells nobody anything outside the page (D-12), so a tab in the background
- * is the one place a mention can show while the person is elsewhere.
+ * (`UX.md` §2) — read in the tab strip while the person is elsewhere, beside the icon's dot and the
+ * browser's notice an open tab in the background shows (D-148).
  *
  * The count is the sidebar's: the sum of the channels' `unreadMentionCount`, which is what *needs
  * you* (D-106, D-107) — a mention, a direct message, an answer in a thread you are in — and never
@@ -23,6 +23,22 @@ import { useWorkspace } from './workspace';
 /** What needs the person across the workspace: the badges, added up. */
 export const waitingCount = (channels: readonly Channel[]): number =>
   channels.reduce((sum, channel) => sum + (channel.state?.unreadMentionCount ?? 0), 0);
+
+/**
+ * A conversation's name where there is no room for more: `#channel`, the other person in a direct
+ * message, a group's people (D-127). The tab's title says it, and so does a notice (D-148).
+ */
+export const placeOf = (t: Translate, channel: Channel, me: string): string | null => {
+  const peer = channel.peer;
+  if (channel.type === 'direct_message' && peer !== null) {
+    const name = nameOf(peer, t('user.erased'));
+    return peer.id === me ? t('feed.selfDm', { name }) : name;
+  }
+  if (channel.type === 'direct_message' && channel.peers.length > 0) {
+    return channel.peers.map((person) => nameOf(person, t('user.erased'))).join(', ');
+  }
+  return typeof channel.name === 'string' ? `#${channel.name}` : null;
+};
 
 /** The title, from its parts; `place` is null where the address names only the workspace. */
 export const tabTitle = (
@@ -51,14 +67,7 @@ export const TabTitle = (): null => {
   else if (match.name === 'questions') place = t('questions.title');
   else if (match.name === 'channel') {
     const channel = channels.find((c) => c.id === match.params.channelId);
-    const peer = channel?.peer ?? null;
-    if (channel?.type === 'direct_message' && peer !== null) {
-      const name = nameOf(peer, t('user.erased'));
-      place = peer.id === user.id ? t('feed.selfDm', { name }) : name;
-    } else if (channel?.type === 'direct_message' && channel.peers.length > 0) {
-      // A group, by its people's names (D-127).
-      place = channel.peers.map((person) => nameOf(person, t('user.erased'))).join(', ');
-    } else if (typeof channel?.name === 'string') place = `#${channel.name}`;
+    if (channel !== undefined) place = placeOf(t, channel, user.id);
   }
   const title = tabTitle(t, {
     place,

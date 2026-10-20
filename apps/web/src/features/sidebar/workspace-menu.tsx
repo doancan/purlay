@@ -1,6 +1,8 @@
 /**
- * The workspace menu: which workspace this is, a way to another or to a new one, and what an owner
- * or an admin does to it (D-110, D-124). Two doors open it — the workspace's name at the top of the
+ * The workspace menu: which workspace this is, a way to another or to a new one, and — for an owner or
+ * an admin — inviting people and the workspace's settings (D-110, D-124, D-146). Everything else an
+ * owner or an admin does is a page of Settings, where it has room; the menu keeps the one thing done
+ * from inside a conversation, inviting somebody, as a quick dialog. Two doors open it — the workspace's name at the top of the
  * sidebar, with its chevron, as the design draws it, and the tile at the top of the rail — and both
  * are this one component, so there is one list of what it holds. A person is in one workspace at a
  * time (`UX.md` §2): one tile, not a column of them. Who is signed in, and signing out, are the
@@ -10,23 +12,17 @@
  * truth, so there is no "current workspace" setting to fall out of step with the URL.
  */
 import { useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Icon } from '../../components/icon';
 import { initialsOf } from '../../ui/avatar';
 import { Dialog } from '../../ui/dialog';
-import { Menu, MenuItem, MenuLabel } from '../../ui/menu';
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useSession } from '../session/session';
 import { CreateWorkspace } from '../shell/home';
 import { useWorkspace } from '../shell/workspace';
-import { AuditDialog } from './audit-dialog';
-import { GitHubDialog } from './github-dialog';
-import { InviteDialog } from './invite-dialog';
-import { MembersDialog } from './members-dialog';
-import { WorkspaceSettingsDialog } from './workspace-settings-dialog';
-import { ExportDialog } from './export-dialog';
-import { RetentionDialog } from './retention-dialog';
 
 interface WorkspaceMenuProps {
   /** Which door: the rail's tile, or the name at the top of the sidebar. */
@@ -36,19 +32,15 @@ interface WorkspaceMenuProps {
 export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { memberships } = useSession();
+  const { memberships, mayCreateWorkspace } = useSession();
   const { navigate } = useRoute();
   const [inviting, setInviting] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [managing, setManaging] = useState(false);
-  const [auditing, setAuditing] = useState(false);
-  const [settling, setSettling] = useState(false);
+  // The dialog is in the deferred chunk (D-163).
+  const deferred = useDeferred([inviting, setInviting]);
   const [creating, setCreating] = useState(false);
-  const [keeping, setKeeping] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
-  // Making links and the GitHub token are an owner's and an admin's (D-115, D-23); a member is not
-  // offered what would be refused.
+  // Inviting and the workspace's settings are an owner's and an admin's (D-115, D-146); a member is
+  // not offered what would be refused.
   const mayInvite = role === 'owner' || role === 'admin';
 
   return (
@@ -91,14 +83,17 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
             {membership.workspace.name}
           </MenuItem>
         ))}
-        <MenuItem
-          glyph="add"
-          onSelect={() => {
-            setCreating(true);
-          }}
-        >
-          {t('workspace.create.entry')}
-        </MenuItem>
+        {/* Offered only where the server would accept it (D-155). */}
+        {mayCreateWorkspace && (
+          <MenuItem
+            glyph="add"
+            onSelect={() => {
+              setCreating(true);
+            }}
+          >
+            {t('workspace.create.entry')}
+          </MenuItem>
+        )}
         {mayInvite && (
           <MenuItem
             glyph="person"
@@ -110,75 +105,20 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
           </MenuItem>
         )}
         {mayInvite && (
-          <MenuItem
-            glyph="people"
-            onSelect={() => {
-              setManaging(true);
-            }}
-          >
-            {t('members.entry')}
-          </MenuItem>
-        )}
-        {mayInvite && (
-          <MenuItem
-            glyph="merged"
-            onSelect={() => {
-              setConnecting(true);
-            }}
-          >
-            {t('github.entry')}
-          </MenuItem>
-        )}
-        {mayInvite && (
-          <MenuItem
-            glyph="audit"
-            onSelect={() => {
-              setAuditing(true);
-            }}
-          >
-            {t('audit.entry')}
-          </MenuItem>
-        )}
-        {mayInvite && (
-          <MenuItem
-            glyph="settings"
-            onSelect={() => {
-              setSettling(true);
-            }}
-          >
-            {t('workspace.settings.entry')}
-          </MenuItem>
-        )}
-        {/* How long history is kept is an owner's alone (D-139 §4). */}
-        {role === 'owner' && (
-          <MenuItem
-            glyph="history"
-            onSelect={() => {
-              setKeeping(true);
-            }}
-          >
-            {t('retention.entry')}
-          </MenuItem>
-        )}
-        {/* An export is an owner's to ask for (D-140). */}
-        {role === 'owner' && (
-          <MenuItem
-            glyph="download"
-            onSelect={() => {
-              setExporting(true);
-            }}
-          >
-            {t('export.entry')}
-          </MenuItem>
+          <>
+            <MenuSeparator />
+            <MenuItem
+              glyph="settings"
+              onSelect={() => {
+                navigate(href('settings', { slug: workspace.slug, section: 'general' }));
+              }}
+            >
+              {t('workspace.settings.entry')}
+            </MenuItem>
+          </>
         )}
       </Menu>
-      <InviteDialog open={inviting} onOpenChange={setInviting} />
-      <GitHubDialog open={connecting} onOpenChange={setConnecting} />
-      <MembersDialog open={managing} onOpenChange={setManaging} />
-      <AuditDialog open={auditing} onOpenChange={setAuditing} />
-      <WorkspaceSettingsDialog open={settling} onOpenChange={setSettling} />
-      <RetentionDialog open={keeping} onOpenChange={setKeeping} />
-      <ExportDialog open={exporting} onOpenChange={setExporting} />
+      {deferred !== null && <deferred.InviteDialog open={inviting} onOpenChange={setInviting} />}
       <Dialog
         open={creating}
         onOpenChange={setCreating}
@@ -189,6 +129,9 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
         <CreateWorkspace
           framed={false}
           onCreated={() => {
+            setCreating(false);
+          }}
+          onCancel={() => {
             setCreating(false);
           }}
         />

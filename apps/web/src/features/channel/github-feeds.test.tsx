@@ -33,7 +33,15 @@ const aFeed = (over: Partial<GitHubFeed> = {}): GitHubFeed => ({
 const openDetails = async (view: ChannelView): Promise<HTMLElement> => {
   await person().click(view.getByRole('button', { name: 'api' }));
   await settle();
-  return view.getByRole('dialog', { name: 'Details of #api' });
+  // The dialog is a chunk of its own (#687): waited for, not assumed.
+  const dialog = await view.findByRole('dialog', { name: 'Details of #api' });
+  // The repositories are in their own tab (D-154), which only an owner or an admin has.
+  const tab = within(dialog).queryByRole('tab', { name: 'Integrations' });
+  if (tab !== null) {
+    await person().click(tab);
+    await settle();
+  }
+  return dialog;
 };
 
 const feedsOf = (dialog: HTMLElement): HTMLElement =>
@@ -41,21 +49,19 @@ const feedsOf = (dialog: HTMLElement): HTMLElement =>
 
 describe('a channel’s repositories, as an owner sees them', () => {
   test('a failure is said with Retry, and read again it is the empty state', async () => {
-    let asked = 0;
+    // Refused until the person asks again: however often the dialog's first opening reads it.
+    let mended = false;
     const view = await mountChannel({
       messages: page([]),
       api: {
-        githubFeeds: () => {
-          asked += 1;
-          return asked === 1
-            ? Promise.reject(new ApiError(500, 'INTERNAL', 'boom'))
-            : Promise.resolve([]);
-        },
+        githubFeeds: () =>
+          mended ? Promise.resolve([]) : Promise.reject(new ApiError(500, 'INTERNAL', 'boom')),
       },
     });
     const dialog = await openDetails(view);
     const feeds = feedsOf(dialog);
     expect(within(feeds).getByText(/went wrong/i)).toBeDefined();
+    mended = true;
     await person().click(within(feeds).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(within(feeds).getByText(/No repository is connected/)).toBeDefined();
@@ -230,6 +236,7 @@ describe('as a member', () => {
       },
     });
     const dialog = await openDetails(view);
+    expect(within(dialog).queryByRole('tab', { name: 'Integrations' })).toBeNull();
     expect(within(dialog).queryByRole('region', { name: 'GitHub repositories' })).toBeNull();
     expect(asked).toBe(0);
     view.unmountAll();
@@ -246,6 +253,8 @@ describe('in Turkish', () => {
     await person().click(view.getByRole('button', { name: 'api' }));
     await settle();
     const dialog = view.getByRole('dialog');
+    await person().click(within(dialog).getByRole('tab', { name: 'Entegrasyonlar' }));
+    await settle();
     expect(within(dialog).getByRole('region', { name: 'GitHub depoları' })).toBeDefined();
     expect(within(dialog).getByRole('button', { name: 'Bağla' })).toBeDefined();
     view.unmountAll();

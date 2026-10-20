@@ -1,9 +1,10 @@
 /**
- * How long a workspace keeps its history (D-139 §4), chosen in the app against the real API: the
- * owner picks a shorter window, is told what it will delete, saves it — and the trail says so.
+ * How long a workspace keeps its history (D-139 §4), chosen in the app against the real API on the
+ * Data & retention page of Settings (D-146): the owner picks a shorter window, is told what it will
+ * delete, saves it — and the trail says so.
  */
 import { expect, test } from './fixtures';
-import { openNav } from './support';
+import { openSettings } from './support';
 
 test.describe('keeping history', () => {
   test('an owner shortens it, is told what goes, and the trail says who chose it', async ({
@@ -13,26 +14,21 @@ test.describe('keeping history', () => {
     expectNoAxe,
   }) => {
     await signIn();
-    await page.goto(`/w/${tenant.slug}`);
-    await openNav(page);
-    await page.getByRole('button', { name: 'Switch workspace' }).click();
-    await page.getByRole('menuitem', { name: 'Keep history…' }).click();
-    // By its name: on a narrow screen the navigation drawer is a dialog too.
-    const dialog = page.getByRole('dialog', { name: /keeps its history/ });
-    const select = dialog.getByLabel('Keep history');
+    const main = await openSettings(page, tenant.slug, 'data', 'Data & retention');
+    const card = main.getByRole('region', { name: 'History' });
+    const select = card.getByLabel('Keep history');
     await expect(select).toHaveValue('forever');
     await select.selectOption({ label: '90 days' });
-    await expect(dialog.getByRole('note')).toContainText('older than 90 days will be deleted');
+    await expect(card.getByRole('note')).toContainText('older than 90 days will be deleted');
     await expectNoAxe();
-    await dialog.getByRole('button', { name: 'Delete history older than 90 days' }).click();
-    await expect(dialog).toBeHidden();
+    await card.getByRole('button', { name: 'Delete history older than 90 days' }).click();
+    // Saved: what is held is what was chosen, so there is nothing more to warn of.
+    await expect(card.getByRole('note')).toHaveCount(0);
+    await expect(select).toHaveValue('90');
 
-    await page.getByRole('button', { name: 'Switch workspace' }).click();
-    await page.getByRole('menuitem', { name: 'Audit log…' }).click();
+    const trail = await openSettings(page, tenant.slug, 'audit', 'Audit log');
     await expect(
-      page
-        .getByRole('dialog', { name: /Audit log/ })
-        .getByText(/changed how long history is kept from forever to 90 days/),
+      trail.getByText(/changed how long history is kept from forever to 90 days/),
     ).toBeVisible();
   });
 });

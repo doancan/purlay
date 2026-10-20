@@ -1,8 +1,8 @@
 /**
- * Profiles as a person meets them (#488, D-131): set from the account menu — only what was edited
- * sent, a cleared field cleared, a refusal said on its field — and read where people are: a
- * conversation's heading with the other person's local time and status, their profile beside it,
- * and the picker. Through the real screens over an API the test wrote, at the feed's fixed minute.
+ * Profiles as a person meets them (#488, D-131): set on the Profile page of Settings (D-146) — only
+ * what was edited sent, a cleared field cleared, a refusal said on its field — and read where people
+ * are: a conversation's heading with the other person's local time and status, their profile beside
+ * it, and the picker. Through the real screens over an API the test wrote, at the feed's fixed minute.
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
@@ -81,7 +81,7 @@ describe('a conversation with one other person', () => {
     const view = await withAlice();
     const name = nameOf(view);
     // Its name is the one it shows (WCAG 2.5.3); what it does is said beside it.
-    expect(name.textContent).toBe('alice');
+    expect(name.textContent).toBe('Alice');
     expect(document.getElementById(name.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
       `Open ${ALICE.displayName}’s profile`,
     );
@@ -200,28 +200,26 @@ describe('a conversation with one other person', () => {
 
 type View = Awaited<ReturnType<typeof renderApp>>;
 
-/** The whole frame — the account menu is the sidebar's — signed in with this profile. */
+/** The whole frame at the Profile page of Settings (D-146), signed in with this profile. */
 const openFrame = async (api: Partial<Api> = {}, profile: Profile = MINE): Promise<View> => {
   const view = await renderApp(<Outlet />, {
-    path: `/w/acme/c/${IDS.api}`,
+    path: '/w/acme/settings/profile',
     api: aSignedInApi({ me: () => Promise.resolve({ ...aSession(), profile }), ...api }),
   });
   await settle();
-  await person().click(view.getByRole('button', { name: 'Account: Dogancan' }));
-  await person().click(await view.findByRole('menuitem', { name: 'Your profile…' }));
-  await settle();
+  await view.findByRole('heading', { level: 1, name: 'Profile' });
   return view;
 };
 
 const MINE: Profile = { title: 'Engineer', timeZone: 'Europe/Istanbul', status: null };
 
 const field = (view: View, name: string): HTMLInputElement =>
-  within(view.getByRole('dialog')).getByRole<HTMLInputElement>('combobox', { name });
+  within(view.getByRole('main')).getByRole<HTMLInputElement>('combobox', { name });
 
 const textbox = (view: View, name: string): HTMLInputElement =>
-  within(view.getByRole('dialog')).getByRole<HTMLInputElement>('textbox', { name });
+  within(view.getByRole('main')).getByRole<HTMLInputElement>('textbox', { name });
 
-describe('your profile, from the account menu', () => {
+describe('your profile, on its page of Settings', () => {
   test('shows what is yours now, sends only what you changed, and says it is saved', async () => {
     const sent: UpdateProfileRequest[] = [];
     const view = await openFrame({
@@ -230,12 +228,14 @@ describe('your profile, from the account menu', () => {
         return Promise.resolve({ ...MINE, title: 'Staff engineer' });
       },
     });
-    const dialog = view.getByRole('dialog');
+    const main = view.getByRole('main');
+    // Who you are is GitHub's, shown and not edited.
+    expect(within(main).getByText('@dogancan')).toBeDefined();
     expect(textbox(view, 'Title').value).toBe('Engineer');
     expect(field(view, 'Time zone').value).toBe('Europe/Istanbul');
-    const save = within(dialog).getByRole('button', { name: 'Save' });
+    const save = within(main).getByRole('button', { name: 'Save' });
     expect(save.hasAttribute('disabled')).toBe(true);
-    await expectNoAxeViolations(dialog);
+    await expectNoAxeViolations(main);
 
     await person().clear(textbox(view, 'Title'));
     await person().type(textbox(view, 'Title'), '  Staff engineer ');
@@ -243,19 +243,17 @@ describe('your profile, from the account menu', () => {
     await settle();
 
     expect(sent).toEqual([{ title: 'Staff engineer' }]);
-    expect(within(dialog).getByRole('status').textContent).toBe('Saved.');
+    expect(within(main).getByRole('status').textContent).toBe('Saved.');
     view.unmount();
   });
 
-  test('closed without saving, what was typed is let go', async () => {
+  test('left without saving, what was typed is let go', async () => {
     const view = await openFrame();
     await person().type(textbox(view, 'Status'), 'Out today');
-    await person().keyboard('{Escape}');
-    await settle();
-    expect(view.queryByRole('dialog')).toBeNull();
-    await person().click(view.getByRole('button', { name: 'Account: Dogancan' }));
-    await person().click(await view.findByRole('menuitem', { name: 'Your profile…' }));
-    await settle();
+    await person().click(view.getByRole('link', { name: 'Preferences' }));
+    await view.findByRole('heading', { level: 1, name: 'Preferences' });
+    await person().click(view.getByRole('link', { name: 'Profile' }));
+    await view.findByRole('heading', { level: 1, name: 'Profile' });
     expect(textbox(view, 'Status').value).toBe('');
     view.unmount();
   });
@@ -273,14 +271,21 @@ describe('your profile, from the account menu', () => {
     view.unmount();
   });
 
-  test('while a save is on its way the fields cannot change and the dialog does not close', async () => {
-    const view = await openFrame({ updateProfile: () => new Promise(() => undefined) });
+  test('while a save is on its way the fields cannot change and it is not sent twice', async () => {
+    let calls = 0;
+    const view = await openFrame({
+      updateProfile: () => {
+        calls += 1;
+        return new Promise(() => undefined);
+      },
+    });
     await person().type(textbox(view, 'Status'), 'Out today');
-    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    const save = within(view.getByRole('main')).getByRole('button', { name: 'Save' });
+    await person().click(save);
     expect(textbox(view, 'Status').readOnly).toBe(true);
-    await person().keyboard('{Escape}');
-    await settle();
-    expect(view.getByRole('dialog')).toBeDefined();
+    expect(save.getAttribute('aria-busy')).toBe('true');
+    await person().click(save);
+    expect(calls).toBe(1);
     view.unmount();
   });
 
@@ -292,7 +297,7 @@ describe('your profile, from the account menu', () => {
         ),
     });
     await person().type(textbox(view, 'Status'), 'x');
-    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
     await settle();
     expect(textbox(view, 'Title').getAttribute('aria-invalid')).toBe('true');
     expect(field(view, 'Time zone').getAttribute('aria-invalid')).toBe('true');
@@ -310,7 +315,7 @@ describe('your profile, from the account menu', () => {
     });
     await person().click(field(view, 'Time zone'));
     await person().keyboard('{Control>}a{/Control}{Backspace}');
-    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
     await settle();
     expect(sent).toEqual([{ timeZone: null }]);
     view.unmount();
@@ -328,7 +333,7 @@ describe('your profile, from the account menu', () => {
       { title: null, timeZone: null, status: null },
     );
     await person().click(
-      within(view.getByRole('dialog')).getByRole('button', { name: 'Use this device’s time zone' }),
+      within(view.getByRole('main')).getByRole('button', { name: 'Use this device’s time zone' }),
     );
     expect(field(view, 'Time zone').value).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
     view.unmount();
@@ -343,10 +348,10 @@ describe('your profile, from the account menu', () => {
     });
     await person().clear(field(view, 'Time zone'));
     await person().type(field(view, 'Time zone'), 'Mars/Base');
-    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
     await settle();
     expect(field(view, 'Time zone').getAttribute('aria-invalid')).toBe('true');
-    expect(within(view.getByRole('dialog')).getByRole('alert').textContent).toContain(
+    expect(within(view.getByRole('main')).getByRole('alert').textContent).toContain(
       'That is not a time zone we know.',
     );
     expect(field(view, 'Time zone').value).toBe('Mars/Base');
@@ -358,9 +363,9 @@ describe('your profile, from the account menu', () => {
       updateProfile: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
     });
     await person().type(textbox(view, 'Status'), 'Out today');
-    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
     await settle();
-    expect(within(view.getByRole('dialog')).getByRole('alert').textContent).toMatch(
+    expect(within(view.getByRole('main')).getByRole('alert').textContent).toMatch(
       /^Your profile was not saved\. /,
     );
     expect(textbox(view, 'Status').value).toBe('Out today');

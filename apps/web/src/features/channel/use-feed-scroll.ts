@@ -40,6 +40,12 @@ export interface FeedScroll {
    * opening), and does not want to be carried to the bottom by it.
    */
   readonly holdPlace: () => void;
+  /**
+   * Newer history is about to be read in below, in a window around a linked message (D-149): it
+   * is what the reader scrolled down to, not news — the reader is neither carried to the new
+   * bottom nor told of it by the pill.
+   */
+  readonly extendBelow: () => void;
 }
 
 interface Options {
@@ -79,6 +85,8 @@ export const useFeedScroll = ({
   const [newBelow, setNewBelow] = useState(0);
   // Set by `holdPlace` until the reader is next placed or scrolls: what changes below is theirs.
   const held = useRef(false);
+  // Set by `extendBelow` until the rows it asked for are in.
+  const extending = useRef(false);
   const placed = useRef(false);
   const before = useRef({
     first: null as string | null,
@@ -125,6 +133,22 @@ export const useFeedScroll = ({
   const onScroll = useCallback((): void => {
     const el = scroller.current;
     if (el === null) return;
+    // A scroll the reader did not make upward, from a place that was the bottom, keeps them there.
+    // The report of our own move to the bottom can arrive after the list grew under it — a picture
+    // drawn a frame later — and would otherwise be taken as the reader having stopped above the end.
+    const previous = before.current;
+    const movedUp = el.scrollTop < previous.top - 1;
+    if (
+      !movedUp &&
+      !held.current &&
+      isNearBottom({
+        scrollTop: previous.top,
+        scrollHeight: previous.height,
+        clientHeight: previous.client,
+      })
+    ) {
+      scrollToBottom(el);
+    }
     settle(el);
     // Where the reader is *now* is what a later prepend must give back to them.
     remember(el, before.current);
@@ -158,6 +182,10 @@ export const useFeedScroll = ({
       // they were on can be shorter now (it follows a message by the same person).
       holdAnchor(el, previous.anchor);
       settle(el);
+    } else if (last !== previous.last && extending.current) {
+      // Read in below on purpose: the reader stays where they are, and none of it is "new".
+      extending.current = false;
+      settle(el);
     } else if (last !== previous.last) {
       const newest = [...items].reverse().find((item) => item.kind === 'message');
       const own = newest !== undefined && isMine(newest.message, meId);
@@ -177,6 +205,13 @@ export const useFeedScroll = ({
         // counts as read, follow the place measured now.
         settle(el);
       }
+    } else if (wasAtBottom(el)) {
+      // Nothing new, but a row changed in place — its pictures drawn, its words edited longer. A
+      // reader who was at the bottom is kept there, judged by the height before the change: the
+      // resize that follows would otherwise measure from the taller list remembered below and
+      // leave them a picture's height above the end.
+      scrollToBottom(el);
+      settle(el);
     }
     remember(el, { first, last });
   }, [items, ready, meId, scroller, settle]);
@@ -196,5 +231,9 @@ export const useFeedScroll = ({
     held.current = true;
   }, []);
 
-  return { atBottom, newBelow, onScroll, jumpToBottom, holdPlace };
+  const extendBelow = useCallback((): void => {
+    extending.current = true;
+  }, []);
+
+  return { atBottom, newBelow, onScroll, jumpToBottom, holdPlace, extendBelow };
 };

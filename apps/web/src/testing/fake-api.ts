@@ -32,6 +32,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   githubIntegration: unexpected('githubIntegration'),
   updateMemberRole: unexpected('updateMemberRole'),
   removeMember: unexpected('removeMember'),
+  leaveWorkspace: unexpected('leaveWorkspace'),
   audit: unexpected('audit'),
   setGitHubToken: unexpected('setGitHubToken'),
   removeGitHubToken: unexpected('removeGitHubToken'),
@@ -65,6 +66,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   pin: unexpected('pin'),
   unpin: unexpected('unpin'),
   messages: unexpected('messages'),
+  messageWindow: unexpected('messageWindow'),
   send: unexpected('send'),
   upload: unexpected('upload'),
   discardAttachment: unexpected('discardAttachment'),
@@ -75,6 +77,12 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   notifications: unexpected('notifications'),
   search: unexpected('search'),
   readNotifications: unexpected('readNotifications'),
+  readThread: unexpected('readThread'),
+  // The thread panel asks on every opening whether its person follows the thread (D-161), so a test
+  // of anything that opens one need not say so: somebody who never wrote in it. A test of following
+  // says otherwise.
+  threadFollow: () => Promise.resolve({ following: false }),
+  setThreadFollow: unexpected('setThreadFollow'),
   react: unexpected('react'),
   unreact: unexpected('unreact'),
   editMessage: unexpected('editMessage'),

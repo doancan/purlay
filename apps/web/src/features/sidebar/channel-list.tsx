@@ -8,15 +8,14 @@
  * them, so focus returns to the button that was pressed.
  */
 import { useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import { useChannels } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { IconButton } from '../../ui/icon-button';
 import { useWorkspace } from '../shell/workspace';
-import { BrowseChannelsDialog } from './browse-channels-dialog';
 import { ChannelRow } from './channel-row';
-import { NewChannelDialog } from './new-channel-dialog';
 import { joinedChannels, starredChannels } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
@@ -27,6 +26,8 @@ export const ChannelList = (): React.JSX.Element => {
   const { match } = useRoute();
   const [creating, setCreating] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  // Both dialogs are in the deferred chunk (D-163).
+  const deferred = useDeferred([creating, setCreating], [browsing, setBrowsing]);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
   const mine = joinedChannels(channels.data ?? []);
   // In no channel at all is the empty state; in channels that are all starred is not (D-132).
@@ -34,9 +35,11 @@ export const ChannelList = (): React.JSX.Element => {
 
   return (
     <nav aria-label={t('sidebar.channels')} className="flex flex-col">
-      <div className="group flex items-center justify-between px-2 py-1">
-        <h2 className="text-label text-nav-ink-muted">{t('sidebar.channels')}</h2>
-        <div className="flex opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:opacity-100">
+      {/* Always shown, in the section's quiet tone: a way in that appears only under a pointer is one
+      a newcomer never finds, and the tooltips say what each glyph is. */}
+      <div className="flex items-center justify-between pl-2">
+        <h2 className="py-1 text-label text-nav-ink-muted">{t('sidebar.channels')}</h2>
+        <div className="flex">
           <IconButton
             label={t('sidebar.browse')}
             glyph="search"
@@ -86,12 +89,13 @@ export const ChannelList = (): React.JSX.Element => {
             <li key={channel.id}>
               <ChannelRow
                 slug={workspace.slug}
-                channelId={channel.id}
+                channel={channel}
                 glyph={channel.type === 'private' ? 'private-channel' : 'channel'}
                 current={channel.id === currentId}
                 unread={(channel.state?.unreadCount ?? 0) > 0}
                 mentions={channel.state?.unreadMentionCount ?? 0}
                 incident={channel.incident}
+                muted={channel.notificationLevel === 'none'}
               >
                 {channel.name}
               </ChannelRow>
@@ -99,8 +103,12 @@ export const ChannelList = (): React.JSX.Element => {
           ))}
         </ul>
       )}
-      <NewChannelDialog open={creating} onOpenChange={setCreating} />
-      <BrowseChannelsDialog open={browsing} onOpenChange={setBrowsing} />
+      {deferred !== null && (
+        <>
+          <deferred.NewChannelDialog open={creating} onOpenChange={setCreating} />
+          <deferred.BrowseChannelsDialog open={browsing} onOpenChange={setBrowsing} />
+        </>
+      )}
     </nav>
   );
 };

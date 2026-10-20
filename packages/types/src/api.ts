@@ -85,6 +85,12 @@ export const MeResponse = Type.Object({
   /** The caller's own profile, for the dialog that changes it (D-131). */
   profile: Profile,
   memberships: Type.Array(Membership),
+  /**
+   * Whether this server would let the caller make a workspace (D-155): the operator's
+   * `WORKSPACE_CREATORS`, or, unset, only the first person to sign in while there is none. The client
+   * offers the form only where it would be accepted.
+   */
+  mayCreateWorkspace: Type.Boolean(),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -230,6 +236,27 @@ export type EditMessageRequest = Static<typeof EditMessageRequest>;
 export const MessagePage = Page(Message);
 export type MessagePage = Static<typeof MessagePage>;
 
+/** How many roots a window around a message holds on each side of the one it is around (D-149). */
+export const MESSAGE_WINDOW_SIDE = 25;
+
+/**
+ * `GET /api/messages/:messageId/around` — a channel's feed around one message: what a link to a
+ * message opens (D-149).
+ *
+ * `target` is the message the link names — a root, or a reply, whose thread then opens. `data` is
+ * the root it lives under (itself, or its thread's root) with up to `MESSAGE_WINDOW_SIDE` roots on
+ * each side, **newest first** as every feed page is. The two cursors are the keyset cursors a feed
+ * already reads with (D-8): `olderCursor` continues as `before`, `newerCursor` as `after`, and each
+ * is null once that end of the channel is in the window.
+ */
+export const MessageWindow = Type.Object({
+  target: Message,
+  data: Type.Array(Message),
+  olderCursor: Type.Union([Uuid, Type.Null()]),
+  newerCursor: Type.Union([Uuid, Type.Null()]),
+});
+export type MessageWindow = Static<typeof MessageWindow>;
+
 export const ChannelList = Type.Array(Channel);
 export type ChannelList = Static<typeof ChannelList>;
 
@@ -239,8 +266,8 @@ export const SEARCH_QUERY_MAX = 200;
 
 /**
  * `GET /api/workspaces/:workspaceId/search` — messages whose words contain `q`, ignoring case, in
- * the channels the caller can see, or in one of them (D-10, D-34, D-105). Newest first, keyset by
- * `before`. `%`, `_` and `\` are themselves, not patterns.
+ * the channels the caller can see, or in one of them, from anybody or from one person (D-10, D-34,
+ * D-105, D-166). Newest first, keyset by `before`. `%`, `_` and `\` are themselves, not patterns.
  */
 export const SearchQuery = FromClient({
   q: Type.String({
@@ -249,6 +276,11 @@ export const SearchQuery = FromClient({
     format: 'plain-text',
   }),
   channelId: Type.Optional(Uuid),
+  /**
+   * Only what this person wrote (D-166). A filter, not a resource: somebody who never wrote in the
+   * caller's visible channels — another workspace's, or nobody at all — is an empty page, not a 404.
+   */
+  senderId: Type.Optional(Uuid),
   before: Type.Optional(Uuid),
   limit: Type.Optional(
     Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
@@ -280,6 +312,29 @@ export const ReadChannelRequest = FromClient({ lastReadMessageId: Uuid });
 export type ReadChannelRequest = Static<typeof ReadChannelRequest>;
 export const ReadChannelResponse = ChannelState;
 export type ReadChannelResponse = Static<typeof ReadChannelResponse>;
+
+/**
+ * `PUT /api/messages/:messageId/thread/read` — the newest reply the person has seen in the thread
+ * of this root. A reply is read here, not by the channel's read position (D-147): the caller's
+ * notifications for this thread's replies up to and including it are read. Nothing is stored but
+ * that, so a bound behind an earlier one changes nothing; the answer is `204`, and the channel's new
+ * state goes to the caller's devices as `CHANNEL_STATE`.
+ */
+export const ReadThreadRequest = FromClient({ lastReadMessageId: Uuid });
+export type ReadThreadRequest = Static<typeof ReadThreadRequest>;
+
+/**
+ * `GET` and `PUT /api/messages/:messageId/follow` — whether the caller is told of new replies in the
+ * thread of this root (D-161). Without a choice of their own, they follow a thread they started or
+ * have answered (D-29); a choice, either way, is kept until they make another — replying again does
+ * not take it back. A mention is addressed to them and is told whatever they chose.
+ */
+export const ThreadFollow = Type.Object({ following: Type.Boolean() });
+export type ThreadFollow = Static<typeof ThreadFollow>;
+
+/** `PUT /api/messages/:messageId/follow` — the caller's own choice; the answer is `ThreadFollow`. */
+export const SetThreadFollowRequest = FromClient({ following: Type.Boolean() });
+export type SetThreadFollowRequest = Static<typeof SetThreadFollowRequest>;
 
 /** `PUT`/`DELETE /api/messages/:messageId/reactions/:emoji` — idempotent; answers the message's reactions. */
 export const ReactionsResponse = Type.Object({ reactions: Type.Array(Reaction) });
@@ -326,16 +381,49 @@ export const NotificationType = Type.Union([
 ]);
 export type NotificationType = Static<typeof NotificationType>;
 
+/**
+ * The reasons that make a message one that *needs* the person (D-99 §1, D-107): what the mention
+ * badge counts, the tab's title adds up, a push is sent for (D-126) and an open tab in the background
+ * is told of (D-148). A resolution is told and not counted — it is not a message. One list, read by
+ * the server's send, read and delete, and by the client: "needs you" is not defined twice.
+ */
+export const NEEDS_YOU = [
+  'mention',
+  'direct_message',
+  'thread_reply',
+  'channel_message',
+] as const satisfies readonly NotificationType[];
+
 /** `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107). */
 export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
 export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;
 
-/** One thing waiting for the caller in the inbox, with the message it is about (D-106). */
+/** How much of a thread's root the inbox quotes to name it (D-162): one line, not the message. */
+export const THREAD_EXCERPT_MAX = 120;
+
+/**
+ * The thread a reply belongs to, in brief (D-162): enough to name it and to say whose it is, so the
+ * inbox can gather one thread's replies under its first line. `excerpt` is the root's text, plain and
+ * on one line, at most `THREAD_EXCERPT_MAX` characters — null when there is nothing to quote: the root
+ * was deleted (D-9), or it says nothing in words. `authorId` is null for a root nobody wrote.
+ */
+export const NotificationThread = Type.Object({
+  rootId: Uuid,
+  excerpt: Type.Union([Type.String({ maxLength: THREAD_EXCERPT_MAX }), Type.Null()]),
+  authorId: Type.Union([Uuid, Type.Null()]),
+});
+export type NotificationThread = Static<typeof NotificationThread>;
+
+/**
+ * One thing waiting for the caller in the inbox, with the message it is about (D-106) and, when that
+ * message is a reply, its thread in brief (D-162) — null when it is not one.
+ */
 export const Notification = Type.Object({
   id: Uuid,
   type: NotificationType,
   channelId: Uuid,
   message: Message,
+  thread: Type.Union([NotificationThread, Type.Null()]),
   createdAt: Timestamp,
   readAt: Type.Union([Timestamp, Type.Null()]),
 });
@@ -424,6 +512,7 @@ export type OlderPageQuery = Static<typeof OlderPageQuery>;
 export const AUDIT_ACTIONS = [
   'member.role_changed',
   'member.removed',
+  'member.left',
   'member.joined',
   'channel.created',
   'channel.renamed',

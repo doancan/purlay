@@ -51,6 +51,7 @@ export const aSession = (): MeResponse => ({
   user: { ...ME, email: 'dogancan@example.test' },
   profile: NO_PROFILE,
   memberships: [{ workspace: WORKSPACE, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
+  mayCreateWorkspace: true,
 });
 
 export const aChannel = (
@@ -69,6 +70,7 @@ export const aChannel = (
   peer: null,
   // A direct message's people agree with its peer unless the test says otherwise.
   peers: over.peer === undefined || over.peer === null ? [] : [over.peer],
+  memberCount: 1,
   notificationLevel: 'mentions',
   starred: false,
   ...over,

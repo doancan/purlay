@@ -28,3 +28,42 @@ export const expectFocusOn = (element: Element | null): void => {
     active === element ? 'focused' : `focus is on ${describe(active)}, not on ${describe(element)}`,
   ).toBe('focused');
 };
+
+const FOCUSABLE =
+  'a[href], button, input, select, textarea, summary, iframe, [contenteditable]:not([contenteditable="false"]), [tabindex]';
+
+/** Whether a browser's Tab would stop on `element`: focusable, not taken out, not disabled or inert. */
+const isTabStop = (element: HTMLElement): boolean => {
+  const index = element.getAttribute('tabindex');
+  if (index !== null && Number(index) < 0) return false;
+  if (element.closest('[inert], [hidden]') !== null) return false;
+  return !(element.matches(':disabled') && !element.matches('a, [tabindex]'));
+};
+
+/**
+ * The page's Tab order, as a browser walks it: every stop in document order (nothing here has a
+ * positive `tabindex`, which lint and review keep out). happy-dom has no sequential navigation of
+ * its own, so this is the browser's rule written down, and `pressTab` follows it.
+ */
+export const tabOrder = (root: ParentNode = document.body): HTMLElement[] =>
+  Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isTabStop);
+
+/**
+ * Presses Tab — or Shift+Tab — where focus is: the key goes to the focused element first, as a
+ * browser's does (the active row hears it), then focus moves to the next stop, read after the key,
+ * from wherever focus was — on a stop or not.
+ */
+export const pressTab = (shift = false): HTMLElement | null => {
+  const from =
+    document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+  from.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: shift, bubbles: true }));
+  const order = tabOrder();
+  const relation = (stop: HTMLElement): number => from.compareDocumentPosition(stop);
+  // An ancestor precedes, a descendant follows: a row's own controls come after it, and before it is
+  // what came before the row.
+  const next = shift
+    ? order.filter((stop) => (relation(stop) & Node.DOCUMENT_POSITION_PRECEDING) !== 0).at(-1)
+    : order.find((stop) => (relation(stop) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
+  next?.focus();
+  return next ?? null;
+};

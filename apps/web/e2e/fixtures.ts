@@ -8,6 +8,7 @@
  * feed, the composer and the palette land are four lines each, not four hundred.
  */
 import AxeBuilder from '@axe-core/playwright';
+import type { Result } from 'axe-core';
 import {
   test as base,
   expect,
@@ -17,12 +18,14 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   apiAs,
   makeRoom,
+  sessionApi,
   type ApiClient,
   type Persona,
   type Room,
@@ -31,6 +34,8 @@ import {
 } from './support';
 
 export type { Persona, Room };
+
+const run = promisify(execFile);
 
 /**
  * Somebody in no workspace, signed in twice (`demo-seed.ts`): for a test that ends every session a
@@ -95,6 +100,58 @@ const freshSessionOf = (world: World, outsider: Outsider): string => {
   return printed;
 };
 
+/**
+ * Somebody made for one test alone (`demo-session.ts --new`), signed in once, in no workspace. The
+ * write budget is per person (`WRITE_BUDGET`), and the seeded four are every test's at once: a test
+ * whose own writes are many — a long history — or whose page is a person the others write as, waits
+ * behind them, and under load runs out of time or is refused. A newcomer's budget is the test's.
+ */
+export interface Newcomer {
+  readonly userId: string;
+  readonly username: string;
+  /** Speaks to the API with their session. */
+  readonly api: ApiClient;
+  /** Their browser, in this project's colour scheme and window, signed in and closed with the test. */
+  readonly page: () => Promise<Page>;
+}
+
+const madePerson = async (
+  world: World,
+  username: string,
+): Promise<{ userId: string; token: string }> => {
+  const printed = (
+    await run('bun', ['run', 'apps/api/src/cli/demo-session.ts', '--new', username], {
+      cwd: join(import.meta.dirname, '../../..'),
+      env: { ...process.env, DATABASE_URL: world.database },
+      encoding: 'utf8',
+    })
+  ).stdout.trim();
+  const [userId, token] = printed.split(' ');
+  // Fail here, saying what came back, rather than as a 401 three steps later.
+  if (userId === undefined || token === undefined || !/^[\w-]{32,}$/.test(token)) {
+    throw new Error(
+      `demo-session.ts --new printed something that is not a person: ${printed.slice(0, 80)}`,
+    );
+  }
+  return { userId, token };
+};
+
+/** A workspace the first newcomer makes, every other one invited by a link and joined. */
+export const workspaceFor = async (
+  owner: Newcomer,
+  ...others: readonly Newcomer[]
+): Promise<OwnWorkspace> => {
+  const slug = `${owner.username}-own`.slice(0, 64);
+  const workspace = await owner.api.post<OwnWorkspace>('/api/workspaces', { name: slug, slug });
+  for (const other of others) {
+    const { token } = await owner.api.post<{ token: string }>(
+      `/api/workspaces/${workspace.id}/invitations`,
+    );
+    await other.api.post('/api/invitations/accept', { token });
+  }
+  return workspace;
+};
+
 const SESSION_COOKIE = '__Host-purlay_session';
 
 /** The page's way to tell the test that the policy refused something. */
@@ -147,7 +204,55 @@ interface Fixtures {
   readonly asOutsider: (outsider: Outsider, session?: 0 | 1 | 'fresh') => Promise<Page>;
   /** A workspace an outsider makes, through the API, with a name of the test's own. */
   readonly workspaceOf: (outsider: Outsider) => Promise<OwnWorkspace>;
+  /** Somebody nobody else in the run is, named after what they are for (`Newcomer`). */
+  readonly newcomer: (label: string) => Promise<Newcomer>;
 }
+
+/**
+ * **A scrollable block in a message whose row is out is reached through its row** (D-168): a list of
+ * messages is one Tab stop, and a code block, a diff or a table in any other message than the focused
+ * one is out of the Tab order until its row is focused — then Tab reaches it. axe audits the page as
+ * it stands and cannot see that path, so it calls the block unreachable. Such a finding is not
+ * excused here, it is *checked*: the row is focused, and only a block that is then a stop is dropped
+ * from the violation; one that is still not a stop — or that is in no row, or in the row focus is
+ * already in — stays a violation. Focus goes back where it was.
+ */
+const withoutRowsOut = async (page: Page, violations: readonly Result[]): Promise<Result[]> => {
+  const kept: Result[] = [];
+  for (const violation of violations) {
+    if (violation.id !== 'scrollable-region-focusable') {
+      kept.push(violation);
+      continue;
+    }
+    const nodes = [];
+    for (const node of violation.nodes) {
+      const [selector, ...deeper] = node.target;
+      const throughItsRow =
+        typeof selector === 'string' &&
+        deeper.length === 0 &&
+        (await page.evaluate((target) => {
+          const block = document.querySelector<HTMLElement>(target);
+          const row = block?.closest<HTMLElement>('[data-message-row]');
+          if (block == null || row == null || row.contains(document.activeElement)) return false;
+          const before = document.activeElement;
+          row.focus({ preventScroll: true });
+          const reached =
+            block.tabIndex >= 0 &&
+            !block.hasAttribute('inert') &&
+            block.closest('[inert]') === null;
+          if (before instanceof HTMLElement && before !== document.body) {
+            before.focus({ preventScroll: true });
+          } else {
+            row.blur();
+          }
+          return reached;
+        }, selector));
+      if (!throughItsRow) nodes.push(node);
+    }
+    if (nodes.length > 0) kept.push({ ...violation, nodes });
+  }
+  return kept;
+};
 
 export const test = base.extend<Fixtures>({
   throttling: [
@@ -328,11 +433,36 @@ export const test = base.extend<Fixtures>({
     });
   },
 
+  newcomer: async ({ browser, baseURL, world, throttling, securityPolicy }, use, testInfo) => {
+    const contexts: BrowserContext[] = [];
+    await use(async (label) => {
+      // Unique across tests, projects, attempts and runs; within the 39 a username may have.
+      const username = `${label}-${crypto.randomUUID().slice(0, 8)}`.toLowerCase().slice(0, 39);
+      const { userId, token } = await madePerson(world, username);
+      return {
+        userId,
+        username,
+        api: sessionApi({ baseURL: baseURL ?? '', workspaceId: undefined, token, who: username }),
+        page: async (): Promise<Page> => {
+          const context = await browserLike(browser, baseURL, testInfo);
+          contexts.push(context);
+          throttling.watch(context);
+          await securityPolicy.watch(context);
+          await signInAs(context, baseURL ?? '', token);
+          return await context.newPage();
+        },
+      };
+    });
+    for (const context of contexts) await securityPolicy.settle(context);
+    for (const context of contexts) await context.close();
+  },
+
   expectNoAxe: async ({ page }, use) => {
     await use(async (scope) => {
       let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
       if (scope !== undefined) builder = builder.include(await scope.evaluate(selectorOf));
-      const { violations } = await builder.analyze();
+      const { violations: found } = await builder.analyze();
+      const violations = await withoutRowsOut(page, found);
       const summary = violations.map(
         (violation) =>
           `${violation.id} (${violation.impact ?? 'unknown'}): ${violation.help}\n` +

@@ -1,15 +1,15 @@
 /**
- * The account menu at the sidebar's foot (D-124), as a person meets it through the real frame:
- * Deep Work for a chosen while, the preferences, and the two ways to sign out.
+ * The account menu at the sidebar's foot (D-124, D-146), as a person meets it through the real frame:
+ * Deep Work for a chosen while, the door to Settings, and signing out. Signing out everywhere and
+ * erasing the account are the Sessions & account page's (`settings/pages/account.test.tsx`).
  */
 import { describe, expect, test } from 'bun:test';
-import { act, within } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import type { MeResponse, SetDeepWorkRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
-import { expectFocusOn } from '../../testing/focus';
 import { installDom } from '../../testing/dom';
 import { IDS, aSession, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
@@ -59,28 +59,32 @@ const menu = async (view: View): Promise<void> => {
 const here = (view: View): string => view.world.history.stack.at(-1) ?? '';
 
 describe('the account menu', () => {
-  test('offers Deep Work for a while, the theme, the language, the shortcuts and both sign-outs', async () => {
+  test('offers Deep Work for a while, Settings, the shortcuts and signing out — nothing that is a page of Settings', async () => {
     const view = await open();
     await menu(view);
     expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Your profile…',
       'For 30 minutes',
       'For 1 hour',
       'For 2 hours',
       'Until tomorrow',
+      expect.stringMatching(/^Settings/) as unknown as string,
       expect.stringMatching(/^Keyboard shortcuts/) as unknown as string,
       'Sign out',
-      'Sign out everywhere…',
-      'Erase my account…',
     ]);
-    expect(view.getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual([
-      'System',
-      'Light',
-      'Dark',
-      'English',
-      'Türkçe',
-    ]);
+    // The theme and the language are Preferences'; signing out everywhere and erasing, Sessions & account's.
+    expect(view.queryAllByRole('menuitemradio')).toEqual([]);
     await expectNoAxeViolations(view.getByRole('menu'));
+    view.unmount();
+  });
+
+  test('Settings opens the person’s Profile page, and the menu says its shortcut', async () => {
+    const view = await open();
+    await menu(view);
+    const item = view.getByRole('menuitem', { name: /^Settings/ });
+    expect(item.textContent).toMatch(/,$/);
+    await person().click(item);
+    expect(await view.findByRole('heading', { level: 1, name: 'Profile' })).toBeDefined();
+    expect(here(view)).toBe('/w/acme/settings/profile');
     view.unmount();
   });
 
@@ -141,14 +145,6 @@ describe('the account menu', () => {
     await settle();
     expect(asked).toEqual([{ active: false }]);
     expect(view.queryByText(/Deep Work until/)).toBeNull();
-    view.unmount();
-  });
-
-  test('a theme chosen here is applied and kept', async () => {
-    const view = await open();
-    await menu(view);
-    await person().click(view.getByRole('menuitemradio', { name: 'Dark' }));
-    expect(view.world.themeStorage.data['purlay.theme']).toBe('dark');
     view.unmount();
   });
 });
@@ -225,208 +221,5 @@ describe('signing out', () => {
     await settle();
     expect(view.world.storage.data['purlay.draft.c1']).toBe('keep me');
     view.unmount();
-  });
-});
-
-describe('signing out everywhere', () => {
-  const counted = (): { asked: string[]; api: Partial<Api> } => {
-    const asked: string[] = [];
-    return {
-      asked,
-      api: {
-        // Signed out, the session is gone: the sign-in screen does not bounce back.
-        me: () =>
-          asked.length > 0
-            ? Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'))
-            : Promise.resolve(aSession()),
-        signOut: (): Promise<void> => {
-          asked.push('here');
-          return Promise.resolve();
-        },
-        signOutEverywhere: (): Promise<void> => {
-          asked.push('everywhere');
-          return Promise.resolve();
-        },
-      },
-    };
-  };
-
-  test('asks first, and Cancel signs nobody out', async () => {
-    const { asked, api } = counted();
-    const view = await open(api);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Sign out everywhere…' }));
-    const dialog = view.getByRole('dialog', { name: 'Sign out everywhere?' });
-    await expectNoAxeViolations(dialog);
-    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await settle();
-    expect(asked).toEqual([]);
-    expect(here(view)).not.toBe('/sign-in');
-    view.unmount();
-  });
-
-  test('Cancel gives focus back to the account button: the menu item that opened it is gone', async () => {
-    const view = await open(counted().api);
-    const trigger = view.getByRole('button', { name: 'Account: Dogancan' });
-    act(() => {
-      trigger.focus();
-    });
-    await person().keyboard('{Enter}');
-    await settle();
-    const item = view.getByRole('menuitem', { name: 'Sign out everywhere…' });
-    act(() => {
-      item.focus();
-    });
-    await person().keyboard('{Enter}');
-    await settle();
-    const dialog = view.getByRole('dialog', { name: 'Sign out everywhere?' });
-    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await settle();
-    expectFocusOn(trigger);
-    view.unmount();
-  });
-
-  test('confirmed, ends every session and goes to sign-in', async () => {
-    const { asked, api } = counted();
-    const view = await open(api);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Sign out everywhere…' }));
-    const dialog = view.getByRole('dialog', { name: 'Sign out everywhere?' });
-    await person().click(within(dialog).getByRole('button', { name: 'Sign out everywhere' }));
-    await settle();
-    expect(asked).toEqual(['everywhere']);
-    expect(view.world.history.stack).toEqual(['/sign-in']);
-    view.unmount();
-  });
-
-  test('refused, says so and stays', async () => {
-    const view = await open({
-      signOutEverywhere: () => Promise.reject(new ApiError(500, 'INTERNAL', 'x')),
-    });
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Sign out everywhere…' }));
-    await person().click(
-      within(view.getByRole('dialog')).getByRole('button', { name: 'Sign out everywhere' }),
-    );
-    expect(await view.findByText(/^Couldn't sign you out\./)).toBeDefined();
-    expect(here(view)).not.toBe('/sign-in');
-    view.unmount();
-  });
-});
-
-describe('erasing the account (D-139 §5)', () => {
-  const erasing = async (api: Partial<Api>): Promise<{ view: View; dialog: HTMLElement }> => {
-    const view = await open(api);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Erase my account…' }));
-    return { view, dialog: view.getByRole('dialog', { name: 'Erase your account' }) };
-  };
-  const field = (dialog: HTMLElement): HTMLElement =>
-    within(dialog).getByLabelText('Type your username, dogancan, to confirm');
-
-  test('says what goes and what stays, and does nothing until the username is typed', async () => {
-    const asked: string[] = [];
-    const { view, dialog } = await erasing({
-      // Signed out once erased, as the cookie the answer clears makes it.
-      me: () =>
-        asked.length > 0
-          ? Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'))
-          : Promise.resolve(aSession()),
-      eraseAccount: (confirm) => {
-        asked.push(confirm);
-        return Promise.resolve();
-      },
-    });
-    expect(dialog.textContent).toContain('What you wrote stays for your team');
-    const erase = within(dialog).getByRole('button', { name: 'Erase my account' });
-    expect(erase).toHaveProperty('disabled', true);
-    await person().type(field(dialog), 'dogancaN');
-    expect(erase).toHaveProperty('disabled', true);
-    await person().clear(field(dialog));
-    await person().type(field(dialog), 'dogancan');
-    await expectNoAxeViolations(dialog);
-    await person().click(erase);
-    await settle();
-    expect(asked).toEqual(['dogancan']);
-    expect(here(view)).toBe('/sign-in?reason=erased');
-  });
-
-  test('Enter with another name is told so under the field; Cancel closes and forgets what was typed', async () => {
-    const { view, dialog } = await erasing({
-      eraseAccount: () => {
-        throw new Error('nothing should be erased');
-      },
-    });
-    await person().type(field(dialog), 'somebody{Enter}');
-    expect(field(dialog).getAttribute('aria-invalid')).toBe('true');
-    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
-    await settle();
-    expect(view.queryByRole('dialog')).toBeNull();
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Erase my account…' }));
-    const again = view.getByRole('dialog', { name: 'Erase your account' });
-    expect((field(again) as HTMLInputElement).value).toBe('');
-  });
-
-  test('a session too old is told to sign in again, with the way to it', async () => {
-    const signedOut: string[] = [];
-    const { view, dialog } = await erasing({
-      eraseAccount: () => Promise.reject(new ApiError(403, 'REAUTHENTICATION_REQUIRED', 'old')),
-      signOut: () => {
-        signedOut.push('here');
-        return Promise.resolve();
-      },
-      me: () =>
-        signedOut.length > 0
-          ? Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'))
-          : Promise.resolve(aSession()),
-    });
-    await person().type(field(dialog), 'dogancan');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
-    await settle();
-    expect(within(dialog).getByRole('alert').textContent).toContain('sign in again first');
-    await person().click(within(dialog).getByRole('button', { name: 'Sign out to sign in again' }));
-    await settle();
-    expect(signedOut).toEqual(['here']);
-    expect(here(view)).toBe('/sign-in');
-  });
-
-  test('the last owner is told which workspaces to hand over, by name', async () => {
-    const { dialog } = await erasing({
-      eraseAccount: () =>
-        Promise.reject(
-          new ApiError(409, 'LAST_OWNER', 'hand over', {}, undefined, [
-            aSession().memberships[0]?.workspace.id ?? '',
-          ]),
-        ),
-    });
-    await person().type(field(dialog), 'dogancan');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
-    await settle();
-    const name = aSession().memberships[0]?.workspace.name ?? '';
-    expect(within(dialog).getByRole('alert').textContent).toBe(
-      `Hand these workspaces to another owner first: ${name}.`,
-    );
-  });
-
-  test('a username the server does not take is said under the field; any other failure above it', async () => {
-    const failures = [
-      new ApiError(400, 'VALIDATION_FAILED', 'no', { confirm: 'is not' }),
-      new ApiError(0, 'NETWORK', 'offline'),
-    ];
-    const { dialog } = await erasing({
-      eraseAccount: () => Promise.reject(failures.shift() ?? new Error('no more')),
-    });
-    await person().type(field(dialog), 'dogancan');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
-    await settle();
-    expect(field(dialog).getAttribute('aria-invalid')).toBe('true');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
-    await settle();
-    expect(
-      within(dialog)
-        .getAllByRole('alert')
-        .map((alert) => alert.textContent),
-    ).toContainEqual(expect.stringContaining('Your account was not erased.') as unknown as string);
   });
 });

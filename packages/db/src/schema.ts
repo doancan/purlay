@@ -295,6 +295,15 @@ export interface Sessions {
   user_id: string;
 }
 
+export interface ThreadFollows {
+  channel_id: string;
+  following: boolean;
+  message_id: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface Users {
   avatar_url: string | null;
   created_at: Generated<Timestamp>;
@@ -385,6 +394,7 @@ export interface DB {
   reactions: Reactions;
   saved_messages: SavedMessages;
   sessions: Sessions;
+  thread_follows: ThreadFollows;
   users: Users;
   workspace_exports: WorkspaceExports;
   workspace_invitations: WorkspaceInvitations;

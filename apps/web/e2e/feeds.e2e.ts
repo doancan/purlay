@@ -18,6 +18,8 @@ test.describe('a channel’s repositories', () => {
     await page.goto(made.path);
     await page.getByRole('button', { name: made.name, exact: true }).click();
     const dialog = page.getByRole('dialog', { name: `Details of #${made.name}` });
+    // The repositories are an owner's own tab (D-154).
+    await dialog.getByRole('tab', { name: 'Integrations' }).click();
     const feeds = dialog.getByRole('region', { name: 'GitHub repositories' });
     await expect(feeds.getByText(/No repository is connected/)).toBeVisible();
 

@@ -27,6 +27,7 @@ import {
   CreateDirectMessageRequest,
   MeResponse,
   MessagePage,
+  MessageWindow,
   NotificationQuery,
   PAGE_LIMIT,
   ReadNotificationsRequest,
@@ -35,6 +36,7 @@ import {
   Page,
   ReactionsResponse,
   ReadChannelRequest,
+  ReadThreadRequest,
   AddChannelMemberRequest,
   SEARCH_QUERY_MAX,
   SEARCH_QUERY_MIN,
@@ -42,6 +44,8 @@ import {
   CreateChannelRequest,
   EditMessageRequest,
   SendMessageRequest,
+  SetThreadFollowRequest,
+  ThreadFollow,
   ThreadPage,
   UnresolvedPage,
 } from './api';
@@ -81,6 +85,7 @@ describe('models', () => {
       incident: null,
       peer: user,
       peers: [user],
+      memberCount: 1,
     };
     expect(Value.Check(Channel, dm)).toBe(true);
     expect(Value.Check(Channel, { ...dm, type: 'nonsense' })).toBe(false);
@@ -329,6 +334,13 @@ describe('http shapes', () => {
     expect(Value.Check(SearchQuery, { q: 'abc', channelId: id, before: id, limit: 5 })).toBe(true);
   });
 
+  test('a search may be narrowed to who wrote it, named by an id (D-166)', () => {
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: id })).toBe(true);
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: id, channelId: id })).toBe(true);
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: 'alice' })).toBe(false);
+    expect(Value.Check(SearchQuery, { q: 'abc', senderId: '' })).toBe(false);
+  });
+
   test('the inbox is one workspace, a page at a time, newest first', () => {
     expect(Value.Check(NotificationQuery, { workspaceId: id })).toBe(true);
     expect(Value.Check(NotificationQuery, { workspaceId: id, unreadOnly: true, before: id })).toBe(
@@ -474,6 +486,18 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
     attachments: [],
   };
 
+  test('a window around a message names it and carries both cursors, null at an end (D-149)', () => {
+    const window = { target: root, data: [root], olderCursor: id, newerCursor: null };
+    expect(Value.Check(MessageWindow, window)).toBe(true);
+    expect(Value.Check(MessageWindow, { ...window, target: null })).toBe(false);
+    expect(Value.Check(MessageWindow, { data: [root], olderCursor: null, newerCursor: null })).toBe(
+      false,
+    );
+    expect(Value.Check(MessageWindow, { target: root, data: [root], olderCursor: null })).toBe(
+      false,
+    );
+  });
+
   test('a root carries its thread summary, a reply carries none', () => {
     expect(Value.Check(Message, root)).toBe(true);
     expect(Value.Check(Message, { ...root, parentId: id, thread: null })).toBe(true);
@@ -520,7 +544,17 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
   test('reading names a message and nothing else', () => {
     expect(Value.Check(ReadChannelRequest, { lastReadMessageId: id })).toBe(true);
     expect(Value.Check(ReadChannelRequest, { lastReadMessageId: id, unreadCount: 0 })).toBe(false);
+    expect(Value.Check(ReadThreadRequest, { lastReadMessageId: id })).toBe(true);
+    expect(Value.Check(ReadThreadRequest, {})).toBe(false);
     expect(Value.Check(CreateDirectMessageRequest, { userId: id })).toBe(true);
+  });
+
+  test('following a thread is one boolean, the caller’s own (D-161)', () => {
+    expect(Value.Check(SetThreadFollowRequest, { following: false })).toBe(true);
+    expect(Value.Check(SetThreadFollowRequest, {})).toBe(false);
+    expect(Value.Check(SetThreadFollowRequest, { following: true, userId: id })).toBe(false);
+    expect(Value.Check(ThreadFollow, { following: true })).toBe(true);
+    expect(Value.Check(ThreadFollow, { following: 'yes' })).toBe(false);
   });
 
   test('a revision carries what an edit or a delete changes, and nothing it does not', () => {
@@ -591,6 +625,7 @@ describe('the wedge: threads, reactions, read state (D-98)', () => {
           incident: null,
           peer: user,
           peers: [user],
+          memberCount: 1,
         },
         ts: 1,
       },

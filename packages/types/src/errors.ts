@@ -44,6 +44,11 @@ export const ErrorCode = Type.Union([
   Type.Literal('FORBIDDEN'),
   /** The one irreversible act needs a sign-in from the last minutes, not an old session (D-139 §5). */
   Type.Literal('REAUTHENTICATION_REQUIRED'),
+  /**
+   * Writing in a channel the caller can see and is not in: a public channel they have not joined.
+   * Joining it is the way on (D-156). Never for a channel they cannot see — that is its `404`.
+   */
+  Type.Literal('NOT_A_CHANNEL_MEMBER'),
   // Absence, and everything a boundary turns into absence
   /** No such route. Distinct from a resource that does not exist, or is not yours. */
   Type.Literal('ROUTE_NOT_FOUND'),
@@ -174,6 +179,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   FORBIDDEN: 403,
   REAUTHENTICATION_REQUIRED: 403,
+  NOT_A_CHANNEL_MEMBER: 403,
   EMAIL_REQUIRED: 403,
 
   ROUTE_NOT_FOUND: 404,
@@ -250,6 +256,16 @@ export const LastOwnerDetails = Type.Object({
 });
 export type LastOwnerDetails = Static<typeof LastOwnerDetails>;
 
+/**
+ * How much room the workspace still has, in bytes, when a file did not fit: what the quota leaves
+ * after what is stored and what is waiting to be sent, so the person is told how large a file would
+ * still go (D-159). The quota is the workspace's own number, and every member uploads into it.
+ */
+export const StorageQuotaDetails = Type.Object({
+  remainingBytes: Type.Integer({ minimum: 0 }),
+});
+export type StorageQuotaDetails = Static<typeof StorageQuotaDetails>;
+
 export const AppErrorBody = Type.Union([
   Type.Object({
     code: Type.Literal('VALIDATION_FAILED'),
@@ -262,11 +278,20 @@ export const AppErrorBody = Type.Union([
     details: Type.Optional(LastOwnerDetails),
   }),
   Type.Object({
+    code: Type.Literal('STORAGE_QUOTA_EXCEEDED'),
+    message: Type.String(),
+    details: Type.Optional(StorageQuotaDetails),
+  }),
+  Type.Object({
     // Derived, so the codes are listed once. A new code lands here automatically
     // rather than in a second list somebody has to remember to update.
     code: Type.Exclude(
       ErrorCode,
-      Type.Union([Type.Literal('VALIDATION_FAILED'), Type.Literal('LAST_OWNER')]),
+      Type.Union([
+        Type.Literal('VALIDATION_FAILED'),
+        Type.Literal('LAST_OWNER'),
+        Type.Literal('STORAGE_QUOTA_EXCEEDED'),
+      ]),
     ),
     message: Type.String(),
   }),

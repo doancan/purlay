@@ -127,8 +127,9 @@ describe('the header', () => {
     const feedTab = view.getByRole('link', { name: 'Feed' });
     expect(feedTab.getAttribute('aria-current')).toBe('page');
     expect(feedTab.getAttribute('href')).toBe(`/w/acme/c/${IDS.api}`);
+    // The open questions of this channel: the view, narrowed to it.
     expect(view.getByRole('link', { name: 'Open questions' }).getAttribute('href')).toBe(
-      '/w/acme/questions',
+      `/w/acme/questions?in=${IDS.api}`,
     );
     view.unmountAll();
   });
@@ -183,6 +184,61 @@ describe('the header', () => {
     none.unmountAll();
   });
 
+  test("counts this channel's open questions, never the workspace's", async () => {
+    // Found by an audit: the header said the workspace's total in every channel, conversations too.
+    const view = await mountChannel({
+      messages: page([aMessage(1)]),
+      api: {
+        unresolved: () =>
+          Promise.resolve(
+            page([
+              aMessage(7, { channelId: IDS.incidents }),
+              aMessage(6),
+              aMessage(5, { channelId: IDS.deploys }),
+            ]),
+          ),
+      },
+    });
+    expect(view.getByRole('link', { name: /Open questions/ }).getAttribute('aria-label')).toBe(
+      'Open questions 1',
+    );
+    view.unmountAll();
+
+    const elsewhere = await mountChannel({
+      messages: page([aMessage(1)]),
+      api: { unresolved: () => Promise.resolve(page([aMessage(7, { channelId: IDS.incidents })])) },
+    });
+    expect(elsewhere.getByRole('link', { name: /Open questions/ }).textContent).toBe(
+      'Open questions',
+    );
+    elsewhere.unmountAll();
+  });
+
+  test('a conversation shows its open questions only while it has some', async () => {
+    const dm = aChannel(IDS.dm, null, { type: 'direct_message', peer: BOB });
+    const quiet = await mountChannel({
+      channelId: IDS.dm,
+      channels: [dm],
+      messages: page([aMessage(1, { channelId: IDS.dm })]),
+      api: { unresolved: () => Promise.resolve(page([aMessage(7)])) },
+    });
+    expect(quiet.queryByRole('navigation', { name: 'Channel views' })).toBeNull();
+    quiet.unmountAll();
+
+    const asking = await mountChannel({
+      channelId: IDS.dm,
+      channels: [dm],
+      messages: page([aMessage(1, { channelId: IDS.dm })]),
+      api: {
+        unresolved: () => Promise.resolve(page([aMessage(7), aMessage(6, { channelId: IDS.dm })])),
+      },
+    });
+    const questions = asking.getByRole('link', { name: /Open questions/ });
+    expect(questions.getAttribute('aria-label')).toBe('Open questions 1');
+    expect(questions.getAttribute('href')).toBe(`/w/acme/questions?in=${IDS.dm}`);
+    asking.unmountAll();
+  });
+
   test('a direct message is the other person, and a note to self says so', async () => {
     const dm = aChannel(IDS.dm, null, { type: 'direct_message', peer: BOB });
     const self = aChannel(IDS.dm, null, { type: 'direct_message', peer: ME });
@@ -191,7 +247,8 @@ describe('the header', () => {
       channels: [dm],
       messages: page([aMessage(1, { channelId: IDS.dm })]),
     });
-    expect(other.getByRole('heading', { level: 1 }).textContent).toBe('bob');
+    // Named as the sidebar names them, never by the handle (that is their profile's).
+    expect(other.getByRole('heading', { level: 1 }).textContent).toBe('Bob');
     // A conversation with a person is headed by the person's own avatar, not a glyph.
     expect(other.getByRole('heading', { level: 1 }).previousElementSibling?.textContent).toBe('BO');
     expect(other.queryByText('No topic yet')).toBeNull();
@@ -201,7 +258,7 @@ describe('the header', () => {
       channels: [self],
       messages: page([aMessage(1, { channelId: IDS.dm })]),
     });
-    expect(note.getByRole('heading', { level: 1 }).textContent).toBe('dogancan (you)');
+    expect(note.getByRole('heading', { level: 1 }).textContent).toBe('Dogancan (you)');
     note.unmountAll();
     const odd = await mountChannel({
       channelId: IDS.dm,

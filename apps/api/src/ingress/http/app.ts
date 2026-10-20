@@ -86,6 +86,7 @@ import {
   readGitHubIntegration,
   readAuditTrail,
   removeWorkspaceMember,
+  leaveWorkspaceMembership,
   updateMemberRole,
   readMe,
   readWorkspace,
@@ -109,12 +110,15 @@ import {
   leave,
   listChannelMembers,
 } from './channels';
-import { markNotificationsRead, readInbox } from './notifications';
+import { markNotificationsRead, markThreadRead, readInbox } from './notifications';
 import {
   postMessage,
   readFiles,
   readHistory,
+  readAround,
   readThread,
+  readThreadFollow,
+  putThreadFollow,
   readSearch,
   readUnresolved,
   setThreadResolution,
@@ -600,6 +604,11 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
+    .delete('/api/workspaces/:workspaceId/membership', async ({ request, params, set }) => {
+      await leaveWorkspaceMembership(sending, request, params.workspaceId);
+      set.status = 204;
+      return null;
+    })
     .put(
       '/api/workspaces/:workspaceId/deep-work',
       async ({ request, params, body }) =>
@@ -834,9 +843,28 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         await editMessage(sending, request, params.messageId, body),
     )
     .get(
+      '/api/messages/:messageId/around',
+      async ({ request, params }) => await readAround(dependencies, request, params.messageId),
+    )
+    .get(
       '/api/messages/:messageId/thread',
       async ({ request, params }) => await readThread(dependencies, request, params.messageId),
     )
+    .get(
+      '/api/messages/:messageId/follow',
+      async ({ request, params }) =>
+        await readThreadFollow(dependencies, request, params.messageId),
+    )
+    .put(
+      '/api/messages/:messageId/follow',
+      async ({ request, params, body }) =>
+        await putThreadFollow(dependencies, request, params.messageId, body),
+    )
+    .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
+      await markThreadRead({ ...dependencies, bus: sockets.bus }, request, params.messageId, body);
+      set.status = 204;
+      return null;
+    })
     .post(
       '/api/messages/:messageId/resolve',
       async ({ request, params }) =>

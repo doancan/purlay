@@ -1068,6 +1068,42 @@ At most `PINS_MAX` a channel, counted over pins of messages not deleted, under t
 locked. Deleting the message deletes its pin in the same transaction; a pin left by a delete that
 raced it is hidden, not counted, and still let go by an unpin; a retention purge cascades it.
 
+### 7.7. `thread_follows`
+
+A person's own choice about one thread (D-161): told of its new replies, or not. Without a row a person
+follows a thread they started or have answered (D-29); a row is a choice, either way, and stands until
+they make another — replying again does not take it back.
+
+```sql
+CREATE TABLE thread_follows (
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id    UUID NOT NULL,
+    -- The root. That it is a root is the service's rule, as a reply's parent is (I-1).
+    message_id    UUID NOT NULL,
+    -- True: told of its replies though they never wrote in it. False: not told, though they did.
+    following     BOOLEAN NOT NULL,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT thread_follows_pkey PRIMARY KEY (user_id, message_id),
+    -- The message is in this channel, and the channel in this workspace. (I-1, I-4)
+    CONSTRAINT thread_follows_message_channel_fkey
+        FOREIGN KEY (message_id, channel_id) REFERENCES messages (id, channel_id)
+        ON DELETE CASCADE,
+    CONSTRAINT thread_follows_channel_workspace_fkey
+        FOREIGN KEY (channel_id, workspace_id) REFERENCES channels (id, workspace_id)
+        ON DELETE CASCADE
+);
+
+-- A reply reads its thread's choices by the root: one indexed lookup per reply, beside D-29's.
+CREATE INDEX idx_thread_follows_message   ON thread_follows (message_id, channel_id);
+CREATE INDEX idx_thread_follows_channel   ON thread_follows (channel_id, workspace_id);
+CREATE INDEX idx_thread_follows_workspace ON thread_follows (workspace_id);
+```
+
+A soft delete keeps the row: a deleted root keeps its thread (D-103 §7), and so who follows it. A
+retention purge cascades it; the account's erasure deletes them, as it does a person's saves.
+
 ## 8. GitHub Integration
 
 ### 8.1. `github_integrations`
@@ -1482,6 +1518,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0041_object_deletions.sql    object_deletions: objects whose rows are gone, until the store lets them go  (D-141)
 0042_object_deletions_due.sql object_deletions.due_at: an upload's keys, written ahead, due after a grace  (D-141 §4)
 0043_messages_search_folded.sql purlay_fold + idx_messages_search_folded replace idx_messages_search: case by Unicode  (D-105 §1, #700)
+0044_thread_follows.sql      thread_follows: a person's choice to follow a thread, or let it go  (D-161)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

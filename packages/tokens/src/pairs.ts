@@ -98,6 +98,7 @@ export const PAIRS: readonly Pair[] = [
   ...cross(['danger-text'], ['danger-subtle'], TEXT, 'a status pill: failed'),
   ...cross(['warning-text'], ['warning-subtle'], TEXT, 'a status pill: open, Deep Work'),
   ...cross(['success-text'], ['success-subtle'], TEXT, 'a status pill: resolved'),
+  ...cross(['ink'], ['match'], TEXT, 'the words a search matched, marked in the text'),
   ...cross(SYNTAX, ['code-bg'], TEXT, 'code, the usual casualty (UX §9)'),
   ...inNav([
     ...cross(
@@ -139,6 +140,7 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   'danger-subtle': 'a background; it is the `background` of the pairs above',
   'warning-subtle': 'a background; it is the `background` of the pairs above',
   'success-subtle': 'a background; it is the `background` of the pairs above',
+  match: 'a background; it is the `background` of the pairs above',
   accent: 'a fill; its legibility is `on-accent` on it, and its words are `accent-text`',
   'accent-hover': 'a fill; its legibility is `on-accent` on it',
   'border-subtle': 'decorative: a divider that carries no meaning, so it is allowed to be faint',

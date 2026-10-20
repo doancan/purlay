@@ -49,15 +49,11 @@ const field = (view: Awaited<ReturnType<typeof visit>>): HTMLInputElement =>
   within(view.container).getByLabelText<HTMLInputElement>('Search messages');
 
 describe('where a found message is read', () => {
-  test('a reply in its thread, a question with answers in its thread, anything else in its channel', () => {
-    expect(placeOf('acme', aMessage(1))).toBe(`/w/acme/c/${IDS.api}`);
+  test('every message at its own address, which opens its thread for a reply (D-149)', () => {
+    expect(placeOf('acme', aMessage(1))).toBe(`/w/acme/c/${IDS.api}?message=${messageIdAt(1)}`);
     expect(placeOf('acme', aMessage(2, { parentId: messageIdAt(1) }))).toBe(
-      `/w/acme/c/${IDS.api}?thread=${messageIdAt(1)}`,
+      `/w/acme/c/${IDS.api}?message=${messageIdAt(2)}`,
     );
-    const answered = aMessage(3, {
-      thread: { replyCount: 2, lastReplyAt: null, resolvedAt: null, resolvedBy: null },
-    });
-    expect(placeOf('acme', answered)).toBe(`/w/acme/c/${IDS.api}?thread=${messageIdAt(3)}`);
   });
 });
 
@@ -81,7 +77,7 @@ describe('asking', () => {
     expect(view.getByRole('button', { name: /the deploy is at noon/ })).toBeDefined();
     await expectNoAxeViolations(view.container);
     await person().click(view.getByRole('button', { name: /the deploy is at noon/ }));
-    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?message=${messageIdAt(4)}`);
     view.unmount();
   });
 
@@ -107,7 +103,7 @@ describe('asking', () => {
       search: () =>
         Promise.resolve(
           page([
-            aMessage(4, { sender: BOB, content: 'deploy at noon' }),
+            aMessage(4, { sender: BOB, content: 'deploy at noon, then deploy again' }),
             aMessage(3, { sender: BOB, content: long }),
           ]),
         ),
@@ -116,8 +112,11 @@ describe('asking', () => {
     await person().keyboard('{Enter}');
     await settle();
     const marks = [...view.container.querySelectorAll('mark')].map((mark) => mark.textContent);
-    expect(marks).toEqual(['deploy', 'Deploy']);
-    const second = view.container.querySelectorAll('mark')[1]?.parentElement?.textContent ?? '';
+    // Every time the words are said, not only the first.
+    expect(marks).toEqual(['deploy', 'deploy', 'Deploy']);
+    // Marked in the match tone, full enough to find in a line — not a status pill's faint ground.
+    expect(view.container.querySelector('mark')?.className.split(' ')).toContain('bg-match');
+    const second = view.container.querySelectorAll('mark')[2]?.parentElement?.textContent ?? '';
     expect(second.startsWith('…')).toBe(true);
     expect(second).toContain('Then the Deploy window moved');
     await expectNoAxeViolations(view.container);
@@ -277,6 +276,22 @@ describe('narrowed to a channel (`PRD.md` §4.6)', () => {
     view.unmount();
   });
 
+  test('a person is named by their name, as the feed names them, never by the handle', async () => {
+    const direct = aChannel(IDS.dm, null, { type: 'direct_message', peer: BOB });
+    const view = await visit({
+      channels: () => Promise.resolve([...someChannels(), direct]),
+      search: () => Promise.resolve(page([aMessage(4, { sender: BOB, content: 'deploy now' })])),
+    });
+    await person().type(field(view), 'deploy');
+    await person().keyboard('{Enter}');
+    await settle();
+    const row = view.getByRole('button', { name: /deploy now/ });
+    expect(within(row).getByText(BOB.displayName)).toBeDefined();
+    expect(within(row).queryByText(BOB.username)).toBeNull();
+    expect(within(where(view)).getByRole('option', { name: BOB.displayName })).toBeDefined();
+    view.unmount();
+  });
+
   test('a group is offered and said by its people, not as one person (D-127)', async () => {
     const group = aChannel(IDS.dm, null, { type: 'direct_message', peers: [ALICE, BOB] });
     const names = `${ALICE.displayName}, ${BOB.displayName}`;
@@ -328,6 +343,133 @@ describe('narrowed to a channel (`PRD.md` §4.6)', () => {
     );
     expect(asked).toEqual([undefined]);
     expect(where(view).value).toBe('');
+    view.unmount();
+  });
+});
+
+describe('narrowed to who wrote it (D-166)', () => {
+  const from = (view: Awaited<ReturnType<typeof visit>>, chosen = 'Anyone'): HTMLElement =>
+    within(view.container).getByRole('button', { name: `From ${chosen}` });
+
+  const recording = (asked: string[]): Partial<Api> => ({
+    search: (_workspace, query): Promise<MessagePage> => {
+      asked.push(`${query.q}@${query.channelId ?? 'everywhere'}/${query.senderId ?? 'anyone'}`);
+      return Promise.resolve(page([]));
+    },
+  });
+
+  test('choosing a person asks again for their words alone, keeps them in the address, and says so', async () => {
+    const asked: string[] = [];
+    const view = await visit(recording(asked), { path: '/w/acme/search?q=deploy' });
+    await person().click(from(view));
+    const choices = view.getAllByRole('menuitemradio');
+    // Anyone, then the person themself, then everybody by name — each with a face.
+    // Read without the avatar's letters, which are hidden from a screen reader.
+    const words = (choice: HTMLElement): string =>
+      choice.textContent.replace(choice.querySelector('[data-avatar]')?.textContent ?? '', '');
+    expect(choices.map(words)).toEqual(['Anyone', 'Dogancan you', 'Alice', 'Bob']);
+    expect(choices.map((choice) => choice.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ]);
+    expect(choices[2]?.querySelector('[data-avatar]')).not.toBeNull();
+    await expectNoAxeViolations(view.getByRole('menu'));
+    await person().click(view.getByRole('menuitemradio', { name: /Alice/ }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=deploy&from=${IDS.alice}`);
+    expect(asked).toEqual(['deploy@everywhere/anyone', `deploy@everywhere/${IDS.alice}`]);
+    expect(from(view, 'Alice')).toBeDefined();
+    expect(
+      view.getByText(
+        'Searched what Alice wrote, in every channel you can see. A deleted message is never found.',
+      ),
+    ).toBeDefined();
+    expect(
+      view.getByText('Press Enter to search what Alice wrote, in every channel you can see.'),
+    ).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test('the address keeps both filters: new words keep them, Anyone lets the person go, Back brings them back', async () => {
+    const asked: string[] = [];
+    const view = await visit(recording(asked), {
+      path: `/w/acme/search?q=deploy&in=${IDS.api}&from=${IDS.bob}`,
+    });
+    expect(from(view, 'Bob')).toBeDefined();
+    expect(
+      view.getByText('Searched what Bob wrote in #api. A deleted message is never found.'),
+    ).toBeDefined();
+    await person().clear(field(view));
+    await person().type(field(view), 'noon{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(
+      `/w/acme/search?q=noon&in=${IDS.api}&from=${IDS.bob}`,
+    );
+    // Choosing where keeps who.
+    await person().selectOptions(
+      within(view.container).getByRole<HTMLSelectElement>('combobox', { name: 'Where' }),
+      '',
+    );
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=noon&from=${IDS.bob}`);
+    await person().click(from(view, 'Bob'));
+    await person().click(view.getByRole('menuitemradio', { name: 'Anyone' }));
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/search?q=noon');
+    act(() => {
+      view.world.history.back();
+    });
+    await settle();
+    expect(from(view, 'Bob')).toBeDefined();
+    expect(asked).toEqual([
+      `deploy@${IDS.api}/${IDS.bob}`,
+      `noon@${IDS.api}/${IDS.bob}`,
+      `noon@everywhere/${IDS.bob}`,
+      'noon@everywhere/anyone',
+    ]);
+    view.unmount();
+  });
+
+  test('typing a name reaches it, and Enter chooses it', async () => {
+    const view = await visit(recording([]), { path: '/w/acme/search?q=deploy' });
+    await person().click(from(view));
+    await person().keyboard('Bo');
+    expect(document.activeElement?.textContent.endsWith('Bob')).toBe(true);
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/search?q=deploy&from=${IDS.bob}`);
+    view.unmount();
+  });
+
+  test('somebody no longer listed is still searched for, and said as Someone; not an id is nobody', async () => {
+    const asked: string[] = [];
+    const gone = '00000000-0000-4000-8000-0000000000ff';
+    const view = await visit(recording(asked), { path: `/w/acme/search?q=deploy&from=${gone}` });
+    expect(from(view, 'Someone')).toBeDefined();
+    view.unmount();
+    const odd = await visit(recording(asked), { path: '/w/acme/search?q=deploy&from=alice' });
+    expect(from(odd)).toBeDefined();
+    expect(asked).toEqual([`deploy@everywhere/${gone}`, 'deploy@everywhere/anyone']);
+    odd.unmount();
+  });
+
+  test('is said in Turkish when the interface is', async () => {
+    const view = await visit(
+      { search: () => Promise.resolve(page([])) },
+      { path: `/w/acme/search?q=yok&from=${IDS.alice}`, locale: 'tr' },
+    );
+    expect(within(view.container).getByRole('button', { name: 'Kimden Alice' })).toBeDefined();
+    expect(
+      view.getByText(
+        'Yazan: Alice. Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
+      ),
+    ).toBeDefined();
+    await person().click(within(view.container).getByRole('button', { name: 'Kimden Alice' }));
+    expect(view.getByRole('menuitemradio', { name: 'Herkes' })).toBeDefined();
+    expect(view.getByRole('menuitemradio', { name: /Dogancan sen/ })).toBeDefined();
     view.unmount();
   });
 });

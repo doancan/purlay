@@ -63,6 +63,8 @@ x-environment: &environment
   GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET}
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+  # Who may make a workspace: GitHub logins, or `*`. Unset, only the first person in (D-155).
+  WORKSPACE_CREATORS: ${WORKSPACE_CREATORS:-}
   # Off unless set; nothing is reported by default (D-44, D-96).
   ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
   # The attachment bucket (CONFIG.md, D-109); production refuses to start without it.
@@ -72,6 +74,16 @@ x-environment: &environment
   S3_BUCKET: ${S3_BUCKET:-purlay-attachments}
   S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID}
   S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+  # Web Push (#78, D-126): all three or none, and empty is none — push off, which the API says.
+  # `--env-file` only fills the placeholders in this file, so a variable not named here never
+  # reaches the container, whatever production.env says.
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+  # Email sign-in (D-138): both or neither, and empty is neither — GitHub sign-in only.
+  SMTP_URL: ${SMTP_URL:-}
+  MAIL_FROM: ${MAIL_FROM:-}
+  SMTP_ALLOW_PLAINTEXT: ${SMTP_ALLOW_PLAINTEXT:-false}
 
 services:
   api:

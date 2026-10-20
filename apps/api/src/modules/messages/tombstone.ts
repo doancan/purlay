@@ -7,8 +7,8 @@
  * a copy of `uncount` that missed the notifications would leave a mention counted for ever.
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
+import { NEEDS_YOU } from '@purlay/types';
 import type { ChannelStateUpdate } from './delivery';
-import { NEEDS_YOU } from './delivery';
 import { enqueueObjectDeletions } from '../attachments/deletions';
 
 /** A message as the counters saw it when it was sent. */
@@ -69,8 +69,8 @@ export const tombstoneRows = async (
 /**
  * Takes back what these messages of one channel added: what needed somebody no longer does — kept
  * for the inbox, read — and one unread for each member each message was counted for (not its author,
- * in the channel when it was written, with their position before it), and one unread mention for each
- * of them it was waiting on. Exactly what the sends added, so the stored numbers stay what a read would
+ * in the channel when it was written, with their position before it, or waiting on them as a reply
+ * the feed was read past — D-147), and one unread mention for each of them it was waiting on. Exactly what the sends added, so the stored numbers stay what a read would
  * recount them to. Called before a message is hard-deleted too: after, a read position on it is gone.
  *
  * Never below zero, and the mentions never above the unread (I-6): a message written before the
@@ -128,19 +128,23 @@ export const takeBack = async (
     from (
       select
         counted.user_id,
-        count(*)::int as unread,
+        count(*) filter (where message.ahead or waited.user_id is not null)::int as unread,
         count(waited.user_id)::int as mentions
       from channel_members as counted
-      join unnest(${ids}::uuid[], ${senders}::uuid[], ${times}::timestamptz[])
-        as message(id, sender_id, created_at)
+      join lateral (
+        select m.id, m.sender_id, m.created_at,
+          (counted.last_read_message_id is null or counted.last_read_message_id < m.id) as ahead
+        from unnest(${ids}::uuid[], ${senders}::uuid[], ${times}::timestamptz[])
+          as m(id, sender_id, created_at)
+      ) as message
         on (message.sender_id is null or counted.user_id <> message.sender_id)
         and counted.joined_at <= message.created_at
-        and (counted.last_read_message_id is null or counted.last_read_message_id < message.id)
       left join unnest(${waitedUsers}::uuid[], ${waitedMessages}::uuid[])
         as waited(user_id, message_id)
         on waited.user_id = counted.user_id and waited.message_id = message.id
       where counted.channel_id = ${channelId}
       group by counted.user_id
+      having count(*) filter (where message.ahead or waited.user_id is not null) > 0
     ) as taken
     where member.channel_id = ${channelId} and member.user_id = taken.user_id
     returning

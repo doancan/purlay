@@ -83,7 +83,7 @@ describe('what an event says', () => {
         { kind: 'pull_request', ...base, action: 'merged', number: 7, title: 'x' },
         turkish,
       ),
-    ).toBe('octocat, #7 numaralı çekme isteğini birleştirdi');
+    ).toBe('octocat, #7 numaralı pull request’i birleştirdi');
   });
 });
 

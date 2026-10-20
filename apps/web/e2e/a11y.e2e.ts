@@ -57,7 +57,7 @@ test.describe('a populated channel', () => {
     await page.goto(made.path);
     await ready(page);
     await expect(page.getByRole('button', { name: /Open · 1 reply/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Resolved by carol/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Resolved by Carol Reyes/ })).toBeVisible();
     await expectNoAxe();
 
     await page.getByRole('button', { name: /Open · 1 reply/ }).click();

@@ -144,7 +144,8 @@ Paste-to-upload for images · file size capped by the `attachment_size_limit` co
 
 **4.5 · Noise control** (D-12, D-15, D-29)
 `@username` mentions · **thread participation** — a reply notifies the root author and everyone
-who has already replied in that thread (D-29) · in-app notification inbox · unread and
+who has already replied in that thread (D-29), and a person can follow a thread or let it go
+(D-161) · in-app notification inbox · unread and
 unread-mention counts · Deep Work mode, which suppresses **server-side delivery** and expires
 automatically
 
@@ -153,7 +154,7 @@ a question you asked is the thing you were waiting for, not an interruption.
 
 **4.6 · Navigation & search** (D-10)
 `Cmd/Ctrl+K` command palette over channels, DMs, people and settings · substring search scoped
-to a workspace, optionally to a channel, keyset-paginated
+to a workspace, optionally to a channel and to who wrote it (D-166), keyset-paginated
 
 **4.7 · Administration** (D-26)
 An append-only audit log of administrative actions — role changes, membership changes,
@@ -163,7 +164,9 @@ integration credentials, workspace and channel settings. Never message content.
 Pasting a PR or Issue URL renders a card: title, state (`open`/`closed`/`merged`), author, CI
 status, review decision. Cached in PostgreSQL (D-23). Workspace-level credential.
 
-> **Stated plainly:** Phase 1 notifies **in-app only**. With the tab closed, Purlay is silent —
+> **Stated plainly:** Phase 1 notifies **from the open page only**. A tab open in the background says
+> what needs the person with its title, a dot on its icon and — with notifications on for that
+> device — a notice from the browser (D-148). With the tab closed, Purlay is silent —
 > unless the server has Web Push keys and the person turned notifications on for that device, which
 > is Phase 2's, started early (D-125, D-126): then what needs them, and only that, reaches the
 > device. Hiding this would fail dogfooding on day one. (D-12)

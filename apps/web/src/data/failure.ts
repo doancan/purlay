@@ -27,6 +27,7 @@ export type FailureKey =
   | 'failure.network'
   | 'failure.session'
   | 'failure.reauthenticate'
+  | 'failure.notAMember'
   | 'failure.gone'
   | 'failure.slow'
   | 'failure.tooLarge'
@@ -66,6 +67,9 @@ export const failureKey = (code: FailureCode): FailureKey => {
     // Erasing an account wants a sign-in from the last minutes (D-139 §5).
     case 'REAUTHENTICATION_REQUIRED':
       return 'failure.reauthenticate';
+    // Writing in a public channel the person has not joined: the way on is Join (D-156).
+    case 'NOT_A_CHANNEL_MEMBER':
+      return 'failure.notAMember';
     case 'FORBIDDEN':
     case 'ROUTE_NOT_FOUND':
     case 'WORKSPACE_NOT_FOUND':

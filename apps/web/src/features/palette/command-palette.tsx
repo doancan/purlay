@@ -27,11 +27,15 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { Avatar } from '../../ui/avatar';
+import { GroupFace } from '../conversations/group-face';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { Kbd } from '../../ui/kbd';
 import { VisuallyHidden } from '../../ui/visually-hidden';
-import { GROUPS, rank, type PaletteGroup, type Shown } from './rank';
+import { searchHref } from '../../router/routes';
+import { useRoute } from '../../router/router-provider';
+import { useWorkspace } from '../shell/workspace';
+import { GROUPS, rank, type PaletteGroup, type PaletteItem, type Shown } from './rank';
 import { usePaletteItems } from './use-palette-items';
 
 export interface CommandPaletteProps {
@@ -78,6 +82,7 @@ const GROUP_LABEL = {
   channels: 'palette.group.channels',
   people: 'palette.group.people',
   settings: 'palette.group.settings',
+  search: 'palette.group.search',
 } as const satisfies Record<PaletteGroup, string>;
 
 const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element => {
@@ -92,7 +97,26 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   const [busy, setBusy] = useState(false);
   const pointer = useRef<{ x: number; y: number } | null>(null);
 
-  const shown = useMemo(() => rank(items, query), [items, query]);
+  const { navigate } = useRoute();
+  const { workspace } = useWorkspace();
+  // Whatever was typed can always be searched for in the messages: the last row, never the only
+  // way to find a channel, but the way to find what somebody said (`PRD.md` §4.6).
+  const matched = useMemo(() => rank(items, query), [items, query]);
+  const shown = useMemo((): readonly Shown[] => {
+    const words = query.trim();
+    if (words === '') return matched;
+    const searching: PaletteItem = {
+      id: 'search:messages',
+      group: 'search',
+      label: t('palette.searchFor', { query: words }),
+      glyph: 'search',
+      recency: '',
+      run: () => {
+        navigate(searchHref(workspace.slug, words));
+      },
+    };
+    return [...matched, { item: searching, positions: [] }];
+  }, [matched, query, t, navigate, workspace.slug]);
   const current = shown[selected];
   const optionId = (index: number): string => `${base}-option-${String(index)}`;
 
@@ -156,9 +180,9 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   const typed = query.trim() !== '';
   const announcement = !typed
     ? ''
-    : shown.length === 0
+    : matched.length === 0
       ? t('palette.empty', { query: query.trim() })
-      : t('palette.results', { count: shown.length });
+      : t('palette.results', { count: matched.length });
 
   let index = -1;
   return (
@@ -190,13 +214,12 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
         </div>
       </div>
 
-      {shown.length === 0 ? (
-        // No listbox at all: an empty one is not a valid listbox, and a combobox with
-        // nothing to show says so (`aria-expanded`) instead of pointing at nothing.
-        <p className="px-4 py-6 text-body text-ink-muted">
+      {typed && matched.length === 0 && (
+        <p className="px-4 pt-3 pb-1 text-body text-ink-muted">
           {t('palette.empty', { query: query.trim() })}
         </p>
-      ) : (
+      )}
+      {shown.length === 0 ? null : (
         <div
           id={listId}
           role="listbox"
@@ -245,7 +268,12 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
                         active && 'bg-accent-subtle',
                       )}
                     >
-                      {entry.item.avatar === undefined ? (
+                      {entry.item.faces !== undefined ? (
+                        <GroupFace
+                          peers={entry.item.faces}
+                          surface={active ? 'selected' : 'surface'}
+                        />
+                      ) : entry.item.avatar === undefined ? (
                         <span
                           aria-hidden="true"
                           className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted"

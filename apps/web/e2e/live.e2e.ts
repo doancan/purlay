@@ -256,7 +256,9 @@ test.describe('a thread', () => {
     await expect(questions.getByText(question)).toBeVisible();
 
     await alice.resolve(root.id);
-    await expect(page.getByRole('button', { name: /Resolved by alice · 1 reply/ })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Resolved by Alice Chen · 1 reply/ }),
+    ).toBeVisible();
     await expect(questions.getByText(question)).toHaveCount(0, {
       timeout: 5_000,
     });
@@ -280,7 +282,7 @@ test.describe('a reaction', () => {
     const aliceRow = rowWith(alice, 'ship it?');
     await aliceRow.hover();
     await aliceRow.getByRole('button', { name: 'Add reaction' }).click();
-    await alice.getByRole('menuitem', { name: /Ship it/ }).click();
+    await alice.getByRole('menuitemcheckbox', { name: /Ship it/ }).click();
     await expect(alice.getByText('The reaction was not saved. Try again.')).toHaveCount(0);
 
     const chip = rowWith(page, 'ship it?').getByRole('button', { name: '🚀, 1 reaction' });
@@ -328,7 +330,9 @@ test.describe('a message somebody else revises', () => {
     room,
     api,
   }) => {
+    // Bob answers, so he is in the room: a write from somebody who has not joined is refused (D-156).
     const made = await room({
+      members: ['dogancan', 'alice', 'bob'],
       messages: [
         { by: 'alice', text: 'a question about the cache' },
         { by: 'alice', text: 'never mind this one' },

@@ -19,7 +19,7 @@
  * usernames), found with the server's own pattern (`mentionsIn`); an `@name` that names nobody is
  * just text.
  */
-import { Component, useMemo } from 'react';
+import { Component, lazy, Suspense, useMemo } from 'react';
 import {
   mentionsIn,
   readMarkdown,
@@ -34,8 +34,13 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { CodeBlock } from './code-block';
-import { DiffBlock } from './diff-block';
 import { readingCache } from './reading-cache';
+
+/**
+ * A diff's viewer, a chunk of its own (#687): a ```diff block is rare, and until the viewer arrives the
+ * same lines are drawn as the code block they are, so nothing is ever blank.
+ */
+const DiffBlock = lazy(async () => ({ default: (await import('./diff-block')).DiffBlock }));
 
 /**
  * Bidirectional controls: the embeddings, overrides and isolates (U+202A–202E, U+2066–2069).
@@ -214,7 +219,7 @@ const Table = ({
       role="group"
       aria-label={t('message.table')}
       tabIndex={0}
-      className="my-1 max-w-full overflow-x-auto"
+      className="scrollbar-thin my-1 max-w-full overflow-x-auto"
     >
       <table className="border-collapse">
         {head !== undefined && (
@@ -284,7 +289,11 @@ const BlockNode = ({
     case 'code':
       // A diff is drawn as one (D-133); any other language is a code block.
       return ['diff', 'patch'].includes((node.lang ?? '').toLowerCase()) ? (
-        <DiffBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
+        <Suspense
+          fallback={<CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />}
+        >
+          <DiffBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
+        </Suspense>
       ) : (
         <CodeBlock code={node.value} language={(node.lang ?? '').toLowerCase()} />
       );

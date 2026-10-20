@@ -246,6 +246,7 @@ const channelOf = (frame: ServerFrame): string | null => {
     case 'PRESENCE':
     case 'DEEP_WORK_UPDATED':
     case 'SAVED_UPDATED':
+    case 'NOTIFICATIONS_UPDATED':
     case 'CHANNELS_UPDATED':
     case 'PONG':
       return null;

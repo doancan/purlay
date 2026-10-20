@@ -727,6 +727,9 @@ obligations end at documentation.
 
 ### D-29. Notifications include thread participation — revises D-12
 
+> **Amended 2026-10-19 by D-161.** A person can follow a thread they have not written in, and let go
+> of one they have; a choice stands until they make another, and replying again does not undo it.
+
 D-12 restricted notifications to a direct `@username` or a DM, while `SCHEMA.md` shipped a
 `notification_type` enum containing `thread_reply` and `thread_resolved`. A direct contradiction,
 and the resolution matters because it sits on the product's central claim.
@@ -4041,6 +4044,10 @@ exists, which is why each ships with its integration tests and its documentation
 
 ### D-99. The wedge's backend: what a write touches, and what "needs you" means
 
+> **Amended 2026-10-19 by D-147.** §4: the read position reads the feed — the notifications of the roots
+> at or behind it — and never a reply's, which is read in its thread or the inbox; a reply waiting
+> behind the position counts as unread until then. §1's two numbers and I-6 are unchanged in meaning.
+
 D-98 pulls threads, resolution, read state, mentions, reactions and DMs forward and orders the work
 contract-first. The schema has the columns; four rules were not written down anywhere, and each is a
 correctness question rather than a style one, so they are decided here before two people implement them
@@ -4546,6 +4553,8 @@ again from the rows — one expression, shared with the read position — and te
 `CHANNEL_STATE`. The messages are still unread; they no longer need the person. A channel whose
 notifications were already read is not told again. The membership rows are locked first, in one order,
 as the read position locks its own, so a read here and a read of the channel at once take turns.
+*(Amended 2026-10-19 by D-147: a reply the feed was read past is unread only because its notification
+waits, so reading it here takes it out of the unread count too.)*
 
 **4 · `{ workspaceId, before }` reads up to and including `before`.** "Mark all read" sends the newest
 notification the person saw, so one that arrived after they looked is still waiting for them.
@@ -4589,6 +4598,19 @@ cannot disagree. Absent at zero, and absent in Deep Work, where the badges are n
 **Rejected:** counting unread messages, which would light the tab for every message in a busy channel —
 the noise D-12 exists to prevent; and counting only mentions and direct messages, a second definition
 of "needs you" beside `NEEDS_YOU`, which D-29 and D-107 already settled.
+
+**Amended 2026-10-19 — an open inbox hears every notification, not only those that move a counter.** The
+client asked an open inbox again when a channel's `unreadMentionCount` rose. A notification that moves
+no counter — a `thread_resolved` (§2: told, not counted), or a mention in a public channel the person is
+not in, where they have no counter — never reached it before a reload. Each write that creates a
+notification now tells its person `NOTIFICATIONS_UPDATED` on their `user:` topic after the commit, with
+nothing but the workspace in it — a send, an edit naming somebody new, a resolution — and the client
+reads that workspace's inbox again, as `SAVED_UPDATED` does for saves (D-128); a reconnect reads it again
+too. The counters no longer ask: one frame per notification, not two. **Rejected:** reading the inbox
+again on `THREAD_UPDATED`, which the whole room hears for every reply — the client cannot tell from it
+whose question was closed without holding the root, and would ask on every reply in every channel;
+and carrying the notification in the frame, which would be a second shape of it beside the page's,
+for a list the client reads whole anyway.
 
 ### D-107. What each notification level is told
 
@@ -5200,7 +5222,8 @@ designed for it below rather than the objection being forgotten.
    which sit on the bubble's inner top corner — except your own message, where they sit on its
    outer corner: a short bubble is narrower than they are, and from the inner corner they ran past
    the feed's edge and scrolled the conversation sideways — first on a narrow window, and on a wide
-   one too once Pin joined them (D-130) (`UX.md` §2).
+   one too once Pin joined them (D-130) (`UX.md` §2). *Amended by D-150:* the actions are a bar on
+   the row's own top edge, in the corner the message is not in, and only one row shows its bar.
 7. **The channel's feed and composer are centred** in the column (amends D-110 §5). The other screens,
    which have one edge, still hang from the left.
 8. **Square tails are not drawn.** The draft squares the corner nearest the speaker; radius is a
@@ -5423,6 +5446,9 @@ permission table, and this paragraph; no data changes shape.
 
 ### D-124. What is the person's and what is the workspace's — #495, #496, #497
 
+**Amended 2026-10-19 by D-146**: Settings are a page; the account menu, the workspace menu and the
+rail's foot are as D-146 §4 says.
+
 Deep Work started only from `Cmd/Ctrl+Shift+D`, for a fixed hour, though the API takes any instant
 within `DEEP_WORK_MAX_HOURS` (D-108). The sidebar's foot showed who was signed in and did nothing;
 signing out was an item of the workspace menu, though it is not the workspace's; and *sign out
@@ -5470,6 +5496,8 @@ in the owner's standing instruction to decide and proceed, and open to their rev
    list of items, as the jump field and `Cmd/Ctrl+K` are two doors to one palette. It gains **Create
    workspace…**, anybody's (the API lets anybody make one), which is the first-run form of `/` in a
    dialog: `/` sends a person with a workspace straight to it, so until now a second could not be made.
+   *Amended by D-155:* not anybody's — the operator's `WORKSPACE_CREATORS` says whose, and the item
+   is offered only to them.
 
 **Rejected.**
 
@@ -5557,6 +5585,8 @@ people can aim.
    answer every signed-in page can ask for without an error, a subscription is `PUSH_UNAVAILABLE`, and
    production still starts, since the inbox is the record. Changing the pair
    leaves old subscriptions inert (each remembers the key it was made with); devices subscribe again.
+   *Amended by D-148:* the switch itself is still offered without keys, for the notices an open tab
+   in the background shows; push joins it where the keys are.
 8. **Sent by the node that committed the write,** not through the `EventBus`: a second node does not
    double it (D-7).
 9. **No dependency.** RFC 8291 and RFC 8292 with `crypto.subtle` (`docs/spikes/web-push.md`).
@@ -5704,7 +5734,7 @@ messages a team keeps at hand — the runbook, the decision, the link everyone a
    outlives their account as nobody.
 2. **A member's to change** — `PUT`/`DELETE /api/messages/:messageId/pin` find the message through
    the caller's visible channels in one query; seeing a public channel is not being in it, so a
-   visible non-member is `403`, as renaming it is (D-123 §1). **Everyone's to see**:
+   visible non-member is `403` (`NOT_A_CHANNEL_MEMBER` since D-156), as renaming it is (D-123 §1). **Everyone's to see**:
    `GET /api/channels/:channelId/pins` through the channel's context.
 3. **At most `PINS_MAX` (50) a channel**, counted over pins of messages not deleted, under the
    channel's row locked (`NO KEY UPDATE`, the lock a send's own write takes): two pins at the bound
@@ -6415,6 +6445,998 @@ holding the signatures and a GitHub app with write access, for what a file and a
 generation of contributors and lawyers has read.
 
 **Cost of reversing:** the file, the check and the pipeline step; signatures already given stand.
+
+### D-146. Settings are a place: a page with its own navigation, not a menu of dialogs
+
+**Context.** D-124 rejected *a Settings page* ("five choices fit in a menu"). By 2026-10-19 the
+workspace menu held nine items, each a 480px dialog — members, invitations, the GitHub token, the
+audit log, the workspace's name, retention, export — and the account menu sixteen: profile, four
+Deep Work durations, three themes, two languages, shortcuts, notifications on this device and three
+ways out. The owner looked at the running product and called the menus cramped and the screens
+undesigned, and their own Superdesign screens (*Profile & Preferences*, *Members & Roles*,
+*Notification Settings*, *Security & Audit Log*) draw a settings page with a navigation of its own.
+D-124 was decided under the standing instruction to decide and proceed and said it was open to the
+owner's reversal; this is that reversal. The owner delegated the design: "modern, enterprise SaaS,
+clear, professional".
+
+**Decided.**
+
+1. **Settings are a route, `/w/:slug/settings/:section`**, inside the shell: the rail stays, and the
+   sidebar's place holds the settings' navigation — *Back to <workspace>*, then **Account** (Profile,
+   Preferences, Notifications, Keyboard shortcuts, Sessions & account) and, for an owner or an admin,
+   **Workspace** (General, Members, Invitations, Integrations, Audit log, Data & retention). A member
+   sees no Workspace group: a section they could only be refused is not drawn. `/w/:slug/settings`
+   opens Profile. An unknown or forbidden section is *not found*, as any address is.
+2. **One page shape.** A title and one sentence of what the page is for; then sections, each a card
+   with a heading; each setting a row with its label and a sentence on the left and its control on the
+   right, stacked below the narrow breakpoint. The column is `size-settings` (720px), centred in the
+   main column on a ground a step below the cards (`surface-000`), as the screens draw it; a control
+   in a row is `size-field` (320px) wide. Lists that are tables — members, the
+   audit log, invitations — use the full card width with a toolbar above them.
+3. **A choice takes effect when it is made; words are saved with a button.** The theme, the language,
+   a role and a toggle apply at once, as they did in the menus. A form of words (profile, the
+   workspace's name) has **Save** in its card, enabled only once something changed, with the outcome
+   said beside it. No page-wide *unsaved changes* bar: each card saves what it holds, so leaving a page
+   loses at most what was typed and not saved, and the browser's own warning is not borrowed for it.
+4. **The menus shrink to what is done often.** The account menu: who you are, Deep Work, **Settings**
+   (`Cmd/Ctrl+,`), the shortcut reference, **Sign out**. Theme and language move to Preferences; *Sign out
+   everywhere* and *Erase my account* to Sessions & account. The workspace menu: the workspaces,
+   **Create workspace…**, **Invite people…** (an owner's or an admin's, the one thing done from inside
+   a conversation) and **Workspace settings**. The rail gains a gear at its foot that opens Settings —
+   D-124 §4's objection, a gear "left with nothing in it", no longer holds. The palette offers every
+   page by name.
+5. **The settings are a chunk of their own.** Loaded when first opened, so the initial JavaScript does
+   not pay for screens a person opens a few times a month (D-49, #687).
+6. **Not drawn: what Purlay does not have.** The screens also draw SSO, SCIM, two-factor, an IP
+   allowlist, seats, guests, billing and an email digest. Each is outside Phase 1 or refused
+   (`PRD.md` §4, §7); a navigation entry for it would promise what is not there.
+
+**Rejected.**
+
+- *Keeping the dialogs and widening them.* The problem was never the width alone: nine doors in one
+  menu, each to a room of its own, with no place that says what the workspace's settings are.
+- *A modal settings window* (Slack's preferences). It hides the conversation for longer than a dialog
+  should (`UX.md` §1), cannot be linked to, and a member list or an audit log needs a page's room.
+- *A page-wide unsaved-changes bar* (the Superdesign screens). It makes every toggle wait for a second
+  press, and it needs a guard on every way out of the page for what a per-card Save does without one.
+
+**Amends D-124** §3 and §4 (what the account menu holds, the rail's gear) and its rejection of a
+Settings page. **Cost of reversing:** the route, the navigation, the pages (which reuse the dialogs'
+logic), and the menu items moved back.
+
+### D-147. A reply is read in its thread, not by scrolling the feed past it — amends D-99 §4
+
+**Context.** An audit reproduced it twice. Bob asked in #incidents; Carol answered **in the thread**;
+Alice then wrote something unrelated in the channel. Bob opened the channel and scrolled to the bottom
+without opening the thread — and Carol's `thread_reply` went from unread to read, its badge, the tab
+title's count and the inbox's unread state with it. Bob never saw the answer. D-99 §4 marked read every
+notification at or behind the read position, and a reply's id sorts in the channel's order with the
+roots, so any reply older than the newest feed message counted as read. Written when a thread opened
+inline under its root, it never considered replies; since D-122 a thread is a panel the feed does not
+show, and the rule re-created exactly the failure D-29 exists to prevent — an answer to your question
+that you are never told about.
+
+**Decided.**
+
+1. **The read position reads the feed.** `PUT …/read` marks read the caller's notifications for the
+   **roots** at or behind it — a mention, a direct message, a followed channel's message, a resolution.
+   A notification for a **reply** — `thread_reply`, a mention inside a thread, a reply in a direct
+   message — is read by reading its thread, or in the inbox (D-106), and by nothing else.
+2. **Reading a thread is a request.** `PUT /api/messages/:messageId/thread/read` with
+   `{ lastReadMessageId }` (`ReadThreadRequest`) reads the caller's notifications for that root's
+   replies up to and including the reply named, recounts the channels touched by the inbox's own path,
+   and tells the caller's devices `CHANNEL_STATE`. Anybody who can see the root may; a reply has no
+   thread, `404` as `GET …/thread` answers. Nothing is stored but the notifications: a thread has no
+   read position of its own (see *Rejected*). The client sends it while the thread is in the panel, the
+   page is in front of the person and the channel has something waiting, for the newest reply it has
+   from the server — so a reply that arrives after it looked is still waiting.
+3. **What is unread follows.** `unread_count` is every message by somebody else past the read position
+   **and every reply at or behind it whose notification still waits** — the feed was read past it, the
+   thread was not. That keeps `unread_mention_count` within it (I-6, unchanged) without capping the badge
+   to zero the moment the feed is read: the badge, the tab title (`UX.md` §2) and the inbox dot (D-110)
+   keep saying it needs you. Every writer agrees, so the stored numbers stay what a recount finds: the
+   read position recounts both terms; reading the inbox or a thread takes back one unread for each reply
+   behind the position it read; a reply that arrives behind the position (an id up to a minute old,
+   D-33) is not pre-read and is counted for the people it needs; an edit that adds a mention to such a
+   reply counts it too; deleting it takes back from both numbers.
+
+**Rejected.**
+
+- *A read position per thread* — a `thread_members`-style row per person per thread. It would answer
+  "where did I stop in this thread", which nobody has asked of a panel that shows the whole thread, at
+  the cost of a table, a migration and a second recount. The notification rows already say what is
+  waiting; reading a thread only has to read them.
+- *Leaving the notification unread and the counters as they were.* The inbox would have kept the
+  answer, but the badge is the lesser of the unread messages and the waiting notifications (I-6): with
+  the feed read to the bottom the unread count is zero and the badge would still have vanished — the
+  half of the defect that interrupts nobody, which is the half that matters.
+- *Dropping I-6.* It is a `CHECK` the badge's meaning rests on; the fix is to count what is unread
+  correctly, not to let the two numbers disagree.
+- *Opening the thread reads everything in it, without a bound.* A reply arriving between the panel
+  drawing and the request reaching the server would be read for somebody who never saw it.
+
+**Cost of reversing:** the root-only condition in `read-state.ts`, the second term of its recount, the
+reply cases in `delivery.ts`, `edit.ts` and `tombstone.ts`, the endpoint, `ReadThreadRequest`, the
+thread panel's `use-read-thread.ts`, and their tests. No schema or stored value depends on it.
+
+### D-148. An open tab in the background tells its person: a notice, a dot on its icon
+
+**Context.** With Purlay open in a tab that is not in front — another tab, another window — the only
+sign that something needed the person was `(N)` in the title (D-106, #491), which a pinned tab does not
+show and anybody can miss. Web Push (D-126) reaches a closed tab, but D-143 holds a push while the
+person's page is open, and it needs the operator's keys: an open tab in the background was told nothing.
+Slack's loop is a banner, a badge and a sound.
+
+**Decision.**
+1. **What interrupts is what the badge already counts — nothing is classified twice.** A conversation's
+   `unreadMentionCount` going up while the page is open is a new thing that needs the person (`NEEDS_YOU`:
+   a mention, a direct message, an answer in a thread they are part of, a channel at `all`). A
+   resolution is told in the inbox and not counted (D-106 §2), so it does not interrupt either; the
+   person's own messages never move their badge. `NEEDS_YOU` moved to `@purlay/types`, one list for the
+   server's send, read and delete and for the client.
+2. **A notice from the page itself**, through the browser's `Notification` — no worker, no server key —
+   only while the page is hidden or not focused, never in Deep Work, never on the first look at a list
+   (what was waiting when the page opened is not news). **Who and where, never what** (D-126 §2): the
+   title is the place (`#api`, the person, a group's people), the body the inbox's own words for why,
+   read from the inbox's newest page; a click focuses the window and opens what the inbox row would —
+   the thread for a reply. Unread, it says only where.
+3. **Coalesced, not a storm.** One tag per conversation, so its next notice replaces its last; several
+   conversations rising at once (a reconnect, a busy minute) are one notice, "3 conversations need you",
+   opening the inbox. A conversation read elsewhere takes its notice back.
+4. **One switch.** "Notifications on this device" (D-126) now covers both: offered wherever the browser
+   has notifications, it asks the browser once, and where the browser has push and the server has keys
+   it also subscribes. It is on while the person who turned it on is signed in here and the browser still
+   allows it; a permission taken back turns it off on the next load. The page never asks on load.
+5. **A dot on the favicon, and the app's badge.** While the title counts, the tab's icon is
+   `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`, bound to the
+   tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count
+   (`navigator.setAppBadge`, optional by its type where Firefox lacks it). Zero, or Deep Work, puts
+   both back.
+6. **No sound.** The operating system already sounds a notice by the person's own settings; a second,
+   product-made one would double it, and quiet is the product (D-12).
+7. **Small and late.** What tells is loaded the first time there is something to tell; the
+   always-loaded part is the comparison of two lists of numbers and the swap of an icon.
+
+**Rejected.**
+- *Reading each `MESSAGE_CREATED` for mentions, direct messages and thread membership* — a second
+  definition of "needs you" beside `NEEDS_YOU`, which D-106's amendment already refused for the title.
+- *Pushing to the open tab* (lifting D-143's hold for a hidden page) — it needs the operator's keys and
+  a worker, and costs a round trip through a push service for what the page already heard on its socket.
+- *A second switch for the open tab* — one browser permission, two controls that can disagree.
+- *Drawing the dot on a canvas from the linked favicon* — tried first: the picture is a `data:`
+  address, which the page's `img-src` refuses (D-39), as the browser suite showed. Loosening the
+  policy for a dot is the wrong trade; a second same-origin file costs four hundred bytes.
+- *A dot in the accent* — the favicon is filled with it, and the dot would vanish.
+- *A count drawn on the favicon* — illegible at sixteen pixels; the title says the number.
+- *A sound, on or off by default* — above; and off by default it is a setting nobody finds.
+
+**Accepted.** Chrome on Android refuses a page's `Notification` (only a worker may); there the page in
+the background is not running anyway, and push is what tells a phone. A tab tells only of its own
+workspace: the socket watches that workspace's channels.
+
+**Cost of reversing:** `features/alerts`, `features/push/notifier.ts`, the shared switch in `push.tsx`,
+two catalogue lines; no migration, no endpoint.
+
+### D-149. A link to a message: its own address, and the feed read around it
+
+**Context.** Nothing in Purlay could be pointed at. The only deep link was a thread's (`?thread=`);
+search, saved items and pins opened a channel at its bottom, so a message older than the first page
+was a scroll and a guess away. Every chat tool a team compares this with has *Copy link*, and opening
+one lands on the message.
+
+**Decision.**
+1. **The address is `?message=<id>` on the channel's own** (`router/routes.ts`, beside `?thread=`,
+   read only when it is an id). One address for a root and a reply: a reply's link opens its root's
+   thread, and the reply is the one marked there. *Copy link* writes it whole, with the page's
+   origin. Search, saved items and **Go to message** in the pins panel go to it.
+2. **The feed is read around the message, by one route built from the feed's own pages.**
+   `GET /api/messages/:messageId/around` answers `MessageWindow`: the message, the root it lives
+   under with `MESSAGE_WINDOW_SIDE` (25) roots either side, and two cursors that are the ones a feed
+   already reads with — `olderCursor` as `before`, `newerCursor` as `after` (D-8). The server reads
+   it as two keyset pages; nothing new orders a channel and nothing is offset. Who may read it is
+   `requireMessageById`'s answer, so a message deleted, never sent or not the caller's to see is one
+   `404 MESSAGE_NOT_FOUND`, and the endpoint is crossed on both axes like every other.
+3. **On the client the window is a query of its own under the channel's key**
+   (`['messages', channel, 'around', id]`), paged both ways. Everything that edits a channel's
+   messages edits it too, because it is found by the channel's key. A message arriving is put in it
+   **only once it reaches the present**: one put after the newest message of a window that stops
+   short would sit above messages it has not read. Until then **Jump to recent** takes the reader to
+   the channel without the link, as sending does, and nothing is marked read.
+4. **Landing:** the message is brought into the middle of the view, focused through the feed's
+   roving focus, and marked in the highlight tone (`warning-subtle`) for two seconds, fading by the
+   hover token — which is zero under reduced motion, so no new motion token was needed. Newer pages
+   read in below keep the reader where they are, without the pill: it is history, not news.
+5. **A link nobody can follow says so in one sentence** over the channel, which opens as it is — a
+   link pasted from a channel left, or a message deleted since, is ordinary and must not look like a
+   failure of the product.
+
+**Rejected.** *Reading back page by page from the newest until the message is in* — what `?thread=`
+does: a link to a message from last year is dozens of requests and a wait, and the more a link is
+worth (older), the worse it would work. *A cursor computed on the client one tick below the id, to
+reuse `after`* — it leans on the id's byte layout and still needs a second request to learn a reply's
+root. *An `around` parameter on the history route* — it would answer a different shape from the same
+route, and a page carries one cursor. *Putting the window into the newest-first feed's cache* — a
+feed with a hole in it is a feed every frame handler and the read position would have to understand.
+*Highlighting with a new animation token* — the hover fade already says it, and costs nothing.
+
+**Cost of reversing:** one route and its contract, the window query and the address; links already
+pasted would open the channel at its bottom.
+
+### D-150. A message's actions: one bar, in the empty corner of its own row
+
+**Amends D-119 §6 and `UX.md` §3.** The owner's audit of the message row (2026-10-19): the bar hung
+above the bubble (`-top-8`, #653) and covered the author's name and the last line or reaction of the
+row above; a focused row and a hovered row each drew a bar; React and Reply had no tooltip, Save and
+Pin only a slow native one; only one's own message had More; nothing said who reacted; the quick
+reactions were a seven-line text menu that opened over the composer; "edited" and "Pinned" ran
+together; on a phone Reply stood taller than the rest.
+
+**Decided.**
+
+1. **The bar sits on its own row's top edge, in the corner the message is not in** — the right for
+   everyone else's, the left for your own — the way Slack and Linear put it top-right, mirrored for
+   the second edge D-119 drew. It starts at the row's top and never reaches above it, so nothing of
+   another message is ever under it, on any window; a message under a name has a band above its
+   bubble and the bar stays inside it. A *grouped* message has no band: there a wide bubble's first
+   line may lose its corner to its own bar while that row is the one. Accepted: the alternatives
+   cover another message (a bar hung into the row above) or move the row (a band opened on hover).
+2. **One bar on the page.** Which row shows it is one fact for the document
+   (`features/messages/active-row.ts`), read by every row in the feed and the thread panel: the row
+   under the pointer, or the focused row while the keyboard is the last thing used; a row whose menu
+   is open keeps it; on a phone, the row tapped. A row reads only whether it is the one, so a move
+   re-renders two rows.
+3. **Its controls are one square, on every window** (`IconButton` size `bar`, `h-control`): React ·
+   Reply · Save · Pin · More, each with the product's tooltip and its key where it has one (Reply `R`;
+   Edit `E` in More). A finger-tall (`size-touch`) control made the bar taller than the band and it
+   covered the name on a phone; 28px is above the 24px WCAG 2.5.8 minimum, and the menus a control
+   opens keep their finger-tall items. The bar is the float surface: `surface-100`, a hairline,
+   `shadow-float`.
+4. **More is on every message.** Copy text (the words as written, through the content ports' clipboard),
+   Save and Pin again for whoever looks there, then Edit and Delete on one's own. An owner or an admin
+   gets Delete on anybody's — the API already allows it and puts it on the audit trail (D-103 §7,
+   D-26) — and the question before it says so. **Copy link** is first in More, the message's own address (D-149): the two were built side by side and met at that one item.
+5. **A reaction chip says who** in its tooltip: "You, Alice and Bob reacted with 👍", the person first
+   as You, past three two names and "N others" — names from the workspace's members as the screen
+   already read them, joined by `Intl.ListFormat` in the interface's language.
+6. **The quick reactions are one row of tiles** (`MenuTiles`, `MenuTile`: checkbox items, so one
+   already yours says so in `aria-checked` and not only by its tint; ←/→ move along the row), the
+   name of the tile reached written under it. Still the seven: `UX.md` §10 allows a recent/frequent
+   row, which needs a record of use the client does not keep, and seven is what fits one row on a
+   phone. The picker and More open upward and are held inside the message list
+   (`data-message-list`, Radix's collision boundary), so neither covers the composer.
+7. **Edited and Pinned are one line under the words**, `gap-3` apart, not drawn when neither applies.
+
+**Rejected.**
+
+- *The bar hung above the row*, as #653 had it and Slack does: it covers the row above whenever that
+  row's content reaches the corner — always true of your own messages, which sit on the right.
+- *Top-right for every row*, your own included: your own bubble *is* the top-right corner, so the bar
+  covered its time or its words; the left corner of your own row is the one that is always empty.
+- *Each row deciding for itself* with `:hover` and `:focus-within`: that is how two bars were drawn.
+- *A full emoji picker*: `UX.md` §10.
+
+**Cost of reversing:** `message-actions.tsx`, `active-row.ts`, the tiles in `ui/menu.tsx`, the `bar`
+size, and the chip's tooltip; no contract, route or stored fact depends on any of it.
+
+### D-151. Controls are 32px tall
+
+**Context.** `size-control` was 28px — every button, tab, select and text field — under UX §1's
+density rule ("controls at this height, no larger"). D-118 §6 had already moved density from how
+tightly things are set to what is shown. Looking at the running product on 2026-10-19 the owner called
+the menus and screens cramped; a 28px field beside a two-line label in a settings row reads as an
+afterthought, and a 28px button is a small pointer target for the actions people take most.
+
+**Decided.** `size-control` is **32px** — Linear's height for buttons and fields. Below the narrow
+breakpoint `size-touch` (44px) still applies. Sidebar rows stay `size-row` (32px), so a control and a
+row are now one height, and the header (48px) keeps its 8px of air above and below a control.
+
+**Rejected.** *36px or more* (Slack's fields): the composer's toolbar and the header would grow for
+little gain, and density in a chat product is still worth something. *Bigger only in Settings*: two
+heights for one kind of control is the drift a token exists to stop.
+
+**Amends** UX §1's density rule and D-118 §6's wording. **Cost of reversing:** one token.
+
+### D-152. Anybody may leave a workspace
+
+**Context.** A member could be removed by an owner or an admin, but could not leave: no endpoint, no
+door. Somebody invited into the wrong workspace, or done with a team, had to ask an admin to take them
+out — and the last owner, who must not leave a workspace with nobody to run it (I-2), had no rule
+written for leaving at all. Found by the settings audit (2026-10-19).
+
+**Decided.**
+
+1. `DELETE /api/workspaces/:workspaceId/membership` — the caller leaves the workspace and every channel
+   in it, by the same going as a removal (`takeOut` in `members.ts`), and their own sockets are told
+   `ACCESS_REVOKED` for every channel they could see.
+2. **Anybody's.** A member, an admin or an owner — except the **last** owner, who is `409 LAST_OWNER`
+   and told to make somebody else an owner first. The role is read under the workspace's lock, as every
+   change to members is, so two owners leaving at once cannot leave none.
+3. **Recorded as `member.left`**, the person as both actor and target — the trail says who went of
+   their own accord, apart from who was removed.
+4. **Leaving is not being removed.** A link that was open before they left still lets them back in: the
+   check that keeps a *removed* person out reads `member.removed` only (`invitations.ts`), because a
+   removal is somebody else's decision and leaving was theirs.
+
+**Rejected.** *`DELETE …/members/:userId` with one's own id* — that endpoint is an admin's and refuses
+one's own row on purpose (nobody changes their own role there); one path with two sets of rules is the
+confusion `members.ts` avoids. *Letting the last owner leave and deleting the workspace* — deleting a
+workspace is unbuilt (D-124 ①) and is not something to do as a side effect of a person leaving.
+
+**Cost of reversing:** one endpoint, its case in the cross-tenant table, an audit action, and a row
+on Sessions & account.
+
+### D-153. The inbox is for triage: an unread view, days, and reading without going
+
+**Context.** The inbox was one flat list, hung from the left at 760px with half the window empty, with
+"Mark all read" and "Load more" and nothing else: no way to see only what waits, nothing to tell this
+morning from last week, and a row could only be read by opening it. The notifications audit
+(2026-10-19) compared it with Slack's Activity and Linear's inbox.
+
+**Decided.**
+
+1. **All and Unread.** Unread is `GET /api/notifications?unreadOnly=true` (D-106 already serves it),
+   kept under the same cache prefix as All (`['notifications', workspaceId, 'unread']`), so every
+   refresh the inbox already hears refreshes both.
+2. **A row read stays where it is.** Marked read in the Unread view, it turns muted and stays until the
+   person looks again; dropping it at once would move the next row under the pointer that was aiming at
+   it.
+3. **Today and Earlier**, by the person's own day, each a card — the column centred like the feed's
+   (D-119), not hung from the left.
+4. **Mark read on the row**, beside its button rather than inside it, so each is its own control for a
+   keyboard and a screen reader.
+
+**Rejected.** *Filtering the loaded pages in the client* — an unread row older than what is loaded would
+not be found, and "Load more" could add pages that show nothing. *Grouping by thread* — the row carries
+the reply, not its root, so a group could not name what it groups without another read per row; left
+for when the contract carries the root's first line. *(Lifted 2026-10-19 by D-162: it now does.)* *Archive and snooze* — PRD §6 refuses reminders,
+and an archive is a second "read".
+
+**Cost of reversing:** the filter control, the sections and the per-row button in `inbox-screen.tsx`.
+
+### D-154. A channel's details are a wide dialog with tabs, not one long column
+
+**Context.** D-123's details were one 480px dialog holding everything: the name and topic, the
+members with Add people, the notification level drawn only as a bell that did not say the level, an
+owner's whole GitHub connect form (D-134), and Leave and Archive at the foot. At 900px it was 886px
+tall and 1063px on a phone, the form most people never use dominated it, and the two acts that cost
+something were below the fold.
+
+**Decided.**
+
+1. **The dialog stays, wider, with tabs** — **About**, **Members**, **Integrations** — as Slack's and
+   Linear's channel settings are. A new width, `size-dialog-lg` (640px), is the `Dialog`'s `wide`
+   size; below the narrow width (900px) a wide dialog is a sheet that fills the screen, since a
+   phone has no room for a card's margins around a whole surface. The 480px dialog is unchanged.
+2. **About** holds the name and topic, the **notification level as three radios that say the current
+   level in words** (the same choosing as the header's menu, `useChooseLevel`, painted first and put
+   back on a refusal), and at its foot a **Danger zone** — a box in the danger tone, one row per act
+   saying what it costs, each asking in place as before. **Members** has its count in the tab, Add
+   people beside the heading, and a field to find a member by name once there are more than eight —
+   folded as everywhere else names are matched (case, accents, the dotless ı). **Integrations** is
+   the repositories (D-134), and is **absent** for anybody who is not an owner or an admin, rather
+   than an empty or refused tab.
+3. **Tabs are WAI-ARIA's, hand-built**: Radix Tabs is not a dependency and one surface does not earn
+   one (CONTRIBUTING §1.12). One tab is in the Tab order, ← → move and choose (wrapping), Home and
+   End go to the ends. Every panel stays mounted and only the chosen one is shown, so a half-typed
+   name survives a look at Members. The dialog still opens on itself, never on the name (D-123).
+
+**Rejected.** *The right-hand side panel* (where the thread, files and pins open): it is for what is
+read beside the conversation, one at a time, and opening details there would close an open thread;
+renaming, leaving and connecting a repository are acts done and finished, which is a dialog's job.
+*Sections in one scrolling column, only wider*: the GitHub form still dominates and Leave and Archive
+still sit below the fold. *Keeping the bell in the details*: it is the header's compact control; in
+the details there is room to say the level.
+
+**Cost of reversing:** one component's layout, a `Dialog` size and a token; no contract changes.
+
+### D-155. Who may make a workspace: the operator names them — #633
+
+**Context.** Signing in is open — an invited person has to be able to — and making a workspace asked
+only for a session, so on an instance reachable from the internet anybody with a GitHub account could
+sign in and make any number of workspaces, each with its own attachment quota (D-109 §5): disk without
+a bound, for a stranger who found the address. Joining a workspace was already closed (an invitation,
+D-115); making one was not. Decided in the owner's standing instruction to decide and proceed, and open
+to their reversal.
+
+**Decided.**
+
+1. **The operator names who may: `WORKSPACE_CREATORS`** (`CONFIG.md`), GitHub logins, comma-separated
+   and compared in any case, or `*` for anybody signed in — what a cloud or a demo wants. A login
+   matches the username of an account signed in with GitHub, which is the login as GitHub last gave
+   it; an account made by an email link (D-138) has no login, whatever its username spells, because
+   its name came from an address anybody can own. A malformed value refuses to start.
+2. **Unset, nobody may but the first person to sign in, and only while the instance has no
+   workspace** — the earliest living account, while `workspaces` is empty. The one-command install
+   (D-144) still ends with its operator owning the first workspace, and a stranger who signs in after
+   them cannot make a second. Two first workspaces asked for at once take turns on a lock, so only one
+   is first.
+3. **One check, in the transaction that makes the workspace** (`modules/workspaces/creators.ts`).
+   Refused, it is `403 FORBIDDEN` — the endpoint is no resource of anybody's to hide — and nothing is
+   made. Signing in is untouched.
+4. **The client asks before it offers.** `GET /api/me` carries `mayCreateWorkspace`; a person with no
+   workspace who may not is told to ask for an invitation, with no form, and the workspace menu's
+   **Create workspace…** (D-124 §8) is offered only where it would be accepted. A refusal anyway — the
+   first workspace made a moment ago — says the same above the form's button.
+5. **Recorded as the create already is.** The audit trail is a workspace's (D-26), and a refusal has
+   none to belong to; the request log carries the `403` and its code, as it does for every refusal.
+
+**Rejected.** *An allowlist of who may sign in* (#633's option 2) — it closes the door earlier, but every
+invitation would then need the operator to add the person too. *Leaving it open and bounding the
+instance's storage instead* (option 3) — it bounds the disk, not the stranger's workspaces or what they
+put in them. *Matching every account's username* — an email link would let anybody take an allowlisted
+login that has not signed in yet. *The first workspace for whoever asks first* — the person who signed
+in first is the one the install is for.
+
+**Cost of reversing:** the variable, `creators.ts`, the field on `/api/me` (a client older than it reads
+it as absent and offers the form, as before) and the screen; no migration.
+
+### D-156. Writing in a channel is a member's — #690
+
+**Context.** The client gives a person who has not joined a public channel no composer — a bar that
+says they are reading without being a member, and **Join** — but the API checked only that the channel
+was visible to them (ARCHITECTURE §7.5), and every member of the workspace can see a public channel. A
+script signed in as somebody outside `#design` posted to it, every message `201`; the channel's members
+were notified by a person its member list does not show, and the writer had no read position, no
+unread place for a reply, nothing in their sidebar. The spec said nothing either way. Decided in the
+owner's standing instruction to decide and proceed, and open to their reversal.
+
+**Decided.**
+
+1. **Writing requires membership** — Slack's `not_in_channel`. Sending a message or a thread reply to
+   a channel the caller can see and is not in is `403 NOT_A_CHANNEL_MEMBER`, over HTTP and the socket's
+   `MESSAGE_SEND` alike, since both are `sendMessage`; nothing is written and nobody is told. Seeing
+   stays as it was: reading, searching and the thread panel are anybody's who can see the channel.
+2. **One code for every write of a visible non-member**, from the one guard (`requireChannelMember`):
+   adding a reaction, editing one's own message, resolving or reopening a thread — each changes what the
+   members see, and a reaction or an edit can tell somebody — and what was already a member's (D-104,
+   D-123, D-130, D-137): pins, the incident, the channel's name and topic, bringing people in. Those
+   were `403 FORBIDDEN`; they keep the status and gain the code, so a client can say *join to do this*
+   rather than *not allowed*. A direct message is unchanged: who is in it is fixed, and its refusals say
+   so as before.
+3. **Taking one's own back is not writing**: deleting one's own message (or an earlier version of it),
+   taking back one's own reaction, and saving for oneself stay open to somebody who has left. A
+   moderator's delete is an owner's or an admin's, as it was (D-103 §7).
+4. **The client already behaves this way** (the bar and **Join**); what it gains is the reason. A send
+   in flight that meets the refusal is `failed` with *you are not in this channel; join it to write
+   here*, and Retry sends it again (UX §3.1); every other surface says the same through the shared
+   failure table, which the compiler holds to every code.
+5. **A read, not a lock.** The guard reads the membership row. A send locks the channel's memberships
+   in one order after its own row is written (#668), and a purge or a delete takes them all first; a
+   lock taken before either would be a second order beside theirs, and the deadlock #668 and #669
+   removed. So a leave in the same instant as a write can let that one write land — from somebody who
+   was in the channel when it was checked.
+
+**Rejected.** *Writing joins* (#690's option 2) — a message would quietly change who is in the
+channel, and the member list and its notifications would follow from a side effect. *Keeping it as it
+was* (option 3) — a member list that does not include the people writing is the surprise an admin of a
+regulated workspace (audit, export, erasure by member) does not expect. *A second code only for sends,
+`FORBIDDEN` for the rest* — two answers to one condition. *Holding the membership row `FOR KEY SHARE`*
+— see 5: it deadlocked against the retention purge in its own race test.
+
+**Cost of reversing:** the guard's calls in `sendMessage`, `reviseMessage`, `setReaction` and
+`setResolved`, and the code — back to `FORBIDDEN` for the rest; no migration.
+
+### D-157. The palette finds every place, and a query never ends in nothing
+
+**Context.** `PRD.md` §4.6 promises a palette over channels, DMs, people and settings, and UX §1.3 calls
+it the primary navigation. The messaging audit (2026-10-19) found it a channel switcher: "inbox",
+"saved", "search", a public channel not joined, a group conversation — none were found, and a query
+that matched nothing ended in "No match".
+
+**Decided.** The palette lists the rail's places (Open questions, Inbox, Saved, Search) as views;
+public channels the person has not joined, with *Not joined* beside them (opening one shows its Join
+bar); group conversations by their people (D-127), found by any member's handle; every settings page
+the person may open (D-146). Whatever was typed is also offered as **Search messages for “…”**, in a
+group of its own that is always last, so arrows and Enter reach it in the order it is drawn; with no
+other match the palette still says "No match" above it.
+
+**Rejected.** *Actions that open dialogs (New channel, Invite)* — their dialogs are owned by the
+components that draw their doors; a second door would need the state lifted for one shortcut.
+*Keyboard shortcuts as an action* — the Settings page of that name is already listed; two rows with
+one name is a guess for the person.
+
+**Cost of reversing:** the items in `use-palette-items.ts` and the search row in `command-palette.tsx`.
+
+### D-158. The list screens share one shape
+
+**Context.** The inbox, the open questions, search and saved each drew their list their own way — hung
+from the left at the feed's width with half the window empty, rows as floating rounded hovers, saved
+items with two or three buttons under every row. After the inbox became cards (D-153), the other three
+read as a different product.
+
+**Decided.** One shape, in `ui/list-column.tsx`: a centred column at the feed's width (D-119) on the
+ground a step below its cards; each list a card of rows divided by hairlines, with its heading (a day, a
+channel) above it; a row is one button, padded alike. A row's own actions (Mark read, a saved item's
+moves) sit beside its button, appearing over the row's meta line in its hover tone on a pointer's hover
+or a keyboard's focus, and stay below the words on a phone. Search's field and *where* sit in a card of
+their own above the results.
+
+**Rejected.** *Leaving each screen its own layout* — four answers to one question is the drift a shared
+primitive exists to stop. *Always-visible row buttons on a wide window* — three buttons under every
+saved item made the list a toolbar.
+
+**Cost of reversing:** the primitive and its four uses.
+
+### D-159. A picture opens in a viewer; a refused upload says why
+
+**Amends D-109 §6 and D-129, and `UX.md` §2, §3 and §5.** The owner's audit of messaging (2026-10-19):
+a click on an image left the app for the raw `/api/attachments/…` file in a new tab (F7), and a failed
+upload said only "Didn't upload · Retry", whatever had gone wrong (F8).
+
+**Decided.**
+
+1. **An image opens the image viewer**, from the feed and from the Files panel alike: the picture over
+   the whole window, fitted to it — never cropped, never enlarged past its own size — with its name, who
+   shared it, its size and when, **Download** and **Open original** (a new tab), and Close. Esc, the close
+   button and a click beside the picture close it, and focus goes back to the thumbnail. It is a Radix
+   dialog (focus moves in and stays in, the page behind is hidden from a screen reader); the viewer takes
+   the first focus itself, and **Esc is the viewer's whatever is focused** — a control's tooltip does not
+   take the first one (#623's trap, closed here at its source for this surface). The thumbnail stays a
+   link to the image, so ⌘/Ctrl-click and the middle button still open a tab. Any other file still
+   downloads.
+2. **←/→ step through the pictures it was opened from** — a message's, or the Files panel's as far as the
+   panel has read (no page is fetched for it: the panel's list is already the channel's newest-first
+   index, and reading more is the panel's Load more). It stops at either end rather than wrapping, and the
+   controls keep their place there, so the picture never moves under the pointer. Not the whole channel's
+   pictures from the feed: the feed holds a window of fifty messages, so "the next picture" would depend
+   on what happened to be loaded.
+3. **On the navigation's tone** (D-118): the viewer is dark in both themes, so a picture is judged against
+   the same ground whatever the theme and the chrome recedes. Not the `scrim`: the page behind showing
+   through a picture is noise, and `UX.md` §1's rule against a modal that hides the conversation is about
+   reading — a picture is opened on purpose and left with one key.
+4. **The viewer is deferred**, with the settings, in one chunk: `apps/web/src/app/deferred.ts`, asked for
+   with `import()` on the first open and on pointing at or focusing a thumbnail, so it is usually there by
+   the click. *Measured:* with the viewer in a chunk of its own the bundler (rolldown under Vite 8) did not
+   fold what two lazy chunks share with the entry back into it — it emitted a third, preloaded chunk of
+   every module that reaches React — and the first page grew by 2.9 KB gzipped, 1.9 KB more than the
+   viewer itself weighs. In one chunk with the settings it costs the first page nothing; the price is that
+   the first picture opened also fetches the settings' code, once, ahead of the click. A later deferred
+   feature joins that module rather than becoming a second `import()`. A viewer that does not arrive says
+   so in a toast and nothing opens. *Amended by D-163:* the build now keeps every initial module in the
+   entry, so a second lazy chunk no longer costs the first page; the rule of one deferred chunk stays,
+   because the shell preloads it once when the browser is idle.
+5. **A refused upload says why, in words, from its code**, under the file's name in the chip: too large
+   (with the limit), an image past the side or pixel bound (with them), an image that does not decode, a
+   type refused, the workspace's storage full (with **the room left**), too many files waiting, no
+   connection, the server busy, file storage unavailable, the session ended. Anything else is "Didn't
+   upload". The mapping is a switch over every code, so a new one is a compile error until it is placed.
+   **Retry is offered where trying the same bytes again can be answered differently**, and not for too
+   large, an image past the bounds, one that does not decode, or a type refused — there the one control is
+   Remove, which every chip keeps.
+6. **`STORAGE_QUOTA_EXCEEDED` carries `details.remainingBytes`**: what the quota leaves after what is
+   stored and what is waiting to be sent, never below zero. It is the workspace's own number, told to a
+   member of it who is uploading into it; it is at most the size of the file refused, so it says nothing
+   about the quota beyond "not this file". Optional in the contract, as `LAST_OWNER`'s details are, so a
+   client reading an older server says "Workspace storage is full" without the room.
+
+**Rejected.**
+
+- *A lightbox library*: D-52's bar for a dependency; Radix's dialog already is the hard part.
+- *Zoom and pan*: Open original is one click away, at the browser's own zoom; a viewer that zooms has to
+  own touch gestures, and that is a feature of its own.
+- *Swipe between pictures on a phone*: the same; the arrows are touch-sized there.
+- *Retry on every refusal*: a button that can only fail again teaches people that it does nothing.
+
+**Cost of reversing:** `messages/image-viewer.tsx`, `image-viewer-door.tsx`, `app/deferred.ts`, the
+thumbnails' click in `attachments.tsx` and `files-panel.tsx`, the chip's words in `composer/uploads.tsx`;
+the quota's `details` is an optional field nothing else reads.
+
+### D-160. Channels stay where they are; conversations come forward
+
+**Context.** The sidebar ordered channels by their last message, newest first. Every message moved a
+row: a mention put #deploys on top while the person was reaching for the row that had been there, and
+with no sound and no banner (D-12) the reshuffle was the loudest signal the product made. UX §1.4 says
+content never moves under the reader; the sidebar did exactly that. Found by two audits (2026-10-19).
+
+**Decided.** Joined channels are listed **by name**, as starred ones already were (D-132): a channel is a
+place, and a place stays put. What is unread is said by the row's weight and its badge, where it is.
+**People and group conversations stay newest first**: a conversation with someone is a correspondence,
+and the one being had is the one to find. `Alt+↑/↓` steps through unread in the sidebar's order, so it
+now walks channels alphabetically.
+
+**Rejected.** *A setting for the order* (Slack's "Sort by activity / alphabetically") — a preference
+for what should simply be right is a second thing to maintain and test; reopen it if the team asks.
+*Activity order frozen while the pointer is over the sidebar* — the list still jumps the moment the
+pointer leaves, and the next look finds everything elsewhere.
+
+**Cost of reversing:** one sort in `ordering.ts`.
+
+### D-161. A thread can be followed, and let go — amends D-29
+
+**Context.** A notifications audit (B5) found no way out of a thread. Replying once made a person one
+of the up to fifty earlier repliers every later reply tells (D-29, D-99 §2): a drive-by "+1" in a long
+incident thread meant every reply after it, for good. The only exit was setting the whole channel to
+*Nothing* (D-107), which silences everything else in it too. And the other way round, somebody who
+wanted to watch a question they had not answered had no way in short of writing in it. Slack and
+Linear both let a person follow and unfollow. Decided in the owner's standing instruction to decide
+and proceed, and open to their reversal.
+
+**Decided.**
+
+1. **Follow is per person, per thread.** Without a choice, participation decides, as D-29 always has:
+   the root's author and whoever has a live reply follow it, nobody else does. A choice, either way, is
+   a `thread_follows` row (`SCHEMA.md` §7.7), and it stands until the person makes another.
+2. **Replying after letting a thread go does not follow it again.** Slack re-follows on reply; here
+   the one thing the person said about this thread was *stop*, and a reply — often the last word,
+   "thanks", "shipped" — is not a request to be interrupted again. Quiet is the product (D-12): of the
+   two mistakes, the one that is noisy behind the person's back is the worse, because they cannot see
+   it happen; the quiet one shows on the panel's toggle, one press from undone.
+3. **What a choice moves is only the thread's own reasons to tell somebody.** Let go: no
+   `thread_reply`, and no `channel_message` for a reply in that thread at level `all` — the thread is
+   more specific than the channel. Followed: `thread_reply` for each reply, under the same conditions
+   as a participant (can still see the channel, D-34; the 50 most recent followers by choice, beside
+   the 50 most recent repliers, the bound D-99 §2 puts on what one reply writes). A person who let it
+   go does not take a replier's place under that bound. **A mention still arrives**, and a direct
+   message is still told: both are addressed to the person, not to the thread. A channel at `none`
+   stays silent for a thread followed (D-107 §1: nothing at all). Deep Work, the counters, `NEEDS_YOU`
+   and D-147's reading are unchanged; not retroactive.
+4. **`GET` and `PUT /api/messages/:messageId/follow`** (`ThreadFollow`, `SetThreadFollowRequest`).
+   Anybody who can see the root may — a member of the channel or not: it is the person's own, as a
+   save is (D-156 §3); a reply has no thread, `404` as `GET …/thread` answers. Idempotent; told to
+   nobody, and not yet to the caller's other devices, which read it when they open the thread (as
+   D-107 left the level).
+5. **Its own endpoint, not a field on the thread's page.** `ThreadPage` is a page of messages the
+   socket writes into for everyone in the room; a per-person fact on it would need one page to be the
+   one that says it, and a reply arriving would have to know which. The panel reads it beside the
+   replies, under its own key, and reads it again when the person's own reply lands — answering a
+   thread one had made no choice about follows it.
+6. **The control** is in the thread panel's header (`UX.md` §4.2): **Follow**, a toggle with one name,
+   its tooltip in Slack's words. Not in a root's More menu: the feed's messages do not carry the state,
+   so the menu would have to ask for it on every opening; the panel is where the thread is.
+
+**Rejected.** *Re-follow on reply* (Slack) — see 2. *A `mute` state only, no explicit follow* — the
+person who wants to watch a question without writing "+1" in it is the other half of the audit's
+finding. *Muting the thread in the inbox too, so its old notifications vanish* — what was told stays
+told (D-107 §3); the badge comes down by reading. *Following everything one can see by default* — the
+broadcast D-12 exists to prevent.
+
+**Accepted.** The panel says *following* for a replier older than the 50 most recent, whom a reply does
+not tell (D-99 §2's bound); the state is the person's relation to the thread, the bound is what one
+reply writes.
+
+**Cost of reversing:** `thread_follows` (migration `0044`), `modules/messages/follow.ts`, the choices
+read in `delivery.ts`, the two routes and their contract, the panel's `follow-toggle.tsx`, and their
+tests.
+
+### D-162. One busy thread is one row in the inbox, named by its root — lifts D-153's *Rejected*
+
+**Context.** The notifications audit (B4, C6) found one busy thread turning the inbox into
+"Alice Chen replied in your thread · api" six times over, none of which said *which* thread — and every
+reply said "your thread", even to somebody who had only answered in it. D-153 refused grouping by
+thread because a notification carried the reply and not its root, so a group could not name what it
+gathered without a read per row.
+
+**Decided.**
+
+1. **The contract carries the root in brief.** A reply's `Notification` has
+   `thread: { rootId, excerpt, authorId }` (`NotificationThread`), null for anything that is not a
+   reply. `excerpt` is the root's text as every excerpt is (#651) — plain, on one line — cut to
+   `THREAD_EXCERPT_MAX` (120) characters with an ellipsis, and null when the root is deleted (D-9: its
+   words are not shown anywhere) or says nothing in words. It is read by joining the root into the
+   inbox's own statement: a page costs the same whatever threads it names, and the root is in the
+   reply's channel, so the visibility the inbox already applies (D-106 §2) is the root's.
+2. **Whose thread.** `authorId === me` is *replied in your thread*; anything else is *replied in a
+   thread you're in* (D-29 tells both). The inbox, a background tab's notice (D-148) and a push
+   (D-126) say it alike; a push reads the root's author in its own statement.
+3. **One thread's replies of one day are one row** (`features/inbox/group.ts`). Only `thread_reply` is
+   gathered — a mention, a direct message or a resolution is about the person and stands alone, even
+   in a thread. The row sits where its newest member sat, so nothing above it moves; it says how many
+   (*3 new replies in “…”*, without *new* once all are read), the newest replier's avatar, who
+   (*Alice, Bob and 1 other*), the newest time and words, and is unread while any member is. Opening
+   it or its Mark read reads every member that waits, by id. A single reply names its thread too:
+   *In “…”* above its words.
+
+**Rejected.** *Gathering across days* — a row in Today would carry yesterday's replies under today's
+time, and Earlier would hold one row spanning a week. *Gathering mentions in a thread with its
+replies* — a mention is the one notification that is about the person by name; folding it under
+"3 new replies" hides it. *Fetching roots in the client* — a read per thread, which is exactly the
+N+1 D-153 refused; or the whole root as a `Message`, which ships what a row never draws. *Counting
+only the unread members* in the headline — "1 new reply" over three names would contradict itself.
+
+**Cost of reversing:** the `thread` field and `NotificationThread`, the join in `inboxOf`, the
+root's author in the push sender's statement, `group.ts`, the row's thread line, and their tests.
+No schema or stored value depends on it.
+
+### D-163. The first page is one file, and what is opened on purpose comes when the browser is idle — amends D-159 §4
+
+**Context.** The initial JavaScript stood at 246.72 KB gzipped of the 250 KB budget (D-49), so the
+next feature would not have fitted. Measured from the build with its source map, the 246.72 KB were
+six files: the entry, and five chunks the bundler (rolldown under Vite 8) cut from it because the lazy
+chunks share modules with it — every one preloaded by `index.html`, so all of it was downloaded
+anyway. The one called `es2015` was the markdown engine and Radix's dialog machinery, named after
+`react-remove-scroll`'s `dist/es2015` folder; nothing in it was a dependency loaded by mistake.
+
+**Decided.**
+
+1. **Every module the first page needs is in the entry** — one file. A `codeSplitting` group in
+   `vite.config.ts` takes every module the `$initial` tag marks, except the push worker's, which is an
+   entry of its own and stays one file that imports nothing (D-126). *Measured:* the same modules in one
+   file are 5.30 KB gzipped smaller than in six (246.72 → 241.42 KB): one compression dictionary instead
+   of six, and no import and export lists between them. It changes nothing a person sees; the lazy
+   chunks are still lazy.
+2. **What a person opens on purpose joins the deferred chunk** (`app/deferred.ts`): the command
+   palette, the shortcut reference, New channel, Browse channels, Invite people, New message, a group's
+   details and Add people. *Measured:* a further 5.38 KB (241.42 → 236.04 KB) — 10.68 KB in all.
+3. **Nothing visibly waits, because the chunk is fetched when the browser is idle.** Once the
+   signed-in shell is drawn it asks for the chunk with `requestIdleCallback` (at most two seconds), or
+   after two seconds where there is none (Safari) — `app/deferred-door.ts`. ⌘K has no pointer to
+   preload on, so an idle preload is the only way to have the palette there by the time it is asked
+   for; one fetch, after the first screen, covers every door. An overlay asked for before the chunk has
+   arrived is drawn the moment it lands. A chunk that does not arrive says so in a toast and the
+   overlay stays closed; the next request asks again.
+4. **Before the chunk arrives an overlay is not mounted; after, it stays mounted** — open or closed,
+   as it was in the first chunk, so it keeps its closing animation and its state. The data a closed
+   dialog asked for (the invitations list) is asked for when the chunk lands, not with the first screen.
+5. **D-159 §4's reason for one deferred chunk is gone, and the rule stays for a new one.** Two lazy
+   chunks no longer push what they share with the entry into a third, preloaded chunk — §1 puts all of
+   it in the entry. A second deferred chunk would be a second preload to remember, so a later deferred
+   feature still joins `app/deferred.ts`.
+6. **The shape is checked** with the number: `bun run budget:web` fails when the initial modules are
+   in more than one file (a locale catalogue beside the entry is allowed, D-41) and when
+   `push-worker.js` imports anything.
+
+**Rejected.**
+
+- *Deferring the markdown engine* (about 20 KB): every message on the first screen is drawn from it,
+  so the feed would wait for it or be drawn twice.
+- *Deferring Radix's menu, tooltip and dialog primitives*: the message actions, the tooltips and every
+  menu are on the first screen, and a trigger drawn before its primitive would lose its ARIA until the
+  chunk came.
+- *Deferring the list screens* (the inbox, saved, search, open questions): a screen is reached by a
+  link, and a link that waits for a chunk is a navigation that waits; the overlays came to enough.
+- *Raising the budget*: D-49.
+
+**Cost of reversing:** the group in `vite.config.ts` and its two checks in `scripts/budget-web.ts`;
+`app/deferred-door.ts`, the exports added to `app/deferred.ts`, and the door at each overlay's place
+(`global-keys.tsx`, `channel-list.tsx`, `conversation-list.tsx`, `people-list.tsx`,
+`workspace-menu.tsx`, `channel-header.tsx`). No stored value depends on it.
+
+### D-164. A thread's box has the channel's buttons; an upload refused for a workspace left says so
+
+**Amends D-110 §8, D-159 §5, and `UX.md` §5.** The owner's audit of messaging (2026-10-19): in the thread
+panel the composer had no buttons — no bold, code block, mention, and no way to attach a file but a paste
+or a drop — while the channel's had all four. Nothing decided it: the reply box had been drawn as a
+one-line field with the send button beside it when the card was introduced (#320), and the buttons were
+added later only where there was room for them (#379). D-110 §8 says *the composer* has the three buttons;
+a reply is a message like any other, and a file belongs in an answer as often as in a question.
+
+**Decided.**
+
+1. **The thread's box is the channel's box**: the words, the files under them, then one row of Bold, Code
+   block, Mention and Attach, the length left, and Send. What it leaves out is what the panel's 380px
+   (`size-thread`) has no room for or no use for: the key hints are not drawn — they stay the field's
+   description, read by a screen reader — the send button is the square icon without the ↵ beside it,
+   and who is typing stays the channel's (`UX.md` §5).
+2. **An upload refused with `WORKSPACE_NOT_FOUND` says "You no longer have access to this workspace"**,
+   with Remove and no Retry. The workspace answers somebody taken out of it, or a workspace that was
+   deleted, as one that does not exist (404, never 403 — `CONTRIBUTING.md` §1.2), so the chip says the
+   one thing true of both, and the same bytes would be refused the same way. It was "Didn't upload" with
+   a Retry that could only fail again, which D-159's *Rejected* already refuses.
+
+**Rejected.**
+
+- *The buttons in a menu behind one "+"* — a click more for every file in a thread, and a control the
+  channel's box does not have: two composers that look alike and work differently.
+- *Hints wrapping onto a second row in the panel* — the box grows when it is focused, which moved what was
+  under the pointer on a narrow window (#654); the panel is that narrow at every width.
+
+**Cost of reversing:** the footer row's `compact` branches in `composer/composer.tsx`, one case in
+`composer/uploads.tsx` and its two sentences; the tests and the two mutation entries that name them.
+
+### D-165. A sidebar row has a context menu: the row's own actions, without opening it
+
+**Context.** Everything a person could do to a channel from the sidebar meant opening it first: star
+it in its header, set its level in the header's bell, leave it from its details' Danger zone, copy its
+address from the browser's bar. Slack and Linear both answer a right click on a sidebar row with that
+row's actions, and the owner asked for the same (2026-10-19). How it is built was decided under their
+standing instruction to decide and proceed, and is open to their reversal.
+
+**Decided.**
+
+1. **What it holds is the row's, and only what applies and the person may do.** *Mark as read* while
+   the row is unread; *Star* / *Unstar* for a channel (a conversation has none, D-132); the
+   notification level as the header's three choices (D-107), one radio group, not a submenu; *Copy
+   link*, the channel's whole address; *Channel details…* for a channel and *Conversation details…*
+   for a group (a conversation of two has no details, `UX.md` §2); *Leave channel…* for a public or a
+   private channel, never for a conversation, whose people never change (D-127). Each reuses what the
+   header and the details already do — `useStar`, `useChooseLevel`, `actions.leaveChannel`, the same
+   strings and the same refusal for the last member of a private channel — and calls only endpoints
+   that already exist.
+2. **Mark as read reads the feed, as reaching its bottom does.** `PUT …/read` with the channel's newest
+   root, asked for by `GET …/messages?limit=1` because the cache's feed may not be loaded or current.
+   A reply still waiting in a thread stays unread (D-147): the row is painted read at once and then
+   shows what the server counted, which may be *still unread*, for that reason. Reading every waiting
+   notification as well would make a press in the sidebar read answers nobody looked at — the failure
+   D-147 exists to prevent.
+3. **Leave asks first, in a dialog** (the menu has no room for the details' in-place question), says
+   what leaving costs for a public and for a private channel, and says a refusal inside the dialog.
+   Done, a toast says so; the person is taken to the workspace only when they left the channel they
+   were reading.
+4. **Opened the platform's three ways.** A right click opens it at the pointer; Shift+F10 or the
+   ContextMenu key on a focused row opens it under the row (caught on `keydown`, so the menu does not
+   land wherever a browser puts a keyboard's `contextmenu`); a finger held still for 500 ms opens it
+   at the finger, and the tap that ends the press does not follow the link. Escape gives focus back
+   to the row, and a dialog an item opened gives it back there too.
+5. **The existing dropdown, anchored to a point** — `AnchoredMenu` in `ui/menu.tsx`, Radix's dropdown
+   opened from an invisible box at the pointer or around the row, drawn on the page's body. Its items,
+   keys, look and `min-w-sidebar` are the account menu's, because they are the same component.
+6. **Its body is deferred** (`app/deferred.ts`, D-49): the door in every row costs the first page
+   0.34 KB gzipped; drawn statically, the menu measured 1.87 KB, more than half the room the budget
+   had left. The chunk is fetched when a pointer enters a row or the keyboard reaches one; a chunk that
+   does not arrive is said in a toast and asked for again next time.
+
+**Rejected.**
+
+- *`@radix-ui/react-context-menu`.* It is the primitive for this, and it is one more runtime
+  dependency (§1.12) for what the dropdown already does once it is anchored; its trigger must also
+  wrap the row in the first page's code, so the menu could not be deferred.
+- *The row itself as the dropdown's trigger.* A trigger opens on a press and on Enter, which are the
+  link's; and every row would be announced as a menu button.
+- *A More (`…`) button revealed on hover*, as Slack also draws. A control that appears only under a
+  pointer is one a newcomer never finds, the reason the section headings' buttons are always shown
+  (`UX.md` §2); the context menu is the desktop's convention and adds nothing to the row's look.
+- *The level as a submenu.* A second primitive (`MenuSub`) for three choices that fit in the menu.
+
+**Cost of reversing:** `features/sidebar/row-menu.tsx` and `row-menu-body.tsx`, `AnchoredMenu`, the
+row's handlers, the export in `app/deferred.ts`, the strings and their tests. No contract, route or
+stored fact depends on any of it.
+
+### D-166. A search can be narrowed to who wrote it
+
+**Context.** `PRD.md` §4.6 narrowed a search to a workspace and a channel. "What did Ayşe say about the
+retry budget?" was answered by reading every result for her name. The owner asked for a *From* beside
+*Where* (2026-10-19); how it is built was decided under their standing instruction to decide and
+proceed, and is open to their reversal.
+
+**Decided.**
+
+1. **`senderId` on `GET …/search`, a filter on the visible set, never a way round it.** It narrows the
+   channels the caller can see (D-105 §4) to one person's words, in the same query; it never widens
+   them. An author's words in a private channel or a conversation the caller is not in stay unseen.
+2. **A person who wrote nothing there is an empty page, not a 404.** `channelId` names a resource and
+   is refused when it cannot be seen (D-105); `senderId` names nothing the caller is shown: a person of
+   another workspace, one who left, and an id nobody has are answered alike, and what is answered comes
+   only from the caller's own channels — so the empty page confirms nothing. Somebody who left is still
+   found by what they wrote while they were here (D-152), which a 404 for a non-member would have lost.
+3. **No new index.** `idx_messages_sender` already exists (0005). Measured on a million messages in
+   twenty workspaces (2026-10-19, PostgreSQL 18.6): without `senderId` the plan is unchanged, a bitmap
+   scan of `idx_messages_search_folded`; with it, for a person of five thousand messages, a `BitmapAnd`
+   of `idx_messages_sender`, the workspace and the channels (13–21 ms); for a person who wrote all fifty
+   thousand of a workspace's messages, the trigram index again (2 ms). No sequential scan in any.
+4. **On the screen: *From*, beside *Where*, kept in the address as `?from=`** with the person's id, so
+   Back and a shared link keep it as they keep `?q=` and `?in=`. *Anyone* first, then the person
+   themself, then everybody by name, each with their avatar — the workspace's people the sidebar lists.
+   Somebody the address names who is no longer listed is still searched for and shown as *Someone*.
+   The palette's *Search messages for "…"* opens a search of the words alone (D-157).
+5. **The menu's radio items, not the native select *Where* uses.** A native select cannot draw a face,
+   and a face is how a person is found in a list of thirty; the menu is already on the first page (the
+   account menu), so it costs no dependency and little weight, and its keys — arrows, typing a name,
+   Escape — are a picker's. Typing reaches a name by its words, not by its avatar's letters.
+
+**Rejected.**
+
+- *`?from=` as a username.* The handle is display-only and follows a rename on GitHub (D-38), so a
+  shared link would come to name somebody else or nobody; the id is what the API takes.
+- *A 404 for a person who is not a member.* It would hide what a person who left wrote, and a 404 on a
+  filter says nothing a 404 on the workspace does not already.
+- *A combined `(workspace_id, sender_id)` index.* The planner reached a cheap plan with the indexes
+  there are in every case measured; an index is paid on every send (D-10).
+
+**Cost of reversing:** `senderId` in `SearchQuery`, the route's parameter list and one `where` in
+`modules/search/search.ts`; `?from=`, `features/search/author-picker.tsx` and the strings on the web.
+
+### D-167. Browse says what a channel is before it is joined; a group has a face
+
+**Context.** Browse channels listed a name and, sometimes, a topic: nothing said whether a channel
+was where the team talks or an abandoned experiment of one, and the only way to find out was to join
+it. Slack and Linear both say how many people are in a channel before you join. In the sidebar, a
+group conversation drew the first of its people's avatars, so a group of three looked like a direct
+message with one of them. The owner asked for both (2026-10-19); how they are built was decided under
+their standing instruction to decide and proceed, and is open to their reversal.
+
+**Decided.**
+
+1. **A channel carries `memberCount`**, for every channel the caller sees, joined or not: its live
+   members, an erased account not among them — the number its members list holds, so the dialog and
+   the details never disagree. It is read in the channel list's own statement, as one aggregate
+   grouped by channel over the same ids the list is narrowed to (`readChannels`), joined in, never a
+   count a channel; the list's statement count stays the same however many channels there are
+   (the existing N+1 test). `EXPLAIN ANALYZE` over 2,000 channels and 100,000 memberships, sixty
+   channels listed: one `HashAggregate` fed by a bitmap scan of `channel_members (channel_id,
+   user_id)` with `channel_id = ANY(…)` as its index condition, 2.1 ms. The count is as of that read: another person's join is not pushed to
+   everyone who might browse. A count a person reads in a dialog they opened is allowed to be a
+   minute old; a frame to every member of a workspace for every join is not worth that minute.
+2. **Each row of Browse** is the name, then one quiet line: *12 members*, and the topic after a dot,
+   cut with an ellipsis before the count is. By name (D-160), as before.
+3. **A field to find a channel appears past eight**, the threshold the channel details' members list
+   already uses — now one constant, `FINDABLE_FROM` in `ui/text-field.tsx` — matching the name and the
+   topic without case or marks (`fold`), and saying so when nothing matches. Closing the dialog forgets
+   the search.
+4. **A group's face is its first two people, the second overlapping the first, and "+N" for the
+   rest**, in the order of its key — the order its name is written in, so the faces and the name
+   agree. Each piece is one small avatar (`size-avatar-sm`) overlapping the last by 4px and showing
+   one letter — two letters at 20px were half covered by the next face, seen live — so the row keeps
+   its height; a group is
+   at most ten people (D-127), so N is at most seven and is always one digit on a chip of the same
+   size. An overlapping piece is cut out of the one behind it by a hairline in the colour of what it
+   is drawn on — the sidebar's, following the row's hover; the accent on the row you are in; the
+   page's in the header; the selected option's in the palette — so two people with the same tint are
+   still two. The same face stands in the sidebar row, the palette's group row and the group's header,
+   where a generic glyph stood. An erased person is *Deleted user* in the reader's language, in the
+   face and in the name.
+
+**Rejected.**
+
+- *The count only for channels the caller has not joined.* A field that is sometimes absent is a
+  second shape for every reader of the list; the aggregate costs the same either way.
+- *Pushing counts on every join and leave.* See §1: a frame per membership change to every member of
+  the workspace, for a number read in one dialog.
+- *A count in the members list's endpoint, read when a row is shown.* A request per row is the N+1
+  (D-13).
+- *Slack's stacked square (two smaller avatars diagonally inside one)*: it needs an avatar smaller
+  than `size-avatar-sm`, a new size token for one place, and the initials stop being legible.
+- *A number in place of the faces* ("3"): it says how many but not who, which is what a face is for.
+
+**Cost of reversing:** the column in `readChannels`, the field in `Channel` and its fixtures,
+`features/conversations/group-face.tsx` and its three uses, the dialog's row and field, the strings
+and their tests.
+
+### D-168. A list of messages is one Tab stop; a row's own controls are reached from it
+
+**Context.** The feed had one row in the Tab order (roving focus, `UX.md` §7) and its bar went inert
+until its row was the one (D-150), but everything *inside* a message was still a stop: reaction chips,
+the thread's line, a code block's Wrap and Copy and the block itself, a diff's view and its region,
+links, files, GitHub cards. Measured in the demo channel (2026-10-19), Tab from the header's last
+control walked **78 stops** inside eleven messages before reaching the composer — and never the
+feed's own row — every row's bar joining in once focus had entered its content. The thread panel had no row in the Tab order at all,
+and the root's chips and bar were reached directly. Slack's message list and the WAI-ARIA feed
+pattern both make the list one stop. How it is built was decided under the owner's standing
+instruction to decide and proceed, and is open to their reversal.
+
+**Decided.**
+
+1. **The list is one stop: its current row.** Tab from what is before the list lands on the row the
+   keyboard was last on — or, untouched, the feed's newest and the panel's root — and ↑ ↓ Home End
+   move between rows as before (`row-keys.ts`). The panel's list now has its own roving row, as the
+   feed has.
+2. **Tab from the focused row walks that row's controls, then leaves.** Only the row that holds focus
+   has stops inside it, in the order they are drawn — its words' links, its code and diff blocks, its
+   files and cards, its chips and thread line, then its bar — and after the last one Tab goes on to
+   what follows the list (the composer, or in the panel Resolve and then the reply box). Shift+Tab
+   from there comes back to the **row**, not to the last control passed: once focus leaves a row its
+   controls are out again. Escape on a row still goes to the composer.
+3. **Out of the Tab order means `tabindex="-1"` and nothing else** (`features/messages/row-stops.ts`).
+   A row's controls are found by what makes an element a stop, whoever drew it; the `tabindex` each
+   had is written down, and given back as it was when focus enters the row. What a component draws or
+   changes while its row is out — highlighting, a reaction, a block unclamped — is taken out as it
+   arrives, and a change its author makes in that time is what is given back. One row holds focus for
+   the document, across the feed and the panel; the document's own focus events say which.
+4. **Pointer, touch and screen readers lose nothing.** A control out of the Tab order is still
+   clicked, tapped and focused by a script (a menu giving focus back, the image viewer giving it back
+   to its thumbnail), and focusing it by any of those ways brings its row in. It stays in the
+   accessibility tree with its name: browse mode reads every message's links and buttons and presses
+   them, and a links list still holds them all. **Nothing is traded.**
+5. **A scrolling block in a row that is out is reached through its row.** axe's
+   `scrollable-region-focusable` audits the page as it stands and calls a code block, a diff or a
+   table in any other row unreachable. The browser tests' audit (`e2e/fixtures.ts`) checks the path
+   instead of excusing the rule: it focuses the block's row and drops the finding only when the block
+   is then a stop; anything else stays a violation.
+
+**Rejected.**
+
+- *Enter or F2 into the row, Escape back out* (the grid pattern). It is one stop in a stricter sense,
+  but a Tab user who does not know the key never reaches a row's link, the bar 8917edc made reachable
+  by Tab would need the key too, and Escape already means "to the composer" on a row (`UX.md` §7).
+- *`inert` on every other row's content*, as the bar has. It takes the words out of the accessibility
+  tree — browse mode would read only the current message — and out of reach of the pointer.
+- *Each control asking whether its row is current* (a context read by chips, links, code blocks…). A
+  dozen components today and every new one tomorrow would have to remember it; the first to forget is
+  back in the Tab order with nothing to say so.
+- *Moving focus by hand on Tab* (a key handler that computes the next stop). It has to know the page's
+  order outside the list, and Shift+Tab from the composer arrives before any handler of the list's runs.
+
+**Cost of reversing:** `row-stops.ts` and its one call in `message-row.tsx`, the panel's roving row in
+`thread.tsx`, and their tests. No contract, route or stored fact depends on any of it.
 
 ## Part D — Open, deliberately
 

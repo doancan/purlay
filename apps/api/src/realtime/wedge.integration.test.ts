@@ -65,6 +65,7 @@ const aRoom = async (): Promise<{
   alice: { id: string; cookie: string };
   bob: { id: string; cookie: string };
   carol: { id: string; cookie: string };
+  workspaceId: string;
   channelId: string;
 }> => {
   const alice = await aUser('wa');
@@ -91,7 +92,7 @@ const aRoom = async (): Promise<{
   for (const user of [bob, carol]) {
     expect((await http('POST', `/api/channels/${channelId}/join`, user.cookie)).ok).toBe(true);
   }
-  return { alice, bob, carol, channelId };
+  return { alice, bob, carol, workspaceId, channelId };
 };
 
 interface Client {
@@ -214,13 +215,19 @@ describe('integration: a reply on real sockets', () => {
     const before = alice.frames.length;
     const reply = sendFrame(bob, room.channelId, 'upstream rate-limits at 15/min', root);
     await alice.until(
-      (frames) => frames.slice(before).some((f) => f.event === 'CHANNEL_STATE'),
-      'Alice’s own numbers',
+      (frames) => frames.slice(before).some((f) => f.event === 'NOTIFICATIONS_UPDATED'),
+      'Alice’s inbox',
     );
 
-    // The order D-99 §2 promises: the message, then what moved under it, then the numbers.
+    // The order D-99 §2 promises: the message, then what moved under it, then the numbers — and
+    // then her inbox, which has the reply (D-106).
     const heard = alice.frames.slice(before).map((f) => f.event);
-    expect(heard).toEqual(['MESSAGE_CREATED', 'THREAD_UPDATED', 'CHANNEL_STATE']);
+    expect(heard).toEqual([
+      'MESSAGE_CREATED',
+      'THREAD_UPDATED',
+      'CHANNEL_STATE',
+      'NOTIFICATIONS_UPDATED',
+    ]);
     const [created, updated, state] = alice.frames.slice(before);
     expect(created?.data).toMatchObject({ id: reply, parentId: root, thread: null });
     expect(updated?.data).toMatchObject({
@@ -327,8 +334,10 @@ describe('integration: a resolution over HTTP, heard on a socket', () => {
       'both messages',
     );
     await alice.until(
-      (frames) => frames.some((f) => f.event === 'THREAD_UPDATED'),
-      'the reply’s summary',
+      (frames) =>
+        frames.some((f) => f.event === 'THREAD_UPDATED') &&
+        frames.some((f) => f.event === 'NOTIFICATIONS_UPDATED'),
+      'the reply’s summary, and the reply in her inbox',
     );
     const settled = alice.frames.length;
 
@@ -338,6 +347,12 @@ describe('integration: a resolution over HTTP, heard on a socket', () => {
       event: 'THREAD_UPDATED',
       data: { messageId: root, thread: { resolvedBy: { id: room.bob.id } } },
     });
+    // She asked it and Bob closed it: her inbox has it, after the room heard it (D-106).
+    await alice.until((frames) => frames.length > settled + 1, 'her inbox');
+    expect(alice.frames[settled + 1]).toMatchObject({
+      event: 'NOTIFICATIONS_UPDATED',
+      data: { workspaceId: room.workspaceId },
+    });
 
     // Closing it again changes nothing, so nothing is said.
     expect((await http('POST', `/api/messages/${root}/resolve`, room.alice.cookie)).status).toBe(
@@ -346,12 +361,12 @@ describe('integration: a resolution over HTTP, heard on a socket', () => {
     expect((await http('DELETE', `/api/messages/${root}/resolve`, room.alice.cookie)).status).toBe(
       200,
     );
-    await alice.until((frames) => frames.length > settled + 1, 'the reopening');
-    expect(alice.frames[settled + 1]).toMatchObject({
+    await alice.until((frames) => frames.length > settled + 2, 'the reopening');
+    expect(alice.frames[settled + 2]).toMatchObject({
       event: 'THREAD_UPDATED',
       data: { thread: { resolvedAt: null, resolvedBy: null } },
     });
-    expect(alice.frames).toHaveLength(settled + 2);
+    expect(alice.frames).toHaveLength(settled + 3);
 
     await alice.close();
     await bob.close();

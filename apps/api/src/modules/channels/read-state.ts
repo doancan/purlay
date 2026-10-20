@@ -11,13 +11,16 @@
  * **Forward only.** A position at or behind the current one is not an error — a
  * second device that is further behind is simply stale — and changes nothing, so
  * it also publishes nothing.
+ *
+ * **The position reads the feed, not the threads** (D-147). It reads the notifications of the
+ * roots at or behind it; a reply's is read in its thread or in the inbox, so an answer the person
+ * has not opened keeps waiting — and keeps counting as unread — however far the feed is read.
  */
 import { sql, type RawBuilder, type Transaction } from '@purlay/db';
-import type { ChannelState } from '@purlay/types';
+import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { ChannelContext } from '../../platform/channels';
-import { NEEDS_YOU } from '../messages/delivery';
 
 /**
  * The notifications still waiting for a person in one channel, of the kinds that need them: what
@@ -33,6 +36,41 @@ export const waitingNotifications = (
   join messages m on m.id = n.message_id and m.deleted_at is null
   where n.user_id = ${userId} and n.channel_id = ${channelId}
     and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
+)`;
+
+/**
+ * The replies at or behind a read position whose notification still waits for the person: unread
+ * though the feed has been read past them (D-147).
+ */
+const waitingRepliesBehind = (
+  userId: string,
+  channelId: string,
+  position: string,
+): RawBuilder<number> => sql<number>`(
+  select count(*)::int from notifications n
+  join messages m on m.id = n.message_id and m.deleted_at is null and m.parent_id is not null
+  where n.user_id = ${userId} and n.channel_id = ${channelId}
+    and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
+    and n.message_id <= ${position}
+)`;
+
+/**
+ * What is unread for a person in one channel, counted from the rows (D-99 §4, D-147): every message
+ * by somebody else past the read position, and every reply at or behind it whose notification is
+ * still waiting — the feed has been read past it, the thread has not. The second term is what keeps
+ * `unread_mention_count` within `unread_count` (I-6) for an answer read past in the feed. Bounded,
+ * as the recount was: the first by the unread messages, the second by the waiting notifications.
+ */
+const unreadMessages = (
+  userId: string,
+  channelId: string,
+  position: string,
+): RawBuilder<number> => sql<number>`(
+  (
+    select count(*)::int from messages
+    where channel_id = ${channelId} and id > ${position}
+      and sender_id is distinct from ${userId} and deleted_at is null
+  ) + ${waitingRepliesBehind(userId, channelId, position)}
 )`;
 
 export interface ReadOutcome {
@@ -96,6 +134,8 @@ export const markRead = async (
     };
   }
 
+  // The roots at or behind the position: what is in the feed. A reply's notification is the
+  // thread's to read (D-147).
   await executor
     .updateTable('notifications')
     .set({ read_at: clock.now() })
@@ -103,27 +143,29 @@ export const markRead = async (
     .where('channel_id', '=', context.channelId)
     .where('read_at', 'is', null)
     .where('message_id', '<=', messageId)
+    .where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom('messages')
+          .select('messages.id')
+          .whereRef('messages.id', '=', 'notifications.message_id')
+          .where('messages.parent_id', 'is', null),
+      ),
+    )
     .execute();
 
+  const unread = unreadMessages(context.userId, context.channelId, messageId);
   const updated = await executor
     .updateTable('channel_members')
     .set({
       last_read_message_id: messageId,
       state_version: sql<number>`state_version + 1`,
-      unread_count: sql<number>`(
-        select count(*)::int from messages
-        where channel_id = ${context.channelId} and id > ${messageId}
-          and sender_id is distinct from ${context.userId} and deleted_at is null
-      )`,
+      unread_count: unread,
       // The lesser of the two, because a message that needs you is, first, one you
       // have not read (I-6). The notifications still unread are the ones past the
-      // position: the update above read everything at or behind it.
+      // position and the replies behind it, which `unread` counts too.
       unread_mention_count: sql<number>`least(
-        (
-          select count(*)::int from messages
-          where channel_id = ${context.channelId} and id > ${messageId}
-            and sender_id is distinct from ${context.userId} and deleted_at is null
-        ),
+        ${unread},
         ${waitingNotifications(context.userId, context.channelId)}
       )`,
     })

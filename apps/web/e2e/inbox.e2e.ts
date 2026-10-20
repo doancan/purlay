@@ -34,7 +34,7 @@ test.describe('the inbox', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
 
     const row = page.getByRole('button', { name: new RegExp(made.name) });
-    await expect(row).toContainText('carol mentioned you');
+    await expect(row).toContainText('Carol Reyes mentioned you');
     await expect(row).toContainText('unread');
     await expectNoAxe();
 

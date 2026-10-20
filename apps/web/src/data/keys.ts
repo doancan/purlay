@@ -17,11 +17,25 @@ export const keys = {
   channelMembers: (channelId: string) => ['channel-members', channelId] as const,
   channels: (workspaceId: string) => ['channels', workspaceId] as const,
   messages: (channelId: string) => ['messages', channelId] as const,
+  /**
+   * The feed around one message, which a link opens (D-149). Under the channel's own key, so what
+   * edits a channel's messages — a reaction, an edit, a channel let go — reaches it too.
+   */
+  messagesAround: (channelId: string, messageId: string | null) =>
+    ['messages', channelId, 'around', messageId] as const,
   thread: (messageId: string) => ['thread', messageId] as const,
+  /** Whether the caller follows a root's thread (D-161): theirs alone, so not under `thread`. */
+  threadFollow: (rootId: string) => ['thread-follow', rootId] as const,
   unresolved: (workspaceId: string) => ['unresolved', workspaceId] as const,
-  notifications: (workspaceId: string) => ['notifications', workspaceId] as const,
-  search: (workspaceId: string, words: string, channelId: string | null) =>
-    ['search', workspaceId, words, channelId] as const,
+  /** A workspace's inbox; `unread` is the same inbox read with `unreadOnly`, under the same prefix. */
+  notifications: (workspaceId: string, filter?: 'unread') =>
+    filter === undefined
+      ? (['notifications', workspaceId] as const)
+      : (['notifications', workspaceId, filter] as const),
+  /** The inbox's newest page, read when an open tab in the background tells of one (D-148). */
+  newestNotifications: (workspaceId: string) => ['notifications', workspaceId, 'newest'] as const,
+  search: (workspaceId: string, words: string, channelId: string | null, authorId: string | null) =>
+    ['search', workspaceId, words, channelId, authorId] as const,
   invitation: (token: string) => ['invitation', token] as const,
   invitations: (workspaceId: string) => ['invitations', workspaceId] as const,
   githubIntegration: (workspaceId: string) => ['github-integration', workspaceId] as const,

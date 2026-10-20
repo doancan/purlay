@@ -51,7 +51,7 @@ const search = async (
   room: Room,
   userId: string,
   q: string,
-  extra: { before?: string; limit?: number; channelId?: string } = {},
+  extra: { before?: string; limit?: number; channelId?: string; senderId?: string } = {},
 ): Promise<{ contents: string[]; nextCursor: string | null }> => {
   const context = await requireWorkspaceMembership(db, userId, room.workspaceId);
   const page = await searchIn(db, context, await visibleChannelIds(db, context), {
@@ -209,6 +209,139 @@ describe('integration: where it looks', () => {
           'CHANNEL_NOT_FOUND',
         );
       }
+    });
+  });
+});
+
+describe('integration: who wrote it (D-166)', () => {
+  test('only the words one person wrote, in roots and replies', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const root = await post(db, room, 'alice', 'deploy at noon?');
+      await post(db, room, 'bob', 'deploy at one', root.message.id);
+      await post(db, room, 'alice', 'deploy moved', root.message.id);
+      const as = member(room, 'bob').userId;
+      expect(
+        (await search(db, room, as, 'deploy', { senderId: member(room, 'alice').userId })).contents,
+      ).toEqual(['deploy moved', 'deploy at noon?']);
+      expect(
+        (await search(db, room, as, 'deploy', { senderId: member(room, 'bob').userId })).contents,
+      ).toEqual(['deploy at one']);
+      // Unnarrowed, the same words find all three: the filter is what took them away.
+      expect((await search(db, room, as, 'deploy')).contents).toHaveLength(3);
+    });
+  });
+
+  test('with a channel too, both narrow: that person, in that channel', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const other = await db
+        .insertInto('channels')
+        .values({ workspace_id: room.workspaceId, name: 'other', type: 'public' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      for (const name of ['alice', 'bob']) {
+        await db
+          .insertInto('channel_members')
+          .values({ channel_id: other.id, user_id: member(room, name).userId })
+          .execute();
+      }
+      const inOther = async (as: string, content: string): Promise<void> => {
+        await sendMessage(
+          db,
+          clock,
+          await requireChannelById(db, member(room, as).userId, other.id),
+          { id: nextId(), content },
+        );
+      };
+      await post(db, room, 'alice', 'release in general by alice');
+      await inOther('alice', 'release in other by alice');
+      await inOther('bob', 'release in other by bob');
+      const alice = member(room, 'alice').userId;
+      expect(
+        (
+          await search(db, room, member(room, 'bob').userId, 'release', {
+            senderId: alice,
+            channelId: other.id,
+          })
+        ).contents,
+      ).toEqual(['release in other by alice']);
+    });
+  });
+
+  for (const type of ['private', 'direct_message'] as const) {
+    test(`an author's words in a ${type} channel the caller is not in stay hidden`, async () => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice'], { type, outsiders: ['bob'] });
+        const alice = member(room, 'alice').userId;
+        const bob = room.outsiders['bob']?.userId ?? '';
+        // A channel both are in, so Bob's search has somewhere to look: without it his visible set
+        // is empty, and the answer would be empty whatever the filter did.
+        const shared = await db
+          .insertInto('channels')
+          .values({ workspace_id: room.workspaceId, name: 'shared', type: 'public' })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        await db
+          .insertInto('channel_members')
+          .values([alice, bob].map((user_id) => ({ channel_id: shared.id, user_id })))
+          .execute();
+        await post(db, room, 'alice', 'quarterly numbers are secret');
+        await sendMessage(db, clock, await requireChannelById(db, alice, shared.id), {
+          id: nextId(),
+          content: 'quarterly numbers are out',
+        });
+        // Alice finds both by her own name: what Bob is not given below is the narrowing.
+        expect((await search(db, room, alice, 'quarterly', { senderId: alice })).contents).toEqual([
+          'quarterly numbers are out',
+          'quarterly numbers are secret',
+        ]);
+        expect((await search(db, room, bob, 'quarterly', { senderId: alice })).contents).toEqual([
+          'quarterly numbers are out',
+        ]);
+      });
+    });
+  }
+
+  test('a person of another workspace finds nothing here, and their own words stay theirs', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice']);
+      const elsewhere = await aRoom(db, ['carol']);
+      await post(db, room, 'alice', 'roadmap for alice');
+      await post(db, elsewhere, 'carol', 'roadmap for carol');
+      const alice = member(room, 'alice').userId;
+      const carol = member(elsewhere, 'carol').userId;
+      // Carol's words exist, and her own search finds them: the empty page is the boundary.
+      expect((await search(db, elsewhere, carol, 'roadmap', { senderId: carol })).contents).toEqual(
+        ['roadmap for carol'],
+      );
+      expect(await search(db, room, alice, 'roadmap', { senderId: carol })).toEqual({
+        contents: [],
+        nextCursor: null,
+      });
+      // And nobody at all is the same answer: the two cannot be told apart.
+      expect(
+        await search(db, room, alice, 'roadmap', {
+          senderId: '00000000-0000-4000-8000-000000000000',
+        }),
+      ).toEqual({ contents: [], nextCursor: null });
+    });
+  });
+
+  test('somebody who left is still found by what they wrote while they were here', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      await post(db, room, 'bob', 'handover notes for the pager');
+      const bob = member(room, 'bob').userId;
+      await db
+        .deleteFrom('workspace_members')
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', bob)
+        .execute();
+      expect(
+        (await search(db, room, member(room, 'alice').userId, 'handover', { senderId: bob }))
+          .contents,
+      ).toEqual(['handover notes for the pager']);
     });
   });
 });

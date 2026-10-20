@@ -7,10 +7,12 @@
  * not (that is Browse's), and a direct message is a person, not a channel — it goes
  * under People, named by who is on the other end (D-6).
  *
- * **Order is activity, then name.** Newest message first, because that is where the
- * conversation is; a channel nobody has written in sorts after every one somebody has,
- * and ties — most often two silent channels — fall back to the name, so the list never
- * shuffles between renders for want of a rule.
+ * **Channels are in order of name; conversations in order of activity** (D-160). A channel is a
+ * place: it stays where the person last saw it, so a new message never moves the row they were
+ * about to click — unread is said by the row's weight and its badge, not by where it went. A
+ * conversation with people is a correspondence, and the newest one is the one being had, so people
+ * and groups are newest first; a conversation nobody has written in sorts after every one somebody
+ * has, and ties fall back to the name, so a list never shuffles between renders for want of a rule.
  */
 import type { Channel, User, WorkspaceMember } from '@purlay/types';
 
@@ -24,11 +26,11 @@ const byActivity = (a: Channel, b: Channel): number => {
 const joined = (channels: readonly Channel[]): Channel[] =>
   channels.filter((c) => c.state !== null);
 
-/** Channels the person is in, not DMs and not starred, most recently active first. */
+/** Channels the person is in, not DMs and not starred, by name — a place stays put (D-160). */
 export const joinedChannels = (channels: readonly Channel[]): Channel[] =>
   joined(channels)
     .filter((c) => c.type !== 'direct_message' && !c.starred)
-    .sort(byActivity);
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
 /**
  * The channels the person starred (D-132), kept apart above the rest — by name, not activity: a

@@ -18,13 +18,19 @@ const iconButtonClasses =
   'inline-flex shrink-0 items-center justify-center transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:text-ink-muted';
 
 /**
- * Two sizes. A control sits in a row with other controls and is as tall as they are; a rail
+ * Sizes. A control sits in a row with other controls and is as tall as they are; a rail
  * button is a larger square on the window's edge, with a larger glyph and its tip opening
  * inward (D-110).
  */
 const sizeClasses = {
   control:
     'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink',
+  /**
+   * A control on a message's bar (D-150): the control's size on every window. A finger-tall bar
+   * is taller than the band above a bubble and covered the author's name on a phone; at this size
+   * it fits the band, and every target on the bar is the same (above the 24px WCAG minimum).
+   */
+  bar: 'h-control aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink aria-pressed:text-accent-text',
   rail: 'size-rail-item rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink max-narrow:h-touch max-narrow:w-touch',
   /** A control in the sidebar, on the navigation's tone (D-118). */
   nav: 'h-control max-narrow:h-touch aspect-square rounded-md text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
@@ -40,6 +46,11 @@ export interface IconButtonProps extends Omit<
   /** The key that does the same thing, shown in the tooltip. */
   readonly shortcut?: string;
   readonly size?: keyof typeof sizeClasses;
+  /**
+   * What the tooltip says, when it is not the name: a toggle keeps one name and says its state in
+   * `aria-pressed`, while its tooltip says what pressing it now would do ("Unpin").
+   */
+  readonly tooltip?: string;
 }
 
 export const IconButton = ({
@@ -47,12 +58,13 @@ export const IconButton = ({
   glyph,
   shortcut,
   size = 'control',
+  tooltip = label,
   type = 'button',
   className,
   ...rest
 }: IconButtonProps): React.JSX.Element => (
   <Tooltip
-    content={label}
+    content={tooltip}
     side={size === 'rail' ? 'right' : 'top'}
     {...(shortcut === undefined ? {} : { shortcut })}
   >

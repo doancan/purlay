@@ -269,7 +269,23 @@ describe('an upload', () => {
   test('a refusal is the error the server named, as a request’s is', async () => {
     const done = client.upload('/u', Thing, file, {}).catch((e: unknown) => e);
     current().answer(413, { error: { code: 'STORAGE_QUOTA_EXCEEDED', message: 'full' } });
-    expect(await done).toMatchObject({ status: 413, code: 'STORAGE_QUOTA_EXCEEDED' });
+    expect(await done).toMatchObject({
+      status: 413,
+      code: 'STORAGE_QUOTA_EXCEEDED',
+      remainingBytes: null,
+    });
+  });
+
+  test('a workspace out of room says how much room it still has (D-159)', async () => {
+    const done = client.upload('/u', Thing, file, {}).catch((e: unknown) => e);
+    current().answer(413, {
+      error: {
+        code: 'STORAGE_QUOTA_EXCEEDED',
+        message: 'full',
+        details: { remainingBytes: 1_048_576 },
+      },
+    });
+    expect(await done).toMatchObject({ code: 'STORAGE_QUOTA_EXCEEDED', remainingBytes: 1_048_576 });
   });
 
   test('an answer outside the contract is MALFORMED; a dropped connection is NETWORK', async () => {

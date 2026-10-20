@@ -26,6 +26,8 @@ const literalPattern = (words: string): string =>
  * `channelIds` is every channel the caller can see in the workspace. `query.channelId` narrows the
  * search to one of them; a channel outside that set — another workspace's, or one the caller is not
  * in — is the same `CHANNEL_NOT_FOUND` as anywhere else, never an empty answer that confirms it.
+ * `query.senderId` narrows it to one person's words (D-166), on `idx_messages_sender` or the trigram
+ * index, whichever the planner finds the smaller.
  */
 export const searchIn = async (
   executor: Executor,
@@ -55,6 +57,11 @@ export const searchIn = async (
     .orderBy('messages.id', 'desc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
+  // Who wrote it narrows the visible set further and never widens it (D-166): an author's words in a
+  // channel the caller cannot see stay unseen, and a person of another workspace finds nothing here.
+  if (query.senderId !== undefined) {
+    statement = statement.where('messages.sender_id', '=', query.senderId);
+  }
 
   return await asPage(executor, await statement.execute(), limit);
 };

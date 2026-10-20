@@ -366,6 +366,43 @@ describe('integration: the frame router', () => {
     });
   });
 
+  test('a send into a public channel the sender has not joined is refused by its code, and writes nothing (D-156)', async () => {
+    await withRollback(async (db) => {
+      const alice = await signedIn(db, 'rt-member');
+      const bob = await signedIn(db, 'rt-unjoined');
+      const { workspaceId, channelId } = await aChannel(db, alice, 'rt-unjoined-ws');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: bob.userId })
+        .execute();
+
+      const delivered: ServerFrame[] = [];
+      const bus = inProcessEventBus(
+        (_socketId, frame) => {
+          delivered.push(frame);
+        },
+        createLogger({ level: 'silent' }),
+      );
+      bus.subscribe(channelTopic(channelId), 'listener');
+
+      const id = messageId(NOW);
+      const [reply] = await route(
+        db,
+        bob,
+        { id, op: 'MESSAGE_SEND', payload: { channelId, content: 'drive-by' } },
+        bus,
+      );
+
+      expect(reply?.event).toBe('ERROR');
+      expect(reply?.refId).toBe(id);
+      expect(reply?.data).toMatchObject({ code: 'NOT_A_CHANNEL_MEMBER' });
+      expect(delivered).toEqual([]);
+      expect(
+        await db.selectFrom('messages').select('id').where('channel_id', '=', channelId).execute(),
+      ).toHaveLength(0);
+    });
+  });
+
   test('subscribing replays what was missed, oldest first', async () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'rt-replay');

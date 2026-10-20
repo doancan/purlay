@@ -91,7 +91,7 @@ describe('integration: the incident routes', () => {
       expect(((await (await erin('GET', base)).json()) as IncidentResponse).incident?.id).toBe(id);
       expect(await codeOf(await erin('PATCH', `${base}/${id}`, { status: 'mitigating' }))).toEqual([
         403,
-        'FORBIDDEN',
+        'NOT_A_CHANNEL_MEMBER',
       ]);
 
       const moved = await alice('PATCH', `${base}/${id}`, { status: 'mitigating' });
@@ -227,7 +227,7 @@ describe('integration: who is told of an incident', () => {
         version: 1,
       });
 
-      expect(refused).toBe('FORBIDDEN');
+      expect(refused).toBe('NOT_A_CHANNEL_MEMBER');
       const frame: ServerFrame = {
         event: 'INCIDENT_UPDATED',
         data: { channelId: room.channelId },

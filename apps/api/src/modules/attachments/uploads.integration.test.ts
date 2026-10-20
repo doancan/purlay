@@ -54,6 +54,17 @@ const refusalOf = async (attempt: Promise<unknown>): Promise<string> => {
   throw new Error('accepted where it had to be refused');
 };
 
+/** The whole body of a refusal, for one whose details matter. */
+const quotaRefusalOf = async (attempt: Promise<unknown>): Promise<AppError['body']> => {
+  try {
+    await attempt;
+  } catch (error) {
+    if (error instanceof AppError) return error.body;
+    throw error;
+  }
+  throw new Error('accepted where it had to be refused');
+};
+
 const quota = async (db: Executor, room: Room, bytes: number, used = 0): Promise<void> => {
   await db
     .updateTable('workspaces')
@@ -155,11 +166,20 @@ describe('integration: the bounds', () => {
       const store = aMemoryStore();
       await quota(db, room, 100, 60);
       await upload(db, store, room, 'alice', { bytes: 30 });
+      // One past the room says how much room there is: 100 - 60 stored - 30 waiting (D-159).
+      expect(await quotaRefusalOf(upload(db, store, room, 'alice', { bytes: 11 }))).toEqual({
+        code: 'STORAGE_QUOTA_EXCEEDED',
+        message: 'This workspace has no room for that file.',
+        details: { remainingBytes: 10 },
+      });
       // 60 stored + 30 waiting + 10 = the quota exactly.
       await upload(db, store, room, 'alice', { bytes: 10 });
       expect(await refusalOf(upload(db, store, room, 'alice', { bytes: 1 }))).toBe(
         'STORAGE_QUOTA_EXCEEDED',
       );
+      expect(await quotaRefusalOf(upload(db, store, room, 'alice', { bytes: 1 }))).toMatchObject({
+        details: { remainingBytes: 0 },
+      });
       expect(store.keys()).toHaveLength(2);
     });
   });

@@ -5,6 +5,7 @@
  * block.
  */
 import { describe, expect, test } from 'bun:test';
+import { act } from '@testing-library/react';
 import { within } from '@testing-library/react';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
@@ -32,8 +33,8 @@ const mount = async (
   content: string,
   ports: Partial<ContentPorts> = {},
   locale?: 'en' | 'tr',
-): ReturnType<typeof renderApp> =>
-  await renderApp(
+): ReturnType<typeof renderApp> => {
+  const view = await renderApp(
     <ContentPortsContext.Provider
       value={{ highlight: () => Promise.resolve(null), copy: () => Promise.resolve(), ...ports }}
     >
@@ -42,6 +43,13 @@ const mount = async (
     </ContentPortsContext.Provider>,
     locale === undefined ? {} : { locale },
   );
+  // The viewer is a chunk of its own (#687): what is asserted is what it draws once it has arrived.
+  await act(async () => {
+    await import('./diff-block');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  return view;
+};
 
 const rows = (view: { container: HTMLElement }, kind: string): string[] =>
   [...view.container.querySelectorAll(`tbody:not(.hidden) [data-diff-line="${kind}"]`)].map(

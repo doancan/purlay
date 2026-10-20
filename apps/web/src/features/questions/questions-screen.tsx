@@ -20,7 +20,7 @@ import type { Channel, Message } from '@purlay/types';
 import { Icon } from '../../components/icon';
 import { useChannels, useUnresolved, readingOrder } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { threadHref } from '../../router/routes';
+import { channelInSearch, threadHref } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { Avatar } from '../../ui/avatar';
@@ -36,6 +36,7 @@ import {
   useChannelTitle,
 } from '../channel/channel-header';
 import { NavToggle } from '../shell/nav';
+import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../ui/list-column';
 import { useWorkspace } from '../shell/workspace';
 import { lastChannel } from './last-channel';
 import { useOpenCount } from './use-open-count';
@@ -67,14 +68,18 @@ export const groupByChannel = (questions: readonly Message[]): Group[] => {
     });
 };
 
-const Header = (): React.JSX.Element => {
+const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.Element => {
   const { t, format } = useI18n();
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
-  const open = useOpenCount(workspace.id);
+  const open = useOpenCount(workspace.id, narrowed);
   const joined = (channels.data ?? []).filter((c) => c.state !== null);
-  const remembered = lastChannel(workspace.id);
-  const back = joined.find((c) => c.id === remembered) ?? joined[0];
+  const remembered = narrowed ?? lastChannel(workspace.id);
+  // Narrowed to a channel, Feed goes back to it, whether or not the person is in it.
+  const back =
+    (channels.data ?? []).find((c) => c.id === narrowed) ??
+    joined.find((c) => c.id === remembered) ??
+    joined[0];
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
@@ -140,7 +145,7 @@ const GroupTitle = ({
   // A hook cannot be called conditionally, so a channel the person can no longer see gets a
   // stand-in that never reaches `useChannelTitle`.
   return channel === undefined ? (
-    <h2 id={id} className="px-3 pb-2 text-label text-ink-muted">
+    <h2 id={id} className="text-label text-ink-muted">
       {t('questions.unnamed')}
     </h2>
   ) : (
@@ -160,7 +165,7 @@ const KnownGroupTitle = ({
   const { t } = useI18n();
   const title = useChannelTitle(channel);
   return (
-    <h2 id={id} className="flex items-center gap-1 px-3 pb-2 text-label text-ink-muted">
+    <h2 id={id} className="flex items-center gap-1 text-label text-ink-muted">
       <Icon name={channel.type === 'direct_message' ? 'person' : 'channel'} size="sm" />
       <span>{title}</span>
       <span aria-hidden="true">·</span>
@@ -183,13 +188,13 @@ const QuestionRow = ({
   const replies = t('thread.replies', { count: question.thread?.replyCount ?? 0 });
   const last = question.thread?.lastReplyAt ?? question.createdAt;
   return (
-    <li>
+    <li className={listRowClasses}>
       <button
         type="button"
         onClick={() => {
           navigate(threadHref(workspace.slug, question.channelId, question.id));
         }}
-        className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors duration-hover ease-standard hover:bg-surface-050"
+        className={listButtonClasses()}
       >
         <Avatar
           name={authorOf(question, t('user.erased')).displayName}
@@ -198,7 +203,7 @@ const QuestionRow = ({
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className="text-body font-semibold text-ink">
-              {authorOf(question, t('user.erased')).username}
+              {authorOf(question, t('user.erased')).displayName}
             </span>
             <time dateTime={question.createdAt} className="font-mono text-caption text-ink-subtle">
               {format.time(question.createdAt, now)}
@@ -219,13 +224,54 @@ const QuestionRow = ({
   );
 };
 
+/** Narrowed to one channel (from its header): which, and the way back to every channel. */
+const Narrowed = ({ channel }: { readonly channel: Channel | undefined }): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  return (
+    <p className="flex flex-wrap items-center gap-2 text-label text-ink-muted">
+      {channel === undefined ? null : (
+        <>
+          <NarrowedName channel={channel} />
+          <span aria-hidden="true">·</span>
+        </>
+      )}
+      <Link
+        to="questions"
+        params={{ slug: workspace.slug }}
+        className="rounded-sm text-accent-text hover:underline"
+      >
+        {t('questions.everyChannel')}
+      </Link>
+    </p>
+  );
+};
+
+const NarrowedName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+  const { t } = useI18n();
+  const title = useChannelTitle(channel);
+  return (
+    <span>
+      {t('questions.only', { name: channel.type === 'direct_message' ? title : `#${title}` })}
+    </span>
+  );
+};
+
 export const QuestionsScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
+  const { search } = useRoute();
+  const narrowed = channelInSearch(search);
   const ports = useFeedPorts();
   const query = useUnresolved(workspace.id);
   const channels = useChannels(workspace.id);
-  const questions = useMemo(() => readingOrder(query.data), [query.data]);
+  const questions = useMemo(
+    () =>
+      readingOrder(query.data).filter(
+        (question) => narrowed === null || question.channelId === narrowed,
+      ),
+    [query.data, narrowed],
+  );
   const groups = useMemo(() => groupByChannel(questions), [questions]);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const now = ports.clock.now();
@@ -233,10 +279,7 @@ export const QuestionsScreen = (): React.JSX.Element => {
   let body: React.JSX.Element;
   if (query.isPending) {
     body = (
-      <LoadingStatus
-        label={t('state.questions.loading')}
-        className="flex w-full max-w-feed flex-col gap-4 px-4 py-4"
-      >
+      <LoadingStatus label={t('state.questions.loading')} className="flex flex-col gap-4 py-2">
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex flex-col gap-2">
             <Skeleton className="w-members" />
@@ -256,37 +299,48 @@ export const QuestionsScreen = (): React.JSX.Element => {
         }}
       />
     );
-  } else if (groups.length === 0) {
+  } else if (groups.length === 0 && !query.hasNextPage) {
     body = (
-      <GlyphEmptyState
-        glyph="resolved"
-        tone="success"
-        title={t('state.questions.empty.title')}
-        body={t('state.questions.empty.body')}
-      />
+      <>
+        <GlyphEmptyState
+          glyph="resolved"
+          tone="success"
+          title={t('state.questions.empty.title')}
+          body={t('state.questions.empty.body')}
+        />
+        {narrowed !== null && (
+          <div className="flex justify-center pb-6">
+            <Narrowed channel={undefined} />
+          </div>
+        )}
+      </>
     );
   } else {
     body = (
-      <div className="flex w-full max-w-feed flex-col gap-6 px-3 py-4">
+      <>
+        {narrowed !== null && <Narrowed channel={byId.get(narrowed)} />}
         {groups.map((group) => {
           const id = `questions-${group.channelId}`;
           return (
-            <section key={group.channelId} aria-labelledby={id}>
-              <GroupTitle
-                channel={byId.get(group.channelId)}
-                count={group.questions.length}
-                id={id}
-              />
-              <ul className="flex flex-col">
-                {group.questions.map((question) => (
-                  <QuestionRow key={question.id} question={question} now={now} />
-                ))}
-              </ul>
-            </section>
+            <ListCard
+              key={group.channelId}
+              headingId={id}
+              heading={
+                <GroupTitle
+                  channel={byId.get(group.channelId)}
+                  count={group.questions.length}
+                  id={id}
+                />
+              }
+            >
+              {group.questions.map((question) => (
+                <QuestionRow key={question.id} question={question} now={now} />
+              ))}
+            </ListCard>
           );
         })}
         {query.hasNextPage && (
-          <div className="px-3">
+          <div className="flex justify-center">
             <Button
               variant="secondary"
               busy={query.isFetchingNextPage}
@@ -298,15 +352,15 @@ export const QuestionsScreen = (): React.JSX.Element => {
             </Button>
           </div>
         )}
-        <p className="px-3 text-caption text-ink-muted">{t('questions.footer')}</p>
-      </div>
+        <p className="text-center text-caption text-ink-muted">{t('questions.footer')}</p>
+      </>
     );
   }
 
   return (
     <>
-      <Header />
-      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+      <Header narrowed={narrowed} />
+      <ListColumn>{body}</ListColumn>
     </>
   );
 };

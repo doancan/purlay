@@ -86,8 +86,12 @@ describe('integration: pinning', () => {
       expect(await attempt(db, () => pinMessage(db, at(0), carol, anId()))).toBe(
         'MESSAGE_NOT_FOUND',
       );
-      expect(await attempt(db, () => pinMessage(db, at(0), carol, message))).toBe('FORBIDDEN');
-      expect(await attempt(db, () => unpinMessage(db, carol, message))).toBe('FORBIDDEN');
+      expect(await attempt(db, () => pinMessage(db, at(0), carol, message))).toBe(
+        'NOT_A_CHANNEL_MEMBER',
+      );
+      expect(await attempt(db, () => unpinMessage(db, carol, message))).toBe(
+        'NOT_A_CHANNEL_MEMBER',
+      );
       // Refused, nothing moved.
       expect((await channelPins(db, contextOf(room, 'alice'))).map((p) => p.message.id)).toEqual([
         message,

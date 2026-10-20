@@ -103,6 +103,41 @@ describe('Cmd/Ctrl+K', () => {
   });
 });
 
+describe('Cmd/Ctrl+, (D-146)', () => {
+  test('opens Settings from anywhere, the composer included, taking the chord from the browser', async () => {
+    const { view, here } = await mount();
+    const composer = view.getByLabelText('composer');
+    act(() => {
+      composer.focus();
+    });
+    expect(press({ key: ',', ctrlKey: true }, composer)).toBe(false);
+    await settle();
+    expect(here()).toBe('/w/acme/settings');
+  });
+
+  test('closes an overlay that is open as it goes', async () => {
+    const { view, here } = await mount();
+    press({ key: 'k', metaKey: true });
+    await settle();
+    expect(view.getByRole('dialog')).toBeDefined();
+    press({ key: ',', metaKey: true });
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(here()).toBe('/w/acme/settings');
+  });
+
+  test.each([
+    ['without a modifier', { key: ',' }],
+    ['with Shift', { key: ',', metaKey: true, shiftKey: true }],
+    ['with Alt', { key: ',', metaKey: true, altKey: true }],
+  ])('is not the chord %s', async (_why, init) => {
+    const { here } = await mount();
+    expect(press(init)).toBe(true);
+    await settle();
+    expect(here()).toBe(`/w/acme/c/${IDS.api}`);
+  });
+});
+
 describe('Cmd/Ctrl+/', () => {
   test('opens the shortcut reference, and the same chord closes it', async () => {
     const { view } = await mount();

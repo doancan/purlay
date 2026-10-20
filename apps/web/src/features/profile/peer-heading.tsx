@@ -32,7 +32,7 @@ export const PeerHeading = ({
   const hintId = useId();
   return (
     <>
-      <h1 className="min-w-0 shrink-0 truncate text-title text-ink">
+      <h1 className="min-w-0 truncate text-title text-ink">
         <button
           type="button"
           data-panel-toggle="profile"

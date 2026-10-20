@@ -391,22 +391,24 @@ const Inner = ({
       </span>
     </>
   );
-  const hintsBlock = focused ? (
-    // Each hint whole. Not drawn on a narrow window: a phone's keyboard has no Shift+Enter, and drawn
-    // there they took a row of their own, so focusing the composer made it taller and moved what was
-    // above it — a pill moved between a press and its release, and the click missed (#654). They are
-    // still the field's description, which a screen reader reads.
-    <span
-      id={hintsId}
-      className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden"
-    >
-      {hints}
-    </span>
-  ) : (
-    <VisuallyHidden>
-      <span id={hintsId}>{hints}</span>
-    </VisuallyHidden>
-  );
+  // A thread's panel is too narrow for them beside the buttons (`size-thread`): read, not drawn (D-164).
+  const hintsBlock =
+    focused && !compact ? (
+      // Each hint whole. Not drawn on a narrow window: a phone's keyboard has no Shift+Enter, and drawn
+      // there they took a row of their own, so focusing the composer made it taller and moved what was
+      // above it — a pill moved between a press and its release, and the click missed (#654). They are
+      // still the field's description, which a screen reader reads.
+      <span
+        id={hintsId}
+        className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden"
+      >
+        {hints}
+      </span>
+    ) : (
+      <VisuallyHidden>
+        <span id={hintsId}>{hints}</span>
+      </VisuallyHidden>
+    );
   const counter = (
     <span aria-live="polite" className="ml-auto text-caption text-ink-muted">
       {left === null
@@ -543,7 +545,7 @@ const Inner = ({
           <VisuallyHidden role="status" aria-live="polite">
             {open ? t('mention.results', { count: suggestions.length }) : ''}
           </VisuallyHidden>
-          <div className={cn('flex gap-2 px-3', compact ? 'items-center py-2' : 'pt-3')}>
+          <div className="flex gap-2 px-3 pt-3">
             <textarea
               data-composer=""
               ref={field}
@@ -571,7 +573,6 @@ const Inner = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
             />
-            {compact && sendButton}
           </div>
           <UploadList uploads={uploads} />
           <input
@@ -586,57 +587,52 @@ const Inner = ({
               event.target.value = '';
             }}
           />
-          {compact && !focused && left === null ? (
-            hintsBlock
-          ) : (
-            <div
-              className={cn(
-                'flex items-center gap-3 px-4',
-                compact ? 'pb-2' : 'pb-2 pl-2 pr-2 pt-1',
+          {/* The same buttons in a thread as in the channel (D-164): a reply is a message like any other. */}
+          <div className="flex items-center gap-3 pb-2 pl-2 pr-2 pt-1">
+            <span className="flex items-center gap-1">
+              <IconButton
+                label={t('composer.bold')}
+                glyph="bold"
+                onClick={() => {
+                  insert('bold');
+                }}
+              />
+              <IconButton
+                label={t('composer.codeBlock')}
+                glyph="code"
+                onClick={() => {
+                  insert('code');
+                }}
+              />
+              <IconButton
+                label={t('composer.mention')}
+                glyph="mention"
+                onClick={() => {
+                  insert('mention');
+                }}
+              />
+              <IconButton
+                label={t('composer.attach')}
+                glyph="attach"
+                onClick={() => {
+                  picker.current?.click();
+                }}
+              />
+              {/* Between the buttons and the hints, and only where the hints are drawn: unfocused, in a
+                  thread, or on a phone it divided the buttons from nothing. */}
+              {focused && !compact && (
+                <span
+                  aria-hidden="true"
+                  data-hints-divider=""
+                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden"
+                />
               )}
-            >
-              {!compact && (
-                <span className="flex items-center gap-1">
-                  <IconButton
-                    label={t('composer.bold')}
-                    glyph="bold"
-                    onClick={() => {
-                      insert('bold');
-                    }}
-                  />
-                  <IconButton
-                    label={t('composer.codeBlock')}
-                    glyph="code"
-                    onClick={() => {
-                      insert('code');
-                    }}
-                  />
-                  <IconButton
-                    label={t('composer.mention')}
-                    glyph="mention"
-                    onClick={() => {
-                      insert('mention');
-                    }}
-                  />
-                  <IconButton
-                    label={t('composer.attach')}
-                    glyph="attach"
-                    onClick={() => {
-                      picker.current?.click();
-                    }}
-                  />
-                  <span
-                    aria-hidden="true"
-                    className="mx-1 h-4 border-l-hairline border-border-subtle"
-                  />
-                </span>
-              )}
-              {hintsBlock}
-              {!compact && <TypingLine channelId={channelId} />}
-              {counter}
-              {!compact && sendButton}
-            </div>
-          )}
+            </span>
+            {hintsBlock}
+            {!compact && <TypingLine channelId={channelId} />}
+            {counter}
+            {sendButton}
+          </div>
         </div>
         {waiting && (
           <p role="status" className="flex items-center gap-2 px-1 text-label text-ink-muted">

@@ -18,6 +18,7 @@ import {
   ME,
   WHEN,
   aChannel,
+  aSession,
   aSignedInApi,
   NO_PROFILE,
 } from '../../testing/fixtures';
@@ -144,14 +145,31 @@ describe('what is on offer before anything is typed', () => {
     expect(view.getByText('Views')).toBeDefined();
     expect(options().map((text) => text.replace(/@\w+/, ''))).toEqual([
       'Open questions',
+      'Inbox',
+      'Saved',
+      'Search',
       'Feed' + 'api',
       'api',
       'deploys',
+      // A public channel not joined is found, and says so.
+      'browse' + 'Not joined',
       'incidents',
       'secrets',
       'Bob',
       'Alice',
       'you',
+      // Every settings page this owner may open (D-146), then the choices made in place.
+      'Profile',
+      'Preferences',
+      'Notifications',
+      'Keyboard shortcuts',
+      'Sessions & account',
+      'General',
+      'Members',
+      'Invitations',
+      'Integrations',
+      'Audit log',
+      'Data & retention',
       'Theme: System',
       'Theme: Light',
       'Theme: Dark',
@@ -207,8 +225,9 @@ describe('typing', () => {
   test('narrows to what matches, best first, with the matched letters in semibold', async () => {
     const { view, input, options } = await mount();
     await person().type(input(), 'dep');
-    expect(options()).toEqual(['deploys']);
-    const strong = view.getByRole('option').querySelectorAll('b');
+    // What matched, then the messages searched for the same words, always last.
+    expect(options()).toEqual(['deploys', 'Search messages for “dep”']);
+    const strong = view.getAllByRole('option')[0]?.querySelectorAll('b') ?? [];
     expect([...strong].map((node) => node.textContent).join('')).toBe('dep');
     expect(strong[0]?.className).toContain('font-semibold');
   });
@@ -219,17 +238,24 @@ describe('typing', () => {
     expect(options().some((text) => text.startsWith('Bob'))).toBe(true);
   });
 
-  test('says so, politely, when nothing matches, and has no current option', async () => {
-    const { view, input } = await mount();
+  test('says so, politely, when nothing matches, and offers to search the messages instead', async () => {
+    const { view, input, options } = await mount();
     await person().type(input(), 'zzz');
-    expect(view.queryAllByRole('option')).toEqual([]);
+    expect(options()).toEqual(['Search messages for “zzz”']);
     expect(view.getAllByText('No match for “zzz”').length).toBeGreaterThan(0);
-    expect(input().getAttribute('aria-activedescendant')).toBeNull();
     const live = view
       .getAllByRole('status')
       .find((node) => node.textContent === 'No match for “zzz”');
     expect(live?.getAttribute('aria-live')).toBe('polite');
     await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  test('Enter on the search row searches the messages for what was typed', async () => {
+    const { input, here } = await mount();
+    await person().type(input(), 'zzz');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/search?q=zzz');
   });
 
   test('announces how many results there are, once something is typed', async () => {
@@ -276,12 +302,12 @@ describe('the keyboard', () => {
     expect(selected()).toBe(all[0]);
   });
 
-  test('the arrows do nothing when there is nothing to move to', async () => {
-    const { input } = await mount();
-    const user = person();
-    await user.type(input(), 'zzz');
-    await user.keyboard('{ArrowDown}{End}{Enter}');
-    expect(input().value).toBe('zzz');
+  test('the rail’s places are found by name: the inbox, saved and search', async () => {
+    const { input, here } = await mount();
+    await person().type(input(), 'inbox');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/inbox');
   });
 
   test('Enter on a channel goes there and closes', async () => {
@@ -426,6 +452,84 @@ describe('what each kind of item does', () => {
     await settle();
     expect(asked).toEqual([IDS.me]);
     expect(here()).toBe('/w/acme/c/00000000-0000-4000-8000-0000000000d2');
+  });
+
+  test('a public channel not joined is opened to be read, where its Join bar is', async () => {
+    const { input, options, here, closed } = await mount();
+    await person().type(input(), 'brow');
+    expect(options()[0]).toBe('browse' + 'Not joined');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe(`/w/acme/c/${IDS.browse}`);
+    expect(closed()).toEqual([false]);
+  });
+
+  test('a group conversation is found by the username of anybody in it, and Enter goes there (D-127)', async () => {
+    const GROUP = '00000000-0000-4000-8000-0000000000c8';
+    const zeynep = {
+      id: '00000000-0000-4000-8000-0000000000e9',
+      username: 'zed',
+      displayName: 'Zeynep',
+      avatarUrl: null,
+    };
+    const api = apiWith({
+      channels: () =>
+        Promise.resolve([
+          ...withDm(),
+          aChannel(GROUP, null, {
+            type: 'direct_message',
+            peer: null,
+            peers: [ALICE, zeynep],
+            lastMessageAt: '2026-09-09T11:00:00.000Z',
+          }),
+        ]),
+    });
+    const { view, input, options, here, closed } = await mount(api);
+    // Neither name has "zed" in it: the group is found by the username alone.
+    await person().type(input(), 'zed');
+    expect(options()[0]).toBe('Alice, Zeynep');
+    // Its tile is its faces, as in the sidebar (D-167), cut out in the selected row's colour.
+    const [option] = view.getAllByRole('option');
+    const face = option?.querySelector('[data-group-face]');
+    expect([...(face?.querySelectorAll('[data-avatar]') ?? [])].map((a) => a.textContent)).toEqual([
+      'A',
+      'Z',
+    ]);
+    expect(face?.lastElementChild?.getAttribute('class')?.split(' ')).toContain(
+      'border-accent-subtle',
+    );
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe(`/w/acme/c/${GROUP}`);
+    expect(closed()).toEqual([false]);
+  });
+
+  test('a settings page is found by its name, and Enter goes there and closes (D-146)', async () => {
+    const { input, here, closed } = await mount();
+    await person().type(input(), 'audit log');
+    await person().keyboard('{Enter}');
+    await settle();
+    expect(here()).toBe('/w/acme/settings/audit');
+    expect(closed()).toEqual([false]);
+  });
+
+  test('a member is offered their own settings pages and none of the workspace’s', async () => {
+    const session = aSession();
+    const { options } = await mount(
+      apiWith({
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((m) => ({ ...m, role: 'member' as const })),
+          }),
+      }),
+    );
+    const offered = options();
+    expect(offered).toContain('Profile');
+    expect(offered).toContain('Sessions & account');
+    for (const page of ['General', 'Members', 'Invitations', 'Audit log', 'Data & retention']) {
+      expect(offered).not.toContain(page);
+    }
   });
 
   test('a theme is applied at once, and the palette closes', async () => {

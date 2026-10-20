@@ -21,6 +21,7 @@
  * the icon's colour, and meaning is never carried by colour alone (`UX.md` §9).
  */
 import {
+  ArrowLeft,
   AtSign,
   Bell,
   Bookmark,
@@ -30,8 +31,10 @@ import {
   PinOff,
   Bold,
   BellOff,
+  BellRing,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   Code,
@@ -44,7 +47,9 @@ import {
   History,
   Quote,
   Copy,
+  WrapText,
   Ellipsis,
+  ExternalLink,
   File,
   GitMerge,
   GitPullRequest,
@@ -52,12 +57,15 @@ import {
   Inbox,
   Info,
   Keyboard,
+  KeyRound,
   Languages,
+  Link2,
   Lock,
   LogOut,
   Menu,
   MessagesSquare,
   Monitor,
+  Plug,
   Paperclip,
   Moon,
   Pencil,
@@ -78,6 +86,17 @@ import {
   Users,
   X,
 } from 'lucide-react';
+
+/**
+ * GitHub's mark, which the icon set does not carry (it dropped brand marks): drawn filled, at the
+ * set's 24-unit grid, taking the same props a glyph of the set takes. Only where GitHub is named —
+ * signing in with it.
+ */
+const GitHubMark = (props: React.SVGProps<SVGSVGElement>): React.JSX.Element => (
+  <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+  </svg>
+);
 
 /** Meaning → glyph. The vocabulary of the interface's icons, in one place. */
 const glyphs = {
@@ -101,6 +120,8 @@ const glyphs = {
   settings: Settings,
   preferences: Settings2,
   notifications: Bell,
+  /** A channel set to tell every message (D-107): the bell ringing, apart from the default bell. */
+  'notify-all': BellRing,
   star: Star,
   save: Bookmark,
   saved: BookmarkCheck,
@@ -113,6 +134,7 @@ const glyphs = {
   merged: GitMerge,
   'open-question': CircleHelp,
   copy: Copy,
+  wrap: WrapText,
   quote: Quote,
   bold: Bold,
   code: Code,
@@ -138,9 +160,24 @@ const glyphs = {
   history: History,
   /** Something that leaves the instance as a file. */
   download: Download,
+  /** The thing itself, in a tab of its own: an image's original (D-159). */
+  external: ExternalLink,
+  /** One back and one on, in a sequence: the image viewer's pictures (D-159). */
+  previous: ChevronLeft,
+  next: ChevronRight,
   shortcuts: Keyboard,
   warning: TriangleAlert,
   info: Info,
+  /** Back to where one came from: settings back to the conversation (D-146). */
+  back: ArrowLeft,
+  /** A link that lets somebody in: an invitation (D-115). */
+  invite: Link2,
+  /** What signs a person in, and the end of an account: sessions and erasure. */
+  lock: KeyRound,
+  /** Another service connected to the workspace: GitHub (D-23). */
+  integration: Plug,
+  /** GitHub itself: the sign-in button's mark. */
+  github: GitHubMark,
 } as const;
 
 export type GlyphName = keyof typeof glyphs;

@@ -151,6 +151,43 @@ describe('a channel’s files panel', () => {
     view.unmountAll();
   });
 
+  test('an image opens the viewer, whose ←/→ step through the panel’s images, skipping its files (D-159)', async () => {
+    const asImage = (n: number, name: string): ChannelFile =>
+      aFile(n, {
+        sender: n === 5 ? BOB : ALICE,
+        attachment: { ...aFile(n).attachment, kind: 'image', fileName: name, width: 4, height: 3 },
+      });
+    const view = await mount(() =>
+      Promise.resolve(filePage([asImage(5, 'newer.webp'), aFile(4), asImage(3, 'older.webp')])),
+    );
+    await openFiles(view);
+    const link = within(panelOf(view)).getByRole('link', { name: 'Open newer.webp' });
+    expect(link.getAttribute('aria-haspopup')).toBe('dialog');
+    act(() => {
+      link.focus();
+      link.click();
+    });
+    await settle();
+    const dialog = view.getByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: 'newer.webp' })).toBeDefined();
+    expect(dialog.textContent).toContain(BOB.displayName);
+    expect(dialog.textContent).toContain('1 of 2');
+    await person().keyboard('{ArrowRight}');
+    expect(within(dialog).getByRole('heading', { name: 'older.webp' })).toBeDefined();
+    expect(dialog.textContent).toContain(ALICE.displayName);
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expectFocusOn(within(panelOf(view)).getByRole('link', { name: 'Open newer.webp' }));
+    // A file in the panel is still a download.
+    expect(
+      within(panelOf(view))
+        .getByRole('link', { name: /report-4\.pdf/ })
+        .getAttribute('download'),
+    ).toBe('report-4.pdf');
+    view.unmountAll();
+  });
+
   test('says when there are none yet', async () => {
     const view = await mount(() => Promise.resolve(filePage([])));
     await openFiles(view);

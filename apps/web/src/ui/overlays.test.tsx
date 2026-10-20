@@ -181,6 +181,44 @@ describe('Dialog', () => {
     });
   });
 
+  test('a first field that already holds text is focused with nothing selected', async () => {
+    // Radix selects the text of the field it focuses first, so one keystroke replaced it: a
+    // channel's name, renamed by the first letter typed into its details.
+    const { getByRole, getByLabelText } = await renderApp(
+      <Dialog open onOpenChange={() => undefined} title="Rename" description="D" closeLabel="Close">
+        <input aria-label="Name" defaultValue="general" />
+      </Dialog>,
+    );
+    const field = getByLabelText('Name');
+    if (!(field instanceof HTMLInputElement)) throw new Error('Name is not a field');
+    await waitFor(() => {
+      expect(getByRole('dialog').contains(document.activeElement)).toBe(true);
+    });
+    expectFocusOn(field);
+    expect(field.selectionStart).toBe('general'.length);
+    expect(field.selectionEnd).toBe('general'.length);
+  });
+
+  test('a dialog to read first takes the first focus itself, not its first field', async () => {
+    const { getByRole, getByLabelText } = await renderApp(
+      <Dialog
+        open
+        onOpenChange={() => undefined}
+        title="Details"
+        description="D"
+        closeLabel="Close"
+        focusFirst="dialog"
+      >
+        <input aria-label="Name" defaultValue="general" />
+      </Dialog>,
+    );
+    await waitFor(() => {
+      expect(getByRole('dialog').contains(document.activeElement)).toBe(true);
+    });
+    expectFocusOn(getByRole('dialog'));
+    expect(document.activeElement === getByLabelText('Name')).toBe(false);
+  });
+
   test('with only a link before Close, Close still does not take the first focus', async () => {
     // Radix never gives first focus to a link, so a dialog whose one other control is a link (an
     // export ready to download, its request button busy) would still focus Close.

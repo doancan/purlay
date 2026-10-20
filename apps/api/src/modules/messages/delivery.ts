@@ -8,11 +8,12 @@
  *
  * **"Needs you" is decided here and nowhere else.** A person is *notified* when the
  * message names them, is in a direct message to them, or is a reply in a thread they
- * started or have already answered. One row per person per message, the strongest
- * reason winning — a mention beats a direct message beats a reply — so the inbox
- * says why they were told, once. A membership at `notification_level = 'none'` is
- * told nothing; a person who is not in the channel but can see it (a public
- * channel, a mention) gets the notification and has no counter to move.
+ * started, have already answered or chose to follow — and did not let go (D-161). One
+ * row per person per message, the strongest reason winning — a mention beats a direct
+ * message beats a reply — so the inbox says why they were told, once. A membership at
+ * `notification_level = 'none'` is told nothing; a person who is not in the channel but
+ * can see it (a public channel, a mention) gets the notification and has no counter to
+ * move.
  *
  * **The counters move in one statement** for the whole channel (D-35): every other
  * member's `unread_count` goes up by one, and `unread_mention_count` by one for
@@ -20,16 +21,13 @@
  * caller tell each of them their new numbers without a query per person.
  */
 import { sql, type Executor } from '@purlay/db';
-import type { ChannelState } from '@purlay/types';
+import type { ChannelState, NEEDS_YOU } from '@purlay/types';
 import type { ChannelContext } from '../../platform/channels';
 import { inDeepWork } from '../workspaces/deep-work';
+import { threadChoices, type ThreadChoices } from './follow';
 
-/**
- * The notifications that make a message one that needs the person (D-99 §1, D-107): every reason a
- * new message gives, strongest first. A resolution is told and not counted — it is not a message.
- * One list, read by the send that counts, the read that recounts and the delete that takes back.
- */
-export const NEEDS_YOU = ['mention', 'direct_message', 'thread_reply', 'channel_message'] as const;
+/** A root has no thread to have chosen about. */
+const NO_CHOICES: ThreadChoices = { followed: [], unfollowed: new Set() };
 
 /** Strongest first — the order a person's one notification for a message is chosen in. */
 type Reason = (typeof NEEDS_YOU)[number];
@@ -150,17 +148,19 @@ type Reasons = ReadonlyMap<string, Reason>;
  * one already holding a notification of that kind for this message is not told again.
  *
  * A membership that has muted the channel is told nothing, and the author never. Somebody who
- * has read past the message is told for the inbox, already read; so is somebody who joined the
- * channel after it was written (`writtenAt`), for whom it was never counted unread.
+ * has read the feed past a root is told for the inbox, already read; so is somebody who joined the
+ * channel after it was written (`writtenAt`), for whom it was never counted unread. A reply is not
+ * read by the feed (D-147): its notification waits for its thread wherever the position is.
  */
 export const notify = async (
   executor: Executor,
   context: ChannelContext,
-  messageId: string,
+  message: { readonly id: string; readonly reply: boolean },
   reasons: Reasons,
   now: Date,
   writtenAt?: Date,
 ): Promise<readonly string[]> => {
+  const messageId = message.id;
   const candidates = [...reasons.keys()].filter((userId) => userId !== context.userId);
   if (candidates.length === 0) return [];
   const muted = new Set<string>();
@@ -173,7 +173,8 @@ export const notify = async (
     .execute();
   for (const row of levels) {
     if (row.notification_level === 'none') muted.add(row.user_id);
-    if (isBehind(row.last_read_message_id, messageId)) alreadyRead.add(row.user_id);
+    if (!message.reply && isBehind(row.last_read_message_id, messageId))
+      alreadyRead.add(row.user_id);
     if (writtenAt !== undefined && new Date(row.joined_at) > writtenAt)
       alreadyRead.add(row.user_id);
   }
@@ -196,7 +197,7 @@ export const notify = async (
                 message_id: messageId,
                 type,
                 suppressed_by_deep_work: deep.has(userId),
-                // Behind the person's position: it exists for the inbox and needs nothing.
+                // A root behind the person's position: it exists for the inbox and needs nothing.
                 ...(alreadyRead.has(userId) ? { read_at: sql<Date>`now()` } : {}),
               },
             ];
@@ -255,6 +256,10 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
     for (const row of others) consider(row.user_id, 'direct_message');
   }
 
+  // What the people of a thread chose about it (D-161): who follows it without having written in
+  // it, and who let it go — told nothing for the thread's sake, nor for a channel at every message.
+  const choices = thread === null ? NO_CHOICES : await threadChoices(executor, thread.rootId);
+
   // A member who asked for every message (D-107) is told of this one, for the weakest reason.
   const following = await executor
     .selectFrom('channel_members')
@@ -263,32 +268,51 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
     .where('notification_level', '=', 'all')
     .where('user_id', '<>', sender)
     .execute();
-  for (const row of following) consider(row.user_id, 'channel_message');
+  for (const row of following) {
+    if (!choices.unfollowed.has(row.user_id)) consider(row.user_id, 'channel_message');
+  }
 
   if (thread !== null) {
     // The most recent repliers over `idx_messages_thread`, one row per person, newest first and
     // bounded: one indexed scan per reply (D-29), and a bound on what one reply can write.
+    // Somebody who let the thread go is left out before the bound, so they do not take a place.
+    const unfollowed = [...choices.unfollowed];
     const answered = await executor
       .selectFrom('messages')
       .select('sender_id')
       .where('parent_id', '=', thread.rootId)
       .where('deleted_at', 'is', null)
       .where('id', '<>', messageId)
+      .where((eb) =>
+        unfollowed.length === 0 ? eb.lit(true) : eb('sender_id', 'not in', unfollowed),
+      )
       .groupBy('sender_id')
       .orderBy(sql`max(id::text)`, 'desc')
       .limit(THREAD_PARTICIPANTS_MAX)
       .execute();
-    const participants = [thread.rootAuthorId, ...answered.map((row) => row.sender_id)].filter(
-      (id): id is string => id !== null,
-    );
+    const participants = [
+      ...new Set([
+        thread.rootAuthorId,
+        ...answered.map((row) => row.sender_id),
+        // Who follows it by choice, most recent first, under the same bound (D-161).
+        ...choices.followed.slice(0, THREAD_PARTICIPANTS_MAX),
+      ]),
+    ].filter((id): id is string => id !== null && !choices.unfollowed.has(id));
     const seeing = await stillSeeing(executor, context, participants);
     for (const userId of participants) if (seeing.has(userId)) consider(userId, 'thread_reply');
   }
 
-  const notified = await notify(executor, context, messageId, reasons, now);
+  const reply = thread !== null;
+  const notified = await notify(executor, context, { id: messageId, reply }, reasons, now);
 
   return {
-    recipients: await countArrival(executor, context.channelId, messageId, sender, notified),
+    recipients: await countArrival(
+      executor,
+      context.channelId,
+      { id: messageId, reply },
+      sender,
+      notified,
+    ),
     told: notified,
   };
 };
@@ -301,16 +325,21 @@ export const recordDelivery = async (executor: Executor, delivery: Delivery): Pr
  * Counted only for a member whose position is before this message. One whose position is at or
  * past it has read beyond it, and the read recount (`id > position`) would not find it: counting it
  * here left the stored number above the recount, and a badge `PUT /read` could not clear because it
- * is a no-op for a position that does not move (H-API 1).
+ * is a no-op for a position that does not move (H-API 1). A reply that needs a member is the
+ * exception, wherever their position is: the feed does not read it, its thread does (D-147), and the
+ * recount counts it as unread until then.
  */
 export const countArrival = async (
   executor: Executor,
   channelId: string,
-  messageId: string,
+  message: { readonly id: string; readonly reply: boolean },
   writer: string | null,
   notified: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
+  const messageId = message.id;
   const ahead = sql<boolean>`(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)`;
+  const needs = sql<boolean>`(user_id = any(${notified}::uuid[]))`;
+  const counted = message.reply ? sql<boolean>`(${ahead} or ${needs})` : ahead;
   // The rows are locked first, in one order (#668). An `UPDATE` of several rows locks them in the
   // order it reaches them, which follows where each row's newest version happens to lie for this
   // snapshot: two senders could each hold a row the other needed, and one send failed with a
@@ -331,8 +360,8 @@ export const countArrival = async (
   const changed = await executor
     .updateTable('channel_members')
     .set({
-      unread_count: sql<number>`unread_count + case when ${ahead} then 1 else 0 end`,
-      unread_mention_count: sql<number>`unread_mention_count + case when ${ahead} and user_id = any(${notified}::uuid[]) then 1 else 0 end`,
+      unread_count: sql<number>`unread_count + case when ${counted} then 1 else 0 end`,
+      unread_mention_count: sql<number>`unread_mention_count + case when ${counted} and ${needs} then 1 else 0 end`,
       // Counted with the numbers it describes, in the one statement, under the row lock it
       // takes: the order of versions is the order of commits (0015).
       state_version: sql<number>`state_version + 1`,

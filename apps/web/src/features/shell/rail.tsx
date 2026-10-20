@@ -1,9 +1,8 @@
 /**
- * The rail: the workspace and the places you go, down the window's left edge (D-110). What is the
- * person's own — theme, language, the shortcut reference — is in the account menu at the sidebar's
- * foot (D-124), not on a gear here.
+ * The rail: the workspace and the places you go, down the window's left edge (D-110).
  *
- * Every entry is a route or a menu that exists without the rail — it adds no destination. Its top
+ * Every entry is a route or a menu that exists without the rail — it adds no destination. At its
+ * foot a gear opens Settings (D-146), which the account menu and the palette also open. Its top
  * is an empty strip the desktop shell will draw its window controls over (D-14). Below the narrow
  * breakpoint it is not in the layout: it opens with the sidebar, in the same overlay.
  */
@@ -38,6 +37,26 @@ const ChannelsLink = (): React.JSX.Element => {
   );
 };
 
+/** Settings (D-146): the person's Profile page first, the workspace's pages beside it. */
+const SettingsLink = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  const { match } = useRoute();
+  const current = match.name === 'settings' || match.name === 'settingsHome';
+  return (
+    <Tooltip content={t('settings.label')} side="right">
+      <Link
+        to="settingsHome"
+        params={{ slug: workspace.slug }}
+        {...(current ? { 'aria-current': 'page' as const } : {})}
+        className={railItemClasses(current)}
+      >
+        <RailItemContent glyph="settings" label={t('settings.label')} />
+      </Link>
+    </Tooltip>
+  );
+};
+
 interface RailProps {
   /** Inside the narrow window's overlay: as tall as the panel. */
   readonly overlay?: boolean;
@@ -66,6 +85,9 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
         <OpenQuestionsLink />
         <SearchLink />
         <SavedLink />
+      </div>
+      <div className="mt-auto">
+        <SettingsLink />
       </div>
     </nav>
   );

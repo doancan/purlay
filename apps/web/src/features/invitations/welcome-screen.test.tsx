@@ -308,12 +308,20 @@ describe('the channels to join, after an invitation', () => {
     view.unmount();
   });
 
-  test('says when there is nothing to join, and leads on', async () => {
+  test('says when the person is in every public channel already, and leads on', async () => {
     const view = await visit({ channels: () => Promise.resolve([aChannel(IDS.api, 'api')]) });
-    expect(view.getByText('There are no public channels to join yet.')).toBeDefined();
+    expect(view.getByText('You are already in every public channel.')).toBeDefined();
+    // Nothing to pick, so nothing tells them to pick.
+    expect(view.queryByText(/Pick the channels/)).toBeNull();
     await person().click(view.getByRole('button', { name: 'Go to the workspace' }));
     await settle();
     expect(here(view)).toMatch(/^\/w\/acme(\/c\/|$)/);
+    view.unmount();
+  });
+
+  test('says when there are no public channels at all', async () => {
+    const view = await visit({ channels: () => Promise.resolve([]) });
+    expect(view.getByText('There are no public channels to join yet.')).toBeDefined();
     view.unmount();
   });
 

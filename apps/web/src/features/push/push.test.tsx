@@ -1,13 +1,15 @@
 /**
- * Notifications on this device (#78, D-126), as a person meets them in the account menu: offered
- * only where they can work, turned on and off with the server told, honoured on a later load only
- * for the person who turned them on here, and a clicked notice opening its conversation.
+ * Notifications on this device (#78, D-126), as a person meets them on the Notifications page of
+ * Settings (D-146): offered only where they can work, turned on and off with the server told,
+ * honoured on a later load only for the person who turned them on here, and a clicked notice
+ * opening its conversation.
  *
  * The browser is a device of the test's own (`PushDevice`); the server is the fake API, so a call
  * nobody expected fails the test.
  */
 import { describe, expect, test } from 'bun:test';
-import { act } from '@testing-library/react';
+import { act, within } from '@testing-library/react';
+import type { BoundFunctions, queries } from '@testing-library/react';
 import type { PushSubscribeRequest } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import type { Api } from '../../data/api';
@@ -20,9 +22,13 @@ import { person } from '../../testing/user';
 import { StorageProvider } from '../../data/storage-provider';
 import { Toaster } from '../../ui/toast';
 import type { DeviceSubscription, PushDevice } from './device';
+import type { Notifier } from './notifier';
 import { PUSH_OWNER_KEY } from './push';
 
 installDom();
+
+/** What `within` answers: the queries, bound to one part of the page. */
+type Scope = BoundFunctions<typeof queries>;
 
 const KEY = `B${'K'.repeat(86)}`;
 const ROTATED = `B${'R'.repeat(86)}`;
@@ -132,11 +138,24 @@ const aServer = (overrides: Partial<Api> = {}): { api: Api; sent: unknown[] } =>
 
 type View = Awaited<ReturnType<typeof renderApp>>;
 
+const NOTIFICATIONS = '/w/acme/settings/notifications';
+const PREFERENCES = '/w/acme/settings/preferences';
+
+const TITLES = {
+  [NOTIFICATIONS]: { en: 'Notifications', tr: 'Bildirimler' },
+  [PREFERENCES]: { en: 'Preferences', tr: 'Tercihler' },
+} as const;
+
 const open = async (
   api: Api,
   device: PushDevice | null,
-  options: { owner?: string; locale?: 'en' | 'tr' } = {},
+  options: {
+    owner?: string;
+    locale?: 'en' | 'tr';
+    path?: typeof NOTIFICATIONS | typeof PREFERENCES;
+  } = {},
 ): Promise<View> => {
+  const path = options.path ?? NOTIFICATIONS;
   // The server's key waits until the browser's storage is as the test says, so the load is
   // judged against it.
   let release = (): void => undefined;
@@ -149,7 +168,7 @@ const open = async (
       <Toaster dismissLabel="Close" />
     </>,
     {
-      path: `/w/acme/c/${IDS.api}`,
+      path,
       api: {
         ...api,
         pushKey: async (signal) => {
@@ -164,22 +183,44 @@ const open = async (
   if (options.owner !== undefined) view.world.storage.setItem(PUSH_OWNER_KEY, options.owner);
   release();
   await settle();
+  await view.findByRole('heading', { level: 1, name: TITLES[path][options.locale ?? 'en'] });
+  await settle();
   return view;
 };
 
-const menu = async (view: View, name = 'Account: Dogancan'): Promise<void> => {
-  await person().click(view.getByRole('button', { name }));
+/** The page's card for this device. */
+const card = (view: View, name = 'Notifications on this device'): Scope =>
+  within(view.getByRole('region', { name }));
+
+/** What the card offers: its buttons, by what they say. */
+const offered = (view: View, name?: string): (string | null)[] =>
+  card(view, name)
+    .queryAllByRole('button')
+    .map((button) => button.textContent);
+
+/** Blocked: the switch is not one, and the card says where that is undone. */
+const expectBlocked = (view: View): void => {
+  const button = card(view).getByRole('button', { name: 'Blocked in the browser' });
+  expect(button).toHaveProperty('disabled', true);
+  expect(card(view).getByText('Blocked: allow them in the browser’s site settings')).toBeDefined();
 };
 
-const items = (view: View): (string | null)[] =>
-  view.getAllByRole('menuitem').map((item) => item.textContent);
+/** Not offered: no switch, and the card says plainly that a closed tab hears nothing. */
+const expectNotOffered = (view: View): void => {
+  expect(offered(view)).toEqual([]);
+  expect(card(view).getByText('Not available here')).toBeDefined();
+};
+
+const chooseLanguage = async (view: View, name: 'English' | 'Türkçe'): Promise<void> => {
+  await person().click(view.getByRole('radio', { name }));
+  await settle();
+};
 
 describe('notifications on this device', () => {
   test('are not offered where the browser has no push, and the server is not asked', async () => {
     // `pushKey` is the fake API's refusal: a call fails the test.
     const view = await open(aSignedInApi(), null);
-    await menu(view);
-    expect(view.queryByText('Notifications on this device')).toBeNull();
+    expectNotOffered(view);
     view.unmount();
   });
 
@@ -188,11 +229,11 @@ describe('notifications on this device', () => {
       <StorageProvider storage={null}>
         <Outlet />
       </StorageProvider>,
-      { path: `/w/acme/c/${IDS.api}`, api: aSignedInApi(), push: aDevice().device },
+      { path: NOTIFICATIONS, api: aSignedInApi(), push: aDevice().device },
     );
     await settle();
-    await menu(view);
-    expect(view.queryByText('Notifications on this device')).toBeNull();
+    await view.findByRole('heading', { level: 1, name: 'Notifications' });
+    expectNotOffered(view);
     view.unmount();
   });
 
@@ -210,8 +251,7 @@ describe('notifications on this device', () => {
       pushKey: () => Promise.resolve({ publicKey: null }),
     });
     const view = await open(api, aDevice().device);
-    await menu(view);
-    expect(view.queryByText('Notifications on this device')).toBeNull();
+    expectNotOffered(view);
     view.unmount();
   });
 
@@ -219,31 +259,24 @@ describe('notifications on this device', () => {
     const { api, sent } = aServer();
     const browser = aDevice();
     const view = await open(api, browser.device, { locale: 'tr' });
-    await menu(view, 'Hesap: Dogancan');
-    expect(view.getByText('Bu cihazda bildirimler')).toBeDefined();
-    await expectNoAxeViolations(view.getByRole('menu'));
-    await person().click(view.getByRole('menuitem', { name: 'Aç' }));
+    const name = 'Bu cihazda bildirimler';
+    await expectNoAxeViolations(view.getByRole('main'));
+    await person().click(card(view, name).getByRole('button', { name: 'Aç' }));
     await settle();
     expect(browser.calls).toEqual(['subscribe BK']);
     expect(sent).toEqual([['subscribe', SUBSCRIPTION.endpoint, 'tr']]);
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBe(IDS.me);
-    await menu(view, 'Hesap: Dogancan');
-    expect(items(view)).toContain('Kapat');
+    expect(offered(view, name)).toEqual(['Kapat']);
     view.unmount();
   });
 
   test('refused by the person, say where that is undone, and tell the server nothing', async () => {
     const { api, sent } = aServer();
     const view = await open(api, aDevice({ answer: 'denied' }).device);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn on' }));
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
     await settle();
     expect(sent).toEqual([]);
-    await menu(view);
-    const blocked = view.getByRole('menuitem', {
-      name: 'Blocked: allow them in the browser’s site settings',
-    });
-    expect(blocked.getAttribute('aria-disabled')).toBe('true');
+    expectBlocked(view);
     view.unmount();
   });
 
@@ -252,27 +285,23 @@ describe('notifications on this device', () => {
       subscribePush: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
     });
     const view = await open(api, aDevice().device);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn on' }));
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
     await settle();
     expect(view.getByText(/^Notifications on this device were not changed\./)).toBeDefined();
     // Not the person's here: the next load drops what the browser was left holding.
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
-    await menu(view);
-    expect(items(view)).toContain('Turn on');
+    expect(offered(view)).toEqual(['Turn on']);
     view.unmount();
   });
 
   test('failed by the browser itself, tell the server nothing, stay off and say so', async () => {
     const { api, sent } = aServer();
     const view = await open(api, aDevice({ fails: 'subscribe' }).device);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn on' }));
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
     await settle();
     expect(sent).toEqual([]);
     expect(view.getByText(/^Notifications on this device were not changed\./)).toBeDefined();
-    await menu(view);
-    expect(items(view)).toContain('Turn on');
+    expect(offered(view)).toEqual(['Turn on']);
     view.unmount();
   });
 
@@ -282,28 +311,24 @@ describe('notifications on this device', () => {
       finish = resolve;
     });
     const view = await open(aServer().api, aDevice({ slow }).device);
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn on' }));
-    await menu(view);
-    expect(view.getByRole('menuitem', { name: 'One moment…' }).getAttribute('aria-disabled')).toBe(
-      'true',
-    );
-    expect(view.queryByRole('menuitem', { name: 'Turn on' })).toBeNull();
-    await person().keyboard('{Escape}');
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
+    const working = card(view).getByRole('button', { name: 'One moment…' });
+    expect(working).toHaveProperty('disabled', true);
+    expect(card(view).queryByRole('button', { name: 'Turn on' })).toBeNull();
     finish();
     await settle();
-    await menu(view);
-    expect(items(view)).toContain('Turn off');
+    expect(offered(view)).toEqual(['Turn off']);
     view.unmount();
   });
 
   test('are reached and turned on from the keyboard', async () => {
     const browser = aDevice();
     const view = await open(aServer().api, browser.device);
-    view.getByRole('button', { name: 'Account: Dogancan' }).focus();
-    await person().keyboard('{Enter}');
-    // Your profile, then Deep Work's four whiles, come first.
-    await person().keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}');
+    // Deep Work's whiles come first; the device's switch is the next stop.
+    act(() => {
+      view.getByRole('button', { name: 'Until tomorrow' }).focus();
+    });
+    await person().tab();
     expect(document.activeElement?.textContent).toBe('Turn on');
     await person().keyboard('{Enter}');
     await settle();
@@ -315,8 +340,7 @@ describe('notifications on this device', () => {
     const { api, sent } = aServer();
     const browser = aDevice({ held: SUBSCRIPTION, permission: 'granted' });
     const view = await open(api, browser.device, { owner: IDS.me });
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn off' }));
+    await person().click(card(view).getByRole('button', { name: 'Turn off' }));
     await settle();
     expect(sent.at(-1)).toEqual(['unsubscribe', SUBSCRIPTION.endpoint]);
     expect(browser.calls).toEqual(['unsubscribe']);
@@ -328,15 +352,13 @@ describe('notifications on this device', () => {
     const { api, sent } = aServer();
     const browser = aDevice({ held: SUBSCRIPTION, permission: 'granted', fails: 'unsubscribe' });
     const view = await open(api, browser.device, { owner: IDS.me });
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn off' }));
+    await person().click(card(view).getByRole('button', { name: 'Turn off' }));
     await settle();
     expect(sent.at(-1)).toEqual(['unsubscribe', SUBSCRIPTION.endpoint]);
     // No owner: the next load drops what the browser kept.
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
     expect(view.getByText(/^Notifications on this device were not changed\./)).toBeDefined();
-    await menu(view);
-    expect(items(view)).toContain('Turn on');
+    expect(offered(view)).toEqual(['Turn on']);
     view.unmount();
   });
 
@@ -346,14 +368,12 @@ describe('notifications on this device', () => {
     });
     const browser = aDevice({ held: SUBSCRIPTION, permission: 'granted' });
     const view = await open(api, browser.device, { owner: IDS.me });
-    await menu(view);
-    await person().click(view.getByRole('menuitem', { name: 'Turn off' }));
+    await person().click(card(view).getByRole('button', { name: 'Turn off' }));
     await settle();
     expect(browser.calls).toEqual([]);
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBe(IDS.me);
     expect(view.getByText(/^Notifications on this device were not changed\./)).toBeDefined();
-    await menu(view);
-    expect(items(view)).toContain('Turn off');
+    expect(offered(view)).toEqual(['Turn off']);
     view.unmount();
   });
 });
@@ -365,6 +385,7 @@ describe('on a later load', () => {
     const view = await open(api, browser.device, { owner: IDS.me });
     expect(sent).toEqual([['subscribe', SUBSCRIPTION.endpoint, 'en']]);
     expect(browser.calls).toEqual([]);
+    expect(offered(view)).toEqual(['Turn off']);
     view.unmount();
   });
 
@@ -376,8 +397,7 @@ describe('on a later load', () => {
       owner: IDS.me,
     });
     expect(view.getByText(/^Notifications on this device were not changed\./)).toBeDefined();
-    await menu(view);
-    expect(items(view)).toContain('Turn on');
+    expect(offered(view)).toEqual(['Turn on']);
     view.unmount();
   });
 
@@ -387,8 +407,7 @@ describe('on a later load', () => {
     const view = await open(api, browser.device, { owner: IDS.alice });
     expect(sent).toEqual([]);
     expect(browser.calls).toEqual(['unsubscribe']);
-    await menu(view);
-    expect(items(view)).toContain('Turn on');
+    expect(offered(view)).toEqual(['Turn on']);
     view.unmount();
   });
 
@@ -404,10 +423,7 @@ describe('on a later load', () => {
   test('a browser that refused is shown as blocked, and the server is not asked', async () => {
     const { api, sent } = aServer();
     const view = await open(api, aDevice({ permission: 'denied' }).device);
-    await menu(view);
-    expect(
-      view.getByRole('menuitem', { name: 'Blocked: allow them in the browser’s site settings' }),
-    ).toBeDefined();
+    expectBlocked(view);
     expect(sent).toEqual([]);
     view.unmount();
   });
@@ -417,8 +433,7 @@ describe('on a later load', () => {
     const view = await open(api, aDevice({ fails: 'current' }).device, { owner: IDS.me });
     expect(sent).toEqual([]);
     expect(view.getByText(/^Notifications on this device were not changed\./)).toBeDefined();
-    await menu(view);
-    expect(items(view)).toContain('Turn on');
+    expect(offered(view)).toEqual(['Turn on']);
     view.unmount();
   });
 
@@ -427,12 +442,10 @@ describe('on a later load', () => {
     const browser = aDevice({ held: SUBSCRIPTION, permission: 'denied' });
     const view = await open(api, browser.device, { owner: IDS.me });
     expect(sent).toEqual([]);
-    expect(browser.calls).toEqual(['subscribe BR', 'unsubscribe']);
+    // Not made again only to be refused: the permission is read first (D-148).
+    expect(browser.calls).toEqual(['unsubscribe']);
     expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
-    await menu(view);
-    expect(
-      view.getByRole('menuitem', { name: 'Blocked: allow them in the browser’s site settings' }),
-    ).toBeDefined();
+    expectBlocked(view);
     view.unmount();
   });
 
@@ -446,18 +459,13 @@ describe('on a later load', () => {
     });
     const view = await open(api, aDevice({ held: SUBSCRIPTION, permission: 'granted' }).device, {
       owner: IDS.me,
+      path: PREFERENCES,
     });
-    await menu(view);
-    await person().click(view.getByRole('menuitemradio', { name: 'Türkçe' }));
-    await settle();
+    await chooseLanguage(view, 'Türkçe');
     expect(view.getByText(/^Bu cihazdaki bildirimler değiştirilemedi\./)).toBeDefined();
     refuse = false;
-    await menu(view, 'Hesap: Dogancan');
-    await person().click(view.getByRole('menuitemradio', { name: 'English' }));
-    await settle();
-    await menu(view);
-    await person().click(view.getByRole('menuitemradio', { name: 'Türkçe' }));
-    await settle();
+    await chooseLanguage(view, 'English');
+    await chooseLanguage(view, 'Türkçe');
     expect(sent.filter((call) => Array.isArray(call) && call[0] === 'locale')).toEqual([
       ['locale', 'tr'],
       ['locale', 'tr'],
@@ -469,10 +477,9 @@ describe('on a later load', () => {
     const { api, sent } = aServer();
     const view = await open(api, aDevice({ held: SUBSCRIPTION, permission: 'granted' }).device, {
       owner: IDS.me,
+      path: PREFERENCES,
     });
-    await menu(view);
-    await person().click(view.getByRole('menuitemradio', { name: 'Türkçe' }));
-    await settle();
+    await chooseLanguage(view, 'Türkçe');
     expect(sent).toEqual([
       ['subscribe', SUBSCRIPTION.endpoint, 'en'],
       ['locale', 'tr'],
@@ -490,4 +497,115 @@ test('a notice clicked opens its conversation in this tab', async () => {
   });
   expect(view.world.history.stack.at(-1)).toBe(path);
   view.unmount();
+});
+
+describe('one switch over the open tab and the closed one (D-148)', () => {
+  /** The page's own notices, sharing the device's one permission, as a browser's do. */
+  const aNotifier = (
+    start: NotificationPermission,
+  ): { notifier: Notifier; asked: () => number; permission: () => NotificationPermission } => {
+    let asked = 0;
+    let permission = start;
+    return {
+      asked: () => asked,
+      permission: () => permission,
+      notifier: {
+        permission: () => permission,
+        request: (): Promise<NotificationPermission> => {
+          asked += 1;
+          if (permission === 'default') permission = 'granted';
+          return Promise.resolve(permission);
+        },
+        show: () => true,
+        close: () => undefined,
+      },
+    };
+  };
+
+  const openWith = async (
+    api: Api,
+    device: PushDevice | null,
+    notifier: Notifier,
+    owner?: string,
+  ): Promise<View> => {
+    const view = await renderApp(
+      <>
+        <Outlet />
+        <Toaster dismissLabel="Close" />
+      </>,
+      { path: NOTIFICATIONS, api, push: device, notifier },
+    );
+    if (owner !== undefined) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
+    await settle();
+    await view.findByRole('heading', { level: 1, name: 'Notifications' });
+    await settle();
+    return view;
+  };
+
+  const NO_KEY = (): Promise<{ publicKey: null }> => Promise.resolve({ publicKey: null });
+
+  test('offered without push, for the open tab alone: asked once, nothing sent to the server', async () => {
+    const page = aNotifier('default');
+    const { api, sent } = aServer({ pushKey: NO_KEY });
+    const view = await openWith(api, aDevice().device, page.notifier);
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
+    await settle();
+    expect(page.asked()).toBe(1);
+    expect(sent).toEqual([]);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBe(IDS.me);
+    expect(offered(view)).toContain('Turn off');
+    view.unmount();
+  });
+
+  test('offered in a browser with no push at all, whose server is never asked for a key', async () => {
+    // `pushKey` is the fake API's refusal: a call fails the test.
+    const view = await openWith(aSignedInApi(), null, aNotifier('default').notifier);
+    // Offered for the open tab alone, and the card says a closed tab hears nothing here.
+    expect(offered(view)).toContain('Turn on');
+    expect(card(view).getByText(/does not send notifications to a closed tab/)).toBeDefined();
+    view.unmount();
+  });
+
+  test('refused by the person, blocked, and nothing remembered', async () => {
+    const page = aNotifier('denied');
+    const view = await openWith(aServer({ pushKey: NO_KEY }).api, null, page.notifier);
+    expectBlocked(view);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
+    view.unmount();
+  });
+
+  test('with push as well, one question covers both and the server is told', async () => {
+    const page = aNotifier('default');
+    const browser = aDevice({ permission: 'granted' });
+    const { api, sent } = aServer();
+    const view = await openWith(api, browser.device, page.notifier);
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
+    await settle();
+    expect(page.asked()).toBe(1);
+    expect(browser.calls).toEqual(['subscribe BK']);
+    expect(sent).toEqual([['subscribe', SUBSCRIPTION.endpoint, 'en']]);
+    view.unmount();
+  });
+
+  test('on a later load, still on for its owner while the browser allows it', async () => {
+    const view = await openWith(
+      aServer({ pushKey: NO_KEY }).api,
+      null,
+      aNotifier('granted').notifier,
+      IDS.me,
+    );
+    expect(offered(view)).toContain('Turn off');
+    view.unmount();
+  });
+
+  test('turned off, the open tab is off too, and the server it never told is not asked', async () => {
+    const { api, sent } = aServer({ pushKey: NO_KEY });
+    const view = await openWith(api, null, aNotifier('granted').notifier, IDS.me);
+    await person().click(card(view).getByRole('button', { name: 'Turn off' }));
+    await settle();
+    expect(sent).toEqual([]);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
+    expect(offered(view)).toContain('Turn on');
+    view.unmount();
+  });
 });

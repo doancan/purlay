@@ -18,7 +18,8 @@
    live status — open or resolved — and the open questions are one click away.
 2. **Density over comfort.** This is a tool for people who read a lot of text quickly. The
    density is in what is shown — one column, no chrome, nothing decorative — not in how tightly it
-   is set: prose gets a readable line, and the screen gets nothing else. (D-110)
+   is set: prose gets a readable line, and the screen gets nothing else; a control is 32px tall, a
+   comfortable target for the pointer (D-110, D-151).
 3. **Keyboard first, mouse optional.** Every action reachable by mouse has a key. The command
    palette is the primary navigation surface, not a power-user extra.
 4. **Never move content under the reader.** Late-arriving content, an opening thread and
@@ -49,35 +50,55 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 ```
 
 - **Rail (56px)** — the workspace tile, a second door to the workspace menu; then channels, the
-  inbox (a dot while anything needs you — the same fact as the mention badges, D-106), open
+  inbox (a dot while anything needs you — the same fact as the mention badges, D-106, so in Deep Work
+  it is not drawn, as they are not, D-15), open
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
-  messages you kept to come back to, in three tabs, In progress, Archived and Completed, each moved
-  or let go from its row (D-128). Every entry is a route
-  or a menu that exists without the rail; it adds no destination. It has no gear: what is the
-  person's is the account menu's (D-124). Its top is an empty drag strip for the desktop
-  shell (D-14).
+  messages you kept to come back to, in three tabs, In progress, Archived and Completed — chosen
+  above the list as the inbox's All and Unread are (D-158) — each moved or let go from its row
+  (D-128). Every entry is a route
+  or a menu that exists without the rail; it adds no destination. At its foot a gear opens
+  **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
 - **Sidebar (240px)** — the workspace name with a chevron, which opens the **workspace menu** (the
-  workspaces to switch to, **Create workspace…**, and an owner's or an admin's items below), the jump
+  workspaces to switch to, **Create workspace…**, and for an owner or an admin **Invite people…** and
+  **Workspace settings**, D-146), the jump
   field (the palette's door, `⌘K`), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
-  (D-132) — the channels, the **conversations** — groups of up to ten
+  (D-132) — the channels, by name so that a new message never moves a row (D-160), under a heading that carries **Browse channels** and **New channel**, always
+shown in the section's quiet tone with a tooltip each, never revealed only under a pointer — the **conversations** — groups of up to ten
   people, each named by its people, and **New message** (`+`), which picks people ("To: …") and
   starts the conversation of exactly them (D-127) —
-  then the people, and your own row at the foot, which opens the **account menu** (D-124): Deep Work
-  for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is on, until when, the
-  minutes left and its end; **notifications on this device** (D-126) — turned on or off, and where the
-  browser blocked them, where that is undone; drawn only where the browser and the server can send
-  them; the theme; the language; the shortcut reference; **Sign out**; and **Sign
-  out everywhere…**, which asks first because it signs out devices that are not in front of you. Unread channels are bold;
+  each drawn with the faces of its first two people, the second overlapping the first, and "+N"
+  for the rest, in the height of any row (D-167) —
+  then the people, and your own row at the foot, which opens the **account menu** (D-124, D-146): who
+  you are; Deep Work for a while — 30 minutes, an hour, two hours or until tomorrow — or, while it is
+  on, until when, the minutes left and its end; **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
   to a screen reader (D-137). A person has an avatar, and a
   dot in its corner while they have Purlay open (D-136), said as "online" beside the name to a screen
   reader. Offline and not known are the same: no dot — a presence that failed to load draws nothing,
   never a team gone offline.
+- **Browse channels** — the public channels the person has not joined, by name (D-160), each saying
+  what it is before it is joined: its name, and on one quiet line how many people are in it (*12
+  members*) and its topic, cut with an ellipsis; **Join** on the row joins and goes there. Past eight
+  channels a **Find a channel** field narrows them by name and topic; it is empty each time the dialog
+  opens (D-167).
+- **A row's context menu** (D-165) — a right click on a channel, a person's conversation or a group,
+  Shift+F10 or the ContextMenu key on a focused row, or a finger held on it, opens what can be done to
+  it without opening it, and only what applies and the person may do: **Mark as read** while it is
+  unread (the feed, as reaching its bottom reads it — a reply waiting in a thread still waits, D-147);
+  **Star** or **Unstar**, a channel's; the notification level's three choices; **Copy link**;
+  **Channel details…**, or **Conversation details…** for a group; and **Leave channel…** for a channel,
+  never a conversation, asked first in a dialog that says what it costs. Each is painted at once and put
+  back with a toast when refused, as in the header. Escape gives focus back to the row.
 - **Channel** — header, feed, composer, in that order, one column. The header names the channel and
-  carries the two views as a segmented control: the feed, and **open questions** with its live count,
-  which is the product's argument and so is always one click away. The channel's **name opens its
+  carries the two views as a segmented control: the feed, and **open questions** with the live count
+  of *this channel's* — never the workspace's, which is the rail's and the sidebar's — opening the view
+  narrowed to the channel (§4.4). In a channel it is always there, being the product's argument; a
+  conversation (a direct message or a group) carries it only while it has open questions, since an
+  empty view there is one more control. The name is cut with an ellipsis before anything is drawn
+  over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
 - **Feed** — the single column. Max width 760px, hung from the left edge beside the sidebar, so the
   eye does not travel back across the window to find where a line starts.
@@ -86,9 +107,12 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
   The feed keeps the rest of the width.
 - **Files panel** — the same place, opened by the header's **Files** control (D-129): every file
   shared in the channel, newest first, each with who shared it, when and its size. An image shows its
-  thumbnail and opens; any other file downloads; a file said in a thread opens that thread in the
+  thumbnail and opens the image viewer, whose ←/→ step through the panel's images (D-159); any other
+  file downloads; a file said in a thread opens that thread in the
   panel's place. One panel at a time: opening the files closes a thread, and a thread opening closes
   the files. Opening moves focus to the panel's heading; closing puts it back on the Files control.
+- The header's **bell** is drawn by the channel's level — ringing for every message, plain for mentions and
+  replies, struck through for nothing — so the level shows without opening its menu (D-107).
 - **On a narrow window** the Files and Pinned messages controls, and the channel's star, are one
   menu, **Channel menu**, so the channel's name keeps its room in the header.
 - **A conversation with one other person** is headed by them: their name, which opens their
@@ -124,14 +148,40 @@ for no benefit at this size. Regions are separated by tone and one hairline, not
 
 - **The tab's title** — `<place> · <workspace> · Purlay`: `#channel`, the other person's name in a
   direct message, or the screen's name. While anything needs the person it starts with the same count
-  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). It is the only
-  signal a tab in the background has in Phase 1.
+  as the mention badges, `(3) `, and with nothing at zero or in Deep Work (D-106). The tab's icon
+  says the same with a dot, which a pinned tab still shows (D-148).
+- **What reaches a person, by where Purlay is** (D-148). What *needs* them is one thing everywhere —
+  what the mention badges count: a mention, a direct message, an answer in a thread they are part of,
+  a channel set to every message. Never their own messages, and in Deep Work nothing interrupts.
+  - **The tab in front of them:** the page says it — the badges, the inbox dot, the title. Nothing
+    pops up and no device buzzes (D-143).
+  - **The tab open but not in front** (another tab, another window): the title's count, a dot on the
+    tab's icon, the installed app's badge; and, with notifications on for this device, a notice from
+    the browser — the place and who, never the words — one per conversation, the next replacing the
+    last, several at once as one. Clicking it brings the tab forward on the conversation or thread.
+  - **The tab closed:** nothing, unless the server has push and the person turned notifications on
+    for this device — then the same notice reaches the device (D-126). Without push, the inbox has it
+    all when they come back.
 
 **Below 900px** the rail and the sidebar become one overlay and the channel fills the window. An
 open thread, or the files, covers the channel — header and composer included — and its close control is the way
 back; what it covers is hidden from a screen reader and from Tab until it closes.
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
+
+**The inbox** (D-106, D-153, D-162). What the person was told in this workspace, newest first, in one centred
+column like the feed — the shape the open questions, search and saved share (D-158): **All** or **Unread** above it — Unread is asked of the server, so what waits is
+found however old — then **Today** and **Earlier**, each a card of rows. A row says who, why and where,
+with the message under it in two lines at most; unread is a dot at its edge and the line in full ink,
+read is muted. Opening a row takes the person to the message and reads it; **Mark read**, beside the
+row on a pointer's hover or a keyboard's focus, reads it without going; **Mark all read** in the header
+reads what is on screen. A row read in the Unread view stays there, muted, until the person looks again,
+so nothing moves out from under the pointer. Unread with nothing waiting says *All caught up*.
+A reply names its thread by the root's first line — *In “…”* — and says whose thread it is: *replied in
+your thread* when the person started it, *replied in a thread you're in* when they only replied in it.
+**One thread's replies of one day are one row** (D-162), where the newest of them sits: *3 new replies
+in “…”*, the newest replier's avatar, who replied (*Alice, Bob and 1 other*), the newest one's time and
+words, unread while any of them is. Opening it, or its **Mark read**, reads every reply it gathers.
 
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
@@ -156,17 +206,26 @@ in the row first, because it costs the person every channel. The last owner is s
 newest first, a page at a time: each entry a sentence — *Doğancan changed Alice's role from Member to
 Admin* — and when. An action newer than the client is said by its name, never dropped.
 
-**Channel details** (D-123). Clicking a channel's name in its header opens a dialog, drawn after the
-Details panel of the Superdesign screens: the **name and topic**, editable by a member of the channel
-with **Save** (somebody who has not joined reads them and is told to join); the **members** with a count
-and **Add people** (the same dialog as the header's); the **notification level** (the header's menu);
-for an owner or an admin, the **GitHub repositories** the channel hears from (D-134) — each with what it
-posts, its last delivery and why it last failed, **Disconnect** asking in place, and a form to
-**Connect** one, which answers with the payload URL, the content type and the secret, each with Copy,
-the secret said to be shown only now, until **Done**; and at the foot, in the danger tone, **Leave channel** for a member and **Archive channel** for an owner
-or an admin. Each of the two asks in place first and says what it costs; done, the person is taken to
-the workspace and told in a toast. The last member of a private channel is told to bring somebody in
-first or ask an admin to archive it. A direct message between two has no details: its title is not a button. A group's title opens its
+**Channel details** (D-123, D-154). Clicking a channel's name in its header opens a wide dialog
+(`size-dialog-lg`; on a narrow window a sheet that fills the screen) with three tabs, **About** chosen on
+opening — one tab in the Tab order, ← → between them, Home and End to the ends, Escape closes. The
+dialog opens with focus on itself, never on the name, so a key pressed on opening renames nothing; no
+dialog opens with a field's text selected. **About**: the **name and topic**, editable by a member of
+the channel with **Save** (somebody who has not joined reads them and is told to join); the
+**notification level** as three choices, the current one said in words (the header's menu, painted
+first and put back on a refusal); and at the foot a **Danger zone** in the danger tone — **Leave
+channel** for a member and **Archive channel** for an owner or an admin, each row saying what it costs.
+Each of the two asks in place first; done, the person is taken to the workspace and told in a toast.
+The last member of a private channel is told to bring somebody in first or ask an admin to archive it.
+**Members**, its count in the tab: who is in it, a field to find one by name once there are more than
+eight, and **Add people** (the same dialog as the header's: the workspace's people, narrowed as typed,
+those who can be added first with **Add**, and anybody already in the channel after them, saying
+*Member* quietly with nothing to press, and a sentence above them when that is everybody).
+**Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
+the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
+**Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the
+content type and the secret, each with Copy, the secret said to be shown only now, until **Done**. A
+half-typed name survives a look at another tab. A direct message between two has no details: its title is not a button. A group's title opens its
 details (D-127): its people, you first, and **New conversation with these people…**, which opens New
 message with them already picked — a group's people never change, so more people is a new
 conversation.
@@ -187,9 +246,38 @@ renames the workspace: a name field and **Save**, and a sentence saying the addr
 so links already shared keep working. Saved, the name changes at once in the tab and, without a reload,
 in every open tab of every member.
 
-**Another workspace** (D-124). **Create workspace…** in the same menu, anybody's, opens the form `/`
-shows a person with none — a name and an address — and goes to the new workspace, with Back to where
+**Another workspace** (D-124). **Create workspace…** in the same menu — offered only to a person this
+server lets make one (`WORKSPACE_CREATORS`, D-155) — opens the form `/` shows a person with none — a name and an address — and goes to the new workspace, with Back to where
 they were.
+
+**Settings** (D-146). A page, `/w/<slug>/settings/<section>`, opened from the rail's gear, the
+account menu, the workspace menu's **Workspace settings** and the palette. The sidebar's place holds
+its navigation: **Back to <workspace>**, then **Account** — Profile, Preferences, Notifications,
+Keyboard shortcuts, Sessions & account — and, for an owner or an admin, **Workspace** — General,
+Members, Invitations, Integrations, Audit log, Data & retention. The current page is marked as the
+current channel is. Each page: a title, one sentence, then cards; a setting is a row with its label and
+a sentence on the left and its control on the right (stacked below 900px). A choice applies when it is
+made; a form of words has **Save** in its card, enabled once something changed, its outcome said beside
+it. On a narrow window the navigation opens as the sidebar does.
+
+- **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away.
+- **Preferences** — the theme (System, Light, Dark) and the language, each a set of choices shown at once.
+- **Notifications** — Deep Work (start, or until when and end), notifications on this device (D-126,
+  D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
+  where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
+- **Keyboard shortcuts** — the reference, as a page.
+- **Sessions & account** — *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told to
+  make somebody else an owner first) and *Erase my account…*, each asking first.
+- **General** — the workspace's name, its address (which stays), and *Create workspace…*.
+- **Members** — a table: person, role, and actions, with a search field and a role filter above it;
+  the rules of *Members* below hold unchanged.
+- **Invitations** — making a link and the links still open, as *Invitations* below says.
+- **Integrations** — the GitHub connection, as below.
+- **Audit log** — the trail as a table, newest first, a page at a time.
+- **Data & retention** — how long history is kept, and exports.
+
+The sections below say what each does; where they say a dialog from the workspace menu, it is now the
+page of the same name.
 
 ---
 
@@ -222,27 +310,58 @@ they were.
 - **A link to a picture is the picture, under the words** — up to three, in the order written, each a
   link to the original, drawn through the API's proxy so the picture's host never sees who is reading
   (#110). One the proxy cannot show draws nothing; the link stays a link.
+- **A file sent with the message is under the words** (D-109 §6): an image as its thumbnail, in a box
+  shaped like it and kept before it loads; any other file as its name, its size and a download. An
+  image opens the **image viewer** (D-159): the picture over the whole window on the navigation's dark
+  tone, fitted to it and never enlarged, with its name, who shared it, its size and when, **Download**,
+  **Open original** in a new tab, and Close. Esc — whatever is focused —, the close button or a click
+  beside the picture close it, and focus goes back to the thumbnail; `←` `→` step through the message's
+  pictures and stop at either end. While the picture loads its thumbnail stands in its place; one that
+  does not load says so, with Retry. ⌘/Ctrl-click still opens the image in a tab.
 - **Two edges, in bubbles** (D-119, amending D-100). Everyone else's messages are on the left in a `surface-200`
   bubble, with an avatar in a fixed column; your own are on the right in an `accent-subtle` bubble,
   with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
   card inside it, and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
   colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are centred.
+- **A person is named by their name** — the display name, as the sidebar names them — wherever they
+  are named in words: the feed, a direct message's header, the inbox, search, the open questions,
+  *Resolved by …*, and what a screen reader hears of a row. The handle appears only where it is the
+  point: an `@mention`, the profile's handle line, and beside the name where people are picked.
 - **The header line** is over a group's first bubble: the name and the time on the left, the time
   alone on the right, the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
   their time shows on hover, in the avatar's column on the left and beside the bubble on the right.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
-- **Hover controls** are a small raised group on the bubble's inner top corner (on
-  your own message, its outer one — D-119 §6) and never reflow the row; the row itself is not tinted. Only the row under the pointer shows its own: a reply in the
-  thread panel is a row of its own.
+- **Hover controls** are one floating bar — hairline edge, the float shadow — on the row's own top
+  edge, in the corner the message is not in: the right for everyone else's, the left for your own
+  (D-150, amending D-119 §6). It never reaches above its row, so it never covers the row above or
+  the name over a bubble; it never reflows the row, and the row itself is not tinted. **One bar on
+  the page**, across the feed and the thread panel: the row under the pointer, or the focused row
+  while the keyboard is in use; a row whose menu is open keeps its bar. A thread's root, drawn in the
+  feed and at the top of the open panel, is two rows: only the copy under the pointer shows it. On a
+  phone the row tapped is the one.
+- **A message's controls are reached from its row** (D-168): the list is one Tab stop, and Tab from
+  the focused row walks that row's links, blocks, files, cards, chips and bar before leaving the list
+  (§7). Every control stays clickable and readable on every row.
+- **The bar holds** React · Reply (a thread's root) · Save · Pin · More, each the same square
+  control on every window, each with its tooltip and its key where it has one (Reply `R`). **More
+  is on every message**: Copy text, Save and Pin again, then Edit (`E`) and Delete on your own; an
+  owner or an admin may delete anybody's, told it goes on the audit trail. React opens the quick
+  set as one row of tiles, the name of the one reached under it and yours marked as chosen, opening
+  upward and kept inside the feed so it never covers the composer.
 - **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
   the bubble has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.
-- **Reactions** sit below the content, above the thread affordance.
+- **Reactions** sit below the content, above the thread affordance. A chip's tooltip says who:
+  "You, Alice and Bob reacted with 👍"; past three, two names and how many others (D-150).
+- **Edited** and **Pinned** share one line under the words, apart from each other.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,
   put back and said with Retry if the server refuses; a saved message's mark is filled.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
+- **Copy link** is first in every message's **More** menu (D-149, D-150): the
+  message's whole address on the clipboard, said with *Link copied*, or, when the browser refuses,
+  that it could not be copied.
 
 ### 3.1. Delivery state
 
@@ -251,6 +370,12 @@ they were.
 | `sending` | Full opacity, subtle clock glyph beside the time | Paints in < 16ms, before any network call (`PRD.md` §5) |
 | `sent` | Glyph removed | On `ACK`. **The row does not move** — the id was final from the start (D-8) |
 | `failed` | The bubble's left edge in the error colour, "Retry · Delete" inline | After 3s with no ACK. Never disappears silently |
+
+**Writing is a member's** (D-156). A public channel the person has not joined is read with a bar in
+place of the composer — *You are reading #name without being a member* and **Join** — and a send that
+was already on its way when they left, or that reached the server some other way, is `failed` with
+the reason in words: they are not in the channel, and joining it is how to write there; Retry then
+sends it. Reacting, editing and resolving there are refused the same way, said as a toast.
 
 The `sending` state is deliberately **not** dimmed to 50% opacity. Dimming implies "not real
 yet"; in an optimistic UI the message *is* real, and flickering opacity on every send is visual
@@ -271,12 +396,14 @@ A root message with replies shows one line beneath it:
 Clicking it, or pressing `T` on the focused message, opens the thread **in the panel** on the
 right (D-122). The affordance is absent when there are no replies — an empty thread control on
 every message is clutter that teaches people to ignore that region. While a root's thread is in
-the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from.
+the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from. Under your own message, which
+sits on the right (§3), the line is mirrored: the status under the bubble's edge, **Show thread** at the
+other end — never the status a column away from the bubble it is about.
 
 ### 4.2. The panel
 
 ```
-  ┌ Thread · #api ─────────────────────────── × ┐
+  ┌ Thread · #api ────────────────── [Follow] × ┐
   │ (AC) Alice  14:32                           │
   │      ╭ The retry backoff is 4s because… ╮   │
   │ ○ Open · 4 replies · last 12m   [Resolve ⌘⇧R]│
@@ -290,10 +417,17 @@ the panel, its line is filled and says **Thread open**, so the eye finds where t
 ```
 
 - **One thread at a time.** Opening another replaces it. A channel opened again opens with no
-  thread, unless its address names one (`?thread=`, from the open questions, the inbox and search),
-  which opens even when its root is older than the feed's first page.
+  thread, unless its address names one (`?thread=`, from the open questions and the inbox), which
+  opens even when its root is older than the feed's first page — or a reply's link does (§6).
 - **The header** names it — *Thread · #channel*, or the person's name in a conversation — and its
-  close control (`Esc`) closes it.
+  close control (`Esc`) closes it. Beside the close control, **Follow** (D-161): a toggle with one
+  name, pressed while the person is told of new replies — a bell — and not pressed with the struck
+  bell a muted channel shows; its tooltip says what pressing it would do, *Get notified about new
+  replies* or *Turn off notifications for replies*. Somebody who started or answered the thread
+  follows it until they press it; replying again does not follow a thread let go again. It paints at
+  once and a refusal puts it back with a toast, and Retry when trying again could help. Until the
+  state is read it is there and disabled, so the header does not move; when it could not be read,
+  its tooltip says so and pressing it reads it again. A mention in the thread still arrives.
 - **The root**, its status and **Resolve / Reopen**, a rule labelled *N replies*, then the replies as
   the feed draws them: two edges, grouped by the same rule (§3). The reply box is at the bottom, and
   keeps its draft per thread like the channel's (§5). There is no "also send to the channel": the
@@ -318,7 +452,7 @@ On resolve:
    because a state change that reorganizes the reader's view needs to be *seen* to be understood.
    Focus returns to the root. Resolved by somebody else, an open panel stays and only its status
    changes (D-122).
-2. The affordance line becomes `✓ Resolved by alice · 4 replies`.
+2. The affordance line becomes `✓ Resolved by Alice Chen · 4 replies`.
 3. A `system_event` message is **not** posted. The resolution is metadata on the root, not
    another line of chatter in a product whose thesis is less noise.
 
@@ -331,6 +465,9 @@ Reached from the palette (`Cmd+K` → "Open questions") or the workspace header.
 unresolved root messages that have at least one reply, workspace-wide, newest first, grouped by
 channel — backed by `idx_messages_unresolved`.
 
+Opened from a channel's header it is **narrowed to that channel** (`?in=`): only its questions, its
+count on the tab, Feed back to it, and *Show every channel* to widen it again.
+
 This view is the product's argument in one screen: *these are the questions your team has not
 finished answering.* Slack cannot produce it at any price. It ships in Phase 1, not later.
 
@@ -339,7 +476,9 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 ## 5. Composer
 
 Plain textarea, GFM, no WYSIWYG toolbar (`PRD.md` §4.1). Three buttons sit under it — bold, a code
-block, a mention — and each only *inserts markdown* that the keys below also produce (D-110).
+block, a mention — and each only *inserts markdown* that the keys below also produce (D-110); a fourth
+attaches a file. **A thread's box has the same four** (D-164): in the panel's width the key hints are not
+drawn (a screen reader still reads them) and Send is the icon alone.
 
 | Key | Action |
 |---|---|
@@ -351,7 +490,12 @@ block, a mention — and each only *inserts markdown* that the keys below also p
 | `@` and a letter | Member autocomplete: who a mention here would reach, found by display name or handle without case or accents; `↑` `↓` move, `Enter` or `Tab` writes `@handle`, `Esc` closes it, and `Enter` while it is open never sends (D-110 §8). **`@here` and `@channel` are not offered and are rejected on send** (D-12) |
 
 Pasting an image uploads immediately and inserts a placeholder; the message can be sent while
-the upload is still in flight. Pasting over ~12 lines of text is inserted as a fenced block
+the upload is still in flight. **A file that did not upload says why under its name** (D-159), in
+words from what the server answered: larger than the limit, an image past the side or pixel bound, an
+image that cannot be read, a type not accepted, the workspace's storage full and how much room is left,
+too many files waiting, no connection, the server busy, file storage unavailable, the session ended, no
+longer having access to the workspace (D-164).
+Retry is there when trying again can be answered differently; Remove always. Pasting over ~12 lines of text is inserted as a fenced block
 automatically, with an undo toast — a paste that silently becomes a code block with no way back
 is worse than no help at all.
 
@@ -381,6 +525,22 @@ The hardest problem in the product, and the subject of **O-5**.
   vanish the instant the messages are seen, because it is the reader's place-holder, not a
   notification.
 - **Marking read** happens when the bottom is reached, or on channel exit. Never on mere render.
+- **The feed reads the feed, not the threads** (D-147). Reading the channel to the bottom reads what
+  the feed shows; an answer in a thread keeps waiting — on the badge, in the tab title, in the inbox —
+  until its thread is open in the panel with the page in front of the person, which reads its replies
+  up to the newest one the panel has. A reply that arrives after that is still waiting.
+- **A link to a message opens the channel at it** (`?message=`, D-149) — from Copy link, search,
+  saved items and **Go to message** in the pins panel. The feed is read **around** the message, not
+  from the newest page: it is brought into view in the middle, marked in the highlight tone for a
+  moment (a fade that reduced motion skips), and focused, as ↑ ↓ would focus it; a reply opens its
+  thread, where the reply is brought into view, marked and focused instead. Scrolling up reads older
+  history as always; scrolling down reads newer history in below **without moving the reader** and
+  without the "new messages" pill, since none of it is new. Until the window reaches the newest
+  message, **Jump to recent** sits where the pill would, takes the reader to the bottom (not back to
+  the unread marker), and so does sending. Nothing is marked read from a window short of the
+  present. A message deleted, never there, or not the person's to see is said in one sentence over
+  the channel — *That message no longer exists, or you can't see it.* — and the channel opens as it
+  is.
 
 **On O-5:** variable-height rows defeat naive virtualization, and a
 wrong guess here is expensive. Phase 1 ships **unvirtualized with a 50-message window** and
@@ -394,15 +554,19 @@ trade a certain cost for a hypothetical benefit.
 
 | Key | Action |
 |---|---|
-| `Cmd/Ctrl+K` | Command palette — channels, DMs, people, settings, open questions |
+| `Cmd/Ctrl+K` | Command palette — the views (open questions, inbox, saved, search), channels (public ones not joined, marked so), group conversations, people, every settings page the person may open, the theme and language; and, whatever was typed, **Search messages for “…”** as its last row, so a query never ends in nothing (D-157) |
 | `Cmd/Ctrl+/` | Shortcut reference |
-| `Esc` | Close the topmost thing — palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
-| `↑` `↓` | Move message focus |
+| `Cmd/Ctrl+,` | Settings (D-146) |
+| `Esc` | Close the topmost thing — the image viewer, palette, then edit, then the thread, files, pins or incident panel (focus returns to its root, or to the control that opened the panel) |
+| `←` `→` | In the image viewer: the previous / next picture of the message, or of the files panel (D-159) |
+| `Tab` | Into a list of messages — the feed, a thread's panel — lands on its one row: the one the keyboard was last on, or the feed's newest and the panel's root; from that row, through **its** controls (links, code, files, cards, reactions, the thread's line, then its bar) and on out of the list; `Shift+Tab` from after it comes back to the row. Other rows' controls are not Tab stops; the pointer and a screen reader's browse mode reach them as before (D-168) |
+| `↑` `↓` `Home` `End` | Move message focus, in the feed and in a thread's panel |
 | `T` | Open the focused message's thread in the panel, and move focus there |
 | `R` | Reply to the focused message |
 | `E` | Edit (own messages) |
 | `Cmd/Ctrl+Shift+R` | Resolve / reopen the focused thread — on its root, or anywhere in its panel |
 | `Alt+↑` `Alt+↓` | Previous / next unread channel |
+| `Shift+F10` · `ContextMenu` | On a sidebar row: its context menu, under the row (D-165) |
 | `Cmd/Ctrl+Shift+D` | Toggle Deep Work — on for an hour; another while is the account menu's or the palette's |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
@@ -419,14 +583,16 @@ missing specified behaviour and does not merge.
 | View | Empty | Loading | Error |
 |---|---|---|---|
 | Channel feed | "No messages yet" + composer focused | Skeleton rows, no spinner | "Couldn't load messages · Retry" — the composer stays usable |
-| Search | "No matches for `<query>`" + scope hint | Inline progress in the input | Retry, query preserved |
+| Search | "No matches for `<query>`" + scope hint: where it looked, and whose words (D-166) | Inline progress in the input | Retry, query preserved |
 | Notifications | "Nothing needs you" | Skeleton | Retry |
 | Open questions | "Every thread is resolved" | Skeleton | Retry |
 | Incident (panel) | "No incident" — declare one when something here is on fire; when the last was resolved | Skeleton, in the panel; the banner draws nothing until it knows | Retry in the panel; a timeline that fails says so with Retry, the controls still usable |
 | Pins (panel) | "Nothing pinned yet" — pin a message everyone here should keep at hand | Skeleton rows, in the panel | Retry in the panel; a list that could not be brought up to date says so, with Retry |
 | Channels to join (after an invitation) | "There are no public channels to join yet" + the way into the workspace | Skeleton rows | Retry; a join that fails part way names the channels and why, keeps them picked, focus on the button that tries again |
 | Files (panel) | "No files yet" — what is shared here gathers in this list | Skeleton rows, in the panel | Retry in the panel; a further page that fails says so above **Load more**, and a list that could not be brought up to date says so, with Retry, keeping what it shows |
+| Image viewer | n/a — opened on a picture | The thumbnail, in the picture's own box, until the full image has loaded | "The image did not load" + Retry; Download and Open original stay (D-159) |
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
+| No workspace (`/`) | "You are not in a workspace yet" + the form to make one, where this server would let the person; otherwise "Ask for an invitation" and no form — never a form that would be refused (D-155). A refusal anyway, the rule having changed under the form, says to ask for an invitation above its button | n/a — the session gate's skeleton | The form's failures above its button or under the field they name |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
 | Sign-in | n/a — always GitHub's button; the email form under it only where the server sends mail, and not until it has said so (D-138) | n/a for GitHub; the email form's button is busy while it asks | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121). The email form: the same sentence whatever the address once asked, a refused address under the field, "switched off" or the failure above its button |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |

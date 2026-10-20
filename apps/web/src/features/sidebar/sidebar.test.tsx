@@ -30,6 +30,7 @@ import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
 import { PRESENCE_GRACE_MS, type PresenceSnapshot, type ServerFrame } from '@purlay/types';
 import { keys } from '../../data/keys';
+import { en } from '../../i18n/catalogue/en';
 import { expectFocusOn } from '../../testing/focus';
 
 installDom();
@@ -72,18 +73,35 @@ const links = (view: View, scope: string): string[] =>
     .map((a) => a.textContent.trim());
 
 describe('the channels section', () => {
+  test('Browse channels and New channel are always there, never revealed only on hover', async () => {
+    const view = await open();
+    const nav = some(view.getAllByRole('navigation', { name: 'Channels' })[0]);
+    for (const name of ['Browse channels', 'New channel']) {
+      const button = within(nav).getByRole('button', { name });
+      // Nothing between the button and its section may hide it until a pointer passes over.
+      for (
+        let node: HTMLElement | null = button;
+        node !== null && node !== nav;
+        node = node.parentElement
+      ) {
+        expect(node.className).not.toContain('opacity-0');
+      }
+    }
+  });
+
   test('lists the channels the person is in, # and name, and not the one they could join', async () => {
     const view = await open();
     expect(links(view, 'Channels')).toEqual(['api', 'deploys', 'incidents']);
     expect(view.queryByText('browse')).toBeNull();
   });
 
-  test('is ordered by activity: the channel somebody wrote in last is first', async () => {
+  test('is ordered by name, and a new message moves nothing (D-160)', async () => {
     const channels = someChannels().map((c) =>
       c.id === IDS.incidents ? { ...c, lastMessageAt: '2026-09-09T09:00:00.000Z' } : c,
     );
     const view = await open(aSignedInApi({ channels: () => Promise.resolve(channels) }));
-    expect(links(view, 'Channels')[0]).toBe('incidents');
+    const listed = links(view, 'Channels');
+    expect(listed).toEqual([...listed].sort((a, b) => a.localeCompare(b)));
   });
 
   test('the channel you are in is the current page, and nothing else is', async () => {
@@ -588,19 +606,43 @@ describe('the workspace menu', () => {
     const view = await open(aSignedInApi({ me: () => Promise.resolve(two()) }));
     await person().click(view.getByRole('button', { name: 'Switch workspace' }));
     const items = view.getAllByRole('menuitem').map((i) => i.textContent);
-    // The owner of acme-eng is also offered invitation links (D-115) and the GitHub token (D-23).
+    // The owner of acme-eng is also offered invitation links (D-115) and the workspace's settings,
+    // a page of Settings (D-146); everything else an owner does is there.
     expect(items).toEqual([
       'acme-eng',
       'side-project',
       'Create workspace…',
       'Invite people…',
-      'Members…',
-      'GitHub connection…',
-      'Audit log…',
-      'Workspace settings…',
-      'Keep history…',
-      'Export workspace…',
+      en['workspace.settings.entry'],
     ]);
+  });
+
+  test('a member is offered the workspaces and a new one, and nothing that is an owner’s or an admin’s', async () => {
+    const session = aSession();
+    const view = await open(
+      aSignedInApi({
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((m) => ({ ...m, role: 'member' as const })),
+          }),
+      }),
+    );
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'acme-eng',
+      'Create workspace…',
+    ]);
+  });
+
+  test('Workspace settings opens the General page, with a way Back', async () => {
+    const view = await open();
+    const before = view.world.history.stack.length;
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: en['workspace.settings.entry'] }));
+    expect(await view.findByRole('heading', { level: 1, name: 'General' })).toBeDefined();
+    expect(here(view)).toBe('/w/acme/settings/general');
+    expect(view.world.history.stack.length).toBeGreaterThan(before);
   });
 
   test('each place in it has a glyph of its own, so it is found without reading every label (#642)', async () => {
@@ -608,19 +650,40 @@ describe('the workspace menu', () => {
     await person().click(view.getByRole('button', { name: 'Switch workspace' }));
     const places = view
       .getAllByRole('menuitem')
-      .filter((item) => item.textContent.endsWith('…'))
+      .filter((item) => item.textContent !== 'acme-eng')
       .map((item) => ({
         place: item.textContent,
         glyph: [...(item.querySelector('svg')?.classList ?? [])].find(
           (name) => name.startsWith('lucide-') && name !== 'lucide-icon',
         ),
       }));
-    expect(places.length).toBeGreaterThan(5);
+    expect(places.map((p) => p.place)).toEqual([
+      'Create workspace…',
+      'Invite people…',
+      en['workspace.settings.entry'],
+    ]);
     expect(places.filter((p) => p.glyph === undefined)).toEqual([]);
     const glyphs = places.map((p) => p.glyph);
     expect(new Set(glyphs).size, JSON.stringify(places)).toBe(glyphs.length);
-    // And none borrows another place's: the keyboard is Keyboard shortcuts', not the audit log's.
-    expect(places.find((p) => p.place === 'Audit log…')?.glyph).not.toBe('lucide-keyboard');
+  });
+
+  test('Create workspace… is not offered where the server would refuse it (D-155)', async () => {
+    const view = await open(
+      aSignedInApi({ me: () => Promise.resolve({ ...aSession(), mayCreateWorkspace: false }) }),
+    );
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    const items = view.getAllByRole('menuitem').map((i) => i.textContent);
+    expect(items).toContain('Invite people…');
+    expect(items).not.toContain('Create workspace…');
+  });
+
+  test('Create workspace… is put away by its Cancel, and nothing is made', async () => {
+    const view = await open();
+    await person().click(view.getByRole('button', { name: 'Switch workspace' }));
+    await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
+    const dialog = await view.findByRole('dialog');
+    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
   });
 
   test('the workspace’s name at the top of the sidebar opens the same menu', async () => {
@@ -633,12 +696,7 @@ describe('the workspace menu', () => {
       'acme-eng',
       'Create workspace…',
       'Invite people…',
-      'Members…',
-      'GitHub connection…',
-      'Audit log…',
-      'Workspace settings…',
-      'Keep history…',
-      'Export workspace…',
+      en['workspace.settings.entry'],
     ]);
   });
 
@@ -895,6 +953,8 @@ describe('browsing channels', () => {
   const browse = async (api: Api = aSignedInApi()): Promise<View> => {
     const view = await open(api);
     await person().click(view.getByRole('button', { name: 'Browse channels' }));
+    // The dialog is in the deferred chunk (D-163): the first open waits for it to arrive.
+    await view.findByRole('dialog', { name: 'Browse channels' });
     return view;
   };
 
@@ -913,6 +973,113 @@ describe('browsing channels', () => {
     ];
     const view = await browse(aSignedInApi({ channels: () => Promise.resolve(channels) }));
     expect(view.getByRole('dialog').textContent).toContain('Reading list');
+  });
+
+  test('says how many people each channel holds, beside its topic, one each', async () => {
+    const channels = [
+      ...someChannels().slice(0, 3),
+      aChannel(IDS.browse, 'browse', { state: null, topic: 'Reading list', memberCount: 12 }),
+      aChannel('00000000-0000-4000-8000-0000000000b1', 'alone', { state: null, memberCount: 1 }),
+    ];
+    const view = await browse(aSignedInApi({ channels: () => Promise.resolve(channels) }));
+    const dialog = within(view.getByRole('dialog'));
+    const rows = dialog.getAllByRole('listitem');
+    // By name (D-160): `alone` before `browse`.
+    expect(rows.map((row) => row.querySelector('.text-label')?.textContent)).toEqual([
+      'alone',
+      'browse',
+    ]);
+    // A channel's name is in the face it has in the sidebar, the header and the palette — not code's.
+    expect(rows.some((row) => row.querySelector('.font-mono') !== null)).toBe(false);
+    expect(rows[0]?.textContent).toContain('1 member');
+    expect(rows[0]?.textContent).not.toContain('·');
+    expect(rows[1]?.textContent).toContain('12 members');
+    // The topic is one line, cut with an ellipsis, and gives way before the count does.
+    const topic = some(within(some(rows[1])).getByText('Reading list'));
+    expect(topic.className.split(' ')).toContain('truncate');
+    expect(within(some(rows[1])).getByText('12 members').className.split(' ')).toContain(
+      'shrink-0',
+    );
+    // A handful is read at a glance: no field to find in it.
+    expect(dialog.queryByRole('searchbox')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  /** Ten channels to join, so the list is long enough to be searched. */
+  const many = (): ReturnType<typeof someChannels> => [
+    ...someChannels().slice(0, 3),
+    ...Array.from({ length: 10 }, (_, n) =>
+      aChannel(
+        `00000000-0000-4000-8000-0000000001${String(n).padStart(2, '0')}`,
+        `room-${String(n)}`,
+        {
+          state: null,
+          memberCount: n,
+          topic: n === 7 ? 'Çalışma odası' : null,
+        },
+      ),
+    ),
+  ];
+
+  test('past a handful, a field narrows the list by name and by topic', async () => {
+    const view = await browse(aSignedInApi({ channels: () => Promise.resolve(many()) }));
+    const dialog = within(view.getByRole('dialog'));
+    const field = dialog.getByRole('searchbox', { name: 'Find a channel' });
+    expect(dialog.getAllByRole('listitem')).toHaveLength(10);
+
+    await person().type(field, 'ROOM-3');
+    const narrowed = dialog.getAllByRole('listitem');
+    expect(narrowed).toHaveLength(1);
+    expect(narrowed[0]?.textContent).toContain('room-3');
+
+    // By topic, with no case and no marks: `calisma` finds `Çalışma odası`.
+    await person().clear(field);
+    await person().type(field, 'calisma');
+    const [found, ...rest] = dialog.getAllByRole('listitem');
+    expect(rest).toHaveLength(0);
+    expect(found?.textContent).toContain('room-7');
+
+    await person().clear(field);
+    await person().type(field, 'nowhere');
+    expect(dialog.queryAllByRole('listitem')).toHaveLength(0);
+    expect(dialog.getByRole('status').textContent).toBe('No channel matches “nowhere”.');
+    await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  test('opened again, it starts from every channel, not from the last search', async () => {
+    const view = await browse(aSignedInApi({ channels: () => Promise.resolve(many()) }));
+    await person().type(view.getByRole('searchbox'), 'room-3');
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    await person().click(view.getByRole('button', { name: 'Browse channels' }));
+    const dialog = within(await view.findByRole('dialog'));
+    expect(dialog.getByRole<HTMLInputElement>('searchbox').value).toBe('');
+    expect(dialog.getAllByRole('listitem')).toHaveLength(10);
+  });
+
+  test('in Turkish, it counts üye and finds with Kanal bul', async () => {
+    const view = await renderApp(
+      <>
+        <Outlet />
+        <Toaster dismissLabel="Kapat" />
+      </>,
+      {
+        path: `/w/acme/c/${IDS.api}`,
+        locale: 'tr',
+        api: aSignedInApi({ channels: () => Promise.resolve(many()) }),
+      },
+    );
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Kanallara göz at' }));
+    const dialog = within(await view.findByRole('dialog'));
+    expect(dialog.getByRole('searchbox', { name: 'Kanal bul' })).toBeDefined();
+    const rows = dialog.getAllByRole('listitem');
+    expect(rows[1]?.textContent).toContain('1 üye');
+    expect(rows[2]?.textContent).toContain('2 üye');
+    await person().type(dialog.getByRole('searchbox'), 'yok-böyle');
+    expect(dialog.getByRole('status').textContent).toBe('“yok-böyle” ile eşleşen kanal yok.');
+    await expectNoAxeViolations(view.getByRole('dialog'));
   });
 
   test('joining joins, goes there, and closes', async () => {
@@ -948,6 +1115,10 @@ describe('browsing channels', () => {
       aSignedInApi({ channels: () => Promise.resolve(someChannels().slice(0, 3)) }),
     );
     expect(view.getByText('Nothing to join')).toBeDefined();
+    // In the dialog it sits at the dialog's edge, under its title, not inset as a sidebar row's words.
+    expect(view.getByText('Nothing to join').parentElement?.className.split(' ')).not.toContain(
+      'px-2',
+    );
   });
 
   test('loads as skeleton rows', async () => {
@@ -994,5 +1165,20 @@ describe('the keyboard', () => {
   test('the whole frame passes the accessibility audit', async () => {
     const view = await open();
     await expectNoAxeViolations(view.container);
+  });
+});
+
+describe('a channel set to tell nothing (D-107)', () => {
+  test('says so after its name, and only that one', async () => {
+    const channels = someChannels().map((c) =>
+      c.id === IDS.deploys ? { ...c, notificationLevel: 'none' as const } : c,
+    );
+    const view = await open(aSignedInApi({ channels: () => Promise.resolve(channels) }));
+    const muted = within(view.getByRole('complementary', { name: 'Workspace' })).getAllByRole(
+      'img',
+      { name: 'muted' },
+    );
+    expect(muted).toHaveLength(1);
+    expect(muted[0]?.closest('a')?.textContent).toContain('deploys');
   });
 });

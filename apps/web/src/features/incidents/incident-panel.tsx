@@ -28,7 +28,7 @@ import { Responders } from './responders';
 import { WriteUp } from './writeup';
 import { useIncident, useIncidentActions, type IncidentActions } from './use-incident';
 
-export const INCIDENT_PANEL_ID = 'channel-incident';
+import { INCIDENT_PANEL_ID } from './panel-id';
 
 const SEVERITIES: readonly IncidentSeverity[] = [1, 2, 3, 4];
 

@@ -29,6 +29,7 @@ import type {
   MeResponse,
 } from '@purlay/types';
 import { families, keys } from './keys';
+import type { FeedPages } from './queries';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -181,18 +182,20 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
   // A channel's files list has no frame of its own: a message carrying files reads it again (D-129).
   if (message.attachments.length > 0) readAgain(client, keys.files(message.channelId));
   if (message.parentId === null) {
-    const key = keys.messages(message.channelId);
-    const cached = client.getQueryData<Pages>(key);
-    if (cached !== undefined) {
-      const [first, ...rest] = cached.pages;
-      if (first !== undefined) {
-        client.setQueryData<Pages>(key, {
+    // The feed, and any window around a linked message (D-149) — but only one that reaches the
+    // present: a window that stops short of it has a gap a message cannot be put after.
+    for (const [key, cached] of client.getQueriesData<FeedPages>({
+      queryKey: keys.messages(message.channelId),
+    })) {
+      const [first, ...rest] = cached?.pages ?? [];
+      if (cached !== undefined && first !== undefined && (first.newerCursor ?? null) === null) {
+        client.setQueryData<FeedPages>(key, {
           ...cached,
           pages: [{ ...first, data: placed(first.data, message, byIdDescending) }, ...rest],
         });
       }
+      askAgainIfOnItsWay(client, key);
     }
-    askAgainIfOnItsWay(client, key);
   } else {
     const key = keys.thread(message.parentId);
     const cached = client.getQueryData<Pages>(key);
@@ -322,21 +325,17 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
   if (deletedRoot) readAgain(client, families.unresolved);
 };
 
-/** The caller's own position and counters in one channel — the server's numbers, copied. */
+/**
+ * The caller's own position and counters in one channel — the server's numbers, copied. The inbox is
+ * not asked again from here: not every notification moves a counter, and each is its own frame
+ * (`NOTIFICATIONS_UPDATED`, D-106).
+ */
 export const channelStateChanged = (
   client: QueryClient,
   channelId: string,
   state: ChannelState,
 ): void => {
-  const before = client
-    .getQueriesData<Channel[]>({ queryKey: families.channels })
-    .flatMap(([, list]) => list ?? [])
-    .find((c) => c.id === channelId);
   editChannels(client, channelId, (c) => ({ ...c, state }));
-  // More waiting for you is a new notification: the inbox, if it is open, asks again (D-106).
-  if (before !== undefined && state.unreadMentionCount > (before.state?.unreadMentionCount ?? 0)) {
-    void client.invalidateQueries({ queryKey: keys.notifications(before.workspaceId) });
-  }
 };
 
 /** The caller's notification level in a channel, as they chose it or as it was before a refusal. */

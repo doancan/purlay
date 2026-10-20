@@ -58,11 +58,11 @@ export const SignInScreen = (): React.JSX.Element => {
 
   return (
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
-      <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle text-center bg-surface-100 p-8 shadow-card">
+      <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
         <LogoMark />
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-display">{t('signIn.title')}</h1>
-          <p className="text-body text-ink-muted">{t('signIn.lede')}</p>
+          <p className="text-balance text-body text-ink-muted">{t('signIn.lede')}</p>
           {note !== null && (
             <p role="status" className="text-label text-warning-text">
               {note}
@@ -71,11 +71,11 @@ export const SignInScreen = (): React.JSX.Element => {
         </div>
         <div className="flex w-full flex-col items-center gap-3">
           {/* A plain anchor on purpose: the browser must leave this page. */}
-          <a href="/auth/github" className={cn(buttonStyle('primary'), 'w-full')}>
-            <Icon name="person" />
+          <a href="/auth/github" className={cn(buttonStyle('primary', 'lg'), 'w-full')}>
+            <Icon name="github" />
             {t('signIn.github')}
           </a>
-          <p className="text-caption text-ink-muted">{t('signIn.scope')}</p>
+          <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
         </div>
         <EmailSignInForm />
       </section>

@@ -23,6 +23,8 @@ import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState } from '../../ui/states';
 import { useToast } from '../../ui/toast';
+import { initialsOf } from '../../ui/avatar';
+import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
@@ -191,9 +193,13 @@ export const WelcomeScreen = (): React.JSX.Element => {
       />
     );
   } else if (joinable.length === 0) {
+    // Already in every public channel, or there are none yet: two different sentences.
+    const anyPublic = channels.data.some((channel) => channel.type === 'public');
     body = (
-      <section className="flex flex-col items-start gap-3">
-        <p className="text-body text-ink-muted">{t('welcome.none')}</p>
+      <section className="flex flex-col items-start gap-4 rounded-xl border-hairline border-border-subtle bg-surface-100 px-6 py-5 shadow-card">
+        <p className="text-body text-ink-muted">
+          {t(anyPublic ? 'welcome.allJoined' : 'welcome.none')}
+        </p>
         <Button variant="primary" onClick={enter}>
           {t('welcome.continue')}
         </Button>
@@ -202,76 +208,92 @@ export const WelcomeScreen = (): React.JSX.Element => {
   } else {
     body = (
       <form
-        className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           void join();
         }}
       >
-        <fieldset className="flex flex-col gap-1">
-          <legend>
-            <VisuallyHidden>{t('welcome.title')}</VisuallyHidden>
-          </legend>
-          {joinable.map((channel) => (
-            <label
-              key={channel.id}
-              className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-200"
-            >
-              <input
-                type="checkbox"
-                className="mt-1"
-                // The channel's name is the box's; its topic and whether it is busy describe it.
-                aria-label={`#${channel.name ?? ''}`}
-                aria-describedby={`${channel.id}-about`}
-                checked={picked.has(channel.id)}
-                disabled={joining}
-                onChange={() => {
-                  toggle(channel.id);
-                }}
-              />
-              <span className="flex min-w-0 flex-col gap-1">
-                <span className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-body text-ink">
-                  <span className="min-w-0 break-all">{`#${channel.name ?? ''}`}</span>
-                  {/* What describes the box: whether it is busy, and what it is for — not its name again. */}
-                  <span id={`${channel.id}-about`} className="flex flex-col gap-1">
-                    {marked.has(channel.id) && (
-                      <span className="self-start rounded-sm bg-accent-subtle px-1 font-sans text-caption text-accent-text">
-                        {t('welcome.active')}
-                      </span>
-                    )}
-                    {channel.topic !== null && (
-                      <span className="break-words font-sans text-label text-ink-muted">
-                        {channel.topic}
-                      </span>
-                    )}
+        <div className="overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-card">
+          <fieldset className="flex flex-col">
+            <legend>
+              <VisuallyHidden>{t('welcome.title')}</VisuallyHidden>
+            </legend>
+            {joinable.map((channel) => {
+              const on = picked.has(channel.id);
+              return (
+                <label
+                  key={channel.id}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-3 not-first:border-t-hairline border-border-subtle px-6 py-4 transition-colors duration-hover ease-standard max-narrow:px-4',
+                    on ? 'bg-accent-subtle' : 'hover:bg-surface-050',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 shrink-0"
+                    // The channel's name is the box's; its topic and whether it is busy describe it.
+                    aria-label={`#${channel.name ?? ''}`}
+                    aria-describedby={`${channel.id}-about`}
+                    checked={on}
+                    disabled={joining}
+                    onChange={() => {
+                      toggle(channel.id);
+                    }}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="min-w-0 break-all text-label text-ink">{`# ${channel.name ?? ''}`}</span>
+                    {/* What describes the box: whether it is busy, and what it is for — not its name again. */}
+                    <span id={`${channel.id}-about`} className="flex flex-col gap-1">
+                      {marked.has(channel.id) && (
+                        <VisuallyHidden>{t('welcome.active')}</VisuallyHidden>
+                      )}
+                      {channel.topic !== null && (
+                        <span className="break-words text-label font-normal text-ink-muted">
+                          {channel.topic}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        {refusals.length > 0 && (
-          <div role="alert" className="flex flex-col gap-1 text-label text-danger-text">
-            {refusals.map((refusal) => (
-              <p key={refusal.names}>
-                {`${t('welcome.failed', { names: refusal.names })} ${refusal.why}`}
-              </p>
-            ))}
-          </div>
-        )}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            ref={submit}
-            type="submit"
-            variant="primary"
-            busy={joining}
-            disabled={picked.size === 0}
-          >
-            {t('welcome.join', { count: picked.size })}
-          </Button>
-          <Button variant="ghost" disabled={joining} onClick={enter}>
-            {t('welcome.skip')}
-          </Button>
+                  {marked.has(channel.id) && (
+                    <span
+                      aria-hidden="true"
+                      className="inline-flex h-badge shrink-0 items-center rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text"
+                    >
+                      {t('welcome.active')}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </fieldset>
+          {refusals.length > 0 && (
+            <div
+              role="alert"
+              className="flex flex-col gap-1 border-t-hairline border-border-subtle bg-danger-subtle px-6 py-3 text-label text-danger-text max-narrow:px-4"
+            >
+              {refusals.map((refusal) => (
+                <p key={refusal.names}>
+                  {`${t('welcome.failed', { names: refusal.names })} ${refusal.why}`}
+                </p>
+              ))}
+            </div>
+          )}
+          <footer className="flex flex-wrap items-center justify-end gap-3 border-t-hairline border-border-subtle bg-surface-050 px-6 py-3 max-narrow:px-4">
+            <Button variant="ghost" disabled={joining} onClick={enter}>
+              {t('welcome.skip')}
+            </Button>
+            <Button
+              ref={submit}
+              type="submit"
+              variant="primary"
+              busy={joining}
+              disabled={picked.size === 0}
+            >
+              {picked.size === 0
+                ? t('welcome.joinNone')
+                : t('welcome.join', { count: picked.size })}
+            </Button>
+          </footer>
         </div>
       </form>
     );
@@ -280,14 +302,26 @@ export const WelcomeScreen = (): React.JSX.Element => {
   return (
     <>
       <ScreenBar />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <section className="flex w-full max-w-feed flex-col gap-4 px-6 py-8">
-          <h1 className="text-display text-ink">
-            {t('welcome.heading', { workspace: workspace.name })}
-          </h1>
-          <p className="text-body text-ink-muted">
-            {t(marked.size > 0 ? 'welcome.lede' : 'welcome.ledeQuiet')}
-          </p>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-000">
+        <section className="mx-auto flex w-full max-w-settings flex-col gap-8 px-10 pt-12 pb-16 max-narrow:px-4 max-narrow:pt-6">
+          <header className="flex flex-col gap-4">
+            <span
+              aria-hidden="true"
+              className="inline-flex size-avatar-lg items-center justify-center rounded-xl bg-accent text-heading text-on-accent"
+            >
+              {initialsOf(workspace.name)}
+            </span>
+            <div className="flex flex-col gap-1">
+              <h1 className="text-display text-ink">
+                {t('welcome.heading', { workspace: workspace.name })}
+              </h1>
+              {joinable.length > 0 && (
+                <p className="text-body text-ink-muted">
+                  {t(marked.size > 0 ? 'welcome.lede' : 'welcome.ledeQuiet')}
+                </p>
+              )}
+            </div>
+          </header>
           {body}
         </section>
       </div>

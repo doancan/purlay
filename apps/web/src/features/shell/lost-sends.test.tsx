@@ -77,7 +77,7 @@ describe('unsent messages of a channel that went away', () => {
       view.world.sockets.open();
     });
     await settle();
-    await person().type(view.getByLabelText(/için mesaj$/), 'yolda{Enter}');
+    await person().type(view.getByLabelText(/^Mesaj: /), 'yolda{Enter}');
     await settle();
     // Nobody said ACCESS_REVOKED: the channel is simply not in the list read again.
     list = list.filter((c) => c.id !== IDS.api);

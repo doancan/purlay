@@ -1,14 +1,14 @@
 /**
- * Erasing one's own account (D-139 §5), against the real API: the dialog says what goes and what
- * stays, wants the username typed, and — done — the sign-in screen says the account is gone, and the
- * old session no longer opens anything.
+ * Erasing one's own account (D-139 §5), from the Sessions & account page of Settings (D-146) against
+ * the real API: the dialog says what goes and what stays, wants the username typed, and — done — the
+ * sign-in screen says the account is gone, and the old session no longer opens anything.
  *
  * As gwen, an outsider of her own (`fixtures.ts`): an erased account is gone for every later test, so
  * nothing else may lean on it.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { openNav } from './support';
+import { openSettings } from './support';
 
 test.describe('erasing an account', () => {
   test('the username typed, the account erased, and the sign-in screen says so', async ({
@@ -17,10 +17,8 @@ test.describe('erasing an account', () => {
   }) => {
     const workspace = await workspaceOf('gwen');
     const page = await asOutsider('gwen', 'fresh');
-    await page.goto(`/w/${workspace.slug}`);
-    await openNav(page);
-    await page.getByRole('button', { name: /^Account: / }).click();
-    await page.getByRole('menuitem', { name: 'Erase my account…' }).click();
+    const main = await openSettings(page, workspace.slug, 'account', 'Sessions & account');
+    await main.getByRole('button', { name: 'Erase my account…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Erase your account' });
     const erase = dialog.getByRole('button', { name: 'Erase my account' });
     await expect(erase).toBeDisabled();

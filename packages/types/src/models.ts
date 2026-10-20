@@ -224,6 +224,12 @@ export const Channel = Type.Object({
    * Empty for a channel.
    */
   peers: Type.Array(User, { maxItems: 9 }),
+  /**
+   * How many people are in it, an erased account not among them — the number its members list
+   * holds. Told for every channel the caller sees, joined or not, so Browse can say what a channel
+   * is before anybody joins it (D-167). As of this read: another person's join is not pushed.
+   */
+  memberCount: Type.Integer({ minimum: 0 }),
   /** Its open incident (D-137); null when none is open, and always for a direct message. */
   incident: Type.Union([ChannelIncident, Type.Null()]),
 });

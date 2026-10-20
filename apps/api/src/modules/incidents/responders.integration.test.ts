@@ -112,7 +112,7 @@ describe('integration: responders', () => {
       const theirs = await declared(db, contextOf(other, 'alice'));
       const erin = await requireChannelById(db, idOf(room, 'erin'), room.channelId);
       expect(await attempt(db, () => addResponder(db, clock, erin, id, idOf(room, 'alice')))).toBe(
-        'FORBIDDEN',
+        'NOT_A_CHANNEL_MEMBER',
       );
       expect(
         await attempt(db, () =>

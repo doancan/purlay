@@ -68,6 +68,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   starred: false,
   peer: null,
   peers: [],
+  memberCount: 1,
   ...over,
 });
 const pages = (...lists: Message[][]): Pages => ({
@@ -150,6 +151,26 @@ describe('a message arrives', () => {
       'edited by the server',
     );
     expect(feed(client)).toHaveLength(3);
+  });
+
+  test('a window around a linked message takes it only once it reaches the present (D-149)', () => {
+    const client = new QueryClient();
+    const reaching = keys.messagesAround(CH, id(2));
+    const short = keys.messagesAround(CH, id(1));
+    client.setQueryData(reaching, {
+      pageParams: [{ around: id(2) }],
+      pages: [{ data: [message(3), message(2)], nextCursor: null, newerCursor: null }],
+    });
+    client.setQueryData(short, {
+      pageParams: [{ around: id(1) }],
+      pages: [{ data: [message(2), message(1)], nextCursor: null, newerCursor: id(2) }],
+    });
+    messageCreated(client, message(5));
+    const ids = (key: readonly unknown[]): string[] =>
+      client.getQueryData<Pages>(key)?.pages.flatMap((p) => p.data.map((m) => m.id)) ?? [];
+    expect(ids(reaching)).toEqual([id(5), id(3), id(2)]);
+    // Put after the window's newest, it would sit above messages the window has not read.
+    expect(ids(short)).toEqual([id(2), id(1)]);
   });
 
   test('an uncached feed is left alone: it loads whole when opened', () => {
@@ -323,25 +344,19 @@ describe('the channel list', () => {
     expect(client.getQueryData<Channel[]>(keys.channels(WS))).toHaveLength(1);
   });
 
-  test('more mentions waiting mark the inbox stale; fewer, or the same, do not (D-106)', () => {
+  test('the counters never ask the inbox again: a new notification is its own frame, whatever its kind (D-106)', () => {
     const client = seeded();
     client.setQueryData(keys.notifications(WS), { pages: [], pageParams: [] });
-    const stale = (): boolean =>
-      client.getQueryState(keys.notifications(WS))?.isInvalidated ?? false;
-    const at = (mentions: number): void => {
+    // More waiting for you, then less: either way the inbox is asked again by NOTIFICATIONS_UPDATED,
+    // once, and not a second time by the numbers that moved with it.
+    for (const mentions of [2, 1]) {
       channelStateChanged(client, CH, {
         lastReadMessageId: null,
         unreadCount: 5,
         unreadMentionCount: mentions,
       });
-    };
-    at(0);
-    expect(stale()).toBe(false);
-    at(2);
-    expect(stale()).toBe(true);
-    client.setQueryData(keys.notifications(WS), { pages: [], pageParams: [] });
-    at(1);
-    expect(stale()).toBe(false);
+    }
+    expect(client.getQueryState(keys.notifications(WS))?.isInvalidated).toBe(false);
   });
 
   test('a channel is added once; with no list cached the list is asked for instead', () => {

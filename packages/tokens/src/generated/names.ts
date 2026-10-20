@@ -47,6 +47,7 @@ export const colorTokens = [
   'success-text',
   'danger-subtle',
   'warning-subtle',
+  'match',
   'success-subtle',
   'scrim',
   'syntax-keyword',
@@ -67,6 +68,9 @@ export const spacingTokens = [
   'space-5',
   'space-6',
   'space-8',
+  'space-10',
+  'space-12',
+  'space-16',
 ] as const;
 
 export const radiusTokens = [
@@ -99,6 +103,9 @@ export const sizeTokens = [
   'size-dot',
   'size-code-clamp',
   'size-dialog',
+  'size-settings',
+  'size-field',
+  'size-dialog-lg',
   'size-palette',
   'size-palette-list',
   'size-toast',

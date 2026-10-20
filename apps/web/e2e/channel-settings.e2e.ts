@@ -35,6 +35,8 @@ test('a rename shows in another person’s sidebar and header; leaving takes it 
   await expect(dialog.getByText('Saved.')).toBeVisible();
   await expect(page.getByRole('dialog', { name: `Details of #${renamed}` })).toBeVisible();
   // The one who made the room for the test, the viewer and Alice.
+  // Who is in it is its own tab (D-154).
+  await dialog.getByRole('tab', { name: /^Members/ }).click();
   await expect(dialog.getByRole('heading', { name: 'Members (3)' })).toBeVisible();
   await expectNoAxe(dialog);
 
@@ -43,6 +45,7 @@ test('a rename shows in another person’s sidebar and header; leaving takes it 
   await expect(alice.getByRole('heading', { level: 1, name: renamed })).toBeVisible();
   await expect(await navLink(alice, renamed)).toBeVisible();
 
+  await dialog.getByRole('tab', { name: 'About' }).click();
   await dialog.getByRole('button', { name: 'Leave channel' }).click();
   await dialog.getByRole('button', { name: 'Leave channel' }).click();
   // Taken back to the workspace, which opens a channel of its own choosing: not this one.

@@ -16,6 +16,8 @@ import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
 import { LOCALES } from '../../i18n/types';
 import { useSession } from '../session/session';
+import { useWorkspaceRole } from '../settings/role';
+import { sectionsFor } from '../settings/sections';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
 import { useWorkspace } from '../shell/workspace';
 import { displayName, inSidebarOrder } from './channels';
@@ -31,6 +33,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const deepWork = useDeepWorkControls();
   const channels = useChannels(workspace.id).data;
   const members = useMembers(workspace.id).data;
+  const role = useWorkspaceRole();
 
   const currentChannelId = match.name === 'channel' ? match.params.channelId : null;
   const slug = workspace.slug;
@@ -50,6 +53,23 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
         navigate(href('questions', { slug }));
       },
     });
+    // The rail's places, by name (`PRD.md` §4.6): the palette is the product's search over where to go.
+    for (const view of [
+      { id: 'inbox', label: t('inbox.title'), glyph: 'inbox', to: href('inbox', { slug }) },
+      { id: 'saved', label: t('saved.title'), glyph: 'saved', to: href('saved', { slug }) },
+      { id: 'search', label: t('search.title'), glyph: 'search', to: href('search', { slug }) },
+    ] as const) {
+      items.push({
+        id: `view:${view.id}`,
+        group: 'views',
+        label: view.label,
+        glyph: view.glyph,
+        recency: '',
+        run: () => {
+          navigate(view.to);
+        },
+      });
+    }
     if (current !== undefined) {
       items.push({
         id: 'view:feed',
@@ -65,13 +85,47 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     }
 
     for (const channel of ordered) {
-      if (channel.type === 'direct_message') continue;
+      // A group conversation is found by its people (D-127); one with a single other person is the
+      // People group's.
+      if (channel.type === 'direct_message') {
+        if (channel.peer !== null) continue;
+        items.push({
+          id: `group:${channel.id}`,
+          group: 'channels',
+          label: displayName(channel, user.id, t('sidebar.you'), t('user.erased')),
+          keywords: channel.peers.map((person) => person.username),
+          glyph: 'people',
+          faces: channel.peers,
+          recency: channel.lastMessageAt ?? '',
+          run: () => {
+            navigate(href('channel', { slug, channelId: channel.id }));
+          },
+        });
+        continue;
+      }
       items.push({
         id: `channel:${channel.id}`,
         group: 'channels',
         label: channel.name ?? '',
         glyph: channel.type === 'private' ? 'private-channel' : 'channel',
         recency: channel.lastMessageAt ?? '',
+        run: () => {
+          navigate(href('channel', { slug, channelId: channel.id }));
+        },
+      });
+    }
+
+    // Public channels the person has not joined: found too, and said so — opening one reads it,
+    // with the Join bar its feed already offers.
+    for (const channel of channels ?? []) {
+      if (channel.type !== 'public' || channel.state !== null) continue;
+      items.push({
+        id: `channel:${channel.id}`,
+        group: 'channels',
+        label: channel.name ?? '',
+        hint: t('palette.notJoined'),
+        glyph: 'channel',
+        recency: '',
         run: () => {
           navigate(href('channel', { slug, channelId: channel.id }));
         },
@@ -93,6 +147,21 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
         run: async () => {
           const channel = existing ?? (await openDirectMessage(workspace.id, person.id));
           navigate(href('channel', { slug, channelId: channel.id }));
+        },
+      });
+    }
+
+    // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
+    for (const section of sectionsFor(role)) {
+      items.push({
+        id: `settings:${section.id}`,
+        group: 'settings',
+        label: t(`settings.${section.id}.nav`),
+        keywords: [t('settings.label')],
+        glyph: section.glyph,
+        recency: '',
+        run: () => {
+          navigate(href('settings', { slug, section: section.id }));
         },
       });
     }
@@ -159,5 +228,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     setLocale,
     openDirectMessage,
     deepWork,
+    role,
   ]);
 };

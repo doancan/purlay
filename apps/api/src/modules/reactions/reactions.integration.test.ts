@@ -79,6 +79,14 @@ const aRoom = async (db: Executor): Promise<Room> => {
     .values({ workspace_id: workspace.id, name: 'general', type: 'public' })
     .returning('id')
     .executeTakeFirstOrThrow();
+  // Both in it: reacting is a member's (D-156).
+  await db
+    .insertInto('channel_members')
+    .values([
+      { channel_id: channel.id, user_id: alice.userId },
+      { channel_id: channel.id, user_id: bob.userId },
+    ])
+    .execute();
   const write = async (
     sender: string,
     parentId: string | null = null,
@@ -293,6 +301,28 @@ describe('integration: the cap on kinds', () => {
 });
 
 describe('integration: who may react to what', () => {
+  test('somebody who can see a public channel and is not in it cannot react, and may still take their own back (D-156)', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db);
+      const { bus, sent } = aRecordingBus();
+      await react(db, bus, room.bob, room.root, '👍');
+      await db
+        .deleteFrom('channel_members')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', room.bob.userId)
+        .execute();
+      sent.length = 0;
+
+      const refused = await refusalFrom(() => react(db, bus, room.bob, room.root, '🎉'));
+      expect(refused.status).toBe(403);
+      expect(refused.body.code).toBe('NOT_A_CHANNEL_MEMBER');
+      expect(sent).toHaveLength(0);
+
+      // Taking back what they gave while they were in it is not writing: it stays theirs to do.
+      expect(await react(db, bus, room.bob, room.root, '👍', false)).toEqual([]);
+    });
+  });
+
   test('a deleted message cannot be reacted to, and is the same refusal as one that never existed', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);

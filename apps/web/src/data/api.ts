@@ -45,6 +45,7 @@ import {
   ReactionsResponse,
   SearchPage,
   ReadChannelResponse,
+  ThreadFollow,
   ThreadPage,
   UnfurlResponse,
   UnresolvedPage,
@@ -58,6 +59,8 @@ import {
   type NotificationLevel,
   type SetDeepWorkRequest,
   type ReadNotificationsRequest,
+  type ReadThreadRequest,
+  type SetThreadFollowRequest,
   type SendMessageRequest,
   type PushLocale,
   Profile,
@@ -67,6 +70,7 @@ import {
   type CreateGitHubFeedRequest,
   PresenceSnapshot,
   MessageVersionPage,
+  MessageWindow,
 } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
@@ -128,6 +132,8 @@ export interface Api {
   ) => Promise<WorkspaceMember>;
   /** Out of the workspace and its channels (D-111). */
   readonly removeMember: (workspaceId: string, userId: string) => Promise<void>;
+  /** The caller leaves the workspace and its channels (D-152). */
+  readonly leaveWorkspace: (workspaceId: string) => Promise<void>;
   /** An owner's or an admin's: the administrative trail, newest first (D-26). */
   readonly audit: (
     workspaceId: string,
@@ -224,6 +230,8 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<MessagePage>;
+  /** The feed around one message, for a link to it (D-149). */
+  readonly messageWindow: (messageId: string, signal?: AbortSignal) => Promise<MessageWindow>;
   readonly send: (channelId: string, input: SendMessageRequest) => Promise<Message>;
   /** A file's bytes under the attachment id the client chose (D-109 §3). */
   readonly upload: (
@@ -247,17 +255,24 @@ export interface Api {
   /** The caller's inbox in one workspace, newest first (D-106). */
   readonly notifications: (
     workspaceId: string,
-    page?: { readonly before?: string | undefined },
+    page?: { readonly before?: string | undefined; readonly unreadOnly?: boolean },
     signal?: AbortSignal,
   ) => Promise<NotificationPage>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
+  /** Reads a thread up to and including a reply: its notifications for the caller (D-147). */
+  readonly readThread: (rootId: string, lastReadMessageId: string) => Promise<void>;
+  /** Whether the caller is told of new replies in this root's thread (D-161). */
+  readonly threadFollow: (rootId: string, signal?: AbortSignal) => Promise<ThreadFollow>;
+  /** Follows this root's thread, or lets it go: the caller's own choice (D-161). */
+  readonly setThreadFollow: (rootId: string, following: boolean) => Promise<ThreadFollow>;
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
     query: {
       readonly q: string;
       readonly channelId?: string | undefined;
+      readonly senderId?: string | undefined;
       readonly before?: string | undefined;
     },
     signal?: AbortSignal,
@@ -404,6 +419,8 @@ export const createApi = (http: Http): Api => {
       ),
     removeMember: (workspaceId, userId) =>
       http.send('DELETE', `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`, options()),
+    leaveWorkspace: (workspaceId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/membership`, options()),
     members: (workspaceId, signal) =>
       http.request(
         'GET',
@@ -579,6 +596,13 @@ export const createApi = (http: Http): Api => {
         MessagePage,
         options({ query: { ...page } }, signal),
       ),
+    messageWindow: (messageId, signal) =>
+      http.request(
+        'GET',
+        `/api/messages/${at(messageId)}/around`,
+        MessageWindow,
+        options({}, signal),
+      ),
     upload: (workspaceId, { id, name, file }, onProgress) =>
       http.upload(`/api/workspaces/${at(workspaceId)}/uploads`, Attachment, file, {
         query: { id, name },
@@ -620,10 +644,35 @@ export const createApi = (http: Http): Api => {
         'GET',
         '/api/notifications',
         NotificationPage,
-        options({ query: { workspaceId, ...page } }, signal),
+        options(
+          {
+            query: {
+              workspaceId,
+              before: page.before,
+              // The server reads it as text; absent is everything (D-106).
+              ...(page.unreadOnly === true ? { unreadOnly: 'true' } : {}),
+            },
+          },
+          signal,
+        ),
       ),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),
+    readThread: (rootId, lastReadMessageId) =>
+      http.send(
+        'PUT',
+        `/api/messages/${at(rootId)}/thread/read`,
+        options({ body: { lastReadMessageId } satisfies ReadThreadRequest }),
+      ),
+    threadFollow: (rootId, signal) =>
+      http.request('GET', `/api/messages/${at(rootId)}/follow`, ThreadFollow, options({}, signal)),
+    setThreadFollow: (rootId, following) =>
+      http.request(
+        'PUT',
+        `/api/messages/${at(rootId)}/follow`,
+        ThreadFollow,
+        options({ body: { following } satisfies SetThreadFollowRequest }),
+      ),
     search: (workspaceId, query, signal) =>
       http.request(
         'GET',

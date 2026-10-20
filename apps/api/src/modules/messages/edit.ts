@@ -9,9 +9,15 @@ import { sql, type Executor } from '@purlay/db';
 import type { Message } from '@purlay/types';
 import type { Engine, Reading } from '@purlay/markdown';
 import { AppError } from '../../platform/errors';
-import { messageNotFound, requireMessageById, type ChannelContext } from '../../platform/channels';
+import {
+  messageNotFound,
+  requireChannelMember,
+  requireMessageById,
+  type ChannelContext,
+} from '../../platform/channels';
 import type { Clock } from '../../platform/clock';
 import {
+  inboxPublications,
   NO_LOG,
   publication,
   publishAfterCommit,
@@ -36,8 +42,10 @@ export interface Revised {
   readonly version: number;
   /** The members whose counters moved: the newly named, where the message is still unread. */
   readonly recipients: readonly ChannelStateUpdate[];
-  /** The newly named, told for the first time: their devices are next (D-126). */
+  /** The newly named, told for the first time: their inbox and their devices are next (D-106, D-126). */
   readonly told: readonly string[];
+  /** The message's workspace: where the told find it in their inbox. */
+  readonly workspaceId: string;
   /** Why the content is stored as typed, when it is; null when it was read (D-101). */
   readonly unformatted: Extract<Reading, { tree: null }>['reason'] | null;
   readonly engineFailure?: unknown;
@@ -64,7 +72,9 @@ export const reviseMessage = async (
   content: string,
   engine?: Engine,
 ): Promise<Revised> => {
-  const { context } = await requireMessageById(executor, userId, messageId);
+  const { context, parentId } = await requireMessageById(executor, userId, messageId);
+  // A reply's notification is read in its thread, not by the feed (D-147).
+  const reply = parentId !== null;
 
   const row = await executor
     .selectFrom('messages')
@@ -80,6 +90,8 @@ export const reviseMessage = async (
   if (row.sender_id !== userId) {
     throw new AppError({ code: 'FORBIDDEN', message: 'Only the author can edit a message.' });
   }
+  // An edit writes words the channel reads, and may tell a new name: a member's, as a send is (D-156).
+  await requireChannelMember(executor, context, 'Join the channel to edit what you wrote in it.');
 
   const built = async (): Promise<Message> => {
     const message = await readBuilt(executor, messageId);
@@ -95,6 +107,7 @@ export const reviseMessage = async (
       version: row.state_version,
       recipients: [],
       told: [],
+      workspaceId: context.workspaceId,
       unformatted: null,
     };
   }
@@ -171,7 +184,7 @@ export const reviseMessage = async (
   const told = await notify(
     executor,
     context,
-    messageId,
+    { id: messageId, reply },
     new Map(
       fresh
         .filter((mentioned) => !alreadyTold.has(mentioned))
@@ -183,7 +196,13 @@ export const reviseMessage = async (
   const recipients =
     told.length === 0
       ? []
-      : await countMentions(executor, context, messageId, told, new Date(row.created_at));
+      : await countMentions(
+          executor,
+          context,
+          { id: messageId, reply },
+          told,
+          new Date(row.created_at),
+        );
 
   return {
     message: await built(),
@@ -191,6 +210,7 @@ export const reviseMessage = async (
     version: updated.state_version,
     recipients,
     told,
+    workspaceId: context.workspaceId,
     unformatted: reading.tree === null ? reading.reason : null,
     ...(reading.tree === null && reading.reason === 'engine'
       ? { engineFailure: reading.error }
@@ -202,14 +222,19 @@ export const reviseMessage = async (
  * One more unread mention for each person told, where the message is counted unread for them:
  * their position is before it, and they were in the channel when it was written. The unread
  * count is not touched — the message was counted when it was sent (I-6 holds by the same rule).
+ *
+ * A reply is counted wherever their position is (D-147): one behind it was read past in the feed and
+ * not counted, and now that it needs them it is unread until its thread is read — one more unread
+ * message for them as well, as the recount finds it.
  */
 const countMentions = async (
   executor: Executor,
   context: ChannelContext,
-  messageId: string,
+  message: { readonly id: string; readonly reply: boolean },
   told: readonly string[],
   writtenAt: Date,
 ): Promise<readonly ChannelStateUpdate[]> => {
+  const messageId = message.id;
   if (told.length === 0) return [];
   // Locked first, by `user_id` — the order a send counting arrivals takes them in (#670) — and only
   // those updated (#669). Updated straight away, `user_id in (…)` reached the rows in whatever order
@@ -230,12 +255,18 @@ const countMentions = async (
     .updateTable('channel_members')
     .set({
       unread_mention_count: sql<number>`unread_mention_count + 1`,
+      unread_count: sql<number>`unread_count + case when last_read_message_id >= ${messageId}::uuid then 1 else 0 end`,
       state_version: sql<number>`state_version + 1`,
     })
     .where('channel_id', '=', context.channelId)
     .where('user_id', 'in', locked)
     .where((eb) =>
-      eb.or([eb('last_read_message_id', 'is', null), eb('last_read_message_id', '<', messageId)]),
+      message.reply
+        ? eb.lit(true)
+        : eb.or([
+            eb('last_read_message_id', 'is', null),
+            eb('last_read_message_id', '<', messageId),
+          ]),
     )
     .where('joined_at', '<=', writtenAt)
     .returning([
@@ -326,6 +357,8 @@ export const edit = async (
         ),
       ),
     ),
+    // Then their inbox, which has the mention whether or not a counter moved for it (D-106).
+    inboxPublications(bus, clock, revised.workspaceId, revised.told),
   ]);
   push?.told(message.id, revised.told);
   return revised.message;

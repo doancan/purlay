@@ -15,6 +15,7 @@
  */
 import { useDescribeFailure } from '../../data/failure';
 import { useState } from 'react';
+import { useDeferred } from '../../app/deferred-door';
 import { useActions } from '../../data/actions-provider';
 import { useChannels, useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -29,7 +30,6 @@ import { useToast } from '../../ui/toast';
 import { useSession } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { ActionRow, ChannelRow } from './channel-row';
-import { InviteDialog } from './invite-dialog';
 import { people } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
 
@@ -75,6 +75,8 @@ export const PeopleList = (): React.JSX.Element => {
   const describe = useDescribeFailure();
   const [opening, setOpening] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
+  // The dialog is in the deferred chunk (D-163).
+  const deferred = useDeferred([inviting, setInviting]);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
 
   const open = async (userId: string): Promise<void> => {
@@ -143,11 +145,12 @@ export const PeopleList = (): React.JSX.Element => {
                 ) : (
                   <ChannelRow
                     slug={workspace.slug}
-                    channelId={direct.id}
+                    channel={direct}
                     current={direct.id === currentId}
                     avatar={<PersonAvatar user={user} meId={me.id} />}
                     unread={(direct.state?.unreadCount ?? 0) > 0}
                     mentions={direct.state?.unreadMentionCount ?? 0}
+                    muted={direct.notificationLevel === 'none'}
                   >
                     {label}
                   </ChannelRow>
@@ -177,7 +180,9 @@ export const PeopleList = (): React.JSX.Element => {
             : {})}
         />
       ) : null}
-      {mayInvite ? <InviteDialog open={inviting} onOpenChange={setInviting} /> : null}
+      {mayInvite && deferred !== null ? (
+        <deferred.InviteDialog open={inviting} onOpenChange={setInviting} />
+      ) : null}
     </section>
   );
 };
