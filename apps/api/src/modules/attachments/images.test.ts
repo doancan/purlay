@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ATTACHMENT_PIXELS_MAX } from '@purlay/types';
 import { AppError } from '../../platform/errors';
+import { heldDecodes, until } from '../../testing/decodes';
 import { claimingPng, twoColourPng } from '../../testing/png';
 import {
   IMAGE_LONGEST_SIDE,
@@ -116,6 +117,22 @@ describe('not an image', () => {
       await readImage(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')),
     ).toBeNull();
     expect(await readImage(new Uint8Array([0x42, 0x4d, 0, 0]))).toBeNull(); // BMP: decodable, not ours
+  });
+});
+
+describe('the decode line', () => {
+  test('two decode and eight wait; the next is refused at once as busy, decodes nothing, and room comes back', async () => {
+    const held = heldDecodes();
+    const png = twoColourPng(64, 64);
+    const queued = Array.from({ length: 10 }, async () => await readImage(png, held.open));
+    await until(() => held.headers() === 10);
+    expect(held.encoding()).toBe(2);
+    expect(await refusal(readImage(png, held.open))).toBe('RATE_LIMITED');
+    expect(held.headers()).toBe(11);
+    held.release();
+    const read = await Promise.all(queued);
+    expect(read.every((image) => image !== null)).toBe(true);
+    expect(await readImage(png)).not.toBeNull();
   });
 });
 

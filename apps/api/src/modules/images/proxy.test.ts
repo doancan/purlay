@@ -6,7 +6,9 @@
 import { describe, expect, test } from 'bun:test';
 import { AppError } from '../../platform/errors';
 import { aRecordingLogger } from '../../testing/doubles';
+import { heldDecodes, until } from '../../testing/decodes';
 import { twoColourPng } from '../../testing/png';
+import { readImage } from '../attachments/images';
 import type { Fetched } from './fetch-external';
 import { externalFetch, externalImageAddress, proxyImage } from './proxy';
 
@@ -111,5 +113,33 @@ describe('proxying an image', () => {
       kind: 'failed',
       reason: 'refused an address that is not public',
     });
+  });
+});
+
+describe('decoding what the proxy fetched', () => {
+  test('one decode at a time and four waiting; the next is refused as not available, and an upload is not kept waiting behind them', async () => {
+    const held = heldDecodes();
+    const { log, lines } = aRecordingLogger();
+    const png = twoColourPng(64, 64);
+    const fetch = (): Promise<Fetched> => Promise.resolve({ kind: 'bytes', bytes: png });
+    const asked = (): Promise<Uint8Array> =>
+      proxyImage({ fetch, log, open: held.open }, 'https://images.example.com/a.png');
+    const queued = Array.from({ length: 5 }, asked);
+    await until(() => held.encoding() === 1);
+    expect(await refusal(asked())).toBe('IMAGE_NOT_AVAILABLE');
+    expect(lines.at(-1)).toMatchObject({
+      msg: 'external image not decoded',
+      host: 'images.example.com',
+    });
+    // The proxy holds one of the node's two decode slots at most: an upload's decode runs now, not
+    // after every picture somebody's feed asked for.
+    const upload = await Promise.race([
+      readImage(png).then(() => 'decoded'),
+      Bun.sleep(2_000).then(() => 'still waiting'),
+    ]);
+    expect(upload).toBe('decoded');
+    expect(held.encoding()).toBe(1);
+    held.release();
+    expect((await Promise.all(queued)).length).toBe(5);
   });
 });

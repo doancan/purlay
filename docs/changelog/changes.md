@@ -6,8 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
-### Fix — 2026-10-20: one finding of a security review
+### Fix — 2026-10-20: two findings of a security review
 
+- **Image decodes wait in a bounded line (D-170).** Two members asking the proxy for large images
+  made an unrelated upload wait 17 seconds and growing. Eight may wait for the node's two decode
+  slots, and the proxy holds at most one of them; past that an upload is refused as busy (`429`,
+  Retry) and a proxied picture is not available now (`404`). The same upload now decodes in 1 ms.
 - **An export download asked for by an id that is no UUID is `404 EXPORT_NOT_FOUND`**, not the
   database's error as a 500.
 

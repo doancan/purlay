@@ -9,7 +9,9 @@
  * **Bounded before it is decoded.** The header is read with `maxPixels` at the bound, so a file that
  * claims a huge canvas is refused before a pixel buffer exists; a side past the bound is refused too.
  * At most `DECODES_AT_ONCE` decodes run per node: one 40-million-pixel re-encode peaked at +118 MiB
- * RSS, two at +258 MiB, four at +450 MiB (measured 2026-10-12, Bun 1.4.2, macOS arm64).
+ * RSS, two at +258 MiB, four at +450 MiB (measured 2026-10-12, Bun 1.4.2, macOS arm64). At most
+ * `DECODES_WAITING` wait for them; past that a decode is refused at once as `RATE_LIMITED`, the server
+ * busy, rather than joining a line that only grows (D-170).
  *
  * **Stored re-encoded.** Turned upright (EXIF orientation), fitted inside `IMAGE_LONGEST_SIDE` without
  * stretching and never enlarged, written as WebP — which leaves every EXIF field behind (GPS, camera
@@ -22,6 +24,13 @@ import { AppError } from '../../platform/errors';
 export const IMAGE_LONGEST_SIDE = 2560;
 export const THUMBNAIL_SIDE = 512;
 const DECODES_AT_ONCE = 2;
+/**
+ * Waiting for a decode slot, per node (D-170). A decode at the pixel bound takes about 290 ms, so the
+ * last of eight waits about a second and a quarter — as long as an upload should sit before it is told
+ * the server is busy. It is above what today's callers can make wait at once (four uploads per node,
+ * and the image proxy's one decode at a time), so it refuses only a caller that has lost its own gate.
+ */
+const DECODES_WAITING = 8;
 
 export interface ReadImage {
   readonly bytes: Uint8Array;
@@ -88,8 +97,14 @@ export const slots = (
   };
 };
 
-/** The node's decode slots. */
-const slot = slots(DECODES_AT_ONCE);
+/** The node's decode slots, and the bounded line for them. */
+const slot = slots(DECODES_AT_ONCE, DECODES_WAITING);
+
+const busy = (): AppError =>
+  new AppError({
+    code: 'RATE_LIMITED',
+    message: 'This server is reading as many images as it can. Try again in a moment.',
+  });
 
 /** How an image is opened: `Bun.Image`, or a stand-in that fails where a test needs it to. */
 export type OpenImage = (bytes: Uint8Array, options?: { maxPixels: number }) => Bun.Image;
@@ -123,6 +138,7 @@ export const readImage = async (
     });
   } catch (error) {
     if (error instanceof AppError) throw error;
+    if (error instanceof SlotsFull) throw busy();
     if (codeOf(error) === 'ERR_IMAGE_TOO_MANY_PIXELS') throw tooLarge();
     if (codeOf(error) === 'ERR_IMAGE_DECODE_FAILED') {
       throw new AppError({
