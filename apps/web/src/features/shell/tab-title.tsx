@@ -17,6 +17,8 @@ import { useI18n } from '../../i18n/i18n-provider';
 import type { Translate } from '../../i18n/types';
 import { useRoute } from '../../router/router-provider';
 import { useSession } from '../session/session';
+import { useWorkspaceRole } from '../settings/role';
+import { FIRST_SECTION, sectionFor } from '../settings/sections';
 import { useDeepWork } from './deep-work';
 import { useWorkspace } from './workspace';
 
@@ -58,6 +60,7 @@ export const TabTitle = (): null => {
   const { match } = useRoute();
   const channels = useChannels(workspace.id).data ?? [];
   const quiet = useDeepWork().until !== null;
+  const role = useWorkspaceRole();
 
   let place: string | null = null;
   if (match.name === 'inbox') place = t('inbox.title');
@@ -65,7 +68,17 @@ export const TabTitle = (): null => {
   else if (match.name === 'saved') place = t('saved.title');
   else if (match.name === 'welcome') place = t('welcome.title');
   else if (match.name === 'questions') place = t('questions.title');
-  else if (match.name === 'channel') {
+  else if (match.name === 'settings' || match.name === 'settingsHome') {
+    // The page, as the navigation names it; one this person may not open is only *Settings*.
+    const section = sectionFor(
+      match.name === 'settings' ? match.params.section : FIRST_SECTION,
+      role,
+    );
+    place =
+      section === null
+        ? t('settings.title')
+        : t('app.tab.settings', { section: t(`settings.${section.id}.nav`) });
+  } else if (match.name === 'channel') {
     const channel = channels.find((c) => c.id === match.params.channelId);
     if (channel !== undefined) place = placeOf(t, channel, user.id);
   }
