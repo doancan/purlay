@@ -185,6 +185,9 @@ export const tr = {
   'members.role.admin': 'Yönetici',
   'members.role.owner': 'Sahip',
   'members.you': 'sen',
+  'members.selfAsk':
+    'Kendi rolünü {role} yapmak istiyor musun? Bunu yalnızca başka bir sahip ya da yönetici geri alabilir.',
+  'members.selfConfirm': 'Rolümü değiştir',
   'members.remove': 'Çıkar',
   'members.removeLabel': '{name} kişisini çıkar',
   'members.removeAsk': '{name} çıkarılsın mı? Çalışma alanının tüm kanallarını kaybeder.',
