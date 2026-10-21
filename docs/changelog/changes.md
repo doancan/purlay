@@ -6,6 +6,21 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-21: the browser tests finish, and judge latency as D-49 says (#727, #728)
+
+The browser tests ran four projects on one runner and outran its twenty minutes; they now run one
+project per job and have Linux screenshot baselines, which they never had. Cold load, keystroke to paint
+and the channel switch block on a regression against main's last run (`bun run budget:browser`, D-49)
+rather than on the line a hosted runner sits far above — 120–170 ms there against a laptop's 33; the
+tests still hold the line on a developer's machine. The twelfth code-scanning result is closed, and
+three browser tests no longer race their neighbours: two read the audit log's first page only, one read
+a card's status while the card reloaded.
+
+A drain for shutdown now also waits for a socket that has just opened and is still reading its
+session: the client sees the socket open before the server has read who it is, and a drain in that
+moment closed the pool under the read. Seen on the runner as the drain test catching the open's read
+instead of the frame's.
+
 ### Fix — 2026-10-21: main is green again
 
 - **Bun 1.4.3, in the pipeline and in the image.** Under 1.4.2 a module imported a second time with a
@@ -26,6 +41,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   lower-case `<script>`, an escape that escaped only dots, tag-stripping by regular expression, URL
   checks by substring or an unanchored pattern, a look-then-read race in the token generator, and a
   test double called with an argument it ignored.
+
+### Chore — 2026-10-21: the image's Bun is `packageManager`'s
+
+The Dockerfile's two bases were the one copy of the Bun version that nothing held to `package.json`, and
+its header listed tag and digest a third time. The list is gone and a test holds every
+`FROM oven/bun:<version>` to `packageManager`; every workflow that sets up Bun — not only `ci.yml` — is
+held to reading the version from `package.json`.
 
 ### Fix — 2026-10-21: the screens take the window's width (D-177)
 

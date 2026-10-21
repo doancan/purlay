@@ -14,6 +14,7 @@
   "scripts": {
     "audit:gate": "bun run scripts/audit.ts --today $(date -u +%F)",
     "budget:api": "bun run scripts/budget-api.ts",
+    "budget:browser": "bun run apps/api/src/cli/budget-browser.ts",
     "budget:latency": "bun run scripts/budget-latency.ts",
     "report:frames": "bun run apps/api/src/cli/frame-report.ts",
     "push:keys": "bun run apps/api/src/cli/push-keys.ts",

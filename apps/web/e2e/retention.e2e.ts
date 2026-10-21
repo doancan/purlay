@@ -4,7 +4,7 @@
  * delete, saves it — and the trail says so.
  */
 import { expect, test } from './fixtures';
-import { openSettings } from './support';
+import { openSettings, trailLine } from './support';
 
 test.describe('keeping history', () => {
   test('an owner shortens it, is told what goes, and the trail says who chose it', async ({
@@ -28,7 +28,7 @@ test.describe('keeping history', () => {
 
     const trail = await openSettings(page, tenant.slug, 'audit', 'Audit log');
     await expect(
-      trail.getByText(/changed how long history is kept from forever to 90 days/),
+      await trailLine(trail, /changed how long history is kept from forever to 90 days/),
     ).toBeVisible();
   });
 });

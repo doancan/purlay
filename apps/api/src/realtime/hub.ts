@@ -147,7 +147,10 @@ export interface SocketHub {
    * closes is dropped.
    */
   enqueue: (socketId: string, work: () => Promise<void>) => void;
-  /** Resolves when no queued work is running — what a drain waits for before closing the pool. */
+  /**
+   * Resolves when no queued work and no identity read is running — what a drain waits for before
+   * closing the pool.
+   */
   settled: () => Promise<void>;
   readonly size: () => number;
   /** How many open connections this user holds, whose identity has been resolved. */
@@ -362,6 +365,15 @@ export const createSocketHub = (
         const confirmed = await resolve(socketId, request);
         return confirmed?.sessionId === first.sessionId ? first : undefined;
       })();
+      // Its reads are work in flight as a frame's are: a drain waits for them before the pool goes.
+      const resolving = entry.identity.then(
+        () => undefined,
+        () => undefined,
+      );
+      running.add(resolving);
+      void resolving.finally(() => {
+        running.delete(resolving);
+      });
 
       const identity = await entry.identity;
       // Closed while its identity was being resolved: arm nothing for a

@@ -8,7 +8,8 @@
  * (D-20, D-49)
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const compose = readFileSync('docker-compose.yml', 'utf8');
 
@@ -136,10 +137,41 @@ describe('the development environment', () => {
     expect(pkg.devDependencies['@types/bun']).toBe(runtime ?? '');
   });
 
-  test('the pipeline reads the Bun version rather than repeating it', () => {
+  test('every workflow reads the Bun version rather than repeating it', () => {
+    const workflows = readdirSync('.github/workflows')
+      .filter((name) => name.endsWith('.yml'))
+      .map((name) => readFileSync(join('.github/workflows', name), 'utf8'))
+      .filter((workflow) => workflow.includes('setup-bun'));
+    expect(workflows.length).toBeGreaterThan(0);
+    for (const workflow of workflows) {
+      expect(workflow).toContain('bun-version-file: package.json');
+      expect(workflow).not.toMatch(/bun-version:\s*\d/);
+    }
+  });
+
+  /** The pipeline runs each browser project as a job of its own; a project added to one is run by both. */
+  test('the browser job runs every project the browser tests define, and no other', () => {
+    const config = readFileSync('apps/web/playwright.config.ts', 'utf8');
+    const block = /const projects = \[([\s\S]*?)\] as const;/.exec(config)?.[1] ?? '';
+    const defined = [...block.matchAll(/name: '([^']+)'/g)].map((match) => match[1] ?? '');
     const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
-    expect(workflow).toContain('bun-version-file: package.json');
-    expect(workflow).not.toMatch(/bun-version:\s*\d/);
+    const listed = /^ {8}project: \[([^\]]*)\]$/m
+      .exec(workflow)?.[1]
+      ?.split(',')
+      .map((name) => name.trim());
+    expect(defined.length).toBeGreaterThan(0);
+    expect(listed).toEqual(defined);
+  });
+
+  /** An image cannot read package.json, so its tag repeats the version; this keeps the two equal. */
+  test('every Bun base image is the version packageManager names', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { packageManager: string };
+    const runtime = /^bun@(.+)$/.exec(pkg.packageManager)?.[1] ?? '';
+    const tags = [
+      ...readFileSync('Dockerfile', 'utf8').matchAll(/^FROM oven\/bun:([^@\s-]+)/gm),
+    ].map((match) => match[1]);
+    expect(tags.length).toBeGreaterThan(0);
+    expect(new Set(tags)).toEqual(new Set([runtime]));
   });
 
   /**

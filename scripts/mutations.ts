@@ -36,6 +36,38 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'drain-forgets-a-socket-still-opening',
+    why: 'a drain returns while a socket that has just opened is still reading its session, and the pool closes under the read',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: '      running.add(resolving);\n',
+    replace: '',
+    tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
+  },
+  {
+    id: 'browser-budget-passes-a-measure-that-stopped',
+    why: 'a browser number main measured is not measured any more, and the gate passes as if it held',
+    file: 'apps/api/src/cli/budget-browser.ts',
+    find: '      regressed = true;\n      lines.push(`${name}: not measured${was} — MISSING`);\n',
+    replace: '      lines.push(`${name}: not measured${was} — MISSING`);\n',
+    tests: ['apps/api/src/cli/budget-browser.test.ts'],
+  },
+  {
+    id: 'browser-job-drops-a-project',
+    why: 'a browser project the tests define is never run by the pipeline, and its job is simply missing',
+    file: '.github/workflows/ci.yml',
+    find: 'project: [chromium-dark, chromium-light, chromium-dark-narrow, chromium-light-narrow]',
+    replace: 'project: [chromium-dark, chromium-light, chromium-dark-narrow]',
+    tests: ['scripts/environment.test.ts'],
+  },
+  {
+    id: 'image-bun-drifts-from-package-manager',
+    why: 'the image runs a Bun other than the one the tests and the pipeline ran, and nothing says so',
+    file: 'Dockerfile',
+    find: 'FROM oven/bun:1.4.3-distroless@',
+    replace: 'FROM oven/bun:1.4.2-distroless@',
+    tests: ['scripts/environment.test.ts'],
+  },
+  {
     id: 'feed-left-by-a-late-scroll-report',
     why: 'the late report of the feed’s own move to the bottom, after a picture grew the list, strands the reader above it',
     file: 'apps/web/src/features/channel/use-feed-scroll.ts',
@@ -3840,9 +3872,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'latency-regression-never-seen',
     why: 'the ACK round-trip could triple and the budget would report it as fine',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: '      before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);\n',
-    replace: '      before !== undefined && value > Number.POSITIVE_INFINITY;\n',
-    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+    find: '  before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);\n',
+    replace: '  before !== undefined && value > Number.POSITIVE_INFINITY;\n',
+    tests: ['apps/api/src/cli/budget-latency.test.ts', 'apps/api/src/cli/budget-browser.test.ts'],
   },
   {
     id: 'trail-forgets-the-session',

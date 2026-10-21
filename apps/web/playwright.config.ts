@@ -38,6 +38,20 @@ const projects = [
   { name: 'chromium-light-narrow', colorScheme: 'light', viewport: { width: 820, height: 900 } },
 ] as const;
 
+/**
+ * One project alone: `PURLAY_E2E_PROJECT=chromium-dark bun run test:e2e`. The pipeline runs the four
+ * as four jobs, so each has a machine to itself — the suite fits its time, and a latency measured
+ * there is the page's, not three other browsers' and servers' sharing two cores. Only that project's
+ * server starts. A name that is not a project refuses to run, rather than running all four.
+ */
+const only = process.env['PURLAY_E2E_PROJECT'] ?? '';
+if (only !== '' && !projects.some((definition) => definition.name === only)) {
+  throw new Error(
+    `PURLAY_E2E_PROJECT names ${only}; it takes ${projects.map((definition) => definition.name).join(', ')}`,
+  );
+}
+const chosen = projects.filter((definition) => only === '' || definition.name === only);
+
 // A harness uses its port for the web origin and the next one for the API: a hundred apart keeps clear of whatever else is listening nearby.
 const portOf = (index: number): number => BASE_PORT + index * 100;
 
@@ -73,7 +87,7 @@ const engines = (process.env['PURLAY_E2E_ENGINES'] ?? '')
     }
     return name;
   });
-const servers = [...projects.map((definition) => definition.name), ...engines];
+const servers = [...chosen.map((definition) => definition.name), ...engines];
 
 const engineProject = (engine: keyof typeof ENGINES, index: number): Project => ({
   name: engine,
@@ -117,8 +131,8 @@ export default defineConfig({
     toHaveScreenshot: { maxDiffPixelRatio: 0.002, animations: 'disabled' },
   },
   projects: [
-    ...projects.map(project),
-    ...engines.map((engine, index) => engineProject(engine, projects.length + index)),
+    ...chosen.map(project),
+    ...engines.map((engine, index) => engineProject(engine, chosen.length + index)),
   ],
   // Servers start one after the other: the first builds the client, the rest serve that build.
   webServer: servers.map((name, index) => ({

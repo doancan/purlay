@@ -1709,6 +1709,10 @@ measurement; a **jump** fails, a number near the line does not. *Since 2026-10-1
 jump is more than 1.5× the recorded p95 and past 20 ms. CI judges every run against the last
 measurement main kept (`actions/cache`, written only by a passing run on main, so a regression that
 lands there fails and is not adopted as the baseline).*
+*Since 2026-10-21 the other three are `bun run budget:browser` (#727), per browser project, by the same
+rule. Until then the browser tests held them to the line on the runner too, where the channel switch
+measured 120–170 ms against a laptop's 33; there they are now judged on a jump, and the tests keep the
+line on a developer's machine.*
 
 **Why not threshold everything.** A p95 latency measured on a shared CI runner moves by tens of
 percent between identical runs. Make that blocking and within two weeks the team is saying "flaky,
