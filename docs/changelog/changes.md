@@ -6,6 +6,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Chore — 2026-10-21: the pipeline spends less
+
+A pull request's superseded run is now cancelled in every workflow, not only `ci` and `image`, and the
+four browser jobs run on a pull request only when it touches the client, the API, a package, the
+dependencies or `ci.yml` (`bun run ci:changes`); on main they always run. CONTRIBUTING §8 says how a
+change is shaped so it does not cost a day: one task, one pull request, verified before it is pushed.
+
 ### Docs — 2026-10-21: plan, the bad day, and keeping the project worth working in
 
 - **`CONTRIBUTING.md` §6.8 — plan before you build.** A written plan for anything past one file: the

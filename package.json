@@ -21,6 +21,7 @@
     "budget:web": "bun run scripts/budget-web.ts",
     "build:web": "bun run --cwd apps/web build",
     "check:branch": "./scripts/check-branch.sh",
+    "ci:changes": "bun run scripts/ci-changes.ts",
     "check:docs": "python3 scripts/check-docs.py",
     "check:licenses": "bun run scripts/check-licenses.ts",
     "check:pr": "bun run scripts/check-pr.ts",

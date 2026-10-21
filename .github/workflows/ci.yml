@@ -125,11 +125,38 @@ jobs:
       - name: the generated tokens are what the source produces
         run: bun run tokens:check
 
+  # Whether this change can move what the browser tests see. Four browser jobs are most of a run's
+  # minutes; a change to documents, the API alone or the scripts cannot change a screen, so on a pull
+  # request they run only when one of these paths changed. On main they always run.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      pull-requests: read
+    outputs:
+      browser: ${{ steps.paths.outputs.browser }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - id: paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: bun run ci:changes
+
   # The browser tests: the production build and a seeded real API, in real Chromium,
   # in both themes and at two widths (#139). A job of its own because it needs a
   # database and a browser, which `bun run verify` deliberately does not. It is not in the
   # repository's required checks until its first week of runs has been read.
   browser:
+    needs: changes
+    if: needs.changes.outputs.browser == 'true'
     # One job per project (playwright.config.ts): each has a runner to itself, so the suite fits its
     # time and a latency is measured on a page that is not sharing two cores with three others.
     strategy:
