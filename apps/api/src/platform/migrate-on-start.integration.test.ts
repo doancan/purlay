@@ -129,12 +129,23 @@ describe('integration: migrate on start', () => {
             where datname = ${name} and pid <> pg_backend_pid()`.execute(admin)
         ).rows[0]?.n,
       );
+    // A closed connection's server process leaves `pg_stat_activity` a moment after the client
+    // hangs up, so the count is waited on to reach zero; a connection left open never does.
+    const settled = async (): Promise<number> => {
+      const deadline = Date.now() + 5_000;
+      let open = await sessions();
+      while (open > 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        open = await sessions();
+      }
+      return open;
+    };
     try {
       await failure(migrateOnStart({ connectionString: urlFor(name) }, directory));
-      expect(await sessions()).toBe(0);
+      expect(await settled()).toBe(0);
       writeFileSync(join(directory, '0001_broken.sql'), 'CREATE TABLE fine (id int);');
       await migrateOnStart({ connectionString: urlFor(name) }, directory);
-      expect(await sessions()).toBe(0);
+      expect(await settled()).toBe(0);
     } finally {
       rmSync(directory, { recursive: true, force: true });
       await db.destroy();
