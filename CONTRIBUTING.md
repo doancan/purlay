@@ -87,7 +87,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | Command | Does |
 |---|---|
 | `bun run queue` | What is startable now, and what each blocked issue waits on |
-| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, and touches only what its issues are about (D-74) |
+| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, touches only what its issues are about (D-74), and answers each failure mode of §6.9 (D-177) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
@@ -339,6 +339,92 @@ is worth the same spike as the thing chosen.
 
 **A compatibility answer expires.** It is true of the versions that were resolved on the day it was
 run, which is why the record carries both.
+
+### 6.8. Plan before you build
+
+**Anything larger than a one-file change starts as a written plan**, in the issue or the pull
+request — not in a new file. It names the contract (`@purlay/types`), the data (migration and the
+rows already there), the failure modes (§6.9), the tests that will prove it, how it is rolled back,
+and what is deliberately left out. A plan you cannot write down is a plan you do not have yet.
+
+**Run a pre-mortem.** *It is three months from now and this broke in production — why?* Every
+answer becomes a test, a guard, or an accepted risk written in the plan. An answer that becomes
+none of the three has been forgotten, not accepted.
+
+**Name the dimension that grows.** Rows, members, sockets, message size, files, jobs — say which
+one this work depends on and where it breaks at ten times today's figure. That is a question for a
+measurement, not for a new layer: §1.11 still holds.
+
+**Reversibility sets the pace.** A change behind a seam can be undone by the next pull request and
+may move fast. A one-way door — a migration that discards data, a public contract, a wire frame, a
+stored format — gets a decision in `DECISIONS.md` before it gets code. A schema or contract change
+an old row, an old client or yesterday's bundle in an open tab cannot survive is split: expand,
+migrate, contract — never all three in one deploy.
+
+**The hard way is the whole way, not the clever way.** The easy way handles the path the demo
+walks. The right way handles the path the demo walks and every one in §6.9 — with the fewest
+moving parts that do it. An abstraction with one implementation and no test seam is a cost, not
+a standard; speculative generality is scope from a later phase (§1.1) wearing a disguise.
+
+### 6.9. Build for the bad day
+
+A test of the happy path proves the demo. **A feature is not done until each category below has a
+test, or a sentence in the pull request saying why it cannot apply** — silence about one is the
+absence §6.4 warns about. The template's *Failure modes* section asks for one line per row, and
+`check:pr` refuses a change to production code that leaves one empty (D-177). Which tests the project *requires* is `ARCHITECTURE.md` §10's; this is how
+to find the ones a feature needs.
+
+| Category | Ask |
+|---|---|
+| Refused input | Missing, malformed, wrong type, empty, oversized; the boundaries 0, 1, the limit and one past it; Unicode, right-to-left and emoji; text shaped like markup or SQL |
+| Authority | Signed out; the wrong role; another workspace or a channel they are not in (`404`, §1.2); a session revoked or a member removed while the action is in flight; a target already soft-deleted |
+| Concurrency | Two people, two tabs or a double click on the same row; a write racing a delete; a retry of something that already succeeded (idempotent, D-33); events arriving in another order |
+| Partial failure | The database failing mid-transaction leaves nothing half-written; storage, GitHub, the mail relay or push timing out or answering `5xx` ends in a bounded wait and a stable error `code`, never a hang; the process restarting mid-job resumes or reruns safely |
+| Network and time | Offline and back (replay); a slow or dropped socket mid-send ends as `failed` with a retry (§1.9); a duplicated frame; a skewed clock; a server restart under open tabs; yesterday's client against today's server |
+| Volume | Zero, one, exactly a page, a page and one, and enough to reach the budgets (`PRD.md` §5) |
+
+**Inject the fault at a seam, not by mocking the thing under test.** Executors are arguments, the
+`EventBus` is an interface and each external service sits behind an adapter: make the real one
+fail there. A mock of the code being tested proves only the mock.
+
+**Prove it from two sides.** An endpoint is proved by its integration test *and* by the screen that
+uses it, end to end (§5). When two layers disagree, one of them is lying — find which before
+choosing.
+
+**Test against the specification, not the implementation.** Write the cases from `UX.md`,
+`API.md` and the plan, before reading the code you just wrote. A test derived from the
+implementation re-asserts its bugs.
+
+**Every new guard gets a mutation** (§5). If deleting the guard leaves the suite green, the guard is
+not tested, whatever the coverage says.
+
+**Someone who did not write it tries to break it.** Hand a reviewer — a person, or a separate agent
+— the specification and the diff, not the author's account of it, and ask for the failing case.
+Review that only confirms is not review.
+
+### 6.10. Keep the project worth working in
+
+**Ship vertical slices.** Each pull request is one thin path from contract to database to service to
+ingress to screen to test, working on its own — not a layer that works only once three more land.
+Small enough to review is the line budget's job (D-74); this is about shape.
+
+**Stop the line.** A red `main`, a flaky test or a broken gate is the first task for whoever sees
+it. A flaky test is a defect — in the test or in the product — and is never retried until green.
+
+**Out of scope is not out of mind.** A defect found outside the task is an issue with a
+reproduction, opened now. Fixing it inside the task breaks §7.3; ignoring it breaks §6.4.
+
+**Operable is part of done.** If a feature fails in production, its log line (`ARCHITECTURE.md`
+§10) must say what failed and where, by `code` and request id, without a debugger. A failure an
+operator cannot see is one they cannot fix.
+
+**Threat-model new surface.** A new endpoint, frame, permission, external call or stored secret
+answers, in the plan: who can reach it, what it can reach in turn, what it costs at a thousand
+times the expected rate, and what must never be logged (`ARCHITECTURE.md` §10).
+
+**An escaped bug owes two fixes.** The regression test (§5), and the answer to *why did the gate
+not catch it?* — a mechanism that now catches the whole class (§6.2). Blameless: the question is
+what let it through, not who.
 
 ## 7. Working on a task
 
