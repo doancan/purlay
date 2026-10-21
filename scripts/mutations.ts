@@ -36,6 +36,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'drain-forgets-a-socket-still-opening',
+    why: 'a drain returns while a socket that has just opened is still reading its session, and the pool closes under the read',
+    file: 'apps/api/src/realtime/hub.ts',
+    find: '      running.add(resolving);\n',
+    replace: '',
+    tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
+  },
+  {
     id: 'browser-budget-passes-a-measure-that-stopped',
     why: 'a browser number main measured is not measured any more, and the gate passes as if it held',
     file: 'apps/api/src/cli/budget-browser.ts',

@@ -184,4 +184,50 @@ describe('integration: draining for shutdown', () => {
     await drained;
     expect(queryFinished).toBe(true);
   });
+  /**
+   * A socket's identity is read after the upgrade, while the client already sees it open. A drain
+   * in that moment closes the pool next, so it waits for the read as it waits for a frame.
+   */
+  test('waits for a socket whose identity is still being read', async () => {
+    // A connection reads its session four times: twice to be admitted, then once as it opens and
+    // once more to confirm it. The fourth is held — the open's own, whenever the client saw it open.
+    let sessionReads = 0;
+    let readFinished = false;
+    const read = aGate();
+    const database = cloned.db.withPlugin({
+      transformQuery: (args) => {
+        const from = (
+          args.node as { from?: { froms?: { table?: { identifier?: { name?: string } } }[] } }
+        ).from?.froms?.[0]?.table?.identifier?.name;
+        if (from === 'sessions') sessionReads += 1;
+        return args.node;
+      },
+      transformResult: async (args) => {
+        if (sessionReads === 4 && !readFinished) {
+          await read.wait();
+          readFinished = true;
+        }
+        return args.result;
+      },
+    });
+    const user = await aSignedInUser(cloned.db, clock, 'drain-open');
+    const app = createApp(
+      testDependencies({ database, clock, config: testConfig({ APP_URL: origin }) }),
+    );
+    const server = `http://localhost:${String(app.listen(0))}`;
+    const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
+      headers: { cookie: user.cookie, origin },
+    } as unknown as string[]);
+    await read.reached;
+
+    const drained = app.drain();
+    expect(
+      await Promise.race([drained.then(() => 'drained'), Bun.sleep(100).then(() => 'waiting')]),
+    ).toBe('waiting');
+    expect(readFinished).toBe(false);
+    read.release();
+    await drained;
+    expect(readFinished).toBe(true);
+    socket.close();
+  });
 });

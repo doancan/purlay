@@ -16,6 +16,11 @@ tests still hold the line on a developer's machine. The twelfth code-scanning re
 three browser tests no longer race their neighbours: two read the audit log's first page only, one read
 a card's status while the card reloaded.
 
+A drain for shutdown now also waits for a socket that has just opened and is still reading its
+session: the client sees the socket open before the server has read who it is, and a drain in that
+moment closed the pool under the read. Seen on the runner as the drain test catching the open's read
+instead of the frame's.
+
 ### Fix — 2026-10-21: main is green again
 
 - **Bun 1.4.3, in the pipeline and in the image.** Under 1.4.2 a module imported a second time with a
