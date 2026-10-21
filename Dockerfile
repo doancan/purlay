@@ -13,11 +13,11 @@
 #
 # Both bases are pinned by digest. A tag is a pointer its owner can move
 # (D-86); Dependabot's docker ecosystem proposes the next digest.
-#   oven/bun:1.4.2-slim       sha256:cb3bbbb0...
-#   oven/bun:1.4.2-distroless sha256:1a0c31c7...
+#   oven/bun:1.4.3-slim       sha256:14a223fa...
+#   oven/bun:1.4.3-distroless sha256:1aaa5150...
 # The tag is kept beside the digest so a reader (and the bot) can see what it is.
 
-FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS dependencies
+FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS dependencies
 WORKDIR /app
 
 # The manifests alone first: this layer, and the install below it, are rebuilt only
@@ -39,7 +39,7 @@ RUN bun install --frozen-lockfile --production --filter @purlay/api
 # The client: the same lockfile, every manifest (the install validates them all), and
 # the sources the bundle is made of. Development dependencies are needed here and
 # nowhere after.
-FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS client
+FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS client
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
@@ -65,7 +65,7 @@ COPY apps/web/src ./apps/web/src
 COPY apps/web/worker ./apps/web/worker
 RUN bun run --cwd apps/web build
 
-FROM oven/bun:1.4.2-distroless@sha256:1a0c31c7c5f9d193aedf60fe1cebdeb76ac8f6e29f24be8dd8cbd6df72df26ec AS runtime
+FROM oven/bun:1.4.3-distroless@sha256:1aaa515018b0b37d95dbdebd55d1b7f37ad258a6289ba63e4bc3b9c9e3038697 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
