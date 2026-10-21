@@ -4221,7 +4221,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'failure-modes-answered-by-the-template',
-    why: 'the template’s own prompts count as answers, so a pull request that says nothing about how it fails passes (D-177)',
+    why: 'the template’s own prompts count as answers, so a pull request that says nothing about how it fails passes (D-178)',
     file: 'scripts/check-pull-request.ts',
     find: "  const visible = body.replace(/<!--[\\s\\S]*?-->/g, '');\n",
     replace: '  const visible = body;\n',
@@ -4229,7 +4229,7 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'failure-modes-owed-by-every-change',
-    why: 'a pull request of documents, tests or tooling alone is refused for failure modes it has none of (D-177)',
+    why: 'a pull request of documents, tests or tooling alone is refused for failure modes it has none of (D-178)',
     file: 'scripts/check-pull-request.ts',
     find: '  const unanswered = pull.files.some(touchesTheProduct) ? unansweredFailureModes(pull.body) : [];\n',
     replace: '  const unanswered = unansweredFailureModes(pull.body);\n',

@@ -14,7 +14,7 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - **§6.9 — build for the bad day.** Refused input, authority, concurrency, partial failure, network
   and time, and volume each get a test or a stated reason; faults injected at a seam; proved from two
   sides, against the specification, with a mutation per guard and a reviewer who tries to break it.
-- **`check:pr` refuses a change to the product that does not say how it fails (D-177).** The pull
+- **`check:pr` refuses a change to the product that does not say how it fails (D-178).** The pull
   request template asks for one line per §6.9 category; an empty one, one inside a comment or one
   under another heading fails the check. Only `apps/` and `packages/` owe it; documents, tests and tooling do not. Two mutations prove
   the check can fail.

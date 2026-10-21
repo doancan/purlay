@@ -7836,7 +7836,7 @@ and the screen still looks unused. **Cost of reversing:** the containers' classe
 
 ---
 
-### D-177. A pull request says how it fails
+### D-178. A pull request says how it fails
 
 **Context.** `CONTRIBUTING.md` §6.9 asks every feature to answer six kinds of bad day — refused
 input, authority, concurrency, partial failure, network and time, volume — with a test or a reason.

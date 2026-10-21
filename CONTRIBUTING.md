@@ -87,7 +87,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | Command | Does |
 |---|---|
 | `bun run queue` | What is startable now, and what each blocked issue waits on |
-| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, touches only what its issues are about (D-74), and answers each failure mode of §6.9 (D-177) |
+| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, touches only what its issues are about (D-74), and answers each failure mode of §6.9 (D-178) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
@@ -371,7 +371,7 @@ a standard; speculative generality is scope from a later phase (§1.1) wearing a
 A test of the happy path proves the demo. **A feature is not done until each category below has a
 test, or a sentence in the pull request saying why it cannot apply** — silence about one is the
 absence §6.4 warns about. The template's *Failure modes* section asks for one line per row, and
-`check:pr` refuses a change to `apps/` or `packages/` that leaves one empty (D-177). Which tests the project *requires* is `ARCHITECTURE.md` §10's; this is how
+`check:pr` refuses a change to `apps/` or `packages/` that leaves one empty (D-178). Which tests the project *requires* is `ARCHITECTURE.md` §10's; this is how
 to find the ones a feature needs.
 
 | Category | Ask |

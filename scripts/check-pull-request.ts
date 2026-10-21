@@ -22,7 +22,7 @@
  *    `packages/` — answers each category of `CONTRIBUTING.md` §6.9 under
  *    `## Failure modes`, one line each: the test that covers it, or why it cannot
  *    apply. Documents, tests, tooling and configuration owe none. Whether an answer is good is the reviewer's; that none is missing
- *    is this check's (D-177).
+ *    is this check's (D-178).
  *
  * Run in CI on every pull request; `bun run check:pr <number>` runs it locally.
  */
