@@ -100,8 +100,9 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   empty view there is one more control. The name is cut with an ellipsis before anything is drawn
   over it, and the topic gives way before the name. The channel's **name opens its
   details** (and so does the topic, for a pointer) — see *Channel details* below.
-- **Feed** — the single column. Max width 1040px, centred in the space beside the sidebar (D-119 §7,
-  D-175), so a wide window is used and a line is still read without travelling across it.
+- **Feed** — the single column: the whole width beside the sidebar, its rows from the left edge as
+  Slack's are, never centred with empty margins (D-175, D-177). A bubble is at most five sixths of it.
+  Max width 1040px bounds only an empty state's sentence or a card drawn inside it.
 - **Member list** — collapsed by default. Presence is decoration, not information.
 - **Thread panel (440px)** — on the right of the channel, only while a thread is open (§4, D-122).
   The feed keeps the rest of the width.
@@ -169,8 +170,8 @@ back; what it covers is hidden from a screen reader and from Tab until it closes
 Purlay is not a mobile product in Phase 1 (`PRD.md` §4), but it must not be broken on a narrow
 window.
 
-**The inbox** (D-106, D-153, D-162). What the person was told in this workspace, newest first, in one centred
-column like the feed — the shape the open questions, search and saved share (D-158): **All** or **Unread** above it — Unread is asked of the server, so what waits is
+**The inbox** (D-106, D-153, D-162). What the person was told in this workspace, newest first, in one
+full-width column like the feed — the shape the open questions, search and saved share (D-158): **All** or **Unread** above it — Unread is asked of the server, so what waits is
 found however old — then **Today** and **Earlier**, each a card of rows. A row says who, why and where,
 with the message under it in two lines at most; unread is a dot at its edge and the line in full ink,
 read is muted. Opening a row takes the person to the message and reads it; **Mark read**, beside the
@@ -267,8 +268,8 @@ its navigation: **Back to <workspace>**, then **Account** — Profile, Preferenc
 Keyboard shortcuts, Sessions & account — and, for an owner or an admin, **Workspace** — General,
 Members, Invitations, Integrations, Audit log, Data & retention. The current page is marked as the
 current channel is. Each page: a title, one sentence, then cards; a setting is a row with its label and
-a sentence on the left and its control on the right (stacked below 900px). A choice applies when it is
-made; a form of words has **Save** in its card, enabled once something changed, its outcome said beside
+a sentence on the left and its control on the right (stacked below 900px). The page is the main area's full width, from its left edge (D-177). A choice
+applies when it is made; a form of words has **Save** in its card, enabled once something changed, its outcome said beside
 it. On a narrow window the navigation opens as the sidebar does.
 
 - **Profile** — what *Your profile…* held: title, status line, time zone with this device's one press away.
@@ -312,7 +313,7 @@ page of the same name.
       │ └─────────────────────────────────────┘       │
       ╰───────────────────────────────────────────────╯
       👍 3   🎉 1
-      ○ Open · 4 replies · last 12m ago      Show thread T
+      ○ Open · 4 replies · last 12m ago  Show thread T
 
                                                    14:35
                           ╭───────────────────────────╮
@@ -341,7 +342,8 @@ page of the same name.
   bubble, with an avatar in a fixed column; your own are on the right in an `accent-subtle` bubble,
   with no avatar and no name. A bubble is at most five sixths of the feed; a code block keeps its own
   card inside it, and a ` ```diff ` block is drawn as a diff — numbered lines, added and removed in
-  colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are centred.
+  colour and in words, **Unified** or **Split** on a wide window (D-133). The channel's feed and composer are one column, the
+  main area's full width (D-177).
 - **A person is named by their name** — the display name, as the sidebar names them — wherever they
   are named in words: the feed, a direct message's header, the inbox, search, the open questions,
   *Resolved by …*, and what a screen reader hears of a row. The handle appears only where it is the
@@ -409,15 +411,16 @@ noise on the most frequent action in the product.
 A root message with replies shows one line beneath it:
 
 ```
-  ○ Open · 4 replies · last 12m ago                     Show thread T
+  ○ Open · 4 replies · last 12m ago  Show thread T
 ```
 
 Clicking it, or pressing `T` on the focused message, opens the thread **in the panel** on the
 right (D-122). The affordance is absent when there are no replies — an empty thread control on
 every message is clutter that teaches people to ignore that region. While a root's thread is in
-the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from. Under your own message, which
-sits on the right (§3), the line is mirrored: the status under the bubble's edge, **Show thread** at the
-other end — never the status a column away from the bubble it is about.
+the panel, its line is filled and says **Thread open**, so the eye finds where the panel came from. The line is as
+wide as what it says, beside the bubble on the bubble's side (D-177); under your own message, which
+sits on the right (§3), it is mirrored: the status under the bubble's edge, **Show thread** just
+before it — never the status a column away from the bubble it is about.
 
 ### 4.2. The panel
 

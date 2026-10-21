@@ -30,7 +30,7 @@ export const LazySettingsScreen = ({
 }: {
   readonly section: string;
 }): React.JSX.Element => (
-  <Suspense fallback={<Waiting className="flex max-w-settings flex-col gap-3 p-10" />}>
+  <Suspense fallback={<Waiting className="flex w-full flex-col gap-3 p-10" />}>
     <Screen section={section} />
   </Suspense>
 );

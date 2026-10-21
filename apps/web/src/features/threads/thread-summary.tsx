@@ -161,19 +161,16 @@ const ThreadSummaryView = ({
           threads.open(root.id);
         }}
         className={cn(
-          'mt-2 flex h-control w-full items-center gap-2 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
+          // As wide as what it says, beside the bubble it belongs to: a full-width row put the status and
+          // Show thread at the feed's two edges, a window's width apart (D-177).
+          'mt-2 flex h-control w-fit max-w-full items-center gap-3 rounded-sm px-2 text-label font-medium text-accent-text transition-colors duration-hover ease-standard hover:bg-accent-subtle',
           // The one open in the panel is marked as such, so the eye finds where it came from.
           open && 'bg-accent-subtle',
-          outgoing && 'flex-row-reverse',
+          outgoing && 'ml-auto flex-row-reverse',
         )}
       >
         <ThreadStatus root={root} nowMinute={nowMinute} />
-        <span
-          className={cn(
-            'inline-flex shrink-0 items-center gap-2 whitespace-nowrap',
-            outgoing ? 'mr-auto' : 'ml-auto',
-          )}
-        >
+        <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap">
           {t(open ? 'thread.shown' : 'thread.show')}
           <Kbd>T</Kbd>
         </span>

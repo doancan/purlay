@@ -286,7 +286,7 @@ const SearchView = ({
 
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-2 border-b-hairline border-border-subtle pr-4 pl-5">
+      <header className="flex h-header shrink-0 items-center gap-2 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
         <NavToggle />
         <HeaderTile>
           <Icon name="search" size="lg" />

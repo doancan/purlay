@@ -151,7 +151,7 @@ const FeedList = ({
     <div
       ref={content}
       role="feed"
-      className="mx-auto w-full max-w-feed px-4"
+      className="w-full px-6 max-narrow:px-4"
       aria-label={ariaLabel}
       aria-busy={busy}
       onKeyDown={onKeyDown}
@@ -507,7 +507,7 @@ export const MessageFeed = ({
     return (
       <LoadingStatus
         label={t('state.feed.loading')}
-        className="mx-auto flex w-full max-w-feed flex-1 flex-col gap-4 overflow-hidden px-6 py-4"
+        className="flex w-full flex-1 flex-col gap-4 overflow-hidden px-6 py-4"
       >
         {[0, 1, 2, 3].map((row) => (
           <div key={row} className="flex gap-3">
@@ -577,7 +577,7 @@ export const MessageFeed = ({
         {/* The top row is one height whatever it says, so loading above never pushes what is below. */}
         <div
           ref={top}
-          className="mx-auto flex h-control w-full max-w-feed items-center justify-center px-6 text-caption text-ink-muted"
+          className="flex h-control w-full items-center justify-center px-6 text-caption text-ink-muted"
         >
           {feed.isFetchNextPageError ? (
             <span className="flex items-center gap-2 text-danger-text">
@@ -612,7 +612,7 @@ export const MessageFeed = ({
         {windowed && (
           <div
             ref={bottom}
-            className="mx-auto flex h-control w-full max-w-feed items-center justify-center px-6 text-caption text-ink-muted"
+            className="flex h-control w-full items-center justify-center px-6 text-caption text-ink-muted"
           >
             {isFetchPreviousPageError ? (
               <span className="flex items-center gap-2 text-danger-text">

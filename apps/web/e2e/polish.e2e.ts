@@ -56,7 +56,7 @@ test.describe('the columns of a channel', () => {
     ]);
     expect(rights.length).toBeLessThanOrEqual(1);
 
-    // The composer card is under the rows: the feed and the composer are one centred column.
+    // The composer card is under the rows: the feed and the composer are one column, the window's width.
     const cards = await lefts(page, '[data-composer-card]');
     const rows = await lefts(page, '[role="feed"] > article');
     expect(cards).toHaveLength(1);

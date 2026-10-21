@@ -1,6 +1,6 @@
 /**
  * The shape the list screens share (D-158): the inbox, the open questions, search and saved. One
- * centred column at the feed's width (D-119) on a ground a step below its cards, and the lists as cards
+ * column the screen's full width, from its left edge as the feed is (D-177), on a ground a step below its cards, and the lists as cards
  * of rows divided by hairlines — so the four read alike and none drifts into a layout of its own.
  */
 import { cn } from './cn';
@@ -12,7 +12,7 @@ export const ListColumn = ({
   readonly children: React.ReactNode;
 }): React.JSX.Element => (
   <div className="min-h-0 flex-1 overflow-y-auto bg-surface-000">
-    <div className="mx-auto flex w-full max-w-feed flex-col gap-6 px-6 pt-6 pb-10 max-narrow:px-4 max-narrow:pt-4">
+    <div className="flex w-full flex-col gap-6 px-6 pt-6 pb-10 max-narrow:px-4 max-narrow:pt-4">
       {children}
     </div>
   </div>

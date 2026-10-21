@@ -82,7 +82,7 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
     joined[0];
 
   return (
-    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-5">
+    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
       <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
         <NavToggle />
         <HeaderTile>

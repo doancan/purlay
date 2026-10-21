@@ -415,7 +415,7 @@ describe('the feed, populated', () => {
     expect(label?.previousElementSibling?.className).toContain('border-t-hairline');
     expect(label?.nextElementSibling?.className).toContain('border-t-hairline');
     expect(label?.parentElement?.className).toContain('uppercase');
-    expect(view.container.querySelector('[role="feed"]')?.className).toContain('max-w-feed');
+    expect(view.container.querySelector('[role="feed"]')?.className).not.toContain('max-w-');
     view.unmountAll();
   });
 

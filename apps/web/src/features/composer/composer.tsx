@@ -452,7 +452,7 @@ const Inner = ({
 
   return (
     <div className="shrink-0 pb-4 pt-2">
-      <div className="mx-auto flex w-full max-w-feed flex-col gap-2 px-4">
+      <div className="flex w-full flex-col gap-2 px-6 max-narrow:px-4">
         <div
           data-composer-card=""
           onDragOver={(event) => {
