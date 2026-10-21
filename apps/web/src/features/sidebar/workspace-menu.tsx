@@ -23,6 +23,7 @@ import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../../ui/menu';
 import { useSession } from '../session/session';
 import { CreateWorkspace } from '../shell/home';
 import { useWorkspace } from '../shell/workspace';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 
 interface WorkspaceMenuProps {
   /** Which door: the rail's tile, or the name at the top of the sidebar. */
@@ -51,10 +52,12 @@ export const WorkspaceMenu = ({ door = 'tile' }: WorkspaceMenuProps): React.JSX.
           door === 'tile' ? (
             <button
               type="button"
-              aria-label={t('sidebar.switch')}
               className="inline-flex size-avatar-lg items-center justify-center rounded-xl bg-accent text-heading text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover max-narrow:h-touch max-narrow:w-touch"
             >
-              {initialsOf(workspace.name)}
+              {/* A picture of the workspace, as an avatar's initials are: the button's name is what it
+                  does, in words only a screen reader reads, so no label contradicts what is shown. */}
+              <span aria-hidden="true">{initialsOf(workspace.name)}</span>
+              <VisuallyHidden>{t('sidebar.switch')}</VisuallyHidden>
             </button>
           ) : (
             <button

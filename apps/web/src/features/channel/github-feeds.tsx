@@ -88,7 +88,7 @@ const Setup = ({
                   copy(value);
                 }}
               >
-                {t('message.code.copy')}
+                {t('common.copy')}
               </Button>
             </dd>
           </div>

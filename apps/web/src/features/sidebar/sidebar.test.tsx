@@ -817,7 +817,9 @@ describe('the footer', () => {
     // The hint moved to the jump field above; the footer no longer carries it.
     expect(footer.querySelector('kbd')).toBeNull();
     expect(footer.textContent).toContain('@dogancan');
-    expect(within(footer).getByRole('button').getAttribute('aria-label')).toBe('Account: Dogancan');
+    // Named by what it shows, said after what it is: its name holds its visible text (WCAG 2.5.3).
+    const button = within(footer).getByRole('button', { name: 'Account: Dogancan @dogancan' });
+    expect(button.getAttribute('aria-label')).toBeNull();
   });
 });
 

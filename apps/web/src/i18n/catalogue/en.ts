@@ -501,7 +501,6 @@ export const en = {
   'incident.declare': 'Declare an incident',
   'incident.severity': 'Severity',
   'incident.sev': 'SEV{n}',
-  'incident.sevOf': 'Severity {n}',
   'incident.status': 'Status',
   'incident.investigating': 'Investigating',
   'incident.mitigating': 'Mitigating',
@@ -1309,7 +1308,7 @@ export const en = {
   'user.signOutEverywhere.title': 'Sign out everywhere?',
   'user.signOutEverywhere.body':
     'Every browser and device signed in as you is signed out, this one included. You sign in again the way you usually do.',
-  'user.menuFor': 'Account: {name}',
+  'user.menuFor': 'Account:',
 
   // ── Command palette (D-98) ──────────────────────────────────────────────
   'palette.notJoined': 'Not joined',

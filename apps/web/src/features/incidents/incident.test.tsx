@@ -120,7 +120,7 @@ describe('a channel’s incident', () => {
     expect(view.queryByRole('region', { name: 'Incident in progress' })).toBeNull();
     const panel = await openPanel(view);
     expect(within(panel).getByText('No incident')).toBeDefined();
-    await person().click(within(panel).getByRole('button', { name: 'Severity 1' }));
+    await person().click(within(panel).getByRole('button', { name: 'SEV1' }));
     await person().click(within(panel).getByRole('button', { name: 'Declare an incident' }));
     await settle();
     // Refused: said, nothing declared, and focus back on the button to try again.
@@ -167,16 +167,16 @@ describe('a channel’s incident', () => {
       answer(open({ status: 'mitigating' }));
     });
     await settle();
-    await person().click(within(panel).getByRole('button', { name: 'Severity 1' }));
+    await person().click(within(panel).getByRole('button', { name: 'SEV1' }));
     act(() => {
       refuse(new ApiError(409, 'INCIDENT_RESOLVED', 'resolved'));
     });
     await settle();
     expect(changes).toEqual([{ status: 'mitigating' }, { severity: 1 }]);
     // Put back as it was: SEV2, not the SEV1 that was refused.
-    expect(
-      within(panel).getByRole('button', { name: 'Severity 2' }).getAttribute('aria-pressed'),
-    ).toBe('true');
+    expect(within(panel).getByRole('button', { name: 'SEV2' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     expect(
       view.getByText('This incident is resolved. Declare a new one if it is back.'),
     ).toBeDefined();
@@ -307,7 +307,7 @@ describe('a channel’s incident', () => {
     const panel = await openPanel(view);
     await person().click(within(panel).getByRole('button', { name: 'Declare an incident' }));
     await settle();
-    await person().click(within(panel).getByRole('button', { name: 'Severity 3' }));
+    await person().click(within(panel).getByRole('button', { name: 'SEV3' }));
     await person().click(within(panel).getByRole('button', { name: 'Declare an incident' }));
     await settle();
     expect(asked.map((input) => input.severity)).toEqual([2, 3]);
@@ -454,11 +454,11 @@ describe('a channel’s incident', () => {
         }),
     });
     const panel = await openPanel(view);
-    await person().click(within(panel).getByRole('button', { name: 'Severity 1' }));
+    await person().click(within(panel).getByRole('button', { name: 'SEV1' }));
     await person().click(within(panel).getByRole('button', { name: 'Mitigating' }));
     const pressed = (name: string): string | null =>
       within(panel).getByRole('button', { name }).getAttribute('aria-pressed');
-    expect([pressed('Severity 1'), pressed('Mitigating')]).toEqual(['true', 'true']);
+    expect([pressed('SEV1'), pressed('Mitigating')]).toEqual(['true', 'true']);
     act(() => {
       refusals[0]?.(new ApiError(500, 'INTERNAL', 'first'));
     });
@@ -467,7 +467,7 @@ describe('a channel’s incident', () => {
       refusals[1]?.(new ApiError(500, 'INTERNAL', 'second'));
     });
     await settle();
-    expect([pressed('Severity 2'), pressed('Investigating')]).toEqual(['true', 'true']);
+    expect([pressed('SEV2'), pressed('Investigating')]).toEqual(['true', 'true']);
     // The read that failed is said above what is kept.
     expect(within(panel).getByText('The incident could not be brought up to date.')).toBeDefined();
     view.unmountAll();

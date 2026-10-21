@@ -81,7 +81,8 @@ describe('the rail', () => {
   test('the workspace tile shows its initials and opens the switcher', async () => {
     const view = await open();
     const tile = within(places(view)).getByRole('button', { name: 'Switch workspace' });
-    expect(tile.textContent).toBe('AE');
+    // The initials are what is seen; the name, read only by a screen reader, is what it does.
+    expect(tile.querySelector('[aria-hidden="true"]')?.textContent).toBe('AE');
     await person().click(tile);
     const items = view.getAllByRole('menuitem').map((item) => item.textContent);
     expect(items).toContain('acme-eng');

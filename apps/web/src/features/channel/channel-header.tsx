@@ -218,6 +218,8 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
               <Icon name="open-question" />
             </span>
             <span className="max-narrow:hidden">{t('header.questions')}</span>
+            {/* A space the eye does not need but the text does: what is shown reads as its name. */}
+            {openText !== null && ' '}
             {openText !== null && (
               <span className="font-mono text-caption text-warning-text">{openText}</span>
             )}

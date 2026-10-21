@@ -500,7 +500,6 @@ export const tr = {
   'incident.declare': 'Olay bildir',
   'incident.severity': 'Önem derecesi',
   'incident.sev': 'SEV{n}',
-  'incident.sevOf': 'Önem derecesi {n}',
   'incident.status': 'Durum',
   'incident.investigating': 'İnceleniyor',
   'incident.mitigating': 'Hafifletiliyor',
@@ -1274,7 +1273,7 @@ export const tr = {
   'user.signOutEverywhere.title': 'Her yerden çıkış yapılsın mı?',
   'user.signOutEverywhere.body':
     'Senin adınla giriş yapılmış her tarayıcı ve cihazdan, bu da dahil, çıkış yapılır. Sonra her zamanki yolunla yeniden giriş yaparsın.',
-  'user.menuFor': 'Hesap: {name}',
+  'user.menuFor': 'Hesap:',
 
   // ── Komut paleti (D-98) ─────────────────────────────────────────────────
   'palette.notJoined': 'Katılmadın',
