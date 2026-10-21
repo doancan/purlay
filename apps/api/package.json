@@ -10,7 +10,7 @@
     "@purlay/types": "workspace:*",
     "@sinclair/typebox": "0.34.52",
     "elysia": "1.4.30",
-    "nodemailer": "10.1.1",
+    "nodemailer": "10.1.2",
     "pino": "10.4.0"
   },
   "scripts": {
