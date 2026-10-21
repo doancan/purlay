@@ -22,6 +22,7 @@ import { DEEP_WORK_CHOICES, useDeepWorkControls } from './deep-work';
 import { useShortcutsDoor } from './overlay';
 import { useSignOut } from './sign-out';
 import { useWorkspace } from './workspace';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 
 /** Deep Work's part of the menu: the whiles to start it for, or how long is left and its end. */
 const DeepWorkItems = (): React.JSX.Element | null => {
@@ -74,9 +75,11 @@ export const AccountMenu = (): React.JSX.Element => {
       trigger={
         <button
           type="button"
-          aria-label={t('user.menuFor', { name: user.displayName })}
           className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover"
         >
+          {/* Named by what it shows, with what it is said before it: the name holds the visible text,
+              so a person who says what they see reaches it (WCAG 2.5.3, label in name). */}
+          <VisuallyHidden>{t('user.menuFor')}</VisuallyHidden>
           <Avatar size="md" name={user.displayName} username={user.username} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-label font-semibold text-nav-ink">

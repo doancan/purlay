@@ -53,7 +53,7 @@ const open = async (api: Partial<Api> = {}, deepWorkUntil: string | null = null)
 };
 
 const menu = async (view: View): Promise<void> => {
-  await person().click(view.getByRole('button', { name: 'Account: Dogancan' }));
+  await person().click(view.getByRole('button', { name: /^Account: Dogancan @/ }));
 };
 
 const here = (view: View): string => view.world.history.stack.at(-1) ?? '';

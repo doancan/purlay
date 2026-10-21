@@ -125,7 +125,7 @@ describe('the settings’ navigation', () => {
     const sidebar = within(view.getByRole('complementary'));
     expect(sidebar.queryByRole('button', { name: /^acme-eng/ })).toBeNull();
     expect(sidebar.queryByText('api')).toBeNull();
-    expect(sidebar.getByRole('button', { name: 'Account: Dogancan' })).toBeDefined();
+    expect(sidebar.getByRole('button', { name: /^Account: Dogancan @/ })).toBeDefined();
     view.unmount();
   });
 });

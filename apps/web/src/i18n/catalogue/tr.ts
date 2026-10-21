@@ -1274,7 +1274,7 @@ export const tr = {
   'user.signOutEverywhere.title': 'Her yerden çıkış yapılsın mı?',
   'user.signOutEverywhere.body':
     'Senin adınla giriş yapılmış her tarayıcı ve cihazdan, bu da dahil, çıkış yapılır. Sonra her zamanki yolunla yeniden giriş yaparsın.',
-  'user.menuFor': 'Hesap: {name}',
+  'user.menuFor': 'Hesap:',
 
   // ── Komut paleti (D-98) ─────────────────────────────────────────────────
   'palette.notJoined': 'Katılmadın',
