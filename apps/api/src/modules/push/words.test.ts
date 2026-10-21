@@ -23,7 +23,9 @@ describe('what a push says', () => {
   test.each(['en', 'tr'] as const)('is the inbox’s own words, in %s', (locale) => {
     const source = catalogue(locale);
     for (const [reason, key] of Object.entries(CATALOGUE_KEY)) {
-      const line = new RegExp(`'${key.replace(/\./g, '\\.')}': '([^']*)'`).exec(source);
+      const line = new RegExp(`'${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}': '([^']*)'`).exec(
+        source,
+      );
       expect({ key, words: line?.[1] }).toEqual({
         key,
         words: PUSH_WORDS[locale][reason as keyof typeof CATALOGUE_KEY],

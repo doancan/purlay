@@ -6,7 +6,7 @@
  * file is committed so it can be read and reviewed, and a check keeps the
  * committed copy from drifting from the source it came from.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { audit } from './audit';
 import { emit } from './emit';
@@ -32,12 +32,22 @@ if (model === undefined) process.exit(1);
 const unreadable = audit(model);
 if (unreadable.length > 0) fail('tokens.json is well formed but not usable:', unreadable);
 
+/** The file's text, or nothing when there is no file: read once, so it cannot change between a look and a read. */
+const readIfPresent = (target: URL): string | undefined => {
+  try {
+    return readFileSync(target, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+};
+
 const files = emit(model);
 const check = process.argv.includes('--check');
 const differing: string[] = [];
 for (const [name, content] of Object.entries(files)) {
   const target = new URL(name, generated);
-  const current = existsSync(target) ? readFileSync(target, 'utf8') : undefined;
+  const current = readIfPresent(target);
   if (current === content) continue;
   differing.push(name);
   if (!check) writeFileSync(target, content);

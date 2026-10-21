@@ -236,6 +236,9 @@ describe('public/theme-init.js', () => {
   test('is referenced from index.html as a same-origin file, not inline', () => {
     const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
     expect(html).toContain('<script src="/theme-init.js"></script>');
-    expect(html).not.toMatch(/<script>[^<]/);
+    // Every script tag, in any case, names a file: none carries code of its own.
+    const tags = html.toLowerCase().split('<script').slice(1);
+    expect(tags).toHaveLength(2);
+    for (const tag of tags) expect(tag.slice(0, tag.indexOf('>'))).toContain(' src=');
   });
 });

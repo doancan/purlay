@@ -20,7 +20,12 @@ describe('the shell as markup', () => {
     expect(markup).not.toContain('<script');
     // Hidden from assistive technology: a screen reader meets the real page.
     expect(markup).toContain('aria-hidden="true"');
-    expect(markup.replace(/<[^>]*>/g, '').trim()).toBe('');
+    // What lies between one tag's end and the next one's start is the text a reader would meet.
+    const text = markup
+      .split('>')
+      .map((part) => part.split('<')[0])
+      .join('');
+    expect(text.trim()).toBe('');
   });
 });
 
