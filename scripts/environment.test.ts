@@ -8,7 +8,8 @@
  * (D-20, D-49)
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const compose = readFileSync('docker-compose.yml', 'utf8');
 
@@ -136,10 +137,27 @@ describe('the development environment', () => {
     expect(pkg.devDependencies['@types/bun']).toBe(runtime ?? '');
   });
 
-  test('the pipeline reads the Bun version rather than repeating it', () => {
-    const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
-    expect(workflow).toContain('bun-version-file: package.json');
-    expect(workflow).not.toMatch(/bun-version:\s*\d/);
+  test('every workflow reads the Bun version rather than repeating it', () => {
+    const workflows = readdirSync('.github/workflows')
+      .filter((name) => name.endsWith('.yml'))
+      .map((name) => readFileSync(join('.github/workflows', name), 'utf8'))
+      .filter((workflow) => workflow.includes('setup-bun'));
+    expect(workflows.length).toBeGreaterThan(0);
+    for (const workflow of workflows) {
+      expect(workflow).toContain('bun-version-file: package.json');
+      expect(workflow).not.toMatch(/bun-version:\s*\d/);
+    }
+  });
+
+  /** An image cannot read package.json, so its tag repeats the version; this keeps the two equal. */
+  test('every Bun base image is the version packageManager names', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { packageManager: string };
+    const runtime = /^bun@(.+)$/.exec(pkg.packageManager)?.[1] ?? '';
+    const tags = [
+      ...readFileSync('Dockerfile', 'utf8').matchAll(/^FROM oven\/bun:([^@\s-]+)/gm),
+    ].map((match) => match[1]);
+    expect(tags.length).toBeGreaterThan(0);
+    expect(new Set(tags)).toEqual(new Set([runtime]));
   });
 
   /**

@@ -27,6 +27,13 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
   checks by substring or an unanchored pattern, a look-then-read race in the token generator, and a
   test double called with an argument it ignored.
 
+### Chore — 2026-10-21: the image's Bun is `packageManager`'s
+
+The Dockerfile's two bases were the one copy of the Bun version that nothing held to `package.json`, and
+its header listed tag and digest a third time. The list is gone and a test holds every
+`FROM oven/bun:<version>` to `packageManager`; every workflow that sets up Bun — not only `ci.yml` — is
+held to reading the version from `package.json`.
+
 ### Fix — 2026-10-21: the screens take the window's width (D-177)
 
 The feed and its composer, the inbox, the open questions, search, saved and Settings no longer sit in
