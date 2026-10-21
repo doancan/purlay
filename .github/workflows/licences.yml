@@ -8,6 +8,11 @@ on:
   push:
     branches: [main]
 
+# A pull request's superseded run is cancelled; on main and on the schedule every run finishes.
+concurrency:
+  group: licences-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

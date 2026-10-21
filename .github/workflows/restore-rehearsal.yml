@@ -18,6 +18,11 @@ on:
     # Weekly, Wednesday morning UTC.
     - cron: '23 5 * * 3'
 
+# A pull request's superseded run is cancelled; on main and on the schedule every run finishes.
+concurrency:
+  group: restore-rehearsal-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

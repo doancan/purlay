@@ -92,6 +92,7 @@ Without it `verify` still passes, on the unit tests alone, behind the banner bel
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
 | `bun run budget:browser -- --project <name>` | Cold load, keystroke to paint and the channel switch as the browser tests measured them for one project, each as its run's median (`PRD.md` §5, D-49), judged as `budget:latency` judges: `-- --keep <file>` fails on a jump past the file's numbers or on a number it has that this run did not measure, and keeps only a run that passed. A run that measured nothing is refused. Runs in CI's browser jobs, after the tests; on a developer's machine the tests hold the lines themselves |
+| `bun run ci:changes` | Whether a pull request can move what the browser tests see — the client, the API, a package, the dependencies or `ci.yml` — and so whether CI runs its four browser jobs; on main they always run. CI only |
 | `bun run budget:latency` | The ACK round-trip and fan-out p95 on two real sockets in one channel (`PRD.md` §5, D-49); reported beside their budgets. `-- --record <file>` keeps the result, `-- --baseline <file>` fails on a jump past it, `-- --keep <file>` does both and keeps only a run that passed (CI, against main's last). Runs in `verify` and in CI's database job |
 | `bun run report:frames <log>…` | The measurement that closes O-4: over a stretch of the API's log (files, or standard input), each socket's peak frames in a second as the p99 and the maximum, beside the budget, and every refusal — frames, sends, HTTP `429` — which for legitimate use must be none (#61) |
 | `bun run push:keys` | A Web Push key pair for `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (`docs/CONFIG.md`, D-126) |
@@ -489,6 +490,17 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   - ❌ `feat(auth): task-123 sprint-5 için oturum ekle`
   - ✅ `feat(auth): add database-backed session validation`
 - Before a PR: `bun run verify`, with the database (§2).
+- **A pull request is a piece of work, not a step of it.** Related fixes travel together: one
+  task, one branch, one pull request, and no pull request opened on top of another that has not
+  merged. Every push starts every workflow, and a chain of small pull requests each needing the
+  last to land turns one change into a day of rebasing and waiting.
+- **The pipeline is not where a change is tried.** Push what `bun run verify` has passed, with the
+  database; a push to see what CI says spends minutes a local run spends nothing on. Once pushed,
+  push again only to fix what the run found — and a pull request's superseded run is cancelled
+  (`concurrency` in every workflow).
+- **The browser jobs run when a screen can have moved.** Four jobs are most of a run; on a pull
+  request they run only when it touches the client, the API, a package, the dependencies or
+  `ci.yml` (`bun run ci:changes`), and on main always.
 
 ---
 

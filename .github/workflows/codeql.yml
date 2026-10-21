@@ -29,6 +29,11 @@ on:
     # Weekly, Tuesday morning UTC. New queries ship without a commit.
     - cron: '41 5 * * 2'
 
+# A pull request's superseded run is cancelled; on main and on the schedule every run finishes.
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
