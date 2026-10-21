@@ -308,6 +308,22 @@ export const openSettings = async (
   return main;
 };
 
+/**
+ * A line of the audit log, however far down it is. The project's tests share one workspace and run in
+ * parallel, so by the time a test reads the trail others may have written a page of their own above
+ * its line: older pages are loaded until it shows, or until there are none.
+ */
+export const trailLine = async (trail: Locator, line: RegExp): Promise<Locator> => {
+  const found = trail.getByText(line);
+  const older = trail.getByRole('button', { name: 'Load older' });
+  await expect(trail.getByRole('list', { name: 'Audit log' })).toBeVisible();
+  while ((await found.count()) === 0 && (await older.isVisible())) {
+    await older.click();
+    await expect(older.or(found).first()).toBeVisible();
+  }
+  return found;
+};
+
 /** A place on the rail — the inbox, the open questions, search — with the navigation open (D-110). */
 export const railLink = async (page: Page, name: string): Promise<Locator> => {
   await openNav(page);

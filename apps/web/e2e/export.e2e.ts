@@ -8,7 +8,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from './fixtures';
-import { openSettings } from './support';
+import { openSettings, trailLine } from './support';
 
 test.describe('exporting a workspace', () => {
   test('an owner asks, waits for it, downloads it once, and the trail says so', async ({
@@ -44,6 +44,6 @@ test.describe('exporting a workspace', () => {
     expect(again.status()).toBe(404);
 
     const trail = await openSettings(page, tenant.slug, 'audit', 'Audit log');
-    await expect(trail.getByText(/exported the workspace, with \d+ messages/)).toBeVisible();
+    await expect(await trailLine(trail, /exported the workspace, with \d+ messages/)).toBeVisible();
   });
 });
