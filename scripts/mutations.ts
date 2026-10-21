@@ -36,6 +36,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'browser-job-drops-a-project',
+    why: 'a browser project the tests define is never run by the pipeline, and its job is simply missing',
+    file: '.github/workflows/ci.yml',
+    find: 'project: [chromium-dark, chromium-light, chromium-dark-narrow, chromium-light-narrow]',
+    replace: 'project: [chromium-dark, chromium-light, chromium-dark-narrow]',
+    tests: ['scripts/environment.test.ts'],
+  },
+  {
     id: 'image-bun-drifts-from-package-manager',
     why: 'the image runs a Bun other than the one the tests and the pipeline ran, and nothing says so',
     file: 'Dockerfile',

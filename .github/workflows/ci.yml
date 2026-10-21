@@ -130,6 +130,12 @@ jobs:
   # database and a browser, which `bun run verify` deliberately does not. It is not in the
   # repository's required checks until its first week of runs has been read.
   browser:
+    # One job per project (playwright.config.ts): each has a runner to itself, so the suite fits its
+    # time and a latency is measured on a page that is not sharing two cores with three others.
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium-dark, chromium-light, chromium-dark-narrow, chromium-light-narrow]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -153,6 +159,8 @@ jobs:
 
       - name: the browser tests
         run: bun run test:e2e
+        env:
+          PURLAY_E2E_PROJECT: ${{ matrix.project }}
 
       # Only when something failed: the report and the traces are how a screenshot that
       # differs is looked at, and the screenshots that were written are how it is judged.
@@ -160,7 +168,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
