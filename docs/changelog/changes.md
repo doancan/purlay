@@ -14,6 +14,11 @@ one stall moves either by half. The gate now compares medians — five cold load
 twenty switches — which a real slowdown moves and a stall does not. The tests still hold the p95s to
 their lines on a developer's machine.
 
+The socket-cap test no longer assumes every upgrade in a burst passes the check before any socket is
+counted: on the runner the last were refused at the door, which the test read as a failure. It now holds
+the account to its cap whichever check refuses the extra ones, and a mutation shows the cap at binding
+is the one a quick machine exercises.
+
 ### Fix — 2026-10-21: the browser tests finish, and judge latency as D-49 says (#727, #728)
 
 The browser tests ran four projects on one runner and outran its twenty minutes; they now run one

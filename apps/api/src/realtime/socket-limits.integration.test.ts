@@ -214,18 +214,29 @@ describe('integration: how many sockets may be open', () => {
   test('a burst of upgrades that all pass the check is held to the cap when they bind', async () => {
     await nothingHeld();
     const dave = await aSignedInUser(cloned.db, clock, 'cap-burst');
+    // On a quick machine every upgrade passes the check before any socket is counted, and the cap
+    // at binding refuses the extra three (the mutation run shows it is that check). On a slow one
+    // the first sockets may be counted before the last upgrades are checked, which refuses those at
+    // the door instead. Either way the account ends at its cap, and every extra one is refused.
     const burst = await Promise.all(
-      Array.from({ length: PER_USER + 3 }, async () => await connect(dave.cookie)),
+      Array.from(
+        { length: PER_USER + 3 },
+        async () => await connect(dave.cookie).catch(() => undefined),
+      ),
     );
+    const opened = burst.filter((s): s is Client => s !== undefined);
     // Wait for the server to have decided about every one of them.
     await until('the extra sockets to be closed', () => app.held().connections <= PER_USER);
     const codes = await Promise.all(
-      burst.map(async (s) => await Promise.race([s.ended, Bun.sleep(300).then(() => undefined)])),
+      opened.map(async (s) => await Promise.race([s.ended, Bun.sleep(300).then(() => undefined)])),
     );
-    expect(codes.filter((code) => code === CLOSE_CODES.TOO_BUSY)).toHaveLength(3);
+    const refusedAtTheDoor = burst.length - opened.length;
     expect(codes.filter((code) => code === undefined)).toHaveLength(PER_USER);
+    expect(codes.filter((code) => code === CLOSE_CODES.TOO_BUSY)).toHaveLength(
+      3 - refusedAtTheDoor,
+    );
     await Promise.all(
-      burst
+      opened
         .filter((_, i) => codes[i] === undefined)
         .map(async (s) => {
           await s.close();

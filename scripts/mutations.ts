@@ -36,6 +36,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'socket-cap-only-at-the-door',
+    why: 'a burst of upgrades that all pass the check before any is counted holds more sockets than an account may',
+    file: 'apps/api/src/ingress/ws/socket.ts',
+    find: '      if (identity !== undefined && hub.connectionsOf(identity.userId) > limits.perUser) {\n',
+    replace: '      if (identity !== undefined && false) {\n',
+    tests: ['apps/api/src/realtime/socket-limits.integration.test.ts'],
+  },
+  {
     id: 'drain-forgets-a-socket-still-opening',
     why: 'a drain returns while a socket that has just opened is still reading its session, and the pool closes under the read',
     file: 'apps/api/src/realtime/hub.ts',
