@@ -6,6 +6,12 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-21: the screens take the window's width (D-177)
+
+The feed and its composer, the inbox, the open questions, search, saved and Settings no longer sit in
+a centred column with empty bands on each side: they fill the main area from its left edge, as Slack's
+messages do, with only a gutter around them.
+
 ### Feature — 2026-10-20: a quota change is on the audit log
 
 - **The operator's `bun run storage:quota <slug> <size>` puts the change on the workspace's audit log**
