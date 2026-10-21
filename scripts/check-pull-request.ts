@@ -18,10 +18,10 @@
  *    labels, and each area allows some paths; a file outside all of them fails.
  *    There is no label for this one: split the change, or name the issue it
  *    also serves.
- * 4. **It says how it fails.** A change to production code answers each
- *    category of `CONTRIBUTING.md` §6.9 under `## Failure modes`, one line each:
- *    the test that covers it, or why it cannot apply. Documents and tests alone
- *    owe none. Whether an answer is good is the reviewer's; that none is missing
+ * 4. **It says how it fails.** A change to the product — `apps/` or
+ *    `packages/` — answers each category of `CONTRIBUTING.md` §6.9 under
+ *    `## Failure modes`, one line each: the test that covers it, or why it cannot
+ *    apply. Documents, tests, tooling and configuration owe none. Whether an answer is good is the reviewer's; that none is missing
  *    is this check's (D-177).
  *
  * Run in CI on every pull request; `bun run check:pr <number>` runs it locally.
@@ -115,6 +115,10 @@ export const unansweredFailureModes = (body: string): string[] => {
   return FAILURE_MODES.filter((mode) => !answers.has(mode.toLowerCase()));
 };
 
+/** The code a person uses: what §6.9's bad day happens to. Tooling and configuration owe none. */
+const touchesTheProduct = (file: ChangedFile): boolean =>
+  /^(apps|packages)\//.test(file.path) && !unmetered(file.path);
+
 const DEPENDABOT = new Set(['dependabot[bot]', 'app/dependabot']);
 
 /** Every rule the pull request breaks, in words a person can act on; empty when it passes. */
@@ -139,7 +143,7 @@ export const judge = (
     );
   }
 
-  const unanswered = lines > 0 ? unansweredFailureModes(pull.body) : [];
+  const unanswered = pull.files.some(touchesTheProduct) ? unansweredFailureModes(pull.body) : [];
   if (unanswered.length > 0) {
     problems.push(
       `It does not say how it fails: nothing under "## Failure modes" for ${unanswered.join(', ')}. One line each — the test that covers it, or why it cannot apply (CONTRIBUTING.md §6.9).`,

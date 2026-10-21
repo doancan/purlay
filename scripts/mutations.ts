@@ -4229,9 +4229,9 @@ export const MUTATIONS: readonly Mutation[] = [
   },
   {
     id: 'failure-modes-owed-by-every-change',
-    why: 'a pull request of documents or tests alone is refused for failure modes it has none of (D-177)',
+    why: 'a pull request of documents, tests or tooling alone is refused for failure modes it has none of (D-177)',
     file: 'scripts/check-pull-request.ts',
-    find: '  const unanswered = lines > 0 ? unansweredFailureModes(pull.body) : [];\n',
+    find: '  const unanswered = pull.files.some(touchesTheProduct) ? unansweredFailureModes(pull.body) : [];\n',
     replace: '  const unanswered = unansweredFailureModes(pull.body);\n',
     tests: ['scripts/check-pull-request.test.ts'],
   },

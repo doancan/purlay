@@ -371,7 +371,7 @@ a standard; speculative generality is scope from a later phase (§1.1) wearing a
 A test of the happy path proves the demo. **A feature is not done until each category below has a
 test, or a sentence in the pull request saying why it cannot apply** — silence about one is the
 absence §6.4 warns about. The template's *Failure modes* section asks for one line per row, and
-`check:pr` refuses a change to production code that leaves one empty (D-177). Which tests the project *requires* is `ARCHITECTURE.md` §10's; this is how
+`check:pr` refuses a change to `apps/` or `packages/` that leaves one empty (D-177). Which tests the project *requires* is `ARCHITECTURE.md` §10's; this is how
 to find the ones a feature needs.
 
 | Category | Ask |

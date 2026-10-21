@@ -177,6 +177,14 @@ describe('a pull request says how it fails (CONTRIBUTING.md §6.9)', () => {
     ]);
   });
 
+  test('configuration and tooling outside the product owe none', () => {
+    const pull = aPull({
+      body: 'Closes #1.',
+      files: [file('.gitignore', 2), file('scripts/queue.ts', 20), file('eslint.config.mjs', 5)],
+    });
+    expect(judge(pull, labelled({ 1: ['infra'] }))).toEqual([]);
+  });
+
   test('documents and tests alone owe no failure modes', () => {
     const pull = aPull({
       body: 'Closes #1.',

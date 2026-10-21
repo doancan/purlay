@@ -16,7 +16,7 @@ $ bun run verify
 ## Failure modes
 
 <!-- CONTRIBUTING.md §6.9. One line each: the test that covers it, or why it cannot apply.
-     CI refuses a change to production code that leaves one empty; documents and tests alone owe none. -->
+     CI refuses a change to apps/ or packages/ that leaves one empty; anything else may delete this section. -->
 
 - **Refused input:** 
 - **Authority:** 

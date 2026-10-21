@@ -7844,10 +7844,11 @@ Written as prose alone it is a wish (§6.2): the omission it guards against is s
 reviewer reading a diff sees what is there, not the category nobody thought of.
 
 **Decided: a fourth rule beside D-74's three**, in `scripts/check-pull-request.ts`. A pull request
-that changes production code — as D-74 counts it — carries `## Failure modes` with one non-empty line
-per category. The template lists the six with empty answers inside no comment, so leaving it as it is
-fails; an answer inside a comment or under another heading does not count. Documents, tests and
-dependabot owe none.
+that changes the product — `apps/` or `packages/`, outside tests — carries `## Failure modes` with one
+non-empty line per category. The template lists the six with empty answers inside no comment, so leaving it as it is
+fails; an answer inside a comment or under another heading does not count. Documents, tests,
+tooling, configuration and dependabot owe none: §6.9 is about how the product fails, and asking a
+`.gitignore` change for six answers teaches people to write *n/a* without reading.
 
 **The check proves presence, not quality.** Whether *n/a — no input* is honest is the reviewer's to
 judge; that the question was asked is the machine's. One line each keeps the cost to a minute on a
