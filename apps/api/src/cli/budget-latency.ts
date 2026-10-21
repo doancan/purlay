@@ -31,6 +31,11 @@ export const BUDGETS = { ackMs: 120, fanOutMs: 200 } as const;
 export const REGRESSION_FACTOR = 1.5;
 /** Below this a jump is noise: a p95 of 4 ms becoming 7 ms is not a regression anyone feels. */
 const NOISE_FLOOR_MS = 20;
+
+/** D-49's one rule for a noisy number: it regressed when it is past both the factor and the floor. */
+export const jumped = (value: number, before: number | undefined): boolean =>
+  before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);
+
 /** Under the per-connection and per-user budgets of ten a second (`rate-limiter.ts`). */
 const PACE_MS = 125;
 const READY_WITHIN_MS = 60_000;
@@ -59,11 +64,10 @@ export const judge = (
   ] as const;
   let regressed = false;
   const lines = rows.map(([name, value, before, budget]) => {
-    const jumped =
-      before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);
-    if (jumped) regressed = true;
+    const worse = jumped(value, before);
+    if (worse) regressed = true;
     const against = before === undefined ? '' : `, was ${before.toFixed(1)} ms`;
-    const verdict = jumped ? ' — REGRESSED' : value < budget ? '' : ' — over the budget';
+    const verdict = worse ? ' — REGRESSED' : value < budget ? '' : ' — over the budget';
     return `${name} p95: ${value.toFixed(1)} ms of ${String(budget)} ms (${String(now.messages)} messages${against})${verdict}`;
   });
   return { regressed, lines };
@@ -250,11 +254,11 @@ export const measureLatency = async (count: number): Promise<Latency> => {
   }
 };
 
-const optionOf = (args: readonly string[], name: string): string | undefined => {
+export const optionOf = (args: readonly string[], name: string): string | undefined => {
   const at = args.indexOf(name);
   if (at === -1) return undefined;
   const value = args[at + 1];
-  if (value === undefined || value.startsWith('--')) throw new Error(`${name} needs a file`);
+  if (value === undefined || value.startsWith('--')) throw new Error(`${name} needs a value`);
   return value;
 };
 

@@ -6,6 +6,16 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-21: the browser tests finish, and judge latency as D-49 says (#727, #728)
+
+The browser tests ran four projects on one runner and outran its twenty minutes; they now run one
+project per job and have Linux screenshot baselines, which they never had. Cold load, keystroke to paint
+and the channel switch block on a regression against main's last run (`bun run budget:browser`, D-49)
+rather than on the line a hosted runner sits far above — 120–170 ms there against a laptop's 33; the
+tests still hold the line on a developer's machine. The twelfth code-scanning result is closed, and
+three browser tests no longer race their neighbours: two read the audit log's first page only, one read
+a card's status while the card reloaded.
+
 ### Fix — 2026-10-21: main is green again
 
 - **Bun 1.4.3, in the pipeline and in the image.** Under 1.4.2 a module imported a second time with a

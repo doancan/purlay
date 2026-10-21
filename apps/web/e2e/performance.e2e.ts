@@ -1,6 +1,9 @@
 /**
  * The latency budgets of `PRD.md` §5 that a browser can measure (D-17, D-49): recorded on
- * every run and held to a threshold here because a number nobody reads is not a budget.
+ * every run and held to a threshold here because a number nobody reads is not a budget. On a
+ * shared runner (`CI`) the line is not the gate, by D-49: there the three latencies block on a
+ * regression against main's last run instead (`bun run budget:browser`), because a hosted runner
+ * measures the channel switch at 120–170 ms where a laptop measures 33.
  *
  * - **Cold load to an interactive channel, < 1.5 s** on the production build, with a warm
  *   browser cache (what a person returning to the tab gets).
@@ -24,6 +27,11 @@ import { history, isNarrow, writeInParallel } from './support';
 const percentile = (values: readonly number[], p: number): number => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)] ?? Number.NaN;
+};
+
+/** D-49: the line on a person's machine; on a shared runner `budget:browser` judges the number. */
+const underTheLine = (value: number, line: number): void => {
+  if (process.env['CI'] === undefined) expect(value).toBeLessThan(line);
 };
 
 const summary = (values: readonly number[]): { p50: number; p95: number; max: number } => ({
@@ -75,7 +83,7 @@ test.describe('cold load', () => {
       type: 'cold-load',
       description: `${elapsed.toFixed(0)} ms to an interactive channel (ttfb ${navigation.responseStart.toFixed(0)}, dom interactive ${navigation.domInteractive.toFixed(0)}, load ${navigation.loadEventEnd.toFixed(0)})`,
     });
-    expect(elapsed).toBeLessThan(1_500);
+    underTheLine(elapsed, 1_500);
   });
 });
 
@@ -157,9 +165,9 @@ test.describe('interaction latency', () => {
       type: 'keystroke-to-paint',
       description: `row in the document p95 ${numbers.toDocument.p95.toFixed(1)} ms · carried by a frame p95 ${numbers.toNextFrame.p95.toFixed(1)} ms`,
     });
-    expect(numbers.toDocument.p95).toBeLessThan(16);
+    underTheLine(numbers.toDocument.p95, 16);
     // The frame that carries it starts at most one frame after the work is done.
-    expect(numbers.toNextFrame.p95).toBeLessThan(16 + 17);
+    underTheLine(numbers.toNextFrame.p95, 16 + 17);
   });
 
   test('switching to a channel whose newest messages are cached paints under 100 ms — p95 over 20 switches', async ({
@@ -229,7 +237,7 @@ test.describe('interaction latency', () => {
       type: 'channel-switch',
       description: `p50 ${numbers.p50.toFixed(1)} ms · p95 ${numbers.p95.toFixed(1)} ms · max ${numbers.max.toFixed(1)} ms`,
     });
-    expect(numbers.p95).toBeLessThan(100);
+    underTheLine(numbers.p95, 100);
     // The page measured each switch itself (O-5): what a week of real use is read from, with nothing
     // sent anywhere. Same order of magnitude as the test's own clock, which starts a click earlier.
     const inPage = await page.evaluate(() =>
@@ -238,7 +246,7 @@ test.describe('interaction latency', () => {
         .map((entry) => entry.duration),
     );
     expect(inPage.length).toBeGreaterThanOrEqual(22);
-    expect(summary(inPage).p95).toBeLessThan(100);
+    underTheLine(summary(inPage).p95, 100);
   });
 });
 

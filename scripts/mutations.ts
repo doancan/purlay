@@ -36,6 +36,14 @@ const CLIENT_TESTS = [
 
 export const MUTATIONS: readonly Mutation[] = [
   {
+    id: 'browser-budget-passes-a-measure-that-stopped',
+    why: 'a browser number main measured is not measured any more, and the gate passes as if it held',
+    file: 'apps/api/src/cli/budget-browser.ts',
+    find: '      regressed = true;\n      lines.push(`${name}: not measured${was} — MISSING`);\n',
+    replace: '      lines.push(`${name}: not measured${was} — MISSING`);\n',
+    tests: ['apps/api/src/cli/budget-browser.test.ts'],
+  },
+  {
     id: 'browser-job-drops-a-project',
     why: 'a browser project the tests define is never run by the pipeline, and its job is simply missing',
     file: '.github/workflows/ci.yml',
@@ -3856,9 +3864,9 @@ export const MUTATIONS: readonly Mutation[] = [
     id: 'latency-regression-never-seen',
     why: 'the ACK round-trip could triple and the budget would report it as fine',
     file: 'apps/api/src/cli/budget-latency.ts',
-    find: '      before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);\n',
-    replace: '      before !== undefined && value > Number.POSITIVE_INFINITY;\n',
-    tests: ['apps/api/src/cli/budget-latency.test.ts'],
+    find: '  before !== undefined && value > Math.max(before * REGRESSION_FACTOR, NOISE_FLOOR_MS);\n',
+    replace: '  before !== undefined && value > Number.POSITIVE_INFINITY;\n',
+    tests: ['apps/api/src/cli/budget-latency.test.ts', 'apps/api/src/cli/budget-browser.test.ts'],
   },
   {
     id: 'trail-forgets-the-session',

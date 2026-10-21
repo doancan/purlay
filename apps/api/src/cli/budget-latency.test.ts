@@ -72,6 +72,6 @@ describe('the latency budget', () => {
       );
     expect(await refusal(['--keep', file])).toContain('is not a latency measurement');
     expect(await refusal(['--baseline', file])).toContain('is not a latency measurement');
-    expect(await refusal(['--keep'])).toBe('--keep needs a file');
+    expect(await refusal(['--keep'])).toBe('--keep needs a value');
   });
 });

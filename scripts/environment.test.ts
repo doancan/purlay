@@ -153,7 +153,7 @@ describe('the development environment', () => {
   test('the browser job runs every project the browser tests define, and no other', () => {
     const config = readFileSync('apps/web/playwright.config.ts', 'utf8');
     const block = /const projects = \[([\s\S]*?)\] as const;/.exec(config)?.[1] ?? '';
-    const defined = [...block.matchAll(/name: '([^']+)'/g)].map((match) => match[1]);
+    const defined = [...block.matchAll(/name: '([^']+)'/g)].map((match) => match[1] ?? '');
     const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
     const listed = /^ {8}project: \[([^\]]*)\]$/m
       .exec(workflow)?.[1]
