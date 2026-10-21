@@ -501,7 +501,6 @@ export const en = {
   'incident.declare': 'Declare an incident',
   'incident.severity': 'Severity',
   'incident.sev': 'SEV{n}',
-  'incident.sevOf': 'Severity {n}',
   'incident.status': 'Status',
   'incident.investigating': 'Investigating',
   'incident.mitigating': 'Mitigating',

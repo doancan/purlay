@@ -49,13 +49,13 @@ const SeverityChoice = ({
       <span id={labelId} className="text-caption text-ink-muted">
         {t('incident.severity')}
       </span>
+      {/* Each is named by what it shows — SEV1 — inside the group that says what SEV is (WCAG 2.5.3). */}
       <div role="group" aria-labelledby={labelId} className="flex gap-1">
         {SEVERITIES.map((severity) => (
           <Button
             key={severity}
             variant={severity === value ? 'primary' : 'secondary'}
             aria-pressed={severity === value}
-            aria-label={t('incident.sevOf', { n: severity })}
             disabled={disabled}
             onClick={() => {
               onChoose(severity);

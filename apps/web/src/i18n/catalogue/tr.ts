@@ -500,7 +500,6 @@ export const tr = {
   'incident.declare': 'Olay bildir',
   'incident.severity': 'Önem derecesi',
   'incident.sev': 'SEV{n}',
-  'incident.sevOf': 'Önem derecesi {n}',
   'incident.status': 'Durum',
   'incident.investigating': 'İnceleniyor',
   'incident.mitigating': 'Hafifletiliyor',

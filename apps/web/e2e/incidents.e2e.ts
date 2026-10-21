@@ -36,7 +36,7 @@ test.describe('an incident', () => {
 
     const panel = await panelOf(page);
     await expect(panel.getByText('No incident')).toBeVisible();
-    await panel.getByRole('button', { name: 'Severity 1' }).click();
+    await panel.getByRole('button', { name: 'SEV1' }).click();
     await panel.getByRole('button', { name: 'Declare an incident' }).click();
     await expect(panel.getByText(/declared it at SEV1/)).toBeVisible();
     await expectNoAxe(panel);
