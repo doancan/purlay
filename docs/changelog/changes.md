@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-21: every control is named by what it shows
+
+axe-core 4.14 checks that a control's name contains its visible text (WCAG 2.5.3, label in name), so a
+person who says what they see — to a voice control, say — reaches it. Six did not: the account button
+(its handle was not in its name), the workspace tile (its initials), the severity choices (SEV1 under
+"Severity 1"), the open-questions link (its count and words with no space between them), and the
+webhook card's copy buttons (which also said "Copy code" of a URL).
+
 ### Fix — 2026-10-21: the browser budgets judge the middle of a run, not its worst moment
 
 `budget:browser` failed a documents-only change: cold load 132 → 198 ms and keystroke to the document

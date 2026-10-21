@@ -174,9 +174,9 @@ describe('a channel’s incident', () => {
     await settle();
     expect(changes).toEqual([{ status: 'mitigating' }, { severity: 1 }]);
     // Put back as it was: SEV2, not the SEV1 that was refused.
-    expect(
-      within(panel).getByRole('button', { name: 'SEV2' }).getAttribute('aria-pressed'),
-    ).toBe('true');
+    expect(within(panel).getByRole('button', { name: 'SEV2' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     expect(
       view.getByText('This incident is resolved. Declare a new one if it is back.'),
     ).toBeDefined();
