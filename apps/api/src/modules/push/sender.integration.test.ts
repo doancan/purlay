@@ -502,7 +502,7 @@ describe('integration: what the push service answers', () => {
       // Carol's push goes while two of Bob's hang, and Bob's third waits for one of his own.
       for (
         let turn = 0;
-        turn < 50 && !posted.includes('https://push.example.com/send/carol');
+        turn < 50 && !posted.some((url) => url === 'https://push.example.com/send/carol');
         turn++
       ) {
         await new Promise((resolve) => setTimeout(resolve, 10));

@@ -33,10 +33,13 @@ const get = async (
     }),
   );
 
+const image = (bytes: Uint8Array): ReturnType<ExternalFetch> =>
+  Promise.resolve({ kind: 'bytes', bytes });
+
 const serving =
   (bytes: Uint8Array): ExternalFetch =>
   () =>
-    Promise.resolve({ kind: 'bytes', bytes });
+    image(bytes);
 
 describe('integration: an external image through the API', () => {
   test('is served as our WebP, with the headers a download has', async () => {
@@ -44,7 +47,7 @@ describe('integration: an external image through the API', () => {
       const asked: string[] = [];
       const fetch: ExternalFetch = async (url) => {
         asked.push(url.href);
-        return await serving(twoColourPng(8, 8))(url);
+        return await image(twoColourPng(8, 8));
       };
       const { cookie } = await aSignedInUser(db, clock, 'img-reader');
       const response = await get(db, fetch, `?url=${encodeURIComponent(IMAGE)}`, cookie);
@@ -65,9 +68,9 @@ describe('integration: an external image through the API', () => {
   test('nobody signed in is 401, and nothing is fetched', async () => {
     await withRollback(async (db) => {
       let fetched = false;
-      const fetch: ExternalFetch = async (url) => {
+      const fetch: ExternalFetch = async () => {
         fetched = true;
-        return await serving(twoColourPng(8, 8))(url);
+        return await image(twoColourPng(8, 8));
       };
       expect((await get(db, fetch, `?url=${encodeURIComponent(IMAGE)}`)).status).toBe(401);
       expect(fetched).toBe(false);

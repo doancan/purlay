@@ -909,7 +909,7 @@ describe('the panel’s list is one Tab stop, as the feed is (D-168)', () => {
     const walk = walkToComposer();
     expect(walk.at(-1)).toBe('composer');
     expect(walk.some((stop) => stop.startsWith('Resolve'))).toBe(true);
-    expect(walk.some((stop) => stop.startsWith('https://example.com'))).toBe(false);
+    expect(walk.some((stop) => stop.startsWith('https://example.com/'))).toBe(false);
     expect(walk.some((stop) => stop.startsWith('row'))).toBe(false);
     view.unmountAll();
   });
@@ -932,7 +932,9 @@ describe('the panel’s list is one Tab stop, as the feed is (D-168)', () => {
     expect(walk.at(-1)).toBe('composer');
     expect(tab(true)).toBe(`row ${messageIdAt(3)}`);
     // A reply's link that is not the current row's still opens under the pointer: it is a link.
-    const four = within(sectionOf(view)).getByRole('link', { name: /example.com\/four/ });
+    const four = within(sectionOf(view)).getByRole('link', {
+      name: 'https://example.com/four (Opens in a new tab)',
+    });
     expect(four.getAttribute('tabindex')).toBe('-1');
     expect(four.getAttribute('href')).toBe('https://example.com/four');
     await expectNoAxeViolations(sectionOf(view));

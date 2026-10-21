@@ -113,7 +113,9 @@ test.describe('focus', () => {
       });
 
     // Both messages drawn whole before the walk starts: a feed still loading has no row to land on.
-    await expect(row(newest.id).getByRole('link', { name: /example.com\/newest/ })).toBeVisible();
+    await expect(
+      row(newest.id).getByRole('link', { name: 'https://example.com/newest' }),
+    ).toBeVisible();
     await expect(row(older.id).locator('pre')).toBeVisible();
     // Shift+Tab from the composer: the feed's row, then out of the feed.
     await composer.focus();
@@ -158,7 +160,7 @@ test.describe('focus', () => {
 
     // The pointer is not the keyboard: the newest message's link, out of the Tab order now, still opens.
     await composer.focus();
-    const link = row(newest.id).getByRole('link', { name: /example.com\/newest/ });
+    const link = row(newest.id).getByRole('link', { name: 'https://example.com/newest' });
     await expect(link).toHaveAttribute('tabindex', '-1');
     await page.context().route('https://example.com/**', (route) => route.fulfill({ body: 'ok' }));
     const [opened] = await Promise.all([page.waitForEvent('popup'), link.click()]);

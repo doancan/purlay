@@ -4171,4 +4171,12 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: "  if (context.role === 'member') {\n",
     tests: ['apps/api/src/ingress/http/permissions.integration.test.ts'],
   },
+  {
+    id: 'migrate-on-start-leaves-its-connection-open',
+    why: 'the connection migrating on start opens is never closed, and a node holds it for as long as it runs',
+    file: 'apps/api/src/platform/migrate-on-start.ts',
+    find: '      await database.destroy();\n',
+    replace: '',
+    tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
+  },
 ];

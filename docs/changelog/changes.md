@@ -6,6 +6,27 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-21: main is green again
+
+- **Bun 1.4.3, in the pipeline and in the image.** Under 1.4.2 a module imported a second time with a
+  query (`./deferred-door?offline`, as the three door tests do) had its coverage written to a copy the
+  report does not show, so `deferred-door.ts`, `row-menu.tsx` and `image-viewer-door.tsx` read 52–92 %
+  in CI and 100 % on a laptop on 1.4.3. Measured: the same three suites give CI's figures exactly under
+  1.4.2 and 100 % under 1.4.3. `packageManager`, `@types/bun` and both Dockerfile bases (by digest) move
+  together, so what is tested is what ships.
+- **Migrating on start is proved to close its connection by waiting for it to go**, up to five seconds,
+  rather than counting at once: a closed connection's server process leaves `pg_stat_activity` a moment
+  after the client hangs up. One left open still fails, and a mutation says so.
+- **A component test file takes its DOM away only after React's scheduler is idle.** An unmount
+  leaves effects React runs later, and they read `window`; once in three CI runs they ran after the
+  file's `afterAll` had removed it, failing the run between tests with every test green. The DOM
+  helper now waits for an idle-priority task — which the scheduler runs only when nothing else is
+  queued — before unregistering, and a test queues such work on purpose to show both orders.
+- **CodeQL's eleven findings are fixed in the code, not excluded:** a tag check that read only
+  lower-case `<script>`, an escape that escaped only dots, tag-stripping by regular expression, URL
+  checks by substring or an unanchored pattern, a look-then-read race in the token generator, and a
+  test double called with an argument it ignored.
+
 ### Fix — 2026-10-21: the screens take the window's width (D-177)
 
 The feed and its composer, the inbox, the open questions, search, saved and Settings no longer sit in
