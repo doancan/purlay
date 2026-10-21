@@ -104,7 +104,12 @@ export const FAILURE_MODES = [
  * heading does not count either.
  */
 export const unansweredFailureModes = (body: string): string[] => {
-  const visible = body.replace(/<!--[\s\S]*?-->/g, '');
+  // Until nothing changes: removing one comment can join the halves of another.
+  let visible = body;
+  for (let before = ''; before !== visible;) {
+    before = visible;
+    visible = visible.replace(/<!--[\s\S]*?-->/g, '');
+  }
   const section =
     /^##\s+Failure modes\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/im.exec(visible)?.[1] ?? '';
   const answers = new Set(

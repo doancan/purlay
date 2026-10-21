@@ -156,6 +156,14 @@ describe('a pull request says how it fails (CONTRIBUTING.md §6.9)', () => {
     expect(unansweredFailureModes(body)).toEqual(['Volume']);
   });
 
+  test('a comment that is left behind when another is removed is removed too', () => {
+    const body = answered.replace(
+      '- **Volume:** covered by x.test.ts',
+      '<!-<!-- -->-\n- **Volume:** later\n-->',
+    );
+    expect(unansweredFailureModes(body)).toEqual(['Volume']);
+  });
+
   test('a category answered under another heading does not count', () => {
     const body = `## Failure modes\n\n- **Authority:** 404 test\n\n## Notes\n\n- **Volume:** fine`;
     expect(unansweredFailureModes(body)).toEqual(
