@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Fix — 2026-10-21: the browser budgets judge the middle of a run, not its worst moment
+
+`budget:browser` failed a documents-only change: cold load 132 → 198 ms and keystroke to the document
+14 → 22 ms on the runner. One cold load is one draw, and a p95 of twenty is the second-worst of twenty;
+one stall moves either by half. The gate now compares medians — five cold loads, twenty keystrokes,
+twenty switches — which a real slowdown moves and a stall does not. The tests still hold the p95s to
+their lines on a developer's machine.
+
 ### Fix — 2026-10-21: the browser tests finish, and judge latency as D-49 says (#727, #728)
 
 The browser tests ran four projects on one runner and outran its twenty minutes; they now run one

@@ -1,6 +1,6 @@
 /**
  * The browser budgets on a shared runner (`PRD.md` §5, D-49): cold load, keystroke to paint and the
- * channel switch, as the browser tests measured them (`apps/web/e2e/performance.e2e.ts` writes each
+ * channel switch, each as the middle of its run, as the browser tests measured them (`apps/web/e2e/performance.e2e.ts` writes each
  * to `test-results/performance/<measure>-<project>.json`).
  *
  *   bun run budget:browser -- --project <name> [--from <folder>] [--keep <file>]
@@ -16,16 +16,25 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { jumped, optionOf } from './budget-latency';
 
-/** Each number: its name in the report, the file it is in, and where in that file. */
+/**
+ * Each number: its name in the report, the file it is in, and where in that file. The middle of
+ * each run, not its tail: a p95 of twenty is the second-worst of twenty, one stall on a shared
+ * machine moves it by half, and a gate that fails on one stall is re-run until nobody reads it
+ * (D-49). A real slowdown moves the median. The tests still hold the p95s to their lines.
+ */
 const MEASURES = [
-  { name: 'cold load', file: 'cold-load', at: ['elapsed'] },
-  { name: 'keystroke to the document p95', file: 'keystroke-to-paint', at: ['toDocument', 'p95'] },
+  { name: 'cold load, median of five', file: 'cold-load', at: ['elapsed'] },
   {
-    name: 'keystroke to the next frame p95',
+    name: 'keystroke to the document, median',
     file: 'keystroke-to-paint',
-    at: ['toNextFrame', 'p95'],
+    at: ['toDocument', 'p50'],
   },
-  { name: 'channel switch p95', file: 'channel-switch', at: ['p95'] },
+  {
+    name: 'keystroke to the next frame, median',
+    file: 'keystroke-to-paint',
+    at: ['toNextFrame', 'p50'],
+  },
+  { name: 'channel switch, median', file: 'channel-switch', at: ['p50'] },
 ] as const;
 
 type Measured = Readonly<Record<string, number>>;

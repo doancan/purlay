@@ -6,7 +6,7 @@
  * measures the channel switch at 120–170 ms where a laptop measures 33.
  *
  * - **Cold load to an interactive channel, < 1.5 s** on the production build, with a warm
- *   browser cache (what a person returning to the tab gets).
+ *   browser cache (what a person returning to the tab gets) — the median of five loads.
  * - **Keystroke → own message painted, < 16 ms** — one frame, never awaiting the network —
  *   p95 over 20 sends, with the server's answers held for two seconds.
  * - **Channel switch with the newest messages cached, < 100 ms**, p95 over 20 switches.
@@ -64,12 +64,18 @@ test.describe('cold load', () => {
     await page.goto(route);
     await expect(frame).toBeVisible();
 
-    const started = performance.now();
-    await page.goto(route, { waitUntil: 'commit' });
-    // Interactive: the frame is there, and the page answers a key press.
-    await expect(frame).toBeVisible();
-    await page.keyboard.press('Tab');
-    const elapsed = performance.now() - started;
+    // Five loads, and their median: one load is one draw of a noisy machine, and a budget judged on
+    // a single draw fails on the draw (D-49).
+    const loads: number[] = [];
+    for (let load = 0; load < 5; load++) {
+      const started = performance.now();
+      await page.goto(route, { waitUntil: 'commit' });
+      // Interactive: the frame is there, and the page answers a key press.
+      await expect(frame).toBeVisible();
+      await page.keyboard.press('Tab');
+      loads.push(performance.now() - started);
+    }
+    const elapsed = percentile(loads, 50);
     const navigation = await page.evaluate(() => {
       const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
       return {
@@ -78,10 +84,10 @@ test.describe('cold load', () => {
         loadEventEnd: entry?.loadEventEnd ?? -1,
       };
     });
-    record('cold-load', info.project.name, { elapsed, ...navigation });
+    record('cold-load', info.project.name, { elapsed, all: loads, ...navigation });
     info.annotations.push({
       type: 'cold-load',
-      description: `${elapsed.toFixed(0)} ms to an interactive channel (ttfb ${navigation.responseStart.toFixed(0)}, dom interactive ${navigation.domInteractive.toFixed(0)}, load ${navigation.loadEventEnd.toFixed(0)})`,
+      description: `${elapsed.toFixed(0)} ms to an interactive channel, the median of five (ttfb ${navigation.responseStart.toFixed(0)}, dom interactive ${navigation.domInteractive.toFixed(0)}, load ${navigation.loadEventEnd.toFixed(0)})`,
     });
     underTheLine(elapsed, 1_500);
   });
