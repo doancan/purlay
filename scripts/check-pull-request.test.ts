@@ -3,6 +3,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import {
+  FAILURE_MODES,
   judge,
   linkedIssues,
   OVERRIDE_LABEL,
@@ -10,6 +11,7 @@ import {
   productionLines,
   type ChangedFile,
   type PullRequest,
+  unansweredFailureModes,
 } from './check-pull-request';
 
 const file = (path: string, lines: number): ChangedFile => ({
@@ -18,8 +20,15 @@ const file = (path: string, lines: number): ChangedFile => ({
   deletions: 0,
 });
 
+/** A section that answers every category, as an author fills the template in. */
+const answered = [
+  '## Failure modes',
+  '',
+  ...FAILURE_MODES.map((mode) => `- **${mode}:** covered by x.test.ts`),
+].join('\n');
+
 const aPull = (overrides: Partial<PullRequest> = {}): PullRequest => ({
-  body: 'Closes #1.',
+  body: `Closes #1.\n\n${answered}`,
   author: 'someone',
   labels: [],
   files: [file('apps/api/src/platform/clock.ts', 10)],
@@ -37,7 +46,7 @@ describe('a pull request names its task', () => {
   });
 
   test('one that names none is refused', () => {
-    expect(judge(aPull({ body: 'Mentions #7 in passing.' }), labelled({}))).toEqual([
+    expect(judge(aPull({ body: `Mentions #7 in passing.\n\n${answered}` }), labelled({}))).toEqual([
       expect.stringContaining('names no issue') as string,
     ]);
   });
@@ -90,7 +99,7 @@ describe('a pull request touches what its task is about', () => {
 
   test('the same change passes when it names the issue the other file serves', () => {
     const pull = aPull({
-      body: 'Closes #1. Part of #2.',
+      body: `Closes #1. Part of #2.\n\n${answered}`,
       files: [file('apps/web/src/a.tsx', 5), file('apps/api/src/b.ts', 5)],
     });
     expect(judge(pull, labelled({ 1: ['web'], 2: ['api'] }))).toEqual([]);
@@ -116,5 +125,63 @@ describe('a pull request touches what its task is about', () => {
     expect(judge(aPull(), labelled({ 1: ['docs'] }))).toEqual([
       expect.stringContaining('apps/api/src/platform/clock.ts') as string,
     ]);
+  });
+});
+
+describe('a pull request says how it fails (CONTRIBUTING.md §6.9)', () => {
+  test('every category answered, one line each, passes', () => {
+    expect(unansweredFailureModes(answered)).toEqual([]);
+  });
+
+  test('without the section, every category is unanswered', () => {
+    expect(unansweredFailureModes('Closes #1.')).toEqual([...FAILURE_MODES]);
+  });
+
+  test('the template left as it is answers nothing', () => {
+    const template = [
+      '## Failure modes',
+      '',
+      '<!-- One line each: the test that covers it, or why it cannot apply. -->',
+      '',
+      ...FAILURE_MODES.map((mode) => `- **${mode}:** `),
+    ].join('\n');
+    expect(unansweredFailureModes(template)).toEqual([...FAILURE_MODES]);
+  });
+
+  test('an answer hidden in a comment is not an answer', () => {
+    const body = answered.replace(
+      '- **Volume:** covered by x.test.ts',
+      '<!--\n- **Volume:** later\n-->',
+    );
+    expect(unansweredFailureModes(body)).toEqual(['Volume']);
+  });
+
+  test('a category answered under another heading does not count', () => {
+    const body = `## Failure modes\n\n- **Authority:** 404 test\n\n## Notes\n\n- **Volume:** fine`;
+    expect(unansweredFailureModes(body)).toEqual(
+      FAILURE_MODES.filter((mode) => mode !== 'Authority'),
+    );
+  });
+
+  test('plain "Label: answer" lines count, case aside', () => {
+    const body = [
+      '## Failure modes',
+      ...FAILURE_MODES.map((m) => `${m.toLowerCase()}: n/a, no input`),
+    ].join('\n');
+    expect(unansweredFailureModes(body)).toEqual([]);
+  });
+
+  test('a change to production code without it is refused, naming what is missing', () => {
+    expect(judge(aPull({ body: 'Closes #1.' }), labelled({ 1: ['api'] }))).toEqual([
+      expect.stringContaining('Refused input, Authority') as string,
+    ]);
+  });
+
+  test('documents and tests alone owe no failure modes', () => {
+    const pull = aPull({
+      body: 'Closes #1.',
+      files: [file('docs/UX.md', 5), file('apps/api/src/x.test.ts', 50)],
+    });
+    expect(judge(pull, labelled({ 1: ['api'] }))).toEqual([]);
   });
 });

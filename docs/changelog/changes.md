@@ -6,6 +6,22 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Docs — 2026-10-21: plan, the bad day, and keeping the project worth working in
+
+- **`CONTRIBUTING.md` §6.8 — plan before you build.** A written plan for anything past one file: the
+  contract, the data, the failure modes, the tests, the rollback and what is left out; a pre-mortem;
+  the dimension that grows; expand, migrate, contract for a one-way door.
+- **§6.9 — build for the bad day.** Refused input, authority, concurrency, partial failure, network
+  and time, and volume each get a test or a stated reason; faults injected at a seam; proved from two
+  sides, against the specification, with a mutation per guard and a reviewer who tries to break it.
+- **`check:pr` refuses a change to production code that does not say how it fails (D-177).** The pull
+  request template asks for one line per §6.9 category; an empty one, one inside a comment or one
+  under another heading fails the check. Documents, tests and dependabot owe none. Two mutations prove
+  the check can fail.
+- **The template's verification block runs `bun run verify`**, the gate, instead of three of its parts.
+- **§6.10 — keep the project worth working in.** Vertical slices, stop the line, out of scope is an
+  issue, operable is part of done, threat-model new surface, and an escaped bug owes a mechanism.
+
 ### Fix — 2026-10-21: every control is named by what it shows
 
 axe-core 4.14 checks that a control's name contains its visible text (WCAG 2.5.3, label in name), so a

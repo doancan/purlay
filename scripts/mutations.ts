@@ -4219,4 +4219,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/api/src/platform/migrate-on-start.integration.test.ts'],
   },
+  {
+    id: 'failure-modes-answered-by-the-template',
+    why: 'the template’s own prompts count as answers, so a pull request that says nothing about how it fails passes (D-177)',
+    file: 'scripts/check-pull-request.ts',
+    find: "  const visible = body.replace(/<!--[\\s\\S]*?-->/g, '');\n",
+    replace: '  const visible = body;\n',
+    tests: ['scripts/check-pull-request.test.ts'],
+  },
+  {
+    id: 'failure-modes-owed-by-every-change',
+    why: 'a pull request of documents or tests alone is refused for failure modes it has none of (D-177)',
+    file: 'scripts/check-pull-request.ts',
+    find: '  const unanswered = lines > 0 ? unansweredFailureModes(pull.body) : [];\n',
+    replace: '  const unanswered = unansweredFailureModes(pull.body);\n',
+    tests: ['scripts/check-pull-request.test.ts'],
+  },
 ];

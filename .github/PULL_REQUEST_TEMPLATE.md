@@ -9,9 +9,21 @@ Closes #
 <!-- Paste the real output. Evidence, then assertion — never claim a pass without it. -->
 
 ```
-$ bun run typecheck && bun run lint && bun test
+$ bun run verify
 
 ```
+
+## Failure modes
+
+<!-- CONTRIBUTING.md §6.9. One line each: the test that covers it, or why it cannot apply.
+     CI refuses a change to production code that leaves one empty; documents and tests alone owe none. -->
+
+- **Refused input:** 
+- **Authority:** 
+- **Concurrency:** 
+- **Partial failure:** 
+- **Network and time:** 
+- **Volume:** 
 
 ## Checklist
 
