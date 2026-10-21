@@ -206,7 +206,8 @@ export const rawValueIn = (property: string, value: string): string | undefined 
   if (LENGTH.test(scrubbed)) return `a size or duration (${value})`;
   if (BEZIER.test(scrubbed)) return `an easing curve (${value})`;
   // Tailwind writes `opacity-50` as `50%`; the number is the same unnamed decision.
-  const amount = /^(-?\d*\.?\d+)(%?)$/.exec(value);
+  // One way to read each number — `5`, `1.5`, `.5` — so a long run of digits cannot backtrack.
+  const amount = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(%?)$/.exec(value);
   if (NUMERIC_PROPERTIES.has(property) && amount !== null) {
     const n = Number(amount[1]) / (amount[2] === '%' ? 100 : 1);
     if (property === 'opacity' && (n === 0 || n === 1)) return undefined;

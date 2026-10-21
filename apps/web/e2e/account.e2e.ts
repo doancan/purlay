@@ -104,10 +104,11 @@ test.describe('connecting GitHub', () => {
     await expect(page).toHaveURL(
       new RegExp(`/w/${workspace.slug}/settings/account\\?github=cancelled$`),
     );
+    // The card is read again after the way back, and its skeleton is a status too: wait it out first.
+    await expect(card.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
     await expect(card.getByRole('status')).toHaveText(
       'You cancelled on GitHub — nothing was connected.',
     );
-    await expect(card.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
   });
 
   test('an account GitHub made says it signs in with GitHub, and has nothing to connect', async ({
