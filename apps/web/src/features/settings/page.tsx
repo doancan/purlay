@@ -4,7 +4,7 @@
  *
  * One shape so the pages read alike and so a page cannot drift into a layout of its own: the column
  * width, the ground under the cards, the gap between them and the rows' padding are decided here and
- * nowhere else. The column is `max-w-settings`, centred, on `surface-000`; a card is `surface-100`
+ * nowhere else. The column is the main area's full width, from its left edge (D-177), on `surface-000`; a card is `surface-100`
  * with a hairline and the card shadow, so in both themes the card is a step above its ground.
  *
  * Below the narrow breakpoint a row stacks — label, then a full-width control — because a label and a
@@ -39,7 +39,7 @@ export const SettingsPage = ({
         <span className="text-heading text-ink">{t('settings.title')}</span>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto bg-surface-000">
-        <div className="mx-auto flex w-full max-w-settings flex-col gap-8 px-10 pt-10 pb-16 max-narrow:px-4 max-narrow:pt-6 max-narrow:pb-10">
+        <div className="flex w-full flex-col gap-8 px-10 pt-10 pb-16 max-narrow:px-4 max-narrow:pt-6 max-narrow:pb-10">
           <header className="flex items-start justify-between gap-6 max-narrow:flex-col max-narrow:gap-4">
             <div className="flex min-w-0 flex-col gap-1">
               <h1 className="text-display text-ink">{title}</h1>
