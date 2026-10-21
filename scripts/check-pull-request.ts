@@ -18,6 +18,11 @@
  *    labels, and each area allows some paths; a file outside all of them fails.
  *    There is no label for this one: split the change, or name the issue it
  *    also serves.
+ * 4. **It says how it fails.** A change to the product — `apps/` or
+ *    `packages/` — answers each category of `CONTRIBUTING.md` §6.9 under
+ *    `## Failure modes`, one line each: the test that covers it, or why it cannot
+ *    apply. Documents, tests, tooling and configuration owe none. Whether an answer is good is the reviewer's; that none is missing
+ *    is this check's (D-178).
  *
  * Run in CI on every pull request; `bun run check:pr <number>` runs it locally.
  */
@@ -83,6 +88,42 @@ export const productionLines = (files: readonly ChangedFile[]): number =>
     .filter((file) => !unmetered(file.path))
     .reduce((sum, file) => sum + file.additions + file.deletions, 0);
 
+/** `CONTRIBUTING.md` §6.9's categories, in its order, as the pull request template names them. */
+export const FAILURE_MODES = [
+  'Refused input',
+  'Authority',
+  'Concurrency',
+  'Partial failure',
+  'Network and time',
+  'Volume',
+] as const;
+
+/**
+ * The categories with no answer under `## Failure modes`. A comment is not an
+ * answer, so the template left as it is answers nothing; a line under another
+ * heading does not count either.
+ */
+export const unansweredFailureModes = (body: string): string[] => {
+  // Until nothing changes: removing one comment can join the halves of another.
+  let visible = body;
+  for (let before = ''; before !== visible;) {
+    before = visible;
+    visible = visible.replace(/<!--[\s\S]*?-->/g, '');
+  }
+  const section =
+    /^##\s+Failure modes\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/im.exec(visible)?.[1] ?? '';
+  const answers = new Set(
+    [
+      ...section.matchAll(/^[ \t]*(?:[-*][ \t]+)?\**([^:*\n]+?)\**[ \t]*:\**[ \t]*([^\s*].*)$/gm),
+    ].map((match) => (match[1] ?? '').trim().toLowerCase()),
+  );
+  return FAILURE_MODES.filter((mode) => !answers.has(mode.toLowerCase()));
+};
+
+/** The code a person uses: what §6.9's bad day happens to. Tooling and configuration owe none. */
+const touchesTheProduct = (file: ChangedFile): boolean =>
+  /^(apps|packages)\//.test(file.path) && !unmetered(file.path);
+
 const DEPENDABOT = new Set(['dependabot[bot]', 'app/dependabot']);
 
 /** Every rule the pull request breaks, in words a person can act on; empty when it passes. */
@@ -104,6 +145,13 @@ export const judge = (
   if (lines > PRODUCTION_LINE_BUDGET && !pull.labels.includes(OVERRIDE_LABEL)) {
     problems.push(
       `It changes ${String(lines)} lines of production code; the budget is ${String(PRODUCTION_LINE_BUDGET)}. Split it, or label it "${OVERRIDE_LABEL}" so its size is a decision the reviewer can see.`,
+    );
+  }
+
+  const unanswered = pull.files.some(touchesTheProduct) ? unansweredFailureModes(pull.body) : [];
+  if (unanswered.length > 0) {
+    problems.push(
+      `It does not say how it fails: nothing under "## Failure modes" for ${unanswered.join(', ')}. One line each — the test that covers it, or why it cannot apply (CONTRIBUTING.md §6.9).`,
     );
   }
 
