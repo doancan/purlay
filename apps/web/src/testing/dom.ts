@@ -23,6 +23,34 @@
 import { afterAll, afterEach, beforeAll } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { cleanup } from '@testing-library/react';
+import { createRequire } from 'node:module';
+
+interface Scheduler {
+  readonly unstable_scheduleCallback: (priority: number, callback: () => void) => unknown;
+  readonly unstable_NormalPriority: number;
+  readonly unstable_IdlePriority: number;
+}
+
+/**
+ * The scheduler `react-dom` itself runs on — resolved from `react-dom`, so it is the same module
+ * instance and the same queue, not a second copy with nothing in it.
+ */
+export const reactScheduler = (): Scheduler => {
+  const fromHere = createRequire(import.meta.url);
+  return createRequire(fromHere.resolve('react-dom'))('scheduler') as Scheduler;
+};
+
+/**
+ * Resolves once everything React has queued has run. The scheduler runs its queue in priority
+ * order, so a task at idle priority runs only when nothing else is waiting: a positive condition,
+ * not a guess at how long the queue takes (`CONTRIBUTING.md` §6.3).
+ */
+export const settleScheduler = async (): Promise<void> => {
+  const scheduler = reactScheduler();
+  await new Promise<void>((resolve) => {
+    scheduler.unstable_scheduleCallback(scheduler.unstable_IdlePriority, resolve);
+  });
+};
 
 /**
  * Registered **in a lifecycle hook**, not when called.
@@ -62,6 +90,8 @@ export const installDom = (): void => {
    * passed alone. A green run of one file is not a green run.
    */
   afterAll(async () => {
+    // An unmount leaves effects for React to run later; they read `window`, so they run first.
+    await settleScheduler();
     await GlobalRegistrator.unregister();
   });
 };

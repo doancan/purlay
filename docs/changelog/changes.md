@@ -17,6 +17,11 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 - **Migrating on start is proved to close its connection by waiting for it to go**, up to five seconds,
   rather than counting at once: a closed connection's server process leaves `pg_stat_activity` a moment
   after the client hangs up. One left open still fails, and a mutation says so.
+- **A component test file takes its DOM away only after React's scheduler is idle.** An unmount
+  leaves effects React runs later, and they read `window`; once in three CI runs they ran after the
+  file's `afterAll` had removed it, failing the run between tests with every test green. The DOM
+  helper now waits for an idle-priority task — which the scheduler runs only when nothing else is
+  queued — before unregistering, and a test queues such work on purpose to show both orders.
 - **CodeQL's eleven findings are fixed in the code, not excluded:** a tag check that read only
   lower-case `<script>`, an escape that escaped only dots, tag-stripping by regular expression, URL
   checks by substring or an unanchored pattern, a look-then-read race in the token generator, and a
