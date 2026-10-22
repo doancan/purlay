@@ -3,12 +3,13 @@
  * out here, signing out everywhere — which asks first — and erasing the account, which asks for the
  * username.
  */
-import { describe, expect, spyOn, test } from 'bun:test';
-import { act, within } from '@testing-library/react';
+import { describe, expect, test } from 'bun:test';
+import { act, fireEvent, within } from '@testing-library/react';
 import type { BoundFunctions, queries } from '@testing-library/react';
+import { en } from '../../../i18n/catalogue/en';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
-import { ApiError } from '../../../data/errors';
+import { ApiError, LibraryFailure } from '../../../data/errors';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { expectFocusOn } from '../../../testing/focus';
 import { installDom } from '../../../testing/dom';
@@ -16,9 +17,6 @@ import { aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import { Toaster } from '../../../ui/toast';
-import { connectGitHubHref } from '@purlay/types';
-import { href } from '../../../router/routes';
-import { leaveFor } from './account';
 
 installDom();
 
@@ -394,7 +392,7 @@ describe('leaving the workspace (D-152)', () => {
   });
 });
 
-describe('how you sign in (D-176)', () => {
+describe('how you sign in (D-176, D-179 §5)', () => {
   const opened = async (
     api: Partial<Api>,
     path = '/w/acme/settings/account',
@@ -407,97 +405,77 @@ describe('how you sign in (D-176)', () => {
   };
 
   const emailAccount: Partial<Api> = {
-    mySignIn: () => Promise.resolve({ email: 'ada@example.test', emailLinks: true, github: null }),
+    mySignIn: () =>
+      Promise.resolve({
+        email: 'ada@example.test',
+        emailLinks: true,
+        hasPassword: false,
+        github: null,
+      }),
   };
 
-  test('an account made by email shows its address and offers Connect GitHub, which leaves for GitHub', async () => {
-    const asked: string[] = [];
-    const left: string[] = [];
-    const leave = leaveFor.go;
-    leaveFor.go = (location): void => {
-      left.push(location);
-    };
-    try {
-      const { view, card } = await opened({
-        ...emailAccount,
-        connectGitHub: (workspace) => {
-          asked.push(workspace);
-          return Promise.resolve({ location: 'https://github.com/login/oauth/authorize?state=s' });
-        },
-      });
-      expect(card.getByText('ada@example.test')).toBeDefined();
-      expect(card.getByText('A sign-in link sent to this address signs you in.')).toBeDefined();
-      await expectNoAxeViolations(view.getByRole('main'));
-      await person().click(card.getByRole('button', { name: 'Connect GitHub' }));
-      await settle();
-      // From the workspace the page is in, which is where GitHub sends the browser back to.
-      expect(asked).toEqual(['acme']);
-      expect(left).toEqual(['https://github.com/login/oauth/authorize?state=s']);
-      view.unmount();
-    } finally {
-      leaveFor.go = leave;
-    }
+  test('an account made by email shows its address, and nothing about GitHub it has none of', async () => {
+    const { view, card } = await opened(emailAccount);
+    expect(card.getByText('ada@example.test')).toBeDefined();
+    expect(card.getByText('A sign-in link sent to this address signs you in.')).toBeDefined();
+    // Nothing to press: GitHub is linked by signing in with it, never from here.
+    expect(card.queryByRole('button')).toBeNull();
+    expect(card.queryByText('GitHub')).toBeNull();
+    expect(view.queryByText(/Connect GitHub/)).toBeNull();
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
   });
 
-  test('a connected account shows the login and no button', async () => {
+  test('a linked account shows the login, read only', async () => {
     const { view, card } = await opened({
       mySignIn: () =>
         Promise.resolve({
           email: 'ada@example.test',
           emailLinks: true,
+          hasPassword: false,
           github: { login: 'ada-gh' },
         }),
     });
+    expect(card.getByText('GitHub')).toBeDefined();
     expect(card.getByText('ada-gh')).toBeDefined();
-    expect(card.queryByRole('button', { name: 'Connect GitHub' })).toBeNull();
+    expect(card.getByText('You can sign in with this GitHub account.')).toBeDefined();
+    expect(card.queryByRole('button')).toBeNull();
+    await expectNoAxeViolations(view.getByRole('main'));
+    view.unmount();
+  });
+
+  test('a GitHub account whose login is not known yet is still said to be linked', async () => {
+    const { view, card } = await opened({
+      mySignIn: () =>
+        Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: true,
+          hasPassword: false,
+          github: { login: null },
+        }),
+    });
+    expect(card.getByText('Linked')).toBeDefined();
     view.unmount();
   });
 
   test('an account GitHub made says it signs in with GitHub, not by link', async () => {
     const { view, card } = await opened({
       mySignIn: () =>
-        Promise.resolve({ email: 'ada@example.test', emailLinks: false, github: { login: 'ada' } }),
+        Promise.resolve({
+          email: 'ada@example.test',
+          emailLinks: false,
+          hasPassword: false,
+          github: { login: 'ada' },
+        }),
     });
     expect(card.getByText('Your GitHub account’s address. You sign in with GitHub.')).toBeDefined();
     view.unmount();
   });
 
-  test('says how a connect came back, in words, from the address GitHub sent the browser to', async () => {
-    const cases = [
-      ['connected', 'status', 'GitHub is connected — you can sign in with it from now on.'],
-      ['session', 'alert', /^You were signed out, or signed in as somebody else/],
-      ['taken', 'alert', /^That GitHub account already signs in to another Purlay account/],
-      ['nonsense', 'alert', 'Connecting GitHub did not finish — try again.'],
-    ] as const;
-    for (const [outcome, role, words] of cases) {
-      const { view, card } = await opened(
-        emailAccount,
-        `/w/acme/settings/account?github=${outcome}`,
-      );
-      expect(card.getByRole(role).textContent).toMatch(words);
-      view.unmount();
-    }
-  });
-
-  test('a connect that cannot start says why, and an account connected meanwhile is read again', async () => {
-    let reads = 0;
-    const { view, card } = await opened({
-      mySignIn: () => {
-        reads += 1;
-        return Promise.resolve({
-          email: 'ada@example.test',
-          emailLinks: true,
-          github: reads > 1 ? { login: 'ada-gh' } : null,
-        });
-      },
-      connectGitHub: () => Promise.reject(new ApiError(409, 'GITHUB_ALREADY_CONNECTED', 'already')),
-    });
-    await person().click(card.getByRole('button', { name: 'Connect GitHub' }));
-    await settle();
-    expect(card.getByRole('alert').textContent).toBe(
-      'GitHub could not be opened. This account has a GitHub account connected already.',
-    );
-    expect(await card.findByText('ada-gh')).toBeDefined();
+  test('an address a connect once sent the browser back with says nothing now', async () => {
+    const { view, card } = await opened(emailAccount, '/w/acme/settings/account?github=connected');
+    expect(card.queryByRole('status')).toBeNull();
+    expect(card.queryByRole('alert')).toBeNull();
     view.unmount();
   });
 
@@ -507,7 +485,12 @@ describe('how you sign in (D-176)', () => {
       mySignIn: () =>
         fail
           ? Promise.reject(new ApiError(500, 'INTERNAL', 'x'))
-          : Promise.resolve({ email: 'ada@example.test', emailLinks: true, github: null }),
+          : Promise.resolve({
+              email: 'ada@example.test',
+              emailLinks: true,
+              hasPassword: false,
+              github: null,
+            }),
     });
     expect(await card.findByRole('button', { name: 'Retry' })).toBeDefined();
     fail = false;
@@ -516,19 +499,172 @@ describe('how you sign in (D-176)', () => {
     view.unmount();
   });
 
-  test('leaving for GitHub is the browser leaving the page, to where the server said', () => {
-    const assign = spyOn(window.location, 'assign').mockImplementation(() => undefined);
-    try {
-      leaveFor.go('https://github.com/login/oauth/authorize?state=s');
-      expect(assign).toHaveBeenCalledWith('https://github.com/login/oauth/authorize?state=s');
-    } finally {
-      assign.mockRestore();
-    }
+  test('while it is read, the card says so', async () => {
+    const view = await renderApp(<Outlet />, {
+      path: '/w/acme/settings/account',
+      api: aSignedInApi({ mySignIn: () => new Promise(() => undefined) }),
+    });
+    await settle();
+    await view.findByRole('heading', { level: 1, name: 'Sessions & account' });
+    const card = within(view.getByRole('region', { name: 'How you sign in' }));
+    expect(card.getByRole('status')).toBeDefined();
+    view.unmount();
+  });
+});
+
+describe('change password', () => {
+  const withPassword: Partial<Api> = {
+    mySignIn: () =>
+      Promise.resolve({
+        email: 'admin@example.test',
+        emailLinks: true,
+        hasPassword: true,
+        github: null,
+      }),
+  };
+
+  const fill = async (view: View, current: string, next: string): Promise<void> => {
+    const user = person();
+    await user.type(view.getByLabelText('Current password'), current);
+    await user.type(view.getByLabelText('New password'), next);
+  };
+
+  test('is drawn only for an account that has a password', async () => {
+    const without = await open({
+      mySignIn: () =>
+        Promise.resolve({
+          email: 'a@example.test',
+          emailLinks: true,
+          hasPassword: false,
+          github: null,
+        }),
+    });
+    expect(without.queryByRole('region', { name: 'Password' })).toBeNull();
+    without.unmount();
+    const view = await open(withPassword);
+    expect(view.getByRole('region', { name: 'Password' })).toBeDefined();
+    await expectNoAxeViolations(view.container);
   });
 
-  test('the address GitHub sends the browser back to is this page’s', () => {
-    expect(connectGitHubHref('acme', 'connected').split('?')[0]).toBe(
-      href('settings', { slug: 'acme', section: 'account' }),
-    );
+  test('reads the policy as the password is typed, from the shared function', async () => {
+    const view = await open(withPassword);
+    const user = person();
+    const rules = within(view.getByRole('region', { name: 'Password' }));
+    await user.type(rules.getByLabelText('New password'), 'short');
+    expect(
+      rules.getByText('10 to 128 characters, no control characters').parentElement?.className,
+    ).toContain('text-danger-text');
+    await user.clear(rules.getByLabelText('New password'));
+    await user.type(rules.getByLabelText('New password'), 'a-fine-long-passphrase-7');
+    expect(
+      rules.getByText('10 to 128 characters, no control characters').parentElement?.className,
+    ).toContain('text-success-text');
   });
+
+  test('a password the policy refuses is said by rule and nothing is sent', async () => {
+    let sent = 0;
+    const view = await open({
+      ...withPassword,
+      changePassword: () => {
+        sent += 1;
+        return Promise.resolve();
+      },
+    });
+    await fill(view, 'the-old-one-1', 'password123');
+    await person().click(view.getByRole('button', { name: 'Change password' }));
+    await settle();
+    expect(view.getByText('That password is one of the commonest.')).toBeDefined();
+    expect(sent).toBe(0);
+  });
+
+  test('sends both passwords, says the other sessions were signed out, and empties the fields', async () => {
+    const sent: { currentPassword: string; newPassword: string }[] = [];
+    const view = await open({
+      ...withPassword,
+      changePassword: async (input) => {
+        sent.push(input);
+        await Promise.resolve();
+      },
+    });
+    await fill(view, 'the-old-one-1', 'a-fine-long-passphrase-7');
+    await person().click(view.getByRole('button', { name: 'Change password' }));
+    await settle();
+    expect(sent).toEqual([
+      { currentPassword: 'the-old-one-1', newPassword: 'a-fine-long-passphrase-7' },
+    ]);
+    expect(view.getByText('Your other sessions were signed out.')).toBeDefined();
+    expect((view.getByLabelText('New password') as HTMLInputElement).value).toBe('');
+  });
+
+  test('is sent when the form itself is submitted, without a page load', async () => {
+    const sent: { currentPassword: string; newPassword: string }[] = [];
+    const view = await open({
+      ...withPassword,
+      changePassword: (input) => {
+        sent.push(input);
+        return Promise.resolve();
+      },
+    });
+    await fill(view, 'the-old-one-1', 'a-fine-long-passphrase-7');
+    const form = view.getByRole('form', { name: 'Password' });
+    expect(fireEvent.submit(form)).toBe(false);
+    await settle();
+    expect(sent).toEqual([
+      { currentPassword: 'the-old-one-1', newPassword: 'a-fine-long-passphrase-7' },
+    ]);
+    expect(view.getByText('Your other sessions were signed out.')).toBeDefined();
+  });
+
+  test("the button is the form's own submit button, so the Enter key in a field presses it", async () => {
+    // A form with several fields and no submit button of its own is not submitted by Enter. The button
+    // sits in the card's footer, outside the form, so the `form` attribute is what joins them.
+    const sent: { currentPassword: string; newPassword: string }[] = [];
+    const view = await open({
+      ...withPassword,
+      changePassword: (input) => {
+        sent.push(input);
+        return Promise.resolve();
+      },
+    });
+    await fill(view, 'the-old-one-1', 'a-fine-long-passphrase-7');
+    const button = view.getByRole('button', { name: 'Change password' }) as HTMLButtonElement;
+    expect(button.type).toBe('submit');
+    expect(button.form === view.getByRole('form', { name: 'Password' })).toBe(true);
+    await person().click(button);
+    await settle();
+    expect(sent).toHaveLength(1);
+  });
+
+  test.each([
+    [new LibraryFailure(400, 'INVALID_PASSWORD'), 'That is not your current password.'],
+    [
+      new LibraryFailure(400, 'PASSWORD_TOO_WEAK', 'contains-name'),
+      'That password contains your name.',
+    ],
+    [new LibraryFailure(400, 'PASSWORD_TOO_SHORT'), 'That password is too short.'],
+    [new LibraryFailure(400, 'PASSWORD_TOO_LONG'), 'That password is too long.'],
+    [new LibraryFailure(0, 'NETWORK'), en['settings.account.password.unreachable']],
+    [
+      new LibraryFailure(429, 'RATE_LIMITED', null, 900),
+      'Too many attempts. Try again in 15 minutes.',
+    ],
+    [
+      new LibraryFailure(500, 'OTHER_SESSIONS_NOT_ENDED'),
+      en['settings.account.password.othersStay'],
+    ],
+    [
+      new LibraryFailure(500, 'INTERNAL_SERVER_ERROR'),
+      'The password was not changed. Try again in a moment.',
+    ],
+  ])(
+    '%s is said in one sentence, without the sessions being called signed out',
+    async (failure, words) => {
+      const view = await open({ ...withPassword, changePassword: () => Promise.reject(failure) });
+      await fill(view, 'the-old-one-1', 'a-fine-long-passphrase-7');
+      await person().click(view.getByRole('button', { name: 'Change password' }));
+      await settle();
+      expect(view.getByText(words)).toBeDefined();
+      expect(view.queryByText('Your other sessions were signed out.')).toBeNull();
+    },
+  );
 });

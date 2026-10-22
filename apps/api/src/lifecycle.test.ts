@@ -3,8 +3,28 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { createLogger } from './platform/logging';
-import { installCrashHandlers, installShutdown, type ProcessLike } from './lifecycle';
+import {
+  closeAfterDrain,
+  drainRefusingChanges,
+  installCrashHandlers,
+  installShutdown,
+  type ProcessLike,
+} from './lifecycle';
 import type { Timers } from './realtime/hub';
+import { outbox, smtpMailer } from './platform/mail';
+import { credentialCipher } from './platform/crypto';
+import { DEVELOPMENT_ENCRYPTION_KEY } from './platform/config';
+import { systemClock } from './platform/clock';
+import { aDatabaseThatMustNotBeTouched, anAuthThatMustNotBeTouched } from './testing/doubles';
+import { aScriptedRelay } from './testing/smtp-relay';
+import {
+  applySettings,
+  runtimeServicesHolder,
+  SettingsChangeFailed,
+  type RuntimeHolder,
+  type RuntimeServices,
+} from './modules/setup/runtime';
+import type { ServerSettings } from './modules/setup/settings';
 
 const harness = (
   drain: () => Promise<void>,
@@ -287,5 +307,103 @@ describe('an error that escaped every handler (#634)', () => {
     await Bun.sleep(20);
     expect(run.errors).toHaveLength(2);
     expect(run.steps.filter((step) => step === 'exit 1')).toHaveLength(1);
+  });
+});
+
+describe('shutting down a server whose relay the settings replaced (D-179 §4.9)', () => {
+  const silent = createLogger({ level: 'silent' });
+  const NOTHING_SET: ServerSettings = {
+    signUp: 'invite-only',
+    github: undefined,
+    smtp: undefined,
+    workspaceCreators: { kind: 'first' },
+    setupCompletedAt: undefined,
+  };
+  const pairOf = (holder: RuntimeHolder, port: number | undefined): RuntimeServices => {
+    const mailer =
+      port === undefined
+        ? undefined
+        : smtpMailer({
+            SMTP_URL: `smtp://127.0.0.1:${String(port)}`,
+            MAIL_FROM: 'no-reply@purlay.test',
+            SMTP_ALLOW_PLAINTEXT: false,
+          });
+    return {
+      auth: anAuthThatMustNotBeTouched(),
+      mailer,
+      mail: mailer === undefined ? undefined : outbox(mailer.send, silent, holder.sends),
+      needsReentry: [],
+      settings: NOTHING_SET,
+    };
+  };
+
+  test('a letter the replaced relay still holds is sent before the pool closes, and no change starts once draining', async () => {
+    const relay = await aScriptedRelay();
+    try {
+      const holder = runtimeServicesHolder(silent);
+      const replaced = pairOf(holder, relay.port);
+      holder.settle(replaced);
+      await holder.replace(pairOf(holder, undefined));
+      // Work a request left for after its answer, on the pair it started on: the relay now replaced.
+      replaced.mail?.post(
+        { to: 'ada@example.test', subject: 's', text: 't', html: '<p>t</p>' },
+        'sign-in',
+      );
+
+      const steps: string[] = [];
+      const refusals: unknown[] = [];
+      const shutdown = installShutdown({
+        drain: drainRefusingChanges(holder, async () => {
+          refusals.push(
+            await applySettings(
+              aDatabaseThatMustNotBeTouched(),
+              { signUp: 'open' },
+              {
+                holder,
+                cipher: credentialCipher(DEVELOPMENT_ENCRYPTION_KEY),
+                clock: systemClock,
+                log: silent,
+                build: () => {
+                  throw new Error('nothing is built while the server drains');
+                },
+              },
+            ).then(
+              () => 'applied',
+              (error: unknown) => error,
+            ),
+          );
+          steps.push('drained');
+        }),
+        closeDatabase: closeAfterDrain({
+          services: holder,
+          errorTracker: { flush: async () => await Promise.resolve(true) },
+          database: {
+            destroy: async (): Promise<void> => {
+              steps.push(`pool closed, ${String(relay.received.length)} letter(s) at the relay`);
+              await Promise.resolve();
+            },
+          },
+        }),
+        log: silent,
+        process: {
+          on: () => undefined,
+          exit: (code) => {
+            steps.push(`exit ${String(code)}`);
+          },
+        },
+        deadlineMs: 10_000,
+      });
+      await shutdown('SIGTERM');
+
+      expect(steps).toEqual(['drained', 'pool closed, 1 letter(s) at the relay', 'exit 0']);
+      expect(relay.received.flatMap(({ to }) => to)).toEqual(['ada@example.test']);
+      expect(
+        refusals.map((refusal) =>
+          refusal instanceof SettingsChangeFailed ? [refusal.stage, refusal.inEffect] : refusal,
+        ),
+      ).toEqual([['shutting-down', 'old']]);
+    } finally {
+      await relay.stop();
+    }
   });
 });

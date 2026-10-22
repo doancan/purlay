@@ -91,7 +91,7 @@ CREATE TABLE users (
     -- resurrecting the one they asked to have removed (D-38). UNIQUE permits many NULLs.
     github_id     BIGINT UNIQUE,
 
-    -- The login as GitHub last gave it, written on every GitHub sign-in (and on connecting, D-176) and
+    -- The login as GitHub last gave it, written on every GitHub sign-in (and on linking it to an account made by email, D-179 §5) and
     -- taken from any other account still holding it; NULL for an email link's account that has not
     -- connected GitHub, and after erasure. What
     -- WORKSPACE_CREATORS is matched against — never `username`, which takes a `-N` or an
@@ -99,10 +99,20 @@ CREATE TABLE users (
     -- briefly share it. (D-169)
     github_login  TEXT COLLATE "C",
 
-    -- When GitHub was connected to an account made by an email link, from a session signed in as it;
-    -- NULL for an account GitHub made, one that has not connected, and after erasure. Tells the two
-    -- apart once both have a github_id: the first keeps its email link and its own names. (D-176)
+    -- When GitHub was joined to an account made by an email link — from a session signed in as it
+    -- (D-176), or by a GitHub sign-in on its verified address (D-179 §5); NULL for an account GitHub
+    -- made, one that has not been joined, and after erasure. Tells the two apart once both have a
+    -- github_id: the first keeps its email link and its own names.
     github_connected_at TIMESTAMPTZ,
+
+    -- Whether the address is one a provider vouched for, or a link sent to it was followed. Better Auth
+    -- reads it: an address that is not verified is never linked to by one that is, and an invitation is
+    -- accepted only by an account whose address is. FALSE until something says so. (D-179, 0047)
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Who may change the server's settings. Ours and not the library's: its Admin plugin is not
+    -- installed. FALSE for everyone until the person who sets the server up is made one. (D-179, 0047)
+    is_server_admin BOOLEAN NOT NULL DEFAULT FALSE,
 
     -- The stable identity anchor across auth methods. Normalised to lowercase ASCII by the
     -- application; COLLATE "C" so comparison is byte-wise and identical everywhere. (D-40)
@@ -147,6 +157,16 @@ CREATE INDEX idx_users_github_login ON users (lower(github_login)) WHERE github_
 Opaque bearer token in an `HttpOnly` cookie, validated against this table on every request and
 on every WebSocket upgrade. Chosen over stateless JWT for revocability. (D-11)
 
+*Amended 2026-10-21 by D-179:* Better Auth reads and writes this table through a mapping of its fields
+onto these columns (`createAuth`); nothing about the columns changed. It deletes a session's row when
+the session ends, whether by sign-out or by revoking it, and so does every way Purlay ends one
+(`modules/auth/sessions.ts`), so nothing writes `revoked_at` any more and nothing reads it but the purge
+below, which still removes a row that has one. The column and its index stay, with no migration: a row
+that carries it can only be from before D-179, and it cannot authenticate anyone (the cookie is the library's
+now, signed under its secret). `token_hash` still holds
+only the SHA-256 of the token: the library is handed a database handle whose plugin
+(`sessionTokenHashing`, `@purlay/db`) hashes every value bound to it.
+
 ```sql
 CREATE TABLE sessions (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -174,7 +194,71 @@ CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS N
 
 `last_used_at` is refreshed at most once an hour, not on every request: this table is read on every HTTP request and every socket upgrade, and a write there would be a write on the hottest path in the system. (D-60)
 
-Expired and revoked rows are not kept: `purgeDeadSessions` removes them in bounded batches, called by the scheduler (#71). (D-87)
+Expired rows are not kept: `purgeDeadSessions` removes them in bounded batches, called by the scheduler (#71), and with them any row from before D-179 that still carries `revoked_at`. (D-87)
+
+### 3.2.1. `accounts`, `verifications` and `rate_limits`
+
+What Better Auth keeps beside `users` and `sessions` (D-179, 0047). Its schema check compares the
+database with what it expects and refuses to run on a difference, so these are its core schema under
+Purlay's names.
+
+```sql
+-- One row for each way a person signs in: a provider's account, or a credential account's password.
+CREATE TABLE accounts (
+    id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider_id              TEXT NOT NULL,   -- 'github', or 'credential' for a password
+    account_id               TEXT NOT NULL,   -- the provider's id for the person; the user's id for 'credential'
+    -- Present because the schema check demands them; never written: a hook of `createAuth` nulls them, as
+    -- Purlay never calls GitHub on a person's behalf and a stored token would be a credential kept for nothing. (D-179)
+    access_token             TEXT,
+    refresh_token            TEXT,
+    id_token                 TEXT,
+    access_token_expires_at  TIMESTAMPTZ,
+    refresh_token_expires_at TIMESTAMPTZ,
+    scope                    TEXT,
+    password                 TEXT,            -- the hash, for a credential account only
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (provider_id, account_id)          -- a provider's account is one row
+);
+
+CREATE INDEX idx_accounts_user ON accounts (user_id);
+
+-- Short-lived tokens the library issues, a sign-in link among them.
+CREATE TABLE verifications (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    identifier  TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_verifications_identifier ON verifications (identifier);
+
+-- Its counters for sign-in attempts, here so a restart does not hand every attempt back and every
+-- process counts the same ones.
+CREATE TABLE rate_limits (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key           TEXT NOT NULL UNIQUE,
+    count         INTEGER NOT NULL,
+    last_request  BIGINT NOT NULL             -- milliseconds since the epoch
+);
+```
+
+Deleting a user deletes its `accounts`. No row of `verifications` is keyed by a person, and one of
+`rate_limits` is, for a day: an inviter's count of invitation e-mails (`purlay:invite-mail:inviter:` and
+their id; the workspace's is `…:workspace:` and its id), which an erasure deletes. Both are short-lived: a sign-in link's `identifier` is `magic-link:` and its token's digest, and its
+`value` the address as JSON, which is how erasure finds it; a reset's `value` is the user's id. The
+library's `rate_limits` rows are a client address and a path; Purlay's own sign-in-link counters are
+`purlay:sign-in-link:address:` or `…:client:` and a digest, with `last_request` the moment the hour
+closes (D-179 §3), and an erasure deletes its address's. The wrong passwords counted against a client are
+`purlay:password:address:<digest>:client:<digest>` and `purlay:password:client:<digest>`, the client being its network (an IPv4 address or an IPv6 /64), their window
+fifteen minutes (D-179 §4); an erasure deletes every one under its address's prefix. A password lives
+only in `accounts.password`, on the row whose `provider_id` is `credential` and whose `account_id` is the
+user's own id, as the library's scrypt (`<salt hex>:<key hex>`) — never the password itself.
 
 ### 3.3. `push_subscriptions` and `users.locale`
 
@@ -208,41 +292,19 @@ CREATE INDEX idx_push_subscriptions_session ON push_subscriptions (session_id);
 
 At most 20 devices a person, the least recently subscribed dropped when a twenty-first subscribes
 (subscribing again sets `created_at`). A row moves to another person only when they send its keys
-as well as its endpoint. A session's rows go when it is revoked (sign-out, sign out everywhere), in
-the same transaction, and, with the session, when `purgeDeadSessions`
-removes it. The endpoint and both keys are a person's: never logged (`ARCHITECTURE.md` §10).
+as well as its endpoint. A session's rows go when its row is deleted (sign-out, sign out everywhere,
+expiry swept by `purgeDeadSessions`): the foreign key takes them with it, in the same transaction.
+The endpoint and both keys are a person's: never logged (`ARCHITECTURE.md` §10).
 
 ---
 
 ### 3.4. `email_sign_ins`
 
-Every message sent to sign in by email (migration 0038, D-138): a link, or a word that the address signs
-in with GitHub.
-
-```sql
-CREATE TABLE email_sign_ins (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email       TEXT NOT NULL,                     -- lower-cased, as every stored address (D-40)
-    kind        TEXT NOT NULL,                     -- 'link' | 'github'
-    token_hash  TEXT UNIQUE,                       -- SHA-256 of a link's token; never the token
-    created_at  TIMESTAMPTZ NOT NULL,
-    expires_at  TIMESTAMPTZ NOT NULL,              -- fifteen minutes after
-    used_at     TIMESTAMPTZ,                       -- set by the one use
-
-    CONSTRAINT email_sign_ins_email_lower CHECK (email = lower(email) AND char_length(email) <= 254),
-    CONSTRAINT email_sign_ins_kind CHECK (kind IN ('link', 'github')),
-    CONSTRAINT email_sign_ins_token_hash CHECK (
-        (kind = 'link') = (token_hash IS NOT NULL) AND (token_hash IS NULL OR token_hash ~ '^[0-9a-f]{64}$')
-    ),
-    CONSTRAINT email_sign_ins_expiry CHECK (expires_at > created_at)
-);
-
-CREATE INDEX idx_email_sign_ins_email ON email_sign_ins (email, created_at);
-```
-
-> No user id: a link to an address no account has makes the account on its use. Both kinds count
-> toward the address's five an hour, so neither can flood a mailbox. A day after, a row is swept
-> (`sweep:email-sign-ins`); erasure (D-27) deletes a person's as it rewrites their address.
+**Dropped by migration 0048 (D-179).** Every message sent to sign in by email (migration 0038, D-138)
+was a row here: a link, or a word that the address signs in with GitHub. A link is Better Auth's
+magic link now, kept in `verifications` (§3.2.1) and swept by `sweep:email-sign-ins` a day after it
+expires; the per-address count is a counter of Purlay's in `rate_limits`. Nothing wrote this table
+after the move, so it went rather than stay a second home for the same fact.
 
 ## 4. Workspaces & Membership
 
@@ -1234,8 +1296,8 @@ CREATE INDEX idx_github_deliveries_received ON github_deliveries (received_at);
 
 ## 9. Administration & Operations
 
-Two tables that exist to make administrative action and scheduled work *visible*. Neither holds
-message content. (D-26, D-30)
+Tables that exist to make administrative action and scheduled work *visible*, and the server's own
+settings. None holds message content. (D-26, D-30, D-179)
 
 ### 9.1. `audit_log`
 
@@ -1288,6 +1350,38 @@ CREATE INDEX idx_audit_log_session ON audit_log (session_id) WHERE session_id IS
 ```
 
 No `updated_at` and no `deleted_at`: a row that can be amended is not an audit record.
+
+### 9.1a. `server_audit_log`
+
+The trail of changes to the server's own settings (Administration → Server, D-179 §4.8). `audit_log`
+is a workspace's, with its workspace required; the server's settings belong to none, so they have a
+trail of their own, append-only on the same terms (I-9). It says who, which setting and when — the
+action names both (`server.github_connected`, `server.github_disconnected`, `server.smtp_connected`,
+`server.smtp_disconnected`, `server.sign_up_changed`, `server.workspace_creators_changed`, and `server.admin_password_reset`, written by
+`bun run admin:reset-password` with the account itself as the actor and no session) — and never
+the value, a secret least of all. Written in the transaction that saves the setting
+(`modules/audit/server-audit.ts`), so a change that did not commit leaves no row and one that did
+cannot lack it. Append-only is held as `audit_log`'s is — by the sweep in
+`modules/audit/append-only.test.ts`, which covers both tables; neither has a trigger.
+
+```sql
+CREATE TABLE server_audit_log (
+    id            UUID PRIMARY KEY,
+    actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    action        VARCHAR(64) NOT NULL,
+    session_id    UUID REFERENCES sessions(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT server_audit_log_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+);
+
+CREATE INDEX idx_server_audit_log_actor ON server_audit_log (actor_user_id, id DESC)
+    WHERE actor_user_id IS NOT NULL;
+
+CREATE INDEX idx_server_audit_log_session ON server_audit_log (session_id)
+    WHERE session_id IS NOT NULL;
+```
 
 ### 9.2. `job_runs`
 
@@ -1391,6 +1485,228 @@ CREATE TABLE object_deletions (
     CONSTRAINT object_deletions_key_in_a_workspace CHECK (storage_key LIKE 'w/%'),
     CONSTRAINT object_deletions_attempts CHECK (attempts >= 0)
 );
+```
+
+### 9.5. `server_settings`
+
+The operator's settings for the whole server (D-179 §6): who may sign up, GitHub's OAuth app, the mail
+relay, and who may make a workspace (D-155, D-169). They are in the database because a person changes
+them in the browser; what the process needs before it can read a row — the database, `ENCRYPTION_KEY`,
+the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md`).
+
+- **One row.** The key is a boolean that can only be `TRUE`, so a second row is refused by the primary
+  key rather than by every reader agreeing to take the first. Typed columns rather than key/value rows:
+  each setting has a type, a default and a check here, and a reader of a missing one fails to compile.
+- **The secrets are sealed by the application** — the GitHub client secret, and the whole SMTP address,
+  which carries the relay's password — by the one credential cipher (D-39 §6), with the column's name
+  as the additional data: a ciphertext copied into the other column does not open there. They are never
+  logged, never exported (`EXCLUDED` in `modules/export/tables.ts`) and never in a response, whose view
+  says only whether each is set (`settingsView` in `modules/setup/settings.ts`).
+- **Pairs are pairs**: a client id with its secret, a relay with its sender, or neither.
+- **Who may make a workspace** is D-155's rule as a kind — `first`, `anyone` or `listed` — and, for
+  `listed`, the GitHub logins in lower case, at least one.
+- `imported_from_env_at` is when the environment was copied in, **once**, on the first start; set, every
+  later start leaves the row alone (`importFromEnvOnce`). `setup_completed_at` is when the setup in the
+  browser was finished.
+
+Instance-wide, like `job_runs`: an operator's table, holding nothing of anybody.
+
+```sql
+CREATE TABLE server_settings (
+    id                        BOOLEAN PRIMARY KEY DEFAULT TRUE,
+    sign_up                   TEXT NOT NULL DEFAULT 'invite-only',
+    github_client_id          TEXT,
+    -- Sealed, base64, bound to this column's name.
+    github_client_secret_encrypted TEXT,
+    -- Sealed, base64, as above: the whole smtp:// or smtps:// address, credentials and all.
+    smtp_url_encrypted        TEXT,
+    mail_from                 TEXT,
+    smtp_allow_plaintext      BOOLEAN NOT NULL DEFAULT FALSE,
+    workspace_creators        TEXT NOT NULL DEFAULT 'first',
+    workspace_creator_logins  TEXT[] NOT NULL DEFAULT '{}',
+    setup_completed_at        TIMESTAMPTZ,
+    imported_from_env_at      TIMESTAMPTZ,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT server_settings_one_row CHECK (id),
+    CONSTRAINT server_settings_sign_up CHECK (sign_up IN ('invite-only', 'open')),
+    CONSTRAINT server_settings_github_pair
+        CHECK ((github_client_id IS NULL) = (github_client_secret_encrypted IS NULL)),
+    CONSTRAINT server_settings_github_client_id CHECK (github_client_id <> ''),
+    CONSTRAINT server_settings_mail_from CHECK (mail_from <> ''),
+    CONSTRAINT server_settings_mail_pair CHECK ((smtp_url_encrypted IS NULL) = (mail_from IS NULL)),
+    CONSTRAINT server_settings_workspace_creators
+        CHECK (workspace_creators IN ('first', 'anyone', 'listed')),
+    CONSTRAINT server_settings_creator_logins
+        CHECK ((workspace_creators = 'listed') = (cardinality(workspace_creator_logins) > 0))
+);
+```
+
+### 9.6. `setup_state`
+
+Where the setup in the browser stands (D-179 §4): the one-time code, the throttle on guessing it, the
+browser the setup is bound to, and how far it has come. Whether setup is **finished** is not here — that
+is `server_settings.setup_completed_at` (§9.5), its one home. Read and written by
+`modules/setup/setup.ts` alone.
+
+- **One row**, held to one by its key as `server_settings` is, and made by the migration itself, so
+  every reader can lock it (`FOR UPDATE`) and none has to make it first.
+- **Digests only**, SHA-256 in hex (`platform/tokens.ts`): `code_digest` of the setup code and
+  `claim_digest` of the claim token. The code is written once, to the log of the start that issued it;
+  the token is handed to the browser once. A claim spends the code, clearing both its columns.
+- A code opens for an hour from `code_issued_at`.
+- **The throttle is the server's**: `failed_attempts` counts every wrong code, whoever sent it, and the
+  fifth sets `locked_until` fifteen minutes on and starts the count again; a claim made starts it again
+  too. Both belong to the code: a new code, at a start, clears them.
+- **The claim** — `claim_digest`, `claimed_at`, `claimed_by` (the browser's id, as the route names it)
+  and `claim_seen_at` — is all set or all empty. One whose browser has not been seen for a day no longer
+  opens; a code from a later start replaces one unseen for fifteen minutes (D-179 §4.2).
+- `admin_user_id` is the administrator an unfinished setup made: a server with any other user is closed
+  to setup. Finishing clears it, so afterwards every user keeps setup closed.
+- `step_reached` is the last step passed, of the closed set `SETUP_STEPS` in `@purlay/types`; steps are
+  passed in order, so it says which are passed whole. `finish` is written only with
+  `server_settings.setup_completed_at`, by the finish, which spends the claim — the one step a claim
+  does not hold.
+- `github_tried_at` and `email_tried_at` (migration 0052): when the setup saved a GitHub app GitHub's
+  token endpoint accepted, and a relay that took the administrator's test letter. The finish rule counts
+  only these (D-179 §4.5) — an app or a relay merely in the settings was never tried. Facts about what
+  was saved, not about a claim: a claim taken over keeps them.
+
+Instance-wide, like `server_settings`; never exported.
+
+```sql
+CREATE TABLE setup_state (
+    id                BOOLEAN PRIMARY KEY DEFAULT TRUE,
+    code_digest       TEXT,
+    code_issued_at    TIMESTAMPTZ,
+    failed_attempts   INTEGER NOT NULL DEFAULT 0,
+    locked_until      TIMESTAMPTZ,
+    claim_digest      TEXT,
+    claimed_at        TIMESTAMPTZ,
+    claimed_by        TEXT,
+    claim_seen_at     TIMESTAMPTZ,
+    admin_user_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    step_reached      TEXT,
+    step_reached_at   TIMESTAMPTZ,
+    github_tried_at   TIMESTAMPTZ,
+    email_tried_at    TIMESTAMPTZ,
+
+    CONSTRAINT setup_state_one_row CHECK (id),
+    CONSTRAINT setup_state_code_digest CHECK (code_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT setup_state_code_whole CHECK ((code_digest IS NULL) = (code_issued_at IS NULL)),
+    CONSTRAINT setup_state_failed_attempts CHECK (failed_attempts >= 0),
+    CONSTRAINT setup_state_claim_digest CHECK (claim_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT setup_state_claimed_by CHECK (char_length(claimed_by) BETWEEN 1 AND 128),
+    CONSTRAINT setup_state_claim_whole CHECK (
+        (claim_digest IS NULL) = (claimed_at IS NULL)
+        AND (claim_digest IS NULL) = (claimed_by IS NULL)
+        AND (claim_digest IS NULL) = (claim_seen_at IS NULL)
+    ),
+    CONSTRAINT setup_state_step CHECK (step_reached IN (
+        'claim', 'admin', 'address', 'github', 'email', 'policy', 'workspace', 'invite', 'finish'
+    )),
+    CONSTRAINT setup_state_step_whole CHECK ((step_reached IS NULL) = (step_reached_at IS NULL)),
+    -- A step is a claim's, but for `finish`: finishing spends the claim.
+    CONSTRAINT setup_state_step_needs_a_claim
+        CHECK (step_reached IS NULL OR step_reached = 'finish' OR claim_digest IS NOT NULL)
+);
+
+-- A foreign key leads an index, as every one here does: a user's row deleted finds this one by it.
+CREATE INDEX idx_setup_state_admin_user ON setup_state (admin_user_id) WHERE admin_user_id IS NOT NULL;
+
+INSERT INTO setup_state (id) VALUES (TRUE);
+```
+
+### 9.7. `admin_email_verification`
+
+The setup administrator's own address check (D-179 §4.3, Ruling R32): the one link the wizard mails to
+the administrator, whose following sets `users.email_verified` — never the sign-in library's magic link,
+which on an account whose address was never proven removes its password. Read and written by
+`modules/setup/verification.ts` alone.
+
+- **One row at most**, held to one by its key as `setup_state` is: setup makes one administrator, and a
+  new link replaces the one before it (an upsert on the key).
+- **A table of its own, not columns of `setup_state`**: the letter can be opened after the finish, which
+  clears `setup_state.admin_user_id` and spends the claim, so the row names its account itself
+  (`user_id`) and following the link needs neither.
+- **A digest only**, SHA-256 in hex (`platform/tokens.ts`): the token is mailed once, in the link's
+  fragment (`/setup/verify#<token>`).
+- **Bound to the address it was mailed to** (`email`, as `users.email` held it): a link followed after
+  the account's address changed verifies nothing.
+- A link opens for a day from `issued_at`; following it deletes the row, in the transaction that sets
+  `users.email_verified` — and only the click whose delete removed it may set it. A row past its day is
+  deleted when it is tried, and by `sweep:email-sign-ins`.
+- `ON DELETE CASCADE` for an account's row deleted; erasure, which keeps the row under an anonymised
+  account (D-139 §5), deletes it by `user_id`.
+
+Instance-wide, like `setup_state`; never exported.
+
+```sql
+CREATE TABLE admin_email_verification (
+    id            BOOLEAN PRIMARY KEY DEFAULT TRUE,
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email         TEXT NOT NULL,
+    token_digest  TEXT NOT NULL,
+    issued_at     TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT admin_email_verification_one_row CHECK (id),
+    CONSTRAINT admin_email_verification_digest CHECK (token_digest ~ '^[0-9a-f]{64}$')
+);
+
+-- A foreign key leads an index, as every one here does: a user's row deleted finds this one by it.
+CREATE INDEX idx_admin_email_verification_user ON admin_email_verification (user_id);
+```
+
+### 9.8. `invitation_passports`
+
+What lets a newcomer make an account on an invite-only server by an invitation link (D-179 §5, Ruling
+R51): a passport made from a live link and spent by the one sign-up it was made for. Read and written by
+`modules/workspaces/invitation-passport.ts`; spent from `databaseHooks.user.create.before`
+(`modules/auth/better-auth.ts`).
+
+- **Two kinds**: `github` holds `cookie_digest`, `email` holds `address_digest`, and neither holds the other's
+  (a CHECK). Both are SHA-256 in hex (`platform/tokens.ts`); the cookie's value and the address are never
+  stored. The address is lower-cased and trimmed first (`normalisedMailbox`).
+- **An hour, once**: `expires_at`, and `consumed_at` set by the sign-up's own transaction, by an update that
+  only one caller can win.
+- **As live as its link**: `invitation_id` names the link and every use reads it again (not revoked, not
+  expired, its workspace not deleted). `ON DELETE CASCADE` for the day a link is deleted.
+- **One passport per address and link**: the unique pair; asking again replaces it. Cookie digests are
+  unique.
+- A day past its hour or its use the daily sweep deletes the row; erasure deletes an address's `email` rows
+  by the digest of the address it read before the tombstone.
+
+Instance-wide; never exported.
+
+```sql
+CREATE TABLE invitation_passports (
+    id              UUID PRIMARY KEY,
+    invitation_id   UUID NOT NULL REFERENCES workspace_invitations(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,
+    cookie_digest   TEXT,
+    address_digest  TEXT,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    consumed_at     TIMESTAMPTZ,
+
+    CONSTRAINT invitation_passports_kind CHECK (kind IN ('github', 'email')),
+    CONSTRAINT invitation_passports_digest_by_kind CHECK (
+        (kind = 'github' AND cookie_digest IS NOT NULL AND address_digest IS NULL)
+        OR (kind = 'email' AND address_digest IS NOT NULL AND cookie_digest IS NULL)
+    ),
+    CONSTRAINT invitation_passports_cookie_is_a_digest
+        CHECK (cookie_digest IS NULL OR cookie_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT invitation_passports_address_is_a_digest
+        CHECK (address_digest IS NULL OR address_digest ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT invitation_passports_cookie_unique UNIQUE (cookie_digest),
+    CONSTRAINT invitation_passports_address_once_per_invitation UNIQUE (invitation_id, address_digest)
+);
+
+CREATE INDEX idx_invitation_passports_address ON invitation_passports (address_digest)
+    WHERE address_digest IS NOT NULL;
+CREATE INDEX idx_invitation_passports_expiry ON invitation_passports (expires_at);
+CREATE INDEX idx_invitation_passports_consumed ON invitation_passports (consumed_at)
+    WHERE consumed_at IS NOT NULL;
 ```
 
 ---
@@ -1537,6 +1853,15 @@ file that leaves its transaction runs statement by statement and must be safe to
 0044_thread_follows.sql      thread_follows: a person's choice to follow a thread, or let it go  (D-161)
 0045_users_github_login.sql  users.github_login: the login as GitHub last gave it, for WORKSPACE_CREATORS  (D-169)
 0046_users_github_connected_at.sql users.github_connected_at: GitHub connected to an account made by email  (D-176)
+0047_better_auth_identity.sql users.email_verified, users.is_server_admin; accounts, verifications, rate_limits: what Better Auth keeps  (D-179)
+0048_drop_email_sign_ins.sql email_sign_ins dropped: a sign-in link is the library's, in verifications  (D-179)
+0049_server_settings.sql      server_settings: the operator's settings, secrets sealed, imported from the environment once  (D-179 §6)
+0050_setup_state.sql          setup_state: the setup code's and the claim's digests, the throttle, the step reached  (D-179 §4)
+0051_admin_email_verification.sql admin_email_verification: the digest of the link that verifies the setup administrator's address  (D-179 §4.3)
+0052_setup_channels_tried.sql setup_state.github_tried_at, email_tried_at: a way in saved after a try that worked, for the finish rule  (D-179 §4.5)
+0053_invitation_passports.sql invitation_passports: the digest of a cookie or an address, made from a live invitation link and spent by one sign-up  (D-179 §5)
+0054_server_audit_log.sql    server_audit_log: who changed which of the server's own settings, never the value  (D-26, D-179 §4.8)
+0055_backfill_existing_identities.sql accounts rows for users who have a github_id, email_verified for those who existed before 0047: an upgraded install signs in  (D-179 §7)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

@@ -3,6 +3,7 @@
  * API is not anybody's open proxy; a few at a time per node, so a feed full of pictures cannot hold
  * every connection; and served as an image of ours, with the headers a download has.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import { ExternalImageQuery } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -22,6 +23,8 @@ export const FETCHES_WAITING = 16;
 const fetching = slots(FETCHES_AT_ONCE, FETCHES_WAITING);
 
 export interface ImageRouteDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
   readonly log: Logger;
@@ -29,10 +32,10 @@ export interface ImageRouteDependencies {
 }
 
 export const serveExternalImage = async (
-  { database, clock, log, externalFetch }: ImageRouteDependencies,
+  { auth, log, externalFetch }: ImageRouteDependencies,
   request: Request,
 ): Promise<{ readonly body: Uint8Array; readonly headers: Record<string, string> }> => {
-  await requireSession(database, clock, request);
+  await requireSession(auth, request);
   const { url } = validated(ExternalImageQuery, queryOf(new URL(request.url)));
   // Only the fetch holds a slot: a slow server keeps its own turn, not a decode's as well (#110 review).
   const fetch: ExternalFetch = async (address) =>

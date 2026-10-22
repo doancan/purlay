@@ -11,7 +11,7 @@ import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
-import { issueSession } from '../auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import { edit } from '../messages/edit';
@@ -143,7 +143,7 @@ const subscribeDevice = async (
   over: { endpoint?: string; serverKey?: string; failures?: number } = {},
 ): Promise<string> => {
   const userId = room.members[who]?.userId ?? '';
-  const { sessionId } = await issueSession(db, clock, userId, 30);
+  const { sessionId } = await aSession(db, clock, userId, 30);
   const row = await db
     .insertInto('push_subscriptions')
     .values({
@@ -319,7 +319,7 @@ describe('integration: a device is told', () => {
       });
       const { say } = await sending(db, service.post);
       const id = await say(room, 'alice', 'see the plan');
-      const { sessionId } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const { sessionId } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
       const caller = { userId: room.members['alice']?.userId ?? '', sessionId };
       const editing = { atomically: atomicallyOn(db), clock, bus: quietBus, push };
       await edit(editing, caller, id, `see the plan ${mention(room, 'bob')}`);
@@ -398,9 +398,9 @@ describe('integration: a device is told', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       await subscribeDevice(db, room, 'bob', await aBrowser());
+      // Ending a session deletes its row, and with it the session's devices (D-179).
       await db
-        .updateTable('sessions')
-        .set({ revoked_at: NOW })
+        .deleteFrom('sessions')
         .where('user_id', '=', room.members['bob']?.userId ?? '')
         .execute();
       await subscribeDevice(db, room, 'carol', await aBrowser(), {
@@ -527,7 +527,7 @@ describe('integration: what the push service answers', () => {
           }),
         );
       }
-      const { sessionId } = await issueSession(db, clock, room.members['carol']?.userId ?? '', 30);
+      const { sessionId } = await aSession(db, clock, room.members['carol']?.userId ?? '', 30);
       const posted: string[] = [];
       let moved = false;
       const post: PushPost = async (url) => {
@@ -574,11 +574,7 @@ describe('integration: what the push service answers', () => {
             .select('session_id')
             .where('id', '=', ids[2] ?? '')
             .executeTakeFirstOrThrow();
-          await db
-            .updateTable('sessions')
-            .set({ revoked_at: NOW })
-            .where('id', '=', third.session_id)
-            .execute();
+          await db.deleteFrom('sessions').where('id', '=', third.session_id).execute();
         }
         return { kind: 'answered', status: 201 };
       };
@@ -638,7 +634,7 @@ describe('integration: what the push service answers', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const userId = room.members['bob']?.userId ?? '';
-      const { sessionId } = await issueSession(db, clock, userId, 30);
+      const { sessionId } = await aSession(db, clock, userId, 30);
       const browser = await aBrowser();
       await db
         .insertInto('push_subscriptions')

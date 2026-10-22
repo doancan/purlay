@@ -262,6 +262,9 @@
   --duration-bar: 120ms;
   --duration-hover: 120ms;
   --duration-overlay: 150ms;
+  --duration-step: 200ms;
+  --duration-mark: 200ms;
+  --duration-nudge: 200ms;
   --easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -311,5 +314,8 @@
     --duration-bar: 0ms;
     --duration-hover: 0ms;
     --duration-overlay: 0ms;
+    --duration-step: 0ms;
+    --duration-mark: 0ms;
+    --duration-nudge: 0ms;
   }
 }

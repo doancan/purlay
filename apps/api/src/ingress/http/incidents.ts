@@ -51,11 +51,11 @@ const told = async (
 
 /** `GET /api/channels/:channelId/incident` — the open one, or the latest; null when never. */
 export const readIncident = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
 ): Promise<IncidentResponse> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return { incident: await channelIncident(database, context) };
 };
@@ -68,7 +68,7 @@ export const postIncident = async (
   body: unknown,
 ): Promise<IncidentWrite> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(DeclareIncidentRequest, body);
   const write = await atomicallyOn(database)(
@@ -87,7 +87,7 @@ export const patchIncident = async (
   body: unknown,
 ): Promise<Incident> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(ChangeIncidentRequest, body);
   const write = await atomicallyOn(database)(
@@ -98,12 +98,12 @@ export const patchIncident = async (
 
 /** `GET /api/channels/:channelId/incident/:incidentId/updates` — its timeline, newest first. */
 export const listIncidentUpdates = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
   incidentId: string,
 ): Promise<IncidentUpdatePage> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await incidentUpdates(database, context, incidentId, query);
@@ -119,7 +119,7 @@ export const putResponder = async (
   responding: boolean,
 ): Promise<Incident> => {
   const { database, clock } = dependencies;
-  const { userId: callerId } = await requireSession(database, clock, request);
+  const { userId: callerId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, callerId, channelId);
   const change = responding ? addResponder : removeResponder;
   const write = await atomicallyOn(database)(
@@ -137,7 +137,7 @@ export const putPostmortem = async (
   body: unknown,
 ): Promise<Incident> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SavePostmortemRequest, body);
   const write = await atomicallyOn(database)(

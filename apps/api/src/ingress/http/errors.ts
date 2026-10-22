@@ -83,7 +83,7 @@ const TAKEN_BY_INDEX: Readonly<Record<string, AppErrorBody>> = {
     code: 'ACCOUNT_EMAIL_CONFLICT',
     message: 'That email address already belongs to another Purlay account.',
   },
-  // Two accounts connecting one GitHub account at once: the second finds it the first's (D-176).
+  // Two accounts taking one GitHub account at once: the second finds it the first's (D-176, D-179).
   users_github_id_key: {
     code: 'GITHUB_ACCOUNT_TAKEN',
     message: 'That GitHub account already signs in to another Purlay account.',

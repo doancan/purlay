@@ -8,7 +8,7 @@ import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { issueSession } from '../../modules/auth/sessions';
+import { aTestAuth, aSession } from '../../testing/signed-in';
 import { aRoom } from '../../testing/rooms';
 import { deleteSaved, putSaved } from './saved';
 
@@ -34,7 +34,7 @@ describe('integration: who is told', () => {
           content: 'keep this',
         })
         .execute();
-      const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const { token } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
       const topics: string[] = [];
       const bus: EventBus = {
         publish: (topic: string, frame: ServerFrame): Promise<void> => {
@@ -49,7 +49,7 @@ describe('integration: who is told', () => {
         new Request('https://purlay.test/', {
           headers: { cookie: `${SESSION_COOKIE}=${token}` },
         });
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       await putSaved(dependencies, request(), first, {});
       await deleteSaved(dependencies, request(), first);
       expect(topics).toEqual([

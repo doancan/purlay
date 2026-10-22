@@ -12,7 +12,8 @@ import { markRead } from '../channels/read-state';
 import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms';
 import { edit as editMessage, reviseMessage } from './edit';
 import { removeMessage } from './delete';
-import { issueSession, revokeSession } from '../auth/sessions';
+import { revokeSession } from '../auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { aRecordingLogger } from '../../testing/doubles';
 import { MARKDOWN_DELIMITERS_MAX, type Engine } from '@purlay/markdown';
 import type { ServerFrame } from '@purlay/types';
@@ -645,7 +646,7 @@ describe('integration: the one way in', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       const sent = await post(db, room, 'alice', `hi ${at(room, 'bob')}`);
-      const { token } = await issueSession(db, later, member(room, 'alice').userId, 30);
+      const { token } = await aSession(db, later, member(room, 'alice').userId, 30);
       const session = await db
         .selectFrom('sessions')
         .select('id')
@@ -707,7 +708,7 @@ describe('integration: the one way in', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const sent = await post(db, room, 'alice', 'once');
-      await issueSession(db, later, member(room, 'alice').userId, 30);
+      await aSession(db, later, member(room, 'alice').userId, 30);
       const session = await db
         .selectFrom('sessions')
         .select('id')
@@ -728,13 +729,13 @@ describe('integration: the one way in', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const sent = await post(db, room, 'alice', 'mine');
-      const { token } = await issueSession(db, later, member(room, 'alice').userId, 30);
+      await aSession(db, later, member(room, 'alice').userId, 30);
       const session = await db
         .selectFrom('sessions')
         .select('id')
         .where('user_id', '=', member(room, 'alice').userId)
         .executeTakeFirstOrThrow();
-      await revokeSession(db, later, token);
+      await revokeSession(db, session.id);
       expect(
         await refusal(
           editMessage(
@@ -761,7 +762,7 @@ describe('integration: the one way in', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const sent = await post(db, room, 'alice', 'before');
-      await issueSession(db, later, member(room, 'alice').userId, 30);
+      await aSession(db, later, member(room, 'alice').userId, 30);
       const session = await db
         .selectFrom('sessions')
         .select('id')
@@ -782,7 +783,7 @@ describe('integration: the one way in', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
       const sent = await post(db, room, 'alice', 'before');
-      await issueSession(db, later, member(room, 'alice').userId, 30);
+      await aSession(db, later, member(room, 'alice').userId, 30);
       const session = await db
         .selectFrom('sessions')
         .select('id')

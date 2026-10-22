@@ -21,11 +21,12 @@ const SETTINGS_SECTIONS = [
   { id: 'integrations', group: 'workspace', glyph: 'integration', for: 'admins' },
   { id: 'audit', group: 'workspace', glyph: 'audit', for: 'admins' },
   { id: 'data', group: 'workspace', glyph: 'history', for: 'owners' },
+  { id: 'server', group: 'server', glyph: 'integration', for: 'serverAdmin' },
 ] as const satisfies readonly {
   readonly id: string;
-  readonly group: 'account' | 'workspace';
+  readonly group: 'account' | 'workspace' | 'server';
   readonly glyph: GlyphName;
-  readonly for: 'everyone' | 'admins' | 'owners';
+  readonly for: 'everyone' | 'admins' | 'owners' | 'serverAdmin';
 }[];
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -34,15 +35,32 @@ export type SettingsSectionId = SettingsSection['id'];
 /** The page `/w/:slug/settings` opens. */
 export const FIRST_SECTION: SettingsSectionId = 'profile';
 
-const allowed = (section: SettingsSection, role: UserRole | undefined): boolean =>
+/**
+ * Whether this person is offered a page. The server's own page is the server administrator's alone
+ * (`GET /api/me`'s `isServerAdmin`, D-179 §4.8) — never a workspace role's: an owner of a workspace is
+ * not the server's administrator. The server refuses the page's calls to anybody else regardless.
+ */
+const allowed = (
+  section: SettingsSection,
+  role: UserRole | undefined,
+  serverAdmin: boolean,
+): boolean =>
   section.for === 'everyone' ||
   (section.for === 'admins' && (role === 'owner' || role === 'admin')) ||
-  (section.for === 'owners' && role === 'owner');
+  (section.for === 'owners' && role === 'owner') ||
+  (section.for === 'serverAdmin' && serverAdmin);
 
 /** The pages this person may open, in the navigation's order. */
-export const sectionsFor = (role: UserRole | undefined): readonly SettingsSection[] =>
-  SETTINGS_SECTIONS.filter((section) => allowed(section, role));
+export const sectionsFor = (
+  role: UserRole | undefined,
+  serverAdmin = false,
+): readonly SettingsSection[] =>
+  SETTINGS_SECTIONS.filter((section) => allowed(section, role, serverAdmin));
 
 /** The page an address names, if this person may open it; otherwise null, which is *not found*. */
-export const sectionFor = (id: string, role: UserRole | undefined): SettingsSection | null =>
-  sectionsFor(role).find((section) => section.id === id) ?? null;
+export const sectionFor = (
+  id: string,
+  role: UserRole | undefined,
+  serverAdmin = false,
+): SettingsSection | null =>
+  sectionsFor(role, serverAdmin).find((section) => section.id === id) ?? null;

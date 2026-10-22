@@ -167,12 +167,3 @@ export const setLocale = async (
 ): Promise<void> => {
   await executor.updateTable('users').set({ locale }).where('id', '=', userId).execute();
 };
-
-/** Devices made in sessions that just ended: signing out stops them being told. */
-export const forgetSessions = async (
-  executor: Executor,
-  sessionIds: readonly string[],
-): Promise<void> => {
-  if (sessionIds.length === 0) return;
-  await executor.deleteFrom('push_subscriptions').where('session_id', 'in', sessionIds).execute();
-};

@@ -26,15 +26,17 @@
  * of the run (D-124).
  */
 import { nobodyActive } from '../platform/attention';
-import type { Executor } from '@purlay/db';
+import { isTransaction, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import type { Config } from '../platform/config';
 import type { Clock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { createLogger } from '../platform/logging';
 import { createApp } from '../ingress/http/app';
-import type { GitHubClient } from '../modules/auth/github';
 import { issueSession } from '../modules/auth/sessions';
+import { inProcessEventBus } from '../realtime/bus';
+import { createAuth, deriveAuthSecret } from '../modules/auth/better-auth';
+
 import {
   PERSONAS,
   apiChannel,
@@ -110,13 +112,6 @@ const durationMinutes = (steps: readonly Step[]): number =>
     0,
   );
 
-/** GitHub is how a real person signs in; the seed issues its sessions itself and must never ask. */
-export const neverSignsIn: GitHubClient = {
-  exchangeCode: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
-  profile: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
-  emails: () => Promise.reject(new Error('the demo seed never signs in through GitHub')),
-};
-
 const ROOMY = { perSecond: 100_000, burst: 1_000_000 } as const;
 
 /**
@@ -146,6 +141,8 @@ export const freshSession = async (
   clock: Clock,
   connectionString: string,
   username: string,
+  /** The server's: `deriveAuthSecret` of the key it runs with, or the cookie is refused. */
+  secret: string,
 ): Promise<string> => {
   assertDemoDatabase(connectionString);
   const user = await database
@@ -154,7 +151,7 @@ export const freshSession = async (
     .where('username', '=', username)
     .executeTakeFirst();
   if (user === undefined) throw new Error(`nobody called ${username} is in this database`);
-  return (await issueSession(database, clock, user.id, SESSION_DAYS)).token;
+  return (await issueSession(database, clock, secret, user.id, SESSION_DAYS)).token;
 };
 
 /**
@@ -168,6 +165,8 @@ export const freshPerson = async (
   clock: Clock,
   connectionString: string,
   username: string,
+  /** The server's: `deriveAuthSecret` of the key it runs with, or the cookie is refused. */
+  secret: string,
 ): Promise<{ readonly userId: string; readonly token: string }> => {
   assertDemoDatabase(connectionString);
   const user = await database
@@ -180,9 +179,12 @@ export const freshPerson = async (
     })
     .returning('id')
     .executeTakeFirstOrThrow();
-  const { token } = await issueSession(database, clock, user.id, SESSION_DAYS);
+  const { token } = await issueSession(database, clock, secret, user.id, SESSION_DAYS);
   return { userId: user.id, token };
 };
+
+/** What the seed hands to the two things nobody is there for: a socket to deliver to, an export to run. */
+const quiet = (): void => undefined;
 
 export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
   const { database, config } = options;
@@ -196,19 +198,37 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
     current = new Date(current.getTime() + minutes * MINUTE);
   };
 
+  // Signed with the secret the served instance derives from the same key, so the cookies printed
+  // for a browser are the ones the server resolves (D-179).
+  const secret = deriveAuthSecret(config.ENCRYPTION_KEY);
+  const log = createLogger({ level: 'silent' });
   // The history is sent in bulk by four people, which the production write budget
   // would (rightly) refuse; the seed is not a client to rate-limit.
   const app = createApp({
-    // The seed stands in for the operator, whatever WORKSPACE_CREATORS says (D-155).
-    config: { ...config, WORKSPACE_CREATORS: '*' },
+    auth: createAuth({
+      database,
+      baseUrl: config.APP_URL,
+      secret,
+      log,
+      settings: { github: undefined, signUp: 'invite-only' },
+      githubUrls: { web: config.GITHUB_URL, api: config.GITHUB_API_URL },
+      sessionTtlDays: config.SESSION_TTL_DAYS,
+      // Nobody listens: the seed opens no socket.
+      bus: inProcessEventBus(quiet, log),
+      clock,
+      // A test seeds inside a rolled-back transaction, which the library's schema check refuses.
+      checkSchema: !isTransaction(database),
+    }),
+    config,
+    // The seed stands in for the operator, whatever the server's setting says (D-155).
+    workspaceCreators: () => Promise.resolve({ kind: 'anyone' }),
     database,
     clock,
-    log: createLogger({ level: 'silent' }),
-    github: neverSignsIn,
+    log,
     // The seed writes no attachments; the store is the one the configuration names.
     storage: storeFor(config),
     // The seed asks for no export: nothing for a runner to start.
-    exportRunner: (): void => undefined,
+    exportRunner: quiet,
     // Nobody is in front of a page here: the seed pushes nothing either way.
     attention: nobodyActive,
     rateBudgets: { auth: ROOMY, writes: ROOMY, costlyReads: ROOMY },
@@ -240,7 +260,7 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
       })
       .returning('id')
       .executeTakeFirstOrThrow();
-    const { token } = await issueSession(database, clock, user.id, SESSION_DAYS);
+    const { token } = await issueSession(database, clock, secret, user.id, SESSION_DAYS);
     people[key] = {
       userId: user.id,
       username: key,
@@ -262,8 +282,8 @@ export const seedDemo = async (options: SeedOptions): Promise<Manifest> => {
       })
       .returning('id')
       .executeTakeFirstOrThrow();
-    const first = await issueSession(database, clock, user.id, SESSION_DAYS);
-    const second = await issueSession(database, clock, user.id, SESSION_DAYS);
+    const first = await issueSession(database, clock, secret, user.id, SESSION_DAYS);
+    const second = await issueSession(database, clock, secret, user.id, SESSION_DAYS);
     outsiders[key] = { userId: user.id, username: key, tokens: [first.token, second.token] };
   }
 

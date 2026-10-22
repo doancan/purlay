@@ -9,6 +9,7 @@
  * forgot to scope itself would not compile, and a caller outside the workspace
  * gets `404`, never `403` (D-21).
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
   CreateWorkspaceRequest,
@@ -40,8 +41,10 @@ import {
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
-import { requireMayCreateWorkspace, workspaceCreatorsOf } from '../../modules/workspaces/creators';
-import type { Config } from '../../platform/config';
+import {
+  requireMayCreateWorkspace,
+  type WorkspaceCreators,
+} from '../../modules/workspaces/creators';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { auditTrail } from '../../modules/audit/audit';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
@@ -66,13 +69,16 @@ import { requireSession } from './session';
 import { queryOf, validated } from './validate';
 
 export interface WorkspaceDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
 }
 
-/** What answers whether the caller may make a workspace (D-155). */
+/** What answers whether the caller may make a workspace (D-155): the server's setting (D-179 §6). */
 export interface CreatorDependencies extends WorkspaceDependencies {
-  readonly config: Pick<Config, 'WORKSPACE_CREATORS'>;
+  /** Who may, as read through this executor: inside the transaction that makes the workspace. */
+  readonly workspaceCreators: (executor: Executor) => Promise<WorkspaceCreators>;
 }
 
 /**
@@ -86,9 +92,9 @@ export const readMe = async (
   dependencies: CreatorDependencies,
   request: Request,
 ): Promise<MeResponse> => {
-  const { database, clock, config } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
-  return await meOf(database, clock, userId, workspaceCreatorsOf(config.WORKSPACE_CREATORS));
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
+  return await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
 };
 
 export const listMyWorkspaces = async (
@@ -96,7 +102,7 @@ export const listMyWorkspaces = async (
   request: Request,
 ): Promise<readonly Membership[]> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   return await membershipsOf(database, clock, userId);
 };
 
@@ -105,12 +111,15 @@ export const createMyWorkspace = async (
   request: Request,
   body: unknown,
 ): Promise<Workspace> => {
-  const { database, clock, config } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database, clock } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(CreateWorkspaceRequest, body);
-  const creators = workspaceCreatorsOf(config.WORKSPACE_CREATORS);
   return await atomicallyOn(database)(async (transaction) => {
-    await requireMayCreateWorkspace(transaction, creators, userId);
+    await requireMayCreateWorkspace(
+      transaction,
+      await dependencies.workspaceCreators(transaction),
+      userId,
+    );
     return await createWorkspace(transaction, clock, userId, input);
   });
 };
@@ -120,8 +129,8 @@ export const readWorkspace = async (
   request: Request,
   workspaceId: string,
 ): Promise<Workspace> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await workspaceIn(database, context);
 };
@@ -131,8 +140,8 @@ export const listWorkspaceMembers = async (
   request: Request,
   workspaceId: string,
 ): Promise<readonly WorkspaceMember[]> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await membersIn(database, context);
 };
@@ -148,7 +157,7 @@ export const setMyDeepWork = async (
   body: unknown,
 ): Promise<DeepWorkResponse> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(SetDeepWorkRequest, body);
   const answer = await setDeepWork(database, clock, context, input);
@@ -179,7 +188,7 @@ export const updateWorkspace = async (
   body: unknown,
 ): Promise<Workspace> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const { name } = validated(UpdateWorkspaceRequest, body);
   const { workspace, memberIds } = await atomicallyOn(database)(
@@ -204,7 +213,7 @@ export const updateMemberRole = async (
   body: unknown,
 ): Promise<WorkspaceMember> => {
   const { database, clock } = dependencies;
-  const caller = await requireSession(database, clock, request);
+  const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { role } = validated(UpdateMemberRoleRequest, body);
   return await atomicallyOn(database)(
@@ -223,7 +232,7 @@ export const removeWorkspaceMember = async (
   userId: string,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const caller = await requireSession(database, clock, request);
+  const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { channelIds } = await atomicallyOn(database)(
     async (transaction) => await removeMember(transaction, clock, context, userId),
@@ -244,7 +253,7 @@ export const leaveWorkspaceMembership = async (
   workspaceId: string,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const caller = await requireSession(database, clock, request);
+  const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { channelIds } = await atomicallyOn(database)(
     async (transaction) => await leaveWorkspace(transaction, clock, context),
@@ -264,8 +273,8 @@ export const readAuditTrail = async (
   request: Request,
   workspaceId: string,
 ): Promise<AuditPage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await auditTrail(database, context, query);
@@ -277,8 +286,8 @@ export const readRetentionSetting = async (
   request: Request,
   workspaceId: string,
 ): Promise<RetentionSetting> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await readRetention(database, context);
 };
@@ -292,8 +301,8 @@ export const readStorageUsage = async (
   request: Request,
   workspaceId: string,
 ): Promise<StorageUsage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await readStorage(database, context);
 };
@@ -310,7 +319,7 @@ export const updateRetentionSetting = async (
   body: unknown,
 ): Promise<RetentionSetting> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const { retentionDays } = validated(SetRetentionRequest, body);
   return await atomicallyOn(database)(
@@ -324,8 +333,8 @@ export const readGitHubIntegration = async (
   request: Request,
   workspaceId: string,
 ): Promise<GitHubIntegration> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await githubIntegrationOf(database, context);
 };
@@ -338,7 +347,7 @@ export const changeGitHubToken = async (
   body: unknown,
 ): Promise<void> => {
   const { database, clock, cipher } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   if (request.method === 'DELETE') {
     await atomicallyOn(database)(async (transaction) => {

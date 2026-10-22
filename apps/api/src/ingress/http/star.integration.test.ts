@@ -10,7 +10,7 @@ import type { Channel, ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
-import { issueSession } from '../../modules/auth/sessions';
+import { aTestAuth, aSession } from '../../testing/signed-in';
 import { testDependencies } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { createApp } from './app';
@@ -28,7 +28,7 @@ describe('integration: a star', () => {
       const room = await aRoom(db, ['alice', 'bob'], { outsiders: ['carol'] });
       const session = async (name: string): Promise<string> =>
         (
-          await issueSession(
+          await aSession(
             db,
             clock,
             room.members[name]?.userId ?? room.outsiders[name]?.userId ?? '',
@@ -72,7 +72,7 @@ describe('integration: a star', () => {
   test('somebody who can see a public channel without being in it cannot star it, and is told 404', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice'], { outsiders: ['carol'] });
-      const { token } = await issueSession(db, clock, room.outsiders['carol']?.userId ?? '', 30);
+      const { token } = await aSession(db, clock, room.outsiders['carol']?.userId ?? '', 30);
       const app = createApp(testDependencies({ database: db, clock }));
       const response = await app.handle(
         new Request(`https://purlay.test/api/channels/${room.channelId}/star`, {
@@ -95,7 +95,7 @@ describe('integration: a star', () => {
   test('a conversation has no star: refused as a stranger is', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob'], { type: 'direct_message' });
-      const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const { token } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
       const app = createApp(testDependencies({ database: db, clock }));
       const response = await app.handle(
         new Request(`https://purlay.test/api/channels/${room.channelId}/star`, {
@@ -112,7 +112,7 @@ describe('integration: a star', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const alice = room.members['alice']?.userId ?? '';
-      const { token } = await issueSession(db, clock, alice, 30);
+      const { token } = await aSession(db, clock, alice, 30);
       const told: [string, ServerFrame][] = [];
       const bus: EventBus = {
         publish: (topic: string, frame: ServerFrame): Promise<void> => {
@@ -123,7 +123,7 @@ describe('integration: a star', () => {
         unsubscribe: () => undefined,
         forget: () => undefined,
       };
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       const request = (): Request =>
         new Request('https://purlay.test/', { headers: { cookie: `${SESSION_COOKIE}=${token}` } });
 

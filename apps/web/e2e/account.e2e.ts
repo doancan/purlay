@@ -22,14 +22,13 @@ const sessionsPage = async (page: Page): Promise<Locator> => {
 };
 
 test.describe('signing out everywhere', () => {
-  test('signing out everywhere ends the session in the other browser too', async ({
-    asOutsider,
-    workspaceOf,
-  }) => {
-    const workspace = await workspaceOf('erin');
-    // Sessions of their own: this ends every session erin holds, the seeded ones included.
-    const here = await asOutsider('erin', 'fresh');
-    const there = await asOutsider('erin', 'fresh');
+  test('signing out everywhere ends the session in the other browser too', async ({ newcomer }) => {
+    // A person of this test alone: signing out everywhere ends every session they hold, so a shared
+    // person would end the sessions of whichever other test (or repeat, or retry) leaned on them.
+    const person = await newcomer('signs-out');
+    const workspace = await workspaceFor(person);
+    const here = await person.page();
+    const there = await person.pageWithAnotherSession();
     for (const page of [here, there]) {
       await page.goto(`/w/${workspace.slug}`);
       await shellReady(page);
@@ -53,65 +52,25 @@ test.describe('signing out everywhere', () => {
 });
 
 /**
- * Connecting GitHub to an account made by email (D-176), against the real API. GitHub itself cannot be
- * reached from the harness, so the way there is stopped at its door and the way back is the callback
- * GitHub would send the browser to: the card, the same-origin start, and each refusal said on this
- * page in words. The finished connect is the API's integration test (`connect-github.integration.test.ts`).
+ * How you sign in (D-176, D-179 §5), against the real API: the card names the address and, where GitHub
+ * is linked, the login — and offers nothing to press, since GitHub is linked by signing in with it.
  */
-test.describe('connecting GitHub', () => {
-  test('an account made by email is offered it here, and every way back is said on this page', async ({
+test.describe('how you sign in', () => {
+  test('an account made by email shows its address and a link that signs in, and nothing to connect', async ({
     newcomer,
   }) => {
-    const person = await newcomer('connects');
+    const person = await newcomer('reads-how');
     const workspace = await workspaceFor(person);
     const page = await person.page();
-    await page.route('https://github.com/**', async (route) => {
-      await route.abort();
-    });
     await page.goto(`/w/${workspace.slug}/settings/account`);
     const card = page.getByRole('region', { name: 'How you sign in' });
     await expect(card.getByText(`${person.username}@elsewhere.example`)).toBeVisible();
     await expect(card.getByText('A sign-in link sent to this address signs you in.')).toBeVisible();
-
-    /** Connect GitHub, pressed: a same-origin POST, then the browser on its way to GitHub. */
-    const pressConnect = async (): Promise<string> => {
-      const started = page.waitForResponse('**/api/me/github/connect');
-      const leaving = page.waitForRequest('https://github.com/**');
-      await card.getByRole('button', { name: 'Connect GitHub' }).click();
-      const answer = await started;
-      expect(answer.request().method()).toBe('POST');
-      expect(answer.status()).toBe(200);
-      const to = new URL((await leaving).url());
-      expect(to.pathname).toBe('/login/oauth/authorize');
-      return to.searchParams.get('state') ?? '';
-    };
-
-    // GitHub came back with a state that is not the one this browser was given.
-    const state = await pressConnect();
-    expect(state).toMatch(/^[0-9a-f]{32}$/);
-    await page.goto(`/auth/github/callback?code=a-code&state=${'0'.repeat(32)}`);
-    await expect(page).toHaveURL(
-      new RegExp(`/w/${workspace.slug}/settings/account\\?github=expired$`),
-    );
-    await expect(card.getByRole('alert')).toHaveText(
-      'That connect expired or was started in another browser — nothing was connected. Press Connect GitHub again.',
-    );
-
-    // Cancelled on GitHub's screen.
-    await page.goto(`/w/${workspace.slug}/settings/account`);
-    const again = await pressConnect();
-    await page.goto(`/auth/github/callback?error=access_denied&state=${again}`);
-    await expect(page).toHaveURL(
-      new RegExp(`/w/${workspace.slug}/settings/account\\?github=cancelled$`),
-    );
-    // The card is read again after the way back, and its skeleton is a status too: wait it out first.
-    await expect(card.getByRole('button', { name: 'Connect GitHub' })).toBeVisible();
-    await expect(card.getByRole('status')).toHaveText(
-      'You cancelled on GitHub — nothing was connected.',
-    );
+    await expect(card.getByRole('button')).toHaveCount(0);
+    await expect(card.getByText('GitHub', { exact: true })).toHaveCount(0);
   });
 
-  test('an account GitHub made says it signs in with GitHub, and has nothing to connect', async ({
+  test('an account GitHub made says it signs in with GitHub, and shows the login, read only', async ({
     asOutsider,
     workspaceOf,
   }) => {
@@ -123,6 +82,6 @@ test.describe('connecting GitHub', () => {
       card.getByText('Your GitHub account’s address. You sign in with GitHub.'),
     ).toBeVisible();
     await expect(card.getByText('You can sign in with this GitHub account.')).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
+    await expect(card.getByRole('button')).toHaveCount(0);
   });
 });

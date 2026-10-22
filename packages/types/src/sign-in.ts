@@ -15,6 +15,17 @@ import { Type, type Static } from '@sinclair/typebox';
 /** The sign-in screen's address. The client's route table spells it from here. */
 export const SIGN_IN_PATH = '/sign-in';
 
+/** Where the sign-in library answers (D-179): every route of its own is under this path. */
+export const AUTH_BASE_PATH = '/auth';
+
+/**
+ * Where GitHub sends the browser back to: the library's own callback under its base path, so the
+ * address GitHub is given is `APP_URL` followed by this (D-61, D-179). Spelled once, here — the
+ * library is configured with `AUTH_BASE_PATH`, and a failure on this path is answered as a redirect
+ * to the sign-in screen rather than JSON, because only a browser ever arrives there (D-121).
+ */
+export const SIGN_IN_CALLBACK = `${AUTH_BASE_PATH}/callback/github`;
+
 /** How long a sign-in link opens (D-138 §4): the server's expiry and every sentence that names it. */
 export const SIGN_IN_LINK_TTL_MINUTES = 15;
 
@@ -31,10 +42,15 @@ export const SignInFailure = Type.Union([
   Type.Literal('cancelled'),
   /** The `state` check failed: no cookie, an expired one, or not the one this browser was given. */
   Type.Literal('expired'),
-  /** The GitHub account has no primary verified address (`EMAIL_REQUIRED`, D-38). */
+  /** The GitHub account has no primary verified address (D-38). */
   Type.Literal('email-required'),
-  /** The address already belongs to another Purlay account (`ACCOUNT_EMAIL_CONFLICT`, D-38). */
+  /**
+   * A local account has this address but has not verified it, so GitHub is not linked to it
+   * (`ACCOUNT_EMAIL_CONFLICT`, D-179 §5).
+   */
   Type.Literal('email-taken'),
+  /** A new account on a server whose sign-up is invite-only, with no invitation (D-179 §5). */
+  Type.Literal('signup-closed'),
   /** GitHub could not be reached, refused, or answered something unusable. */
   Type.Literal('github-unavailable'),
   /** Too many sign-ins from here, or no database connection in time: wait, then retry. */
@@ -65,53 +81,4 @@ export const signInFailureIn = (search: string): SignInFailure | null => {
   const value = new URLSearchParams(search).get(FAILURE_PARAM);
   if (value === null) return null;
   return isFailure(value) ? value : 'failed';
-};
-
-/**
- * How connecting GitHub to a signed-in account came out (D-176), said on the settings page it started
- * from — a closed set in the address, as a sign-in's failure is, and for the same reasons.
- */
-export const ConnectGitHubOutcome = Type.Union([
-  /** Connected: the account now signs in with this GitHub account as well. */
-  Type.Literal('connected'),
-  /** They pressed Cancel on GitHub's screen. */
-  Type.Literal('cancelled'),
-  /** The `state` check failed: expired, or not the one this browser was given. */
-  Type.Literal('expired'),
-  /** The session that started it is not the one signed in here now: signed out, or another person. */
-  Type.Literal('session'),
-  /** That GitHub account is another Purlay account's already (`GITHUB_ACCOUNT_TAKEN`). Never merged. */
-  Type.Literal('taken'),
-  /** This account has a GitHub account already (`GITHUB_ALREADY_CONNECTED`). */
-  Type.Literal('already'),
-  /** GitHub could not be reached, refused, or answered something unusable. */
-  Type.Literal('github-unavailable'),
-  /** Too many requests from here, or no database connection in time: wait, then retry. */
-  Type.Literal('busy'),
-  /** Anything else. The cause is in the server's log, never in the address. */
-  Type.Literal('failed'),
-]);
-export type ConnectGitHubOutcome = Static<typeof ConnectGitHubOutcome>;
-
-/** The query parameter the outcome travels in, on the Sessions & account page. */
-const CONNECT_PARAM = 'github';
-
-const OUTCOMES: ReadonlySet<string> = new Set(
-  ConnectGitHubOutcome.anyOf.map((literal) => literal.const),
-);
-
-const isOutcome = (value: string): value is ConnectGitHubOutcome => OUTCOMES.has(value);
-
-/**
- * Where the browser is sent once a connect is over: that workspace's Sessions & account page. A path,
- * so the API prefixes its own origin; the slug is `[a-z0-9-]`, so it is a path and nothing else.
- */
-export const connectGitHubHref = (workspace: string, outcome: ConnectGitHubOutcome): string =>
-  `/w/${encodeURIComponent(workspace)}/settings/account?${new URLSearchParams({ [CONNECT_PARAM]: outcome }).toString()}`;
-
-/** The outcome an address carries, or null; a value outside the set reads as `failed`. */
-export const connectGitHubOutcomeIn = (search: string): ConnectGitHubOutcome | null => {
-  const value = new URLSearchParams(search).get(CONNECT_PARAM);
-  if (value === null) return null;
-  return isOutcome(value) ? value : 'failed';
 };

@@ -40,7 +40,6 @@ export type FailureKey =
   | 'failure.incidentResolved'
   | 'failure.incidentRespondersLimit'
   | 'failure.incidentPostmortemChanged'
-  | 'failure.githubAlreadyConnected'
   | 'failure.generic';
 
 /**
@@ -62,8 +61,6 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'TIMEOUT':
       return 'failure.network';
     case 'UNAUTHENTICATED':
-    case 'OAUTH_STATE_INVALID':
-    case 'EMAIL_REQUIRED':
       return 'failure.session';
     // Erasing an account wants a sign-in from the last minutes (D-139 §5).
     case 'REAUTHENTICATION_REQUIRED':
@@ -111,9 +108,6 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.incidentRespondersLimit';
     case 'INCIDENT_POSTMORTEM_CHANGED':
       return 'failure.incidentPostmortemChanged';
-    // Connecting GitHub to an account that has it (D-176): the page reads the account again.
-    case 'GITHUB_ALREADY_CONNECTED':
-      return 'failure.githubAlreadyConnected';
     case 'TOO_MANY_PENDING_UPLOADS':
     case 'ATTACHMENT_ID_CONFLICT':
     case 'LAST_OWNER':
@@ -129,13 +123,20 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'MESSAGE_ID_CONFLICT':
     case 'INCIDENT_ID_CONFLICT':
     case 'ACCOUNT_EMAIL_CONFLICT':
-    // Said only by the callback, on the settings page, in its own words (D-176).
+    // A lost race on the GitHub id's index, said by the callback as `failed` (D-179).
     case 'GITHUB_ACCOUNT_TAKEN':
       return 'failure.refused';
     case 'DATABASE_UNAVAILABLE':
     case 'STORAGE_UNAVAILABLE':
     case 'PUSH_UNAVAILABLE':
     case 'EMAIL_SIGN_IN_UNAVAILABLE':
+    // The setup's own: its screens say each in words of their own (`UX.md` §11); anywhere else, generic.
+    case 'SETUP_UNAVAILABLE':
+    case 'SETUP_LOCKED':
+    case 'SETUP_STEP_REFUSED':
+    case 'SETTINGS_CHANGE_FAILED':
+    case 'SERVER_CHANGE_REFUSED':
+    case 'ADMIN_LINK_NOT_FOUND':
     // GitHub's answers, never a person's: no screen calls the webhook (D-134 §4).
     case 'WEBHOOK_SIGNATURE_INVALID':
     case 'GITHUB_REPOSITORY_MISMATCH':

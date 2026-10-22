@@ -53,19 +53,30 @@ export const tr = {
   'signIn.emailRequired':
     'GitHub hesabında doğrulanmış birincil e-posta yok — GitHub’da birini doğrula, sonra yeniden giriş yap.',
   'signIn.emailTaken':
-    'Bu e-posta başka bir Purlay hesabına ait. O hesabı e-posta bağlantısıyla açtıysan bağlantıyla giriş yap, sonra Ayarlar → Oturumlar ve hesap’tan GitHub’ı bağla; başka bir GitHub hesabıyla açtıysan onunla giriş yap.',
+    'Bu e-postayla bir hesap var ama adresi henüz doğrulanmamış; bu yüzden GitHub ile giriş yapılamıyor. Bunun yerine o hesabın parolasıyla giriş yap; adres doğrulanınca GitHub de aynı hesaba giriş yapar.',
+  'signIn.emailTakenNoMail':
+    'Bu e-postayla bir hesap var ama adresi henüz doğrulanmamış; bu yüzden GitHub ile giriş yapılamıyor. Bu, sunucu kurulurken açılan bir parola hesabı: parolasıyla giriş yap. Bu sunucu e-posta göndermiyor; adres doğrulanmış olmayacağı için GitHub bu hesaba giriş yapmaz.',
+  'signIn.signupClosed':
+    'Bu Purlay sunucusunda hesap yalnızca davetle açılır — sunucudaki birinden davet bağlantısı iste.',
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden dene.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden dene.',
   'signIn.failed': 'Giriş tamamlanamadı — yeniden dene.',
   'signIn.ended': 'Oturumun sona erdi. Devam etmek için yeniden giriş yap.',
+  'signIn.methods.unchecked': 'Bu sunucunun hangi giriş seçeneklerini sunduğunu denetleyemedik.',
+  'signIn.methods.retry': 'Yeniden dene',
+  'signIn.notSetUp.title': 'Bu sunucu henüz kurulmadı',
+  'signIn.notSetUp.body':
+    'GitHub ile giriş de e-posta bağlantısı da henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+  'signIn.notSetUp.action': 'Bu sunucuyu kur',
   'signIn.scope': 'Purlay GitHub’dan yalnızca adını, kullanıcı adını ve e-postanı ister.',
   'signIn.email.label': 'E-posta adresi',
   'signIn.email.submit': 'Bana giriş bağlantısı gönder',
+  'signIn.email.linkInstead': 'Bunun yerine bana giriş bağlantısı gönder',
   'signIn.email.sent':
     '{email} e-postayla giriş yapabiliyorsa bağlantı yolda. Bir kez ve {minutes} dakika boyunca çalışır.',
   'signIn.email.another': 'Başka bir adres kullan',
   'signIn.email.invalid': 'Bu bir e-posta adresi değil.',
-  'signIn.email.unavailable': 'Bu sunucu e-postayla giriş yapmıyor — GitHub ile devam et.',
+  'signIn.email.unavailable': 'Bu sunucu e-postayla giriş yapmıyor.',
   'signIn.email.failed': 'Bağlantı istenemedi.',
   'signIn.link.as': '{email} olarak giriş yapıyorsun.',
   'signIn.link.replaces':
@@ -75,6 +86,27 @@ export const tr = {
   'signIn.link.notFound': 'Bu bağlantı kullanılmış ya da süresi dolmuş — yenisini iste.',
   'signIn.link.failed': 'Giriş tamamlanamadı.',
   'signIn.link.back': 'Girişe dön',
+  'signIn.password.form': 'Parolayla giriş yap',
+  'signIn.password.label': 'Parola',
+  'signIn.password.submit': 'Giriş yap',
+  'signIn.password.wrong': 'E-posta ya da parola yanlış.',
+  'signIn.password.tooMany': {
+    other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden dene.',
+  },
+  'signIn.password.unreachable': 'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'signIn.password.failed': 'Giriş tamamlanamadı. Biraz sonra yeniden dene.',
+  'signIn.createAccount.prompt': 'Hesabın yok mu?',
+  'signIn.createAccount.action': 'Hesap oluştur',
+  'signIn.byInvitation': 'Hesaplar davetle açılır.',
+  'signUp.title': 'Hesabını oluştur',
+  'signUp.lede':
+    'GitHub ile devam et ya da e-postana giriş bağlantısı gönderilsin. Açtığın ilk bağlantı hesabını oluşturur.',
+  'signUp.nothing': 'Bu sunucuda henüz hesap açmanın bir yolu bağlanmamış.',
+  'signUp.haveAccount': 'Zaten hesabın var mı?',
+  'signUp.signIn': 'Giriş yap',
+  'signUp.closed.title': 'Hesaplar davetle açılır',
+  'signUp.closed.body':
+    'Bu Purlay sunucusu kendiliğinden kayıt almıyor. Sunucudaki birinden davet bağlantısı iste ve hesabını o bağlantıyı açarak oluştur.',
 
   // ── Çalışma alanı ve kenar çubuğu ───────────────────────────────────────
   'sidebar.label': 'Çalışma alanı',
@@ -153,6 +185,12 @@ export const tr = {
   'invite.gone.body': 'Süresi dolmuş ya da iptal edilmiş olabilir. Yenisini iste.',
   'invite.failed.title': 'Davet okunamadı',
   'invite.home': 'Ana sayfaya dön',
+  'invite.signedOut.title': 'Davet edildin',
+  'invite.signedOut.body': 'Katılmak için giriş yap ya da hesap oluştur. Davet sende kalır.',
+  'invite.signedOut.haveAccount': 'Zaten hesabın var mı?',
+  'invite.signedOut.signIn': 'Parolanla giriş yap',
+  'invite.passport.tooMany': 'Bu davet şu an çok sık açılıyor. Biraz sonra yeniden dene.',
+  'invite.passport.failed': 'Davet denetlenemedi.',
   'message.imageFrom': '{host} adresinden bir görsel',
   'github.state.open': 'Açık',
   'github.state.closed': 'Kapalı',
@@ -177,6 +215,33 @@ export const tr = {
   'invite.admin.row': '{name} oluşturdu, {until} tarihine kadar açık',
   'invite.admin.someone': 'biri',
   'invite.admin.revoke': 'İptal et',
+  'invite.mail.description':
+    'Bağlantıyı e-postayla gönder ya da kopyalayıp kendin paylaş. Oturum açmış, bağlantıya sahip herkes yedi gün boyunca üye olarak katılır.',
+  'invite.mail.label': 'E-posta adresleri',
+  'invite.mail.placeholder': 'ayse@firma.com',
+  'invite.mail.hint':
+    'Her adresi eklemek için Enter ya da virgül kullan. Hatalı adres kırmızı olur ve gönderilmez.',
+  'invite.mail.tooMany': 'Bir seferde en çok {max} adres; kalanlar dışarıda bırakıldı.',
+  'invite.mail.remove': '{address} adresini kaldır',
+  'invite.mail.invalidChip': '(e-posta adresi değil)',
+  'invite.mail.sendNone': 'Davetleri gönder',
+  'invite.mail.send': {
+    other: '{count} daveti gönder',
+  },
+  'invite.mail.queued': {
+    other: 'Posta sunucusundan daveti {count} kişiye göndermesi istendi.',
+  },
+  'invite.mail.queuedNote':
+    'Ulaştığı doğrulanmadı. Bir mesaj ulaşmazsa aşağıdaki bağlantı da çalışır.',
+  'invite.mail.invalid': 'E-posta adresi olmadığı için gönderilmedi: {addresses}.',
+  'invite.mail.inviterLimit':
+    'Bugünkü {limit} davet e-postası sınırına ulaştın, bu yüzden şunlar gönderilmedi: {addresses}.',
+  'invite.mail.workspaceLimit':
+    'Bu çalışma alanı bugünkü {limit} davet e-postası sınırına ulaştı, bu yüzden şunlar gönderilmedi: {addresses}.',
+  'invite.mail.unavailable':
+    'Bu sunucu e-posta gönderemiyor, bu yüzden şunlar gönderilmedi: {addresses}.',
+  'invite.mail.failed': 'Davetler gönderilemedi.',
+  'invite.mail.or': 'Ya da bağlantıyı kendin paylaş',
   'members.entry': 'Üyeler…',
   'members.title': '{workspace} üyeleri',
   'members.description':
@@ -1087,7 +1152,6 @@ export const tr = {
     'Bir olaya müdahale edebilecek kişi sınırına ulaşıldı. Önce birini çıkar.',
   'failure.incidentPostmortemChanged':
     'Sen başladığından beri başka biri postmortemi kaydetti. Yazdığın duruyor: önce onunkini oku, sonra yeniden kaydet.',
-  'failure.githubAlreadyConnected': 'Bu hesaba zaten bir GitHub hesabı bağlı.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar dene.',
   'failure.signOut': 'Çıkış yapılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendin kopyala.',
@@ -1173,26 +1237,24 @@ export const tr = {
   'settings.account.emailLinks': 'Bu adrese gönderilen giriş bağlantısıyla giriş yaparsın.',
   'settings.account.emailGitHub': 'GitHub hesabının adresi. GitHub ile giriş yaparsın.',
   'settings.account.github': 'GitHub',
-  'settings.account.githubNone':
-    'Bağlı değil. GitHub hesabını bağla; e-postanın yanında onunla da giriş yap.',
   'settings.account.githubSignsIn': 'Bu GitHub hesabıyla giriş yapabilirsin.',
-  'settings.account.githubConnected': 'Bağlı',
-  'settings.account.githubConnect': 'GitHub’ı bağla',
-  'settings.account.githubConnectFailed': 'GitHub açılamadı.',
-  'settings.account.github.connected': 'GitHub bağlandı — artık onunla da giriş yapabilirsin.',
-  'settings.account.github.cancelled': 'GitHub’da iptal ettin — hiçbir şey bağlanmadı.',
-  'settings.account.github.expired':
-    'Bu bağlamanın süresi doldu ya da başka bir tarayıcıda başlatıldı — hiçbir şey bağlanmadı. “GitHub’ı bağla”ya yeniden bas.',
-  'settings.account.github.session':
-    'GitHub yanıt vermeden önce çıkış yapıldı ya da başka biri olarak giriş yapıldı — hiçbir şey bağlanmadı. “GitHub’ı bağla”ya yeniden bas.',
-  'settings.account.github.taken':
-    'Bu GitHub hesabıyla zaten başka bir Purlay hesabına giriş yapılıyor — hiçbir şey bağlanmadı. GitHub’da kastettiğin hesapla giriş yap, sonra yeniden dene.',
-  'settings.account.github.already': 'Bu hesaba zaten bir GitHub hesabı bağlı.',
-  'settings.account.github.unavailable':
-    'GitHub’a ulaşılamadı — hiçbir şey bağlanmadı. Biraz bekleyip yeniden dene.',
-  'settings.account.github.busy':
-    'Purlay şu an yoğun — hiçbir şey bağlanmadı. Bir dakika bekleyip yeniden dene.',
-  'settings.account.github.failed': 'GitHub bağlanamadı — yeniden dene.',
+  'settings.account.githubLinked': 'Bağlı',
+  'settings.account.password.title': 'Parola',
+  'settings.account.password.description':
+    'Giriş yaptığın parolayı değiştir. Diğer oturumların kapatılır.',
+  'settings.account.password.current': 'Mevcut parola',
+  'settings.account.password.new': 'Yeni parola',
+  'settings.account.password.submit': 'Parolayı değiştir',
+  'settings.account.password.done': 'Diğer oturumların kapatıldı.',
+  'settings.account.password.wrong': 'Bu, mevcut parolan değil.',
+  'settings.account.password.tooMany': {
+    other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden dene.',
+  },
+  'settings.account.password.unreachable':
+    'Purlay’e ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'settings.account.password.othersStay':
+    'Parolan değişti ama diğer oturumların kapatılamadı. "Her yerden çıkış yap"ı kullan.',
+  'settings.account.password.failed': 'Parola değiştirilmedi. Biraz sonra yeniden dene.',
   'settings.account.sessions': 'Oturumlar',
   'settings.account.here': 'Bu cihaz',
   'settings.account.hereHint': 'Yalnızca bu tarayıcıda Purlay’den çık.',
@@ -1323,4 +1385,329 @@ export const tr = {
   // ── Klavye kısayolları, devamı ──────────────────────────────────────────
   'shortcuts.codeSend': 'Kod bloğunun içinden gönder',
   'shortcuts.or': 'ya da',
+
+  // ── Kurulum sihirbazı (D-179 §4, UX §11) ────────────────────────────────
+  'setup.title': 'Purlay kurulumu',
+  'setup.stepper.label': 'Kurulum adımları',
+  'setup.stepOf': 'Adım {n} / {total}',
+  'setup.done': 'tamam',
+  'setup.foot': 'Burada yaptığın her şeyi sonra Yönetim → Sunucu sayfasından değiştirebilirsin.',
+  'setup.back': 'Geri',
+  'setup.continue': 'Devam',
+  'setup.skip': 'Şimdilik atla',
+  'setup.tryAgain': 'Yeniden dene',
+  'setup.step.claim.name': 'Kurulum kodu',
+  'setup.step.claim.line': 'Bu sunucunun sahibi sensin',
+  'setup.step.admin.name': 'Yönetici',
+  'setup.step.admin.line': 'Ad, adres ve parola',
+  'setup.step.address.name': 'Sunucu adresi',
+  'setup.step.address.line': 'Ve kimler hesap açabilir',
+  'setup.step.github.name': 'GitHub ile giriş',
+  'setup.step.github.line': 'Bir OAuth uygulaması',
+  'setup.step.email.name': 'E-posta',
+  'setup.step.email.line': 'Giriş bağlantıları ve davetler',
+  'setup.step.workspace.name': 'İlk çalışma alanı',
+  'setup.step.workspace.line': 'Ad ve adres',
+  'setup.step.invite.name': 'Ekibi davet et',
+  'setup.step.invite.line': 'İstediğin zaman',
+  'setup.step.finish.name': 'Bitir',
+  'setup.step.finish.line': 'Purlay’ı aç',
+  'setup.status.error.title': 'Bu sunucu kontrol edilemedi',
+  'setup.status.error.body':
+    'Sunucu kuruluma açık olup olmadığını söylemedi. Çalıştığından emin ol, sonra yeniden dene.',
+  'setup.state.error.title': 'Kurulum okunamadı',
+  'setup.state.error.body': 'Sunucu yanıt vermedi. İlerlemen kayıtlı; yeniden dene.',
+  'setup.closed.title': 'Bu sunucu kurulu',
+  'setup.closed.body': 'Kurulum bitti. Devam etmek için giriş yap.',
+  'setup.closed.action': 'Girişe git',
+  'setup.closed.bodySignedIn': 'Kurulum bitti.',
+  'setup.closed.open': "Purlay'ı aç",
+  'setup.mismatch.title': 'Farklı bir adrestesin',
+  'setup.mismatch.body':
+    'Bu sunucu {address} adresi için kurulu, ama bu sayfa {origin} adresinde açıldı. Buradan gönderilen kod reddedilir. Doğru adresi aç ve kodu orada gir.',
+  'setup.mismatch.action': '{address} adresini aç',
+  'setup.lost':
+    'Bu kurulum başka bir tarayıcıda başlatılmış. O tarayıcı yoksa on beş dakika bekle, sunucuyu yeniden başlat ve günlüğündeki yeni kurulum kodunu gir. Kaldığın adımdan devam edersin.',
+  'setup.claim.title': 'Kurulum kodunu gir',
+  'setup.claim.lede':
+    'Bu sunucuyu senin yönettiğini kanıtlar. Kod yalnızca sunucunun günlüğüne yazılır.',
+  'setup.claim.where': 'Sunucunun çalıştığı makinede şununla oku:',
+  'setup.claim.hour': 'Kod bir saat geçerlidir. Sunucuyu yeniden başlatmak yenisini yazar.',
+  'setup.claim.label': 'Kurulum kodu',
+  'setup.claim.takeover':
+    'Kurulum başka bir tarayıcıda mı başlamıştı? O tarayıcı yoksa on beş dakika bekle, sunucuyu yeniden başlat ve yeni kodu gir; onun kaldığı adımdan devam edersin.',
+  'setup.claim.wrong':
+    'Bu kurulum kodu değil. Günlükteki en son SETUP CODE satırına bak; bir kod bir saat geçerlidir.',
+  'setup.claim.locked': {
+    other:
+      'Çok fazla yanlış kod girildi. Kurulum {count} dakika sonra yeniden açılır; sunucuyu yeniden başlatmak yeni bir kod yazar ve beklemeyi hemen bitirir.',
+  },
+  'setup.claim.limited': {
+    other: 'Bu tarayıcıdan çok fazla deneme yapıldı. {count} dakika bekleyip yeniden dene.',
+  },
+  'setup.claim.unavailable.title': 'Kurulum kullanılamıyor',
+  'setup.claim.unavailable.body':
+    'Bu sunucu zaten kurulmuş ya da kurulum başka bir tarayıcıda sürüyor. O tarayıcı yoksa on beş dakika bekle, sunucuyu yeniden başlat ve günlüğündeki yeni kodu gir.',
+  'setup.claim.forbidden':
+    'Sunucu kodu bu adresten reddetti. {address} adresini açıp kodu orada gir.',
+  'setup.admin.title': 'Yönetici hesabını oluştur',
+  'setup.admin.lede':
+    'Sunucuyu bu hesapla yöneteceksin. Parolası olan tek hesap bu; diğer herkes GitHub ile ya da e-posta bağlantısıyla girer.',
+  'setup.admin.name': 'Ad',
+  'setup.admin.email': 'E-posta adresi',
+  'setup.admin.password': 'Parola',
+  'setup.admin.show': 'Göster',
+  'setup.admin.hide': 'Gizle',
+  'setup.admin.showLabel': 'Parolayı göster',
+  'setup.admin.hideLabel': 'Parolayı gizle',
+  'setup.admin.rules': 'Parola şunlara uymalı',
+  'setup.admin.rule.length': '{min} ile {max} karakter arası, denetim karakteri yok',
+  'setup.admin.rule.own': 'Adın ya da e-posta adresin olmamalı',
+  'setup.admin.rule.common': 'En yaygın parolalardan biri olmamalı',
+  'setup.admin.rule.repetitive': 'Bir iki karakter tekrarından ibaret olmamalı',
+  'setup.admin.rule.met': 'sağlandı',
+  'setup.admin.rule.broken': 'sağlanmadı',
+  'setup.admin.unverified':
+    'Bu adres henüz doğrulanmadı. E-posta adımı adrese bir ileti gönderir; iletideki bağlantıyı açmak adresi doğrular. O zamana kadar GitHub bu hesaba bağlanmaz; parolayla giriş yaparsın.',
+  'setup.admin.submit': 'Hesabı oluştur',
+  'setup.admin.nameBlank': 'Bir ad gir.',
+  'setup.admin.emailInvalid': 'Bu bir e-posta adresi değil.',
+  'setup.admin.problem.too-short': 'Bu parola çok kısa.',
+  'setup.admin.problem.too-long': 'Bu parola çok uzun.',
+  'setup.admin.problem.invalid-character': 'Bu parolada izin verilmeyen bir karakter var.',
+  'setup.admin.problem.blank': 'Bu parola boş.',
+  'setup.admin.problem.contains-email': 'Bu parola e-posta adresini içeriyor.',
+  'setup.admin.problem.contains-name': 'Bu parola adını içeriyor.',
+  'setup.admin.problem.common': 'Bu parola en yaygın parolalardan biri.',
+  'setup.admin.problem.repetitive': 'Bu parola aynı birkaç karakteri tekrar ediyor.',
+  'setup.admin.conflict': 'Bu adresle bir hesap zaten var.',
+  'setup.admin.notSignedIn':
+    'Hesap oluşturuldu ama bu tarayıcıda oturum açılmadı. Kurulumdan sonra parolayla giriş yap.',
+  'setup.admin.done': 'Yönetici: {name}, {email}.',
+  'setup.address.title': 'Sunucu adresini onayla',
+  'setup.address.lede':
+    'İnsanların açtığı adres bu. Sunucunun APP_URL ayarından gelir; değiştirmek bir dağıtım ayarıdır, burada yapılacak bir şey değil.',
+  'setup.address.label': 'Sunucu adresi',
+  'setup.address.callback': 'GitHub dönüş adresi',
+  'setup.address.callbackHint': 'Bunu bir sonraki adımda GitHub’a yapıştıracaksın.',
+  'setup.policy.legend': 'Kimler hesap açabilir',
+  'setup.policy.invite': 'Yalnızca davet edilenler',
+  'setup.policy.inviteNote': 'Hesaplar yalnızca davet bağlantısıyla açılır; başka kimse giremez.',
+  'setup.policy.open': 'Herkes hesap açabilir',
+  'setup.policy.openNote':
+    'Bu sunucuya ulaşabilen herkes kaydolup kendi çalışma alanını başlatabilir.',
+  'setup.address.submit': 'Onayla ve devam et',
+  'setup.github.title': 'GitHub ile giriş',
+  'setup.github.lede':
+    'Ekibin sahip olduğu GitHub hesabıyla tek tıkla girebilsin. GitHub’da bir OAuth uygulaması oluştur, aşağıdaki adresi ona ver, sonra iki değerini buraya yapıştır.',
+  'setup.github.part1': '1 · GitHub’da bir OAuth uygulaması oluştur',
+  'setup.github.part1Body':
+    'GitHub’da Settings → Developer settings → OAuth Apps → New OAuth App yolunu izle ve bunu “Authorization callback URL” alanına yapıştır.',
+  'setup.github.callbackNote':
+    'GitHub “The redirect_uri MUST match the registered callback URL” sayfasını gösterirse, uygulamanın Authorization callback URL alanı tam olarak bu adres değil demektir.',
+  'setup.github.part2': '2 · Değerleri yapıştır',
+  'setup.github.clientId': 'Client ID',
+  'setup.github.clientSecret': 'Client secret',
+  'setup.github.secretHint': 'Sunucuda şifrelenerek saklanır, bir daha gösterilmez.',
+  'setup.github.reentry': 'Kayıtlı client secret artık okunamıyor. Yeniden gir.',
+  'setup.github.try': 'Dene',
+  'setup.github.save': 'Kaydet ve devam et',
+  'setup.github.ok': 'GitHub bu bilgileri kabul etti.',
+  'setup.github.okNote': 'Henüz kaydedilmedi. Kaydet ve devam et onları saklar.',
+  'setup.github.connected': 'GitHub bağlı. Secret saklanıyor ve gösterilmiyor.',
+  'setup.github.skipNote':
+    'Atlarsan kimse GitHub ile giremez. E-postayı bağlarsan insanlar yine de girebilir.',
+  'setup.email.title': 'E-postayı bağla',
+  'setup.email.lede':
+    'E-posta giriş bağlantılarını ve davetleri taşır. Deneme gerçek bir ileti gönderir; yöneticinin adresini doğrulayan ileti de odur.',
+  'setup.email.showLabel': 'Posta sunucusu adresini göster',
+  'setup.email.hideLabel': 'Posta sunucusu adresini gizle',
+  'setup.email.url': 'Posta sunucusu',
+  'setup.email.urlHint':
+    'Sunucunun adresi ve oturum bilgisi, örneğin smtps://kullanici:parola@host:465.',
+  'setup.email.from': 'Gönderen',
+  'setup.email.fromHint': 'İletilerin geldiği adres.',
+  'setup.email.plaintext': 'Şifresiz bağlantıya izin ver',
+  'setup.email.plaintextHint': 'Yalnızca özel bir ağdaki sunucu için.',
+  'setup.email.letter': '{email} adresine, onu doğrulayan bir ileti göndereceğiz.',
+  'setup.email.letterVerified': '{email} adresine bir deneme iletisi göndereceğiz.',
+  'setup.email.reentry': 'Kayıtlı posta oturumu artık okunamıyor. Yeniden gir.',
+  'setup.email.try': 'Bağlantıyı dene ve devam et',
+  'setup.email.stage.resolved': 'Sunucu adresi çözüldü',
+  'setup.email.stage.connected': 'Bağlantı kuruldu',
+  'setup.email.stage.login': 'Oturum kabul edildi',
+  'setup.email.stage.message': 'Deneme iletisi kabul edildi',
+  'setup.email.stage.done': 'tamam',
+  'setup.email.stage.failed': 'başarısız',
+  'setup.email.stage.skipped': 'buraya gelinmedi',
+  'setup.email.sent':
+    '{email} adresine bir ileti gönderdik. Adresini doğrulamak için içindeki bağlantıyı aç.',
+  'setup.email.sentTest': '{email} adresine bir deneme iletisi gönderdik.',
+  'setup.email.connected': 'E-posta bağlı.',
+  'setup.email.skipNote':
+    'Atlarsan davet bağlantıları gönderilmez, yalnızca kopyalanır; e-postayla giriş ve e-postayla hesap açma gizlenir. GitHub bağlıysa herkes yine de girer. Adresin doğrulanmamış kalır.',
+  'setup.workspace.title': 'İlk çalışma alanını oluştur',
+  'setup.workspace.lede': 'Çalışma alanı, bir ekibin konuştuğu yerdir. #general kanalıyla başlar.',
+  'setup.workspace.preview': 'Ekibin onu şu adreste açacak: {url}',
+  'setup.workspace.done': '{name} çalışma alanı var: {url}.',
+  'setup.invite.title': 'Ekibini davet et',
+  'setup.invite.lede':
+    'Bir bağlantı üret ve istediğin yoldan gönder. Atlamak da devam etmenin geçerli bir yolu.',
+  'setup.invite.make': 'Davet bağlantısı üret',
+  'setup.invite.mailTitle': 'Ya da e-postayla gönder',
+  'setup.invite.notSent': 'Gönderilmedi: {addresses}.',
+  'setup.invite.failed': 'Bağlantı üretilemedi.',
+  'setup.finish.title': 'Kurulumu bitir',
+  'setup.finish.lede': 'İnsanların girebildiğinden emin ol, sonra Purlay’ı aç.',
+  'setup.finish.admin': 'Yönetici hesabı',
+  'setup.finish.workspace': 'İlk çalışma alanı',
+  'setup.finish.channel': 'Başkalarının giriş yapabileceği bir yol',
+  'setup.finish.github': 'GitHub',
+  'setup.finish.email': 'E-posta',
+  'setup.finish.connected': 'bağlı',
+  'setup.finish.skipped': 'bağlı değil',
+  'setup.finish.problem.out-of-order': 'Önceki bir adım henüz bitmedi.',
+  'setup.finish.problem.no-workspace': 'İlk çalışma alanı henüz oluşturulmadı.',
+  'setup.finish.problem.no-channel':
+    'Başka kimse giremez. Şimdi bitirirsen yalnızca sen, parolanla girebilirsin; davet ettiklerin giremez.',
+  'setup.finish.toGithub': 'GitHub’a dön',
+  'setup.finish.toEmail': 'E-postaya dön',
+  'setup.finish.submit': 'Kurulumu bitir',
+  'setup.finish.failed': 'Kurulum bitirilemedi.',
+  'setup.failure.what': 'Ne oldu',
+  'setup.failure.fix': 'Nasıl düzeltilir',
+  'setup.failure.raw': 'Hizmetin yanıtı',
+  'setup.reason.secret-rejected.what': 'GitHub uygulamayı tanıyor ama client secret’ı reddetti.',
+  'setup.reason.secret-rejected.fix1':
+    'Uygulamanın GitHub’daki sayfasını aç ve Generate a new client secret’ı seç.',
+  'setup.reason.secret-rejected.fix2':
+    'Hemen kopyala — GitHub yalnızca bir kez gösterir — ve buraya yapıştır.',
+  'setup.reason.client-unknown.what': 'GitHub bu Client ID’ye sahip bir uygulama tanımıyor.',
+  'setup.reason.client-unknown.fix1':
+    'Client ID’yi uygulamanın GitHub’daki sayfasından yeniden kopyala.',
+  'setup.reason.client-unknown.fix2':
+    'Uygulama silinmiş olabilir ya da ID başka bir GitHub’a, örneğin bir Enterprise Server’a ait olabilir.',
+  'setup.reason.unreachable.what': 'O adreste kimse yanıt vermedi ya da zamanında vermedi.',
+  'setup.reason.unreachable.fix1': 'Sunucu adını ve portu kontrol et.',
+  'setup.reason.unreachable.fix2':
+    'Bu sunucunun dışarıya bağlanmasına izin verildiğini kontrol et.',
+  'setup.reason.tls-failed.what': 'Sunucuya ulaşıldı ama güvenli bağlantı kurulamadı.',
+  'setup.reason.tls-failed.fix1':
+    'Sağlayıcının verdiği portu ve smtps:// ya da smtp:// biçimini kullan.',
+  'setup.reason.tls-failed.fix2':
+    'Bu sunucunun güvenmediği bir sertifika reddedilir; bu makinenin ötesindeki bir sunucu, aradaki bağlantı özel değilse TLS sunmalıdır.',
+  'setup.reason.auth-failed.what': 'Posta sunucusu bağlantıyı kabul etti ama oturumu reddetti.',
+  'setup.reason.auth-failed.fix1': 'Parola yanlış ya da süresi dolmuş olabilir.',
+  'setup.reason.auth-failed.fix2':
+    'Hesap bir uygulama parolası isteyebilir; Google ve Microsoft’ta olağan.',
+  'setup.reason.auth-failed.fix3': 'Kullanıcı adının tam adres olması gerekebilir.',
+  'setup.reason.sender-refused.what': 'Oturum açıldı ama gönderen adresi reddedildi.',
+  'setup.reason.sender-refused.fix1': 'Bu hesabın kullanmasına izin verilen bir adresten gönder.',
+  'setup.reason.recipient-refused.what':
+    'Posta sunucusu yöneticinin adresini alıcı olarak reddetti.',
+  'setup.reason.recipient-refused.fix1': 'Yönetici adımındaki adresi kontrol et.',
+  'setup.reason.recipient-refused.fix2': 'Bazı sunucular yalnızca kendi alan adlarına gönderir.',
+  'setup.reason.message-refused.what': 'Posta sunucusu iki adresi de aldı ama iletiyi reddetti.',
+  'setup.reason.message-refused.fix1':
+    'Sunucunun politikası reddetti; çoğu zaman gönderenin alan adı yüzünden (SPF, DKIM, DMARC).',
+  'setup.reason.message-refused.fix2': 'Sunucunun adına gönderebildiği bir alan adından gönder.',
+  'setup.reason.unexpected-reply.what':
+    'Gelen yanıt, çalışan bir GitHub ya da posta sunucusunun vereceği türden değil.',
+  'setup.reason.unexpected-reply.fix1': 'Bir dakika sonra yeniden dene.',
+  'setup.reason.unexpected-reply.fix2':
+    'Sürerse adresi kontrol et; aşağıdaki yanıt neyin cevap verdiğini söyler.',
+  'setup.failed.network': 'Sunucuya ulaşılamadı. Bağlantını kontrol edip yeniden dene.',
+  'setup.failed.rate': {
+    other: 'Bu tarayıcıdan çok fazla deneme yapıldı. {count} dakika bekleyip yeniden dene.',
+  },
+  'setup.failed.order': 'Önceki bir adım henüz bitmedi. Geri dönüp bitir.',
+  'setup.failed.generic': 'Sunucu bunu reddetti. Yeniden dene.',
+  'setup.verify.loading': 'Adresin doğrulanıyor',
+  'setup.verify.done.title': 'Adresin doğrulandı',
+  'setup.verify.done.body': 'Bu sayfayı kapatabilir ya da girişe geçebilirsin.',
+  'setup.verify.done.action': 'Girişe git',
+  'setup.verify.refused.title': 'Bu bağlantı açılmıyor',
+  'setup.verify.refused.body':
+    'Daha önce kullanılmış ya da süresi dolmuş olabilir; bir bağlantı bir kez, 24 saat boyunca çalışır.',
+  'setup.verify.incomplete.title': 'Bu bağlantı eksik',
+  'setup.verify.incomplete.body': 'İletideki bağlantının tamamını, son kısmıyla birlikte aç.',
+  'setup.verify.error.title': 'Adres doğrulanamadı',
+  'settings.group.server': 'Sunucu',
+  'settings.server.nav': 'Sunucu',
+  'settings.server.title': 'Sunucu',
+  'settings.server.description':
+    'Bu sunucunun insanları nasıl içeri aldığı. Bu sayfayı yalnızca sen, sunucunun yöneticisi, görürsün.',
+  'settings.server.loadError.title': 'Sunucu ayarları okunamadı',
+  'settings.server.loadError.body': 'Hiçbir şey değişmedi. Yeniden dene.',
+  'settings.server.reentry': 'Bu gizli değer şu anki anahtarla açılamadı — yeniden gir.',
+  'settings.server.setupUnfinished':
+    'Bu sunucunun kurulumu henüz bitmedi. Önce onu bitir; o zamana kadar bu ayarları kurulum adımları değiştirir.',
+  'settings.server.status': 'Durum',
+  'settings.server.connected': 'Bağlı',
+  'settings.server.notConnected': 'Bağlı değil',
+  'settings.server.disconnect': 'Bağlantıyı kes',
+  'settings.server.disconnectAnyway': 'Yine de bağlantıyı kes',
+  'settings.server.lastWay':
+    'Bu, başkalarının giriş yapabileceği son yol. Sonrasında yalnızca senin parolan giriş yapar; başka kimse giremez ya da davet kabul edemez.',
+  'settings.server.github.title': 'GitHub ile giriş',
+  'settings.server.github.description':
+    'İnsanlar, senin sahip olduğun bir OAuth uygulaması üzerinden GitHub hesabıyla giriş yapar.',
+  'settings.server.github.clientId': 'Client ID {id}',
+  'settings.server.github.empty': 'Bir uygulama bağlanana kadar kimse GitHub ile giriş yapamaz.',
+  'settings.server.github.callback': 'Geri dönüş adresi',
+  'settings.server.github.callbackHint':
+    'Bunu GitHub’da uygulamanın Authorization callback URL alanına yapıştır.',
+  'settings.server.github.connect': 'GitHub’ı bağla',
+  'settings.server.github.replace': 'Bilgileri değiştir',
+  'settings.server.github.hint':
+    'Bir şey kaydedilmeden önce uygulama GitHub’a sorulur. Gizli değer şifreli saklanır ve bir daha gösterilmez.',
+  'settings.server.github.save': 'Bağlantıyı dene ve kaydet',
+  'settings.server.github.saved': 'Kaydedildi. GitHub girişi bundan sonra bu uygulamayı kullanır.',
+  'settings.server.github.disconnectTitle': 'GitHub girişinin bağlantısı kesilsin mi?',
+  'settings.server.github.disconnectBody':
+    'İnsanlar artık GitHub ile giriş yapamaz. Açık oturumlar açık kalır.',
+  'settings.server.github.disconnected': 'GitHub’ın bağlantısı kesildi.',
+  'settings.server.email.title': 'E-posta',
+  'settings.server.email.description':
+    'Giriş bağlantıları ve davetler bu e-posta sunucusundan gönderilir.',
+  'settings.server.email.relay': 'E-posta sunucusu {host}',
+  'settings.server.email.sender': 'Gönderen',
+  'settings.server.email.empty':
+    'E-posta sunucusu olmadan giriş bağlantısı yok; davetler yalnızca bağlantı olarak paylaşılabilir.',
+  'settings.server.email.connect': 'E-posta sunucusu bağla',
+  'settings.server.email.replace': 'Sunucuyu değiştir',
+  'settings.server.email.testNote': '{email} adresine bir deneme iletisi göndereceğiz.',
+  'settings.server.email.save': 'Deneme iletisi gönder ve kaydet',
+  'settings.server.email.saved': 'Deneme iletisi gönderildi ve e-posta sunucusu kaydedildi.',
+  'settings.server.email.disconnectTitle': 'E-posta sunucusunun bağlantısı kesilsin mi?',
+  'settings.server.email.disconnectBody':
+    'Giriş bağlantıları ve davet iletileri durur. Davet bağlantıları elle paylaşılabilir.',
+  'settings.server.email.disconnected': 'E-posta sunucusunun bağlantısı kesildi.',
+  'settings.server.policy.title': 'Kimler hesap açabilir',
+  'settings.server.policy.description':
+    'Bir sonraki kayıttan itibaren geçerli olur; var olan hesaplara dokunulmaz.',
+  'settings.server.policy.label': 'Kayıt politikası',
+  'settings.server.policy.invite-only': 'Yalnızca davet edilenler',
+  'settings.server.policy.invite-only.body':
+    'Kimse kendi başına kaydolamaz: herkes bir davetle gelir.',
+  'settings.server.policy.open': 'Herkes',
+  'settings.server.policy.open.body': 'Bu sunucuya ulaşabilen herkes hesap açabilir.',
+  'settings.server.policy.saved': 'Kaydedildi. Bu bir sonraki kayıttan itibaren geçerli.',
+  'settings.server.creators.title': 'Kimler çalışma alanı açabilir',
+  'settings.server.creators.description':
+    'Giriş açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',
+  'settings.server.creators.label': 'Çalışma alanı açanlar',
+  'settings.server.creators.first': 'Yalnızca ilk kişi',
+  'settings.server.creators.first.body':
+    'Sunucuda çalışma alanı yokken giriş yapan ilk kişi bir tane açabilir. Sonrasında başkası açamaz.',
+  'settings.server.creators.anyone': 'Giriş yapan herkes',
+  'settings.server.creators.anyone.body': 'Bu sunucudaki her hesap çalışma alanı açabilir.',
+  'settings.server.creators.listed': 'Yalnızca bu GitHub hesapları',
+  'settings.server.creators.listed.body': 'GitHub kullanıcı adı listede olanlar açabilir.',
+  'settings.server.creators.logins': 'GitHub kullanıcı adları',
+  'settings.server.creators.loginsHint': 'Bir ya da daha fazla, virgülle ayrılmış.',
+  'settings.server.creators.loginsError':
+    'Virgülle ayrılmış bir ya da daha fazla GitHub kullanıcı adı.',
+  'settings.server.creators.save': 'Kaydet',
+  'settings.server.creators.saved': 'Kaydedildi. Bu bir sonraki istekten itibaren geçerli.',
 } as const satisfies Catalogue;

@@ -39,8 +39,8 @@ const run = promisify(execFile);
 
 /**
  * Somebody in no workspace, signed in twice (`demo-seed.ts`): for a test that ends every session a
- * person holds, or makes a workspace of its own to change. One test, one outsider — erin's sessions
- * end in the test that signs her out everywhere, so nothing else may lean on them.
+ * person holds, or makes a workspace of its own to change. A test that ends every session a person
+ * holds takes a `newcomer` instead, never a shared outsider: the others' sessions would end with it.
  */
 type Outsider = 'erin' | 'frank' | 'gwen';
 
@@ -81,7 +81,10 @@ interface World {
  * everywhere ends every session a person holds, so a test of it would leave the seeded ones dead for
  * its own retry, or a second run against the same server.
  */
-const freshSessionOf = (world: World, outsider: Outsider): string => {
+/** A session cookie's value as Better Auth signs it (D-179): the token, a dot, its signature, URI-encoded. */
+const SIGNED_TOKEN = /^[\w-]{32,}\.[\w%]{40,}$/;
+
+const freshSessionOf = (world: World, outsider: string): string => {
   const printed = execFileSync(
     'bun',
     ['run', 'apps/api/src/cli/demo-session.ts', '--as', outsider],
@@ -92,7 +95,7 @@ const freshSessionOf = (world: World, outsider: Outsider): string => {
     },
   ).trim();
   // Fail here, saying what came back, rather than as a 401 three steps later.
-  if (!/^[\w-]{32,}$/.test(printed)) {
+  if (!SIGNED_TOKEN.test(printed)) {
     throw new Error(
       `demo-session.ts printed something that is not a token: ${printed.slice(0, 80)}`,
     );
@@ -113,6 +116,8 @@ export interface Newcomer {
   readonly api: ApiClient;
   /** Their browser, in this project's colour scheme and window, signed in and closed with the test. */
   readonly page: () => Promise<Page>;
+  /** Their browser signed in with a second session of its own: ending one does not end this, signing out everywhere ends both. */
+  readonly pageWithAnotherSession: () => Promise<Page>;
 }
 
 const madePerson = async (
@@ -128,7 +133,7 @@ const madePerson = async (
   ).stdout.trim();
   const [userId, token] = printed.split(' ');
   // Fail here, saying what came back, rather than as a 401 three steps later.
-  if (userId === undefined || token === undefined || !/^[\w-]{32,}$/.test(token)) {
+  if (userId === undefined || token === undefined || !SIGNED_TOKEN.test(token)) {
     throw new Error(
       `demo-session.ts --new printed something that is not a person: ${printed.slice(0, 80)}`,
     );
@@ -435,6 +440,14 @@ export const test = base.extend<Fixtures>({
 
   newcomer: async ({ browser, baseURL, world, throttling, securityPolicy }, use, testInfo) => {
     const contexts: BrowserContext[] = [];
+    const pageSignedInWith = async (token: string): Promise<Page> => {
+      const context = await browserLike(browser, baseURL, testInfo);
+      contexts.push(context);
+      throttling.watch(context);
+      await securityPolicy.watch(context);
+      await signInAs(context, baseURL ?? '', token);
+      return await context.newPage();
+    };
     await use(async (label) => {
       // Unique across tests, projects, attempts and runs; within the 39 a username may have.
       const username = `${label}-${crypto.randomUUID().slice(0, 8)}`.toLowerCase().slice(0, 39);
@@ -443,14 +456,9 @@ export const test = base.extend<Fixtures>({
         userId,
         username,
         api: sessionApi({ baseURL: baseURL ?? '', workspaceId: undefined, token, who: username }),
-        page: async (): Promise<Page> => {
-          const context = await browserLike(browser, baseURL, testInfo);
-          contexts.push(context);
-          throttling.watch(context);
-          await securityPolicy.watch(context);
-          await signInAs(context, baseURL ?? '', token);
-          return await context.newPage();
-        },
+        page: async (): Promise<Page> => await pageSignedInWith(token),
+        pageWithAnotherSession: async (): Promise<Page> =>
+          await pageSignedInWith(freshSessionOf(world, username)),
       };
     });
     for (const context of contexts) await securityPolicy.settle(context);

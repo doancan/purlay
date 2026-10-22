@@ -13,7 +13,7 @@ import { markNotificationsRead } from './notifications';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { userTopic, type EventBus } from '../../platform/events';
-import { aSignedInUser } from '../../testing/signed-in';
+import { aTestAuth, aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
@@ -161,12 +161,20 @@ describe('integration: PUT /api/notifications/read', () => {
           headers: { cookie: world.bob },
         });
       const body = { ids: page.data.map((n) => n.id) };
-      await markNotificationsRead({ database: db, clock, bus }, request(), body);
+      await markNotificationsRead(
+        { auth: aTestAuth(db), database: db, clock, bus },
+        request(),
+        body,
+      );
       expect(heard.map((h) => [h.topic, h.frame.event])).toEqual([
         [userTopic(world.bobId), 'CHANNEL_STATE'],
       ]);
       // Read again: nothing moved, so nothing is said.
-      await markNotificationsRead({ database: db, clock, bus }, request(), body);
+      await markNotificationsRead(
+        { auth: aTestAuth(db), database: db, clock, bus },
+        request(),
+        body,
+      );
       expect(heard).toHaveLength(1);
     });
   });

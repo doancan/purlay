@@ -8,7 +8,7 @@ import { messageId, type ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { issueSession } from '../../modules/auth/sessions';
+import { aTestAuth, aSession } from '../../testing/signed-in';
 import { reviseMessage } from '../../modules/messages/edit';
 import { sendMessage } from '../../modules/messages/messages';
 import { aRoom } from '../../testing/rooms';
@@ -55,12 +55,12 @@ describe('integration: who is told of a version removed', () => {
         forget: () => undefined,
       };
       const as = async (userId: string): Promise<Request> => {
-        const { token } = await issueSession(db, clock, userId, 30);
+        const { token } = await aSession(db, clock, userId, 30);
         return new Request('https://purlay.test/', {
           headers: { cookie: `${SESSION_COOKIE}=${token}` },
         });
       };
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
 
       const refused = await deleteVersion(
         dependencies,

@@ -81,8 +81,25 @@ const SETTLED_EXPECTATION = {
     'Await the promise and assert on its outcome: `expect(…).rejects`/`.resolves` is not a promise to Bun’s types, and unawaited it passes whatever happened.',
 };
 
+/**
+ * The authority a setup probe takes (Ruling R48): a session the setup's guard minted, or a server
+ * administrator's. Minted by their guards alone, behind symbols their module does not export; this
+ * closes the assertion, as for a context.
+ */
+const AUTHORITY_MESSAGE =
+  'A setup session or a server administrator is minted by its guard, never asserted: a probe trusts it to mean the claim or the role was checked. (D-179 §4.4, R48)';
+const AUTHORITY_NAMES = '/^(SetupSession|ServerAdminSession|ProbeAuthority)$/';
+
 const BRAND_SELECTORS = [
   ...CONTEXT_SELECTORS,
+  {
+    selector: `TSAsExpression > TSTypeReference > Identifier[name=${AUTHORITY_NAMES}]`,
+    message: AUTHORITY_MESSAGE,
+  },
+  {
+    selector: `TSTypeAssertion > TSTypeReference > Identifier[name=${AUTHORITY_NAMES}]`,
+    message: AUTHORITY_MESSAGE,
+  },
   {
     selector: 'TSAsExpression > TSTypeReference > Identifier[name="SafeHref"]',
     message: HREF_MESSAGE,

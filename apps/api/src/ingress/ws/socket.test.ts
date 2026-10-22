@@ -14,7 +14,12 @@ import { CLOSE_CODES, ServerFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { fixedClock } from '../../platform/clock';
-import { aDatabaseThatMustNotBeTouched, aRecordingLogger, testConfig } from '../../testing/doubles';
+import {
+  aDatabaseThatMustNotBeTouched,
+  anAuthThatMustNotBeTouched,
+  aRecordingLogger,
+  testConfig,
+} from '../../testing/doubles';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { createSocketLifecycle } from './socket';
 
@@ -26,6 +31,8 @@ const opening = async (
   const { log, lines } = aRecordingLogger();
   const lifecycle = createSocketLifecycle({
     config: testConfig(),
+    // The read that fails is the session's: the seam is where the database is first reached.
+    auth: anAuthThatMustNotBeTouched(failure),
     database: aDatabaseThatMustNotBeTouched(failure),
     clock,
     log,
@@ -85,6 +92,7 @@ describe('a socket that closes', () => {
     const { log, lines } = aRecordingLogger();
     const lifecycle = createSocketLifecycle({
       config: testConfig(),
+      auth: anAuthThatMustNotBeTouched(),
       database: aDatabaseThatMustNotBeTouched(new Error('unused')),
       clock,
       log,

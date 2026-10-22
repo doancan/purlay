@@ -245,6 +245,10 @@ export const COLUMNS: Columns = {
     github_id: 'omit',
     github_login: 'omit',
     github_connected_at: 'omit',
+    // What the sign-in library keeps about the account, and who may run the server: the person's own,
+    // and a credential's neighbour, never the controller's data about them (D-179).
+    email_verified: 'omit',
+    is_server_admin: 'omit',
     locale: 'omit',
     last_seen_at: 'omit',
     updated_at: 'omit',
@@ -253,9 +257,12 @@ export const COLUMNS: Columns = {
 
 /** Every other table, and why it is not in an export. Exhaustive: a new table must say. */
 export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, string>> = {
+  accounts: 'a provider’s account and a credential’s password hash: the person’s own (D-179)',
+  verifications: 'short-lived sign-in tokens, credentials of the person’s own (D-179)',
+  rate_limits:
+    'sign-in and invitation-mail counters by client address, address digest or id, nobody’s record (D-179)',
   sessions: 'a credential, the person’s own',
   push_subscriptions: 'a device’s keys, the person’s own',
-  email_sign_ins: 'sign-in links, credentials of the person’s own',
   github_integrations: 'the sealed GitHub token: a credential never leaves',
   github_deliveries: 'an idempotency log of webhook deliveries, nobody’s record',
   notifications: 'each person’s inbox, their own state',
@@ -266,6 +273,16 @@ export const EXCLUDED: Readonly<Record<Exclude<keyof Database, ExportedTable>, s
   workspace_exports: 'an export’s own record: its archive is the export',
   object_deletions:
     'storage keys waiting to be deleted: the store’s housekeeping, and keys never leave',
+  server_settings:
+    'the operator’s settings for the whole server, not a workspace’s; the GitHub secret and the relay’s address are credentials, which never leave (D-179)',
+  server_audit_log:
+    'who changed which of the server’s own settings, and when: the operator’s trail, not a workspace’s, and never exported (D-179 §4.8)',
+  admin_email_verification:
+    'the digest of the one link that verifies the setup administrator’s address: a credential, the server’s, never exported (D-179 §4.3)',
+  invitation_passports:
+    'digests of a cookie or of an address, each made from a live invitation link and spent by one sign-up: credentials, never exported (D-179 §5)',
+  setup_state:
+    'where the server’s setup stands: digests of its one-time code and its claim, the throttle and the step reached — the server’s, not a workspace’s, and never exported (D-179 §4)',
 };
 
 /** The migrator's own tables: not in the generated schema at all, and not anybody's record. */

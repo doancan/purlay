@@ -5,7 +5,13 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
-import type { CreatedInvitation, Invitation, InvitationPage } from '@purlay/types';
+import type {
+  CreatedInvitation,
+  CreateInvitationRequest,
+  Invitation,
+  InvitationMailResult,
+  InvitationPage,
+} from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
 import { expectNoAxeViolations } from '../../testing/axe';
@@ -185,5 +191,233 @@ describe('invite people', () => {
     expect(await view.findByRole('heading', { level: 1, name: 'Invitations' })).toBeDefined();
     await settle();
     expect(view.getByRole('button', { name: 'Revoke' })).toBeDefined();
+  });
+});
+
+/** A server that can send mail: the same answer the sign-in screen reads. */
+const withMail: Partial<Api> = {
+  authMethods: () => Promise.resolve({ github: true, email: true, signUp: 'invite-only' }),
+};
+
+const queuedFor = (...outcomes: InvitationMailResult[]): Promise<CreatedInvitation> =>
+  Promise.resolve({ invitation: anInvitation('x'), token: TOKEN, mail: outcomes });
+
+const typeInto = async (
+  view: Awaited<ReturnType<typeof renderApp>>,
+  text: string,
+): Promise<HTMLInputElement> => {
+  const field = view.getByRole('textbox', { name: 'Email addresses' }) as HTMLInputElement;
+  await person().click(field);
+  await person().keyboard(text);
+  return field;
+};
+
+describe('invite people by email', () => {
+  test('without mail the dialog is the link alone: no address field, no mention of email', async () => {
+    const view = await openMenu({});
+    const dialog = await invite(view);
+    expect(view.queryByRole('textbox', { name: 'Email addresses' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Make a link' })).toBeDefined();
+    expect(dialog.textContent).not.toMatch(/email/i);
+    expect(dialog.textContent).toContain('A link lets anyone signed in join as a member');
+  });
+
+  test('with mail there is an address field above the link, and the send waits for an address', async () => {
+    const view = await openMenu(withMail);
+    const dialog = await invite(view);
+    expect(await view.findByRole('textbox', { name: 'Email addresses' })).toBeDefined();
+    expect(dialog.textContent).toContain('Send the link by email');
+    const send = within(dialog).getByRole('button', { name: 'Send invitations' });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    // The link is still there to make by hand.
+    expect(within(dialog).getByRole('button', { name: 'Make a link' })).toBeDefined();
+    await expectNoAxeViolations(dialog);
+  });
+
+  test('Enter and a comma make chips, × and Backspace take them away, and Enter sends nothing', async () => {
+    let asked = 0;
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: () => {
+        asked += 1;
+        return queuedFor();
+      },
+    });
+    await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    const field = await typeInto(
+      view,
+      'ann@example.test{Enter}bob@example.test,carol@example.test',
+    );
+    await person().keyboard('{Enter}');
+    expect(asked).toBe(0);
+    for (const address of ['ann@example.test', 'bob@example.test', 'carol@example.test']) {
+      expect(view.getByText(address)).toBeDefined();
+    }
+    expect(field.value).toBe('');
+    await person().click(view.getByRole('button', { name: 'Remove bob@example.test' }));
+    expect(view.queryByText('bob@example.test')).toBeNull();
+    await person().click(field);
+    await person().keyboard('{Backspace}');
+    expect(view.queryByText('carol@example.test')).toBeNull();
+    expect(view.getByText('ann@example.test')).toBeDefined();
+    expect(view.getByRole('button', { name: 'Send invitation' })).toBeDefined();
+  });
+
+  test('an address typed again in any case is one chip; a paste of several makes several', async () => {
+    const view = await openMenu(withMail);
+    await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await typeInto(view, 'Ann@Example.test{Enter}ann@example.TEST{Enter}');
+    expect(view.getAllByRole('button', { name: /^Remove / })).toHaveLength(1);
+    await person().paste('bob@example.test, carol@example.test;\ndan@example.test');
+    expect(view.getAllByRole('button', { name: /^Remove / })).toHaveLength(4);
+  });
+
+  test('a wrong address stays, red and in words, and is not sent; the right ones are', async () => {
+    const requests: CreateInvitationRequest[] = [];
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: (_, request) => {
+        if (request !== undefined) requests.push(request);
+        return queuedFor({ address: 'ann@example.test', outcome: 'queued' });
+      },
+    });
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await typeInto(view, 'ann@example.test{Enter}nope{Enter}');
+    expect(within(dialog).getByText('(not an email address)')).toBeDefined();
+    await expectNoAxeViolations(dialog);
+    await person().click(view.getByRole('button', { name: 'Send invitation' }));
+    await settle();
+    expect(requests).toEqual([{ emails: ['ann@example.test'], locale: 'en' }]);
+    // The wrong one is still there to be fixed, never silently dropped.
+    expect(view.getByText('nope')).toBeDefined();
+    expect(view.queryByText('ann@example.test')).toBeNull();
+  });
+
+  test('says the mail server was asked — not that it was sent or arrived — and shows the link too', async () => {
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: () =>
+        queuedFor(
+          { address: 'ann@example.test', outcome: 'queued' },
+          { address: 'bob@example.test', outcome: 'queued' },
+        ),
+    });
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await typeInto(view, 'ann@example.test{Enter}bob@example.test{Enter}');
+    await person().click(view.getByRole('button', { name: 'Send 2 invitations' }));
+    await settle();
+    const status = within(dialog).getByRole('status');
+    expect(status.textContent).toContain(
+      'Asked the mail server to send the invitation to 2 people.',
+    );
+    expect(status.textContent).toContain('not confirmed that it arrived');
+    expect(dialog.textContent).not.toMatch(/\b(sent to|delivered)\b/i);
+    expect((view.getByRole('textbox', { name: 'Invitation link' }) as HTMLInputElement).value).toBe(
+      `${window.location.origin}/invite#${TOKEN}`,
+    );
+    expect(view.queryByText('ann@example.test')).toBeNull();
+  });
+
+  test('a partly refused send names who, and why, and never calls it sent', async () => {
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: () =>
+        queuedFor(
+          { address: 'ann@example.test', outcome: 'queued' },
+          { address: 'bob@example.test', outcome: 'inviter_limit' },
+          { address: 'carol@example.test', outcome: 'inviter_limit' },
+          { address: 'dan@example.test', outcome: 'workspace_limit' },
+          { address: 'eve@example.test', outcome: 'unavailable' },
+        ),
+    });
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await typeInto(
+      view,
+      'ann@example.test,bob@example.test,carol@example.test,dan@example.test,eve@example.test,',
+    );
+    await person().click(view.getByRole('button', { name: 'Send 5 invitations' }));
+    await settle();
+    const words = within(dialog).getByRole('status').textContent;
+    expect(words).toContain('Asked the mail server to send the invitation to 1 person.');
+    expect(words).toContain(
+      'You have reached today’s limit of 50 invitation emails, so these were not sent: bob@example.test, carol@example.test.',
+    );
+    expect(words).toContain(
+      'This workspace has reached today’s limit of 200 invitation emails, so these were not sent: dan@example.test.',
+    );
+    expect(words).toContain(
+      'This server cannot send email, so these were not sent: eve@example.test.',
+    );
+    // The refused stay in the field; the queued one is on its way.
+    expect(within(dialog).getAllByRole('button', { name: /^Remove / })).toHaveLength(4);
+    expect(view.getByRole('textbox', { name: 'Invitation link' })).toBeDefined();
+  });
+
+  test('when everything is refused it claims nothing was asked, and the link is there to copy', async () => {
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: () => queuedFor({ address: 'ann@example.test', outcome: 'inviter_limit' }),
+    });
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await typeInto(view, 'ann@example.test{Enter}');
+    await person().click(view.getByRole('button', { name: 'Send invitation' }));
+    await settle();
+    const words = within(dialog).getByRole('status').textContent;
+    expect(words).not.toContain('Asked the mail server');
+    expect(words).toContain('limit of 50 invitation emails');
+    expect(view.getByRole('textbox', { name: 'Invitation link' })).toBeDefined();
+  });
+
+  test('a request that fails says so, keeps the addresses, and claims nothing', async () => {
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
+    });
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await typeInto(view, 'ann@example.test{Enter}');
+    await person().click(view.getByRole('button', { name: 'Send invitation' }));
+    await settle();
+    expect(within(dialog).getByRole('alert').textContent).toContain(
+      'Could not send the invitations.',
+    );
+    expect(within(dialog).queryByRole('status')).toBeNull();
+    expect(dialog.textContent).not.toContain('Asked the mail server');
+    expect(view.getByText('ann@example.test')).toBeDefined();
+  });
+
+  test('more than twenty addresses: the rest are left out, and it says so', async () => {
+    const view = await openMenu(withMail);
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await person().click(view.getByRole('textbox', { name: 'Email addresses' }));
+    await person().paste(
+      Array.from({ length: 22 }, (_, n) => `p${String(n)}@example.test`).join(' '),
+    );
+    expect(view.getAllByRole('button', { name: /^Remove / })).toHaveLength(20);
+    expect(within(dialog).getByRole('alert').textContent).toContain('Up to 20 addresses at a time');
+  });
+
+  test('making the link by hand, with mail on, sends no address', async () => {
+    const requests: (CreateInvitationRequest | undefined)[] = [];
+    const view = await openMenu({
+      ...withMail,
+      createInvitation: (_, request) => {
+        requests.push(request);
+        return Promise.resolve({ invitation: anInvitation('x'), token: TOKEN });
+      },
+    });
+    const dialog = await invite(view);
+    await view.findByRole('textbox', { name: 'Email addresses' });
+    await person().click(view.getByRole('button', { name: 'Make a link' }));
+    await settle();
+    expect(requests).toEqual([undefined]);
+    expect(within(dialog).queryByRole('status')).toBeNull();
   });
 });

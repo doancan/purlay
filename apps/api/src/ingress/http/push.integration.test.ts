@@ -2,6 +2,7 @@
  * A device's push subscription through the HTTP surface (#78, D-126): the server's key, subscribing
  * and its bounds, removing only one's own, the language a person is told in, and signing out.
  */
+import { revokeSession } from '../../modules/auth/sessions';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
@@ -187,11 +188,8 @@ describe('integration: subscribing a device', () => {
   test('is refused for a session signed out since it was read: a raced sign-out leaves no device', async () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'push-raced');
-      await db
-        .updateTable('sessions')
-        .set({ revoked_at: NOW })
-        .where('id', '=', alice.sessionId)
-        .execute();
+      // Signed out as every path signs out: the row is gone (D-179 §3).
+      await revokeSession(db, alice.sessionId);
       const input = Value.Parse(PushSubscribeRequest, device(11));
       const refused: unknown = await subscribe(
         db,

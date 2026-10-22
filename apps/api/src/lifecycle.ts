@@ -12,6 +12,7 @@
  * signals, the exit and the timer are arguments.
  */
 import type { Logger } from './platform/logging';
+import type { RuntimeHolder } from './modules/setup/runtime';
 import { systemTimers, type Timers } from './realtime/hub';
 
 export interface ProcessLike {
@@ -183,3 +184,39 @@ export const installCrashHandlers = ({
     },
   };
 };
+
+/**
+ * The application's drain, with the server's settings closed to change first: a change that would
+ * start now builds and swaps a pair the process is about to drop, so it is refused, said as
+ * `shutting-down` (D-179 §4.9). A change already under way finishes; the drain waits for its request.
+ */
+export const drainRefusingChanges =
+  (services: Pick<RuntimeHolder, 'refuseChanges'>, drain: () => Promise<void>) =>
+  async (): Promise<void> => {
+    services.refuseChanges();
+    await drain();
+  };
+
+/** What a drained process still holds, closed by `closeAfterDrain` in this order. */
+export interface HeldAfterDrain {
+  /** Pushes for writes already committed (D-126); absent where push is off. */
+  readonly push?: { readonly flush: () => Promise<void> } | undefined;
+  /** The mail ledger of every relay the process served with (`modules/setup/runtime.ts`). */
+  readonly services: Pick<RuntimeHolder, 'sends'>;
+  readonly errorTracker: { readonly flush: () => Promise<unknown> };
+  readonly database: { readonly destroy: () => Promise<void> };
+}
+
+/**
+ * The shutdown's second half: pushes, then every letter still on its way — the current relay's and
+ * those of relays the settings replaced, posted by work that started on them — each within its own
+ * bound, then the reports of the shutdown itself, then the pool.
+ */
+export const closeAfterDrain =
+  ({ push, services, errorTracker, database }: HeldAfterDrain) =>
+  async (): Promise<void> => {
+    await push?.flush();
+    await services.sends.flush();
+    await errorTracker.flush();
+    await database.destroy();
+  };

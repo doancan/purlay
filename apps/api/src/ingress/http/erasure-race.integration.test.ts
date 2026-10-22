@@ -12,7 +12,7 @@ import { fixedClock } from '../../platform/clock';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { createApp } from './app';
 
 let cloned: ClonedDatabase;
@@ -38,7 +38,7 @@ describe('integration: erasing an account while it sends', () => {
     const room = await aRoom(cloned.db, ['bob', 'ada']);
     const ada = room.members['ada'];
     if (ada === undefined) throw new Error('no ada');
-    const { token } = await issueSession(cloned.db, clock, ada.userId, 30);
+    const { token } = await aSession(cloned.db, clock, ada.userId, 30);
     const cookie = `${SESSION_COOKIE}=${token}`;
     const app = createApp(testDependencies({ database: cloned.db, clock }));
     const post = (path: string, body: unknown): Request =>

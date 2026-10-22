@@ -7,7 +7,7 @@
  * method returns what the contract says and throws an `ApiError` — it never
  * returns half of a response.
  */
-import { Type } from '@sinclair/typebox';
+import { Type, type Static } from '@sinclair/typebox';
 import {
   Attachment,
   AuditPage,
@@ -37,7 +37,6 @@ import {
   StorageUsage,
   WorkspaceExport,
   AuthMethods,
-  ConnectGitHubResponse,
   MySignIn,
   EmailSignInPreview,
   type EmailSignInRequest,
@@ -75,6 +74,7 @@ import {
   MessageVersionPage,
   MessageWindow,
 } from '@purlay/types';
+import type { CreateInvitationRequest } from '@purlay/types';
 import type { Http, RequestOptions } from './http';
 
 interface PageQuery {
@@ -88,6 +88,14 @@ interface PageQuery {
 const Memberships = Type.Array(Membership);
 const WorkspaceExports = Type.Array(WorkspaceExport);
 
+/**
+ * `GET /setup/status` (`SetupStatus`, `API.md` §2): whether this server is open to setup, and the address
+ * it is configured for. The only setup call the main chunk makes — `/` goes to the wizard on a fresh
+ * server — so its schema is here and the wizard's other calls are in the wizard's own chunk.
+ */
+const SetupStatusAnswer = Type.Object({ open: Type.Boolean(), appUrl: Type.String() });
+export type SetupStatusAnswer = Static<typeof SetupStatusAnswer>;
+
 export interface Api {
   readonly me: (signal?: AbortSignal) => Promise<MeResponse>;
   readonly workspaces: (signal?: AbortSignal) => Promise<Membership[]>;
@@ -98,7 +106,10 @@ export interface Api {
   readonly previewInvitation: (token: string, signal?: AbortSignal) => Promise<InvitationPreview>;
   readonly acceptInvitation: (token: string) => Promise<Membership>;
   /** An owner's or an admin's: a new link, its token in this answer only. */
-  readonly createInvitation: (workspaceId: string) => Promise<CreatedInvitation>;
+  readonly createInvitation: (
+    workspaceId: string,
+    mail?: CreateInvitationRequest,
+  ) => Promise<CreatedInvitation>;
   readonly invitations: (
     workspaceId: string,
     before?: string,
@@ -293,8 +304,19 @@ export interface Api {
 
   /** Which ways in this server offers: GitHub always, email when mail is configured (D-138 §6). */
   readonly authMethods: (signal?: AbortSignal) => Promise<AuthMethods>;
+  /** Whether the server is open to setup, and the address it is configured for (D-179 §4). */
+  readonly setupStatus: (signal?: AbortSignal) => Promise<SetupStatusAnswer>;
   /** Asks for a sign-in link; `202` whatever the address (D-138 §1). */
   readonly requestEmailSignIn: (input: EmailSignInRequest) => Promise<void>;
+  /** Password sign-in, the library's route; a refusal is a `LibraryFailure`. The session cookie is set. */
+  readonly signInWithPassword: (input: { email: string; password: string }) => Promise<void>;
+  /** Change the caller's password, ending every other session; a refusal is a `LibraryFailure`. */
+  readonly changePassword: (input: {
+    currentPassword: string;
+    newPassword: string;
+  }) => Promise<void>;
+  /** An invitation's passport, so a newcomer may make an account on an invite-only server (R51). */
+  readonly openInvitationPassport: (input: { token: string; email?: string }) => Promise<void>;
   /** The address a link was sent to, without spending it (D-138 §4). */
   readonly previewEmailSignIn: (token: string, signal?: AbortSignal) => Promise<EmailSignInPreview>;
   /** Spends the link; the answer sets the session cookie. */
@@ -312,13 +334,8 @@ export interface Api {
   readonly requestExport: (workspaceId: string) => Promise<WorkspaceExport>;
   /** Erases the caller's own account (D-139 §5); the answer clears the session cookie. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
-  /** The ways the caller signs in: their address, and the GitHub account connected, if any (D-176). */
+  /** The ways the caller signs in: their address, and the GitHub account linked to it, if any (D-176, D-179 §5). */
   readonly mySignIn: (signal?: AbortSignal) => Promise<MySignIn>;
-  /**
-   * Starts connecting GitHub to the caller's account (D-176): the answer sets the state's cookie and
-   * says where to send the browser; GitHub sends it back to this workspace's Sessions & account.
-   */
-  readonly connectGitHub: (workspace: string) => Promise<ConnectGitHubResponse>;
   readonly signOut: () => Promise<void>;
   /** Ends every session the person holds, this one with them (D-11). */
   readonly signOutEverywhere: () => Promise<void>;
@@ -360,12 +377,12 @@ export const createApi = (http: Http): Api => {
       ),
     acceptInvitation: (token) =>
       http.request('POST', '/api/invitations/accept', Membership, options({ body: { token } })),
-    createInvitation: (workspaceId) =>
+    createInvitation: (workspaceId, mail) =>
       http.request(
         'POST',
         `/api/workspaces/${at(workspaceId)}/invitations`,
         CreatedInvitation,
-        options({ body: {} }),
+        options({ body: mail ?? {} }),
       ),
     invitations: (workspaceId, before, signal) =>
       http.request(
@@ -724,7 +741,14 @@ export const createApi = (http: Http): Api => {
       http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
     authMethods: (signal) =>
       http.request('GET', '/api/auth/methods', AuthMethods, options({}, signal)),
+    setupStatus: (signal) =>
+      http.request('GET', '/setup/status', SetupStatusAnswer, options({}, signal)),
     requestEmailSignIn: (input) => http.send('POST', '/auth/email', options({ body: input })),
+    signInWithPassword: (input) => http.library('/auth/sign-in/email', input),
+    changePassword: (input) =>
+      http.library('/auth/change-password', { ...input, revokeOtherSessions: true }),
+    openInvitationPassport: (input) =>
+      http.send('POST', '/api/invitations/passport', options({ body: input })),
     previewEmailSignIn: (token, signal) =>
       http.request(
         'POST',
@@ -771,13 +795,6 @@ export const createApi = (http: Http): Api => {
       ),
     eraseAccount: (confirm) => http.send('POST', '/api/me/erase', options({ body: { confirm } })),
     mySignIn: (signal) => http.request('GET', '/api/me/sign-in', MySignIn, options({}, signal)),
-    connectGitHub: (workspace) =>
-      http.request(
-        'POST',
-        '/api/me/github/connect',
-        ConnectGitHubResponse,
-        options({ body: { workspace } }),
-      ),
     signOut: () => http.send('POST', '/auth/logout', options()),
     signOutEverywhere: () => http.send('POST', '/auth/logout-all', options()),
     pushKey: (signal) => http.request('GET', '/api/push/key', PushKeyResponse, options({}, signal)),

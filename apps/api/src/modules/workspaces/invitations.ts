@@ -17,7 +17,14 @@
  * - Making, revoking and joining are audited in the transaction that does them (D-26); each takes a
  *   transaction, because each writes twice (#232).
  */
-import type { Executor, Transaction } from '@purlay/db';
+import type {
+  Database,
+  Executor,
+  Expression,
+  ExpressionBuilder,
+  SqlBool,
+  Transaction,
+} from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
   INVITATION_TTL_DAYS,
@@ -38,11 +45,27 @@ import { randomToken, tokenDigest } from '../../platform/tokens';
 import { recordAudit } from '../audit/audit';
 import { membershipsOf } from './workspaces';
 
-const notFound = (): AppError =>
+export const notFound = (): AppError =>
   new AppError({
     code: 'INVITATION_NOT_FOUND',
     message: 'That invitation does not open: it may have expired or been revoked.',
   });
+
+/**
+ * Whether a link still opens, as a condition on its row and its workspace's: not revoked, not past its
+ * expiry, its workspace not deleted. One home for the three, read by the preview and the join (`opened`)
+ * and by every use of an invitation passport (`invitation-passport.ts`), so a link that stops opening
+ * stops opening them too — the same words, never a copy of them.
+ */
+export const linkOpens = (
+  eb: ExpressionBuilder<Database, 'workspace_invitations' | 'workspaces'>,
+  now: Date,
+): Expression<SqlBool> =>
+  eb.and([
+    eb('workspace_invitations.revoked_at', 'is', null),
+    eb('workspace_invitations.expires_at', '>', now),
+    eb('workspaces.deleted_at', 'is', null),
+  ]);
 
 const forbidden = (): AppError =>
   new AppError({ code: 'FORBIDDEN', message: 'Only an owner or an admin manages invitations.' });
@@ -259,9 +282,7 @@ const opened = async (
       'workspaces.avatar_url',
     ])
     .where('workspace_invitations.token_hash', '=', await tokenDigest(token))
-    .where('workspace_invitations.revoked_at', 'is', null)
-    .where('workspace_invitations.expires_at', '>', now)
-    .where('workspaces.deleted_at', 'is', null);
+    .where((eb) => linkOpens(eb, now));
   const row = await (lock ? statement.forShare() : statement).executeTakeFirst();
   if (row === undefined) throw notFound();
   // Removed since the link was made: the removal stands (written in its transaction, D-26).

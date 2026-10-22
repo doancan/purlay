@@ -72,6 +72,7 @@ describe('the endpoints', () => {
       profile: NO_PROFILE,
       memberships: [{ workspace, role: 'owner', joinedAt: WHEN, deepWorkUntil: null }],
       mayCreateWorkspace: false,
+      isServerAdmin: false,
     });
     expect((await me.api.me()).user.username).toBe('alice');
     expect(me.calls[0]).toMatchObject({ method: 'GET', url: '/api/me' });
@@ -682,29 +683,29 @@ describe('the endpoints', () => {
     expect(everywhere.calls[0]).toMatchObject({ method: 'POST', url: '/auth/logout-all' });
   });
 
-  test('the ways the caller signs in, and connecting GitHub (D-176)', async () => {
-    const read = harness({ email: 'a@example.test', emailLinks: true, github: null });
+  test('the ways the caller signs in, read only (D-176, D-179 §5)', async () => {
+    const read = harness({
+      email: 'a@example.test',
+      emailLinks: true,
+      hasPassword: false,
+      github: null,
+    });
     expect(await read.api.mySignIn()).toEqual({
       email: 'a@example.test',
       emailLinks: true,
+      hasPassword: false,
       github: null,
     });
     expect(read.calls[0]).toMatchObject({ method: 'GET', url: '/api/me/sign-in' });
-
-    const started = harness({ location: 'https://github.com/login/oauth/authorize?state=s' });
-    expect(await started.api.connectGitHub('acme')).toEqual({
-      location: 'https://github.com/login/oauth/authorize?state=s',
-    });
-    expect(started.calls[0]).toEqual({
-      method: 'POST',
-      url: '/api/me/github/connect',
-      body: { workspace: 'acme' },
-    });
   });
 
   test('signing in by email (D-138): what is offered, asking, showing and spending a link', async () => {
-    const methods = harness({ email: true });
-    expect(await methods.api.authMethods()).toEqual({ email: true });
+    const methods = harness({ github: false, email: true, signUp: 'open' });
+    expect(await methods.api.authMethods()).toEqual({
+      github: false,
+      email: true,
+      signUp: 'open',
+    });
     expect(methods.calls[0]).toMatchObject({ method: 'GET', url: '/api/auth/methods' });
 
     const token = 'a'.repeat(64);
@@ -727,6 +728,34 @@ describe('the endpoints', () => {
     const spent = harness(null);
     await spent.api.consumeEmailSignIn(token);
     expect(spent.calls[0]).toEqual({ method: 'POST', url: '/auth/email/consume', body: { token } });
+  });
+
+  test('passwords and the invitation passport (R30, R51)', async () => {
+    const signedIn = harness({ token: 'unread' });
+    await signedIn.api.signInWithPassword({ email: 'a@example.test', password: 'pw' });
+    expect(signedIn.calls[0]).toEqual({
+      method: 'POST',
+      url: '/auth/sign-in/email',
+      body: { email: 'a@example.test', password: 'pw' },
+    });
+
+    // Every other session ends with a change; the client always asks for it.
+    const changed = harness({ token: 'unread' });
+    await changed.api.changePassword({ currentPassword: 'old', newPassword: 'new' });
+    expect(changed.calls[0]).toEqual({
+      method: 'POST',
+      url: '/auth/change-password',
+      body: { currentPassword: 'old', newPassword: 'new', revokeOtherSessions: true },
+    });
+
+    const token = 'b'.repeat(64);
+    const passport = harness(null);
+    await passport.api.openInvitationPassport({ token });
+    await passport.api.openInvitationPassport({ token, email: 'a@example.test' });
+    expect(passport.calls.map((call) => [call.url, call.body])).toEqual([
+      ['/api/invitations/passport', { token }],
+      ['/api/invitations/passport', { token, email: 'a@example.test' }],
+    ]);
   });
 
   test('how long a workspace keeps its history (D-139 §4): read, and set', async () => {

@@ -17,8 +17,9 @@ import { MembersPage } from './pages/members';
 import { NotificationsPage } from './pages/notifications';
 import { PreferencesPage } from './pages/preferences';
 import { ProfilePage } from './pages/profile';
+import { ServerPage } from './pages/server';
 import { ShortcutsPage } from './pages/shortcuts';
-import { useWorkspaceRole } from './role';
+import { useIsServerAdmin, useWorkspaceRole } from './role';
 import { sectionFor, type SettingsSectionId } from './sections';
 
 const PAGES: Record<SettingsSectionId, () => React.JSX.Element> = {
@@ -33,11 +34,12 @@ const PAGES: Record<SettingsSectionId, () => React.JSX.Element> = {
   integrations: IntegrationsPage,
   audit: AuditPage,
   data: DataPage,
+  server: ServerPage,
 };
 
 export const SettingsScreen = ({ section }: { readonly section: string }): React.JSX.Element => {
   const role = useWorkspaceRole();
-  const found = sectionFor(section, role);
+  const found = sectionFor(section, role, useIsServerAdmin());
   if (found === null) return <NotFound />;
   const Page = PAGES[found.id];
   return <Page />;

@@ -82,6 +82,7 @@ describe('the single-value reads', () => {
           profile: NO_PROFILE,
           memberships: [],
           mayCreateWorkspace: true,
+          isServerAdmin: false,
         });
       },
       channels: (workspaceId) => {

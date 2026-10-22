@@ -28,18 +28,25 @@ export interface TextFieldProps extends Omit<
   readonly hint?: string;
   /** Present only when the value is wrong; its presence is what marks the field invalid. */
   readonly error?: string;
+  /**
+   * Marked wrong with no message of its own: a sentence elsewhere says what is wrong with it (a failed
+   * try names the field it concerns), so the field is outlined, announced as invalid, and says no more.
+   */
+  readonly invalid?: boolean;
 }
 
 export const TextField = ({
   label,
   hint,
   error,
+  invalid = false,
   className,
   ...rest
 }: TextFieldProps): React.JSX.Element => {
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
+  const wrong = error !== undefined || invalid;
   const describedBy = [hint === undefined ? null : hintId, error === undefined ? null : errorId]
     .filter((value) => value !== null)
     .join(' ');
@@ -51,13 +58,9 @@ export const TextField = ({
       <input
         {...rest}
         id={id}
-        aria-invalid={error === undefined ? undefined : true}
+        aria-invalid={wrong ? true : undefined}
         aria-describedby={describedBy === '' ? undefined : describedBy}
-        className={cn(
-          inputClasses,
-          error === undefined ? 'border-border-strong' : 'border-danger',
-          className,
-        )}
+        className={cn(inputClasses, wrong ? 'border-danger' : 'border-border-strong', className)}
       />
       {hint === undefined ? null : (
         <p id={hintId} className="text-caption text-ink-muted">

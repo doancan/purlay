@@ -12,7 +12,7 @@ import { Link, useRoute } from '../../router/router-provider';
 import { cn } from '../../ui/cn';
 import { useWorkspace } from '../shell/workspace';
 import { FIRST_SECTION, sectionsFor, type SettingsSection } from './sections';
-import { useWorkspaceRole } from './role';
+import { useIsServerAdmin, useWorkspaceRole } from './role';
 
 const rowClasses =
   'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
@@ -70,7 +70,7 @@ export const SettingsNav = (): React.JSX.Element => {
       : match.name === 'settingsHome'
         ? FIRST_SECTION
         : null;
-  const sections = sectionsFor(role);
+  const sections = sectionsFor(role, useIsServerAdmin());
   return (
     <>
       <div className="flex flex-col gap-1 px-4 pt-3 pb-2">
@@ -98,6 +98,11 @@ export const SettingsNav = (): React.JSX.Element => {
         <Group
           title={t('settings.group.workspace', { workspace: workspace.name })}
           sections={sections.filter((section) => section.group === 'workspace')}
+          current={current}
+        />
+        <Group
+          title={t('settings.group.server')}
+          sections={sections.filter((section) => section.group === 'server')}
           current={current}
         />
       </nav>

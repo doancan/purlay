@@ -12,7 +12,7 @@ import { openConversationWith } from './channels';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { aTestAuth, aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
@@ -283,7 +283,7 @@ describe('integration: a group’s people stay its people', () => {
       };
       const request = (): Request =>
         new Request('https://purlay.test/', { headers: { cookie: ann.cookie } });
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       const body = { userIds: [cat.userId, ben.userId] };
       await openConversationWith(dependencies, request(), workspaceId, body);
       await openConversationWith(dependencies, request(), workspaceId, body);

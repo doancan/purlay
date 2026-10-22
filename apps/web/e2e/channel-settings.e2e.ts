@@ -70,6 +70,12 @@ test('somebody looking at a channel an admin archives is told it was archived', 
   await signIn('alice');
   await page.goto(made.path);
   await expect(page.getByRole('heading', { level: 1, name: made.name })).toBeVisible();
+  // The heading is drawn from the HTTP answer; the socket may not be subscribed yet, and an archive
+  // announced before it is would never reach this page. A message that arrives live proves it is.
+  await api('dogancan').say(made.id, 'the socket is listening');
+  await expect(
+    page.locator('[data-message-row]', { hasText: 'the socket is listening' }),
+  ).toBeVisible();
 
   await api('dogancan').del(`/api/channels/${made.id}`);
   await expect(

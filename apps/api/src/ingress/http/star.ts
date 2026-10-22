@@ -21,7 +21,7 @@ export const starChannel = async (
   starred: boolean,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   if (!(await setStarred(database, clock, context, starred))) return;
   await publishAfterCommit(log, [

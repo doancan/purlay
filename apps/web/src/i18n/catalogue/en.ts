@@ -53,19 +53,30 @@ export const en = {
   'signIn.emailRequired':
     'Your GitHub account has no verified primary email — verify one on GitHub, then sign in again.',
   'signIn.emailTaken':
-    'That email already belongs to another Purlay account. If you made it with an email link, sign in with a link, then connect GitHub in Settings → Sessions & account; if you made it with another GitHub account, sign in with that one.',
+    'An account with that email exists, but its address is not verified yet, so GitHub cannot sign in to it. Sign in with that account’s password instead; once the address is verified, GitHub will sign in to the same account.',
+  'signIn.emailTakenNoMail':
+    'An account with that email exists, but its address is not verified yet, so GitHub cannot sign in to it. It is a password account made when this server was set up: sign in with its password. This server sends no email, so the address stays unverified and GitHub will not sign in to it.',
+  'signIn.signupClosed':
+    'This Purlay server makes accounts by invitation only — ask someone on it for an invitation link.',
   'signIn.githubUnavailable': 'GitHub could not be reached — wait a moment and try again.',
   'signIn.busy': 'Purlay is busy right now — wait a minute and try again.',
   'signIn.failed': 'Sign-in did not finish — try again.',
   'signIn.ended': 'Your session ended. Sign in again to carry on.',
+  'signIn.methods.unchecked': 'We could not check which sign‑in options this server offers.',
+  'signIn.methods.retry': 'Try again',
+  'signIn.notSetUp.title': 'This server is not set up yet',
+  'signIn.notSetUp.body':
+    'Neither GitHub nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.',
+  'signIn.notSetUp.action': 'Set up this server',
   'signIn.scope': 'Purlay asks GitHub for your name, username and email, and nothing else.',
   'signIn.email.label': 'Email address',
   'signIn.email.submit': 'Email me a sign-in link',
+  'signIn.email.linkInstead': 'Email me a sign-in link instead',
   'signIn.email.sent':
     'If {email} can sign in by email, a link is on its way. It works once, for {minutes} minutes.',
   'signIn.email.another': 'Use another address',
   'signIn.email.invalid': 'That is not an email address.',
-  'signIn.email.unavailable': 'This server does not sign in by email — continue with GitHub.',
+  'signIn.email.unavailable': 'This server does not sign in by email.',
   'signIn.email.failed': 'The link could not be asked for.',
   'signIn.link.as': 'You are signing in as {email}.',
   'signIn.link.replaces':
@@ -76,6 +87,29 @@ export const en = {
   'signIn.link.notFound': 'This link has been used or has expired — ask for a new one.',
   'signIn.link.failed': 'Signing in did not finish.',
   'signIn.link.back': 'Back to sign in',
+  'signIn.password.form': 'Sign in with a password',
+  'signIn.password.label': 'Password',
+  'signIn.password.submit': 'Sign in',
+  'signIn.password.wrong': 'Wrong email or password.',
+  'signIn.password.tooMany': {
+    one: 'Too many attempts. Try again in {count} minute.',
+    other: 'Too many attempts. Try again in {count} minutes.',
+  },
+  'signIn.password.unreachable':
+    'Purlay could not be reached. Check your connection and try again.',
+  'signIn.password.failed': 'Signing in did not finish. Try again in a moment.',
+  'signIn.createAccount.prompt': 'No account yet?',
+  'signIn.createAccount.action': 'Create an account',
+  'signIn.byInvitation': 'Accounts are created by invitation.',
+  'signUp.title': 'Create your account',
+  'signUp.lede':
+    'Continue with GitHub, or have a sign-in link sent to your email. The first link you open makes your account.',
+  'signUp.nothing': 'This server has no way to make an account connected yet.',
+  'signUp.haveAccount': 'Already have an account?',
+  'signUp.signIn': 'Sign in',
+  'signUp.closed.title': 'Accounts are created by invitation',
+  'signUp.closed.body':
+    'This Purlay server does not take sign-ups. Ask someone on it for an invitation link, and open the link to make your account.',
 
   // ── Workspace and sidebar ───────────────────────────────────────────────
   'sidebar.label': 'Workspace',
@@ -157,6 +191,13 @@ export const en = {
   'invite.gone.body': 'It may have expired or been revoked. Ask for a new one.',
   'invite.failed.title': 'Could not read the invitation',
   'invite.home': 'Go home',
+  'invite.signedOut.title': 'You have been invited',
+  'invite.signedOut.body': 'Sign in or make an account to join. The invitation stays with you.',
+  'invite.signedOut.haveAccount': 'Already have an account?',
+  'invite.signedOut.signIn': 'Sign in with your password',
+  'invite.passport.tooMany':
+    'This invitation is being opened a lot right now. Try again in a while.',
+  'invite.passport.failed': 'The invitation could not be checked.',
   'message.imageFrom': 'An image from {host}',
   'github.state.open': 'Open',
   'github.state.closed': 'Closed',
@@ -182,6 +223,34 @@ export const en = {
   'invite.admin.someone': 'someone',
   'invite.admin.revoke': 'Revoke',
   'invite.admin.revokeFailed': 'Could not revoke the link.',
+  'invite.mail.description':
+    'Send the link by email, or copy it and share it yourself. Anyone signed in who has it joins as a member for seven days.',
+  'invite.mail.label': 'Email addresses',
+  'invite.mail.placeholder': 'ayse@company.com',
+  'invite.mail.hint':
+    'Press Enter or a comma to add each address. A wrong one turns red and is not sent.',
+  'invite.mail.tooMany': 'Up to {max} addresses at a time; the rest were left out.',
+  'invite.mail.remove': 'Remove {address}',
+  'invite.mail.invalidChip': '(not an email address)',
+  'invite.mail.sendNone': 'Send invitations',
+  'invite.mail.send': {
+    one: 'Send invitation',
+    other: 'Send {count} invitations',
+  },
+  'invite.mail.queued': {
+    one: 'Asked the mail server to send the invitation to {count} person.',
+    other: 'Asked the mail server to send the invitation to {count} people.',
+  },
+  'invite.mail.queuedNote':
+    'It is not confirmed that it arrived. If a message does not, the link below works too.',
+  'invite.mail.invalid': 'Not an email address, so not sent: {addresses}.',
+  'invite.mail.inviterLimit':
+    'You have reached today’s limit of {limit} invitation emails, so these were not sent: {addresses}.',
+  'invite.mail.workspaceLimit':
+    'This workspace has reached today’s limit of {limit} invitation emails, so these were not sent: {addresses}.',
+  'invite.mail.unavailable': 'This server cannot send email, so these were not sent: {addresses}.',
+  'invite.mail.failed': 'Could not send the invitations.',
+  'invite.mail.or': 'Or share the link yourself',
   'members.entry': 'Members…',
   'members.title': 'Members of {workspace}',
   'members.description':
@@ -1122,7 +1191,6 @@ export const en = {
     'That is as many people as an incident has responding. Take somebody off first.',
   'failure.incidentPostmortemChanged':
     'Somebody else saved the postmortem since you began. Your text is kept: read theirs, then save again.',
-  'failure.githubAlreadyConnected': 'This account has a GitHub account connected already.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
   'failure.signOut': "Couldn't sign you out.",
   'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
@@ -1209,26 +1277,25 @@ export const en = {
   'settings.account.emailLinks': 'A sign-in link sent to this address signs you in.',
   'settings.account.emailGitHub': 'Your GitHub account’s address. You sign in with GitHub.',
   'settings.account.github': 'GitHub',
-  'settings.account.githubNone':
-    'Not connected. Connect your GitHub account to sign in with it as well as by email.',
   'settings.account.githubSignsIn': 'You can sign in with this GitHub account.',
-  'settings.account.githubConnected': 'Connected',
-  'settings.account.githubConnect': 'Connect GitHub',
-  'settings.account.githubConnectFailed': 'GitHub could not be opened.',
-  'settings.account.github.connected': 'GitHub is connected — you can sign in with it from now on.',
-  'settings.account.github.cancelled': 'You cancelled on GitHub — nothing was connected.',
-  'settings.account.github.expired':
-    'That connect expired or was started in another browser — nothing was connected. Press Connect GitHub again.',
-  'settings.account.github.session':
-    'You were signed out, or signed in as somebody else, before GitHub answered — nothing was connected. Press Connect GitHub again.',
-  'settings.account.github.taken':
-    'That GitHub account already signs in to another Purlay account — nothing was connected. On GitHub, sign in as the account you mean, then try again.',
-  'settings.account.github.already': 'This account has a GitHub account connected already.',
-  'settings.account.github.unavailable':
-    'GitHub could not be reached — nothing was connected. Wait a moment and try again.',
-  'settings.account.github.busy':
-    'Purlay is busy right now — nothing was connected. Wait a minute and try again.',
-  'settings.account.github.failed': 'Connecting GitHub did not finish — try again.',
+  'settings.account.githubLinked': 'Linked',
+  'settings.account.password.title': 'Password',
+  'settings.account.password.description':
+    'Change the password you sign in with. Your other sessions are signed out.',
+  'settings.account.password.current': 'Current password',
+  'settings.account.password.new': 'New password',
+  'settings.account.password.submit': 'Change password',
+  'settings.account.password.done': 'Your other sessions were signed out.',
+  'settings.account.password.wrong': 'That is not your current password.',
+  'settings.account.password.tooMany': {
+    one: 'Too many attempts. Try again in {count} minute.',
+    other: 'Too many attempts. Try again in {count} minutes.',
+  },
+  'settings.account.password.unreachable':
+    'Purlay could not be reached. Check your connection and try again.',
+  'settings.account.password.othersStay':
+    'Your password changed, but your other sessions could not be signed out. Use "Sign out everywhere".',
+  'settings.account.password.failed': 'The password was not changed. Try again in a moment.',
   'settings.account.sessions': 'Sessions',
   'settings.account.here': 'This device',
   'settings.account.hereHint': 'Sign out of Purlay in this browser only.',
@@ -1359,4 +1426,332 @@ export const en = {
   // ── Keyboard shortcuts, continued ───────────────────────────────────────
   'shortcuts.codeSend': 'Send from inside a code block',
   'shortcuts.or': 'or',
+
+  // ── The setup wizard (D-179 §4, UX §11) ─────────────────────────────────
+  'setup.title': 'Set up Purlay',
+  'setup.stepper.label': 'Setup steps',
+  'setup.stepOf': 'Step {n} of {total}',
+  'setup.done': 'done',
+  'setup.foot': 'Everything here can be changed later in Administration → Server.',
+  'setup.back': 'Back',
+  'setup.continue': 'Continue',
+  'setup.skip': 'Skip for now',
+  'setup.tryAgain': 'Try again',
+  'setup.step.claim.name': 'Setup code',
+  'setup.step.claim.line': 'You own this server',
+  'setup.step.admin.name': 'Administrator',
+  'setup.step.admin.line': 'Name, address and password',
+  'setup.step.address.name': 'Server address',
+  'setup.step.address.line': 'And who may sign up',
+  'setup.step.github.name': 'Sign in with GitHub',
+  'setup.step.github.line': 'An OAuth app',
+  'setup.step.email.name': 'Email',
+  'setup.step.email.line': 'Sign-in links and invitations',
+  'setup.step.workspace.name': 'First workspace',
+  'setup.step.workspace.line': 'Name and address',
+  'setup.step.invite.name': 'Invite your team',
+  'setup.step.invite.line': 'Whenever you like',
+  'setup.step.finish.name': 'Finish',
+  'setup.step.finish.line': 'Open Purlay',
+  'setup.status.error.title': 'Could not check this server',
+  'setup.status.error.body':
+    'The server did not say whether it is open to setup. Check that it is running, then try again.',
+  'setup.state.error.title': 'Could not read the setup',
+  'setup.state.error.body': 'The server did not answer. Your progress is saved; try again.',
+  'setup.closed.title': 'This server is set up',
+  'setup.closed.body': 'Setup is finished. Sign in to carry on.',
+  'setup.closed.action': 'Go to sign in',
+  'setup.closed.bodySignedIn': 'Setup is finished.',
+  'setup.closed.open': 'Open Purlay',
+  'setup.mismatch.title': 'You are on a different address',
+  'setup.mismatch.body':
+    'This server is set up for {address}, but this page was opened at {origin}. A code sent from here is refused. Open the right address and enter the code there.',
+  'setup.mismatch.action': 'Open {address}',
+  'setup.lost':
+    'This setup was started in another browser. If that browser is gone, wait fifteen minutes, restart the server and enter the new setup code from its log. You will carry on from the step you reached.',
+  'setup.claim.title': 'Enter the setup code',
+  'setup.claim.lede':
+    'This proves you run this server. The code is written to the server’s log and nowhere else.',
+  'setup.claim.where': 'On the machine that runs the server, read it with:',
+  'setup.claim.hour': 'The code works for one hour. Restarting the server writes a new one.',
+  'setup.claim.label': 'Setup code',
+  'setup.claim.takeover':
+    'Setup was started in another browser? If that browser is gone, wait fifteen minutes, restart the server and enter the new code; you carry on from the step it reached.',
+  'setup.claim.wrong':
+    'That is not the setup code. Check the latest SETUP CODE line in the log — a code works for one hour.',
+  'setup.claim.locked': {
+    one: 'Too many wrong codes. Setup opens again in {count} minute; restarting the server writes a new code and ends the wait at once.',
+    other:
+      'Too many wrong codes. Setup opens again in {count} minutes; restarting the server writes a new code and ends the wait at once.',
+  },
+  'setup.claim.limited': {
+    one: 'Too many tries from this browser. Wait {count} minute and try again.',
+    other: 'Too many tries from this browser. Wait {count} minutes and try again.',
+  },
+  'setup.claim.unavailable.title': 'Setup is not available',
+  'setup.claim.unavailable.body':
+    'This server is set up already, or setup is in progress in another browser. If that browser is gone, wait fifteen minutes, restart the server and enter the new code from its log.',
+  'setup.claim.forbidden':
+    'The server refused the code from this address. Open {address} and enter it there.',
+  'setup.admin.title': 'Create the administrator account',
+  'setup.admin.lede':
+    'You will manage this server with it. It is the only account with a password; everyone else signs in with GitHub or an email link.',
+  'setup.admin.name': 'Name',
+  'setup.admin.email': 'Email address',
+  'setup.admin.password': 'Password',
+  'setup.admin.show': 'Show',
+  'setup.admin.hide': 'Hide',
+  'setup.admin.showLabel': 'Show the password',
+  'setup.admin.hideLabel': 'Hide the password',
+  'setup.admin.rules': 'A password needs',
+  'setup.admin.rule.length': '{min} to {max} characters, no control characters',
+  'setup.admin.rule.own': 'Not your name or your email address',
+  'setup.admin.rule.common': 'Not one of the commonest passwords',
+  'setup.admin.rule.repetitive': 'More than one or two characters repeated',
+  'setup.admin.rule.met': 'met',
+  'setup.admin.rule.broken': 'not met',
+  'setup.admin.unverified':
+    'This address is not verified yet. The Email step sends a message to it, and opening the link in that message verifies it. Until then GitHub will not link to this account; you sign in with the password.',
+  'setup.admin.submit': 'Create account',
+  'setup.admin.nameBlank': 'Enter a name.',
+  'setup.admin.emailInvalid': 'That is not an email address.',
+  'setup.admin.problem.too-short': 'That password is too short.',
+  'setup.admin.problem.too-long': 'That password is too long.',
+  'setup.admin.problem.invalid-character': 'That password has a character that is not allowed.',
+  'setup.admin.problem.blank': 'That password is blank.',
+  'setup.admin.problem.contains-email': 'That password contains your email address.',
+  'setup.admin.problem.contains-name': 'That password contains your name.',
+  'setup.admin.problem.common': 'That password is one of the commonest.',
+  'setup.admin.problem.repetitive': 'That password repeats the same few characters.',
+  'setup.admin.conflict': 'An account with this address already exists.',
+  'setup.admin.notSignedIn':
+    'The account was made, but this browser was not signed in. Sign in with the password after setup.',
+  'setup.admin.done': 'The administrator is {name}, {email}.',
+  'setup.address.title': 'Confirm the server address',
+  'setup.address.lede':
+    'This is the address people open. It comes from the server’s APP_URL setting; changing it is a deployment setting, not something to do here.',
+  'setup.address.label': 'Server address',
+  'setup.address.callback': 'GitHub callback address',
+  'setup.address.callbackHint': 'You will paste this into GitHub in the next step.',
+  'setup.policy.legend': 'Who may create an account',
+  'setup.policy.invite': 'Only people who are invited',
+  'setup.policy.inviteNote':
+    'Accounts are made only through an invitation link; nobody else can get in.',
+  'setup.policy.open': 'Anyone can create an account',
+  'setup.policy.openNote':
+    'Anyone who can reach this server can sign up and start their own workspace.',
+  'setup.address.submit': 'Confirm and continue',
+  'setup.github.title': 'Sign in with GitHub',
+  'setup.github.lede':
+    'So your team can sign in with one click using the GitHub account they already have. Create an OAuth app on GitHub, give it the address below, then paste its two values here.',
+  'setup.github.part1': '1 · Create an OAuth app on GitHub',
+  'setup.github.part1Body':
+    'On GitHub open Settings → Developer settings → OAuth Apps → New OAuth App, and paste this into “Authorization callback URL”.',
+  'setup.github.callbackNote':
+    'If GitHub ever shows “The redirect_uri MUST match the registered callback URL”, the app’s Authorization callback URL is not exactly this address.',
+  'setup.github.part2': '2 · Paste the values',
+  'setup.github.clientId': 'Client ID',
+  'setup.github.clientSecret': 'Client secret',
+  'setup.github.secretHint': 'Stored encrypted on the server and never shown again.',
+  'setup.github.reentry': 'The saved client secret can no longer be read. Enter it again.',
+  'setup.github.try': 'Try it',
+  'setup.github.save': 'Save and continue',
+  'setup.github.ok': 'GitHub accepted these credentials.',
+  'setup.github.okNote': 'They are not saved yet. Save and continue keeps them.',
+  'setup.github.connected': 'GitHub is connected. Its secret is stored and not shown.',
+  'setup.github.skipNote':
+    'If you skip, nobody can sign in with GitHub. Email, if you connect it, still lets people in.',
+  'setup.email.title': 'Connect email',
+  'setup.email.lede':
+    'Email carries sign-in links and invitations. The try sends a real message, and that message is the one that verifies the administrator’s address.',
+  'setup.email.showLabel': 'Show the mail server address',
+  'setup.email.hideLabel': 'Hide the mail server address',
+  'setup.email.url': 'Mail server',
+  'setup.email.urlHint':
+    'The relay’s address with its login, such as smtps://user:password@host:465.',
+  'setup.email.from': 'Sender',
+  'setup.email.fromHint': 'The address messages come from.',
+  'setup.email.plaintext': 'Allow an unencrypted connection',
+  'setup.email.plaintextHint': 'Only for a relay on a private network.',
+  'setup.email.letter': 'We will send a message to {email} that also verifies it.',
+  'setup.email.letterVerified': 'We will send a test message to {email}.',
+  'setup.email.reentry': 'The saved mail login can no longer be read. Enter it again.',
+  'setup.email.try': 'Try the connection and continue',
+  'setup.email.stage.resolved': 'Server address resolved',
+  'setup.email.stage.connected': 'Connection made',
+  'setup.email.stage.login': 'Login accepted',
+  'setup.email.stage.message': 'Test message accepted',
+  'setup.email.stage.done': 'done',
+  'setup.email.stage.failed': 'failed',
+  'setup.email.stage.skipped': 'not reached',
+  'setup.email.sent': 'We sent a message to {email}. Open the link in it to verify your address.',
+  'setup.email.sentTest': 'We sent a test message to {email}.',
+  'setup.email.connected': 'Email is connected.',
+  'setup.email.skipNote':
+    'If you skip, invitation links are copied, not sent, and email sign-in and creating an account by email are hidden. GitHub, if connected, still lets everyone in. Your address stays unverified.',
+  'setup.workspace.title': 'Create the first workspace',
+  'setup.workspace.lede': 'A workspace is where one team talks. It starts with a #general channel.',
+  'setup.workspace.preview': 'Your team will open it at {url}',
+  'setup.workspace.done': 'The workspace {name} exists at {url}.',
+  'setup.invite.title': 'Invite your team',
+  'setup.invite.lede':
+    'Make a link and send it however you like. Skipping is as good as any other way on.',
+  'setup.invite.make': 'Make an invitation link',
+  'setup.invite.mailTitle': 'Or send it by email',
+  'setup.invite.notSent': 'Not sent: {addresses}.',
+  'setup.invite.failed': 'The link could not be made.',
+  'setup.finish.title': 'Finish setup',
+  'setup.finish.lede': 'Check that people can get in, then open Purlay.',
+  'setup.finish.admin': 'Administrator account',
+  'setup.finish.workspace': 'First workspace',
+  'setup.finish.channel': 'A way for other people to sign in',
+  'setup.finish.github': 'GitHub',
+  'setup.finish.email': 'Email',
+  'setup.finish.connected': 'connected',
+  'setup.finish.skipped': 'not connected',
+  'setup.finish.problem.out-of-order': 'An earlier step is not finished yet.',
+  'setup.finish.problem.no-workspace': 'The first workspace is not made yet.',
+  'setup.finish.problem.no-channel':
+    'Nobody else could sign in. If you finished now, only you could, with your password; nobody you invited could get in.',
+  'setup.finish.toGithub': 'Back to GitHub',
+  'setup.finish.toEmail': 'Back to email',
+  'setup.finish.submit': 'Finish setup',
+  'setup.finish.failed': 'Setup could not be finished.',
+  'setup.failure.what': 'What happened',
+  'setup.failure.fix': 'How to put it right',
+  'setup.failure.raw': 'What the service answered',
+  'setup.reason.secret-rejected.what': 'GitHub knows the app and refused the client secret.',
+  'setup.reason.secret-rejected.fix1':
+    'Open the app’s page on GitHub and choose Generate a new client secret.',
+  'setup.reason.secret-rejected.fix2':
+    'Copy it at once — GitHub shows it only once — and paste it here.',
+  'setup.reason.client-unknown.what': 'GitHub knows no app with this Client ID.',
+  'setup.reason.client-unknown.fix1': 'Copy the Client ID from the app’s page on GitHub again.',
+  'setup.reason.client-unknown.fix2':
+    'The app may have been deleted, or the ID may belong to a different GitHub, such as an Enterprise Server.',
+  'setup.reason.unreachable.what': 'Nothing answered at that address, or not in time.',
+  'setup.reason.unreachable.fix1': 'Check the host and the port.',
+  'setup.reason.unreachable.fix2': 'Check that this server may connect out to it.',
+  'setup.reason.tls-failed.what': 'The server was reached, but the secure connection failed.',
+  'setup.reason.tls-failed.fix1':
+    'Use the port and the smtps:// or smtp:// form your provider names.',
+  'setup.reason.tls-failed.fix2':
+    'A certificate this server does not trust is refused, and a relay beyond this machine must offer TLS unless the link to it is private.',
+  'setup.reason.auth-failed.what': 'The mail server accepted the connection and refused the login.',
+  'setup.reason.auth-failed.fix1': 'The password may be wrong or expired.',
+  'setup.reason.auth-failed.fix2':
+    'The account may want an app password — usual with Google and Microsoft.',
+  'setup.reason.auth-failed.fix3': 'The user name may need to be the full address.',
+  'setup.reason.sender-refused.what': 'The login worked and the sender address was refused.',
+  'setup.reason.sender-refused.fix1': 'Send from an address this account is allowed to use.',
+  'setup.reason.recipient-refused.what':
+    'The mail server refused the administrator’s address as a recipient.',
+  'setup.reason.recipient-refused.fix1': 'Check the address in the administrator step.',
+  'setup.reason.recipient-refused.fix2': 'Some relays send only to their own domain.',
+  'setup.reason.message-refused.what':
+    'The mail server took both addresses and refused the message.',
+  'setup.reason.message-refused.fix1':
+    'The relay’s policy refused it — often because of the sender’s domain (SPF, DKIM, DMARC).',
+  'setup.reason.message-refused.fix2': 'Send from a domain the relay may send for.',
+  'setup.reason.unexpected-reply.what':
+    'The answer was not one a working GitHub or mail server gives.',
+  'setup.reason.unexpected-reply.fix1': 'Try again in a minute.',
+  'setup.reason.unexpected-reply.fix2':
+    'If it stays, check the address — the reply below says what answered.',
+  'setup.failed.network': 'The server could not be reached. Check the connection and try again.',
+  'setup.failed.rate': {
+    one: 'Too many tries from this browser. Wait {count} minute and try again.',
+    other: 'Too many tries from this browser. Wait {count} minutes and try again.',
+  },
+  'setup.failed.order': 'An earlier step is not finished yet. Go back and finish it.',
+  'setup.failed.generic': 'The server refused this. Try again.',
+  'setup.verify.loading': 'Verifying your address',
+  'setup.verify.done.title': 'Your address is verified',
+  'setup.verify.done.body': 'You can close this page, or go on to sign in.',
+  'setup.verify.done.action': 'Go to sign in',
+  'setup.verify.refused.title': 'This link does not open',
+  'setup.verify.refused.body':
+    'It may have been used already or have expired — a link works once, for 24 hours.',
+  'setup.verify.incomplete.title': 'This link is incomplete',
+  'setup.verify.incomplete.body': 'Open the whole link from the message, including its last part.',
+  'setup.verify.error.title': 'Could not verify the address',
+  'settings.group.server': 'Server',
+  'settings.server.nav': 'Server',
+  'settings.server.title': 'Server',
+  'settings.server.description':
+    'How this server lets people in. Only you, its administrator, see this page.',
+  'settings.server.loadError.title': 'Could not read the server settings',
+  'settings.server.loadError.body': 'Nothing was changed. Try again.',
+  'settings.server.reentry':
+    'This secret could not be opened with the current key — enter it again.',
+  'settings.server.setupUnfinished':
+    'The setup of this server is not finished yet. Finish it first; its steps change these settings until then.',
+  'settings.server.status': 'Status',
+  'settings.server.connected': 'Connected',
+  'settings.server.notConnected': 'Not connected',
+  'settings.server.disconnect': 'Disconnect',
+  'settings.server.disconnectAnyway': 'Disconnect anyway',
+  'settings.server.lastWay':
+    'This is the last way for other people to sign in. Afterwards only your own password signs in, and nobody else can come in or accept an invitation.',
+  'settings.server.github.title': 'Sign in with GitHub',
+  'settings.server.github.description':
+    'People sign in with their GitHub account, through an OAuth app you own.',
+  'settings.server.github.clientId': 'Client ID {id}',
+  'settings.server.github.empty': 'Nobody can sign in with GitHub until an app is connected.',
+  'settings.server.github.callback': 'Callback address',
+  'settings.server.github.callbackHint':
+    'Paste this as the app’s Authorization callback URL on GitHub.',
+  'settings.server.github.connect': 'Connect GitHub',
+  'settings.server.github.replace': 'Replace credentials',
+  'settings.server.github.hint':
+    'GitHub is asked about the app before anything is saved. The secret is stored encrypted and never shown again.',
+  'settings.server.github.save': 'Try the connection and save',
+  'settings.server.github.saved': 'Saved. GitHub sign-in uses this app from now on.',
+  'settings.server.github.disconnectTitle': 'Disconnect GitHub sign-in?',
+  'settings.server.github.disconnectBody':
+    'People will no longer be able to sign in with GitHub. Sessions already open stay open.',
+  'settings.server.github.disconnected': 'GitHub is disconnected.',
+  'settings.server.email.title': 'E-mail',
+  'settings.server.email.description':
+    'Sign-in links and invitations are sent through this mail server.',
+  'settings.server.email.relay': 'Mail server {host}',
+  'settings.server.email.sender': 'Sender',
+  'settings.server.email.empty':
+    'Without a mail server there are no sign-in links, and invitations can only be shared as links.',
+  'settings.server.email.connect': 'Connect a mail server',
+  'settings.server.email.replace': 'Replace mail server',
+  'settings.server.email.testNote': 'We will send a test message to {email}.',
+  'settings.server.email.save': 'Send a test message and save',
+  'settings.server.email.saved': 'The test message was sent, and the mail server is saved.',
+  'settings.server.email.disconnectTitle': 'Disconnect the mail server?',
+  'settings.server.email.disconnectBody':
+    'Sign-in links and invitation messages stop. Invitation links can still be shared by hand.',
+  'settings.server.email.disconnected': 'The mail server is disconnected.',
+  'settings.server.policy.title': 'Who can create an account',
+  'settings.server.policy.description':
+    'Applies from the next sign-up; accounts that exist are not touched.',
+  'settings.server.policy.label': 'Sign-up policy',
+  'settings.server.policy.invite-only': 'Only people who are invited',
+  'settings.server.policy.invite-only.body':
+    'Nobody can sign up on their own: everyone arrives through an invitation.',
+  'settings.server.policy.open': 'Anyone',
+  'settings.server.policy.open.body': 'Anyone who can reach this server can create an account.',
+  'settings.server.policy.saved': 'Saved. This applies from the next sign-up.',
+  'settings.server.creators.title': 'Who can create workspaces',
+  'settings.server.creators.description':
+    'Signing in stays open: a person who is invited can always join a workspace.',
+  'settings.server.creators.label': 'Workspace creators',
+  'settings.server.creators.first': 'Only the first person',
+  'settings.server.creators.first.body':
+    'While the server has no workspace, the first person to sign in may create one. After that, nobody else may.',
+  'settings.server.creators.anyone': 'Anyone who signs in',
+  'settings.server.creators.anyone.body': 'Every account on this server may create a workspace.',
+  'settings.server.creators.listed': 'Only these GitHub accounts',
+  'settings.server.creators.listed.body':
+    'People whose GitHub login is on the list may create one.',
+  'settings.server.creators.logins': 'GitHub logins',
+  'settings.server.creators.loginsHint': 'One or more, separated by commas.',
+  'settings.server.creators.loginsError': 'One or more GitHub logins, separated by commas.',
+  'settings.server.creators.save': 'Save',
+  'settings.server.creators.saved': 'Saved. This applies from the next request.',
 } as const satisfies Record<string, Message>;

@@ -20,7 +20,7 @@ import { aRecordingLogger, NOW, testDependencies } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore } from '../../testing/storage';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { createApp } from './app';
 import { purgeRetention, purgeWorkspace } from '../../modules/retention/purge';
 
@@ -134,7 +134,7 @@ describe('integration: the purge against what happens at the same moment', () =>
   });
 
   const signedIn = async (room: Room, name: string): Promise<string> => {
-    const { token } = await issueSession(cloned.db, clock, member(room, name).userId, 30);
+    const { token } = await aSession(cloned.db, clock, member(room, name).userId, 30);
     return `${SESSION_COOKIE}=${token}`;
   };
 

@@ -15,6 +15,10 @@
  *   — under a Turkish locale `lower('İ')` is not `i`, and two channel names that
  *   collide on one server coexist on another (D-40). A schema restored or
  *   hand-built without the clause looks healthy and is not.
+ * - **the sign-in library finds the tables it expects** — asked last, once every migration is in,
+ *   since its verdict on a mismatch is kept until the process restarts; the library itself only
+ *   logs one and fails each sign-in, so a server whose sign-in cannot work would otherwise look
+ *   ready (D-179). The caller hands the check in: this file knows no module.
  *
  * The answer to the caller is a word; the reason is the log's. Health endpoints
  * disclose nothing about dependencies (`API.md` §8).
@@ -39,7 +43,13 @@ export const COLLATED_COLUMNS: readonly (readonly [table: string, column: string
 export type Readiness =
   { readonly ready: true } | { readonly ready: false; readonly reason: string };
 
-export const readiness = async (database: Executor): Promise<Readiness> => {
+/** A check beyond the database's own, answering a reason when it fails and nothing when it holds. */
+export type ReadinessCheck = () => Promise<string | undefined>;
+
+export const readiness = async (
+  database: Executor,
+  signIn?: ReadinessCheck,
+): Promise<Readiness> => {
   try {
     const history = await migrationHistoryProblem(database);
     if (history !== undefined) return { ready: false, reason: history };
@@ -70,6 +80,8 @@ export const readiness = async (database: Executor): Promise<Readiness> => {
         reason: `columns that must compare byte-wise do not (COLLATE "C", D-40): ${wrong.join(', ')}`,
       };
     }
+    const signInProblem = await signIn?.();
+    if (signInProblem !== undefined) return { ready: false, reason: signInProblem };
     return { ready: true };
   } catch (error) {
     return {

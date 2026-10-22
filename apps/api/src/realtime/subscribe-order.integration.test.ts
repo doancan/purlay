@@ -12,7 +12,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
-import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
+import { aTestAuth, aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { testDependencies } from '../testing/doubles';
 import { missedIn } from '../modules/messages/messages';
 import { fixedClock } from '../platform/clock';
@@ -65,7 +65,7 @@ interface Rig {
 /** One hub holding one socket, 's1', with everything written to it recorded. */
 const aRig = async (db: Executor, who: SignedInUser): Promise<Rig> => {
   const written: ServerFrame[] = [];
-  const hub = createSocketHub(db, clock, {
+  const hub = createSocketHub(aTestAuth(db), clock, {
     log: createLogger({ level: 'silent' }),
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);

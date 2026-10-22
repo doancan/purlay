@@ -14,7 +14,7 @@ import { IDS, WHEN, aSession, aSignedInApi, aChannel } from '../../testing/fixtu
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Api } from '../../data/api';
-import { DEFAULT_CHANNEL_NAME, signInFailureHref } from '@purlay/types';
+import { DEFAULT_CHANNEL_NAME } from '@purlay/types';
 import { PERSON_KEY } from '../../data/browser-storage';
 import { page as aPage } from '../../testing/channel-harness';
 
@@ -456,45 +456,15 @@ describe('the sign-in screen', () => {
   const out = (): Api =>
     anApi({
       me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-      authMethods: () => Promise.resolve({ email: false }),
+      authMethods: () => Promise.resolve({ github: true, email: false, signUp: 'invite-only' }),
     });
 
-  test('without mail, is one button to GitHub, which is a real navigation', async () => {
+  test('without mail, is a button to GitHub, which is a real navigation, above the password form', async () => {
     const view = await visit('/sign-in', out());
     expect(view.getByRole('link', { name: 'Continue with GitHub' }).getAttribute('href')).toBe(
       '/auth/github',
     );
-    expect(view.queryByRole('textbox')).toBeNull();
-  });
-
-  // Every reason the API can send a sign-in back with, and the address shapes besides (D-121).
-  test.each([
-    [signInFailureHref('cancelled'), 'You cancelled on GitHub'],
-    [signInFailureHref('expired'), 'That sign-in expired or was started in another browser'],
-    [signInFailureHref('email-required'), 'Your GitHub account has no verified primary email'],
-    [signInFailureHref('email-taken'), 'That email already belongs to another Purlay account'],
-    [signInFailureHref('github-unavailable'), 'GitHub could not be reached'],
-    [signInFailureHref('busy'), 'Purlay is busy right now'],
-    [signInFailureHref('failed'), 'Sign-in did not finish'],
-    // A reason outside the set — an old link — still says it failed.
-    ['/sign-in?error=1', 'Sign-in did not finish'],
-    ['/sign-in?reason=ended', 'Your session ended'],
-    ['/sign-in?reason=erased', 'Your account was erased.'],
-  ])('%s says what happened', async (path, words) => {
-    const view = await visit(path, out());
-    expect(view.getByRole('status').textContent).toContain(words);
-  });
-
-  test('says it in Turkish to a Turkish reader', async () => {
-    const view = await renderApp(<Outlet />, {
-      path: signInFailureHref('email-taken'),
-      api: out(),
-      locale: 'tr',
-    });
-    await settle();
-    expect(view.getByRole('status').textContent).toContain(
-      'Bu e-posta başka bir Purlay hesabına ait',
-    );
+    expect(view.queryByRole('button', { name: /sign-in link/ })).toBeNull();
   });
 
   test('says what Purlay is in Turkish as a Turkish reader says it: the question stays open', async () => {

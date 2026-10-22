@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
-import { aDatabaseThatMustNotBeTouched } from '../testing/doubles';
+import { anAuthThatMustNotBeTouched } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import {
   channelTopic,
@@ -87,7 +87,7 @@ interface Node {
 
 const aNode = (backplane: ReturnType<typeof inProcessBackplane>): Node => {
   const seen = new Map<string, string[]>();
-  const hub = createSocketHub(aDatabaseThatMustNotBeTouched(), clock, {
+  const hub = createSocketHub(anAuthThatMustNotBeTouched(), clock, {
     log,
     leave: (channelId, socketId) => {
       bus.unsubscribe(channelTopic(channelId), socketId);

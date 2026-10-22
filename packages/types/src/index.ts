@@ -17,3 +17,6 @@ export * from './api';
 export * from './message-id';
 export * from './sign-in';
 export * from './export';
+export * from './mailbox';
+export * from './setup';
+export * from './password';

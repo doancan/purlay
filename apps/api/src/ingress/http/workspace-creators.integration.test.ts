@@ -1,6 +1,7 @@
 /**
  * Who may make a workspace (D-155), through real requests: what `GET /api/me` says, and what
- * `POST /api/workspaces` does, under each value of `WORKSPACE_CREATORS`.
+ * `POST /api/workspaces` does, under each rule the server's setting can hold (D-179 §6) — written as
+ * `WORKSPACE_CREATORS` spells it, the seed it is imported from, and read by the application itself.
  *
  * Inside a transaction that is rolled back (D-46). The first run of an instance is made by emptying
  * `workspaces` inside it, which the rollback puts back.
@@ -8,13 +9,15 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
 import { createApp } from './app';
-import { testConfig, testDependencies } from '../../testing/doubles';
+import { creatorsFromTheSetting, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import type { Config } from '../../platform/config';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
+import { credentialCipher } from '../../platform/crypto';
+import { saveSettings } from '../../modules/setup/settings';
+import { workspaceCreatorsOf } from '../../modules/workspaces/creators';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { resolveIdentity } from '../../modules/auth/identity';
-import { issueSession } from '../../modules/auth/sessions';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { recordGitHubSignIn } from '../../modules/auth/identity';
+import { aSession, aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
 afterAll(async () => {
@@ -24,12 +27,11 @@ afterAll(async () => {
 const ORIGIN = 'https://purlay.test';
 const clock = fixedClock(new Date('2026-10-19T12:00:00.000Z'));
 
-/** The test configuration with `WORKSPACE_CREATORS` set to this, or not set at all. */
-const configured = (creators: string | undefined): Config => {
-  const config: Config = { ...testConfig() };
-  if (creators === undefined) delete config.WORKSPACE_CREATORS;
-  else config.WORKSPACE_CREATORS = creators;
-  return config;
+/** The server's setting made what `WORKSPACE_CREATORS` says, or the default for it unset. */
+const configured = async (db: Executor, creators: string | undefined): Promise<void> => {
+  await saveSettings(db, credentialCipher(DEVELOPMENT_ENCRYPTION_KEY), clock, {
+    workspaceCreators: workspaceCreatorsOf(creators),
+  });
 };
 
 const call = async (
@@ -39,14 +41,9 @@ const call = async (
   path: string,
   cookie: string,
   body?: unknown,
-): Promise<Response> =>
-  await createApp(
-    testDependencies({
-      database: db,
-      clock,
-      config: configured(creators),
-    }),
-  ).handle(
+): Promise<Response> => {
+  await configured(db, creators);
+  return await createApp(creatorsFromTheSetting(testDependencies({ database: db, clock }))).handle(
     new Request(`${ORIGIN}${path}`, {
       method,
       headers: {
@@ -56,6 +53,7 @@ const call = async (
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }),
   );
+};
 
 /** What `/api/me` says, and what a create then does. */
 const tryIt = async (
@@ -90,12 +88,36 @@ const withGitHub = async (db: Executor, person: SignedInUser): Promise<SignedInU
 /** A login nobody in the database has: lower case, as GitHub's are compared. */
 const aLogin = (name: string): string => `${name}-${crypto.randomUUID().slice(0, 8)}`;
 
-/** Signs in through GitHub as this id and login, the way the callback does; answers the cookie. */
+/**
+ * Signs in through GitHub as this id and login, the way the library's callback leaves the database:
+ * the account made if this id has none, then what a GitHub sign-in writes (`recordGitHubSignIn`);
+ * answers the cookie.
+ */
 const signedInWithGitHub = async (db: Executor, id: number, login: string): Promise<string> => {
-  const { userId } = await resolveIdentity(db, clock, { id, login, name: null, avatarUrl: null }, [
-    { email: `${String(id)}@users.noreply.github.test`, primary: true, verified: true },
-  ]);
-  const { token } = await issueSession(db, clock, userId, 30);
+  const githubId = String(id);
+  const known = await db
+    .selectFrom('users')
+    .select('id')
+    .where('github_id', '=', githubId)
+    .executeTakeFirst();
+  const made =
+    known ??
+    (await db
+      .insertInto('users')
+      .values({
+        github_id: githubId,
+        email: `${githubId}@users.noreply.github.test`,
+        username: `pending-${githubId}`,
+        display_name: login,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow());
+  const { userId } = await recordGitHubSignIn(db, clock, {
+    userId: made.id,
+    profile: { id, login, name: null, avatarUrl: null },
+    made: known === undefined,
+  });
+  const { token } = await aSession(db, clock, userId, 30);
   return `${SESSION_COOKIE}=${token}`;
 };
 
@@ -106,7 +128,7 @@ const signedInByEmail = async (db: Executor, username: string): Promise<string> 
     .values({ email: `${username}@stranger.test`, username, display_name: username })
     .returning('id')
     .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, user.id, 30);
+  const { token } = await aSession(db, clock, user.id, 30);
   return `${SESSION_COOKIE}=${token}`;
 };
 

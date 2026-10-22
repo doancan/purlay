@@ -26,11 +26,18 @@
       // `demo-session.ts` likewise: the browser suite's fixtures run it for a session the seed did
       // not make (`apps/web/e2e/fixtures.ts`, `freshSessionOf`). `storage-init.ts` is the command of
       // the production compose file's one-shot `storage-init` service (D-144), which knip does not read.
+      // `testing/fresh-server.ts` is run by the setup wizard's browser spec (`apps/web/e2e/setup.e2e.ts`) as a
+      // subprocess: a server with nobody on it, GitHub's stand-in and a relay beside it — the state `scripts/demo.ts`,
+      // which seeds people, cannot give.
+      // `throwaway-database.ts` is run by `scripts/budget-api.ts` as a subprocess: the scripts cannot
+      // import the database package, and the API must start on a clone, never on `DATABASE_URL` itself.
       "entry": [
         "src/index.ts",
         "src/cli/seed-demo.ts",
         "src/cli/demo-session.ts",
         "src/cli/storage-init.ts",
+        "src/cli/throwaway-database.ts",
+        "src/testing/fresh-server.ts",
       ],
     },
     "apps/web": {

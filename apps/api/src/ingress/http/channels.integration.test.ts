@@ -10,7 +10,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { createApp } from './app';
 import { testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { aTestAuth, aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import type { ServerFrame } from '@purlay/types';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
@@ -299,7 +299,7 @@ describe('integration: private channels over HTTP', () => {
       };
       const request = (): Request =>
         new Request(`${ORIGIN}/`, { headers: { cookie: alice.cookie } });
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       await addChannelMember(dependencies, request(), channelId, { userId: bob.userId });
       await addChannelMember(dependencies, request(), channelId, { userId: bob.userId });
       expect(topics).toEqual([userTopic(bob.userId)]);
@@ -338,7 +338,7 @@ describe('integration: the person’s other devices hear of a channel they joine
         .execute();
       const channelId = await aChannel(db, alice.cookie, workspaceId, 'design');
       const { bus, heard } = recording();
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       const joined = await joinPublicChannel(dependencies, as(bob.cookie), channelId);
       await joinPublicChannel(dependencies, as(bob.cookie), channelId);
       expect(heard.map(([topic, frame]) => [topic, frame.event])).toEqual([
@@ -356,7 +356,7 @@ describe('integration: the person’s other devices hear of a channel they joine
       const workspaceId = await aWorkspace(db, alice.cookie, 'mk-acme');
       const { bus, heard } = recording();
       const made = await createWorkspaceChannel(
-        { database: db, clock, bus, log: NO_LOG },
+        { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG },
         as(alice.cookie),
         workspaceId,
         { name: 'launch' },

@@ -3,6 +3,7 @@
  * language a person is told in. Each is the caller's own — no workspace is named, and nothing about
  * anybody else is read or answered.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
   PushSubscribeRequest,
@@ -23,6 +24,8 @@ import { requireSession } from './session';
 import { validated } from './validate';
 
 export interface PushDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
   readonly config: Pick<Config, 'VAPID_PUBLIC_KEY'>;
@@ -36,20 +39,20 @@ const serverKey = (config: PushDependencies['config']): string => {
 
 /** `GET /api/push/key` — what a browser subscribes with. */
 export const readPushKey = async (
-  { database, clock, config }: PushDependencies,
+  { auth, config }: PushDependencies,
   request: Request,
 ): Promise<PushKeyResponse> => {
-  await requireSession(database, clock, request);
+  await requireSession(auth, request);
   return { publicKey: config.VAPID_PUBLIC_KEY ?? null };
 };
 
 /** `POST /api/push/subscriptions` — this device, in this session, is told. */
 export const subscribeDevice = async (
-  { database, clock, config }: PushDependencies,
+  { auth, database, clock, config }: PushDependencies,
   request: Request,
   body: unknown,
 ): Promise<void> => {
-  const subscriber = await requireSession(database, clock, request);
+  const subscriber = await requireSession(auth, request);
   const key = serverKey(config);
   const input = validated(PushSubscribeRequest, body);
   await atomicallyOn(database)(async (transaction) => {
@@ -59,20 +62,20 @@ export const subscribeDevice = async (
 
 /** `POST /api/push/subscriptions/remove` — this device stops being told. */
 export const unsubscribeDevice = async (
-  { database, clock }: PushDependencies,
+  { auth, database }: PushDependencies,
   request: Request,
   body: unknown,
 ): Promise<void> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   await unsubscribe(database, userId, validated(PushUnsubscribeRequest, body).endpoint);
 };
 
 /** `PUT /api/me/locale` — the language the server writes this person's notifications in (D-41). */
 export const setMyLocale = async (
-  { database, clock }: PushDependencies,
+  { auth, database }: PushDependencies,
   request: Request,
   body: unknown,
 ): Promise<void> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   await setLocale(database, userId, validated(SetLocaleRequest, body).locale);
 };

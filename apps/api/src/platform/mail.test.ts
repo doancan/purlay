@@ -5,6 +5,8 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { aRecordingLogger } from '../testing/doubles';
+import { aRelay } from '../testing/relay';
+import { smtpUrlProblem } from './smtp-address';
 import { checkRelay, letter, outbox, smtpMailer, transportOptions, type MailMessage } from './mail';
 
 const allow = { SMTP_ALLOW_PLAINTEXT: false };
@@ -142,7 +144,7 @@ describe('the relay, checked at start', () => {
   test('answering is said; not answering is an error, by its code alone', async () => {
     const answering = aRecordingLogger();
     await checkRelay(
-      { send: () => Promise.resolve(), verify: () => Promise.resolve() },
+      { send: () => Promise.resolve(), verify: () => Promise.resolve(), close: () => undefined },
       answering.log,
     );
     expect(answering.lines.map((line) => line['msg'])).toEqual(['mail relay answers']);
@@ -155,6 +157,7 @@ describe('the relay, checked at start', () => {
           Promise.reject(
             Object.assign(new Error('535 auth failed for purlay@example.com'), { code: 'EAUTH' }),
           ),
+        close: () => undefined,
       },
       silent.log,
     );
@@ -164,61 +167,6 @@ describe('the relay, checked at start', () => {
     expect(JSON.stringify(silent.lines)).not.toContain('purlay@example.com');
   });
 });
-
-/**
- * A relay on this machine that speaks just enough SMTP to accept a message, and records each command:
- * what nodemailer actually tells a relay, not what its options say it will.
- */
-const aRelay = (
-  greeting = '220 relay.test ready',
-): {
-  readonly port: number;
-  readonly commands: string[];
-  readonly stop: () => void;
-} => {
-  const commands: string[] = [];
-  let inData = false;
-  const server = Bun.listen({
-    hostname: '127.0.0.1',
-    port: 0,
-    socket: {
-      open: (socket) => {
-        socket.write(`${greeting}\r\n`);
-      },
-      data: (socket, chunk) => {
-        for (const line of chunk
-          .toString()
-          .split('\r\n')
-          .filter((part) => part !== '')) {
-          if (inData) {
-            if (line === '.') {
-              inData = false;
-              socket.write('250 queued\r\n');
-            }
-            continue;
-          }
-          commands.push(line);
-          const verb = line.split(/[ :]/)[0]?.toUpperCase();
-          if (verb === 'EHLO' || verb === 'HELO') socket.write('250 relay.test\r\n');
-          else if (verb === 'DATA') {
-            inData = true;
-            socket.write('354 go on\r\n');
-          } else if (verb === 'QUIT') {
-            socket.write('221 bye\r\n');
-            socket.end();
-          } else socket.write('250 ok\r\n');
-        }
-      },
-    },
-  });
-  return {
-    port: server.port,
-    commands,
-    stop: (): void => {
-      server.stop(true);
-    },
-  };
-};
 
 describe('the relay, spoken to', () => {
   const settings = (port: number): Parameters<typeof smtpMailer>[0] => ({
@@ -245,6 +193,28 @@ describe('the relay, spoken to', () => {
     }
   });
 
+  test('a letter handed over after the transport was let go is still sent: it holds no connection', async () => {
+    // What a relay the settings replaced relies on (D-179 §4.9): work that started on it may post after
+    // it was closed. True of nodemailer's unpooled transport, which connects for each letter; a pooled
+    // one would refuse — this fails first if the transport is ever pooled.
+    const relay = aRelay();
+    try {
+      const mailer = smtpMailer(settings(relay.port));
+      mailer.close();
+      await mailer.send({
+        to: 'late@example.test',
+        subject: 'Your sign-in link',
+        text: 'words',
+        html: '<p>words</p>',
+      });
+      expect(relay.commands.filter((line) => /^RCPT/i.test(line))).toEqual([
+        'RCPT TO:<late@example.test>',
+      ]);
+    } finally {
+      relay.stop();
+    }
+  });
+
   test('a relay that answers is said to; one that refuses fails the check', async () => {
     const answering = aRelay();
     const refusing = aRelay('554 no service here');
@@ -263,5 +233,58 @@ describe('the relay, spoken to', () => {
       answering.stop();
       refusing.stop();
     }
+  });
+});
+
+describe('an SMTP address the transport can be built from (D-179 §6)', () => {
+  test('is refused, with a reason and never the value, when a password character is not escaped or the address is incomplete', () => {
+    for (const [address, reason] of [
+      ['smtp://u:pa#ss@mail.example.com', 'written %23, %2F, %3F'],
+      ['smtp://u:pa/ss@mail.example.com', 'written %23, %2F, %3F'],
+      ['smtp://u:pa?ss@mail.example.com', 'written %23, %2F, %3F'],
+      ['smtps://u:pa%zzss@mail.example.com', 'escape'],
+      ['smtps://%zz:pass@mail.example.com', 'escape'],
+      ['smtps://:pass@mail.example.com', 'user and password'],
+      ['smtps://user@mail.example.com', 'user and password'],
+      ['smtps://user:@mail.example.com', 'user and password'],
+      ['smtp://', 'host'],
+      ['smtp:///nothing', 'host'],
+      ['smtp://mail.example.com/path', 'path, query or fragment'],
+      ['https://mail.example.com', 'smtp:// or smtps://'],
+      ['not an address', 'smtp:// or smtps://'],
+    ] as const) {
+      const problem = smtpUrlProblem(address);
+      expect({ address, problem, says: problem?.includes(reason) }).toMatchObject({
+        address,
+        says: true,
+      });
+      // The reason is the rule broken, never a piece of what was given.
+      expect(problem).not.toContain('mail.example.com');
+      expect(problem).not.toContain('%zz');
+      expect(problem).not.toContain(address);
+    }
+  });
+
+  test('is accepted when every character is escaped as the URL needs, and builds the transport it says', () => {
+    for (const address of [
+      'smtps://u%40x.com:pa%23s%2Fs%3F@mail.example.com:465',
+      'smtp://mail.example.com',
+      'smtp://127.0.0.1:2525',
+      'smtp://[::1]:25',
+    ]) {
+      expect({ address, problem: smtpUrlProblem(address) }).toEqual({
+        address,
+        problem: undefined,
+      });
+      expect(() =>
+        transportOptions({ SMTP_URL: address, SMTP_ALLOW_PLAINTEXT: false }),
+      ).not.toThrow();
+    }
+    expect(
+      transportOptions({
+        SMTP_URL: 'smtps://u%40x.com:pa%23s%2Fs%3F@mail.example.com:465',
+        SMTP_ALLOW_PLAINTEXT: false,
+      }).auth,
+    ).toEqual({ user: 'u@x.com', pass: 'pa#s/s?' });
   });
 });

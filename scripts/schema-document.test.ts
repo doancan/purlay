@@ -133,8 +133,14 @@ for (const match of withoutComments(migrationsSql).matchAll(
   if (change === 'ADD') columns?.add(column);
   else columns?.delete(column);
 }
+// A table a later migration drops (0048) is not one any more, and its indexes went with it.
+const droppedTables = [
+  ...withoutComments(migrationsSql).matchAll(/DROP TABLE (?:IF EXISTS )?(\w+)/g),
+].map((match) => match[1] ?? '');
+for (const table of droppedTables) applied.delete(table);
 const documented = tablesIn(documentSql);
 const appliedIndexes = indexesIn(migrationsSql);
+for (const table of droppedTables) appliedIndexes.delete(table);
 const documentedIndexes = indexesIn(documentSql);
 
 const sorted = (values: ReadonlySet<string> | undefined): string[] => [...(values ?? [])].sort();

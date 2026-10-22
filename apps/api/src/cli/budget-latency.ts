@@ -25,6 +25,7 @@ import { messageId } from '@purlay/types';
 import { systemClock } from '../platform/clock';
 import { SESSION_COOKIE } from '../platform/cookies';
 import { issueSession } from '../modules/auth/sessions';
+import { deriveAuthSecret } from '../modules/auth/better-auth';
 
 export const BUDGETS = { ackMs: 120, fanOutMs: 200 } as const;
 /** A jump: this many times the recorded p95. */
@@ -89,13 +90,13 @@ interface Person {
   readonly cookie: string;
 }
 
-const aPerson = async (clone: ClonedDatabase, name: string): Promise<Person> => {
+const aPerson = async (clone: ClonedDatabase, secret: string, name: string): Promise<Person> => {
   const { id } = await clone.db
     .insertInto('users')
     .values({ email: `${name}@budget.test`, username: name, display_name: name })
     .returning('id')
     .executeTakeFirstOrThrow();
-  const { token } = await issueSession(clone.db, systemClock, id, 1);
+  const { token } = await issueSession(clone.db, systemClock, secret, id, 1);
   return { id, cookie: `${SESSION_COOKIE}=${token}` };
 };
 
@@ -149,6 +150,8 @@ export const measureLatency = async (count: number): Promise<Latency> => {
   const clone = await cloneIntegrationDatabase();
   const port = await freePort();
   const origin = `http://localhost:${String(port)}`;
+  // The server's key, so the sessions made below are signed as it signs them (D-179).
+  const key = randomBytes(32).toString('base64');
   const api = Bun.spawn(['bun', 'apps/api/src/index.ts'], {
     env: {
       ...process.env,
@@ -158,7 +161,7 @@ export const measureLatency = async (count: number): Promise<Latency> => {
       DATABASE_URL: clone.connectionString,
       GITHUB_CLIENT_ID: 'budget',
       GITHUB_CLIENT_SECRET: 'budget',
-      ENCRYPTION_KEY: randomBytes(32).toString('base64'),
+      ENCRYPTION_KEY: key,
       LOG_LEVEL: 'warn',
     },
     stdout: 'inherit',
@@ -176,8 +179,8 @@ export const measureLatency = async (count: number): Promise<Latency> => {
       if (performance.now() > deadline) throw new Error('the API did not become ready');
       await Bun.sleep(100);
     }
-    const sender = await aPerson(clone, 'budget-sender');
-    const listener = await aPerson(clone, 'budget-listener');
+    const sender = await aPerson(clone, deriveAuthSecret(key), 'budget-sender');
+    const listener = await aPerson(clone, deriveAuthSecret(key), 'budget-listener');
     const call = async (who: Person, path: string, body: unknown): Promise<{ id: string }> => {
       const response = await fetch(`${origin}${path}`, {
         method: 'POST',

@@ -9,18 +9,38 @@
  * convention (`ARCHITECTURE.md` §4).
  */
 import { exportQueue } from './modules/export/requests';
-import { checkRelay, outbox, smtpMailer } from './platform/mail';
+import { checkRelay } from './platform/mail';
 import { createDatabase } from '@purlay/db';
 import { databaseConnection } from './platform/database';
 import { loadConfig } from './platform/config';
 import { systemClock } from './platform/clock';
-import { githubClient } from './modules/auth/github';
-import { SIGN_IN_CALLBACK } from './modules/auth/sign-in';
+import { deriveAuthSecret } from './modules/auth/better-auth';
+import {
+  envSeedOf,
+  ignoredEnvironment,
+  importFromEnvOnce,
+  readSettingsToBoot,
+} from './modules/setup/settings';
+import { issueSetupCode } from './modules/setup/setup';
+import {
+  runtimeServicesFrom,
+  runtimeServicesHolder,
+  type RuntimeBase,
+  type RuntimeServices,
+} from './modules/setup/runtime';
+import type { SealedSetting, ServerSettings } from './modules/setup/settings';
+import { credentialCipher } from './platform/crypto';
+import { inProcessBackplane } from './realtime/bus';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
 import { errorTrackingFor, reportUrgently } from './platform/error-tracking';
-import { installCrashHandlers, installShutdown } from './lifecycle';
-import { migrateOnStart } from './platform/migrate-on-start';
+import {
+  closeAfterDrain,
+  drainRefusingChanges,
+  installCrashHandlers,
+  installShutdown,
+} from './lifecycle';
+import { migrateOnStart, untilMigrated } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
 import { inMemoryAttention } from './platform/attention';
@@ -86,26 +106,52 @@ const push =
       });
 log.info(push === undefined ? 'web push is off: no VAPID keys' : 'web push is on');
 
-// Sign-in by email (#81, D-138 §6): on with both of SMTP_URL and MAIL_FROM, which the configuration
-// has checked come together.
-const mailer =
-  config.SMTP_URL === undefined || config.MAIL_FROM === undefined
-    ? undefined
-    : smtpMailer({
-        SMTP_URL: config.SMTP_URL,
-        MAIL_FROM: config.MAIL_FROM,
-        SMTP_ALLOW_PLAINTEXT: config.SMTP_ALLOW_PLAINTEXT,
-      });
-const mail = mailer === undefined ? undefined : outbox(mailer.send, log);
-log.info(mail === undefined ? 'email sign-in is off: no SMTP_URL' : 'email sign-in is on');
-// Not awaited: the server starts whatever the relay says, and the log says it.
-if (mailer !== undefined) void checkRelay(mailer, log);
-
 // An owner's exports, one at a time, made by this process after answering (D-140).
 const storage = storeFor(config);
 const exports = exportQueue({ database, clock: systemClock, log, storage });
 
+// The transport this node's sockets hear on. Made here, rather than by the application, so that
+// the sign-in library publishes on it too: a session it ends closes the sockets it held (D-85).
+const backplane = inProcessBackplane();
+
+// Who every request and socket is: sessions are resolved through Better Auth, signing with a secret
+// derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
+// takes that is not a setting is the process's own, from the environment.
+const runtimeBase: RuntimeBase = {
+  database,
+  baseUrl: config.APP_URL,
+  secret: deriveAuthSecret(config.ENCRYPTION_KEY),
+  log,
+  githubUrls: { web: config.GITHUB_URL, api: config.GITHUB_API_URL },
+  sessionTtlDays: config.SESSION_TTL_DAYS,
+  // A node of its own on the backplane, with no sockets: it only ever publishes.
+  bus: backplane.node(() => undefined, log),
+  clock: systemClock,
+};
+// The rest — GitHub's app, the mail relay, who may sign up — is the server's settings, in the database
+// and so readable only once the migrations are in (D-179 §6). Until then the application is built
+// with a stand-in that answers every use as a busy server, and readiness says why; after, a change of
+// the settings swaps a new instance and relay in without a restart, each request served by the pair
+// it started on (D-179 §4).
+const services = runtimeServicesHolder(log);
+/** The pair the settings make: at the start, and again for every change of them (`applySettings`). */
+const servicesFor = (
+  settings: ServerSettings,
+  needsReentry: readonly SealedSetting[],
+): RuntimeServices => runtimeServicesFrom(settings, runtimeBase, needsReentry, services.sends);
+
 const app = createApp({
+  auth: services.auth,
+  services,
+  // The setup's steps and, later, Administration → Server change the settings through this (D-179 §4.9).
+  settingsChange: {
+    holder: services,
+    cipher: credentialCipher(config.ENCRYPTION_KEY),
+    clock: systemClock,
+    log,
+    build: servicesFor,
+  },
+  backplane,
   config,
   log,
   clock: systemClock,
@@ -115,40 +161,71 @@ const app = createApp({
   attention,
   ...(client === undefined ? {} : { client }),
   ...(push === undefined ? {} : { push }),
-  ...(mail === undefined ? {} : { mail }),
-  github: githubClient({
-    clientId: config.GITHUB_CLIENT_ID,
-    clientSecret: config.GITHUB_CLIENT_SECRET,
-    // One origin, so this is the origin the browser is already on (D-61).
-    redirectUri: `${config.APP_URL}${SIGN_IN_CALLBACK}`,
-  }),
 });
 
 log.info('listening', { port: app.listen(config.PORT) });
 // A crash stops new work at once: readiness says no and the sockets are told to come back (#634).
 crash.onCrash(() => {
-  app.drain().catch((failure: unknown) => {
+  drainRefusingChanges(services, app.drain)().catch((failure: unknown) => {
     plainLog.warn('draining after a crash failed', { err: failure });
   });
 });
 
 // A restart is a reconnect, not an outage: drain, close the pool, exit (#220).
 installShutdown({
-  drain: app.drain,
-  closeDatabase: async () => {
-    // Pushes for writes already committed, within their own bound, then the reports of the
-    // shutdown itself: the error tracker still has its time.
-    await push?.flush();
-    // Sign-in links answered already: their mail goes before the process does, within its bound.
-    await mail?.flush();
-    await errorTracker.flush();
-    await database.destroy();
-  },
+  // No change of the settings starts once the process is going (D-179 §4.9).
+  drain: drainRefusingChanges(services, app.drain),
+  // Pushes for writes already committed, then the mail of every relay this process served with, then
+  // the reports of the shutdown itself — the error tracker still has its time — then the pool.
+  closeDatabase: closeAfterDrain({ push, services, errorTracker, database }),
   log,
   process,
   deadlineMs: 10_000,
   crashed: crash.crashed,
 });
+
+/**
+ * The server's settings: the environment copied in on the first start of the database and never again,
+ * then read, and what the server serves with built from them. A secret sealed under another
+ * `ENCRYPTION_KEY` is read as unset and the server waits in setup mode for it (R38); a setting that cannot
+ * be read otherwise — a row that does not decode, a database that fails — ends the process, said, rather
+ * than serving without it.
+ */
+const fromSettings = async (): Promise<RuntimeServices> => {
+  try {
+    const cipher = credentialCipher(config.ENCRYPTION_KEY);
+    if (
+      (await importFromEnvOnce(database, cipher, systemClock, envSeedOf(config))) === 'imported'
+    ) {
+      log.info(
+        'the environment was copied into the server settings; from now on they are read there',
+      );
+    } else {
+      const ignored = ignoredEnvironment(config);
+      // Names only: an operator who edited one is told it does nothing (CONFIG.md).
+      if (ignored.length > 0) {
+        log.info("settings are the database's; these variables are ignored", {
+          variables: ignored,
+        });
+      }
+    }
+    const { settings, needsReentry } = await readSettingsToBoot(database, cipher);
+    if (needsReentry.length > 0) {
+      // A rotated ENCRYPTION_KEY: the server starts in setup mode with these read as unset, and the
+      // wizard asks for them again. Which settings, never a value; nothing is deleted (CONFIG.md).
+      log.warn('a secret in the server settings cannot be opened and is treated as unset', {
+        settings: needsReentry,
+        action: 'enter it again in the browser, or put the previous ENCRYPTION_KEY back',
+        see: 'CONFIG.md, "What stays in the environment": the recovery after ENCRYPTION_KEY changes',
+      });
+    }
+    return servicesFor(settings, needsReentry);
+  } catch (error) {
+    // Anything but a secret that will not open: a row that does not decode, a database that fails.
+    log.error('the server settings could not be read; exiting', { err: error });
+    process.exit(1);
+  }
+};
 
 // After the listener is open, so liveness answers during a long migration and
 // readiness says 503 until it finishes (D-93). Nodes started together take turns
@@ -172,4 +249,44 @@ if (config.MIGRATE_ON_START === true) {
     log.error('migrating on start failed; exiting', { err: error });
     process.exit(1);
   }
+} else {
+  // Somebody else migrates — an operator, another node: the settings are read once they have.
+  await untilMigrated(database, log);
+}
+
+const runtime = await fromSettings();
+if (config.MIGRATE_ON_START === true) {
+  // The schema is the one this code ships now, so the sign-in library's comparison of it with what
+  // it expects is a verdict: it would only log a mismatch and then fail every sign-in, so a mismatch
+  // ends the process here. Not asked before the migrations are in — the library keeps a mismatch
+  // until a restart — and without a migration on start, readiness asks it once they are (D-179).
+  const signInProblem = await runtime.auth.schemaProblem();
+  if (signInProblem !== undefined) {
+    log.error('the sign-in library cannot work on this database; exiting', {
+      reason: signInProblem,
+    });
+    process.exit(1);
+  }
+}
+services.settle(runtime);
+// Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
+log.info(
+  runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',
+);
+log.info(
+  runtime.auth.github
+    ? 'GitHub sign-in is on'
+    : 'GitHub sign-in is off: no GitHub app is connected',
+);
+// Not awaited: the server serves whatever the relay says, and the log says it.
+if (runtime.mailer !== undefined) void checkRelay(runtime.mailer, log);
+
+// The setup in the browser (D-179 §4): while the server has no user but the one its setup made and the
+// setup is not finished, every start writes a new one-time code to the log — after the migrations and
+// the settings, so the row is there to hold its digest. A closed server writes nothing, and a code that
+// could not be issued is said while the server serves on: the next start issues one again.
+try {
+  await issueSetupCode(database, log, systemClock);
+} catch (error) {
+  log.error('the setup code could not be issued; restart the server for one', { err: error });
 }

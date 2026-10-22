@@ -17,23 +17,23 @@ import { queryOf, validated } from './validate';
 
 /** `GET /api/messages/:messageId/versions` */
 export const listVersions = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   messageId: string,
 ): Promise<MessageVersionPage> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const query = validated(OlderPageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await messageVersions(database, userId, messageId, query);
 };
 
 /** `DELETE /api/messages/:messageId/versions/:versionId` — and every open history is told. */
 export const deleteVersion = async (
-  { database, clock, bus, log = NO_LOG }: ChannelWriteDependencies,
+  { auth, database, clock, bus, log = NO_LOG }: ChannelWriteDependencies,
   request: Request,
   messageId: string,
   versionId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const { channelId } = await atomicallyOn(database)(
     async (transaction) => await removeVersion(transaction, userId, messageId, versionId),
   );

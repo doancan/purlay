@@ -19,7 +19,7 @@ import {
 import { fixedClock } from '../../platform/clock';
 import {
   NOW,
-  aDatabaseThatMustNotBeTouched,
+  anAuthThatMustNotBeTouched,
   testConfig,
   testDependencies,
 } from '../../testing/doubles';
@@ -32,11 +32,15 @@ const appWith = (trustProxy: boolean): ReturnType<typeof createApp> =>
     }),
   );
 
+/**
+ * A request under /auth/ that touches nothing behind the edge: signing out with no session. The sign-in
+ * library's own routes read their database, which these tests do not have.
+ */
 const signIn = async (
   app: ReturnType<typeof createApp>,
   headers: Record<string, string> = {},
 ): Promise<Response> =>
-  await app.handle(new Request('https://purlay.test/auth/github', { headers }));
+  await app.handle(new Request('https://purlay.test/auth/logout', { method: 'POST', headers }));
 
 const exhaust = async (
   app: ReturnType<typeof createApp>,
@@ -53,7 +57,7 @@ describe('rate limiting /auth/*', () => {
   test('a client gets its burst, then 429 with RATE_LIMITED and a Retry-After', async () => {
     const app = appWith(false);
     const statuses = await exhaust(app);
-    expect(statuses.slice(0, AUTH_BUDGET.burst).every((status) => status === 302)).toBe(true);
+    expect(statuses.slice(0, AUTH_BUDGET.burst).every((status) => status === 204)).toBe(true);
     expect(statuses.slice(AUTH_BUDGET.burst)).toEqual([429, 429, 429, 429, 429]);
 
     const refused = await signIn(app);
@@ -80,7 +84,7 @@ describe('rate limiting /auth/*', () => {
     const statuses = await exhaust(app, () => ({ 'x-forwarded-for': '198.51.100.1' }));
     expect(statuses.filter((status) => status === 429)).toHaveLength(5);
     // Another client, as the proxy reports it, is untouched.
-    expect((await signIn(app, { 'x-forwarded-for': '198.51.100.2' })).status).toBe(302);
+    expect((await signIn(app, { 'x-forwarded-for': '198.51.100.2' })).status).toBe(204);
   });
 
   test('behind a trusted proxy the entries a client wrote are not the key', async () => {
@@ -110,7 +114,7 @@ describe('the budgets in force', () => {
   /** Tests run with a roomy budget; this is what stops that being the only one ever exercised. */
   test('unless told otherwise, the limits are the provisional ones', async () => {
     const admit = httpLimits({
-      database: aDatabaseThatMustNotBeTouched(),
+      auth: anAuthThatMustNotBeTouched(),
       clock: fixedClock(NOW),
       trustProxy: false,
     });

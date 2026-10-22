@@ -28,7 +28,7 @@ import {
 } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { sendMessage } from '../../modules/messages/messages';
 import { exportQueue, sayAlive, sweepExports } from '../../modules/export/requests';
 import { createApp } from './app';
@@ -94,7 +94,7 @@ const aWorld = async (
     as: async (name): Promise<Caller> => {
       const person = room.members[name];
       if (person === undefined) throw new Error(`no ${name}`);
-      const { token } = await issueSession(cloned.db, clock, person.userId, 30);
+      const { token } = await aSession(cloned.db, clock, person.userId, 30);
       return async (method, path): Promise<Response> =>
         await app.handle(
           new Request(`${ORIGIN}${path}`, {

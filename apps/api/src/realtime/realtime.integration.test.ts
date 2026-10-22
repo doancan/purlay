@@ -28,7 +28,7 @@ import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
 import { admitSocket } from './upgrade';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
-import { aSignedInUser, type SignedInUser } from '../testing/signed-in';
+import { aTestAuth, aSignedInUser, type SignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 
 afterAll(async () => {
@@ -90,7 +90,7 @@ describe('integration: the socket handshake', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'ws-ok');
       const admitted = await admitSocket(
-        { database: db, clock, appUrl: ORIGIN },
+        { auth: aTestAuth(db), appUrl: ORIGIN },
         upgrade(alice.cookie),
       );
       expect(admitted.userId).toBe(alice.userId);
@@ -106,7 +106,7 @@ describe('integration: the socket handshake', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'ws-evil');
       const refusal = await admitSocket(
-        { database: db, clock, appUrl: ORIGIN },
+        { auth: aTestAuth(db), appUrl: ORIGIN },
         upgrade(alice.cookie, 'https://attacker.test'),
       ).catch((error: unknown) => error);
 
@@ -119,7 +119,7 @@ describe('integration: the socket handshake', () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'ws-noorigin');
       const refusal = await admitSocket(
-        { database: db, clock, appUrl: ORIGIN },
+        { auth: aTestAuth(db), appUrl: ORIGIN },
         upgrade(alice.cookie, null),
       ).catch((error: unknown) => error);
       expect((refusal as AppError).body.code).toBe('FORBIDDEN');
@@ -129,7 +129,7 @@ describe('integration: the socket handshake', () => {
   test('the right origin without a session is refused too', async () => {
     await withRollback(async (db) => {
       const refusal = await admitSocket(
-        { database: db, clock, appUrl: ORIGIN },
+        { auth: aTestAuth(db), appUrl: ORIGIN },
         upgrade(undefined),
       ).catch((error: unknown) => error);
       expect((refusal as AppError).body.code).toBe('UNAUTHENTICATED');

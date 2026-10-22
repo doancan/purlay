@@ -28,14 +28,76 @@ test.describe('the sign-in screen', () => {
     await expect(page).toHaveScreenshot('sign-in.png');
   });
 
-  test('offers no email form where the server sends no mail, as the demo does not', async ({
+  test('offers no link by email where the server sends no mail, as the demo does not', async ({
     page,
   }) => {
     const methods = page.waitForResponse('**/api/auth/methods');
     await page.goto('/sign-in');
-    expect(await (await methods).json()).toEqual({ email: false });
+    expect(await (await methods).json()).toEqual({
+      github: true,
+      email: false,
+      signUp: 'invite-only',
+    });
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
-    await expect(page.getByRole('textbox')).toHaveCount(0);
+    // The password is always offered; the link by email is not, with no mail.
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign-in link/ })).toHaveCount(0);
+  });
+
+  /**
+   * A server with no way in connected waits for its setup (D-179 §4). The e2e server has GitHub, so
+   * the screen is told, as a server in setup mode tells it, that nothing is connected; the real
+   * server's answer in that state is the process test's (`migrate-on-start.integration.test.ts`).
+   */
+  test('says plainly that the server is not set up when no way in is connected', async ({
+    page,
+    expectNoAxe,
+  }) => {
+    await page.route('**/api/auth/methods', async (route) => {
+      await route.fulfill({ json: { github: false, email: false, signUp: 'invite-only' } });
+    });
+    await page.goto('/sign-in');
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'This server is not set up yet' }),
+    ).toBeVisible();
+    await expect(page.getByText(/If you run this server/)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toHaveCount(0);
+    // The password form stays (R30); nothing else is offered.
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign-in link/ })).toHaveCount(0);
+    await expectNoAxe();
+  });
+
+  /**
+   * The methods answer fails once: the query asks again by itself, and the person sees only the button.
+   * Failing for good, the screen keeps the button (the historical default) and says the check failed,
+   * with a way to ask again (R45).
+   */
+  test('a hiccup in asking what the server offers is retried; failing for good keeps the button and says so', async ({
+    page,
+  }) => {
+    let asked = 0;
+    await page.route('**/api/auth/methods', async (route) => {
+      asked += 1;
+      if (asked === 1) await route.abort('failed');
+      else await route.continue();
+    });
+    await page.goto('/sign-in');
+    await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
+    await expect(page.getByText(/could not check which sign‑in options/)).toHaveCount(0);
+    expect(asked).toBe(2);
+
+    await page.unroute('**/api/auth/methods');
+    await page.route('**/api/auth/methods', async (route) => {
+      await route.abort('failed');
+    });
+    await page.goto('/sign-in');
+    await expect(
+      page.getByText('We could not check which sign‑in options this server offers.'),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign-in link/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 
   /**
@@ -70,6 +132,21 @@ test.describe('the sign-in screen', () => {
     await expect(page.getByText('Sign-in did not finish')).toBeVisible();
   });
 
+  test('says what to do when the address is an unverified account’s (on the demo, which sends no mail), or the server takes no strangers', async ({
+    page,
+    expectNoAxe,
+  }) => {
+    await page.goto('/sign-in?error=email-taken');
+    await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
+      'An account with that email exists, but its address is not verified yet, so GitHub cannot sign in to it. It is a password account made when this server was set up: sign in with its password. This server sends no email, so the address stays unverified and GitHub will not sign in to it.',
+    );
+    await expectNoAxe();
+    await page.goto('/sign-in?error=signup-closed');
+    await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
+      'This Purlay server makes accounts by invitation only — ask someone on it for an invitation link.',
+    );
+  });
+
   /**
    * The round trip as the browser makes it (D-121): GitHub sends the browser to the API's
    * callback, and a sign-in that did not finish lands back here with a sentence — never on
@@ -79,16 +156,16 @@ test.describe('the sign-in screen', () => {
   test('a callback that did not finish lands back here, saying why and what to do', async ({
     page,
   }) => {
-    await page.goto('/auth/github/callback?error=access_denied&state=anything');
+    await page.goto('/auth/callback/github?error=access_denied&state=anything');
     await expect(page).toHaveURL(/\/sign-in\?error=cancelled$/);
-    await expect(page.getByRole('main').getByRole('status')).toHaveText(
+    await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
       'You cancelled on GitHub — continue with GitHub whenever you are ready.',
     );
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
 
-    await page.goto('/auth/github/callback?code=a-code&state=not-this-browsers');
+    await page.goto('/auth/callback/github?code=a-code&state=not-this-browsers');
     await expect(page).toHaveURL(/\/sign-in\?error=expired$/);
-    await expect(page.getByRole('main').getByRole('status')).toHaveText(
+    await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
       'That sign-in expired or was started in another browser — start again from here.',
     );
   });

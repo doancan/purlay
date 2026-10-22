@@ -6,6 +6,7 @@
  * checked **before a byte is read**, so 25 MiB is never taken from somebody who is not let in, and
  * then the body is read once and handed to the module.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import { UploadQuery, type Attachment } from '@purlay/types';
 import { storeUpload, type UploadDependencies } from '../../modules/attachments/uploads';
 import type { Clock } from '../../platform/clock';
@@ -19,6 +20,8 @@ import { validated } from './validate';
 export const UPLOADS_AT_ONCE = 4;
 
 export interface UploadRouteDependencies extends UploadDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
   /** This node's count of uploads being read: the gate, held by the app. */
@@ -30,8 +33,8 @@ export const receiveUpload = async (
   request: Request,
   workspaceId: string,
 ): Promise<{ readonly attachment: Attachment; readonly created: boolean }> => {
-  const { database, clock, inFlight } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database, inFlight } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const query = validated(UploadQuery, Object.fromEntries(new URL(request.url).searchParams));
   if (inFlight.count >= UPLOADS_AT_ONCE) {

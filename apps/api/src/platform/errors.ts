@@ -20,12 +20,15 @@ export class AppError extends Error {
   /** The wire body, exactly as the client receives it. */
   readonly body: AppErrorBody;
   readonly status: HttpStatus;
+  /** How long the client should wait before asking again, sent as `Retry-After`; only with a 429. */
+  readonly retryAfterSeconds: number | undefined;
 
-  constructor(body: AppErrorBody) {
+  constructor(body: AppErrorBody, options: { readonly retryAfterSeconds?: number } = {}) {
     super(body.message);
     this.name = 'AppError';
     this.body = body;
     this.status = statusFor(body.code);
+    this.retryAfterSeconds = options.retryAfterSeconds;
   }
 
   /** The envelope. One shape, always. (`API.md` §1) */

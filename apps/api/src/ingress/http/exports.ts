@@ -3,6 +3,7 @@
  * by this process), listed, and downloaded once. The archive streams from the store to the browser and
  * leaves the store once it has been served whole.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import type { WorkspaceExport } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -20,6 +21,8 @@ import {
 import { requireSession } from './session';
 
 export interface ExportDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
   readonly log: Logger;
@@ -35,7 +38,7 @@ export const askForExport = async (
   workspaceId: string,
 ): Promise<WorkspaceExport> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const asked = await atomicallyOn(database)(
     async (transaction) => await requestExport(transaction, clock, context),
@@ -51,8 +54,8 @@ export const readExports = async (
   request: Request,
   workspaceId: string,
 ): Promise<WorkspaceExport[]> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await listExports(database, context);
 };
@@ -72,7 +75,7 @@ export const downloadExport = async (
   readonly headers: Record<string, string>;
 }> => {
   const { database, clock, log, storage } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const { key, size } = await atomicallyOn(database)(
     async (transaction) => await claimDownload(transaction, clock, context, exportId),

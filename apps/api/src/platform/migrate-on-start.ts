@@ -18,9 +18,13 @@
 import {
   createMigrationDatabase,
   migrateToLatest,
+  migrationHistoryProblem,
+  pendingMigrations,
+  type Executor,
   type MigrateOptions,
   type MigrationConnection,
 } from '@purlay/db';
+import type { Logger } from './logging';
 
 /**
  * Opens a connection of its own, the one `bun run db:migrate` uses (D-87), and closes it
@@ -48,4 +52,44 @@ export const migrateOnStart = async (
   return (results ?? [])
     .filter((result) => result.status === 'Success')
     .map((result) => result.migrationName);
+};
+
+/** How often a node that does not migrate looks again for the migrations it waits on. */
+const MIGRATED_POLL_MS = 2_000;
+
+/**
+ * For a node that does not migrate on start: resolves once the database answers and every migration
+ * this code ships is applied — by an operator's `bun run db:migrate`, or by another node — so what the
+ * process reads next (the server's settings, D-179 §6) is there to read. Until then readiness says 503
+ * and why (`readiness.ts`); this says once, at `warn`, for each kind of reason it waits on — the
+ * database not answering, the history not matching, migrations not applied — rather than once a poll.
+ * Never gives up: a node started before its database is a node that should start when it comes.
+ */
+export const untilMigrated = async (
+  database: Executor,
+  log: Logger,
+  pollMs: number = MIGRATED_POLL_MS,
+): Promise<void> => {
+  let said: string | undefined;
+  for (;;) {
+    let kind: string | undefined;
+    let reason: string | undefined;
+    try {
+      const history = await migrationHistoryProblem(database);
+      const pending = history === undefined ? await pendingMigrations(database) : [];
+      if (history !== undefined) [kind, reason] = ['history', history];
+      else if (pending.length > 0) {
+        [kind, reason] = ['pending', `migrations not applied: ${pending.join(', ')}`];
+      }
+    } catch (error) {
+      kind = 'unreachable';
+      reason = `the database did not answer: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    if (kind === undefined) return;
+    if (kind !== said) {
+      log.warn('waiting for the migrations before reading the settings', { reason });
+      said = kind;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
 };

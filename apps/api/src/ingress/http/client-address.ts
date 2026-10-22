@@ -11,6 +11,7 @@
  * the client, and the header is ignored.
  */
 import { isIP } from 'node:net';
+import { unmappedAddress } from '../../platform/client-key';
 
 /** The part of the server this needs: the framework's `server`, which is `null` under `handle`. */
 export interface PeerSource {
@@ -21,15 +22,9 @@ export interface PeerSource {
 export const peerOf = (server: PeerSource | null, request: Request): string | undefined =>
   server?.requestIP(request)?.address;
 
-/** `::ffff:203.0.113.9` is the IPv4 address `203.0.113.9` as a dual-stack socket reports it. */
-const unmapped = (address: string): string => {
-  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(address);
-  return mapped?.[1] ?? address;
-};
-
 const valid = (candidate: string | undefined): string | undefined => {
   if (candidate === undefined) return undefined;
-  const address = unmapped(candidate.trim());
+  const address = unmappedAddress(candidate.trim());
   return isIP(address) === 0 ? undefined : address;
 };
 
@@ -51,25 +46,4 @@ export const clientAddress = (
     if (forwarded !== undefined) return forwarded;
   }
   return valid(peer);
-};
-
-/** Expands `::` so the first four groups can be read off. Input is a valid IPv6 address. */
-const hextets = (address: string): string[] => {
-  const [head = '', tail] = address.split('::');
-  const front = head === '' ? [] : head.split(':');
-  const back = tail === undefined || tail === '' ? [] : tail.split(':');
-  const fill = tail === undefined ? [] : Array<string>(8 - front.length - back.length).fill('0');
-  return [...front, ...fill, ...back].map((group) => group.toLowerCase().replace(/^0+(?=.)/, ''));
-};
-
-/**
- * The key a limit is held under. An IPv6 subscriber is given a whole /64, so a
- * budget per address would be a budget per request; every address in one /64
- * shares a key. No address at all shares one bucket: a stricter limit is the
- * safe way for this to fail.
- */
-export const limitKeyFor = (address: string | undefined): string => {
-  if (address === undefined) return 'unknown';
-  if (isIP(address) === 4) return address;
-  return `${hextets(address).slice(0, 4).join(':')}::/64`;
 };

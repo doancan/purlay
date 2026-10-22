@@ -141,6 +141,9 @@ export const durationTokens = [
   'duration-bar',
   'duration-hover',
   'duration-overlay',
+  'duration-step',
+  'duration-mark',
+  'duration-nudge',
 ] as const;
 
 export const easingTokens = [

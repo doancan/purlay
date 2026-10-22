@@ -50,22 +50,176 @@ a number to keep out of the environment. They are in `POOL_DEFAULTS` (`packages/
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `GITHUB_CLIENT_ID` | ✅ | — | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38) |
-| `GITHUB_CLIENT_SECRET` | ✅ | — | **Secret.** Never logged |
+| `GITHUB_CLIENT_ID` | — | unset | OAuth app client id. Requested scopes are `read:user user:email` and nothing more (D-38). **A seed**: read on the first start only, into the server's settings, and ignored after (below). **Both of this and `GITHUB_CLIENT_SECRET`, or neither**: one without the other refuses to start. Neither is how a fresh server starts: it waits in setup mode, and the setup page connects GitHub |
+| `GITHUB_CLIENT_SECRET` | — | unset | **Secret.** Never logged. **A seed**, as `GITHUB_CLIENT_ID`, and set with it or not at all; kept encrypted in the settings |
+| `GITHUB_URL` | — | `https://github.com` | Where a GitHub sign-in is sent to authorise and its code is redeemed (`/login/oauth/…`). Another only for a GitHub Enterprise Server, or for a stand-in for GitHub on this machine in a run that cannot reach the real one. `https://`, or `http://` to `localhost`, `127.0.0.1` or `[::1]` alone, in any environment; a path is kept, a trailing slash dropped, and credentials, a query or a fragment refused. A deployment's shape, not a setting: never in the browser (D-179) |
+| `GITHUB_API_URL` | — | `https://api.github.com` | GitHub's API, where a sign-in reads the person and their addresses (`/user`, `/user/emails`): `https://<host>/api/v3` on an Enterprise Server. Checked as `GITHUB_URL` is |
 | `SESSION_TTL_DAYS` | — | `30` | Cookie and `sessions.expires_at` lifetime |
-| `WORKSPACE_CREATORS` | — | unset | Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against the login GitHub last gave each account signed in with it — never its username here, which may carry a `-N` (D-169); an account made by an email link has no login, or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is reachable from the internet if more than its first person should make workspaces; a malformed value refuses to start |
-| `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted`. Rotating it invalidates stored integration tokens |
+| `WORKSPACE_CREATORS` | — | unset | **A seed**, as `GITHUB_CLIENT_ID`. Who may make a workspace (D-155): GitHub logins, comma-separated, matched in any case against the login GitHub last gave each account signed in with it — never its username here, which may carry a `-N` (D-169); an account made by an email link has no login, or `*` for anybody signed in. **Unset, nobody may but the first person to sign in, and only while the instance has no workspace** — the one-command install. Signing in stays open, so an invited person can; anybody else signed in is told to ask for an invitation. Set it before an instance is first started if more than its first person should make workspaces; a malformed value refuses to start |
+| `ENCRYPTION_KEY` | ✅ | — | **Secret.** 32 bytes, base64 (44 characters, one `=`): `openssl rand -base64 32`. Decoded at boot; canonical base64 only; a key that is a pattern (repeated, sequential, few distinct bytes) is refused, and production refuses the public development key (D-79). Encrypts `github_integrations.access_token_encrypted` and the secrets of the server's settings (below). Rotating it invalidates stored integration tokens and those secrets |
 | `ENCRYPTION_ALGORITHM` | — | `aes-256-gcm` | Fixed. Documented so two call sites cannot encrypt differently (D-39) |
 
-The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/github/callback`. That is
+The OAuth callback URL registered with GitHub must be `${APP_URL}/auth/callback/github` (D-179; the
+setup wizard shows it, computed from the server address). That is
 the client's origin **and** the API's: the browser talks to one origin, and development is
 proxied so it matches (D-61). There is no separate API URL to configure.
 
 **Nobody is joined to a workspace by signing in.** The first person creates one; everyone after
-is invited with a link (D-115), and makes a workspace of their own only if `WORKSPACE_CREATORS`
-names them (D-155). `WORKSPACE_OPEN_JOIN_SLUG`, which joined every signed-in user to
+is invited with a link (D-115), and makes a workspace of their own only if the server's setting —
+first `WORKSPACE_CREATORS` — names them (D-155). `WORKSPACE_OPEN_JOIN_SLUG`, which joined every signed-in user to
 one workspace in Phase 0 (D-37), is retired: set, the API refuses to start and says so, rather than
 ignoring it and leaving an operator to wonder why nobody is let in.
+
+### What leaves the environment (D-179)
+
+A server is set up in the browser, so what a person can type there stops being an environment variable.
+Its home is the database's `server_settings` row (`SCHEMA.md`), read by the server as it starts, once
+its migrations are in.
+
+| A seed of the settings | Where it is changed after the first start |
+|---|---|
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the setup wizard's GitHub step, then Administration → Server; the secret is stored encrypted and never shown again |
+| `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` | the wizard's email step, then Administration → Server; the address is stored encrypted, since it carries the relay's password, and shown only as its host — not even the user, which for some relays is the token |
+| `WORKSPACE_CREATORS` | Administration → Server; the rule is D-155's |
+| Who may sign up (`invite-only` or `open`) | no variable: one choice in setup, then Administration → Server; `invite-only` by default |
+
+**Imported once.** On the first start of a database — no settings yet — the values above are copied
+into the settings in one transaction, and from then on **the database is the only home**: changing a
+variable afterwards does nothing, and every start names the ones still set, in one line of the log
+(`settings are the database's; these variables are ignored`), never their values. Two nodes starting
+together import once. A variable left unset is a setting left at its default: **a server started with no
+GitHub variable imports a row with no GitHub app**, and starts in setup mode — it serves, its sign-in
+screen says it is not set up yet, and `/auth/github` answers `404` — until the setup page connects GitHub
+or mail. Nothing in the environment but the database, `ENCRYPTION_KEY`, `APP_URL` and the storage is
+needed to start one.
+
+**Applied at once, without a restart.** Every setting in the table above takes effect from the next
+request once it is saved through the setup page or Administration → Server (both land together with this
+mechanism; nothing else saves them): the server builds a new sign-in library and mail relay from what it
+saved, checks them, and swaps them in, while a request already in flight finishes on the old ones. GitHub
+and email sign-in appear and disappear with their settings; sessions are kept. A change that cannot be
+built or checked saves nothing and the server serves as before, and none is taken while the server shuts
+down. One visible edge: somebody halfway through a GitHub sign-in when the GitHub app itself is replaced
+comes back to the sign-in screen with an error — the code GitHub gave was for the old app — and simply
+signs in again.
+If the page says to **restart the server** (`docker compose … restart api`), the database did not confirm
+the save, or the replaced relay could not be let go: a start serves exactly what the database holds
+(D-179 §4.9). Editing `server_settings` by hand, as the recovery below does, is read at the next start
+only.
+
+**What stays in the environment** is what the process needs before it can read a setting or serve at
+all: `DATABASE_URL` and the database variables, `ENCRYPTION_KEY`, the storage (`S3_*` and the stack's
+own), `PORT`, `TRUST_PROXY`, logging, `GITHUB_URL` and `GITHUB_API_URL` (where GitHub is: the shape of
+the deployment, not a choice in the browser), and **`APP_URL`**: the cookies, the origin checks and the
+sign-in library are fixed by it when they are built, so the server's address is a deployment setting —
+the wizard shows it, and the callback GitHub needs, and does not change it. The secret Better Auth signs
+cookies with is derived from `ENCRYPTION_KEY`, so no variable is added, and is **never a server
+setting** and never edited in the browser, because changing it signs everyone out (D-179 §3).
+`ENCRYPTION_KEY` also opens the settings' secrets: rotating it leaves the GitHub secret and the relay's
+address unreadable. The server **still starts**, in setup mode, with those two read as unset: one
+`warn` line in the log names which (`github`, `smtp`) and points here, never a value. **Nothing is
+deleted**: the unreadable value stays in the database until a new one is saved over it. A value that is
+truncated or corrupt is treated the same as one sealed under another key. **The recovery is in the browser** where the administrator can still sign in — and the
+password always works, whichever way the server's other sign-in methods stand: **Settings → Server**
+(Administration → Server, `API.md` §2 `/api/server/*`) lists `needsReentry` and says on the card of each
+affected secret *This secret could not be opened with the current key — enter it again*; entering it tries
+it with GitHub or the relay and seals it under the current key. Nothing else is needed. Without a
+browser to hand, or for every case at once: put the old `ENCRYPTION_KEY` back, and everything opens as it
+did; or clear the two **and reopen the import**, so the next start copies every seed variable above in
+again from the environment — `WORKSPACE_CREATORS` too, so set it as it should be, and the GitHub and mail
+variables must be in the environment of that start — sealed under the new key:
+`UPDATE server_settings SET github_client_id = NULL, github_client_secret_encrypted = NULL, smtp_url_encrypted = NULL, mail_from = NULL, imported_from_env_at = NULL WHERE id;`
+Without `imported_from_env_at = NULL` the next start would ignore the environment and stay without them.
+A test runs this statement as written here. A row that fails to decode for any other reason still
+refuses to start.
+
+**A forgotten administrator password** is set again on the server, by whoever runs it — no mail and no
+browser can do it:
+
+```
+docker compose … exec api bun run admin:reset-password admin@example.com
+```
+
+(or `bun run admin:reset-password <email>` where the repository is checked out, with `DATABASE_URL`
+naming the database). It is for the **server's administrator** only — the account the setup made; any
+other address is refused, in the words an unknown address gets. The new password is typed at the prompt,
+with nothing shown and asked twice, or — standard input not being a terminal — read from its first line,
+as in `printf '%s\n' "$NEW" | bun run …`. It is **never read from an argument or from the
+environment**, which the shell, the process table and the logs keep: a second argument is refused without
+being repeated. The password policy applies. It prints `Password changed for <email>` and nothing else of
+it, and **ends every session of that account** in the same transaction, so a session that was stolen dies
+with the old password. An administrator who came in only through GitHub is given a password by it. It leaves a row on the
+server's own trail (`server.admin_password_reset`). A connection the account holds open in a browser is
+ended by the server within about half a minute — the command has no way to tell it, so the server asks
+the database every thirty seconds which sessions still exist — and the same is true of a session removed
+by SQL.
+
+**The setup code** (D-179 §4). A server with no user is set up in the browser at `APP_URL/setup`, which
+asks first for a one-time code. The code is in the API's log, never anywhere else — not in the database
+(it keeps a digest), not in a response:
+
+```sh
+docker compose -f docker-compose.production.yml --env-file production.env logs api | grep 'SETUP CODE'
+```
+
+It is one line at `warn`, its field `setupCode`, twenty letters and digits in five groups
+(`7KQ2-…`); case, spaces and dashes do not matter when it is typed. It opens for **one hour**. **Every
+start writes a new one** while the server is open to setup, and the newest is the only one that opens it;
+with `LOG_LEVEL=error` the line is not written, so leave the level at `info` or `warn` until setup is
+done. A code is spent by the browser it lets in, and that browser carries on from where it stopped
+whenever it comes back. Lost that browser — another one, cookies cleared, or a day without it — wait
+until it has been idle **fifteen minutes**, **restart the API** (`docker compose … restart api`) and
+enter the new code: it takes the unfinished setup over at the step it had reached. A setup whose browser
+was seen within fifteen minutes cannot be taken by any code, so a code found later in a kept log cannot
+take a setup from someone at work on it.
+
+Five wrong codes lock setup for fifteen minutes, for everybody, the right code included. The lock
+belongs to the code: **a restart clears it** with the new code it writes — which helps only against a
+slow guesser. Somebody sending wrong codes without pause locks each new code five requests after the
+start, and neither a restart nor the statement below lets you in. The `/setup` endpoints limit each
+client — ten codes in fifteen minutes from one address, or one IPv6 /64 (D-179 §4.10) — so one client
+cannot do it fast; many clients still can, and the way out is to block the sources (or keep `/setup` off
+the public network until setup is done). Behind a proxy, set `TRUST_PROXY` so the limit sees the client's
+address and not the proxy's.
+To clear a lock without a restart:
+`UPDATE setup_state SET failed_attempts = 0, locked_until = NULL WHERE id;` (a test runs this statement
+as written here). Once the server has a user other than the administrator an unfinished setup made, or
+the setup is finished, every start says `setup is closed` instead and no code is written again; only a
+server with no user at all — a fresh install — is open to setup.
+
+### Upgrading a server from before the sign-in library (D-179 §7)
+
+Start the new version with the old environment and `MIGRATE_ON_START` (or run `bun run db:migrate`
+first): migrations 0047 to 0055 apply to the data as it is — people, workspaces, messages and
+invitations are kept — and the server is **closed to setup from the first start** (it has users), so no
+setup code is written. `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, `SMTP_URL` and `MAIL_FROM` already in
+the environment are copied into the settings on that first start, once; keep them there for it. Three
+things the operator should know:
+
+- **Everyone signs in again.** The library's cookie is a signed value that the old opaque cookie is not;
+  every old session is refused (`401`) and its row is left to the sweep. Nothing is lost but the session.
+- **Nobody is the server's administrator yet**, so no one can open Administration → Server (`404`). Name
+  one, as in *Recovery when there is no server administrator* below, then sign in: the guard reads the
+  column on every request, so no restart is needed.
+- **GitHub people and email people sign in as before**: migration 0055 gives each user with a `github_id`
+  the account row the library finds them by, and marks the address of everyone who existed before the
+  upgrade as verified — each proved it then, by GitHub's verified address or a spent link.
+
+### Recovery when there is no server administrator
+
+The server's administrator can be erased (the only one, from Account), and an upgraded install starts
+without one. Nobody can then open Administration → Server (`404`), and no screen can name one. It is
+named on the server, in the database, for an account that exists:
+
+```sql
+UPDATE users SET is_server_admin = TRUE WHERE email = '<address>' AND deleted_at IS NULL;
+```
+
+The guard reads the column on every request, so no restart is needed. If that account has no password
+(it came in through GitHub or a link), give it one afterwards with
+`bun run admin:reset-password <address>` (`docker compose … exec api bun run admin:reset-password <address>`
+in the image): the command is the break-glass for the server's administrator, and it refuses any other
+address, which is why the statement comes first.
 
 ## Object storage
 
@@ -110,7 +264,7 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 | `BILLING_WEBHOOK_SECRET` | cloud | — | **Secret.** Signature verification on subscription events |
 | `SMTP_URL` | — | — | **Secret.** The SMTP server sign-in links are sent through, `smtp://` or `smtps://` with its credentials; with `MAIL_FROM`, or neither — neither is email sign-in off (D-138 §6). Mail to a relay past this machine goes only over TLS — `smtps://`, or STARTTLS required on `smtp://` — unless `SMTP_ALLOW_PLAINTEXT=true`: every message carries a sign-in link. Invitations are links, not email (D-115) |
 | `MAIL_FROM` | — | — | The address sign-in links come from; set with `SMTP_URL`, or neither (D-138) |
-| `SMTP_ALLOW_PLAINTEXT` | — | `false` | Says that the link to a relay past this machine is private, so `smtp://` need not upgrade to TLS — as `DATABASE_ALLOW_PLAINTEXT` does for the database (D-138 §6) |
+| `SMTP_ALLOW_PLAINTEXT` | — | `false` | Says that the link to a relay past this machine is private, so `smtp://` need not upgrade to TLS — as `DATABASE_ALLOW_PLAINTEXT` does for the database (D-138 §6). A relay whose certificate no public authority signed is refused, the wizard's try included (`tls-failed`); nothing turns the check off. Give the server the authority instead: `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` in its environment, read by the runtime at start (measured with Bun and nodemailer, `probes.integration.test.ts`) — or use a relay with a public certificate (D-179 §4.4) |
 
 ## Limits
 
@@ -195,11 +349,11 @@ private network and an operator must supply the rest. The stack sets `NODE_ENV=p
 `POSTGRES_PASSWORD`), `DATABASE_SSL=false` with `DATABASE_ALLOW_PLAINTEXT=true` (the database is on the
 stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is therefore not set),
 `MIGRATE_ON_START=true` and `S3_ENDPOINT`. It passes through `APP_URL` (**`https://`**),
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `ENCRYPTION_KEY` (**32 random bytes in base64**:
+`ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
 `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
-`SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), all optional. `docker compose`
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack
 fails on any variable the API reads that is neither passed nor named there with the reason it is
@@ -226,7 +380,8 @@ the same by hand, through Garage's CLI, and is kept for a stack from before this
 
 **The first person in** signs in with GitHub and makes the first workspace from the screen they land
 on; they are its owner. Who else may join is decided by them, with invitation links (D-115). Nobody
-else may make a workspace unless `WORKSPACE_CREATORS` names them (D-155): somebody who finds the
+else may make a workspace unless the server's setting names them — `WORKSPACE_CREATORS` on the first
+start, the setting after (D-155, D-179 §6): somebody who finds the
 address and signs in is told to ask for an invitation.
 
 **Memory and processes are bounded per container** (#639): `API_MEMORY_LIMIT` (default `768m`),

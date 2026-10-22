@@ -29,8 +29,6 @@ const ENVIRONMENT: Record<string, string> = {
   S3_ACCESS_KEY_ID: 'GK' + 'd'.repeat(24),
   S3_SECRET_ACCESS_KEY: 'e'.repeat(64),
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
-  GITHUB_CLIENT_ID: 'id',
-  GITHUB_CLIENT_SECRET: 'secret',
 };
 
 interface Resolved {
@@ -404,6 +402,27 @@ describe('integration: the production compose file', () => {
       const stale = Object.keys(withheld).filter((name) => passed.includes(name));
       expect({ service, stale }).toEqual({ service, stale: [] });
     }
+  });
+
+  test('GitHub is a seed, not a requirement: the stack resolves without it, passes it as empty, (which the configuration reads as unset: `config.test.ts`)', () => {
+    // R38: a fresh server starts with no GitHub variable and waits for the wizard. Empty is unset.
+    const environment = model.services['api']?.environment ?? {};
+    for (const name of ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET']) {
+      expect({ name, value: environment[name] }).toEqual({ name, value: '' });
+    }
+    expect(composeText).not.toMatch(/GITHUB_CLIENT_(ID|SECRET):\?/);
+    // Given, both reach the API; one without the other would stop it, so the stack passes both.
+    const result = resolve({
+      ...ENVIRONMENT,
+      GITHUB_CLIENT_ID: 'Iv1.app',
+      GITHUB_CLIENT_SECRET: 'gh-secret',
+    });
+    expect(result.code).toBe(0);
+    const given = (JSON.parse(result.stdout) as Resolved).services['api']?.environment ?? {};
+    expect([given['GITHUB_CLIENT_ID'], given['GITHUB_CLIENT_SECRET']]).toEqual([
+      'Iv1.app',
+      'gh-secret',
+    ]);
   });
 
   test('Web Push and email sign-in are off unless the env file turns them on, and then reach the API and the scheduler', () => {

@@ -5,20 +5,28 @@
  * and a workspace never left without a live owner, nor one left so by an erased owner who still counts.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Transaction } from '@purlay/db';
+import { closeIntegrationDatabase, sql, withRollback, type Transaction } from '@purlay/db';
 import { ERASURE_SIGN_IN_MINUTES, isErased, messageId } from '@purlay/types';
-import { fixedClock } from '../../platform/clock';
-import { aRecordingLogger } from '../../testing/doubles';
+import { DAY_MS, fixedClock } from '../../platform/clock';
+import { aRecordingLogger, aRecordingOutbox } from '../../testing/doubles';
+import { afterAnswer } from '../../platform/after-answer';
 import { attempt } from '../../testing/attempt';
 import { aRoom, type Room } from '../../testing/rooms';
-import { issueSession } from '../auth/sessions';
-import { resolveIdentity } from '../auth/identity';
-import { consumeSignInLink, requestSignInLink } from '../auth/email-sign-in';
+import { aSession, aTestAuth } from '../../testing/signed-in';
+import { SESSION_COOKIE } from '../../platform/cookies';
+import { sessionFromHeaders } from '../auth/sessions';
+import { recordGitHubSignIn } from '../auth/identity';
+import type { SignInLinks } from '../auth/better-auth';
+import { addressCounterKey, consumeSignInLink, requestSignInLink } from '../auth/magic-link';
+import { addressAttemptsPrefix, countAttempt } from '../auth/password-attempts';
 import { sendMessage } from '../messages/messages';
 import { changeRole } from '../workspaces/members';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { eraseAccount } from './erasure';
+import { issuePassport } from '../workspaces/invitation-passport';
+import { tokenDigest } from '../../platform/tokens';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
+import { inviterMailKey } from '../workspaces/invitation-mail';
 import { aUserRow } from '../../testing/users';
 
 afterAll(async () => {
@@ -50,20 +58,46 @@ const signedIn = async (
   room: Room,
   name: string,
   ago = 0,
-): Promise<{ userId: string; sessionId: string }> => {
-  const { sessionId } = await issueSession(
+): Promise<{ userId: string; sessionId: string; cookie: string }> => {
+  const { sessionId, token } = await aSession(
     db,
     fixedClock(new Date(NOW.getTime() - ago)),
     member(room, name).userId,
     30,
     { ipAddress: '203.0.113.7', userAgent: 'Firefox' },
   );
-  return { userId: member(room, name).userId, sessionId };
+  return { userId: member(room, name).userId, sessionId, cookie: `${SESSION_COOKIE}=${token}` };
 };
 
 const emailOf = async (db: Transaction, userId: string): Promise<string> =>
   (await db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirstOrThrow())
     .email;
+
+/** Better Auth's links over the test's transaction, on a server where anybody may sign up. */
+const linksOver = (
+  db: Transaction,
+): SignInLinks & { readonly outbox: ReturnType<typeof aRecordingOutbox> } => {
+  const outbox = aRecordingOutbox();
+  const links = aTestAuth(db, {
+    mailer: outbox,
+    settings: { github: undefined, signUp: 'open' },
+  }).signInLinks;
+  if (links === undefined) throw new Error('sign-in by link is not on');
+  return { ...links, outbox };
+};
+
+/** The library's link rows that name `email`, by the address in their value. */
+const linkRowsFor = async (db: Transaction, emails: readonly string[]): Promise<string[]> =>
+  (
+    await db
+      .selectFrom('verifications')
+      .select('value')
+      .where('identifier', 'like', 'magic-link:%')
+      .execute()
+  )
+    .map((row) => (JSON.parse(row.value) as { email: string }).email)
+    .filter((email) => emails.includes(email))
+    .sort();
 
 const erase = async (
   db: Transaction,
@@ -139,13 +173,52 @@ describe('integration: erasing an account', () => {
         .execute();
       // A link for ada's address, and — the control — one for somebody else's.
       const adaEmail = await emailOf(db, ada.userId);
+      const links = linksOver(db);
       for (const email of [adaEmail, 'someone@example.test']) {
-        await requestSignInLink(
+        await links.issue(email, { locale: 'en' });
+      }
+      expect(await linkRowsFor(db, [adaEmail, 'someone@example.test'])).toHaveLength(2);
+      // And the count of what her address was sent this hour, kept by its digest.
+      const after = afterAnswer(aRecordingLogger().log, 'sign-in');
+      await requestSignInLink(
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          appUrl: 'https://purlay.test',
+          links,
+          later: after.run,
+        },
+        { email: adaEmail, locale: 'en' },
+        '203.0.113.7',
+      );
+      await after.settled();
+      const counter = await addressCounterKey(adaEmail);
+      const counters = async (): Promise<number> =>
+        (await db.selectFrom('rate_limits').select('key').where('key', '=', counter).execute())
+          .length;
+      expect(await counters()).toBe(1);
+      // And how many invitation letters she sent today, kept under her id; bob's is the control.
+      for (const person of [ada, member(room, 'bob')]) {
+        await sql`insert into rate_limits (key, count, last_request)
+          values (${inviterMailKey(person.userId)}, 3, ${String(clock.now().getTime() + DAY_MS)})`.execute(
           db,
-          { clock, appUrl: 'https://purlay.test', log: aRecordingLogger().log },
-          { email, locale: 'en' },
         );
       }
+
+      // And the wrong passwords counted for her address, from a client; bob's is the control.
+      const bobEmail = await emailOf(db, member(room, 'bob').userId);
+      await countAttempt(db, clock, adaEmail, '203.0.113.7');
+      await countAttempt(db, clock, bobEmail, '203.0.113.7');
+      const attemptsOf = async (email: string): Promise<number> =>
+        (
+          await db
+            .selectFrom('rate_limits')
+            .select('key')
+            .where('key', 'like', `${await addressAttemptsPrefix(email)}%`)
+            .execute()
+        ).length;
+      expect(await attemptsOf(adaEmail)).toBe(1);
 
       // The control for what is deleted: ada was told of bob's reply.
       expect(
@@ -180,12 +253,14 @@ describe('integration: erasing an account', () => {
       expect(row.display_name).toBe(row.username);
       expect(JSON.stringify(row)).not.toContain(ada.username);
 
-      const session = await db
-        .selectFrom('sessions')
-        .select(['revoked_at', 'ip_address', 'user_agent'])
-        .where('id', '=', caller.sessionId)
-        .executeTakeFirstOrThrow();
-      expect(session).toEqual({ revoked_at: NOW, ip_address: null, user_agent: null });
+      // Every session ends, the one that asked included, and its address and browser go with its row
+      // (D-139 §5, D-179 §3): it resolves through the seam as nobody, and the trail keeps no pointer to it.
+      expect(
+        await db.selectFrom('sessions').select('id').where('user_id', '=', ada.userId).execute(),
+      ).toEqual([]);
+      expect(
+        await sessionFromHeaders(aTestAuth(db), new Headers({ cookie: caller.cookie })),
+      ).toBeUndefined();
       for (const table of [
         'push_subscriptions',
         'saved_messages',
@@ -196,15 +271,21 @@ describe('integration: erasing an account', () => {
           await db.selectFrom(table).select('user_id').where('user_id', '=', ada.userId).execute(),
         ).toEqual([]);
       }
+      expect(await linkRowsFor(db, [adaEmail, 'someone@example.test'])).toEqual([
+        'someone@example.test',
+      ]);
+      expect(await counters()).toBe(0);
+      expect(await attemptsOf(adaEmail)).toBe(0);
+      expect(await attemptsOf(bobEmail)).toBe(1);
       expect(
         (
           await db
-            .selectFrom('email_sign_ins')
-            .select('email')
-            .where('email', 'in', [adaEmail, 'someone@example.test'])
+            .selectFrom('rate_limits')
+            .select('key')
+            .where('key', 'like', 'purlay:invite-mail:inviter:%')
             .execute()
-        ).map((r) => r.email),
-      ).toEqual(['someone@example.test']);
+        ).map((counter) => counter.key),
+      ).toEqual([inviterMailKey(member(room, 'bob').userId)]);
 
       // The control: the team's history is whole, under the anonymised row.
       expect(
@@ -256,47 +337,234 @@ describe('integration: erasing an account', () => {
     return { id: ada.userId, email, name: ada.username };
   };
 
+  test('the passports made for the erased address go with it, and no other address’s or cookie’s does', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      const adaEmail = await emailOf(db, ada.userId);
+      const context = await requireWorkspaceMembership(db, bob.userId, room.workspaceId);
+      const { token, invitation } = await createInvitation(db, clock, context);
+      // Mixed case and padding: the digest is of the address as it is compared (D-40).
+      await issuePassport(db, clock, { token, email: `  ${adaEmail.toUpperCase()} ` });
+      await issuePassport(db, clock, { token, email: `x${adaEmail}` });
+      await issuePassport(db, clock, { token });
+      const digests = async (): Promise<(string | null)[]> =>
+        (
+          await db
+            .selectFrom('invitation_passports')
+            .select('address_digest')
+            .where('invitation_id', '=', invitation.id)
+            .execute()
+        ).map((row) => row.address_digest);
+      expect(await digests()).toHaveLength(3);
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const left = await digests();
+      expect(left).toHaveLength(2);
+      expect(left).not.toContain(await tokenDigest(adaEmail));
+      expect(left).toContain(await tokenDigest(`x${adaEmail}`));
+    });
+  });
+
+  test('an erased server administrator keeps neither the flag nor the verified mark on the tombstone', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      await db
+        .updateTable('users')
+        .set({ is_server_admin: true, email_verified: true })
+        .where('id', '=', ada.userId)
+        .execute();
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const tombstone = await db
+        .selectFrom('users')
+        .select(['is_server_admin', 'email_verified'])
+        .where('id', '=', ada.userId)
+        .executeTakeFirstOrThrow();
+      expect(tombstone).toEqual({ is_server_admin: false, email_verified: false });
+    });
+  });
+
+  test('the library tokens that name their address go with the account, and no near miss does', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada', 'cem', 'dan']);
+      const soon = new Date(NOW.getTime() + 5 * MINUTE);
+      // Two people whose addresses a pattern would mistake for others': `%` and `_` are a pattern's
+      // wildcards, and `a@b.co` is the end of `aa@b.co`.
+      const cases = [
+        { name: 'ada', email: 'a@b.co', nearMisses: ['aa@b.co', 'a@b.coo', 'xa@b.co'] },
+        { name: 'cem', email: 'c_x@b.co', nearMisses: ['cax@b.co', 'c_xx@b.co', 'cc_x@b.co'] },
+        // An address GitHub vouched for may hold a `%`, which no link is ever asked for: its rows
+        // are written as the library writes them.
+        { name: 'dan', email: 'd%@b.co', nearMisses: ['dxyz@b.co', 'd%x@b.co'], written: true },
+      ] as const;
+      const links = linksOver(db);
+      for (const { name, email, nearMisses, ...how } of cases) {
+        await db
+          .updateTable('users')
+          .set({ email })
+          .where('id', '=', member(room, name).userId)
+          .execute();
+        for (const address of [email, ...nearMisses]) {
+          // What Better Auth writes, made by it: the identifier a prefix and the token's digest, never
+          // the address, which is in a link's value as JSON (D-179).
+          if (!('written' in how)) await links.issue(address, { locale: 'en' });
+          else {
+            await db
+              .insertInto('verifications')
+              .values({
+                identifier: `magic-link:${crypto.randomUUID()}`,
+                value: JSON.stringify({ type: 'magic-link', email: address }),
+                expires_at: soon,
+              })
+              .execute();
+          }
+        }
+      }
+      // A password reset's value is a user's id: the library has no reset mail configured here, so
+      // those rows are written as it writes them. And a value that is not JSON at all, which the
+      // match must step over rather than fail on.
+      await db
+        .insertInto('verifications')
+        .values([
+          { identifier: 'reset-password:ada', value: member(room, 'ada').userId, expires_at: soon },
+          { identifier: 'reset-password:bob', value: member(room, 'bob').userId, expires_at: soon },
+          { identifier: 'other:x', value: '{not json', expires_at: soon },
+        ])
+        .execute();
+      for (const { name } of cases) {
+        await erase(db, await signedIn(db, room, name), member(room, name).username);
+      }
+      const everyAddress = cases.flatMap(({ email, nearMisses }) => [email, ...nearMisses]);
+      expect(await linkRowsFor(db, everyAddress)).toEqual(
+        cases.flatMap(({ nearMisses }) => nearMisses).sort(),
+      );
+      const left = await db
+        .selectFrom('verifications')
+        .select('identifier')
+        .where('identifier', 'in', ['reset-password:ada', 'reset-password:bob', 'other:x'])
+        .orderBy('identifier')
+        .execute();
+      expect(left.map((row) => row.identifier)).toEqual(['other:x', 'reset-password:bob']);
+    });
+  });
+
+  test('the accounts a sign-in library kept for them go with it: a provider id and a password hash', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      await db
+        .insertInto('accounts')
+        .values([
+          { user_id: ada.userId, provider_id: 'github', account_id: '4242' },
+          { user_id: ada.userId, provider_id: 'credential', account_id: ada.userId, password: 'h' },
+        ])
+        .execute();
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const left = await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('user_id', '=', ada.userId)
+        .execute();
+      expect(left).toEqual([]);
+    });
+  });
+
+  test('a link that would verify their address as the setup’s administrator goes with the account', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      await db
+        .insertInto('admin_email_verification')
+        .values({
+          user_id: ada.userId,
+          email: await emailOf(db, ada.userId),
+          token_digest: 'a'.repeat(64),
+          issued_at: NOW,
+        })
+        .execute();
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      const left = await db
+        .selectFrom('admin_email_verification')
+        .select('user_id')
+        .where('user_id', '=', ada.userId)
+        .execute();
+      expect(left).toEqual([]);
+    });
+  });
+
   test('a later GitHub sign-in is a new account, never the erased one', async () => {
     await withRollback(async (db) => {
       const ada = await erasedAda(db);
-      const byGitHub = await resolveIdentity(
-        db,
-        clock,
-        { id: 777, login: ada.name, name: 'Ada', avatarUrl: null },
-        [{ email: ada.email, primary: true, verified: true }],
-      );
-      expect(byGitHub.userId).not.toBe(ada.id);
+      // As the library makes the account of a GitHub sign-in: a new row, under the address the erased
+      // account gave up, then what the sign-in writes.
+      const byGitHub = await db
+        .insertInto('users')
+        .values({
+          github_id: '777',
+          email: ada.email,
+          username: 'pending-777',
+          display_name: 'Ada',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await recordGitHubSignIn(db, clock, {
+        userId: byGitHub.id,
+        profile: { id: 777, login: ada.name, name: 'Ada', avatarUrl: null },
+        made: true,
+      });
+      expect(byGitHub.id).not.toBe(ada.id);
     });
   });
 
   test('a later sign-in by the old address is a new account, never the erased one', async () => {
     await withRollback(async (db) => {
       const ada = await erasedAda(db);
-      const sent = await requestSignInLink(
-        db,
-        { clock, appUrl: 'https://purlay.test', log: aRecordingLogger().log },
-        { email: ada.email, locale: 'en' },
-      );
-      const token = /#([0-9a-f]{64})/.exec(sent?.text ?? '')?.[1] ?? '';
+      const links = linksOver(db);
+      const after = afterAnswer(aRecordingLogger().log, 'sign-in');
+      const dependencies = {
+        database: db,
+        clock,
+        log: aRecordingLogger().log,
+        appUrl: 'https://purlay.test',
+        links,
+        later: after.run,
+      };
+      await requestSignInLink(dependencies, { email: ada.email, locale: 'en' }, '203.0.113.7');
+      await after.settled();
+      const token = /#([0-9a-f]{64})/.exec(links.outbox.posted[0]?.text ?? '')?.[1] ?? '';
       expect(token).toHaveLength(64);
-      const byMail = await consumeSignInLink(db, clock, token);
-      expect(byMail.created).toBe(true);
-      expect(byMail.userId).not.toBe(ada.id);
+      await consumeSignInLink(dependencies, token, new Headers());
+      const byMail = await db
+        .selectFrom('users')
+        .select('id')
+        .where('email', '=', ada.email)
+        .executeTakeFirstOrThrow();
+      expect(byMail.id).not.toBe(ada.id);
     });
   });
 
   test('a login that begins as an erased name does is given another, so it stays a person', async () => {
     await withRollback(async (db) => {
-      const made = await resolveIdentity(
-        db,
-        clock,
-        { id: 99_123, login: 'deleted-user-abc', name: null, avatarUrl: null },
-        [{ email: 'abc@example.test', primary: true, verified: true }],
-      );
+      const made = await db
+        .insertInto('users')
+        .values({
+          github_id: '99123',
+          email: 'abc@example.test',
+          username: 'pending-99123',
+          display_name: 'pending',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await recordGitHubSignIn(db, clock, {
+        userId: made.id,
+        profile: { id: 99_123, login: 'deleted-user-abc', name: null, avatarUrl: null },
+        made: true,
+      });
       const { username } = await db
         .selectFrom('users')
         .select('username')
-        .where('id', '=', made.userId)
+        .where('id', '=', made.id)
         .executeTakeFirstOrThrow();
       expect(username).toBe('user-deleted-user-abc');
       expect(isErased({ username })).toBe(false);

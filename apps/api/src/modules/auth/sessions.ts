@@ -1,41 +1,43 @@
 /**
- * Sessions: an opaque token in the user's cookie, only its hash in the database.
+ * Sessions: an opaque token in the user's cookie, only its hash in the database (D-11), resolved
+ * by Better Auth (D-179).
  *
- * Chosen over a stateless token because revocation — *sign out everywhere*, *this
- * device was stolen* — matters more here than saving a database round-trip the
- * request makes anyway (D-11).
+ * Chosen over a stateless token because revocation — *sign out everywhere*, *this device was
+ * stolen* — matters more here than saving a database round-trip the request makes anyway.
  *
- * **The raw token exists in exactly two places: the response that issues it, and
- * the user's cookie.** Everything stored is `SHA-256(token)`, so a database dump
- * hands over no live session. Nothing in this module logs, returns or stores the
- * raw value except the one function whose job is to hand it to the caller.
+ * **One seam turns a request into a session, for both doors**: `sessionFromHeaders`, which asks the
+ * library (`auth.api.getSession`). The cookie is the library's — the raw token and its HMAC under
+ * the secret — and the row it is looked up by holds `SHA-256(token)`, kept so by the hashing plugin
+ * on the library's database handle (`sessionTokenHashing`). A dump is not a session, and neither is
+ * a dump signed with the secret.
  *
- * Lookup is by hash, and the hash is derived from 256 bits of randomness the
- * attacker does not have — so an indexed equality is not a timing oracle: there
- * is no prefix to guess your way along.
+ * **Ending a session deletes its row**, as the library does on its own sign-out and revoke, so every
+ * path ends one the same way and nothing else has to be consulted to know it is over: `revoked_at`
+ * stays in the schema and is not written (D-179 §3). The row's deletion sets `audit_log.session_id`
+ * to `NULL` (D-116) and takes the session's push subscriptions with it (0024).
  *
- * The executor is an argument, so this runs inside a rolled-back transaction in a
- * test and never opens a connection of its own (D-46).
+ * The executor is an argument, so this runs inside a rolled-back transaction in a test and never
+ * opens a connection of its own (D-46).
  */
-import type { Executor } from '@purlay/db';
-import type { Clock } from '../../platform/clock';
+import { makeSignature } from 'better-auth/crypto';
+import { isAPIError } from 'better-auth/api';
+import { sessionTokenDigest, type Executor } from '@purlay/db';
+import { systemClock, type Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
-import { sessionTokenFrom } from '../../platform/cookies';
-import { randomToken, tokenDigest } from '../../platform/tokens';
+import { readCookie, SESSION_COOKIE } from '../../platform/cookies';
+import { randomToken } from '../../platform/tokens';
+import type { Auth } from './better-auth';
 
 /**
- * How stale `last_used_at` may get before a resolve refreshes it.
- *
- * Writing it on every request would put an `UPDATE` on the hottest path in the
- * system to maintain a column whose only consumer is a device list nobody has
- * built yet. An hour is precise enough for *when was this device last seen* and
- * costs one write per session per hour. (D-60)
+ * The clock a session's expiry is judged by. Better Auth compares `expires_at` with the wall clock
+ * and takes no other, so whatever arms or mints an expiry beside it reads the same one; a test's
+ * fixed clock in the past would otherwise mint sessions the library has already let lapse.
  */
-const LAST_USED_STALE_AFTER_MS = 60 * 60 * 1000;
+export const SESSION_CLOCK: Clock = systemClock;
 
 export interface IssuedSession {
   readonly sessionId: string;
-  /** The only place the raw token is ever returned. It is never stored. */
+  /** The cookie's value: the raw token and its signature. The only place the raw token leaves. */
   readonly token: string;
   readonly expiresAt: Date;
 }
@@ -52,25 +54,32 @@ export interface IssueOptions {
   readonly ipAddress?: string | undefined;
 }
 
+/** What the library accepts as `__Host-purlay_session`: the token, a dot, its HMAC; URI-encoded. */
+const signedSessionCookieValue = async (secret: string, token: string): Promise<string> =>
+  encodeURIComponent(`${token}.${await makeSignature(token, secret)}`);
+
+/**
+ * A session made without the library, for the sign-in flows that predate it and the command-line
+ * tools that sign a person in to drive the real server: the row the library would have written,
+ * stored hashed, and the cookie it would have set.
+ */
 export const issueSession = async (
   executor: Executor,
   clock: Clock,
+  secret: string,
   userId: string,
   ttlDays: number,
   options: IssueOptions = {},
 ): Promise<IssuedSession> => {
   const token = randomToken();
   const now = clock.now();
-  const expiresAt = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(SESSION_CLOCK.now().getTime() + ttlDays * 24 * 60 * 60 * 1000);
 
   const row = await executor
     .insertInto('sessions')
     .values({
       user_id: userId,
-      token_hash: await tokenDigest(token),
-      // From the clock, never the column default: `resolveSession` compares
-      // `last_used_at` against `clock.now()`, and two clocks in one comparison
-      // made the staleness check depend on the wall date the test ran on.
+      token_hash: sessionTokenDigest(token),
       created_at: now,
       last_used_at: now,
       expires_at: expiresAt,
@@ -80,59 +89,103 @@ export const issueSession = async (
     .returning('id')
     .executeTakeFirstOrThrow();
 
-  return { sessionId: row.id, token, expiresAt };
+  return { sessionId: row.id, token: await signedSessionCookieValue(secret, token), expiresAt };
 };
 
 /**
- * Resolves a token to its owner, or to nothing.
+ * How stale `last_used_at` may get before a resolve refreshes it.
  *
- * Every reason to refuse produces the same answer: expired, revoked, unknown, or
- * belonging to a user who has been deleted. A caller that could tell them apart
- * could use this endpoint to ask questions about accounts it does not own.
+ * Writing it on every request would put an `UPDATE` on the hottest path in the system to maintain a
+ * column whose only consumer is a device list nobody has built yet; not writing it at all would make
+ * it fiction. An hour is precise enough for *when was this device last seen* and costs one write per
+ * session per hour. (D-60)
  */
-export const resolveSession = async (
-  executor: Executor,
-  clock: Clock,
-  token: string,
-): Promise<SessionOwner | undefined> => {
-  const now = clock.now();
-  const row = await executor
-    .selectFrom('sessions')
-    .innerJoin('users', 'users.id', 'sessions.user_id')
-    .select([
-      'sessions.id as sessionId',
-      'sessions.user_id as userId',
-      'sessions.last_used_at',
-      'sessions.expires_at',
-    ])
-    .where('sessions.token_hash', '=', await tokenDigest(token))
-    .where('sessions.revoked_at', 'is', null)
-    .where('sessions.expires_at', '>', now)
-    .where('users.deleted_at', 'is', null)
-    .executeTakeFirst();
+const LAST_USED_STALE_AFTER_MS = 60 * 60 * 1000;
 
-  if (row === undefined) return undefined;
-
-  if (now.getTime() - new Date(row.last_used_at).getTime() > LAST_USED_STALE_AFTER_MS) {
-    await executor
-      .updateTable('sessions')
-      .set({ last_used_at: now })
-      .where('id', '=', row.sessionId)
-      .execute();
-  }
-
-  return { sessionId: row.sessionId, userId: row.userId, expiresAt: new Date(row.expires_at) };
+/** `users.deleted_at`, mapped as the library's `deletedAt`; absent reads as never deleted. */
+const deletedAtOf = (user: object): unknown => {
+  const value: unknown = (user as Readonly<Record<string, unknown>>)['deletedAt'];
+  return value ?? null;
 };
 
 /**
- * Inside a transaction that is about to write on a session's behalf: the session
- * must still be live, and stays live until this transaction ends.
+ * Refreshes `last_used_at` (the library's `updatedAt`) by row id when it is stale, through the
+ * library's adapter, so nothing about the token is touched and the library's own refresh, which the
+ * seam turns off, is not needed for it.
+ */
+const touch = async (auth: Auth, sessionId: string, lastUsed: Date): Promise<void> => {
+  const now = SESSION_CLOCK.now();
+  if (now.getTime() - lastUsed.getTime() <= LAST_USED_STALE_AFTER_MS) return;
+  const { adapter } = await auth.$context;
+  await adapter.update({
+    model: 'session',
+    where: [{ field: 'id', value: sessionId }],
+    update: { updatedAt: now },
+  });
+};
+
+/**
+ * Who a request's headers say is calling, or nobody.
  *
- * A socket authenticates once and keeps the identity. A sign-out that raced a
- * send let a write commit *after* `revoked_at`. `FOR SHARE` closes that: the
- * revocation updates this row, so it waits for the transaction that holds the
- * lock — the write commits before the revocation does — and a revocation that
- * committed first is seen here. One primary-key read, compatible with every
+ * The one place a header becomes a session, for both doors: an HTTP request and a socket upgrade
+ * carry the same cookie and resolve it here. Missing, malformed, tampered, expired, revoked and
+ * unknown all answer `undefined`: a caller that could tell them apart could ask questions about
+ * sessions it does not hold (D-60). A failure that is not about the session — the database is down
+ * — is thrown, never read as *signed out*.
+ */
+export const sessionFromHeaders = async (
+  auth: Auth,
+  headers: Headers,
+): Promise<SessionOwner | undefined> => {
+  // Nothing to look up: an anonymous request costs the database nothing.
+  if (readCookie(headers.get('cookie'), SESSION_COOKIE) === undefined) return undefined;
+  try {
+    // Read, never written: a refresh here would extend the row while the browser's cookie kept its
+    // old lifetime, and put a write on every request. The library's own `/get-session` refreshes.
+    const found = await auth.api.getSession({ headers, query: { disableRefresh: true } });
+    if (found === null) return undefined;
+    // A soft-deleted account keeps no live session, whatever row is left (ARCHITECTURE.md, D-139 §5).
+    if (deletedAtOf(found.user) !== null) return undefined;
+    await touch(auth, found.session.id, new Date(found.session.updatedAt));
+    return {
+      sessionId: found.session.id,
+      userId: found.user.id,
+      expiresAt: new Date(found.session.expiresAt),
+    };
+  } catch (error) {
+    // A refresh that found its row deleted under it: the library's word for a session that ended
+    // while it was being read.
+    if (isAPIError(error) && error.statusCode === 401) return undefined;
+    // The library wraps what failed under it; the cause is what says whether to try again (a pool
+    // out of connections is a 503, not a 500).
+    if (isAPIError(error) && error.cause instanceof Error) throw error.cause;
+    throw error;
+  }
+};
+
+/**
+ * The same, as a refusal. A missing cookie and an invalid one produce the same `401`: telling them
+ * apart would tell a caller whether a token they hold was ever real (D-60).
+ */
+export const requireSessionFromHeaders = async (
+  auth: Auth,
+  headers: Headers,
+): Promise<SessionOwner> => {
+  const owner = await sessionFromHeaders(auth, headers);
+  if (owner === undefined) {
+    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  }
+  return owner;
+};
+
+/**
+ * Inside a transaction that is about to write on a session's behalf: the session must still be
+ * live, and stays live until this transaction ends.
+ *
+ * A socket authenticates once and keeps the identity. A sign-out that raced a send let a write
+ * commit after it. `FOR SHARE` closes that: ending a session deletes this row, so the delete waits
+ * for the transaction that holds the lock — the write commits before the sign-out does — and a
+ * sign-out that committed first leaves no row to find. One primary-key read, compatible with every
  * other sender's share lock on the same session. (D-85)
  */
 export const requireLiveSession = async (
@@ -144,7 +197,6 @@ export const requireLiveSession = async (
     .selectFrom('sessions')
     .select('id')
     .where('id', '=', sessionId)
-    .where('revoked_at', 'is', null)
     .where('expires_at', '>', clock.now())
     .forShare()
     .executeTakeFirst();
@@ -153,71 +205,34 @@ export const requireLiveSession = async (
   }
 };
 
-/** Sign out, on this device. Revoking is a stamp, never a delete: the row is evidence. */
+/**
+ * Sign out, on this device: the session the request resolved to, by its row. Never by a token, so
+ * nothing a caller can read back — a listed digest — can end a session (D-179 §3).
+ */
 export const revokeSession = async (
   executor: Executor,
-  clock: Clock,
-  token: string,
+  sessionId: string,
 ): Promise<string | undefined> => {
   const revoked = await executor
-    .updateTable('sessions')
-    .set({ revoked_at: clock.now() })
-    .where('token_hash', '=', await tokenDigest(token))
-    .where('revoked_at', 'is', null)
+    .deleteFrom('sessions')
+    .where('id', '=', sessionId)
     .returning('id')
     .executeTakeFirst();
   return revoked?.id;
 };
 
 /**
- * Sign out everywhere. Returns the ids of the sessions that were live, so the
- * caller can end the connections they hold — a revoked session with an open
- * socket is not signed out (#194).
+ * Sign out everywhere. Returns the ids of the sessions that were live, so the caller can end the
+ * connections they hold — a revoked session with an open socket is not signed out (#194).
  */
 export const revokeAllSessions = async (
   executor: Executor,
-  clock: Clock,
   userId: string,
 ): Promise<readonly string[]> => {
   const revoked = await executor
-    .updateTable('sessions')
-    .set({ revoked_at: clock.now() })
+    .deleteFrom('sessions')
     .where('user_id', '=', userId)
-    .where('revoked_at', 'is', null)
     .returning('id')
     .execute();
   return revoked.map((row) => row.id);
-};
-
-/**
- * Who a request's `Cookie` header says is calling, or nobody.
- *
- * The one place a header becomes a session, for both doors: an HTTP request and
- * a socket upgrade carry the same cookie and must resolve it the same way.
- * Missing, malformed, expired and revoked all answer `undefined`.
- */
-export const sessionFromCookie = async (
-  executor: Executor,
-  clock: Clock,
-  cookieHeader: string | null,
-): Promise<SessionOwner | undefined> => {
-  const token = sessionTokenFrom(cookieHeader);
-  return token === undefined ? undefined : await resolveSession(executor, clock, token);
-};
-
-/**
- * The same, as a refusal. A missing cookie and an invalid one produce the same
- * `401`: telling them apart would tell a caller whether a token they hold was
- * ever real (D-60).
- */
-export const requireSessionFromCookie = async (
-  executor: Executor,
-  clock: Clock,
-  cookieHeader: string | null,
-): Promise<SessionOwner> => {
-  const owner = await sessionFromCookie(executor, clock, cookieHeader);
-  if (owner === undefined) {
-    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
-  }
-  return owner;
 };

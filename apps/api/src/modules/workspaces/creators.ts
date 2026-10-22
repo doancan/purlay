@@ -3,7 +3,8 @@
  *
  * Signing in is open — an invited person has to be able to — so making a workspace is the door a
  * stranger who finds the address would otherwise walk through, with a storage quota of their own
- * (#633). The operator names who may: `WORKSPACE_CREATORS`, GitHub logins or `*`. Unset, nobody may
+ * (#633). The operator names who may — GitHub logins, or anybody — in the server's setting
+ * (`modules/setup/settings.ts`, D-179 §6), seeded once from `WORKSPACE_CREATORS`. By default nobody may
  * but the first person to sign in, and only while the instance has no workspace — which is how the
  * one-command install still ends with its operator in a workspace of their own (D-144).
  *
@@ -19,7 +20,10 @@ export type WorkspaceCreators =
   | { readonly kind: 'listed'; readonly logins: ReadonlySet<string> }
   | { readonly kind: 'first' };
 
-/** The rule `WORKSPACE_CREATORS` says, already checked by the configuration's pattern. */
+/**
+ * The rule `WORKSPACE_CREATORS` says, already checked by the configuration's pattern: what the first
+ * start copies into the server's setting, and nothing after (D-179 §6).
+ */
 export const workspaceCreatorsOf = (value: string | undefined): WorkspaceCreators => {
   const trimmed = value?.trim() ?? '';
   if (trimmed === '') return { kind: 'first' };

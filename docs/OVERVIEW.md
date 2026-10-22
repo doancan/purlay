@@ -42,6 +42,7 @@ second file is a number that will eventually disagree with itself.
 | Collation and identifier text handling | `DECISIONS.md` D-40 |
 | Interface languages and the i18n mechanism | `DECISIONS.md` D-41 |
 | Retention, erasure and export semantics | `DECISIONS.md` D-27 |
+| Who owns identity — users, sessions, accounts, verifications and sign-in limits — and what stays the `workspaces` module's; how a server is set up in the browser; sign-up and account-linking policy; what stays in `.env` | `DECISIONS.md` D-179 (the interface is `API.md` §2, the screens `UX.md` §11, the variables `CONFIG.md`) |
 | Which tables hold personal data, why and for how long, for an operator | `DATA.md` §2, bound to the generated tables by `scripts/data-map.test.ts` |
 | The list of background jobs and how they are scheduled | `DECISIONS.md` D-30 |
 | Why any choice was made, and what was rejected | `DECISIONS.md` |
@@ -69,6 +70,14 @@ looking for the error codes to a file that does not have them.
 | The CSS custom properties, the Tailwind vocabulary and the token names | `packages/tokens/src/generated/` — generated from `tokens.json`, never written (D-97) |
 | Which icons exist, and what each means | `glyphs` in `apps/web/src/components/icon.tsx` (D-97) |
 | The variables the application reads | `apps/api/src/platform/config.ts` — `.env.example` is generated from it |
+| The server's settings — what they are, which are secret, what a response may show of them, and the one import from the environment | `apps/api/src/modules/setup/settings.ts` over `server_settings` (D-179 §6); what the server serves with, built from them, is `runtimeServicesFrom` in `modules/setup/runtime.ts` |
+| Which sign-in instance and mail relay serve now, which one a request is served by, and applying a change of the settings without a restart | `runtimeServicesHolder` and `applySettings` in `apps/api/src/modules/setup/runtime.ts` (D-179 §4.9); the request pins its pair in `ingress/http/app.ts`'s first hook |
+| The setup in the browser — open or closed, the one-time code, the guess throttle, the claim that binds setup to one browser, the steps it has passed | `apps/api/src/modules/setup/setup.ts` over `setup_state` (D-179 §4); the step names are `SETUP_STEPS` in `packages/types/src/setup.ts`; whether setup is finished is `server_settings.setup_completed_at` |
+| Trying GitHub's app and a mail relay before they are saved, and the reasons a try fails | `apps/api/src/modules/setup/probes.ts` (D-179 §4.4); the reasons are `PROBE_REASONS` in `packages/types/src/setup.ts` |
+| Verifying the setup administrator's address with a link of the wizard's own | `apps/api/src/modules/setup/verification.ts` over `admin_email_verification` (D-179 §4.3) |
+| Letting a newcomer make an account on an invite-only server by an invitation link | `apps/api/src/modules/workspaces/invitation-passport.ts` over `invitation_passports`, spent in `databaseHooks.user.create.before` (D-179 §5) |
+| What each setup step does beyond recording itself — in its turn, tried then kept, the administrator's letter, the first workspace — and the finish rule | `apps/api/src/modules/setup/wizard.ts` (D-179 §4, §4.5); which channels were tried is `setup_state`'s, written by `recordChannelTried` in `setup.ts` |
+| The setup's HTTP surface — the claim's cookie, the one answer to everybody without the claim, the refusals as the contract says them | `apps/api/src/ingress/http/setup.ts` (`API.md` §2 `/setup/*`); its limits per client are `SETUP_BUDGET` and `SETUP_SECRET_BUDGET` in `ingress/http/rate-limit.ts`; the cookie is `SETUP_COOKIE` in `platform/cookies.ts`; the shapes are `@purlay/types` |
 | The tenant boundary: what mints a `WorkspaceContext`, and what a stranger gets instead | `apps/api/src/platform/tenancy.ts` (D-21, D-54) |
 | Which endpoints are tenant-scoped, where each sits on the channel-visibility axis, and how a test crosses each one | `apps/api/src/testing/cross-tenant.ts` (D-63, D-64) |
 | The event bus seam and the topic names | `apps/api/src/platform/events.ts` (D-7) |

@@ -3,6 +3,7 @@
  * names it (D-23, #66). The workspace is in the body, asked of the guard before the link is read, so
  * a stranger is told the workspace does not exist whatever else they sent (D-34).
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import { UnfurlRequest, type UnfurlResponse } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
@@ -16,6 +17,7 @@ import { validated } from './validate';
 
 export const unfurlLink = async (
   dependencies: {
+    readonly auth: Auth;
     readonly database: Executor;
     readonly clock: Clock;
     readonly cipher: CredentialCipher;
@@ -28,7 +30,7 @@ export const unfurlLink = async (
   body: unknown,
 ): Promise<UnfurlResponse> => {
   const { database, clock, cipher, githubApi, log, githubCalls } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const workspaceId =
     typeof body === 'object' &&
     body !== null &&

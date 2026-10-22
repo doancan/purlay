@@ -5,7 +5,7 @@
  *   sweep:sessions     sessions that expired or were revoked
  *   reconcile:storage  each workspace's storage count put back to the bytes it holds (I-7)
  *   sweep:link-previews  the unfurl cache past its expiry (D-23)
- *   sweep:email-sign-ins  sign-in links and notes a day old (D-138)
+ *   sweep:email-sign-ins  sign-in links and their counters a day past use (D-138, D-179)
  *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
  *   sweep:exports      exports nobody downloaded in time, and any whose making was cut off (D-140)
  *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)

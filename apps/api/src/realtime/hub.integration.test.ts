@@ -7,7 +7,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { CLOSE_CODES } from '@purlay/types';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
-import { aSignedInUser } from '../testing/signed-in';
+import { aTestAuth, aSignedInUser } from '../testing/signed-in';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
 import { revokeAllSessions } from '../modules/auth/sessions';
@@ -49,7 +49,7 @@ describe('integration: the hub’s expiry timer', () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'hub-timer');
       const timers = recorded();
-      const hub = createSocketHub(db, clock, {
+      const hub = createSocketHub(aTestAuth(db), clock, {
         log: createLogger({ level: 'silent' }),
         leave: () => undefined,
         listen: () => undefined,
@@ -79,7 +79,7 @@ describe('integration: the hub’s expiry timer', () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'hub-timer-early');
       const timers = recorded();
-      const hub = createSocketHub(db, clock, {
+      const hub = createSocketHub(aTestAuth(db), clock, {
         log: createLogger({ level: 'silent' }),
         leave: () => undefined,
         listen: () => undefined,
@@ -116,7 +116,7 @@ describe('integration: a sign-out while a socket is opening', () => {
             armed = false;
             // The sign-out: written, then published on the session's topic — to
             // whoever is listening, which at this moment is nobody.
-            const ended = await revokeAllSessions(db, clock, alice.userId);
+            const ended = await revokeAllSessions(db, alice.userId);
             await publishSessionsEnded(bus, clock, ended);
           }
           return args.result;
@@ -125,7 +125,7 @@ describe('integration: a sign-out while a socket is opening', () => {
       const closes: number[] = [];
       const events: string[] = [];
       const log = createLogger({ level: 'silent' });
-      const hub = createSocketHub(racing, clock, {
+      const hub = createSocketHub(aTestAuth(racing), clock, {
         log,
         leave: () => undefined,
         listen: (identity) => {
@@ -171,10 +171,10 @@ describe('integration: a sign-out while a socket is opening', () => {
   test('a session gone before the hub first reads it is still told why before the close', async () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'open-race-before');
-      await revokeAllSessions(db, clock, alice.userId);
+      await revokeAllSessions(db, alice.userId);
       const events: string[] = [];
       const log = createLogger({ level: 'silent' });
-      const hub = createSocketHub(db, clock, {
+      const hub = createSocketHub(aTestAuth(db), clock, {
         log,
         leave: () => undefined,
         listen: () => undefined,
@@ -209,7 +209,7 @@ describe('integration: a sign-out while a socket is opening', () => {
       const alice = await aSignedInUser(db, clock, 'open-race-after');
       const closes: number[] = [];
       const log = createLogger({ level: 'silent' });
-      const hub = createSocketHub(db, clock, {
+      const hub = createSocketHub(aTestAuth(db), clock, {
         log,
         leave: () => undefined,
         listen: (identity) => {

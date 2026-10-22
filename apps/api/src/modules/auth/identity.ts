@@ -1,19 +1,17 @@
 /**
- * Turning a GitHub account into a Purlay user, with every collision named.
+ * What a GitHub account becomes in Purlay's own columns: the names a sign-in takes from it, made safe
+ * to store, and the login it holds. Who the account is, and whether the address is one that may be
+ * trusted, is the sign-in library's to decide (`better-auth.ts`, D-179); this writes what follows.
  *
- * D-38 exists because the obvious implementation fails on the first sign-in by a
- * developer who has not made an email address public: the profile omits it and
- * the insert violates `NOT NULL`. Each of the four outcomes below is a decision
- * that was written down before it was met.
- *
- * The executor is an argument, so this runs inside a rolled-back transaction in a
- * test (D-46).
+ * The executor is an argument, so this runs inside a rolled-back transaction in a test (D-46).
  */
 import { isErased } from '@purlay/types';
+import { BROADCAST_NAMES } from '@purlay/markdown';
 import { sql, type Executor } from '@purlay/db';
 import { AppError } from '../../platform/errors';
+import { atomicallyOn } from '../../platform/transactions';
 import type { Clock } from '../../platform/clock';
-import type { GitHubEmail, GitHubProfile } from './github';
+import type { GitHubProfile } from './github';
 
 export interface ResolvedIdentity {
   readonly userId: string;
@@ -21,7 +19,7 @@ export interface ResolvedIdentity {
    * Set when the incoming `login` was already taken by somebody else and this
    * user was stored with a suffix. D-38 requires it to be logged. It is returned
    * rather than logged here, so this stays a decision over values, and
-   * `sign-in.ts` writes the line — a fact with nowhere to go is a fact that
+   * `better-auth.ts` writes the line — a fact with nowhere to go is a fact that
    * quietly stops existing.
    */
   readonly usernameCollision?: { readonly wanted: string; readonly stored: string };
@@ -51,29 +49,6 @@ export const cleanedProfile = (given: GitHubProfile): GitHubProfile => {
   };
 };
 
-/**
- * The address that is both primary **and** verified. Anything else is refused:
- * an unverified address is a claim by whoever typed it, and the email is the
- * identity anchor Phase 2's magic links resolve against (D-11, D-38).
- */
-const anchorEmail = (emails: readonly GitHubEmail[]): string => {
-  // An address with a control character is not an address, and is never repaired:
-  // stripping one would turn it into a different, possibly somebody else's.
-  const address = emails.find(
-    (entry) => entry.primary && entry.verified && !CONTROL.test(entry.email),
-  )?.email;
-  if (address === undefined) {
-    throw new AppError({
-      code: 'EMAIL_REQUIRED',
-      message:
-        'Purlay needs a primary, verified email address on your GitHub account. Add or verify one and sign in again.',
-    });
-  }
-  // Lowercase ASCII at the boundary, so the `COLLATE "C"` column compares
-  // byte-wise and two spellings of one address cannot become two accounts (D-40).
-  return address.toLowerCase();
-};
-
 /** The columns' widths (`SCHEMA.md` §users): `username` is GitHub's own limit. */
 const USERNAME_MAX = 39;
 const DISPLAY_NAME_MAX = 128;
@@ -97,17 +72,41 @@ const UNSAFE_IN_NAME =
 const cleanedName = (value: string): string => value.replace(UNSAFE_IN_NAME, '').trim();
 
 /**
- * GitHub lets an account be renamed and the freed name be taken by someone else,
- * so a refresh can collide with a live row. The incoming user takes a suffix;
- * identity is `github_id`, and `username` is display-only (D-38).
- */
-/**
  * A name a living account may take: none begins as an erased one's does (D-139 §5), so a GitHub login or
  * an address that happens to is given `user-` before it, and stays a person rather than a tombstone.
  */
 export const livingName = (wanted: string): string =>
   isErased({ username: wanted }) ? `user-${wanted}` : wanted;
 
+/**
+ * A username shaped from anything — a GitHub login, an address's local part, a value a client sent —
+ * into what a mention can name (D-138 §5): lower-case letters, digits and single hyphens between
+ * them, at most 39, never a broadcast name. `null` when nothing is left. No value reaches the column
+ * without passing here and then `availableUsername`, so nobody can name themselves after somebody
+ * else (D-179, R23).
+ */
+export const shapedUsername = (value: string): string | null => {
+  const shaped = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, USERNAME_MAX)
+    .replace(/-+$/, '');
+  return shaped === '' || BROADCAST_NAMES.has(shaped) ? null : shaped;
+};
+
+/**
+ * A username from an address's local part (D-138 §5): what an account a link makes is named, before
+ * `availableUsername` makes it unique; `null` when nothing is left.
+ */
+export const usernameFrom = (email: string): string | null =>
+  shapedUsername(email.slice(0, email.lastIndexOf('@')));
+
+/**
+ * GitHub lets an account be renamed and the freed name be taken by someone else,
+ * so a refresh can collide with a live row. The incoming user takes a suffix;
+ * identity is `github_id`, and `username` is display-only (D-38).
+ */
 export const availableUsername = async (
   executor: Executor,
   wanted: string,
@@ -134,11 +133,7 @@ export const availableUsername = async (
  * still holds it in any case — renamed away from it at GitHub, and not signed in since. It is what
  * `WORKSPACE_CREATORS` is matched against (D-169), never the username, which only starts from it.
  */
-export const holdLogin = async (
-  executor: Executor,
-  githubId: string,
-  login: string,
-): Promise<void> => {
+const holdLogin = async (executor: Executor, githubId: string, login: string): Promise<void> => {
   await executor
     .updateTable('users')
     .set({ github_login: null })
@@ -155,144 +150,101 @@ export const holdLogin = async (
     .execute();
 };
 
-export const resolveIdentity = async (
-  executor: Executor,
-  clock: Clock,
-  given: GitHubProfile,
-  emails: readonly GitHubEmail[],
-): Promise<ResolvedIdentity> => {
-  const profile = cleanedProfile(given);
-  const email = anchorEmail(emails);
-  const displayName = fitted(
+/**
+ * The name GitHub gives an account it makes, cleaned for a column (#233): the profile's name, else the
+ * login, never failing on what GitHub sent.
+ */
+export const githubDisplayName = (profile: GitHubProfile): string =>
+  fitted(
     cleanedName(profile.name ?? '') || cleanedName(profile.login) || profile.login,
     DISPLAY_NAME_MAX,
   );
-  const now = clock.now();
 
-  const existing = await executor
-    .selectFrom('users')
-    .select(['id', 'username', 'github_connected_at'])
-    .where('github_id', '=', String(profile.id))
-    .where('deleted_at', 'is', null)
-    .executeTakeFirst();
+/** The username GitHub's login asks for, before `availableUsername` settles who already has it. */
+export const githubUsernameWanted = (profile: GitHubProfile): string =>
+  livingName(shapedUsername(profile.login) ?? `user-${String(profile.id)}`);
 
-  if (existing !== undefined) {
-    // An account made by email that connected GitHub (D-176): its name and username were never
-    // GitHub's and stay its own. The picture is GitHub's (D-11), and the login is held as always.
-    const ownNames = existing.github_connected_at !== null;
-    const username = ownNames
-      ? existing.username
-      : await availableUsername(executor, livingName(profile.login), existing.id);
-    // Only while it is live: an erasure that committed after the read above leaves this row a
-    // tombstone, and the person's identity must not be written back onto it (D-139 §5, I-11).
-    const refreshed = await executor
-      .updateTable('users')
-      .set({
-        ...(ownNames ? {} : { username, display_name: displayName }),
-        avatar_url: profile.avatarUrl,
-        updated_at: now,
-      })
-      .where('id', '=', existing.id)
-      .where('deleted_at', 'is', null)
-      .returning('id')
+/** What a GitHub sign-in through the library has finished with, for the columns that are ours. */
+export interface GitHubSignIn {
+  readonly userId: string;
+  /** Cleaned (`cleanedProfile`). */
+  readonly profile: GitHubProfile;
+  /** The library made the account in this very sign-in. */
+  readonly made: boolean;
+}
+
+/**
+ * What a GitHub sign-in writes beyond the library's own rows (D-169, D-176, D-179 §5), once the
+ * library has decided whose account it is and before it opens the session:
+ *
+ * - **An account GitHub made** — this sign-in's, or an earlier one's — has its username and display
+ *   name from GitHub, refreshed on every sign-in (D-38), its picture, and `github_connected_at` NULL.
+ * - **An account made by email, linked now** because GitHub vouches for its verified address (D-179 §5)
+ *   gets `github_id` and `github_connected_at`, and the picture; its names were never GitHub's and stay.
+ *   Once connected it keeps them on every later sign-in (D-176 §6).
+ * - **Every one** holds the login, taken from any other account that still has it (`holdLogin`): it is
+ *   what `WORKSPACE_CREATORS` is matched against (D-169).
+ *
+ * Only while the account is live: an erasure that committed first leaves a tombstone, and nothing of
+ * the person is written back onto it (D-139 §5, I-11) — the sign-in is refused instead.
+ */
+export const recordGitHubSignIn = async (
+  executor: Executor,
+  clock: Clock,
+  { userId, profile, made }: GitHubSignIn,
+): Promise<ResolvedIdentity> =>
+  // One transaction: a refresh that fails half-way leaves the account as it was, never with new
+  // names under an old login, or a login held by nobody.
+  await atomicallyOn(executor)(async (transaction) => {
+    const githubId = String(profile.id);
+    // Locked, erased or not: an erasure waits for this to end, and one that ended first is refused by
+    // the write below, which is the one guard against writing a person back onto a tombstone.
+    const account = await transaction
+      .selectFrom('users')
+      .select(['id', 'github_id', 'github_connected_at'])
+      .where('id', '=', userId)
+      .forUpdate()
       .executeTakeFirst();
-    if (refreshed === undefined) {
+    if (account === undefined) {
       throw new AppError({
         code: 'UNAUTHENTICATED',
         message: 'That account is gone. Sign in again.',
       });
     }
-    await holdLogin(executor, String(profile.id), profile.login);
-    return {
-      userId: existing.id,
-      ...(ownNames || username === profile.login
-        ? {}
-        : { usernameCollision: { wanted: profile.login, stored: username } }),
-    };
-  }
-
-  /**
-   * The address already belongs to a different account. **Never linked
-   * silently**: "same email, therefore the same person" is a classic
-   * account-takeover surface, and it is no safer between two GitHub accounts than
-   * between two providers (D-5, D-38).
-   */
-  const emailOwner = await executor
-    .selectFrom('users')
-    .select(['github_id', 'deleted_at'])
-    .where('email', '=', email)
-    .executeTakeFirst();
-  // The owner may be this very account, made a moment ago by the other half of a
-  // double-clicked callback: same GitHub id, so not a stranger and not a conflict.
-  const isThisAccount =
-    emailOwner?.github_id === String(profile.id) && emailOwner.deleted_at === null;
-  if (emailOwner !== undefined && !isThisAccount) {
-    throw new AppError({
-      code: 'ACCOUNT_EMAIL_CONFLICT',
-      message: 'That email address already belongs to another Purlay account.',
-    });
-  }
-
-  const username = await availableUsername(executor, livingName(profile.login), undefined);
-  // The lookups above and this insert race: the same GitHub account completing sign-in
-  // twice at once (a double-clicked callback, two tabs) passes them twice. **Any** unique
-  // key can be the one that loses — `github_id` when the first row is already visible,
-  // `email` when it commits after this statement's check of the first and before its
-  // check of the second (D-78 handled the first and answered the second as a stranger
-  // holding the address: a 409 for a person who had done nothing wrong). So the insert
-  // names no key and does nothing on any conflict; what a conflict meant is decided by
-  // reading, below, with the first row now committed and visible.
-  const created = await executor
-    .insertInto('users')
-    .values({
-      github_id: String(profile.id),
-      email,
-      username,
-      display_name: displayName,
-      avatar_url: profile.avatarUrl,
-    })
-    .onConflict((conflict) => conflict.doNothing())
-    .returning('id')
-    .executeTakeFirst();
-
-  if (created === undefined) {
-    // Somebody got there first. If it was this account, refresh the row it made and carry
-    // on — the username stays as the first stored it. If it was not, the address is a
-    // stranger's, and that is the conflict the lookups above exist to name.
-    const winner = await executor
+    // Made by GitHub: this sign-in made it, or it has GitHub's id and was never connected to one —
+    // its id written as it was made (`better-auth.ts`'s user hook), so this holds whatever failed after.
+    const githubMade =
+      made || (account.github_id === githubId && account.github_connected_at === null);
+    const now = clock.now();
+    const wanted = githubUsernameWanted(profile);
+    const username = githubMade ? await availableUsername(transaction, wanted, userId) : undefined;
+    const written = await transaction
       .updateTable('users')
-      .set({ display_name: displayName, avatar_url: profile.avatarUrl, updated_at: now })
-      .where('github_id', '=', String(profile.id))
+      .set({
+        github_id: githubId,
+        avatar_url: profile.avatarUrl,
+        updated_at: now,
+        ...(username === undefined
+          ? // Connected now, or before: the moment it first was is kept.
+            { github_connected_at: account.github_connected_at ?? now }
+          : { username, display_name: githubDisplayName(profile), github_connected_at: null }),
+      })
+      .where('id', '=', userId)
+      // Only while it is live (D-139 §5, I-11): nothing of the person is written onto a tombstone.
       .where('deleted_at', 'is', null)
       .returning('id')
       .executeTakeFirst();
-    if (winner !== undefined) {
-      await holdLogin(executor, String(profile.id), profile.login);
-      return { userId: winner.id };
-    }
-    const stranger = await executor
-      .selectFrom('users')
-      .select('id')
-      .where('email', '=', email)
-      .executeTakeFirst();
-    if (stranger !== undefined) {
+    if (written === undefined) {
       throw new AppError({
-        code: 'ACCOUNT_EMAIL_CONFLICT',
-        message: 'That email address already belongs to another Purlay account.',
+        code: 'UNAUTHENTICATED',
+        message: 'That account is gone. Sign in again.',
       });
     }
-    // The account was deleted and its GitHub id is deliberately never reused (D-38), or
-    // the username was taken in the same instant: no row to refresh, none to create. No
-    // Phase 0 path deletes a user; the contract has no code for this yet, and inventing
-    // one is not this change's to do.
-    throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
-  }
-
-  await holdLogin(executor, String(profile.id), profile.login);
-  return {
-    userId: created.id,
-    ...(username === profile.login
-      ? {}
-      : { usernameCollision: { wanted: profile.login, stored: username } }),
-  };
-};
+    await holdLogin(transaction, githubId, profile.login);
+    return {
+      userId,
+      ...(username === undefined || username === wanted
+        ? {}
+        : { usernameCollision: { wanted, stored: username } }),
+    };
+  });

@@ -19,23 +19,23 @@ type FeedDependencies = ChannelDependencies & { readonly cipher: CredentialCiphe
 
 /** `GET /api/channels/:channelId/github-feeds` */
 export const listFeeds = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
 ): Promise<GitHubFeedList> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return await channelFeeds(database, context);
 };
 
 /** `POST /api/channels/:channelId/github-feeds` — the feed, its address and its secret, once. */
 export const connectFeed = async (
-  { database, clock, cipher }: FeedDependencies,
+  { auth, database, clock, cipher }: FeedDependencies,
   request: Request,
   channelId: string,
   body: unknown,
 ): Promise<CreatedGitHubFeed> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const asked = validated(CreateGitHubFeedRequest, body);
   return await atomicallyOn(database)(async (transaction) => {
     const context = await requireChannelById(transaction, userId, channelId);
@@ -45,12 +45,12 @@ export const connectFeed = async (
 
 /** `DELETE /api/channels/:channelId/github-feeds/:feedId` */
 export const disconnectFeed = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database, clock }: ChannelDependencies,
   request: Request,
   channelId: string,
   feedId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   await atomicallyOn(database)(async (transaction) => {
     const context = await requireChannelById(transaction, userId, channelId);
     await removeFeed(transaction, clock, context, feedId);

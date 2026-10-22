@@ -19,15 +19,14 @@
  * a refusal is a real HTTP status rather than a socket that closes for reasons
  * the client has to guess at.
  */
-import type { Executor } from '@purlay/db';
-import type { Clock } from '../platform/clock';
 import { AppError } from '../platform/errors';
 import { isAppOrigin } from '../platform/origin';
-import { requireSessionFromCookie } from '../modules/auth/sessions';
+import type { Auth } from '../modules/auth/better-auth';
+import { requireSessionFromHeaders } from '../modules/auth/sessions';
 
 export interface UpgradeDependencies {
-  readonly database: Executor;
-  readonly clock: Clock;
+  /** The same seam an HTTP request is resolved through (`sessions.ts`). */
+  readonly auth: Auth;
   readonly appUrl: string;
 }
 
@@ -51,10 +50,6 @@ export const admitSocket = async (
     throw new AppError({ code: 'FORBIDDEN', message: 'That origin may not open a socket here.' });
   }
 
-  const owner = await requireSessionFromCookie(
-    dependencies.database,
-    dependencies.clock,
-    request.headers.get('cookie'),
-  );
+  const owner = await requireSessionFromHeaders(dependencies.auth, request.headers);
   return { userId: owner.userId };
 };

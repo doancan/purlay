@@ -10,7 +10,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { CreatedGitHubFeed, GitHubFeedList } from '@purlay/types';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { fixedClock } from '../../platform/clock';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { aRoom } from '../../testing/rooms';
 import { testDependencies } from '../../testing/doubles';
 import { createApp } from './app';
@@ -26,7 +26,7 @@ type Call = (method: string, path: string, body?: unknown) => Promise<Response>;
 
 const anAdmin = async (db: Executor): Promise<{ call: Call; channelId: string }> => {
   const room = await aRoom(db, ['alice']);
-  const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+  const { token } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
   const app = createApp(testDependencies({ database: db, clock }));
   const call: Call = async (method, path, body) =>
     await app.handle(

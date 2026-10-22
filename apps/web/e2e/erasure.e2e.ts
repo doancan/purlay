@@ -37,7 +37,9 @@ test.describe('erasing an account', () => {
     await erase.click();
 
     await expect(page).toHaveURL(/\/sign-in\?reason=erased$/);
-    await expect(page.getByRole('main').getByRole('status')).toHaveText('Your account was erased.');
+    await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
+      'Your account was erased.',
+    );
     await page.goto(`/w/${workspace.slug}`);
     await expect(page).toHaveURL(/\/sign-in/);
   });

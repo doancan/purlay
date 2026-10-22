@@ -16,7 +16,7 @@ import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
 import { LOCALES } from '../../i18n/types';
 import { useSession } from '../session/session';
-import { useWorkspaceRole } from '../settings/role';
+import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
 import { sectionsFor } from '../settings/sections';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
 import { useWorkspace } from '../shell/workspace';
@@ -34,6 +34,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const channels = useChannels(workspace.id).data;
   const members = useMembers(workspace.id).data;
   const role = useWorkspaceRole();
+  const serverAdmin = useIsServerAdmin();
 
   const currentChannelId = match.name === 'channel' ? match.params.channelId : null;
   const slug = workspace.slug;
@@ -152,7 +153,7 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     }
 
     // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
-    for (const section of sectionsFor(role)) {
+    for (const section of sectionsFor(role, serverAdmin)) {
       items.push({
         id: `settings:${section.id}`,
         group: 'settings',
@@ -229,5 +230,6 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     openDirectMessage,
     deepWork,
     role,
+    serverAdmin,
   ]);
 };

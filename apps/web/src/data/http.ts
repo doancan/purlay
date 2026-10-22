@@ -16,7 +16,7 @@ import { AppErrorBody } from '@purlay/types';
 import type { Static, TSchema } from '@sinclair/typebox';
 import type { Schedule } from '../realtime/connection';
 import { browserSchedule } from '../realtime/socket';
-import { ApiError } from './errors';
+import { ApiError, LibraryFailure } from './errors';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -38,6 +38,11 @@ export interface Http {
     schema: S,
     options?: RequestOptions,
   ) => Promise<Static<S>>;
+  /**
+   * A POST to one of the sign-in library's own routes (`/auth/sign-in/email`, `/auth/change-password`):
+   * the answer is not read, and a refusal is the library's shape, `LibraryFailure`.
+   */
+  readonly library: (path: string, body: unknown) => Promise<void>;
   /** For an endpoint whose answer is not read (a sign-out). */
   readonly send: (method: Method, path: string, options?: RequestOptions) => Promise<void>;
   /**
@@ -95,6 +100,27 @@ const unanswered = (status: number): ApiError =>
   GATEWAY.has(status)
     ? new ApiError(status, 'NETWORK', 'The server could not be reached.')
     : unreadable(status);
+
+/** A refusal of one of the library's routes: `{ code, message, reason? }`, and `Retry-After` on a 429. */
+const libraryFailureOf = (
+  status: number,
+  text: string,
+  retryAfter: string | null,
+): LibraryFailure => {
+  const wait = retryAfter !== null && /^\d{1,7}$/.test(retryAfter) ? Number(retryAfter) : null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return new LibraryFailure(status, GATEWAY.has(status) ? 'NETWORK' : 'MALFORMED', null, wait);
+  }
+  const record =
+    typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+  const code = typeof record['code'] === 'string' ? record['code'] : null;
+  if (code === null) return new LibraryFailure(status, 'MALFORMED', null, wait);
+  const reason = typeof record['reason'] === 'string' ? record['reason'] : null;
+  return new LibraryFailure(status, code, reason, wait);
+};
 
 /** An error answer, read the same whichever transport carried it. */
 const failureOf = (status: number, text: string): ApiError => {
@@ -176,6 +202,8 @@ export const createHttp = (
     path: string,
     options: RequestOptions,
     signal: AbortSignal | undefined,
+    refusal: (status: number, text: string, response: Response) => Error = (status, text) =>
+      failureOf(status, text),
   ): Promise<{ readonly status: number; readonly text: string }> => {
     const hasBody = options.body !== undefined;
     const sent: { type: string; body: BodyInit } | null =
@@ -205,7 +233,7 @@ export const createHttp = (
     } catch (cause) {
       throw new ApiError(0, 'NETWORK', 'The answer stopped before it was whole.', {}, cause);
     }
-    if (!response.ok) throw failureOf(response.status, text);
+    if (!response.ok) throw refusal(response.status, text, response);
     return { status: response.status, text };
   };
 
@@ -218,6 +246,23 @@ export const createHttp = (
     ): Promise<Static<S>> => {
       const { status, text } = await call(method, path, options);
       return answerOf(status, text, schema);
+    },
+    library: async (path: string, body: unknown): Promise<void> => {
+      const deadline = new AbortController();
+      const cancel = schedule(() => {
+        deadline.abort();
+      }, WRITE_DEADLINE_MS);
+      try {
+        await exchange('POST', path, { body }, deadline.signal, (status, text, response) =>
+          libraryFailureOf(status, text, response.headers.get('retry-after')),
+        );
+      } catch (error) {
+        // No answer at all is the network's, in the library's vocabulary too.
+        if (error instanceof ApiError) throw new LibraryFailure(error.status, error.code);
+        throw error;
+      } finally {
+        cancel();
+      }
     },
     send: async (method: Method, path: string, options: RequestOptions = {}): Promise<void> => {
       await call(method, path, options);

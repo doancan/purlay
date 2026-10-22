@@ -373,7 +373,7 @@ describe('integration: who may react to what', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);
       const { bus, sent } = aRecordingBus();
-      await revokeSession(db, clock, room.alice.cookie.split('=')[1] ?? '');
+      await revokeSession(db, room.alice.sessionId);
       const refusal = await refusalFrom(() => react(db, bus, room.alice, room.root, '👍'));
       expect(refusal.body.code).toBe('UNAUTHENTICATED');
       expect(sent).toHaveLength(0);

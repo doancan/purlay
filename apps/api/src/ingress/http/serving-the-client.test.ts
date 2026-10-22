@@ -168,7 +168,9 @@ describe('what is never the shell', () => {
     },
   );
 
-  test.each(['/api/nope', '/api', '/auth/nope', '/health/nope', '/%61pi/me', '/api%2Fme', '/ws/x'])(
+  // `/auth/nope` is the sign-in library's to answer, which reads its database first: the same answer
+  // is asserted where there is one (`auth.integration.test.ts`).
+  test.each(['/api/nope', '/api', '/health/nope', '/%61pi/me', '/api%2Fme', '/ws/x'])(
     '%s is the API answering, never HTML a client would try to parse',
     async (path) => {
       const response = await send(path);

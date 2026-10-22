@@ -9,7 +9,13 @@
  * what this file cost, and on a slow disk more than a hook's five seconds.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  type Executor,
+} from '@purlay/db';
 import { createApp } from './app';
 import {
   aDatabaseThatMustNotBeTouched,
@@ -98,6 +104,31 @@ describe('integration: readiness', () => {
       expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
       expect(String(answer.reasons[0])).toContain('users.email');
     });
+  });
+
+  /**
+   * The sign-in library's own check reads the catalogue on a connection of its own, which a
+   * rolled-back transaction is not, so these two break a clone (D-179).
+   */
+  test('the sign-in library’s tables as it expects them are ready; drifted, not ready, saying why', async () => {
+    const cloned = await cloneIntegrationDatabase();
+    try {
+      expect(await ready(cloned.db)).toEqual({
+        status: 200,
+        body: { status: 'ready' },
+        reasons: [],
+      });
+      await sql`alter table verifications rename column identifier to identifier_was`.execute(
+        cloned.db,
+      );
+      const answer = await ready(cloned.db);
+      expect(answer).toMatchObject({ status: 503, body: { status: 'not ready' } });
+      expect(String(answer.reasons[0])).toContain('sign-in library');
+      expect(String(answer.reasons[0])).toContain('identifier');
+      expect(JSON.stringify(answer.body)).not.toContain('identifier');
+    } finally {
+      await cloned.drop();
+    }
   });
 
   test('a database that does not answer is not ready, and says nothing about why', async () => {

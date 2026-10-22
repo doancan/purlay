@@ -59,8 +59,13 @@ x-environment: &environment
   # private (D-79), and here it is: a compose network no other host can join.
   DATABASE_SSL: 'false'
   DATABASE_ALLOW_PLAINTEXT: 'true'
-  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:?set GITHUB_CLIENT_ID}
-  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:?set GITHUB_CLIENT_SECRET}
+  # A seed of the server's settings, read on the first start only (D-179 §6): both or neither, and
+  # empty is neither — the server then waits in setup mode for the wizard to connect GitHub (R38).
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  # Where GitHub is: github.com and its API unless set, for a GitHub Enterprise Server. Empty is unset.
+  GITHUB_URL: ${GITHUB_URL:-}
+  GITHUB_API_URL: ${GITHUB_API_URL:-}
   ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (32 bytes, base64)}
   SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
   # Who may make a workspace: GitHub logins, or `*`. Unset, only the first person in (D-155).

@@ -194,9 +194,41 @@ chat the team already uses.
   signs in first and comes back to the same card. The token leaves the address bar as the page loads,
   so it is not left in the history or a screenshot. A link that does not open says so in one
   sentence — expired, revoked, or never real look the same — and offers the way home.
+  A person who is **not signed in** is not bounced to sign-in: the page says *You have been invited* (the
+  workspace's name is read only with a session, so it is not shown yet) and offers GitHub and, where the
+  server sends mail, an email field with **Email me a sign-in link**, and under them *Already have an
+  account? **Sign in with your password*** (a link to sign-in; the invitation stays in the tab and the front
+  door brings the person back to it). Before the page leaves for GitHub, or asks for the link, it asks the
+  server for the invitation's **passport** (`POST /api/invitations/passport`, R51; D-179 §5) — the answer
+  sets the cookie GitHub's callback will present, or records the address a link may make an account for —
+  and only when it is given does anything else happen. A link that does not open is the page's *does not
+  open* state; too many askings are *This invitation is being opened a lot right now. Try again in a
+  while.*; any other failure is said in words and nothing else happens. Signed in, the page skips the
+  passport and joins as above.
 - **Making one** is an owner's or an admin's: **Invite people…** in the workspace menu opens a dialog
-  with **Make a link**, the link once made with **Copy**, and the links still open — who made each and
-  until when — each with **Revoke**. A member does not see the entry.
+  with **Make a link**, the link once made with **Copy**, and a way to the links still open — who made
+  each and until when, each with **Revoke** — on the Invitations page. A member does not see the entry.
+- **By email** (D-179 §5), only where the server can send mail (the same answer the sign-in screen
+  reads, `GET /api/auth/methods`; without it, or until it has answered, the dialog is exactly the above).
+  An **Email addresses** field above the link takes addresses as chips: Enter or a comma, or a paste of
+  several, makes each a chip; × or Backspace on an empty field removes one; an address typed again, in any
+  case, is one chip, and at most twenty are taken. A chip that is not an address stays, red with a glyph
+  and the words *not an email address* — never colour alone — and is not sent. **Send invitations**
+  (*Send 3 invitations*) makes one link and sends the addresses it, as members: there is **no role** to
+  choose and no address is tied to the link. The link is shown whatever happens, so a message that
+  fails is not a dead end.
+  **What the screen says is what the server did, no more.** The letters are handed to the mail server
+  after the answer, so the answer is *queued* and the words are *"Asked the mail server to send the
+  invitation to 3 people"* with *"It is not confirmed that it arrived. If a message does not, the link
+  below works too."* — never *sent* or *delivered*. Each refusal is its own sentence naming the addresses
+  and the reason: not an email address; *you have reached today's limit of 50 invitation emails*;
+  *this workspace has reached today's limit of 200 invitation emails*; *this server cannot send email*.
+  The addresses refused stay in the field, so nothing leaves unsaid; the ones queued are cleared. A
+  request that fails says *Could not send the invitations* above the link, keeps the addresses and
+  claims nothing. The letter is plain text in the interface's language: who invited (their display
+  name), the workspace, the link with its token after `#`, until when it works, and that it can be
+  ignored if unexpected; its subject is fixed text, and the names in it are cut, stripped of line breaks
+  and of anything that reads as a web address.
 
 **Members** (`ARCHITECTURE.md` §7.4). **Members…** in the same menu lists everyone in the workspace
 with a role each: a labelled select where the person may change it, the role in words where they may
@@ -278,12 +310,16 @@ it. On a narrow window the navigation opens as the sidebar does.
   D-148) — one switch for the open tab's notices and, where the server has push, the closed tab's — with
   where a blocked browser undoes it, and what interrupts in Phase 1 in words (D-12, D-29).
 - **Keyboard shortcuts** — the reference, as a page.
-- **Sessions & account** — first *How you sign in* (D-176): the address, and whether a link sent to it
-  signs in; and GitHub — the login connected, or **Connect GitHub** for an account made by email. Connect
-  leaves for GitHub and comes back to this page, the card's foot saying how it went in words: connected,
-  or why not — cancelled, expired, signed out or somebody else signed in meanwhile, that GitHub account
-  already another Purlay account's, this one connected already, GitHub or Purlay unavailable — and that
-  nothing was connected. Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
+- **Sessions & account** — first *How you sign in* (D-176, amended by D-179): the address and whether a
+  link sent to it signs in, and, only when GitHub is linked, a GitHub row with the login — read only,
+  nothing to press. There is no **Connect GitHub**: one verified address is one account (D-179 §5), so a
+  person who signs in with GitHub on an address they verified by link arrives in the account they have.
+  Next, **Password** — only for an account that has one (`hasPassword`: the administrator the setup made):
+  *Current password* and *New password*, with the policy's rules shown as met, broken or not yet known as
+  the new one is typed (the same `passwordProblem` the server runs, §11), and **Change password**. A
+  success says *Your other sessions were signed out.* and keeps this one — the page stays on Settings, the session is the same row; if signing the others out failed after the password changed, it says so and points to *Sign out everywhere*; a wrong current password is one
+  sentence, a refused new one is named by rule, and a wait is told in minutes.
+  Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
   to make somebody else an owner first) and *Erase my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), and *Create workspace…*.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
@@ -620,11 +656,16 @@ missing specified behaviour and does not merge.
 | Thread | n/a — never rendered empty; a link to a root the channel does not hold says so in the panel | Skeleton under the root, in the panel | Retry in the panel, root intact; a root that could not be read back, Retry in its place |
 | No workspace (`/`) | "You are not in a workspace yet" + the form to make one, where this server would let the person; otherwise "Ask for an invitation" and no form — never a form that would be refused (D-155). A refusal anyway, the rule having changed under the form, says to ask for an invitation above its button | n/a — the session gate's skeleton | The form's failures above its button or under the field they name |
 | Invitation | n/a — a link always names a workspace or says it does not open | Skeleton card | "This invitation does not open" + the way home; any other failure, Retry |
-| Sign-in | n/a — always GitHub's button; the email form under it only where the server sends mail, and not until it has said so (D-138) | n/a for GitHub; the email form's button is busy while it asks | One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121). The email form: the same sentence whatever the address once asked, a refused address under the field, "switched off" or the failure above its button |
+| Sign-in | **A server with neither way connected** (a fresh one, waiting for its setup): *This server is not set up yet* — *Neither GitHub nor an emailed link is connected yet, but you can still sign in with a password. If you run this server, you can finish setting it up in the browser.* — and one link, **Set up this server**, which opens `/setup`, above the password form, which is never absent (R30). Otherwise the screen offers what the server has connected: GitHub's button where an app is, the link action where it sends mail, the password form always, and nothing until the server has said (D-138, D-179) | A skeleton the height of the button, announced as loading, until the server says what it offers; the email form's button is busy while it asks | The methods cannot be read (after a few automatic tries): the GitHub button stays, as it was before the screen asked at all, the password form stays (it does not depend on the answer) without the link action, and one small line says *We could not check which sign‑in options this server offers.* with **Try again** — the server answers a button it should not have offered with a defined 404 (`API.md`), and a failed round trip is already said here. One sentence per reason a sign-in came back unfinished (`API.md` §2): what happened, then what to do, above the same button (D-121); `email-taken` has two, chosen by whether the email form is shown. The email form: the same sentence whatever the address once asked, a refused address under the field, "switched off" or the failure above its button |
+| Setup wizard (`/setup`) | n/a — a first step is always the code | Skeleton while the status is asked; each **Try the connection** busy while it calls out | A wrong code under its field; five wrong codes, said as a lock with the time it ends and that a restart ends it; setup not available — finished, or held by another browser, which the server does not tell apart (`API.md` §2) — said as one page naming both, with the fifteen minutes and the restart; too many tries from this browser, said with the wait; a failed try as its reason's three parts and nothing saved (§11); a finish refused, with the way back to a step that would allow it |
+| Sign-up | n/a — a form, always | The button busy while it asks | On an *invite-only* server without an invitation, one sentence that an invitation is needed, with what to do; an address refused under the field; "switched off" or the failure above the button (D-179) |
+| A workspace with nobody else | "Only you are here for now" + **Invite people** | n/a — the sidebar's skeleton | A send that fails says *not sent* and keeps the link to copy (D-179) |
+| Invite people (dialog) | n/a — always the link, and the address field where the server sends mail | The send and the link buttons busy while they ask; the field is held | *Could not send the invitations* / *Could not make a link* above the link, the addresses kept; each address refused named with its reason (not an address, a daily limit, no mail on this server), the rest *asked of the mail server*, never *sent*; the link shown whatever happened |
+| Administration → Server (Settings → Server) | Each way in not connected says what that stops and offers to connect it; the two policies always have a value | Skeleton cards | A failed try as in the wizard, nothing kept and what was typed still there; the settings that could not be read, with Retry; a secret the key could not open, on its card; a setup still open, said in a sentence; anybody who is not the administrator is *not found* |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
-| How you sign in (Sessions & account) | n/a — always an address; GitHub is a login or **Connect GitHub** | Skeleton in the card; **Connect GitHub** is busy while it asks | Retry in the card; a connect that could not start says why under the card, and one GitHub sent back says how it went there, in words (D-176) |
+| How you sign in (Sessions & account) | n/a — always an address, and whether a link to it signs in; the GitHub row is there only when GitHub is linked, and is not offered otherwise | Skeleton in the card | Retry in the card (D-176, D-179) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
@@ -690,3 +731,188 @@ picker beyond a recent/frequent row · read receipts · threads in a popped-out 
 saved items and a status line were pulled into Phase 1 (D-130, D-128, D-131) and are in §2.
 
 Some are permanent non-goals (`PRD.md` §6); the rest are simply not the wedge.
+
+---
+
+## 11. Setting up a server and making an account
+
+D-179. The reference for how these look is the owner's three prototypes — the wizard, its error states
+and the sign-up flow; every colour and size comes from `packages/tokens` (D-97), never from them. Where
+this section and a prototype differ, this section is what is built.
+
+**The setup wizard** is `/setup`, and the only screen a server with no user answers. A server with a user
+answers `/setup` as it answers any address that does not exist; the page itself, on a finished server, says so, with one link — *Go to sign in*, or *Open Purlay* (the app's root) to someone already signed in. After a refused try the GitHub step shows one primary action, *Try again*, not a second *Try it* beside it. It is a focused page, like the welcome
+step: a list of the eight screens down the left, each with a name and a line saying what it holds, the
+current one marked and the finished ones ticked, and on the right the step — *Step 4 of 8*, its title, a
+sentence, then the form. A line under the list says everything can be changed later in
+**Administration → Server**. On a narrow window the list is not drawn and the *Step n of 8* line alone
+says where the person is; nothing is missing, as in §2.
+
+**Eight screens, nine steps.** The table's seven rows and the finish are the eight screens; the server
+records nine steps (`SETUP_STEPS`), because the address and the sign-up policy — row 3 — are two of its
+steps and one screen: confirming posts both, in that order. A screen is *done* when the server has passed
+its last step. A person who closes the window comes back to the first screen not done; one already done
+can be walked back to with **Back**, shows what was kept (the administrator, the workspace, *GitHub is
+connected*), and a screen that keeps a secret never shows it again. The page asks the server for its
+status once, on entry, and for its state once and again only after a step changed something — never on a
+timer and never when the window gains focus, since the status shares the sign-in rate-limit bucket.
+`/` on a server nobody has set up, for somebody not signed in, goes to `/setup`; every other address goes
+to sign-in as it did.
+
+| # | Step | What it asks, and what it does |
+|---|---|---|
+| 1 | **Setup code** | Before the code is asked, the page compares the address the server is configured for (`appUrl`, from `GET /setup/status`) with its own: when they differ it says so and links to `APP_URL`, since a code sent from another address is refused. "You own this server." The code the latest start wrote to the log; the sentence says where to find it (`docker compose … logs api`) and that it works for **one hour** — a restart writes a new one. A wrong code is said under the field. After five wrong codes setup is locked for fifteen minutes, the right code included; the page says so, says when it opens again, and that a restart of the server, which writes a new code, ends the lock at once. Accepted, this browser holds setup: another browser sending a code is told setup is not available — finished, or in progress in another browser; the server answers both alike, so the page names both. If the browser that holds setup has not been seen for fifteen minutes, a code from a later start takes the setup over at the step it reached, and the page says so: "Setup was started in another browser. If that browser is gone, wait fifteen minutes, restart the server and enter the new code; you carry on from the step it reached." |
+| 2 | **Administrator account** | Name, email address and password. Says, before the button, that the address is **not verified yet** and is verified by the message the Email step sends — never by a sign-in link, which the library would let **remove the password and sign every session out**, and which is therefore never sent to an unverified address (D-179 §4). The password rules are the policy's (`passwordProblem` in `@purlay/types`, D-179 §4) — ten to 128 characters, not the address or the name or a word of it, not one of the commonest or one of them with digits added, not one or two characters repeated — shown before the field, and a refusal says which rule it broke |
+| 3 | **Server address** | The address people open — `APP_URL`, shown, with GitHub's callback address; changing it is a deployment setting (Ruling R35) — and the one choice about sign-up: *Anyone can create an account* or *Only people who are invited* — the second already chosen |
+| 4 | **Sign in with GitHub** | Why, then two numbered parts: *1 · Create an OAuth app on GitHub*, naming the path to take there and showing the callback address to paste, with **Copy**; *2 · Paste the values* — Client ID and Client secret, with the note that the secret is stored encrypted and never shown again. **Try the connection and continue**; **Skip for now**; **Back** |
+| 5 | **Email** | The mail server and the sender; says what mail is for — sign-in links and invitations. **Try the connection and continue** sends a test message to the administrator's address — the letter that verifies it (below); skipping says what then stops working |
+| 6 | **First workspace** | A name and an address, as *Create workspace* asks (D-124); it starts with `#general` (D-174) |
+| 7 | **Invite your team** | Copies the invitation link, and where mail is connected also sends it to addresses typed in. **Skip for now** is as good as any other way to go on |
+
+**Nothing is saved on a failed try.** Steps 4 and 5 call the service for real before they save. A try
+that fails shows, in this order, the same three things: **what happened** in a sentence under a red
+heading, **how to put it right** as a short list, and **what the service answered**, as it said it, in a
+monospace line. The field that is wrong is outlined, and the button becomes **Try again**; **Skip for
+now** and **Back** stay. The email step also lists what it managed, one line each — *server address
+resolved*, *connection made, TLS on*, *login rejected*, *test message not sent* — a tick, a cross, or a
+hollow circle for what was never reached — read from the reason, since each reason is where the try
+stopped: `unreachable` and `tls-failed` at the connection (a refused port is the common case, so the address line is ticked), `auth-failed` at the login,
+the three refusals at the message. Each reason is a sentence of its own (`ProbeReason`, `API.md` §2) and
+the build refuses a reason without one. The reply line is the service's words with whatever was typed
+into the form taken out, at most 200 characters (D-179 §4.4). The wording of every reason but
+`secret-rejected` and `auth-failed`, the prototype's two, is the builder's, to be confirmed:
+
+| Reason | What happened | How to put it right |
+|---|---|---|
+| `secret-rejected` | GitHub knows the app and refused the client secret | Open the app's page on GitHub, **Generate a new client secret**, copy it at once — it is shown once — and paste it in |
+| `client-unknown` | GitHub knows no app with this Client ID | Copy the Client ID from the app's page on GitHub again — the app may have been deleted, or the ID belongs to another GitHub (an Enterprise Server) |
+| `auth-failed` | The mail server accepted the connection and refused the login | The password may be wrong or expired; the account may want an app password (usual with Google and Microsoft); the user name may need to be the full address |
+| `tls-failed` | The server was reached and the secure connection failed | Use the port and the `smtps://` or `smtp://` form the provider names; a certificate this server does not trust is refused, and a relay past this machine must offer TLS unless the link to it is private |
+| `unreachable` | Nothing answered at that address, or not in time | Check the host and port, and that this server may connect out to it |
+| `sender-refused` | The login worked and the sender address was refused | Send from an address this account is allowed to use |
+| `recipient-refused` | The mail server refused the administrator's address as a recipient | Check the address in the administrator step; some relays send only to their own domain |
+| `message-refused` | The mail server took both addresses and refused the message | The relay's policy refused it — often the sender's domain (SPF, DKIM, DMARC): send from a domain the relay may send for |
+| `unexpected-reply` | The answer was not one a working GitHub or mail server gives: an error or a busy reply from the service itself, a redirect, a reply too long to be one, or a web server, a proxy or another service at that address | Try again in a minute; if it stays, check the address — the reply shown says which it was |
+
+**What the GitHub step cannot try is the callback address.** GitHub checks it only on its own screen when
+somebody signs in, so the step shows the exact address — `APP_URL/auth/callback/github` — with **Copy**,
+and says that GitHub's page *"The redirect_uri MUST match the registered callback URL"* means the app's
+*Authorization callback URL* is not that address (D-179 §4.4).
+
+**Settings → Server** (`/w/:slug/settings/server`, D-179 §4.8) is where the wizard's choices are changed
+afterwards. It is **the server administrator's alone** — `isServerAdmin` on `GET /api/me`, never a
+workspace role: an owner of a workspace is not offered it, and its address is *not found* for everybody
+else, as the server answers `404` to the same people. It has its own heading in the navigation, *Server*,
+under the account's and the workspace's, and is in the palette. Four cards, in this order, over one query
+that is read again after every change and never polled:
+
+- **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
+  sentence on what that stops), the callback address with **Copy**, **Replace credentials** (or **Connect
+  GitHub**) opening the wizard's two fields, **Try the connection and save**, and **Disconnect**. The
+  server tries the pair with GitHub before it keeps it, so there is one button, not two: a try that
+  fails is the wizard's three parts — what happened, how to put it right, what GitHub answered — with the
+  field outlined, nothing kept and what was typed still there; one that works closes the form and says
+  *Saved. GitHub sign-in uses this app from now on.*
+- **E-mail** — the relay's host (never its user or password), the sender, **Replace mail server**, and
+  **Disconnect**. Under the fields it says where the test goes: *We will send a test message to
+  ⟨your address⟩* — a plain letter, no link; **Send a test message and save** is the one button, and the
+  failure is the wizard's, with the same reasons.
+- **Who can create an account** — *Only people who are invited* or *Anyone*, each with its one sentence,
+  applied as it is chosen (*Saved. This applies from the next sign-up.*).
+- **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
+  accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
+  by the server after; **Save** is enabled only when something changed.
+
+**Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
+remain — the page knows from which of GitHub and the mail server serve — it says so **before** the button
+(*This is the last way for other people to sign in. Afterwards only your own password signs in…*) and the
+button reads **Disconnect anyway**; the server is told so outright (`confirmLastChannel`). If the page was
+wrong about it — somebody else changed the settings meanwhile — the server's refusal turns the same dialog
+into that question, and nothing was taken.
+
+**A secret the key could not open** (`needsReentry`) says so on its card — *This secret could not be opened
+with the current key — enter it again.* — and the card's form is already open, with **Disconnect** beside it to let the unreadable value go (the
+same question, the same last-way-in rule): entering it tries it and seals it under the current key
+(`docs/CONFIG.md`). A server whose setup is still open refuses these changes
+(*The setup of this server is not finished yet…*): the wizard's steps are the way until then. Motion is the
+wizard's: a form arrives with the step-in movement, a failure with the nudge, and under reduced motion
+neither plays. It is a settings page like the others: skeleton cards while it loads, *Could not read the
+server settings* with **Retry** if it fails, one column on a phone.
+
+**The email step's test message is the administrator's own verification letter.** It names the server,
+carries a link that works once for 24 hours, and says to ignore it if unexpected; following the link —
+in any browser, during the setup or after it — marks the address verified (D-179 §4.3). The step says so:
+*We sent a test message to `<address>`. Open the link in it to verify your address.*
+
+**When a step is skipped it says what stops working.** Skipping email: invitation links are not sent and
+only copied, email sign-in and *create an account by email* are hidden; GitHub, if connected, still lets
+everyone in. Skipping GitHub is said the same way.
+
+**The finish rule.** **Finish setup** is disabled until at least one way for other people to sign in is
+connected and its try succeeded — GitHub's app accepted, or the test message taken by the relay; the
+administrator always has the password (D-179 §4.5). If both GitHub and email were skipped, the wizard says why in a
+warning — *Nobody else could sign in. If you finished now, only you could, with your password; nobody you invited could get in* — and offers **Back to
+GitHub** and **Back to email**; the button stays disabled until one is connected. The server refuses
+the finish too (`API.md` §2).
+
+**Close and return.** The browser that holds setup comes back to the step it reached, with what it had
+saved; a step that was not completed saved nothing. **Without email** (GitHub only), the sign-in screen
+shows no email form, a workspace's invitation dialog shows the link alone, and nowhere is a person told
+to check their email.
+
+**Motion.** A step enters from the right and the screen under it rises into place; a finished step's
+mark settles; an error nudges its field once. Each lasts 0.2 second, from the motion
+tokens (`duration-step`, `duration-mark`, `duration-nudge` — the token gate allows none longer than 200 ms, §9), and none loops. Under `prefers-reduced-motion: reduce` **nothing animates**: the step simply
+changes. A test asserts it, since a rule left to taste is skipped.
+
+**Sign-in, as it changes.** Under the one card — *Sign in to Purlay*, *Continue to your workspace* — the
+GitHub button, *or*, the email field and **Send a sign-in link**, and at the foot *No account yet?
+**Create account***. Each way is offered only where the server connected it, so a GitHub-only server
+shows the one button and a mail-only server the field. A person who sent themselves a link is shown
+*Check your email*: the address, *the link is valid for fifteen minutes*, **Send again** and **Change
+address**. **The password is always offered** (R30), because the administrator the setup made has one on
+a server with mail and on one without: under the GitHub button the card has an email field, a password
+field and **Sign in**, and — only where the server sends mail — **Email me a sign-in link instead**, which
+asks for a link to the address typed. The fields are named for a password manager (`username`,
+`current-password`). A wrong address, a wrong password and an account with no password get the one
+sentence *Wrong email or password.*, so the screen never says which accounts exist. Ten wrong passwords
+for an address from this browser's network, or twenty for any addresses, in fifteen minutes, and the
+screen says *Too many attempts. Try again in N minutes.* from `Retry-After` — never that the account is
+locked, for it is not (D-179 §4); a server that did not answer is not blamed on the person. At the foot,
+where the policy is *open*, *No account yet? **Create an account*** (the sign-up screen); where it is
+*invite-only*, *Accounts are created by invitation.*, with no link.
+
+**When a GitHub sign-in did not finish**, one sentence says what happened and what to do, above the
+button, and never blames the person (D-121). Two are new with D-179 §5. *`signup-closed`* — an
+*invite-only* server and no invitation: "This Purlay server makes accounts by invitation only — ask
+someone on it for an invitation link." *`email-taken`* — a local account has the address GitHub gave but has not verified it, so GitHub is not
+linked to it, and the sentence follows what the screen offers. Where the server sends mail (the email form
+is shown): "An account with that email exists, but its address is not verified yet, so GitHub cannot sign
+in to it. Sign in with that account's password instead; once the address is verified, GitHub will sign in
+to the same account." The only unverified accounts are password accounts made at setup (R30), so the
+advice is the password on a server with mail and on one without. Where there is no mail: "… It is a
+password account made when this server was set up: sign in with its password. This server sends no email,
+so the address stays unverified and GitHub will not sign in to it." Neither sends anyone to Settings, which
+has nothing to connect.
+
+**Sign-up** is its own screen at `/sign-up`, at the same width, and only for a server whose policy is
+*open* (`AuthMethods.signUp`): *Create your account*, the GitHub button where GitHub is connected, *or*,
+where the server sends mail, an email field and **Email me a sign-in link** — the first link spent makes
+the account — and *Already have an account? **Sign in***. There is **no password sign-up** and no name
+field: the library's password sign-up is closed (D-179 §3), and the name comes from GitHub or is made
+(D-138 §5). On an *invite-only* server the same address shows *Accounts are created by invitation*, *This
+Purlay server does not take sign-ups. Ask someone on it for an invitation link, and open the link to make
+your account.*, and *Sign in*, with no form and no button. An uninvited address that tries anyway, by a
+route this screen does not offer, is told that an invitation is needed to make an account here, with what
+to do — ask whoever runs it — never *no such account*.
+
+**An invitation, to a person without an account**, shows the card of §2 (*You have been invited*) and both
+ways in: **Continue with GitHub**, *or* an email address and **Email me a sign-in link**, each after the
+invitation's passport (§2). This is the one place an *invite-only* server lets an account be made. A person
+who has an account is pointed to sign-in with their password, and the invitation waits in the tab.
+
+**A workspace with nobody else in it** says so, where the feed would be: *Only you are here for now*, and
+under it *Invite your team and the conversation can start. They sign in with an email link or GitHub.*,
+with **Invite people** — the dialog of §2, where mail is connected adding an address field above **Make a
+link** and the link beside **Copy**. A send that is refused or fails says so, in words (§2, *By email*), and leaves the
+link to copy; nothing says *sent* or *delivered* that was not.

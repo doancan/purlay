@@ -27,7 +27,7 @@ export const putPin = async (
   messageId: string,
 ): Promise<void> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const change = await atomicallyOn(database)(
     async (transaction) => await pinMessage(transaction, clock, userId, messageId),
   );
@@ -40,8 +40,8 @@ export const deletePin = async (
   request: Request,
   messageId: string,
 ): Promise<void> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const change = await atomicallyOn(database)(
     async (transaction) => await unpinMessage(transaction, userId, messageId),
   );
@@ -50,11 +50,11 @@ export const deletePin = async (
 
 /** `GET /api/channels/:channelId/pins` — newest pin first, bounded by `PINS_MAX`. */
 export const listPins = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
 ): Promise<PinList> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return await channelPins(database, context);
 };

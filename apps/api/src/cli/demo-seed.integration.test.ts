@@ -2,6 +2,7 @@
  * The seed, run against a real database inside a transaction that is rolled back: what it
  * leaves is what the real send path produced, and nothing it does survives the test.
  */
+import { TEST_AUTH_SECRET } from '../testing/signed-in';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { Channel, type MeResponse, type Message } from '@purlay/types';
@@ -16,7 +17,6 @@ import {
   assertDemoDatabase,
   freshPerson,
   freshSession,
-  neverSignsIn,
   plannedMessages,
   seedDemo,
 } from './demo-seed';
@@ -137,18 +137,28 @@ describe('integration: the demo seed', () => {
     },
     SEEDING_MS,
   );
+});
 
-  test('never asks GitHub for anything: its sessions are its own', async () => {
-    for (const call of [
-      neverSignsIn.exchangeCode('code'),
-      neverSignsIn.profile('token'),
-      neverSignsIn.emails('token'),
-    ]) {
-      expect(
-        await call.catch((error: unknown) => (error instanceof Error ? error.message : '')),
-      ).toContain('never signs in');
-    }
-  });
+describe('integration: a seed the API refuses', () => {
+  test(
+    'stops at the first refused request and says which, as whom, with what the API answered',
+    async () => {
+      await withRollback(async (db) => {
+        const config = testConfig({
+          DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_demo_test',
+        });
+        // The workspace's address is taken, so the first request the seed makes is refused.
+        await db.insertInto('workspaces').values({ name: 'Taken', slug: 'acme-eng' }).execute();
+        let message = '';
+        await seedDemo({ database: db, config, now: NOW }).catch((error: unknown) => {
+          message = error instanceof Error ? error.message : '';
+        });
+        expect(message).toStartWith('POST /api/workspaces as dogancan answered 409:');
+        expect(message).toContain('WORKSPACE_SLUG_TAKEN');
+      });
+    },
+    SEEDING_MS,
+  );
 });
 
 describe('integration: the database the seed will write to', () => {
@@ -207,10 +217,16 @@ describe('integration: a fresh session for a seeded person (#522 follow-up)', ()
         ).status;
 
       // Every session erin holds ends, as signing out everywhere ends them.
-      await revokeAllSessions(db, fixedClock(NOW), manifest.outsiders.erin.userId);
+      await revokeAllSessions(db, manifest.outsiders.erin.userId);
       expect(await me(manifest.outsiders.erin.tokens[0])).toBe(401);
 
-      const token = await freshSession(db, fixedClock(NOW), config.DATABASE_URL, 'erin');
+      const token = await freshSession(
+        db,
+        fixedClock(NOW),
+        config.DATABASE_URL,
+        'erin',
+        TEST_AUTH_SECRET,
+      );
       expect(await me(token)).toBe(200);
     });
   });
@@ -218,7 +234,7 @@ describe('integration: a fresh session for a seeded person (#522 follow-up)', ()
   test('is refused outside a scratch database, and for somebody who is not there', async () => {
     await withRollback(async (db) => {
       const refusal = async (url: string, who: string): Promise<string> =>
-        await freshSession(db, fixedClock(NOW), url, who).then(
+        await freshSession(db, fixedClock(NOW), url, who, TEST_AUTH_SECRET).then(
           () => 'no refusal',
           (error: unknown) => (error instanceof Error ? error.message : String(error)),
         );
@@ -239,7 +255,13 @@ describe('integration: a fresh person, for a browser test that needs people nobo
         DATABASE_URL: 'postgres://u:p@localhost:5432/purlay_e2e_test',
       });
       const app = createApp(testDependencies({ database: db, clock: fixedClock(NOW), config }));
-      const person = await freshPerson(db, fixedClock(NOW), config.DATABASE_URL, 'hana-test');
+      const person = await freshPerson(
+        db,
+        fixedClock(NOW),
+        config.DATABASE_URL,
+        'hana-test',
+        TEST_AUTH_SECRET,
+      );
       const response = await app.handle(
         new Request('http://localhost/api/me', {
           headers: { cookie: `${SESSION_COOKIE}=${person.token}` },
@@ -255,6 +277,7 @@ describe('integration: a fresh person, for a browser test that needs people nobo
         fixedClock(NOW),
         'postgres://u:p@localhost:5432/purlay',
         'hana-elsewhere',
+        TEST_AUTH_SECRET,
       ).then(
         () => 'no refusal',
         (error: unknown) => (error instanceof Error ? error.message : String(error)),

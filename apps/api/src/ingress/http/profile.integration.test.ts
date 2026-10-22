@@ -9,7 +9,7 @@ import { PROFILE_TITLE_MAX, type Profile, type ServerFrame } from '@purlay/types
 import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
-import { issueSession } from '../../modules/auth/sessions';
+import { aTestAuth, aSession } from '../../testing/signed-in';
 import { testDependencies } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { createApp } from './app';
@@ -27,7 +27,7 @@ describe('integration: PATCH /api/me/profile', () => {
       const room = await aRoom(db, ['alice', 'bob']);
       const alice = room.members['alice']?.userId ?? '';
       const bob = room.members['bob']?.userId ?? '';
-      const { token } = await issueSession(db, clock, alice, 30);
+      const { token } = await aSession(db, clock, alice, 30);
       const told: string[] = [];
       const bus: EventBus = {
         publish: (topic: string, frame: ServerFrame): Promise<void> => {
@@ -38,7 +38,7 @@ describe('integration: PATCH /api/me/profile', () => {
         unsubscribe: () => undefined,
         forget: () => undefined,
       };
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       const request = (): Request =>
         new Request('https://purlay.test/api/me/profile', {
           method: 'PATCH',
@@ -63,7 +63,7 @@ describe('integration: PATCH /api/me/profile', () => {
   test('refuses what the contract refuses, and a caller with no session', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice']);
-      const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const { token } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
       const app = createApp(testDependencies({ database: db, clock }));
       const patch = async (body: unknown, cookie = true): Promise<number> =>
         (

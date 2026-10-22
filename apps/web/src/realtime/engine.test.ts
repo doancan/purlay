@@ -1325,6 +1325,7 @@ describe('is the session still there', () => {
       profile: NO_PROFILE,
       memberships: [],
       mayCreateWorkspace: true,
+      isServerAdmin: false,
     });
   const gone: Me = () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no'));
   const offline: Me = () => Promise.reject(new ApiError(0, 'NETWORK', 'offline'));

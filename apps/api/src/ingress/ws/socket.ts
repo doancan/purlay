@@ -13,6 +13,7 @@
  * (D-39, `ARCHITECTURE.md` §7.2), identity is resolved once on open, frames of one
  * connection are handled in order, and cleanup runs on close.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
@@ -22,6 +23,7 @@ import { withinRequest, type Logger } from '../../platform/logging';
 import { atomicallyOn, type Atomically } from '../../platform/transactions';
 import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
+import { startLivenessSweep } from '../../realtime/liveness';
 import { onlinePresence, type OnlinePresence } from '../../realtime/online';
 import { announcePresence } from '../../modules/presence/presence';
 import {
@@ -41,7 +43,11 @@ import type { PushSender } from '../../modules/push/sender';
 
 export interface SocketDependencies {
   readonly config: Pick<Config, 'APP_URL'>;
+  /** The seam a socket's session is resolved through, as an HTTP request's is (`sessions.ts`). */
+  readonly auth: Auth;
   readonly database: Executor;
+  /** The liveness sweep's own timers and interval; absent, the real ones (`liveness.ts`). */
+  readonly liveness?: { readonly timers?: Timers; readonly intervalMs?: number };
   readonly clock: Clock;
   readonly log: Logger;
   readonly backplane?: Backplane | undefined;
@@ -137,7 +143,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
       await announcePresence({ database, bus, clock, log }, change);
     },
   });
-  const hub = createSocketHub(database, clock, {
+  const hub = createSocketHub(dependencies.auth, clock, {
     log,
     presence: online,
     // Called from `hub.deliver`, which only runs after `bus` exists.
@@ -152,6 +158,19 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
   });
   const bus = (dependencies.backplane ?? inProcessBackplane()).node(hub.deliver, log);
+  // A session removed by the database itself ends its sockets within a sweep (`liveness.ts`).
+  const sweep = startLivenessSweep({
+    database,
+    clock,
+    log,
+    source: { sessions: hub.sessions, end: hub.deliver },
+    ...(dependencies.liveness?.timers === undefined
+      ? {}
+      : { timers: dependencies.liveness.timers }),
+    ...(dependencies.liveness?.intervalMs === undefined
+      ? {}
+      : { intervalMs: dependencies.liveness.intervalMs }),
+  });
   // Measured, so the closing line says what the budget met (O-4).
   const limiter = metered(inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET), clock);
   // This node's view of who is typing where; ephemeral, as D-7 allows.
@@ -167,7 +186,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     admit: async (request): Promise<UpgradeRefusal | undefined> => {
       try {
         const { userId } = await admitSocket(
-          { database, clock, appUrl: dependencies.config.APP_URL },
+          { auth: dependencies.auth, appUrl: dependencies.config.APP_URL },
           request,
         );
         // Before the socket is bound, so a refusal is a real status. Counts what is
@@ -192,6 +211,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     },
 
     open: async (socket): Promise<void> => {
+      sweep.arm();
       let identity: Awaited<ReturnType<typeof hub.opened>>;
       try {
         identity = await hub.opened(
@@ -304,6 +324,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
     closeAll: (): void => {
       // First: the sockets about to close tell nobody they left — they are coming back elsewhere.
       online.stop();
+      sweep.stop();
       hub.closeAll(CLOSE_CODES.RESTARTING, 'restarting');
     },
     settled: async (): Promise<void> => {

@@ -1,23 +1,29 @@
 /**
- * Identity resolution, against a real database.
- *
- * D-38 exists because the obvious implementation fails on the first sign-in by
- * somebody who has not made an email address public. Each collision it names is
- * a test here, because "we thought about it" and "it does that" are different
- * claims.
+ * What a GitHub sign-in writes into Purlay's own columns, against a real database (D-38, D-78,
+ * D-179). The library decides whose account it is (`better-auth.integration.test.ts`,
+ * `ingress/http/auth.integration.test.ts`); what is checked here is what is stored from what GitHub
+ * said, because "we thought about it" and "it does that" are different claims: a name that is taken,
+ * a login at the edge of its column, control characters, an account erased in the meantime.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback } from '@purlay/db';
+import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
-import type { GitHubEmail, GitHubProfile } from './github';
-import { resolveIdentity } from './identity';
+import type { GitHubProfile } from './github';
+import {
+  availableUsername,
+  cleanedProfile,
+  recordGitHubSignIn,
+  type ResolvedIdentity,
+} from './identity';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
 });
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
+
+type Database = Parameters<Parameters<typeof withRollback>[0]>[0];
 
 const account = (overrides: Partial<GitHubProfile> = {}): GitHubProfile => ({
   id: 4001,
@@ -27,253 +33,141 @@ const account = (overrides: Partial<GitHubProfile> = {}): GitHubProfile => ({
   ...overrides,
 });
 
-const verified = (address: string): readonly GitHubEmail[] => [
-  { email: address, primary: true, verified: true },
-];
-
-const refusalFrom = async (body: () => Promise<unknown>): Promise<AppError> => {
-  try {
-    await body();
-  } catch (error) {
-    if (error instanceof AppError) return error;
-    throw error;
-  }
-  throw new Error('identity resolved where it was required to refuse');
+/**
+ * A GitHub sign-in as the library leaves the database before it opens the session: the account made
+ * if this GitHub id has none, with a name nobody would choose, then what the sign-in writes.
+ */
+const signedIn = async (db: Database, given: GitHubProfile): Promise<ResolvedIdentity> => {
+  const githubId = String(given.id);
+  const known = await db
+    .selectFrom('users')
+    .select('id')
+    .where('github_id', '=', githubId)
+    .executeTakeFirst();
+  const row =
+    known ??
+    (await db
+      .insertInto('users')
+      .values({
+        github_id: githubId,
+        email: `${githubId}@users.noreply.github.test`,
+        username: `pending-${githubId}`,
+        display_name: 'pending',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow());
+  return await recordGitHubSignIn(db, clock, {
+    userId: row.id,
+    profile: cleanedProfile(given),
+    made: known === undefined,
+  });
 };
 
-describe('integration: GitHub identity', () => {
-  test('a first sign-in creates the account', async () => {
+const storedFor = async (
+  db: Database,
+  userId: string,
+): Promise<{ username: string; display_name: string }> =>
+  await db
+    .selectFrom('users')
+    .select(['username', 'display_name'])
+    .where('id', '=', userId)
+    .executeTakeFirstOrThrow();
+
+describe('integration: what a GitHub sign-in stores from what GitHub said', () => {
+  test('a first sign-in stores the login as the username, the name, and the picture', async () => {
     await withRollback(async (db) => {
-      const { userId } = await resolveIdentity(db, clock, account(), verified('mona@example.test'));
+      const { userId, usernameCollision } = await signedIn(db, account());
       const row = await db
         .selectFrom('users')
-        .selectAll()
+        .select(['username', 'display_name', 'avatar_url', 'github_login'])
         .where('id', '=', userId)
         .executeTakeFirstOrThrow();
-
-      expect(row.github_id).toBe('4001');
-      expect(row.email).toBe('mona@example.test');
-      expect(row.username).toBe('octocat');
-      expect(row.display_name).toBe('Mona Lisa');
+      expect(row).toEqual({
+        username: 'octocat',
+        display_name: 'Mona Lisa',
+        avatar_url: 'https://avatars.test/octocat.png',
+        github_login: 'octocat',
+      });
+      expect(usernameCollision).toBeUndefined();
     });
   });
 
-  test('signing in again returns the same account and refreshes what is display-only', async () => {
+  test('signing in again refreshes what is display-only, on the same account', async () => {
     await withRollback(async (db) => {
-      const first = await resolveIdentity(db, clock, account(), verified('mona@example.test'));
-      const second = await resolveIdentity(
-        db,
-        clock,
-        account({ login: 'monalisa', name: 'Mona' }),
-        verified('mona@example.test'),
-      );
-
-      expect(second.userId).toBe(first.userId);
+      const first = await signedIn(db, account());
+      const again = await signedIn(db, account({ name: 'Mona Renamed', avatarUrl: null }));
+      expect(again.userId).toBe(first.userId);
       const row = await db
         .selectFrom('users')
-        .selectAll()
+        .select(['display_name', 'avatar_url'])
         .where('id', '=', first.userId)
         .executeTakeFirstOrThrow();
-      expect(row.username).toBe('monalisa');
-      expect(row.display_name).toBe('Mona');
+      expect(row).toEqual({ display_name: 'Mona Renamed', avatar_url: null });
     });
   });
 
   /**
-   * The address is the identity anchor and `NOT NULL`. GitHub omits it from the
-   * profile for anyone who has not made one public, which is common among the
-   * developers this product is for — so this is the *likely* path, not the edge.
-   */
-  test('no primary verified address is refused with a message that says what to fix', async () => {
-    await withRollback(async (db) => {
-      const noneAtAll = await refusalFrom(() => resolveIdentity(db, clock, account(), []));
-      expect(noneAtAll.body.code).toBe('EMAIL_REQUIRED');
-      expect(noneAtAll.body.message).toContain('verify');
-
-      const unverified = await refusalFrom(() =>
-        resolveIdentity(db, clock, account(), [
-          { email: 'mona@example.test', primary: true, verified: false },
-        ]),
-      );
-      expect(unverified.body.code).toBe('EMAIL_REQUIRED');
-
-      const notPrimary = await refusalFrom(() =>
-        resolveIdentity(db, clock, account(), [
-          { email: 'other@example.test', primary: false, verified: true },
-        ]),
-      );
-      expect(notPrimary.body.code).toBe('EMAIL_REQUIRED');
-    });
-  });
-
-  test('the primary verified address is chosen out of several', async () => {
-    await withRollback(async (db) => {
-      const { userId } = await resolveIdentity(db, clock, account(), [
-        { email: 'old@example.test', primary: false, verified: true },
-        { email: 'unverified@example.test', primary: true, verified: false },
-        { email: 'MONA@Example.test', primary: true, verified: true },
-      ]);
-      const row = await db
-        .selectFrom('users')
-        .select('email')
-        .where('id', '=', userId)
-        .executeTakeFirstOrThrow();
-      // Lowercased at the boundary, so one address cannot become two accounts (D-40).
-      expect(row.email).toBe('mona@example.test');
-    });
-  });
-
-  /**
-   * "Same email, therefore the same person" is a classic account-takeover
-   * surface. Never linked silently (D-5, D-38).
-   */
-  test('a second GitHub account with the same address is refused, never linked', async () => {
-    await withRollback(async (db) => {
-      const first = await resolveIdentity(db, clock, account(), verified('shared@example.test'));
-
-      const refusal = await refusalFrom(() =>
-        resolveIdentity(
-          db,
-          clock,
-          account({ id: 9002, login: 'impostor' }),
-          verified('shared@example.test'),
-        ),
-      );
-      expect(refusal.body.code).toBe('ACCOUNT_EMAIL_CONFLICT');
-      expect(refusal.status).toBe(409);
-
-      // And the original account is untouched — not relinked, not renamed.
-      const rows = await db
-        .selectFrom('users')
-        .selectAll()
-        .where('email', '=', 'shared@example.test')
-        .execute();
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.id).toBe(first.userId);
-      expect(rows[0]?.github_id).toBe('4001');
-    });
-  });
-
-  /**
-   * GitHub lets an account be renamed and the freed name be taken by someone
-   * else, so a refresh can collide with a live row. Identity is `github_id`;
-   * `username` is display-only, so the incoming user takes a suffix (D-38).
+   * GitHub lets an account be renamed and the freed name be taken by someone else, so a username can
+   * collide with a live row. The incoming user takes a suffix; identity is `github_id`, and
+   * `username` is display-only (D-38).
    */
   test('a username taken by somebody else gets a suffix, and the collision is reported', async () => {
     await withRollback(async (db) => {
-      await resolveIdentity(
-        db,
-        clock,
-        account({ id: 1, login: 'taken' }),
-        verified('one@example.test'),
-      );
-
-      const second = await resolveIdentity(
-        db,
-        clock,
-        account({ id: 2, login: 'taken' }),
-        verified('two@example.test'),
-      );
-
-      const row = await db
-        .selectFrom('users')
-        .select('username')
-        .where('id', '=', second.userId)
-        .executeTakeFirstOrThrow();
-      expect(row.username).toBe('taken-1');
+      await signedIn(db, account({ id: 1, login: 'taken' }));
+      const second = await signedIn(db, account({ id: 2, login: 'taken' }));
+      expect((await storedFor(db, second.userId)).username).toBe('taken-1');
       expect(second.usernameCollision).toEqual({ wanted: 'taken', stored: 'taken-1' });
     });
   });
 
   test('keeping your own username across a sign-in is not a collision', async () => {
     await withRollback(async (db) => {
-      const first = await resolveIdentity(db, clock, account(), verified('mona@example.test'));
-      const again = await resolveIdentity(db, clock, account(), verified('mona@example.test'));
+      const first = await signedIn(db, account());
+      const again = await signedIn(db, account());
       expect(again.userId).toBe(first.userId);
       expect(again.usernameCollision).toBeUndefined();
     });
   });
 
   /**
-   * `users.username` is VARCHAR(39), GitHub's own limit, so a login that fills it
-   * cannot take a `-1` suffix without overflowing — and a login one longer than
-   * the limit must not be able to fail a sign-in either. Both raised 22001 and the
-   * person was told the server broke (#233).
+   * `users.username` is VARCHAR(39), GitHub's own limit, so a login that fills it cannot take a `-1`
+   * suffix without overflowing — and a login one longer than the limit must not be able to fail a
+   * sign-in either. Both raised 22001 and the person was told the server broke (#233).
    */
   describe('a login at the edge of the column', () => {
     const THIRTY_NINE = 'a'.repeat(39);
 
     test('a 39-character login that is taken is shortened to fit its suffix', async () => {
       await withRollback(async (db) => {
-        await resolveIdentity(
-          db,
-          clock,
-          account({ id: 1, login: THIRTY_NINE }),
-          verified('one@example.test'),
-        );
-        const second = await resolveIdentity(
-          db,
-          clock,
-          account({ id: 2, login: THIRTY_NINE }),
-          verified('two@example.test'),
-        );
-
-        const row = await db
-          .selectFrom('users')
-          .select('username')
-          .where('id', '=', second.userId)
-          .executeTakeFirstOrThrow();
-        expect(row.username).toBe(`${'a'.repeat(37)}-1`);
-        expect(row.username).toHaveLength(39);
-        expect(second.usernameCollision).toEqual({ wanted: THIRTY_NINE, stored: row.username });
+        await signedIn(db, account({ id: 1, login: THIRTY_NINE }));
+        const second = await signedIn(db, account({ id: 2, login: THIRTY_NINE }));
+        const { username } = await storedFor(db, second.userId);
+        expect(username).toBe(`${'a'.repeat(37)}-1`);
+        expect(username).toHaveLength(39);
+        expect(second.usernameCollision).toEqual({ wanted: THIRTY_NINE, stored: username });
       });
     });
 
     test('a 40-character login is truncated, never refused', async () => {
       await withRollback(async (db) => {
-        const { userId } = await resolveIdentity(
-          db,
-          clock,
-          account({ id: 3, login: 'b'.repeat(40) }),
-          verified('long@example.test'),
-        );
-        const row = await db
-          .selectFrom('users')
-          .select('username')
-          .where('id', '=', userId)
-          .executeTakeFirstOrThrow();
-        expect(row.username).toBe('b'.repeat(39));
+        const { userId } = await signedIn(db, account({ id: 3, login: 'b'.repeat(40) }));
+        expect((await storedFor(db, userId)).username).toBe('b'.repeat(39));
       });
     });
 
     test('truncating onto a name that is taken still ends in a free one', async () => {
       await withRollback(async (db) => {
-        await resolveIdentity(
-          db,
-          clock,
-          account({ id: 4, login: 'c'.repeat(39) }),
-          verified('c1@example.test'),
-        );
-        const { userId } = await resolveIdentity(
-          db,
-          clock,
-          account({ id: 5, login: 'c'.repeat(40) }),
-          verified('c2@example.test'),
-        );
-        const row = await db
-          .selectFrom('users')
-          .select('username')
-          .where('id', '=', userId)
-          .executeTakeFirstOrThrow();
-        expect(row.username).toBe(`${'c'.repeat(37)}-1`);
+        await signedIn(db, account({ id: 4, login: 'c'.repeat(39) }));
+        const { userId } = await signedIn(db, account({ id: 5, login: 'c'.repeat(40) }));
+        expect((await storedFor(db, userId)).username).toBe(`${'c'.repeat(37)}-1`);
       });
     });
 
     test('a refresh of an account whose login is 40 characters is not refused either', async () => {
       await withRollback(async (db) => {
         const profile = account({ id: 6, login: 'd'.repeat(40) });
-        const first = await resolveIdentity(db, clock, profile, verified('d@example.test'));
-        const again = await resolveIdentity(db, clock, profile, verified('d@example.test'));
+        const first = await signedIn(db, profile);
+        const again = await signedIn(db, profile);
         expect(again.userId).toBe(first.userId);
       });
     });
@@ -281,81 +175,47 @@ describe('integration: GitHub identity', () => {
 
   test('a display name longer than the column is cut to fit, not refused', async () => {
     await withRollback(async (db) => {
-      const { userId } = await resolveIdentity(
+      const { userId } = await signedIn(
         db,
-        clock,
         account({ id: 7, login: 'wordy', name: 'n'.repeat(300) }),
-        verified('wordy@example.test'),
       );
-      const row = await db
-        .selectFrom('users')
-        .select('display_name')
-        .where('id', '=', userId)
-        .executeTakeFirstOrThrow();
-      expect(row.display_name).toBe('n'.repeat(128));
+      expect((await storedFor(db, userId)).display_name).toBe('n'.repeat(128));
     });
   });
 
   /** GitHub controls this string; PostgreSQL cannot store a NUL, and sign-in never fails on a name. */
   test('a display name with control characters is cleaned, not refused', async () => {
     await withRollback(async (db) => {
-      const { userId } = await resolveIdentity(
+      const { userId } = await signedIn(
         db,
-        clock,
         account({ id: 8, login: 'nulled', name: 'Mo\u0000na \u202EgnoL\u0007 \uD800ok' }),
-        verified('nulled@example.test'),
       );
-      const row = await db
-        .selectFrom('users')
-        .select('display_name')
-        .where('id', '=', userId)
-        .executeTakeFirstOrThrow();
-      expect(row.display_name).toBe('Mona gnoL ok');
+      expect((await storedFor(db, userId)).display_name).toBe('Mona gnoL ok');
     });
   });
 
   test('a name that is nothing but controls falls back to the login', async () => {
     await withRollback(async (db) => {
-      const { userId } = await resolveIdentity(
+      const { userId } = await signedIn(
         db,
-        clock,
         account({ id: 9, login: 'blank', name: '\u0000\u0001' }),
-        verified('blank@example.test'),
       );
-      const row = await db
-        .selectFrom('users')
-        .select('display_name')
-        .where('id', '=', userId)
-        .executeTakeFirstOrThrow();
-      expect(row.display_name).toBe('blank');
+      expect((await storedFor(db, userId)).display_name).toBe('blank');
     });
   });
 
   /**
-   * GitHub does not issue a name with a NUL in it, but this is a value another
-   * system controls, and PostgreSQL refuses a NUL in text outright: the insert
-   * raised and sign-in answered 500. Control characters are removed, and what is
-   * left is stored — sign-in shortens and cleans what it is given, never fails on
-   * it (D-78).
+   * GitHub does not issue a name with a NUL in it, but this is a value another system controls, and
+   * PostgreSQL refuses a NUL in text outright: the insert raised and sign-in answered 500. Control
+   * characters are removed, and what is left is stored — sign-in shortens and cleans what it is given,
+   * never fails on it (D-78).
    */
   describe('control characters from GitHub', () => {
-    const storedFor = async (
-      db: Parameters<Parameters<typeof withRollback>[0]>[0],
-      userId: string,
-    ): Promise<{ username: string; display_name: string }> =>
-      await db
-        .selectFrom('users')
-        .select(['username', 'display_name'])
-        .where('id', '=', userId)
-        .executeTakeFirstOrThrow();
-
     test('a login and a name with a NUL or another control character are cleaned', async () => {
       await withRollback(async (db) => {
-        const { userId } = await resolveIdentity(
+        const { userId } = await signedIn(
           db,
-          clock,
           account({ id: 11, login: 'oct\u0000o\u001Bcat\u007F', name: 'Mo\u0000na\u0085 Lisa' }),
-          verified('ctl@example.test'),
         );
         expect(await storedFor(db, userId)).toEqual({
           username: 'octocat',
@@ -366,11 +226,9 @@ describe('integration: GitHub identity', () => {
 
     test('a login that is nothing but control characters becomes a name made from the id', async () => {
       await withRollback(async (db) => {
-        const { userId } = await resolveIdentity(
+        const { userId } = await signedIn(
           db,
-          clock,
           account({ id: 12, login: '\u0000\u0000', name: '\u0000' }),
-          verified('nothing@example.test'),
         );
         expect(await storedFor(db, userId)).toEqual({
           username: 'user-12',
@@ -378,150 +236,88 @@ describe('integration: GitHub identity', () => {
         });
       });
     });
+  });
+});
 
-    test('an address with a control character is not an address', async () => {
-      await withRollback(async (db) => {
-        const refused = await refusalFrom(
-          async () =>
-            await resolveIdentity(
-              db,
-              clock,
-              account({ id: 13 }),
-              verified('mona\u0000@example.test'),
-            ),
-        );
-        expect(refused.body.code).toBe('EMAIL_REQUIRED');
+describe('integration: what a GitHub sign-in through the library writes (D-179)', () => {
+  test('never writes GitHub onto an erased account: refused, and the tombstone untouched (I-11)', async () => {
+    await withRollback(async (db) => {
+      const tombstone = await db
+        .insertInto('users')
+        .values({
+          email: `erased-${crypto.randomUUID().slice(0, 8)}@deleted.invalid`,
+          username: `deleted-user-${crypto.randomUUID().slice(0, 8)}`,
+          display_name: 'deleted',
+          deleted_at: clock.now(),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const refused = await recordGitHubSignIn(db, clock, {
+        userId: tombstone.id,
+        profile: { id: 4242, login: 'back-again', name: 'Back', avatarUrl: null },
+        made: false,
+      }).then(
+        () => 'written',
+        (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
+      );
+      expect(refused).toBe('UNAUTHENTICATED');
+      const after = await db
+        .selectFrom('users')
+        .select(['github_id', 'github_login', 'github_connected_at', 'avatar_url'])
+        .where('id', '=', tombstone.id)
+        .executeTakeFirstOrThrow();
+      expect(after).toEqual({
+        github_id: null,
+        github_login: null,
+        github_connected_at: null,
+        avatar_url: null,
       });
     });
   });
 
-  test('a deleted account is not signed back in, and not turned into a second one', async () => {
+  test('refuses a sign-in for an account that does not exist, and writes nothing', async () => {
     await withRollback(async (db) => {
-      const first = await resolveIdentity(
-        db,
-        clock,
-        account({ id: 21, login: 'gone' }),
-        verified('gone@example.test'),
+      const refused = await recordGitHubSignIn(db, clock, {
+        userId: crypto.randomUUID(),
+        profile: { id: 4343, login: 'nobody', name: 'Nobody', avatarUrl: null },
+        made: false,
+      }).then(
+        () => 'written',
+        (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
       );
-      await db
-        .updateTable('users')
-        .set({ deleted_at: clock.now() })
-        .where('id', '=', first.userId)
-        .execute();
-
-      const refused = await refusalFrom(
-        async () =>
-          await resolveIdentity(
-            db,
-            clock,
-            account({ id: 21, login: 'gone' }),
-            verified('elsewhere@example.test'),
-          ),
-      );
-      expect(refused.body.code).toBe('INTERNAL');
+      expect(refused).toBe('UNAUTHENTICATED');
       const rows = await db
         .selectFrom('users')
         .select('id')
-        .where('github_id', '=', '21')
+        .where('github_id', '=', '4343')
         .execute();
-      expect(rows).toHaveLength(1);
+      expect(rows).toEqual([]);
     });
   });
 });
 
-/**
- * The window between the lookups and the insert, held open by a trigger that does what the
- * other half of a double-clicked callback does there: it writes a row first. The old
- * statement named `github_id` as the only key it would resolve, so a row that collided on
- * `email` instead — committed after that key was checked and before this one — surfaced as a
- * stranger holding the address, and a person who had done nothing wrong was refused (D-78).
- */
-describe('integration: a row that appears between the lookups and the insert', () => {
-  const rivalBeforeInsert = async (
-    db: Parameters<Parameters<typeof withRollback>[0]>[0],
-    row: { github_id: string; email: string; username: string; deleted: boolean },
-  ): Promise<void> => {
-    await sql`
-      create function rival_first() returns trigger language plpgsql as $$
-      begin
-        if new.username <> ${sql.lit(row.username)}
-           and not exists (select 1 from users where username = ${sql.lit(row.username)}) then
-          insert into users (github_id, email, username, display_name, deleted_at)
-          values (${sql.lit(row.github_id)}, ${sql.lit(row.email)}, ${sql.lit(row.username)}, 'first', ${sql.raw(row.deleted ? 'now()' : 'null')});
-        end if;
-        return new;
-      end $$
-    `.execute(db);
-    await sql`create trigger rival before insert on users for each row execute function rival_first()`.execute(
-      db,
-    );
-  };
-
-  test('the same account arriving first is refreshed, not refused', async () => {
+describe('integration: a login that every suffix has already taken', () => {
+  test('is refused rather than looped on, once a hundred names are taken', async () => {
     await withRollback(async (db) => {
-      await rivalBeforeInsert(db, {
-        github_id: '4101',
-        email: 'rival@example.test',
-        username: 'rival-first',
-        deleted: false,
-      });
-      const { userId } = await resolveIdentity(
-        db,
-        clock,
-        account({ id: 4101, login: 'octocat-race', name: 'Second Callback' }),
-        verified('rival@example.test'),
-      );
-      const rows = await db
-        .selectFrom('users')
-        .select(['id', 'username', 'display_name'])
-        .where('github_id', '=', '4101')
+      const names = [
+        'crowd',
+        ...Array.from({ length: 99 }, (_, index) => `crowd-${String(index + 1)}`),
+      ];
+      await db
+        .insertInto('users')
+        .values(
+          names.map((username, index) => ({
+            email: `crowd-${String(index)}@example.test`,
+            username,
+            display_name: username,
+          })),
+        )
         .execute();
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({
-        id: userId,
-        username: 'rival-first',
-        display_name: 'Second Callback',
-      });
-    });
-  });
-
-  test('a stranger arriving first with the address is the conflict it always was', async () => {
-    await withRollback(async (db) => {
-      await rivalBeforeInsert(db, {
-        github_id: '4102',
-        email: 'taken@example.test',
-        username: 'rival-stranger',
-        deleted: false,
-      });
-      const refusal = await refusalFrom(() =>
-        resolveIdentity(
-          db,
-          clock,
-          account({ id: 4103, login: 'octocat-late' }),
-          verified('taken@example.test'),
-        ),
+      const outcome = await availableUsername(db, 'crowd', undefined).then(
+        (name) => name,
+        (error: unknown) => (error instanceof AppError ? error.body.code : String(error)),
       );
-      expect(refusal.body.code).toBe('ACCOUNT_EMAIL_CONFLICT');
-    });
-  });
-
-  test('an account that was deleted in that instant has nothing to refresh and nothing to create', async () => {
-    await withRollback(async (db) => {
-      await rivalBeforeInsert(db, {
-        github_id: '4104',
-        email: 'gone@example.test',
-        username: 'rival-gone',
-        deleted: true,
-      });
-      const refusal = await refusalFrom(() =>
-        resolveIdentity(
-          db,
-          clock,
-          account({ id: 4104, login: 'octocat-gone' }),
-          verified('other@example.test'),
-        ),
-      );
-      expect(refusal.body.code).toBe('INTERNAL');
+      expect(outcome).toBe('INTERNAL');
     });
   });
 });

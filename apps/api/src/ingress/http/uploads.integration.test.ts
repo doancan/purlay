@@ -13,7 +13,7 @@ import { AppError } from '../../platform/errors';
 import { atomicallyOn } from '../../platform/transactions';
 import { NOW, aRecordingLogger, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { aSignedInUser } from '../../testing/signed-in';
+import { aTestAuth, aSignedInUser } from '../../testing/signed-in';
 import { claimingPng, twoColourPng } from '../../testing/png';
 import { aMemoryStore } from '../../testing/storage';
 import { aUniqueSlug } from '../../testing/users';
@@ -226,6 +226,7 @@ describe('integration: the upload door', () => {
       let refused = '';
       await receiveUpload(
         {
+          auth: aTestAuth(db),
           database: db,
           clock,
           atomically: atomicallyOn(db),

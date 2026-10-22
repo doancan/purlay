@@ -17,6 +17,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type {
+  AuthMethods,
   MySignIn,
   Channel,
   MeResponse,
@@ -30,6 +31,8 @@ import type {
 } from '@purlay/types';
 import { SEARCH_QUERY_MIN } from '@purlay/types';
 import { useApi } from './api-provider';
+import type { SetupStatusAnswer } from './api';
+import { isTransient } from './errors';
 import { claimFor } from './browser-storage';
 import { useClientStorage } from './storage-provider';
 import { keys } from './keys';
@@ -57,7 +60,43 @@ export const useMe = (): UseQueryResult<MeResponse> => {
   });
 };
 
-/** The ways the caller signs in, and the GitHub account connected, if any (D-176). */
+/** How many more times, and how long before the first, the methods are asked for (`useAuthMethods`). */
+const AUTH_METHODS_RETRIES = 3;
+const AUTH_METHODS_RETRY_MS = 400;
+
+/** Which ways in this server offers (D-138 §6): the sign-in screen shows only what works. */
+export const useAuthMethods = (enabled = true): UseQueryResult<AuthMethods> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.authMethods,
+    queryFn: ({ signal }) => api.authMethods(signal),
+    enabled,
+    // The one question the sign-in screen cannot do without, so a hiccup is retried before it is
+    // shown: up to three more asks, 0.4 s, 0.8 s and 1.6 s apart (the client's default is one retry
+    // after TanStack's 1 s), and only for a failure a retry may mend.
+    retry: (failures, error) => failures < AUTH_METHODS_RETRIES && isTransient(error),
+    retryDelay: (failures) => AUTH_METHODS_RETRY_MS * 2 ** failures,
+  });
+};
+
+/**
+ * Whether the server is open to setup, asked once (`/` on a fresh server goes to the wizard). Never
+ * retried, never refetched: the status shares the sign-in rate-limit bucket, and an answer that is not
+ * `open` — a 429 included — is the ordinary one (`SessionGate`, the wizard's entry).
+ */
+export const useSetupStatus = (enabled = true): UseQueryResult<SetupStatusAnswer> => {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.setupStatus,
+    queryFn: ({ signal }) => api.setupStatus(signal),
+    enabled,
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+};
+
+/** The ways the caller signs in, and the GitHub account linked to it, if any (D-176, D-179 §5). */
 export const useMySignIn = (): UseQueryResult<MySignIn> => {
   const api = useApi();
   return useQuery({

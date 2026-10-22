@@ -6,6 +6,141 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-22: upgrading a server made before the sign-in library
+
+- **`0055_backfill_existing_identities`**: an `accounts` row for every user who has a `github_id` (the
+  library finds a GitHub sign-in by it; without it those people were refused as `email-taken`) and
+  `email_verified = TRUE` for everyone who existed when 0047 ran (without it, no sign-in link was ever
+  sent to them). No token is stored. Found by rehearsing an upgrade from the previous release's database.
+- **Everyone signs in again** after the upgrade, and nobody is the server's administrator until the
+  operator names one: both are written down in `CONFIG.md` "Upgrading a server from before the sign-in
+  library".
+
+### Change — 2026-10-22: Administration → Server, and the administrator's password recovery
+
+- **`/api/server/*`** (`API.md` §2, D-179 §4.8): the server's administrator — and nobody else; everybody
+  else, signed out included, gets `404` — reads the settings (a secret is `{ set }`, a relay its scheme
+  and host, which secrets need entering again), replaces GitHub's app or the relay (tried first, kept only
+  if the try worked; the relay's test letter goes to the administrator's own address), disconnects either
+  (refused when it is the last way in for other people, unless said outright), and changes who may sign
+  up and who may make a workspace — in effect on the next request. A limit of sixty in fifteen minutes per
+  client; `409 SERVER_CHANGE_REFUSED` is new. `GET /api/me` gains `isServerAdmin`.
+- **A trail of its own** (`server_audit_log`, migration 0054): who, from which session, which setting,
+  never the value — written in the transaction that saves the setting.
+- **`bun run admin:reset-password <email>`**: the break-glass for the server administrator's password,
+  typed at a prompt or read from standard input, never from an argument or the environment; ends every
+  session of the account. `docs/CONFIG.md` carries it with the recovery.
+- **Settings → Server** in the browser, shown to the administrator only: GitHub sign-in, e-mail, the
+  sign-up policy and who may create workspaces, each with its try, its states and — where a rotated key
+  left a secret unreadable — the line that says to enter it again (`UX.md` §11).
+
+### Change — 2026-10-22: the setup's steps over HTTP
+
+- **`/setup/*` is served** (`API.md` §2, D-179 §4.10): the public status (`{ open }` and nothing else),
+  the claim with the code from the log (a `__Host-` cookie, `SameSite=Strict`, for the claim's day), and
+  the holder's steps — the administrator (made and signed in; only the library's cookie reaches the
+  browser), the address confirmed, the sign-up policy, GitHub and the relay tried and kept only when the
+  try worked, the first workspace, the invitations done or skipped, and the finish. The address link
+  (`POST /setup/verify`) works in any browser, for its day, after the finish too.
+- **One answer to everybody without the claim**: closed, unclaimed, another browser's, a wrong or
+  taken-over cookie — `404 SETUP_UNAVAILABLE`, the same body, headers and time. A wrong code is a field's
+  refusal; the lock is `429 SETUP_LOCKED` with `Retry-After`.
+- **A limit per client on every `/setup` route**, charged before anything is weighed: ten codes or links
+  in fifteen minutes, thirty steps, the status with the sign-in traffic — what keeps one client from
+  holding the setup's lock shut.
+- **The finish rule** counts a way in only when the setup saved it after a try that worked and it serves
+  now (migration 0052); an app or a relay merely in the settings does not. The policy step now follows
+  the address, as the wizard asks them together.
+- New error codes: `SETUP_UNAVAILABLE`, `SETUP_LOCKED`, `SETUP_STEP_REFUSED`, `SETTINGS_CHANGE_FAILED`,
+  `ADMIN_LINK_NOT_FOUND`. The wizard's screens come next.
+
+### Change — 2026-10-22: GitHub and mail are tried before they are saved, and the administrator's address is verified by a link of its own
+
+- **Trying GitHub's app** (D-179 §4.4) sends its token endpoint the client id and secret with a code
+  GitHub never issued: GitHub's refusal of the code says the pair is good; a wrong secret, an unknown
+  app (GitHub answers `404`, which its documentation does not say), an unreachable GitHub, an untrusted
+  certificate and a page that is not GitHub each have their reason. The callback address cannot be
+  tried without a browser, so the wizard will show it to paste.
+- **Trying a relay** asks it whether it answers and sends it one message — the administrator's
+  verification letter — through a transport built from the candidate settings, nothing saved; each
+  refusal (unreachable, TLS, login, sender, recipient, message) has its reason, and the relay's words
+  are shown with every credential taken out. Bounded at ten seconds a phase and twenty in all.
+- **The administrator's address is verified by the wizard's own link**, never a magic link: one link at
+  a time, kept as a digest, opening once for a day — after the setup is finished too — and erased with
+  the account (migration 0051). The HTTP routes and the screens come with the wizard.
+
+### Change — 2026-10-22: the setup's administrator, the password policy, and a throttled password sign-in
+
+- **The first administrator is made by the setup** (D-179 §4.3), under the claim, once, in one
+  transaction: the account through the sign-in library's own adapter, its address unverified, the
+  server's authority on it, a password the library hashed. Signed in by the library's own
+  `/auth/sign-in/email`. The HTTP route and the screen come with the wizard.
+- **A password policy** in `@purlay/types`: 10 to 128 characters, not the address or the name in it,
+  not one of the commonest. Changing the password is held to it (`400 PASSWORD_TOO_WEAK` with the
+  reason), and always ends every other session.
+- **Wrong passwords are throttled, never locked out**: ten for an address from one client and twenty
+  from one client in fifteen minutes, then `429 RATE_LIMITED` with `Retry-After`. A sign-in that works
+  counts nothing, and other people's wrong guesses never keep the administrator out. An unknown address
+  and a wrong password answer alike, in the same time. `/auth/request-password-reset` is closed.
+
+### Change — 2026-10-22: a fresh server starts with no GitHub and no mail, and waits for its setup
+
+- **`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are optional**, both or neither (one without the
+  other refuses to start). A server given neither imports a settings row with no GitHub app and starts
+  in setup mode: only the database, `ENCRYPTION_KEY`, `APP_URL` and the storage are needed
+  (`CONFIG.md`). The production stack no longer asks for them.
+- **With no GitHub app there is no `/auth/github`**: `404 ROUTE_NOT_FOUND`, in the API's error shape.
+  `GET /api/auth/methods` says `{ github, email }`, and the sign-in screen offers only what is
+  connected; with neither it says *This server is not set up yet*.
+- **A rotated `ENCRYPTION_KEY` no longer stops the start.** The GitHub secret and the mail address that
+  no longer open are read as unset, the server starts in setup mode, and the log names which — never a
+  value. Nothing is deleted; the recovery is to enter them again in the browser, or to put the old key
+  back (`CONFIG.md`).
+
+### Change — 2026-10-22: the server's settings live in the database
+
+- **GitHub's app, the mail relay, who may sign up and who may make a workspace are server settings**
+  (D-179 §6), one row of `server_settings` (migration 0049). The GitHub client secret and the relay's
+  address, which carries its password, are stored encrypted, each bound to its own column, and never
+  shown: a view says only whether each is set.
+- **The environment is read once.** On the first start of a database, `GITHUB_CLIENT_ID`,
+  `GITHUB_CLIENT_SECRET`, `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` and `WORKSPACE_CREATORS` are
+  copied into the settings; afterwards they do nothing, and each start names the ones still set.
+  `APP_URL` stays in the environment (`CONFIG.md`).
+- **A server reads its settings once its migrations are in**, after it listens: until then a request
+  that needs sign-in is answered `503 DATABASE_UNAVAILABLE` and readiness says why. A node that does not
+  migrate on start waits for the migrations.
+- **`GITHUB_URL` and `GITHUB_API_URL`** say where GitHub is — github.com and its API by default; a
+  GitHub Enterprise Server, or a stand-in on the same machine, otherwise.
+
+### Change — 2026-10-21: an email link is Better Auth's magic link
+
+- **Signing in by link runs on the library's magic link** (D-179 §3), behind the same three routes and
+  the same page: the token is still only in the link's fragment, the page still shows the address
+  before **Sign in** spends it, and the library's own routes — one that takes a name, one that spends
+  a link on a `GET` — are closed. The old `email_sign_ins` table is no longer written.
+- **Five links an hour for an address, twenty for a client**, counted in the database, so a restart or
+  a second process hands nothing back.
+- **No link reaches an account whose address was never verified.** Measured on 1.7.12, spending one
+  removes every way that account signs in — its password and a linked GitHub account — and its
+  sessions; the setup administrator is such an account. Asking sends nothing, and an earlier link is
+  refused (D-179 §4).
+- **Invite-only means invite-only by link too**: a new address gets no link where sign-up is closed.
+- **The answer to asking for a link comes before the account is looked up**, so its timing says nothing
+  about the address either; the link is made and mailed after it.
+- **`sweep:email-sign-ins` sweeps the library's links** a day past expiry and the sign-in counters a
+  day old; the old `email_sign_ins` table is dropped (migration 0048).
+
+### Change — 2026-10-21: connecting GitHub by hand is gone, and the sign-in says why it did not finish
+
+- **The Connect GitHub button, its start route and its way back are removed** (D-179 §5 replaces D-176's
+  flow): `POST /api/me/github/connect`, the connect state, `ConnectGitHubOutcome` and
+  `GITHUB_ALREADY_CONNECTED`. A GitHub sign-in on a verified address links itself. *How you sign in*
+  keeps reading `GET /api/me/sign-in` and shows the linked login, read only.
+- **The sign-in screen's `email-taken` sentence** now says a local account has that address but has not
+  verified it: to sign in by the link sent to it first where the server sends mail, or to ask an administrator where it does not (two sentences, chosen by whether the email form is shown); `signup-closed`
+  has its sentence checked in both languages.
+
 ### Chore — 2026-10-21: the pipeline spends less
 
 A pull request's superseded run is now cancelled in every workflow, not only `ci` and `image`, and the

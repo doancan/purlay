@@ -9,12 +9,12 @@ import type { ChannelDependencies } from './channels';
 import { requireSession } from './session';
 
 export const readPresence = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   workspaceId: string,
   online: OnlineReader,
 ): Promise<PresenceSnapshot> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await workspacePresence(database, context, online);
 };

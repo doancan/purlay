@@ -24,10 +24,10 @@ import { TextField } from '../../ui/text-field';
 import { useSession } from '../session/session';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
 
-const SLUG = /^[a-z0-9][a-z0-9-]*$/;
+export const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 
 /** What a name suggests as an address: the part of it a URL would keep. */
-const slugOf = (name: string): string =>
+export const slugOf = (name: string): string =>
   name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

@@ -11,7 +11,7 @@ import { RETENTION_DAYS_MAX, RETENTION_DAYS_MIN } from '@purlay/types';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
 import { aRoom } from '../../testing/rooms';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { attempt } from '../../testing/attempt';
 import { createApp } from './app';
@@ -35,7 +35,7 @@ const owner = async (
     .where('workspace_id', '=', room.workspaceId)
     .where('user_id', '=', ada.userId)
     .execute();
-  const { token } = await issueSession(db, clock, ada.userId, 30);
+  const { token } = await aSession(db, clock, ada.userId, 30);
   return {
     workspaceId: room.workspaceId,
     cookie: `${SESSION_COOKIE}=${token}`,

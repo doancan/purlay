@@ -67,7 +67,7 @@ was nearly built.
 
 On a server with Docker and the compose plugin, and a public name whose ports 80 and 443 reach it:
 
-1. Make a GitHub OAuth app whose callback is `https://<your name>/auth/github/callback`.
+1. Make a GitHub OAuth app whose callback is `https://<your name>/auth/callback/github`.
 2. `cp docker/production.env.example production.env`, and fill in every empty value; each says how to
    make it. Keep the file private.
 3. `docker compose -f docker-compose.production.yml --env-file production.env up -d --wait`
@@ -88,7 +88,7 @@ The design is fully specified before implementation, deliberately. Read in this 
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here — orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 178 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 179 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Tables, indexes, invariants, migration order |
 | [`docs/UX.md`](docs/UX.md) | Layout, thread interaction, keyboard model, required states |

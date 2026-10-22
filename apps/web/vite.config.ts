@@ -31,6 +31,9 @@ const { browserslist } = packageJson;
 /** The push worker's sources: an entry of their own, never part of the page's chunk. */
 const workerDirectory = fileURLToPath(new URL('./worker/', import.meta.url));
 
+/** The reads under `/setup` that are the API's (`API.md` §2): every other `GET` there is a page. */
+const SETUP_API_READS: ReadonlySet<string> = new Set(['/setup/status', '/setup/state']);
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
@@ -46,12 +49,25 @@ export default defineConfig({
     // this exists to remove, one path at a time — `/health` was missing and
     // answered with the client's HTML.
     proxy: Object.fromEntries(
-      ['/auth', '/api', '/ws', '/health'].map((prefix) => [
+      ['/auth', '/api', '/ws', '/health', '/setup'].map((prefix) => [
         prefix,
         {
           target: `http://localhost:${String(process.env['PORT'] ?? 3001)}`,
           changeOrigin: false,
           ws: prefix === '/ws',
+          // Under `/setup` the API answers its two reads and every write; any other page asked for —
+          // the wizard itself, the address link's page — is the client's, served here.
+          ...(prefix === '/setup'
+            ? {
+                bypass: (request: {
+                  readonly method?: string | undefined;
+                  readonly url?: string | undefined;
+                }): string | undefined =>
+                  request.method === 'GET' && !SETUP_API_READS.has(request.url ?? '')
+                    ? request.url
+                    : undefined,
+              }
+            : {}),
         },
       ]),
     ),

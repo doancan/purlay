@@ -232,6 +232,8 @@ jobs:
     # file stop agreeing.
     env:
       DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      # The job's own database, which exists for nothing else: db:check may migrate it.
+      PURLAY_ALLOW_DB_CHECK_ON: purlay
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -7,11 +7,13 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
+import { tokenDigest } from '../../platform/tokens';
 import { workspacePrefix } from '../../platform/storage';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import { aRoom, type Room } from '../../testing/rooms';
+import { aUserRow } from '../../testing/users';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { storeUpload } from '../attachments/uploads';
 import { sendMessage } from '../messages/messages';
@@ -336,31 +338,168 @@ describe('integration: the delivery sweep (D-134 §5)', () => {
 });
 
 describe('integration: the sign-in mail sweep', () => {
-  test('takes what was sent more than a day ago, spent or not; a day and younger stay', async () => {
+  test('takes every verification row expired more than a day ago, whatever its prefix, and counters a day closed; nothing live', async () => {
     await withRollback(async (db) => {
       const now = new Date('2026-10-14T12:00:00.000Z');
-      const row = (hoursAgo: number, n: number): Record<string, unknown> => ({
-        email: `s${String(n)}@example.test`,
-        kind: 'link',
-        token_hash: String(n).padStart(64, '0'),
-        created_at: new Date(now.getTime() - hoursAgo * 3_600_000),
-        expires_at: new Date(now.getTime() - hoursAgo * 3_600_000 + 900_000),
-      });
-      for (const [n, hours] of [24.01, 30, 23.99, 0].entries()) {
-        await sql`insert into email_sign_ins (email, kind, token_hash, created_at, expires_at)
-          values (${row(hours, n)['email']}, 'link', ${row(hours, n)['token_hash']},
-                  ${row(hours, n)['created_at']}, ${row(hours, n)['expires_at']})`.execute(db);
-      }
-      expect(await sweepEmailSignIns({ database: db, clock: fixedClock(now) })).toEqual({
-        removed: 2,
-      });
-      const kept = await db
-        .selectFrom('email_sign_ins')
-        .select('email')
-        .where('email', 'like', 's_@example.test')
-        .orderBy('email')
+      const hoursAgo = (hours: number): Date => new Date(now.getTime() - hours * 3_600_000);
+      // The library's link rows, by when they expired; a password reset's row, long expired; and a
+      // value that is not JSON, which the sweep has no reason to read.
+      await db
+        .insertInto('verifications')
+        .values([
+          ...[24.01, 30, 23.99, 0, -0.25].map((hours, n) => ({
+            identifier: `magic-link:sweep-${String(n)}`,
+            value: JSON.stringify({ type: 'magic-link', email: `s${String(n)}@example.test` }),
+            expires_at: hoursAgo(hours),
+          })),
+          { identifier: 'reset-password:sweep-old', value: 'a-user-id', expires_at: hoursAgo(48) },
+          { identifier: 'reset-password:sweep-new', value: 'a-user-id', expires_at: hoursAgo(23) },
+          // The state of an abandoned GitHub round trip, which holds a PKCE verifier, and a row of no prefix.
+          { identifier: 'sweepstate-old', value: '{"codeVerifier":"x"}', expires_at: hoursAgo(48) },
+          { identifier: 'sweepstate-new', value: '{"codeVerifier":"x"}', expires_at: hoursAgo(1) },
+          { identifier: 'other:sweep-old', value: '{not json', expires_at: hoursAgo(48) },
+          { identifier: 'other:sweep-new', value: '{not json', expires_at: hoursAgo(-1) },
+        ])
         .execute();
-      expect(kept.map((r) => r.email)).toEqual(['s2@example.test', 's3@example.test']);
+      // Counters, the library's (a client address and a path) and Purlay's, by `last_request`.
+      await db
+        .insertInto('rate_limits')
+        .values(
+          [24.01, 30, 23.99, -1].map((hours, n) => ({
+            key: `sweep-${String(n)}|/sign-in/email`,
+            count: 1,
+            last_request: String(hoursAgo(hours).getTime()),
+          })),
+        )
+        .execute();
+      expect(await sweepEmailSignIns({ database: db, clock: fixedClock(now) })).toEqual({
+        removed: 4 + 3,
+      });
+      const links = await db
+        .selectFrom('verifications')
+        .select('identifier')
+        .where('identifier', 'like', '%sweep%')
+        .orderBy('identifier')
+        .execute();
+      expect(links.map((row) => row.identifier)).toEqual([
+        'magic-link:sweep-2',
+        'magic-link:sweep-3',
+        'magic-link:sweep-4',
+        'other:sweep-new',
+        'reset-password:sweep-new',
+        'sweepstate-new',
+      ]);
+      const counters = await db
+        .selectFrom('rate_limits')
+        .select('key')
+        .where('key', 'like', 'sweep-%')
+        .orderBy('key')
+        .execute();
+      expect(counters.map((row) => row.key)).toEqual([
+        'sweep-2|/sign-in/email',
+        'sweep-3|/sign-in/email',
+      ]);
+    });
+  });
+
+  test('takes the invitation passports a day past their hour or their use, and not before (D-179 §5)', async () => {
+    await withRollback(async (db) => {
+      const now = new Date('2026-10-14T12:00:00.000Z');
+      const owner = await aUserRow(db, 'passport-owner');
+      const { id: workspaceId } = await db
+        .insertInto('workspaces')
+        .values({ name: 'Sweep', slug: `sweep-${crypto.randomUUID().slice(0, 6)}` })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const invitationId = messageId(now);
+      await db
+        .insertInto('workspace_invitations')
+        .values({
+          id: invitationId,
+          workspace_id: workspaceId,
+          token_hash: 'd'.repeat(64),
+          created_by: owner.userId,
+          created_at: new Date(now.getTime() - 3 * 24 * 3_600_000),
+          expires_at: new Date(now.getTime() + 24 * 3_600_000),
+        })
+        .execute();
+      const day = 24 * 3_600_000;
+      const make = async (
+        name: string,
+        expiresAgo: number,
+        consumedAgo: number | null,
+      ): Promise<string> => {
+        const id = messageId(now);
+        await db
+          .insertInto('invitation_passports')
+          .values({
+            id,
+            invitation_id: invitationId,
+            kind: 'github',
+            cookie_digest: await tokenDigest(name),
+            expires_at: new Date(now.getTime() - expiresAgo),
+            consumed_at: consumedAgo === null ? null : new Date(now.getTime() - consumedAgo),
+          })
+          .execute();
+        return name;
+      };
+      // Expired a day and a second ago; spent a day and a second ago; each one second short of that;
+      // and one live.
+      await make('expired-long', day + 1000, null);
+      await make('spent-long', 3_600_000, day + 1000);
+      await make('expired-recently', day - 1000, null);
+      await make('spent-recently', day - 1000, day - 1000);
+      await make('live', -3_600_000, null);
+      const remaining = async (): Promise<string[]> =>
+        (
+          await db
+            .selectFrom('invitation_passports')
+            .select('cookie_digest')
+            .where('invitation_id', '=', invitationId)
+            .orderBy('cookie_digest')
+            .execute()
+        )
+          .map((row) => row.cookie_digest ?? '')
+          .sort();
+      const names = ['expired-long', 'spent-long', 'expired-recently', 'spent-recently', 'live'];
+      const digestOf = new Map(
+        await Promise.all(names.map(async (name) => [await tokenDigest(name), name] as const)),
+      );
+      const swept = await sweepEmailSignIns({ database: db, clock: fixedClock(now) });
+      expect(swept.removed).toBe(2);
+      expect((await remaining()).map((digest) => digestOf.get(digest)).sort()).toEqual(
+        ['expired-recently', 'live', 'spent-recently'].sort(),
+      );
+    });
+  });
+
+  test('takes the administrator’s address link once it no longer opens, and not before (D-179 §4.3)', async () => {
+    await withRollback(async (db) => {
+      const now = new Date('2026-10-14T12:00:00.000Z');
+      const admin = await aUserRow(db, 'admin');
+      await db
+        .insertInto('admin_email_verification')
+        .values({
+          user_id: admin.userId,
+          email: admin.email,
+          token_digest: 'a'.repeat(64),
+          issued_at: new Date(now.getTime() - 24 * 3_600_000 + 1),
+        })
+        .execute();
+      const left = async (): Promise<number> =>
+        (
+          await db
+            .selectFrom('admin_email_verification')
+            .select('user_id')
+            .where('user_id', '=', admin.userId)
+            .execute()
+        ).length;
+      await sweepEmailSignIns({ database: db, clock: fixedClock(now) });
+      expect(await left()).toBe(1);
+      expect(
+        await sweepEmailSignIns({ database: db, clock: fixedClock(new Date(now.getTime() + 1)) }),
+      ).toEqual({ removed: 1 });
+      expect(await left()).toBe(0);
     });
   });
 });

@@ -315,6 +315,9 @@ test.describe('without a connection', () => {
     room,
     api,
   }) => {
+    // The client's backoff after a dead socket is bounded by forty seconds (the wait below), which
+    // is longer than the default thirty for the whole test: say so, rather than flake on a busy run.
+    test.setTimeout(120_000);
     const made = await room({ members: ['dogancan', 'alice'] });
     const link = await wreckable(page);
     await signIn();

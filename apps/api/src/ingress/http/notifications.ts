@@ -36,8 +36,8 @@ export const readInbox = async (
   dependencies: ChannelDependencies,
   request: Request,
 ): Promise<NotificationPage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const url = new URL(request.url);
   const query = queryOf(url, { numbers: ['limit'], booleans: ['unreadOnly'] });
   // The workspace is asked of the guard before the rest is read, so a stranger is told 404 whatever
@@ -61,7 +61,7 @@ export const markNotificationsRead = async (
   body: unknown,
 ): Promise<void> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(ReadNotificationsRequest, body);
   const told = await atomicallyOn(database)(
     async (transaction) => await readNotifications(transaction, clock, userId, input),
@@ -81,7 +81,7 @@ export const markThreadRead = async (
   body: unknown,
 ): Promise<void> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(ReadThreadRequest, body);
   const told = await atomicallyOn(database)(
     async (transaction) => await readThreadNotifications(transaction, clock, userId, rootId, input),

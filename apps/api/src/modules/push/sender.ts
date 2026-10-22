@@ -132,7 +132,6 @@ const devicesFor = async (
     .where('n.suppressed_by_deep_work', '=', false)
     .where('m.deleted_at', 'is', null)
     .where('person.deleted_at', 'is', null)
-    .where('live.revoked_at', 'is', null)
     .where('live.expires_at', '>', clock.now())
     .where('s.server_key', '=', keys.publicKey)
     // A person's devices in the order they were subscribed: the same order every time.
@@ -198,7 +197,6 @@ export const createPushSender = async (
       .where('s.id', '=', device.id)
       .where('s.user_id', '=', device.userId)
       .where('s.session_id', '=', device.sessionId)
-      .where('live.revoked_at', 'is', null)
       .where('live.expires_at', '>', clock.now())
       .executeTakeFirst()) !== undefined;
 

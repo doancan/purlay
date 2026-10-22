@@ -6,6 +6,7 @@
  * only path (`ARCHITECTURE.md` §5.1). One service, two entry points, so the two
  * cannot validate differently.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
   EditMessageRequest,
@@ -48,6 +49,8 @@ import { queryOf, validated } from './validate';
 
 /** Reading needs the database and the clock, and nothing that publishes. */
 export interface HistoryDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
 }
@@ -76,8 +79,8 @@ export const readHistory = async (
   request: Request,
   channelId: string,
 ): Promise<MessagePage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const query = validated(PageQuery, asPageQuery(new URL(request.url)));
   return await messageHistory(database, context, query);
@@ -89,8 +92,8 @@ export const readFiles = async (
   request: Request,
   channelId: string,
 ): Promise<FilePage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const query = validated(FileQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await channelFiles(database, context, query);
@@ -102,8 +105,8 @@ export const postMessage = async (
   channelId: string,
   body: unknown,
 ): Promise<Message> => {
-  const { database, clock } = dependencies;
-  const { userId, sessionId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId, sessionId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SendMessageRequest, body);
   return await send(dependencies, context, input, sessionId);
@@ -121,8 +124,8 @@ export const readThread = async (
   request: Request,
   messageId: string,
 ): Promise<MessagePage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   // A deleted root with replies keeps its place in the feed, and its thread with it (D-103 §7).
   const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
   const query = validated(PageQuery, asPageQuery(new URL(request.url)));
@@ -138,8 +141,8 @@ export const readAround = async (
   request: Request,
   messageId: string,
 ): Promise<MessageWindow> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   return await messageWindow(database, await requireMessageById(database, userId, messageId));
 };
 
@@ -152,8 +155,8 @@ export const readThreadFollow = async (
   request: Request,
   messageId: string,
 ): Promise<ThreadFollow> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
   return await followState(database, root);
 };
@@ -170,7 +173,7 @@ export const putThreadFollow = async (
   body: unknown,
 ): Promise<ThreadFollow> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(SetThreadFollowRequest, body);
   const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
   return await setFollowing(database, clock, root, input.following);
@@ -183,8 +186,7 @@ export const setThreadResolution = async (
   messageId: string,
   resolved: boolean,
 ): Promise<Message> => {
-  const { database, clock } = dependencies;
-  const { userId, sessionId } = await requireSession(database, clock, request);
+  const { userId, sessionId } = await requireSession(dependencies.auth, request);
   return await setResolved(dependencies, userId, messageId, resolved, sessionId);
 };
 
@@ -195,8 +197,7 @@ export const editMessage = async (
   messageId: string,
   body: unknown,
 ): Promise<Message> => {
-  const { database, clock } = dependencies;
-  const caller = await requireSession(database, clock, request);
+  const caller = await requireSession(dependencies.auth, request);
   const input = validated(EditMessageRequest, body);
   return await edit(dependencies, caller, messageId, input.content);
 };
@@ -207,8 +208,7 @@ export const removeMessage = async (
   request: Request,
   messageId: string,
 ): Promise<void> => {
-  const { database, clock } = dependencies;
-  const caller = await requireSession(database, clock, request);
+  const caller = await requireSession(dependencies.auth, request);
   await deleteMessage(dependencies, caller, messageId);
 };
 
@@ -223,8 +223,8 @@ export const readUnresolved = async (
   request: Request,
   workspaceId: string,
 ): Promise<MessagePage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const url = new URL(request.url);
   const channelId = url.searchParams.get('channelId');
@@ -248,8 +248,8 @@ export const readSearch = async (
   request: Request,
   workspaceId: string,
 ): Promise<SearchPage> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const url = new URL(request.url);
   const query = asPageQuery(url);

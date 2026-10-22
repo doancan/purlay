@@ -2,9 +2,14 @@
  * The per-user write limit and the session's recorded address, against a real
  * database. The unauthenticated half is `rate-limit.test.ts`.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  withRollback,
+  type ClonedDatabase,
+} from '@purlay/db';
+import { SIGN_IN_CALLBACK, messageId } from '@purlay/types';
 import { createApp } from './app';
 import { NOW, testConfig, testDependencies } from '../../testing/doubles';
 import { aSignedInUser } from '../../testing/signed-in';
@@ -12,6 +17,14 @@ import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from './rate-limit';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
 import { STATE_COOKIE } from '../../platform/cookies';
+import {
+  aGitHubAuth,
+  aGitHubFor,
+  aGitHubPerson,
+  cookiesFrom,
+  returnFromGitHub,
+  startGitHubSignIn,
+} from '../../testing/github-sign-in';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -172,80 +185,89 @@ describe('integration: the per-user write limit', () => {
 });
 
 describe('integration: the address a session records', () => {
-  const signIn = async (
-    db: Executor,
+  // The sign-in is the library's, whose transactions need a database of their own.
+  let cloned: ClonedDatabase;
+  beforeAll(async () => {
+    cloned = await cloneIntegrationDatabase();
+  });
+  afterAll(async () => {
+    await cloned.drop();
+  });
+
+  /** A GitHub sign-in of a person of its own; answers the address its session recorded. */
+  const signInRecording = async (
     trustProxy: boolean,
     forwardedFor?: string,
-  ): Promise<void> => {
+  ): Promise<string | null> => {
+    const person = aGitHubPerson();
+    const github = aGitHubFor(person);
     const app = createApp(
       testDependencies({
-        database: db,
+        database: cloned.db,
         clock,
         config: testConfig({ TRUST_PROXY: trustProxy }),
+        auth: aGitHubAuth(cloned.db, github.fetch, { baseUrl: ORIGIN }),
       }),
     );
-    const started = await app.handle(new Request(`${ORIGIN}/auth/github`));
-    const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
-    const callback = await app.handle(
-      new Request(`${ORIGIN}/auth/github/callback?code=a-valid-code&state=${state}`, {
-        headers: {
-          cookie: (started.headers.get('set-cookie') ?? '').split(';')[0] ?? '',
-          ...(forwardedFor === undefined ? {} : { 'x-forwarded-for': forwardedFor }),
-        },
-      }),
+    const started = await startGitHubSignIn(app, ORIGIN, github);
+    const callback = await returnFromGitHub(
+      app,
+      ORIGIN,
+      started,
+      undefined,
+      forwardedFor === undefined ? {} : { 'x-forwarded-for': forwardedFor },
     );
     expect(callback.status).toBe(302);
     expect(callback.headers.get('location')).toBe(ORIGIN);
     expect(callback.headers.getSetCookie().join(';')).toContain(STATE_COOKIE);
+    return await addressOf(person.email);
   };
 
-  const addresses = async (db: Executor): Promise<(string | null)[]> =>
-    (
-      await db
-        .selectFrom('sessions')
-        .innerJoin('users', 'users.id', 'sessions.user_id')
-        .select('sessions.ip_address')
-        .where('users.email', '=', 'mona@example.test')
-        .execute()
-    ).map((row) => row.ip_address);
+  const addressOf = async (email: string): Promise<string | null> => {
+    const rows = await cloned.db
+      .selectFrom('sessions')
+      .innerJoin('users', 'users.id', 'sessions.user_id')
+      .select('sessions.ip_address')
+      .where('users.email', '=', email)
+      .execute();
+    expect(rows).toHaveLength(1);
+    return rows[0]?.ip_address ?? null;
+  };
 
   test('behind a trusted proxy the session records the address the proxy reported', async () => {
-    await withRollback(async (db) => {
-      await signIn(db, true, '6.6.6.6, 198.51.100.7');
-      expect(await addresses(db)).toEqual(['198.51.100.7']);
-    });
+    expect(await signInRecording(true, '6.6.6.6, 198.51.100.7')).toBe('198.51.100.7');
   });
 
   test('without one, a header the client wrote is never recorded', async () => {
-    await withRollback(async (db) => {
-      await signIn(db, false, '198.51.100.7');
-      expect(await addresses(db)).toEqual([null]);
-    });
+    // With no address to give, the library records localhost under test, and nothing in production.
+    expect(await signInRecording(false, '198.51.100.7')).not.toBe('198.51.100.7');
   });
 
   /** `handle` has no socket, so the peer path is only real on a listener. */
   test('over a real socket the peer address is what is recorded', async () => {
-    await withRollback(async (db) => {
-      const app = createApp(testDependencies({ database: db, clock }));
-      const port = String(app.listen(0));
-      try {
-        const base = `http://127.0.0.1:${port}`;
-        const started = await fetch(`${base}/auth/github`, { redirect: 'manual' });
-        const state =
-          new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
-        const callback = await fetch(
-          `${base}/auth/github/callback?code=a-valid-code&state=${state}`,
-          {
-            redirect: 'manual',
-            headers: { cookie: (started.headers.get('set-cookie') ?? '').split(';')[0] ?? '' },
-          },
-        );
-        expect(callback.status).toBe(302);
-        expect(callback.headers.get('location')).toBe(ORIGIN);
-        expect(await addresses(db)).toEqual(['127.0.0.1']);
-      } finally {
-        await app.stop(true);
-      }
-    });
+    const person = aGitHubPerson();
+    const github = aGitHubFor(person);
+    const app = createApp(
+      testDependencies({
+        database: cloned.db,
+        clock,
+        auth: aGitHubAuth(cloned.db, github.fetch, { baseUrl: ORIGIN }),
+      }),
+    );
+    const port = String(app.listen(0));
+    try {
+      const base = `http://127.0.0.1:${port}`;
+      const started = await fetch(`${base}/auth/github`, { redirect: 'manual' });
+      const { code, state } = github.authorize(started.headers.get('location') ?? '');
+      const callback = await fetch(`${base}${SIGN_IN_CALLBACK}?code=${code}&state=${state}`, {
+        redirect: 'manual',
+        headers: { cookie: cookiesFrom(started), 'x-forwarded-for': '198.51.100.9' },
+      });
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get('location')).toBe(ORIGIN);
+      expect(await addressOf(person.email)).toBe('127.0.0.1');
+    } finally {
+      await app.stop(true);
+    }
   });
 });

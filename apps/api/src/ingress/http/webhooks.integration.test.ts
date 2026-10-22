@@ -12,7 +12,7 @@ import { closeIntegrationDatabase, withRollback, type Transaction } from '@purla
 import { CreatedGitHubFeed, WebhookAnswer } from '@purlay/types';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { fixedClock } from '../../platform/clock';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { aRoom } from '../../testing/rooms';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import { credentialCipher } from '../../platform/crypto';
@@ -48,7 +48,7 @@ const connected = async (
   channelId: string;
 }> => {
   const room = await aRoom(db, ['alice']);
-  const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+  const { token } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
   const app = createApp(testDependencies({ database: db, clock }));
   const made = await app.handle(
     new Request(`https://purlay.test/api/channels/${room.channelId}/github-feeds`, {

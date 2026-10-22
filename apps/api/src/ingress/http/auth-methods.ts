@@ -1,12 +1,18 @@
 /**
  * How this server signs people in (#81, D-138 §6), asked before anybody is: the sign-in screen offers
- * only what works. GitHub always; email when the server can send a link — both of `SMTP_URL` and
- * `MAIL_FROM`, which the configuration refuses one without the other.
+ * only what works. GitHub where an app is connected; email when the server can send a link — when the
+ * instance, built from the server's settings (D-179 §6), has a relay to mail one through. A server with
+ * neither is waiting for its setup (D-179 §4), and says so with two `false`. `signUp` is who may make
+ * an account (R51): the sign-in screen offers "Create an account" under `open` only.
  */
 import type { AuthMethods } from '@purlay/types';
-import type { Config } from '../../platform/config';
+import type { Auth } from '../../modules/auth/better-auth';
 
 /** `GET /api/auth/methods` — nothing of anybody in it: the same for every caller. */
-export const authMethods = (config: Pick<Config, 'SMTP_URL' | 'MAIL_FROM'>): AuthMethods => ({
-  email: config.SMTP_URL !== undefined && config.MAIL_FROM !== undefined,
+export const authMethods = (
+  auth: Pick<Auth, 'signInLinks' | 'github' | 'signUp'>,
+): AuthMethods => ({
+  github: auth.github,
+  email: auth.signInLinks !== undefined,
+  signUp: auth.signUp,
 });

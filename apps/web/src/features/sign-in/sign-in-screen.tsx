@@ -1,5 +1,12 @@
 /**
- * Sign in. GitHub always, and a link by email where the server can send one (D-138); the GitHub
+ * Sign in. GitHub where the server has an app connected, the address and password always (the setup's
+ * administrator has one, R30), and a link by email where the server can send one (D-138, D-179): the
+ * screen offers what `/api/auth/methods` says works and nothing it assumes. Under it, "Create an
+ * account" where sign-up is open and a plain "by invitation" where it is not (R51). A server with neither
+ * GitHub nor mail is waiting for its setup (D-179 §4), and says so plainly above the password. When the
+ * server could not be asked, the screen keeps the historical default — the GitHub button — and says so in
+ * one small line with a retry: the server answers a button it should not have offered with a defined 404
+ * (R45); the password form does not depend on the answer and stays. The GitHub
  * click is a full navigation — the server answers with a redirect to GitHub and the callback
  * lands back on this origin with a session cookie, none of which a router can do.
  *
@@ -14,38 +21,69 @@
  */
 import { useEffect } from 'react';
 import { signInFailureIn, type SignInFailure } from '@purlay/types';
-import type { MessageKey } from '../../i18n/types';
-import { useMe } from '../../data/queries';
+import { useAuthMethods, useMe } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
-import { useRoute } from '../../router/router-provider';
-import { buttonStyle } from '../../ui/button';
+import { Link, useRoute } from '../../router/router-provider';
+import { Button, buttonStyle } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
-import { Icon } from '../../components/icon';
+import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { LogoMark } from '../shell/notice';
 import { EmailSignInForm } from './email-sign-in-form';
+import { GitHubButton } from './github-button';
 
-/** The sentence for each reason. A `Record`, so a reason added to the contract is a compile error here. */
-const FAILURE_SENTENCE = {
-  cancelled: 'signIn.cancelled',
-  expired: 'signIn.expired',
-  'email-required': 'signIn.emailRequired',
-  'email-taken': 'signIn.emailTaken',
-  'github-unavailable': 'signIn.githubUnavailable',
-  busy: 'signIn.busy',
-  failed: 'signIn.failed',
-} as const satisfies Readonly<Record<SignInFailure, MessageKey>>;
+type SentenceKey =
+  | 'signIn.cancelled'
+  | 'signIn.expired'
+  | 'signIn.emailRequired'
+  | 'signIn.emailTaken'
+  | 'signIn.emailTakenNoMail'
+  | 'signIn.signupClosed'
+  | 'signIn.githubUnavailable'
+  | 'signIn.busy'
+  | 'signIn.failed';
+
+/**
+ * The sentence for a reason, given whether the email form is on the screen. A `switch` with no
+ * default, so a reason added to the contract is a compile error here; and a reason whose words depend
+ * on the form (`email-taken` points at it, or at an administrator where it is not) says both
+ * variants in one place, never an instruction the screen contradicts.
+ */
+const sentenceFor = (failure: SignInFailure, mail: boolean): SentenceKey => {
+  switch (failure) {
+    case 'cancelled':
+      return 'signIn.cancelled';
+    case 'expired':
+      return 'signIn.expired';
+    case 'email-required':
+      return 'signIn.emailRequired';
+    case 'email-taken':
+      return mail ? 'signIn.emailTaken' : 'signIn.emailTakenNoMail';
+    case 'signup-closed':
+      return 'signIn.signupClosed';
+    case 'github-unavailable':
+      return 'signIn.githubUnavailable';
+    case 'busy':
+      return 'signIn.busy';
+    case 'failed':
+      return 'signIn.failed';
+  }
+};
 
 export const SignInScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { search, navigate } = useRoute();
   const me = useMe();
+  const methods = useAuthMethods();
+  // Each is offered only once the server has said it works (`EmailSignInForm` asks for itself).
+  const mail = methods.data?.email === true;
+  const github = methods.data?.github === true;
   const failure = signInFailureIn(search);
   const reason = new URLSearchParams(search).get('reason');
   const note =
     failure !== null
-      ? t(FAILURE_SENTENCE[failure])
+      ? t(sentenceFor(failure, mail))
       : reason === 'ended'
         ? t('signIn.ended')
         : reason === 'erased'
@@ -64,20 +102,60 @@ export const SignInScreen = (): React.JSX.Element => {
           <h1 className="text-display">{t('signIn.title')}</h1>
           <p className="text-balance text-body text-ink-muted">{t('signIn.lede')}</p>
           {note !== null && (
-            <p role="status" className="text-label text-warning-text">
+            <p role="status" className="text-balance text-label text-warning-text">
               {note}
             </p>
           )}
         </div>
-        <div className="flex w-full flex-col items-center gap-3">
-          {/* A plain anchor on purpose: the browser must leave this page. */}
-          <a href="/auth/github" className={cn(buttonStyle('primary', 'lg'), 'w-full')}>
-            <Icon name="github" />
-            {t('signIn.github')}
-          </a>
-          <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
-        </div>
-        <EmailSignInForm />
+        {methods.data === undefined && !methods.isError ? (
+          <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
+            <Skeleton className="h-touch w-full rounded-md" />
+          </LoadingStatus>
+        ) : (
+          <>
+            {!methods.isError && !github && !mail && (
+              <div className="flex w-full flex-col items-center gap-3">
+                <h2 className="text-title">{t('signIn.notSetUp.title')}</h2>
+                <p className="text-balance text-body text-ink-muted">{t('signIn.notSetUp.body')}</p>
+                <a href={href('setup')} className={cn(buttonStyle('secondary', 'lg'), 'w-full')}>
+                  {t('signIn.notSetUp.action')}
+                </a>
+              </div>
+            )}
+            {(github || methods.isError) && (
+              <div className="flex w-full flex-col items-center gap-3">
+                <GitHubButton variant="secondary" />
+                <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
+              </div>
+            )}
+            {/* The password is always offered (R30); the link only where mail is on, which the form asks. */}
+            <EmailSignInForm alone={!github && !methods.isError && mail} withPassword mail={mail} />
+            {methods.isError && (
+              <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-caption text-ink-muted">
+                {t('signIn.methods.unchecked')}
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void methods.refetch();
+                  }}
+                >
+                  {t('signIn.methods.retry')}
+                </Button>
+              </p>
+            )}
+            {methods.data?.signUp === 'open' && (
+              <p className="text-balance text-label text-ink-muted">
+                {t('signIn.createAccount.prompt')}{' '}
+                <Link to="signUp" className="text-accent-text underline">
+                  {t('signIn.createAccount.action')}
+                </Link>
+              </p>
+            )}
+            {methods.data?.signUp === 'invite-only' && (
+              <p className="text-balance text-label text-ink-muted">{t('signIn.byInvitation')}</p>
+            )}
+          </>
+        )}
       </section>
     </Main>
   );

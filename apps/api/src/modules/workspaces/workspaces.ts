@@ -178,6 +178,7 @@ export const meOf = async (
       'title',
       'time_zone',
       'status_text',
+      'is_server_admin',
     ])
     .where('id', '=', userId)
     .where('deleted_at', 'is', null)
@@ -194,6 +195,7 @@ export const meOf = async (
     profile: asProfile(user),
     memberships: [...(await membershipsOf(executor, clock, userId))],
     mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
+    isServerAdmin: user.is_server_admin,
   };
 };
 

@@ -13,17 +13,20 @@
  *
  * - **revocation** arrives as a `SESSION_ENDED` frame on the session's topic,
  *   published by sign-out, so it reaches the socket on whichever node holds it;
- * - **expiry** is a timer set from the session's `expires_at`.
+ * - **expiry** is a timer set from the session's `expires_at`;
+ * - **a session removed by the database itself** — the recovery command, an operator's SQL — has no
+ *   bus event: `liveness.ts` asks about every open socket's session on an interval and ends the ones
+ *   whose session is gone, expired, or whose account was erased.
  *
  * Either way the frame is delivered first, so the client knows why, and the
  * connection is closed with `CLOSE_CODES.SESSION_ENDED` (#194).
  */
 import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
-import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
+import type { Auth } from '../modules/auth/better-auth';
 import { readCookie, SESSION_COOKIE } from '../platform/cookies';
 import type { Logger } from '../platform/logging';
-import { sessionFromCookie } from '../modules/auth/sessions';
+import { SESSION_CLOCK, sessionFromHeaders } from '../modules/auth/sessions';
 import type { SocketIdentity } from './router';
 
 /** How a connection is reached and ended. The transport supplies both. */
@@ -117,6 +120,8 @@ export interface SocketHub {
   closed: (socketId: string) => void;
   /** Closes every connection with this code — what a shutdown does to tell clients to come back. */
   closeAll: (code: number, reason: string) => void;
+  /** The session each open, identified socket was admitted with: what the liveness sweep asks about. */
+  readonly sessions: () => readonly { readonly socketId: string; readonly sessionId: string }[];
   /** What the bus delivers through. */
   deliver: (socketId: string, frame: ServerFrame) => void;
   /**
@@ -189,6 +194,7 @@ interface Held {
   queued: number;
   /** Set once the identity is resolved, so the per-user count can be given back. */
   userId?: string;
+  sessionId?: string;
   /** Set when the hub closes the connection itself, so queued work stops at once. */
   ending: boolean;
 }
@@ -257,7 +263,7 @@ const channelOf = (frame: ServerFrame): string | null => {
 };
 
 export const createSocketHub = (
-  database: Executor,
+  auth: Auth,
   clock: Clock,
   { log, leave, listen, timers = systemTimers, presence }: HubOptions,
 ): SocketHub => {
@@ -329,7 +335,7 @@ export const createSocketHub = (
     socketId: string,
     request: Request,
   ): Promise<SocketIdentity | undefined> => {
-    const owner = await sessionFromCookie(database, clock, request.headers.get('cookie'));
+    const owner = await sessionFromHeaders(auth, request.headers);
     return owner === undefined
       ? undefined
       : { socketId, userId: owner.userId, sessionId: owner.sessionId, expiresAt: owner.expiresAt };
@@ -397,12 +403,14 @@ export const createSocketHub = (
         return undefined;
       }
       entry.userId = identity.userId;
+      entry.sessionId = identity.sessionId;
       const before = byUser.get(identity.userId) ?? 0;
       byUser.set(identity.userId, before + 1);
       if (before === 0) presence?.arrived(identity.userId);
       entry.cancelExpiry = after(
         timers,
-        identity.expiresAt.getTime() - clock.now().getTime(),
+        // Against the clock the library judges expiry by, so the socket ends when its session does.
+        identity.expiresAt.getTime() - SESSION_CLOCK.now().getTime(),
         () => {
           deliver(socketId, {
             event: 'SESSION_ENDED',
@@ -434,6 +442,13 @@ export const createSocketHub = (
     closeAll: (code: number, reason: string): void => {
       for (const socket of held.values()) socket.connection.close(code, reason);
     },
+
+    sessions: () =>
+      [...held.entries()].flatMap(([socketId, socket]) =>
+        socket.sessionId === undefined || socket.ended === true
+          ? []
+          : [{ socketId, sessionId: socket.sessionId }],
+      ),
 
     deliver,
 

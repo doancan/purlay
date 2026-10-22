@@ -17,7 +17,7 @@ import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { issueSession } from '../../modules/auth/sessions';
+import { aTestAuth, aSession } from '../../testing/signed-in';
 import { aRoom } from '../../testing/rooms';
 import { testDependencies } from '../../testing/doubles';
 import { createApp } from './app';
@@ -49,7 +49,7 @@ const recordingBus = (): { readonly bus: EventBus; readonly told: [string, Serve
 };
 
 const caller = async (db: Executor, userId: string): Promise<Call> => {
-  const { token } = await issueSession(db, clock, userId, 30);
+  const { token } = await aSession(db, clock, userId, 30);
   const app = createApp(testDependencies({ database: db, clock }));
   return async (method, path, body) =>
     await app.handle(
@@ -187,9 +187,9 @@ describe('integration: who is told of an incident', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice'], { outsiders: ['erin'] });
       const { bus, told } = recordingBus();
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
       const asked = async (userId: string): Promise<() => Request> => {
-        const { token } = await issueSession(db, clock, userId, 30);
+        const { token } = await aSession(db, clock, userId, 30);
         return () =>
           new Request('https://purlay.test/', {
             headers: { cookie: `${SESSION_COOKIE}=${token}` },

@@ -32,8 +32,10 @@ test.describe('an invitation', () => {
     await bob.say(busy.id, 'shipping now');
 
     await page.goto(`/invite#${token}`);
-    // Not signed in: sent to sign in, and the secret is already out of the address.
-    await expect(page).toHaveURL(/\/sign-in$/);
+    // Not signed in: the page is a way in (the passport comes before GitHub or a link), and the
+    // secret is already out of the address.
+    await expect(page).toHaveURL(/\/invite$/);
+    await expect(page.getByRole('heading', { name: 'You have been invited' })).toBeVisible();
     expect(page.url()).not.toContain(token);
 
     // Signing in comes back to the root, as GitHub's callback does, in the same tab.
@@ -96,6 +98,52 @@ test.describe('an invitation', () => {
     const alice = await asPerson('alice');
     await alice.goto(new URL(link).pathname + new URL(link).hash);
     await expect(alice.getByRole('button', { name: 'Open', exact: true })).toBeVisible();
+  });
+
+  test('by email: chips, a wrong address kept red, the server’s answer said in words, and the link always there', async ({
+    page,
+    signIn,
+    tenant,
+  }) => {
+    // The e2e server has no mail relay, so the screen is told there is one — the way a configured
+    // server tells it — and the real server then answers what it does without one: every address
+    // `unavailable`, the link made all the same. The queued answer has no relay to stand on here and
+    // is the integration tests' (`invitation-mail.integration.test.ts`).
+    await page.route('**/api/auth/methods', async (route) => {
+      await route.fulfill({ json: { github: true, email: true, signUp: 'invite-only' } });
+    });
+    await signIn();
+    await page.goto(`/w/${tenant.slug}`);
+    await openNav(page);
+    await page.getByRole('button', { name: 'Switch workspace' }).click();
+    await page.getByRole('menuitem', { name: 'Invite people…' }).click();
+    const dialog = page.getByRole('dialog', { name: /^Invite people to / });
+    const field = dialog.getByRole('textbox', { name: 'Email addresses' });
+    await expect(field).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Send invitations' })).toBeDisabled();
+
+    await field.fill('ann@example.test,nope,');
+    await field.press('Enter');
+    await expect(dialog.getByText('ann@example.test')).toBeVisible();
+    await expect(dialog.getByText('(not an email address)')).toBeAttached();
+    // The dialog fits the window at both widths: nothing runs off its edge.
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+
+    await dialog.getByRole('button', { name: 'Send invitation' }).click();
+    await expect(
+      dialog.getByText('This server cannot send email, so these were not sent: ann@example.test.'),
+    ).toBeVisible();
+    // Never said to be sent; the link is there to copy, and the refused address stays in the field.
+    await expect(dialog.getByText(/Asked the mail server/)).toHaveCount(0);
+    await expect(dialog.getByRole('textbox', { name: 'Invitation link' })).toHaveValue(
+      /\/invite#[0-9a-f]{64}$/,
+    );
+    await expect(dialog.getByRole('button', { name: 'Remove nope' })).toBeVisible();
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
   });
 
   test('an open link is revoked on the Invitations page, and opens for nobody after', async ({

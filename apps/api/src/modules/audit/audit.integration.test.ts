@@ -13,7 +13,7 @@ import { createChannel } from '../channels/channels';
 import { acceptInvitation, createInvitation } from '../workspaces/invitations';
 import { changeRole, removeMember } from '../workspaces/members';
 import { auditTrail, recordAudit } from './audit';
-import { issueSession } from '../auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { withinRequest } from '../../platform/logging';
 
 afterAll(async () => {
@@ -180,7 +180,7 @@ describe('integration: a row with no request behind it', () => {
   test('a row a request wrote names its session, and loses it when the session is swept', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['acted']);
-      const { sessionId } = await issueSession(db, fixedClock(NOW), idOf(room, 'acted'), 1);
+      const { sessionId } = await aSession(db, fixedClock(NOW), idOf(room, 'acted'), 1);
       await withinRequest({ requestId: 'r', startedAt: 0, sessionId }, async () => {
         await recordAudit(db, fixedClock(NOW), {
           workspaceId: room.workspaceId,

@@ -59,4 +59,9 @@ type NeedsParams<K extends MessageKey> = keyof ParamsOf<K> extends never ? false
 /** The arguments after the key: none for a plain string, the params object otherwise. */
 type TranslateArgs<K extends MessageKey> = NeedsParams<K> extends true ? [params: ParamsOf<K>] : [];
 
+/** The keys whose message takes no parameters: what a table of sentences, read by key, may hold. */
+export type PlainKey = {
+  readonly [K in MessageKey]: NeedsParams<K> extends true ? never : K;
+}[MessageKey];
+
 export type Translate = <K extends MessageKey>(key: K, ...args: TranslateArgs<K>) => string;

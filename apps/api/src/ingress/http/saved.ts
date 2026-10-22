@@ -34,7 +34,7 @@ export const putSaved = async (
   body: unknown,
 ): Promise<void> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(SaveMessageRequest, body ?? {});
   const workspaceId = await atomicallyOn(database)(
     async (transaction) => await saveMessage(transaction, clock, userId, messageId, input),
@@ -48,19 +48,19 @@ export const deleteSaved = async (
   request: Request,
   messageId: string,
 ): Promise<void> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const workspaceId = await unsaveMessage(database, userId, messageId);
   await told(dependencies, userId, workspaceId);
 };
 
 /** `GET /api/workspaces/:workspaceId/saved?state=` — one state's saves, newest first. */
 export const listSaved = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   workspaceId: string,
 ): Promise<SavedPage> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(SavedQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await savedPage(database, context, input);
@@ -68,11 +68,11 @@ export const listSaved = async (
 
 /** `GET /api/workspaces/:workspaceId/saved/ids` — which messages are saved, to mark them. */
 export const listSavedIds = async (
-  { database, clock }: ChannelDependencies,
+  { auth, database }: ChannelDependencies,
   request: Request,
   workspaceId: string,
 ): Promise<SavedIds> => {
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await savedIds(database, context);
 };

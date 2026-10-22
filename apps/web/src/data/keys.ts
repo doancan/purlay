@@ -13,6 +13,8 @@ export const keys = {
   mySignIn: ['my-sign-in'] as const,
   /** Which ways in this server offers (D-138 §6). */
   authMethods: ['auth-methods'] as const,
+  /** Whether the server is open to setup (D-179 §4). */
+  setupStatus: ['setup-status'] as const,
   /** A sign-in link's address, read before it is spent (D-138 §4). */
   emailSignIn: (token: string) => ['email-sign-in', token] as const,
   members: (workspaceId: string) => ['members', workspaceId] as const,

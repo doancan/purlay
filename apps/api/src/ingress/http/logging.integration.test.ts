@@ -5,40 +5,63 @@
  * was told nothing about, D-38's record of a renamed account — and, across a
  * whole sign-in, not one session token, cookie or address.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  type ClonedDatabase,
+  type Executor,
+} from '@purlay/db';
 import { createApp } from './app';
 import {
   aDatabaseThatMustNotBeTouched,
-  aGitHubAccount,
   aRecordingLogger,
   testDependencies,
 } from '../../testing/doubles';
-import { aSignedInUser } from '../../testing/signed-in';
+import {
+  aGitHubAuth,
+  aGitHubFor,
+  aGitHubPerson,
+  returnFromGitHub,
+  signInWithGitHub,
+  startGitHubSignIn,
+  type GitHubPerson,
+  type StartedSignIn,
+} from '../../testing/github-sign-in';
+import type { Logger } from '../../platform/logging';
+import type { Auth } from '../../modules/auth/better-auth';
+import { aSignedInUser, aTestAuth } from '../../testing/signed-in';
 import { fixedClock } from '../../platform/clock';
 import { aUserRow } from '../../testing/users';
 
+// The sign-ins go through the library, whose transactions need a database of their own.
+let cloned: ClonedDatabase;
+beforeAll(async () => {
+  cloned = await cloneIntegrationDatabase();
+});
+
 afterAll(async () => {
+  await cloned.drop();
   await closeIntegrationDatabase();
 });
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
 
-const signIn = async (
-  db: Executor,
-  github: ReturnType<typeof aGitHubAccount>,
-  log: ReturnType<typeof aRecordingLogger>['log'],
-): Promise<Response> => {
-  const app = createApp(testDependencies({ database: db, clock, github, log }));
-  const started = await app.handle(new Request('https://purlay.test/auth/github'));
-  const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
-  const cookie = (started.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-  return await app.handle(
-    new Request(`https://purlay.test/auth/github/callback?code=${github.accepts}&state=${state}`, {
-      headers: { cookie },
+/** A whole GitHub sign-in through the library, on the clone, writing to this log. */
+const signIn = async (person: GitHubPerson, log: Logger): Promise<Response> => {
+  const github = aGitHubFor(person);
+  const app = createApp(
+    testDependencies({
+      database: cloned.db,
+      clock,
+      log,
+      auth: aGitHubAuth(cloned.db, github.fetch, { log }),
     }),
   );
+  return await signInWithGitHub(app, 'https://purlay.test', github);
 };
 
 /** The first line matching, once it has been written; a test fails rather than waits forever. */
@@ -116,41 +139,424 @@ describe('integration: the log', () => {
   });
 
   test('a whole sign-in writes no token, no cookie and no address', async () => {
-    await withRollback(async (db) => {
-      const { log, lines } = aRecordingLogger();
-      const github = aGitHubAccount(
-        { id: 7001, login: 'quiet-logs', name: null, avatarUrl: null },
-        [{ email: 'quiet-logs@example.test', primary: true, verified: true }],
-      );
-      const signedIn = await signIn(db, github, log);
-      expect(signedIn.status).toBe(302);
-      expect(signedIn.headers.get('location')).toBe('https://purlay.test');
-      const token = (signedIn.headers.getSetCookie()[0] ?? '').split(';')[0]?.split('=')[1] ?? '';
-      expect(token.length).toBeGreaterThan(20);
+    const { log, lines } = aRecordingLogger();
+    const person = aGitHubPerson(`quiet-logs-${crypto.randomUUID().slice(0, 6)}`);
+    const signedIn = await signIn(person, log);
+    expect(signedIn.status).toBe(302);
+    expect(signedIn.headers.get('location')).toBe('https://purlay.test');
+    const session = signedIn.headers
+      .getSetCookie()
+      .find((cookie) => cookie.startsWith('__Host-purlay_session='));
+    const token =
+      decodeURIComponent(session?.split(';')[0]?.split('=')[1] ?? '').split('.')[0] ?? '';
+    expect(token.length).toBeGreaterThan(20);
 
-      const written = JSON.stringify(lines);
-      expect(lines.length).toBeGreaterThan(0);
-      expect(written).not.toContain(token);
-      expect(written).not.toContain('quiet-logs@example.test');
-      expect(written).not.toContain('purlay_session=');
-    });
+    const written = JSON.stringify(lines);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(written).not.toContain(token);
+    expect(written).not.toContain(person.email);
+    expect(written).not.toContain('purlay_session=');
+    expect(written).not.toContain('gho_never_kept');
   });
 
   test('an account stored under another name than GitHub gave is written down (D-38)', async () => {
-    await withRollback(async (db) => {
-      const taken = await aUserRow(db, 'log-taken');
-      const { log, lines } = aRecordingLogger();
-      const github = aGitHubAccount(
-        { id: 7002, login: taken.username, name: null, avatarUrl: null },
-        [{ email: 'second-of-that-name@example.test', primary: true, verified: true }],
-      );
-      expect((await signIn(db, github, log)).headers.get('location')).toBe('https://purlay.test');
-      expect(
-        lines.find((line) => line['msg'] === 'username taken; stored with a suffix'),
-      ).toMatchObject({
-        level: 'warn',
-        wanted: taken.username,
-      });
+    const taken = await aUserRow(cloned.db, 'log-taken');
+    const { log, lines } = aRecordingLogger();
+    const person = aGitHubPerson(taken.username, {
+      email: `second-of-that-name-${crypto.randomUUID().slice(0, 6)}@example.test`,
     });
+    expect((await signIn(person, log)).headers.get('location')).toBe('https://purlay.test');
+    expect(
+      lines.find((line) => line['msg'] === 'username taken; stored with a suffix'),
+    ).toMatchObject({
+      level: 'warn',
+      wanted: taken.username,
+    });
+  });
+
+  test('what the sign-in library says goes to this log, without an address, a token, a cookie or a state', async () => {
+    const { log, lines } = aRecordingLogger();
+    const person = aGitHubPerson(`library-logs-${crypto.randomUUID().slice(0, 6)}`);
+    const github = aGitHubFor(person);
+    const app = createApp(
+      testDependencies({
+        database: cloned.db,
+        clock,
+        log,
+        auth: aGitHubAuth(cloned.db, github.fetch, { log }),
+      }),
+    );
+    // The library catches a failed sign-up and logs the database's error — which names the address.
+    await sql`
+      create function refuse_naming() returns trigger language plpgsql as
+      $$ begin raise exception 'refused for %', new.email; end $$
+    `.execute(cloned.db);
+    await sql`create trigger refuse_naming before insert on users for each row execute function refuse_naming()`.execute(
+      cloned.db,
+    );
+    let started: StartedSignIn;
+    try {
+      started = await startGitHubSignIn(app, 'https://purlay.test', github);
+      const refused = await returnFromGitHub(app, 'https://purlay.test', started);
+      expect(refused.headers.get('location')).toBe('https://purlay.test/sign-in?error=failed');
+    } finally {
+      await sql`drop trigger refuse_naming on users`.execute(cloned.db);
+      await sql`drop function refuse_naming()`.execute(cloned.db);
+    }
+    // And a state that is not this browser's: the library logs why, naming the state.
+    const stray = await startGitHubSignIn(app, 'https://purlay.test', github);
+    await returnFromGitHub(app, 'https://purlay.test', { ...stray, cookie: '' });
+
+    const fromLibrary = lines.filter((line) => line['msg'] === 'the sign-in library said');
+    expect(fromLibrary.map((line) => line['said'])).toContain('Unable to create OAuth user');
+    const written = JSON.stringify(lines);
+    expect(written).toContain('refused for');
+    expect(written).not.toContain(person.email);
+    expect(written).not.toContain(stray.state);
+    expect(written).not.toContain(started.state);
+    expect(written).not.toContain('purlay_session=');
+    expect(written).not.toContain('gho_');
+  });
+
+  /** Everything written to the console while the body runs: what reaches stdout and stderr past us. */
+  const consoleDuring = async (body: () => Promise<void>): Promise<string> => {
+    const said: string[] = [];
+    const methods = ['error', 'warn', 'log', 'info', 'debug'] as const;
+    const kept = methods.map((name) => console[name].bind(console));
+    for (const name of methods) {
+      console[name] = (...args: unknown[]): void => {
+        said.push(
+          args
+            .map((arg) =>
+              // Every own field of an error, a driver's `detail` among them.
+              arg instanceof Error
+                ? JSON.stringify(arg, Object.getOwnPropertyNames(arg))
+                : String(arg),
+            )
+            .join(' '),
+        );
+      };
+    }
+    try {
+      await body();
+    } finally {
+      methods.forEach((name, index) => {
+        const original = kept[index];
+        if (original !== undefined) console[name] = original;
+      });
+    }
+    return said.join('\n');
+  };
+
+  test('a driver error the library does not catch is ours to log: nothing reaches the console (D-78)', async () => {
+    const { log, lines } = aRecordingLogger();
+    const person = aGitHubPerson(`uncaught-${crypto.randomUUID().slice(0, 6)}`);
+    const github = aGitHubFor(person);
+    const app = createApp(
+      testDependencies({
+        database: cloned.db,
+        clock,
+        log,
+        auth: aGitHubAuth(cloned.db, github.fetch, { log }),
+      }),
+    );
+    // The driver's own shape: a unique violation whose detail names the address.
+    await sql`
+      create function refuse_with_detail() returns trigger language plpgsql as
+      $$ begin raise exception 'duplicate key value' using errcode = '23505',
+         detail = 'Key (email)=(' || new.email || ') already exists.'; end $$
+    `.execute(cloned.db);
+    await sql`create trigger refuse_with_detail before update on users for each row execute function refuse_with_detail()`.execute(
+      cloned.db,
+    );
+    let answered: Response | undefined;
+    const printed = await consoleDuring(async () => {
+      try {
+        answered = await signInWithGitHub(app, 'https://purlay.test', github);
+      } finally {
+        await sql`drop trigger refuse_with_detail on users`.execute(cloned.db);
+        await sql`drop function refuse_with_detail()`.execute(cloned.db);
+      }
+    });
+    expect(answered?.headers.get('location')).toBe('https://purlay.test/sign-in?error=failed');
+    expect(printed).not.toContain(person.email);
+    expect(printed).not.toContain('already exists');
+    expect(printed).not.toContain('SERVER_ERROR');
+    const failure = lines.find((line) => line['msg'] === 'request failed');
+    expect(failure).toMatchObject({ level: 'error', err: { errorCode: '23505' } });
+    expect(JSON.stringify(lines)).not.toContain(person.email);
+    expect(JSON.stringify(lines)).not.toContain('already exists');
+  });
+
+  test('a session lookup whose read fails reaches the console with nothing either', async () => {
+    const { log, lines } = aRecordingLogger();
+    const alice = await aSignedInUser(cloned.db, clock, 'lookup-fails');
+    const failing = { on: false };
+    // The read of the user behind a session fails, carrying the address as a driver's detail would.
+    const database = cloned.db.withPlugin({
+      transformQuery: (
+        args,
+      ): ReturnType<Parameters<Executor['withPlugin']>[0]['transformQuery']> => {
+        if (failing.on && JSON.stringify(args.node).includes('"users"')) {
+          throw Object.assign(new Error('the read failed'), {
+            detail: `Key (email)=(${alice.email})`,
+          });
+        }
+        return args.node;
+      },
+      transformResult: async (args) => await Promise.resolve(args.result),
+    });
+    const app = createApp(testDependencies({ database, clock, log }));
+    let status = 0;
+    const printed = await consoleDuring(async () => {
+      failing.on = true;
+      try {
+        status = (
+          await app.handle(
+            new Request('https://purlay.test/api/me', { headers: { cookie: alice.cookie } }),
+          )
+        ).status;
+      } finally {
+        failing.on = false;
+      }
+    });
+    expect(status).toBe(500);
+    expect(printed).not.toContain(alice.email);
+    expect(printed).not.toContain('Key (email)');
+    expect(lines.find((line) => line['msg'] === 'request failed')).toMatchObject({
+      level: 'error',
+    });
+    expect(JSON.stringify(lines)).not.toContain(alice.email);
+  });
+
+  /** A server whose statements matching `fails` throw an error carrying the address as its detail. */
+  const aServerFailing = (
+    log: Logger,
+    email: string,
+    fails: (node: { readonly kind: string }, text: string) => boolean,
+    failing: { on: boolean },
+  ): ReturnType<typeof createApp> =>
+    createApp(
+      testDependencies({
+        database: cloned.db.withPlugin({
+          transformQuery: (
+            args,
+          ): ReturnType<Parameters<Executor['withPlugin']>[0]['transformQuery']> => {
+            if (failing.on && fails(args.node, JSON.stringify(args.node))) {
+              throw Object.assign(new Error('the statement failed'), {
+                detail: `Key (email)=(${email})`,
+              });
+            }
+            return args.node;
+          },
+          transformResult: async (args) => await Promise.resolve(args.result),
+        }),
+        clock,
+        log,
+      }),
+    );
+
+  /** A token as a reset link would carry one: the kind of thing a path segment must never leak. */
+  const RESET_TOKEN = `reset-${'f'.repeat(32)}`;
+
+  for (const { sent, route, method, fails } of [
+    {
+      sent: '/auth/revoke-sessions',
+      route: '/auth/revoke-sessions',
+      method: 'POST',
+      fails: (node: { readonly kind: string }, text: string): boolean =>
+        node.kind === 'DeleteQueryNode' && text.includes('"sessions"'),
+    },
+    {
+      sent: '/auth/get-session',
+      route: '/auth/get-session',
+      method: 'GET',
+      fails: (node: { readonly kind: string }, text: string): boolean =>
+        node.kind === 'SelectQueryNode' &&
+        text.includes('"token_hash"') &&
+        !text.includes('"sessions_ended"'),
+    },
+  ] as const) {
+    test(`a failure the library answers itself on ${route} is written down once, by its route, and nothing reaches the console`, async () => {
+      const { log, lines } = aRecordingLogger();
+      const alice = await aSignedInUser(cloned.db, clock, 'library-500');
+      const failing = { on: false };
+      const app = aServerFailing(log, alice.email, fails, failing);
+      let status = 0;
+      const printed = await consoleDuring(async () => {
+        failing.on = true;
+        try {
+          status = (
+            await app.handle(
+              new Request(
+                `https://purlay.test${sent}${sent.includes('?') ? '&' : '?'}probe=${alice.username}`,
+                {
+                  method,
+                  headers: {
+                    cookie: alice.cookie,
+                    origin: 'https://purlay.test',
+                    ...(method === 'POST' ? { 'content-type': 'application/json' } : {}),
+                  },
+                  ...(method === 'POST' ? { body: '{}' } : {}),
+                },
+              ),
+            )
+          ).status;
+        } finally {
+          failing.on = false;
+        }
+      });
+      expect(status).toBe(500);
+      expect(printed).not.toContain(alice.email);
+      expect(printed).not.toContain('Key (email)');
+      const told = lines.filter((line) => line['msg'] === 'the sign-in library answered a failure');
+      expect(told).toHaveLength(1);
+      expect(told[0]).toMatchObject({ level: 'error', status: 500, path: route });
+      expect(lines.filter((line) => line['msg'] === 'request failed')).toEqual([]);
+      const written = JSON.stringify(lines);
+      expect(written).not.toContain(alice.email);
+      expect(written).not.toContain('Key (email)');
+      expect(written).not.toContain(alice.username);
+      expect(written).not.toContain('probe=');
+      expect(written).not.toContain(RESET_TOKEN);
+      expect(written).not.toContain('purlay_session=');
+    });
+  }
+
+  test('a failure the library throws on its route with a parameter is written by the route, never the token', async () => {
+    const { log, lines } = aRecordingLogger();
+    const alice = await aSignedInUser(cloned.db, clock, 'reset-500');
+    const failing = { on: false };
+    // The read of the reset's row fails under `GET /auth/reset-password/:token`: measured, the
+    // library throws this one to us rather than answer it, so the edge writes it.
+    const app = aServerFailing(
+      log,
+      alice.email,
+      (node, text) => node.kind === 'SelectQueryNode' && text.includes('"verifications"'),
+      failing,
+    );
+    let status = 0;
+    const printed = await consoleDuring(async () => {
+      failing.on = true;
+      try {
+        status = (
+          await app.handle(
+            new Request(
+              `https://purlay.test/auth/reset-password/${RESET_TOKEN}?callbackURL=%2Fsign-in&probe=${alice.username}`,
+            ),
+          )
+        ).status;
+      } finally {
+        failing.on = false;
+      }
+    });
+    expect(status).toBe(500);
+    expect(printed).not.toContain(alice.email);
+    expect(printed).not.toContain(RESET_TOKEN);
+    const failed = lines.filter((line) => line['msg'] === 'request failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ level: 'error', path: '/auth/reset-password/:token' });
+    expect(
+      lines.filter((line) => line['msg'] === 'the sign-in library answered a failure'),
+    ).toEqual([]);
+    const written = JSON.stringify(lines);
+    expect(written).not.toContain(RESET_TOKEN);
+    expect(written).not.toContain(alice.email);
+    expect(written).not.toContain(alice.username);
+    expect(written).not.toContain('probe=');
+    expect(written).not.toContain('callbackURL');
+  });
+
+  /**
+   * The library answering `500` to everything, with the real instance's route table: what the log
+   * names a path by when the library has no route for it, or a route with a parameter in it, is
+   * decided by ingress alone.
+   */
+  const aLibraryAnswering500 = (real: Auth): Auth =>
+    new Proxy({} as Auth, {
+      get: (_target, property): unknown => {
+        const answer = (): Response =>
+          Response.json(
+            { code: 'FAILED_TO_GET_SESSION', message: 'the library says why' },
+            { status: 500 },
+          );
+        if (property === 'handler') return () => Promise.resolve(answer());
+        if (property === 'answer') {
+          return () => Promise.resolve({ response: answer(), lostSignUpRace: false });
+        }
+        if (property === 'routeOf' || property === '$ERROR_CODES' || property === 'github') {
+          return real[property];
+        }
+        throw new Error(
+          `the sign-in library was reached (\`${String(property)}\`) beyond its handler`,
+        );
+      },
+    });
+
+  test('a 5xx the library answers is written by a route of its table, or /auth/*: never a segment the caller wrote', async () => {
+    const { log, lines } = aRecordingLogger();
+    const real = aTestAuth(cloned.db);
+    const app = createApp(
+      testDependencies({ database: cloned.db, clock, log, auth: aLibraryAnswering500(real) }),
+    );
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+    for (const sent of [
+      `/auth/reset-password/${RESET_TOKEN}?callbackURL=%2Fsign-in`,
+      `/auth/${first}/${second}?probe=${first}`,
+      '/auth/revoke-sessions?probe=yes',
+    ]) {
+      expect(
+        (
+          await app.handle(
+            new Request(`https://purlay.test${sent}`, {
+              method: 'POST',
+              headers: { origin: 'https://purlay.test', 'content-type': 'application/json' },
+              body: '{}',
+            }),
+          )
+        ).status,
+      ).toBe(500);
+    }
+    const told = lines.filter((line) => line['msg'] === 'the sign-in library answered a failure');
+    expect(told.map((line) => line['path'])).toEqual([
+      '/auth/reset-password/:token',
+      '/auth/*',
+      '/auth/revoke-sessions',
+    ]);
+    expect(told.every((line) => line['libraryCode'] === 'FAILED_TO_GET_SESSION')).toBe(true);
+    const written = JSON.stringify(lines);
+    expect(written).not.toContain(RESET_TOKEN);
+    expect(written).not.toContain(first);
+    expect(written).not.toContain(second);
+    expect(written).not.toContain('probe=');
+    expect(written).not.toContain('callbackURL');
+    expect(written).not.toContain('the library says why');
+  });
+
+  test('a request under the library’s path is written by its route: a reset link’s token and an unknown path’s segments never', async () => {
+    const { log, lines } = aRecordingLogger();
+    const app = createApp(testDependencies({ database: cloned.db, clock, log }));
+    // Nobody issued the token: the library sends the browser back with `INVALID_TOKEN`.
+    const reset = await app.handle(
+      new Request(`https://purlay.test/auth/reset-password/${RESET_TOKEN}?callbackURL=%2Fsign-in`),
+    );
+    expect(reset.status).toBe(302);
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+    const unknown = await app.handle(new Request(`https://purlay.test/auth/${first}/${second}`));
+    expect(unknown.status).toBe(404);
+    // Written a tick after each response has gone.
+    await written(lines, () => lines.filter((line) => line['msg'] === 'request').length === 2);
+    const requests = lines.filter((line) => line['msg'] === 'request');
+    expect(requests.map((line) => line['path'])).toEqual([
+      '/auth/reset-password/:token',
+      '/auth/*',
+    ]);
+    const everything = JSON.stringify(lines);
+    expect(everything).not.toContain(RESET_TOKEN);
+    expect(everything).not.toContain(first);
+    expect(everything).not.toContain(second);
+    expect(everything).not.toContain('callbackURL');
   });
 });

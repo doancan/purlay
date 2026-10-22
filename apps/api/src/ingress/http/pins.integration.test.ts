@@ -9,7 +9,7 @@ import { fixedClock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { issueSession } from '../../modules/auth/sessions';
+import { aTestAuth, aSession } from '../../testing/signed-in';
 import { aRoom } from '../../testing/rooms';
 import { testDependencies } from '../../testing/doubles';
 import { createApp } from './app';
@@ -38,7 +38,7 @@ describe('integration: who is told of a pin', () => {
         })
         .execute();
       const asked = async (userId: string): Promise<() => Request> => {
-        const { token } = await issueSession(db, clock, userId, 30);
+        const { token } = await aSession(db, clock, userId, 30);
         return () =>
           new Request('https://purlay.test/', {
             headers: { cookie: `${SESSION_COOKIE}=${token}` },
@@ -56,7 +56,7 @@ describe('integration: who is told of a pin', () => {
         unsubscribe: () => undefined,
         forget: () => undefined,
       };
-      const dependencies = { database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
 
       await putPin(dependencies, alice(), message);
       await putPin(dependencies, alice(), message);
@@ -96,7 +96,7 @@ describe('integration: the routes', () => {
           content: 'pin this',
         })
         .execute();
-      const { token } = await issueSession(db, clock, room.members['alice']?.userId ?? '', 30);
+      const { token } = await aSession(db, clock, room.members['alice']?.userId ?? '', 30);
       const app = createApp(testDependencies({ database: db, clock }));
       const call = async (method: string, path: string): Promise<Response> =>
         await app.handle(

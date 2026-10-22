@@ -53,3 +53,35 @@ export const isTransient = (error: unknown): boolean =>
     error.code === 'DATABASE_UNAVAILABLE' ||
     error.code === 'RATE_LIMITED' ||
     error.code === 'INTERNAL');
+
+/**
+ * A refusal in the shape of the sign-in library's own routes (`{ code, message, reason? }`, no
+ * `error` envelope), which the password sign-in and change-password answer with (`API.md`). Its `code`
+ * is the library's, read by the two screens that call those routes and by nothing else; `retryAfter`
+ * is `Retry-After` in seconds on a 429.
+ */
+export class LibraryFailure extends Error {
+  readonly status: number;
+  /** The library's code, or `NETWORK` / `MALFORMED` where there was no readable answer. */
+  readonly code: string;
+  /** What `PASSWORD_TOO_WEAK` says is wrong with a password (`PasswordProblem`); else null. */
+  readonly reason: string | null;
+  readonly retryAfter: number | null;
+
+  constructor(
+    status: number,
+    code: string,
+    reason: string | null = null,
+    retryAfter: number | null = null,
+  ) {
+    super(`${String(status)} ${code}`);
+    this.name = 'LibraryFailure';
+    this.status = status;
+    this.code = code;
+    this.reason = reason;
+    this.retryAfter = retryAfter;
+  }
+}
+
+export const isLibraryFailure = (value: unknown): value is LibraryFailure =>
+  value instanceof LibraryFailure;

@@ -51,16 +51,16 @@ account for it. `message` is for humans and may change. (D-47)
 | Status | Meaning |
 |---|---|
 | `400` | Validation failed, or the body is not JSON — `details` names the fields. Never the submitted value and never the schema: a typo must not come back as a description of the server's own rules (`docs/spikes/elysia.md`) |
-| `401` | No session, or the session is expired or revoked |
-| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a member editing a message they did not write, or deleting one without moderating the workspace (D-103), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address. Never across a tenant or channel boundary — that is `404` |
-| `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`) |
+| `401` | No session, or the session is expired or ended (signed out, or revoked) |
+| `403` | Refused for what the caller is, never for what exists: a role that is insufficient (from Phase 1), a member editing a message they did not write, or deleting one without moderating the workspace (D-103), a socket upgrade or a `POST`/`PUT`/`PATCH`/`DELETE` from another origin (D-39, D-80), a GitHub account with no verified address is not a `403`: it is the `302` to the sign-in screen with `email-required` (D-121). Never across a tenant or channel boundary — that is `404` |
+| `404` | Does not exist, **or exists in a workspace you are not in**, or no such route (`ROUTE_NOT_FOUND`); a `/setup` route to anybody but the setup's holder (`SETUP_UNAVAILABLE`, §2) |
 | `409` | Conflict — duplicate workspace slug, duplicate channel name, stale edit, or `MESSAGE_ID_CONFLICT` (D-33). Losing a race for a name is the same `409` as being told it is taken (D-78) |
 | `411` | `LENGTH_REQUIRED` — a `POST`/`PUT`/`PATCH`/`DELETE` with a body and no `Content-Length` (chunked): its size cannot be judged before it is read (D-109 §4) |
 | `413` | `PAYLOAD_TOO_LARGE` — a JSON body over 64 KiB (`JSON_BODY_MAX_BYTES`, the socket's frame), or an upload over `attachment_size_limit`, refused at the edge by its `Content-Length` before it is read (D-80, D-109 §4) |
 | `415` | `UNSUPPORTED_MEDIA_TYPE` — a `POST`/`PUT`/`PATCH`/`DELETE` whose body is not `application/json` (a form, `text/plain`, or a body with no type). A request with no body at all, such as logout, is unaffected (D-80) |
-| `429` | Rate limited |
+| `429` | Rate limited (`RATE_LIMITED`), or the setup locked by five wrong codes (`SETUP_LOCKED`, §2) — each with `Retry-After` in seconds |
 | `500` | Something the server did not anticipate — `INTERNAL`, carrying no detail of the cause |
-| `503` | This process should not receive traffic — `/health/ready` while not ready or draining for shutdown — or, from any endpoint, `DATABASE_UNAVAILABLE`: no database connection within 3 s, nothing was changed, retry shortly (D-87) |
+| `503` | This process should not receive traffic — `/health/ready` while not ready or draining for shutdown — or, from any endpoint, `DATABASE_UNAVAILABLE`: no database connection within 3 s, or a process that has started and not yet read its settings from the database (D-179 §6); nothing was changed, retry shortly (D-87) |
 
 **Idempotency.** `POST` of a message carries a client-generated UUIDv7 as its `id`. Re-sending
 the same id **by the same sender in the same channel** is a no-op that returns the existing
@@ -74,71 +74,197 @@ without disclosing it. (D-33)
 
 | | Method | Path | Notes |
 |:-:|---|---|---|
-| ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`. Sets a short-lived signed `state` cookie (D-38) |
-| ○ | `GET` | `/auth/github/callback` | Verifies `state`, exchanges the code, resolves identity (D-38), upserts the user, applies open join if configured (D-37), creates a session, 302 to `APP_URL`. **Never answers JSON:** a failure is a 302 to the sign-in screen with a reason (below, D-121) |
-| ○ | `POST` | `/auth/email` | `EmailSignInRequest` (an address, the language to write in, and an invitation the tab holds, carried in the link's fragment) → `202` whatever the address, so whether an account has it is never said; the message is sent after the answer — a link for an address no account has or an email account's, a word to sign in with GitHub for a GitHub account's, nothing past five an hour. Off without mail configured: `503 EMAIL_SIGN_IN_UNAVAILABLE` (D-138) |
-| ○ | `POST` | `/auth/email/preview` | `EmailSignInToken` → `EmailSignInPreview`, the address the link was sent to, for the page to show before anyone signs in; spends nothing, so a mail scanner that opens the page signs nobody in. `404 SIGN_IN_LINK_NOT_FOUND` as for consume (D-138 §4) |
-| ○ | `POST` | `/auth/email/consume` | `EmailSignInToken` (the token the link carried in its fragment) → `204` with the session cookie: the link is spent, and an address no account has becomes an account. One answer for a link unknown, used or expired, or into an account GitHub made: `404 SIGN_IN_LINK_NOT_FOUND` (D-138 §2, §4). An account made by email that has connected GitHub keeps its link (D-176) |
+| ○ | `GET` | `/auth/github` | 302 to GitHub, scopes `read:user user:email`, with a PKCE `code_challenge` (`S256`) whose verifier is sent with the code, back to the library's callback `/auth/callback/github` (`SIGN_IN_CALLBACK`, from `APP_URL`). Sets the state's `__Host-purlay_oauth_state` cookie, signed, `Max-Age=300` (the library's five minutes; its server-side row lasts ten), its value kept server-side too (D-38, D-62, D-179). A connect's state, in the same cookie, keeps D-176's ten minutes (`Max-Age=600`). With **no GitHub app connected** (a server in setup mode, D-179 §4) there is no such route: `404 ROUTE_NOT_FOUND`, `GitHub sign-in is not set up on this server.`, in the API's error shape, and no redirect — the sign-in screen does not offer the button then (`AuthMethods.github`), so this is a stale link or a typed address. The library's own `POST /auth/sign-in/social` answers the same, instead of its thrown error; a callback that reaches such a server is a browser, and gets a `302` to the sign-in screen with `?error=expired` |
+| ○ | `GET` | `/auth/*` | The sign-in library's own routes (D-179), under its base path `/auth`, where no route of this table is the same path. Among them **`/auth/callback/github`**: verifies the state, exchanges the code, takes GitHub's primary verified address, finds or makes the account (D-38, D-179 §5), creates a session, 302 to `APP_URL`. **Never answers JSON:** a failure is a 302 to the sign-in screen with a reason (below, D-121). A tab whose first sign-up lost to another tab of the same person making the account at that moment is sent round once more, a 302 to `/auth/github` with a `__Host-purlay_signin_retry` marker, so both tabs end signed in (D-78); losing again with the marker is `failed`. `/auth/get-session` reads the session, never extending it. A path the library has no route for is `404 ROUTE_NOT_FOUND`, and so is `/auth/magic-link/verify`, the magic link's own spend: a `GET`, which a mail scanner makes, so a link is spent only by `POST /auth/email/consume` (D-138 §4) |
+| ○ | `POST` | `/auth/*` | The sign-in library's own routes, as above: `/auth/sign-out`, `/auth/revoke-session`, `/auth/revoke-sessions`, `/auth/revoke-other-sessions` (ours, by row id, D-179 §3), `/auth/change-password` and `/auth/sign-in/email` (the password routes, below the table), the password reset, and `/auth/sign-in/social`, which answers GitHub's address as JSON rather than redirecting. Password sign-up, `/auth/sign-up/email`, is `400 EMAIL_PASSWORD_SIGN_UP_DISABLED`: nobody makes a password account over HTTP (D-179 §3). Every session one of them ends closes the sockets it held with `SESSION_ENDED { reason: 'signed-out' }` (D-85). Closed, `404`: `/auth/update-user`, `/auth/link-social`, `/auth/unlink-account`, `/auth/get-access-token`, `/auth/refresh-token`, `/auth/account-info`, `/auth/change-email`, `/auth/send-verification-email`, `/auth/verify-email`, `/auth/update-session`, `/auth/delete-user/callback`, `/auth/list-accounts`, `/auth/sign-in/magic-link`, `/auth/request-password-reset`, `/auth/verify-password`, `/auth/delete-user` — a username is never set by a client, an account is joined to GitHub by one verified address only, no provider token is kept, and a link is asked for only by `POST /auth/email`, under its rules, never with a name of the asker's |
+| ○ | `POST` | `/auth/email` | `EmailSignInRequest` (an address, the language to write in, and an invitation the tab holds, carried in the link's fragment) → `202` whatever the address, so whether an account has it is never said — answered once the request is counted, before the account is read or any link made, so neither its words nor its time differ. A link — Better Auth's magic link, mailed as `APP_URL/sign-in/email#<token>` — goes to an email account's address, a linked one's, and an address no account has only where sign-up is open; a word to sign in with GitHub to an account GitHub made; nothing to an erased account, to an account whose address was never verified (the library would remove its password, D-179 §4), to a new address on an invite-only server, or past five an hour for an address and twenty an hour from a client, counted in the database. Nothing a client sends names the account: a `name`, a `username` or any field the contract does not list is `400 VALIDATION_FAILED`, as is an address the library would refuse. Off without mail configured: `503 EMAIL_SIGN_IN_UNAVAILABLE` (D-138, D-179) |
+| ○ | `POST` | `/auth/email/preview` | `EmailSignInToken` → `EmailSignInPreview`, the address the link was sent to, for the page to show before anyone signs in; reads the library's row by the token's digest and spends nothing, so a mail scanner that opens the page signs nobody in. `404 SIGN_IN_LINK_NOT_FOUND` as for consume (D-138 §4) |
+| ○ | `POST` | `/auth/email/consume` | `EmailSignInToken` (the token the link carried in its fragment) → `204` with the session cookie: the link is spent once by the library, in one transaction with the session, and an address no account has becomes an account — its address verified, named by D-138 §5 — where sign-up is open. One answer for a link unknown, used or expired, into an account GitHub made, an erased one or one whose address was never verified, or a new account on an invite-only server: `404 SIGN_IN_LINK_NOT_FOUND` (D-138 §2, §4; D-179 §4). An account made by email that GitHub is linked to keeps its link (D-176) |
 | ○ | `POST` | `/auth/logout` | Revokes the current session, and the devices subscribed in it stop being told (D-126) |
 | ○ | `POST` | `/auth/logout-all` | Revokes every session for the user. Phase 0 rather than Phase 1: *sign out everywhere* is the capability D-11 chose database-backed sessions **for**, so shipping the cost without it makes the decision unpaid |
 | ○ | `GET` | `/api/me` | Current user, their `profile`, workspace memberships, and `mayCreateWorkspace` — whether `POST /api/workspaces` would let them (D-155) |
-| ○ | `GET` | `/api/me/sign-in` | `MySignIn` — the caller's own ways in: their address, whether a link sent to it signs them in (`emailLinks`: an account made by email, connected or not — never one GitHub made, D-138 §2), and the GitHub account connected, `{ login }` or `null` (D-176) |
-| ○ | `POST` | `/api/me/github/connect` | `ConnectGitHubRequest` — the workspace whose Sessions & account page the browser comes back to — from a signed-in session, as a same-origin JSON `POST` (D-39 §2): there is no `GET` that starts one. Answers `ConnectGitHubResponse` `{ location }`, GitHub's authorization page, and sets the `state` cookie — a connect's, naming the user and the session that asked and signed under a key of its own. An account that has GitHub already is `409 GITHUB_ALREADY_CONNECTED`. The callback finishes it (below, D-176) |
+| ○ | `GET` | `/api/me/sign-in` | `MySignIn` — the caller's own ways in, **read only**: their address, whether the account has a password to change (`hasPassword`), whether a link sent to it signs them in (`emailLinks`: an account made by email, linked to GitHub or not — never one GitHub made, D-138 §2), and the GitHub account linked to it, `{ login }` or `null`. It is what the card *How you sign in* reads; nothing starts a connection from it — GitHub is linked by signing in with it, on one verified address (D-176, D-179 §5) |
 | ○ | `PATCH` | `/api/me/profile` | `{ title?, timeZone?, status? }` (`UpdateProfileRequest`): each left out is kept, `null` clears it, words are trimmed, and nothing but spaces is `400`; a time zone is a named zone the runtime knows, stored as it spells it, else `400` on `timeZone`. Answers the `Profile`. A change sends `WORKSPACE_UPDATED` to everyone in each workspace the caller is in, who read the members again (D-131) |
 | ○ | `PUT` | `/api/me/locale` | `{ locale: 'en' \| 'tr' }` (`SetLocaleRequest`) — the language the server writes the caller's notifications in (D-41, D-126); `204` |
-| ○ | `GET` | `/api/auth/methods` | Public — `AuthMethods`: whether this server signs in by email as well as by GitHub, so the sign-in screen offers only what works; `email` is false without both of `SMTP_URL` and `MAIL_FROM` (D-138 §6) |
+| ○ | `GET` | `/api/auth/methods` | Public — `AuthMethods`: `{ github: boolean, email: boolean, signUp: 'open' | 'invite-only' }`, which of the two ways in this server has connected and who may make an account, so the sign-in and sign-up screens offer only what works (password sign-in is always offered: the setup's administrator has one). `github` is false until a GitHub app is connected (the settings, D-179 §6); `email` is false without a mail relay (D-138 §6). **Both false is a server waiting for its setup**, and the screen says so |
 | ○ | `GET` | `/api/push/key` | The server's Web Push public key (`PushKeyResponse`), `null` where push is off — an answer, since every signed-in page asks (D-126) |
 | ○ | `POST` | `/api/push/subscriptions` | This device, as its browser's `PushSubscription` gives it, and the caller's language (`PushSubscribeRequest`); `204`. Tied to the caller's live session; an endpoint another person holds moves to the caller only with the same keys, and the answer is the same either way; at most 20 devices a person, the least recently subscribed dropped; a key that is no P-256 point is `400`; `503 PUSH_UNAVAILABLE` where push is off (D-126) |
 | ○ | `POST` | `/api/push/subscriptions/remove` | `{ endpoint }` — this device stops being told; `204` whether or not it was the caller's, and another person's stays theirs (D-126) |
 | ○ | `POST` | `/api/me/erase` | `EraseAccountRequest` — the caller's username, typed — from a session signed in within `ERASURE_SIGN_IN_MINUTES`, else `403 REAUTHENTICATION_REQUIRED`; a wrong username is `400` on `confirm`. `204` with the cookie cleared: the account's personal data is cleared (the address to a placeholder, the name to `deleted-user-…`, the GitHub id and profile), every session revoked and its sockets ended, its devices, pending sign-in links, saved items and notifications deleted, and each workspace told to read its members again; the person's sockets end with `SESSION_ENDED { reason: 'account-deleted' }`. **Never cascades to messages**, reactions or memberships (D-27, I-11). The last live owner of a workspace with another live member is `409 LAST_OWNER` with `details.workspaceIds` naming each to hand over; a workspace left with nobody live in it has its open links revoked (I-2, D-139 §5–§6) |
 
-Sign-in refuses with `EMAIL_REQUIRED` when the GitHub account exposes no primary verified email,
-and with `ACCOUNT_EMAIL_CONFLICT` when that address already belongs to a different `github_id` — an
-account made by email included. Neither case is linked silently (D-38, D-138 §3); the way through for
-an account made by email is to sign in by link and connect GitHub from Sessions & account (D-176).
+**The password routes, the library's** (D-179 §4). `POST /auth/sign-in/email`: The library's password sign-in, `{ email, password }` → `200` with the session cookie (`__Host-purlay_session`, the library's session, hashed at rest). **Only the setup's administrator has a password** (D-179 §4); its address may be unverified, and signs in all the same. One answer for an address no account has, an account with no password and a wrong password: `401 INVALID_EMAIL_OR_PASSWORD`, the same body and headers, and the same work — the library hashes the password for an address it does not know (measured, D-179 §4). A password over `PASSWORD_MAX_LENGTH` (128) is `400 PASSWORD_TOO_LONG` before it is hashed or counted; an address the library cannot read `400 INVALID_EMAIL`; a body past the edge's bound `413`. **Throttled on wrong guesses, never locked:** ten for an address from one client and twenty from one client in fifteen minutes — a client being a network, an IPv4 address or an IPv6 /64, counted in the database; past either `429 RATE_LIMITED` with `Retry-After` in seconds, and the password is not weighed, the right one included. A sign-in that works spends nothing. Other clients' wrong guesses never refuse the address from yours. These answers are the library's shape, `{ code, message }`.
+
+`POST /auth/change-password`: `{ currentPassword, newPassword }`, signed in → `200`, **the caller's own session untouched** (the same row, no new cookie); **every other session of the person ends** — deleted by row id, never the caller's, in one statement — whatever `revokeOtherSessions` says, and exactly those sockets close (D-85). Were that step to fail after the password changed, the answer is `500 OTHER_SESSIONS_NOT_ENDED` (the password did change, the other sessions stand; use *Sign out everywhere*). The new password is held to the policy (`passwordProblem` in `@purlay/types`, D-179 §4): `400 PASSWORD_TOO_SHORT` under ten, `400 PASSWORD_TOO_LONG` over 128, `400 PASSWORD_TOO_WEAK` with `reason` — `invalid-character`, `blank`, `contains-email`, `contains-name`, `common` or `repetitive` — said before the current password is weighed. A wrong current password is `400 INVALID_PASSWORD`, counted with the sign-in's wrong guesses for the same address and client, and `429 RATE_LIMITED` with `Retry-After` past them. `/auth/reset-password` holds a new password to the same policy, but no route issues its token: `/auth/request-password-reset` is closed (`404`), as are `/auth/verify-password` and `/auth/delete-user`, the library's other routes that weigh a password, and a password is reset on the server (`bun run admin:reset-password`).
+
+Sign-in refuses when the GitHub account exposes no primary verified email, and when that address
+belongs to an account whose own address is unverified — neither is linked (D-38, D-179 §5). An
+account made by email whose address **is** verified is the same account, and the sign-in joins
+GitHub to it: `github_id` and `github_connected_at` are set and its names stay (D-176 §5–§6). On a
+server whose sign-up is invite-only a GitHub account no Purlay account has is refused (D-179 §5).
+The username of an account GitHub makes is its login shaped as a mention can name it — lower case,
+`[a-z0-9-]`, at most 39 — and the first one free; no client sends one (D-179 §3).
 
 **A refused callback is a redirect, not an error body.** Only a browser GitHub redirected ever
 arrives at the callback, so every way it can fail — the rate limit and `INTERNAL` included — answers
 `302` to `APP_URL/sign-in?error=<reason>`, spends the `state` cookie and issues no session. The reason
 is one of `SignInFailure` in `@purlay/types`, and the address carries nothing else: no code, no
-message, nothing GitHub said. The cause is written to the log. (D-121)
+message, nothing GitHub or the sign-in library said. The library's own reasons (its `?error=`) are
+each turned into one of these, and one it has never given before is `failed`. The cause is written
+to the log. (D-121, D-179)
 
 | Reason | When |
 |---|---|
-| `cancelled` | GitHub returned `error=access_denied`: the person pressed Cancel |
-| `expired` | `OAUTH_STATE_INVALID` — no state cookie, an expired one, a mismatch, or no `code`; one reason for all of them (D-62) |
-| `email-required` | `EMAIL_REQUIRED` |
-| `email-taken` | `ACCOUNT_EMAIL_CONFLICT`, including a lost race on the email index; the screen says the way through — a link, then Connect GitHub (D-176) |
-| `github-unavailable` | GitHub could not be reached, refused, or answered something that is not a usable identity |
+| `cancelled` | GitHub returned `error=access_denied`: the person pressed Cancel. Read before the state, so a cancel in another tab is still one |
+| `expired` | The state check failed — no state cookie, an expired or spent one, a mismatch — or there is no `code`; one reason for all of them (D-62) |
+| `email-required` | No primary verified address on the GitHub account |
+| `email-taken` | A local account has the GitHub address but has not verified it, so neither is linked (D-179 §5). The screen's sentence says to sign in by the link sent to that address first where the server sends mail, and to ask an administrator to verify it where it does not |
+| `signup-closed` | A GitHub account no Purlay account has, on a server whose sign-up is `invite-only` (D-179 §5) |
+| `github-unavailable` | GitHub could not be reached, refused, did not take the code, or answered something that is not a usable identity |
 | `busy` | `RATE_LIMITED` or `DATABASE_UNAVAILABLE` |
-| `failed` | Anything else — another GitHub `error` value, or `INTERNAL` |
-
-**Connecting GitHub to an account made by email** finishes at the same callback (D-176): the `state`
-cookie says which handshake it is, by what this server signed. A connect's callback requires the state
-to be this browser's, unexpired and the one GitHub returned; the session signed in in this browser to
-be the very one that asked, still live as the account is written; the account to have no GitHub
-account; and the GitHub account GitHub vouches for to be no other Purlay account's — else
-`GITHUB_ACCOUNT_TAKEN`, never merged. It sets `github_id` and `github_login` (the login taken from any
-other account holding it, D-169 §2) and the picture, and nothing else — no session is issued. It
-answers `302` to `APP_URL/w/<workspace>/settings/account?github=<outcome>`, the state spent, with one of
-`ConnectGitHubOutcome` in `@purlay/types`:
-
-| Outcome | When |
-|---|---|
-| `connected` | Done: the account signs in with this GitHub account as well |
-| `cancelled` | GitHub returned `error=access_denied` |
-| `expired` | `OAUTH_STATE_INVALID` — expired, a mismatch, or no `code` |
-| `session` | `UNAUTHENTICATED` — the session that asked is signed out, gone, or not the one signed in here; GitHub is not asked |
-| `taken` | `GITHUB_ACCOUNT_TAKEN`, including a lost race on the GitHub id's index |
-| `already` | `GITHUB_ALREADY_CONNECTED` |
-| `github-unavailable` | GitHub could not be reached, refused, or answered something unusable |
-| `busy` | `RATE_LIMITED` or `DATABASE_UNAVAILABLE` |
-| `failed` | Anything else |
-
-A cookie this server did not sign as a connect — forged, tampered, under another key — is not one: it
-is a sign-in's failure, `expired`, on the sign-in screen.
+| `failed` | Anything else — another GitHub `error` value, a reason of the library's nobody anticipated, or `INTERNAL` |
 
 Every other route here, `/auth/github` and both logouts included, answers as §1 says.
+
+### Sign-in through Better Auth, and the setup surface (D-179)
+
+Built: D-179 moved sign-in and sessions to Better Auth and added a browser setup, and every row below
+is ○ (built) unless it is marked ①. The library's handler under `/auth` and its GitHub round trip are the ○ rows of §2
+above; this section is the surface that code is held to.
+
+**`/auth/*`.** Better Auth's handler is mounted at `/auth`. The contract a browser relies on is the
+product's own, unchanged in shape: `POST /auth/email`, `POST /auth/email/preview`,
+`POST /auth/email/consume`, `POST /auth/logout`, `POST /auth/logout-all` and the GitHub round trip, with
+the token of an email link still only in the fragment and never in a path or a query (D-138 §4), and
+every refusal of the round trip still a `302` to the sign-in screen with a reason (D-121). What differs:
+
+| | Method | Path | Notes |
+|:-:|---|---|---|
+| ○ | `GET` | `/api/auth/methods` | `AuthMethods` says which of GitHub and email are connected (`github`, `email`: built); it gains the sign-up policy, `open` or `invite-only` (`signUp`, built), so the sign-in and sign-up screens offer only what works |
+
+A session is listed or revoked, where a screen needs it, through a route of ours by the session's `id`, never by its token (the database no longer holds one, D-179 §3). Any other route the library offers is outside this contract: it is switched off by configuration or
+refused at the edge, and a test holds the list. A client never sends a `username`; one is made from the
+GitHub login or the address (D-179 §3).
+
+**`/setup/*`** (built). The setup in the browser (D-179 §4). Not under `/api`: there is no session yet,
+and the browser is held by the setup's **claim** instead — a cookie, `__Host-purlay_setup` (`HttpOnly;
+Secure; SameSite=Strict; Path=/`, no `Domain`, `Max-Age` 86400: a claim not seen for a day no longer
+opens), set by the claim, sent again by every answer to the holder — so it lasts a day from the last
+use, as the claim does — and cleared (`Max-Age=0`) by the finish. The functions are
+`apps/api/src/ingress/http/setup.ts`; the shapes are `@purlay/types` — the requests in `api.ts`
+(`SetupClaimRequest`, `SetupAddressRequest`, `SetupAdminRequest`, `SetupPolicyRequest`,
+`SetupGitHubRequest`, `SetupSmtpRequest`, `SetupVerifyRequest`; the workspace's is
+`CreateWorkspaceRequest`), the answers in `setup.ts` (`SetupStatus`, `SetupState`, `SetupAdminAnswer`,
+`SetupVerifyAnswer`, `ProbeResult`). The steps are `SETUP_STEPS`, taken in order: claim, admin, address,
+policy, github, email, workspace, invite, finish.
+
+| | Method | Path | Who | Request → answer |
+|:-:|---|---|---|---|
+| ○ | `GET` | `/setup/status` | anybody | → `200 SetupStatus` `{ open, appUrl }`, the same for every caller: whether the server is open to setup, and the address it is configured for (`APP_URL`, Ruling R35) — which the page compares with its own origin **before** a code is sent, since a claim from another origin is refused as cross-site. Nothing else — not whether it is claimed, not the step |
+| ○ | `POST` | `/setup/claim` | anybody | `{ code }`, the code from the log, any case, dashes or not → `204` and the claim's cookie. The browser's id is the server's to make |
+| ○ | `GET` | `/setup/state` | holder | → `200 SetupState`: the steps passed, `appUrl`, `githubCallbackUrl` (`APP_URL/auth/callback/github`), the settings as a view (a secret `{ set }`, the relay as its host), `needsReentry`, `channels` (connected after a try that worked, and serving), `admin` (`name`, `email`, `emailVerified`), `workspace`, `canFinish` and every `finishProblems` |
+| ○ | `POST` | `/setup/admin` | holder | `{ name, email, password }` → `200 { signedIn }`: the administrator made, its address unverified, and signed in by the library — its session cookie passed on, **nothing of its body** (which carries the session's raw token). `signedIn: false` is an administrator made and not signed in (the client's wrong-password allowance spent): sign in with the password |
+| ○ | `POST` | `/setup/address` | holder | `{ confirmed: true }` → `200`: `APP_URL` seen and confirmed (Ruling R35); it is a deployment setting, never this route's |
+| ○ | `POST` | `/setup/policy` | holder | `{ signUp }`, `invite-only` or `open` → `200`: saved and served at once |
+| ○ | `POST` | `/setup/github` | holder | `{ clientId, clientSecret, save? }` → `200 ProbeResult`; kept, and served at once, only when `ok` **and** `save`. `{ skip: true }` → `200`, the step passed with nothing connected |
+| ○ | `POST` | `/setup/smtp` | holder | `{ smtpUrl, from, allowPlaintext, locale, save? }` → `200 ProbeResult`: the relay tried with the administrator's address letter (a plain test letter, with no link, once the address is verified); kept only when `ok` **and** `save`. `{ skip: true }` → `200` |
+| ○ | `POST` | `/setup/workspace` | holder | `CreateWorkspaceRequest` `{ name, slug }` → `201 Workspace`, the administrator its owner, with `#general` (D-174); asked again, `200` and the one made before, whatever was asked |
+| ○ | `POST` | `/setup/invite` | holder | no body → `200`: the invitations sent through the invitation routes of §3 by the signed-in administrator, or skipped |
+| ○ | `POST` | `/setup/finish` | holder | no body → `204` and the claim's cookie cleared, when the finish rule holds; the door is closed from then on |
+| ○ | `POST` | `/setup/verify` | anybody | `{ token }`, from the fragment of the administrator's link → `200 { verified: true }`. Works in any browser, during the setup and for the link's day after it |
+
+**One answer to everybody without the claim.** A holder route without the cookie, with a wrong one, an
+idle one, one taken over by a later code, on a server never claimed, claimed by another browser, or
+finished, is `404 SETUP_UNAVAILABLE` — the same body, the same headers, about the same time (a test
+measures it). After the finish every `/setup` route answers so, but `GET /setup/status` (`open: false`)
+and `POST /setup/verify`. The claim itself tells only what the operator needs: a wrong code — or a right
+one past its hour — is `400 VALIDATION_FAILED` on the field `code`; the server's lock after five wrong
+codes is `429 SETUP_LOCKED` with `Retry-After` in seconds to its end (a restart, which writes a new
+code, ends it); a server closed or claimed is `404 SETUP_UNAVAILABLE`.
+
+**The holder's refusals.**
+
+| Answer | When |
+|---|---|
+| `400 VALIDATION_FAILED` | A body that does not match its schema; the administrator's `email` (`is not an email address`), `name` (`is one to 128 characters`) or `password`, whose field says the policy's rule by name — `too-short`, `too-long`, `invalid-character`, `blank`, `contains-email`, `contains-name`, `common`, `repetitive` (`passwordProblem`); a relay address (`smtpUrl`: a space or line break, or not `smtp://`/`smtps://` with a host) or sender (`from`: one plain address) that cannot be tried — refused before any letter is made |
+| `409 ACCOUNT_EMAIL_CONFLICT` | The administrator's address is an account's already |
+| `409 SETUP_STEP_REFUSED` | `details.reason`: `out-of-order` — a step before this one is not passed (checked before anything is tried, so nothing is called or saved); `admin-exists` — a second administrator; `no-workspace` or `no-channel` — the finish, refused (the first reason that holds; `GET /setup/state` lists them all) |
+| `500 SETTINGS_CHANGE_FAILED` | A change of the settings did not complete: `details.stage` (`save`, `build`, `verify` — nothing saved, the old settings serve; `commit` — restart the server; `retire` — saved and serving, restart to release the old relay) and `details.restartNeeded`. Never what was in the change |
+| `503 DATABASE_UNAVAILABLE` | The server has not read its settings yet, or is shutting down: nothing changed, try again |
+
+**The finish rule** (D-179 §4.5): every step before it passed (the invitations, skipped or not, are the
+last), the first workspace there, and at least one way for other people to sign in **connected after a
+try that worked and serving now** — a GitHub app GitHub's token endpoint accepted when `save` kept it, or
+a relay that took the letter when `save` kept it. An app or a relay only in the settings — seeded from
+the environment — does not count. The server enforces it, not only the button.
+
+**`/api/server/*`** (built). Administration → Server (D-179 §4.8): the operator's settings changed in the
+browser after the setup, by **the server's administrator** alone (`users.is_server_admin`, Ruling R16 —
+a workspace's owner is not one). The functions are `apps/api/src/ingress/http/server.ts`; the shapes are
+`@purlay/types` — the requests in `api.ts` (`ServerGitHubRequest`, `ServerSmtpRequest`,
+`ServerDisconnectRequest`, `ServerPolicyRequest`, `ServerCreatorsRequest`), the answer in `setup.ts`
+(`ServerSettingsAnswer`, `ProbeResult`). A change goes through the wizard's own machinery: tried with the
+candidate (`probeGitHub`, `probeSmtp`, under the administrator's authority) and kept and served at once by
+`applySettings` only when the try worked. `GET /api/me` says whether the caller is the administrator
+(`isServerAdmin`), which is all the client reads to draw Settings → Server.
+
+| | Method | Path | Request → answer |
+|:-:|---|---|---|
+| ○ | `GET` | `/api/server/settings` | → `200 ServerSettingsAnswer`: `settings` (`signUp`, `github` `{ clientId, clientSecret: { set } }`, `smtp` `{ address: { set, host }, from, allowPlaintext }` — the relay's scheme and host only —, `workspaceCreators`), `needsReentry` (`github`, `smtp`: a sealed secret the current `ENCRYPTION_KEY` cannot open, read as unset), `appUrl`, `githubCallbackUrl`, `channels` (which ways in serve now) and `adminEmail` (the caller's own, where the relay's test letter goes). Never a secret |
+| ○ | `POST` | `/api/server/github` | `{ clientId, clientSecret }` → `200 ProbeResult`: GitHub's token endpoint asked with the candidate; kept and served only when `ok`. A try that failed saves nothing |
+| ○ | `POST` | `/api/server/smtp` | `{ smtpUrl, from, allowPlaintext }` → `200 ProbeResult`: a plain test letter to the **caller's own address** (no link: this is not the proof of an address); kept and served only when `ok` |
+| ○ | `DELETE` | `/api/server/github` | optional `{ confirmLastChannel: true }` → `204`: GitHub disconnected — also when its secret could not be opened (`needsReentry`), which clears the unreadable ciphertext. Refused (`409`, below) when it is the last way for other people to sign in, unless `confirmLastChannel` is said |
+| ○ | `DELETE` | `/api/server/smtp` | the same, for the mail relay |
+| ○ | `POST` | `/api/server/policy` | `{ signUp }`, `invite-only` or `open` → `204`, in effect on the next request |
+| ○ | `POST` | `/api/server/creators` | `{ workspaceCreators: { kind: 'first' \| 'anyone' } \| { kind: 'listed', logins: [...] } }` → `204`, in effect on the next request. A list is one to a hundred GitHub logins (D-155, D-169), any case, kept lower case; anything else is `400` on `workspaceCreators` |
+
+**Everybody who is not the administrator is `404 ROUTE_NOT_FOUND`** — signed out, a stale cookie, a
+member, a workspace's owner, an erased account — the same body and headers (a test compares them):
+the route is shaped as absent to everybody it is not for, as `SETUP_UNAVAILABLE` is, so nobody learns from
+it that the server has an administration page. (Everywhere else a signed-out `/api` call is `401`; here
+it is not, on purpose.) The guard reads `is_server_admin` and `deleted_at` from the database on every
+request, so a demotion takes effect at once whatever session is held.
+
+| Answer | When |
+|---|---|
+| `400 VALIDATION_FAILED` | A body that does not match its schema; a relay address or sender that cannot be tried (`smtpUrl`, `from`, as in the wizard — refused before any letter is made); a list of creators that is not GitHub logins |
+| `409 SERVER_CHANGE_REFUSED` | `details.reason`: `last-channel` — the disconnect would leave the administrator's password as the only way in, and `confirmLastChannel` was not said (weighed inside the change's own transaction, so two disconnects at once cannot both pass); `not-connected` — there is nothing of that kind to disconnect (a secret that could not be opened counts as connected, so it can be let go); `setup-unfinished` — the setup in the browser is still open: its steps change the settings until it is finished, and the `tried` bookkeeping the finish rule reads is not touched from here |
+| `429 RATE_LIMITED` | More than sixty requests in fifteen minutes (`SERVER_ADMIN_BUDGET`: sixty at once, then one every fifteen seconds) **per client** — counted on every method of every path under `/api/server`, before the session is looked at, so a stranger spends it too |
+| `500 SETTINGS_CHANGE_FAILED` | As the wizard's: `details.stage` `save`, `build`, `verify` (nothing saved, the old settings serve), `commit` (restart the server), `retire` (saved and serving; restart to release the old relay). A change whose audit row could not be written is a `save` failure: nothing is saved |
+| `503 DATABASE_UNAVAILABLE` | The server has not read its settings yet (`starting`), or is shutting down (`shutting-down`): nothing changed, try again |
+
+Every change is on the **server's own trail** (`server_audit_log`, `SCHEMA.md` §9.1a), written in the
+transaction that saves it: who, from which session, and which setting — `server.github_connected`,
+`server.github_disconnected`, `server.smtp_connected`, `server.smtp_disconnected`,
+`server.sign_up_changed`, `server.workspace_creators_changed` — never the value.
+
+**A failed try is an answer, not an error.** `/setup/github` and `/setup/smtp` answer `200` with a
+`ProbeResult`: `ok: true`, or `ok: false` with one `ProbeReason` and `raw`, the service's own reply —
+trimmed, at most 200 characters, with every credential that was tried taken out. Both are in
+`@purlay/types` (`setup.ts`), the reasons a plain list, `PROBE_REASONS`: `secret-rejected`,
+`client-unknown`, `unreachable`, `tls-failed`, `auth-failed`, `sender-refused`, `recipient-refused`,
+`message-refused`, `unexpected-reply` — what each means and how each is produced is D-179 §4.4; a
+callback address GitHub would refuse is not among them, since only a browser meets that check. The
+screen writes what happened and how to correct it from the reason (`UX.md` §11), and shows `raw` **as
+text, never as markup** — it is the service's words. **Nothing is saved** on a failure, nor on a try
+without `save`. The reply is shown only to the operator who holds the claim.
+
+**The address link.** The `/setup/smtp` try's letter is the administrator's verification letter (D-179
+§4.3), whose link is `APP_URL/setup/verify#<token>` — the token in the fragment, so no request line or
+referrer carries it. `/setup/verify` is the client's page: it reads the token from the fragment, clears
+the fragment, and posts `{ token }` to `POST /setup/verify`. Every link that does not open — unknown,
+spent, past its day, its account gone or its address changed since — and every body that is not a
+well-formed token (64 hex characters, judged before anything is hashed) is the one answer,
+`404 ADMIN_LINK_NOT_FOUND`.
+
+**Limits and the edge.** Every `/setup` route is limited per client — an IPv4 address or an IPv6 /64
+(`limitKeyFor`) — and the limit is charged before the claim is looked at or anything is weighed:
+`POST /setup/claim` and `POST /setup/verify` ten in fifteen minutes (`SETUP_SECRET_BUDGET`), every
+holder route thirty in fifteen minutes (`SETUP_BUDGET`), and `GET /setup/status` with the sign-in
+traffic (`AUTH_BUDGET`); a `HEAD` is charged as the `GET` it runs; past one, `429 RATE_LIMITED` with
+`Retry-After`. The server's own lock on wrong
+codes stays, and is the server's; the limit per client is what keeps one client from holding it shut.
+A `POST` from another origin is `403 FORBIDDEN` before anything else (D-39), a body that is not JSON
+`415`, over 64 KiB `413`. Every `/setup` answer is `Cache-Control: no-store` and `X-Robots-Tag: noindex`.
 
 `state` verification is mandatory: without it the callback is a CSRF endpoint that signs
 victims into an attacker's account. (`ARCHITECTURE.md` §7.1)
@@ -154,7 +280,7 @@ an instance-administrator role this product does not have.
 | | Method | Path | Role |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces` | — (own memberships) |
-| ○ | `POST` | `/api/workspaces` | Whom `WORKSPACE_CREATORS` names — GitHub logins, or `*` for anybody; unset, only the first person to sign in, while the instance has no workspace (D-155). Anybody else is `403 FORBIDDEN` and nothing is made. The creator becomes `owner`, and the workspace starts with one public channel, `general`, with no topic and the creator in it — made in the same transaction, on the trail as `channel.created` (D-174) |
+| ○ | `POST` | `/api/workspaces` | Whom the server's setting names (D-179 §6, seeded once from `WORKSPACE_CREATORS`) — GitHub logins, or anybody; by default only the first person to sign in, while the instance has no workspace (D-155). Anybody else is `403 FORBIDDEN` and nothing is made. The creator becomes `owner`, and the workspace starts with one public channel, `general`, with no topic and the creator in it — made in the same transaction, on the trail as `channel.created` (D-174) |
 | ○ | `GET` | `/api/workspaces/:workspaceId` | member |
 | ○ | `PATCH` | `/api/workspaces/:workspaceId` | admin — `{ name }` (`UpdateWorkspaceRequest`); answers the `Workspace`. The name only: the slug is its address and stays (D-124). The same name is `200` and changes nothing; a member is `403 FORBIDDEN`. On the audit trail with the name before and after; each member's sockets are told `WORKSPACE_UPDATED` and read their memberships again |
 | ① | `DELETE` | `/api/workspaces/:workspaceId` | owner — not built |
@@ -164,10 +290,11 @@ an instance-administrator role this product does not have.
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/members/:userId` | admin — `204`: out of the workspace and its channels; their sockets are sent `ACCESS_REVOKED` for every channel they could see. An owner is an owner's to remove; the last one `409 LAST_OWNER` (I-2) |
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/membership` | member — the caller leaves the workspace and every channel in it (D-152); answers `204`, recorded as `member.left`, and the caller's own sockets are told (`ACCESS_REVOKED`). The last owner is `409 LAST_OWNER` (I-2): make somebody else an owner first. Somebody not in the workspace is `404 WORKSPACE_NOT_FOUND`; signed out `401` |
 | ○ | `PUT` | `/api/workspaces/:workspaceId/deep-work` | The caller's own — `{ active: true, until }` (ahead, at most `DEEP_WORK_MAX_HOURS`) or `{ active: false }` (`SetDeepWorkRequest`); answers `DeepWorkResponse`. Ends by itself at `until`; each membership in `/api/me` carries `deepWorkUntil`. While it lasts notifications are written `suppressed_by_deep_work` and still counted (D-15, D-108). The person's own sockets are sent `DEEP_WORK_UPDATED` (#526) |
-| ○ | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — `201` `CreatedInvitation`: a link valid for `INVITATION_TTL_DAYS`, its `token` in this answer and never again (D-115). A member is `403 FORBIDDEN` |
+| ○ | `POST` | `/api/workspaces/:workspaceId/invitations` | admin — optional body `CreateInvitationRequest` `{ emails?, locale? }`, empty as it always could be. `201` `CreatedInvitation`: a link valid for `INVITATION_TTL_DAYS`, its `token` in this answer and never again (D-115). **With `emails`** (at most `INVITATION_EMAILS_PER_REQUEST`, twenty — more is `400 VALIDATION_FAILED` before anything is made; `locale` is `en` or `tr`, default `en`) the answer also carries `mail`: one `{ address, outcome }` for each address, in order, a repeat in any case dropped first. The one link — never one for each address, no role, no address bound to it — is mailed to every address whose outcome is `queued`, **after the answer, once the transaction has committed**: `queued` means the letter is waiting to be handed to the mail server, not that it was, nor that it arrived — a send that then fails is logged by its code, never told, which is why the link is in the answer too. The other outcomes are refusals made before anything was queued: `invalid` (not one mailbox, as `/auth/email` reads an address), `inviter_limit` (`INVITATION_EMAILS_PER_INVITER_PER_DAY`, fifty a day for the caller across workspaces), `workspace_limit` (`INVITATION_EMAILS_PER_WORKSPACE_PER_DAY`, two hundred a day for the workspace, whoever asks), `unavailable` (this server has no mail relay). A day opens at the first letter and closes a day later; both counts are in the database (`rate_limits`) and a request that fails gives back what it took. Whether an address already belongs to a member is not looked up and not said — members' addresses are not shown to each other. A member is `403 FORBIDDEN`; another workspace's admin is `404 WORKSPACE_NOT_FOUND` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/invitations` | admin — `?before=&limit=` (`OlderPageQuery`); an `InvitationPage` of the links that still open, newest first, never their tokens |
 | ○ | `DELETE` | `/api/workspaces/:workspaceId/invitations/:invitationId` | admin — `204`: the link stops opening. Revoked or expired already is `204` again; another workspace's is `404 INVITATION_NOT_FOUND` |
 | ○ | `POST` | `/api/invitations/preview` | signed in — `{ token }` (`InvitationTokenRequest`); the `InvitationPreview`: which workspace, until when, and whether the caller is in it already |
+| ○ | `POST` | `/api/invitations/passport` | public, `{ token, email? }` (`InvitationPassportRequest`), charged per client (10 at once, then one every 90 s; a 429 with `Retry-After`) — what lets a newcomer make an account on an invite-only server (D-179 §5). Without `email` it sets the cookie `__Host-purlay_invite=<random>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600` for the GitHub sign-in that follows; with it, the pass is for that address and the mailed link, and no cookie is set. `204` either way, never saying whether an address has an account. A link that does not open is the preview's one `404 INVITATION_NOT_FOUND`; an address that is not one, `400 VALIDATION_FAILED`; a link already holding twenty live passports, `429 RATE_LIMITED`. One hour, one use |
 | ○ | `POST` | `/api/invitations/accept` | signed in — `{ token }`; in as `member`, into no channel, answered with the `Membership`. Already in: the same answer, the role unchanged. A link that does not open — unknown, expired, revoked, its workspace deleted, or the caller removed since it was made — is one `404 INVITATION_NOT_FOUND` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/audit` | admin — `?before=&limit=` (`OlderPageQuery`); an `AuditPage` of `AuditEntry`, newest first, keyset on the id (D-26). Who did what to whom, never anything written; a member is `403 FORBIDDEN` |
 | ○ | `GET` | `/api/workspaces/:workspaceId/retention` | owner — `RetentionSetting`: how many days of history the workspace keeps, `null` for forever (the default). Its own route, since the `Workspace` shape is shown to people not yet in it (D-139 §4) |

@@ -129,7 +129,7 @@ purlay/
 │   │       ├── realtime/        the socket door: frame router, hub (connection lifecycle,
 │   │       │                  backpressure), the in-process EventBus, the rate limiter
 │   │       ├── modules/         business rules; no HTTP or WS types cross this line
-│   │       │   ├── auth/        GitHub OAuth, sessions (opaque token, SHA-256 at rest)
+│   │       │   ├── auth/        the sign-in library (Better Auth) and what sits on it: sessions (token SHA-256 at rest)
 │   │       │   ├── workspaces/  tenancy, membership, roles, Deep Work
 │   │       │   │              ownership is a membership row, never a column (D-22)
 │   │       │   ├── channels/    channels, DMs, membership, read state
@@ -479,45 +479,46 @@ speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
 > itself — every route, its phase and its required role — lives in `API.md`, which is the
 > single source of truth. Adding a route here instead of there is a bug.
 
-1. `GET /auth/github` → redirect with a `state` value stored in a short-lived signed cookie.
-   Scopes: **`read:user user:email`**, nothing more. Repository access belongs to the
-   workspace-level integration token (D-23), never to a member's sign-in. (D-38)
-2. `GET /auth/github/callback` → verify `state`, exchange the code, fetch the profile **and
-   `/user/emails`**.
-3. Resolve identity (D-38): take the primary **verified** email, or refuse with `EMAIL_REQUIRED`.
-   Upsert `users` by `github_id`. A different `github_id` carrying an already-registered email is
-   refused with `ACCOUNT_EMAIL_CONFLICT` — **never linked silently** (D-5), an email link's account
-   included (D-138 §3). `username` is refreshed from GitHub's `login` and is display-only; a
-   collision caused by a rename is stored with a numeric suffix and logged. An account made by email
-   that connected GitHub keeps its own names (below, D-176).
-4. Generate a 32-byte random token. Store **only its SHA-256** in `sessions`. (D-11)
-5. Set the session cookie — named, with its attributes, in `apps/api/src/platform/cookies.ts`: `__Host-`-prefixed, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30-day expiry — and spend the `state` cookie, on this and every other outcome. (D-62)
+Sign-in is Better Auth's, mounted under `/auth` (D-179); what it is configured to do, and the
+mechanisms of ours beside it, are `apps/api/src/modules/auth/better-auth.ts`.
+
+1. `GET /auth/github` → the library makes the `state` (a row of its own, and a signed `__Host-`
+   cookie) and the browser is sent to GitHub. Scopes: **`read:user user:email`**, nothing more.
+   Repository access belongs to the workspace-level integration token (D-23), never to a member's
+   sign-in. (D-38)
+2. `GET /auth/callback/github` (the library's callback under its base path, `SIGN_IN_CALLBACK`) →
+   verify `state`, exchange the code, fetch the profile **and `/user/emails`**, every call with a
+   deadline.
+3. Resolve identity (D-38, D-179 §5): take the primary **verified** email, or refuse. The account is
+   found by the library's record of the GitHub account (`accounts`); otherwise an account whose
+   own address is the same **and verified** is the same account and is joined to GitHub; one whose
+   address is unverified is never linked. A new account is made only where sign-up is open. Purlay's
+   own columns are then written for it — `github_id`, `github_login` (D-169) and, for an account
+   GitHub made, a `username` from the login, shaped and suffixed on a collision, and the display
+   name; an account made by email keeps its own names (D-176).
+4. The session is the library's: a random token whose **SHA-256** alone is stored in `sessions`
+   (D-11, our hashing plugin), lasting `SESSION_TTL_DAYS` from sign-in and never slid forward.
+5. Set the session cookie — `__Host-purlay_session`, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`
+   (names in `apps/api/src/platform/cookies.ts`) — and spend the `state` cookie, on this and every
+   other outcome. (D-62)
 6. Any refusal on the way is a redirect to the sign-in screen with a reason, never a JSON body: the
    person arrived by navigation. The reasons are listed in `API.md` §2. (D-121)
 
 `state` verification is not optional — without it the callback is a CSRF endpoint that logs
-victims into an attacker's account. The cookie carrying it is **signed**, with a key derived from
-`ENCRYPTION_KEY` rather than a second secret: a sibling subdomain can write a cookie for this
-origin, so an equality check alone would still let an attacker supply both halves (D-62). Every way
-the handshake can be wrong produces the same refusal.
+victims into an attacker's account. The cookie carrying it is **signed** with the library's secret,
+itself derived from `ENCRYPTION_KEY`, and its value is kept server-side as well: a sibling subdomain
+can write a cookie for this origin, so an equality check alone would still let an attacker supply
+both halves (D-62). Every way the handshake can be wrong produces the same refusal.
 
-**Connecting GitHub to an account made by email** (D-176). An email link's account has no
-`github_id`, and a GitHub sign-in on its address is refused (step 3, D-138 §3). The person connects
-the two deliberately, from a session signed in as that account: `POST /api/me/github/connect` — a
-same-origin JSON `POST`, never a `GET` — issues a state that names the user and the session, in the
-same `__Host-` cookie and with the same lifetime as a sign-in's, signed under a key derived for this
-purpose alone, and sends the browser to GitHub. The one callback tells the two handshakes apart by
-what was signed, and for a connect requires the session signed in in this browser to be the very one
-that asked — checked before GitHub is asked, and held live (`FOR SHARE`, D-85) as the account is
-written — the account to have no GitHub account, and the GitHub account to be nobody else's. It sets
-`github_id`, `github_login` and the picture, never the address, the username or the display name, and
-issues no session. From then on a GitHub sign-in finds the account by `github_id` (step 3) and leaves
-its names alone, and its email link still signs in. There is no disconnecting yet: an account keeps
-every way in it has.
+**Connecting GitHub by hand is gone** (D-176, replaced by D-179 §5). An account made by email whose
+address is unverified has no `github_id`, and a GitHub sign-in on its address is refused (step 3); one
+whose address is verified is the account a GitHub sign-in on that address arrives in, linked by the
+sign-in itself. Nothing is pressed, no second state exists, and the card *How you sign in* only reads
+(`GET /api/me/sign-in`, `API.md` §2).
 
-**Validating one.** The token is looked up by its hash, and a session resolves only while it is
-unexpired, unrevoked, and owned by a user who has not been deleted — a soft-deleted account does
-not keep a live session. Every reason to refuse produces the same answer, so an unauthenticated
+**Validating one.** The token is looked up by its hash, and a session resolves only while its row
+exists and is unexpired, and it is owned by a user who has not been deleted — a soft-deleted account does
+not keep a live session. Ending a session deletes its row, so there is no "revoked" state to consult. Every reason to refuse produces the same answer, so an unauthenticated
 caller cannot learn from it whether a token was ever real or an account ever existed. `last_used_at`
 is refreshed at most once an hour rather than on every request. (D-60)
 
@@ -531,7 +532,7 @@ bound; an invalid or expired session is rejected at handshake, never after. Ther
 token-in-query-string path — query strings land in access logs.
 
 **After the handshake, a connection lives exactly as long as its session.** Signing out and signing
-out everywhere publish `SESSION_ENDED` on each revoked session's topic; expiry is a timer set from
+out everywhere publish `SESSION_ENDED` on each ended session's topic; expiry is a timer set from
 `expires_at` when the socket opens. Either way the frame is delivered first and the connection is
 then closed with `CLOSE_CODES.SESSION_ENDED`, so the client knows not to reconnect into a refusal.
 The session is **not** re-read per frame. (D-68)
@@ -798,7 +799,7 @@ the lines that explain it. Every HTTP request and every socket frame is a scope 
 the response carries it back as `x-request-id` — and every line written inside the scope carries
 it, however deep the call, without any signature taking it (D-47, D-71). A request writes one line
 when its response has gone; a failure the client is told nothing about is written with its cause.
-Never logged: session tokens, `access_token_encrypted`, a feed's `secret_encrypted` and a delivery's signature (D-134), message content, email addresses, a device's
+Never logged: session tokens, `access_token_encrypted`, a feed's `secret_encrypted` and a delivery's signature (D-134), the server settings' GitHub client secret and relay address, read or sealed (D-179 §6), message content, email addresses, a device's
 push endpoint and keys (D-126), a profile's status line (D-131), a sign-in link, its token and its
 digest, and a mail's recipient and words — a relay's error is logged by its code alone (D-138 §8) — a list
 in `platform/logging.ts` that every field and binding passes through, at any depth, before it is
@@ -920,8 +921,9 @@ was run, and the failure in the last-but-one paragraph was reproduced, not reaso
    same one. Keep a copy somewhere other than the server and other than the backups (a password manager, a
    sealed envelope). Lose it and the stored integration tokens (`github_integrations.access_token_encrypted`)
    cannot be read: people are asked to link GitHub again, and nothing else is lost. Changing it on purpose
-   has the same consequence, and invalidates sign-ins in flight (the OAuth state is signed with a key derived
-   from it), so rotate it at a quiet hour and tell people. The database password and the storage secrets are
+   has the same consequence, and signs everyone out and invalidates sign-ins in flight (the sign-in library's
+   secret, which signs its session cookie and the OAuth state, is derived from it), so rotate it at a quiet
+   hour and tell people. The database password and the storage secrets are
    not custody problems: a rebuilt stack takes new ones from its `production.env`.
 
 **Backups.** `scripts/backup.sh` writes a directory: a custom-format `pg_dump`, the bucket's objects with

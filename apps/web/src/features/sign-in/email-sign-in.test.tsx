@@ -43,7 +43,7 @@ const signedOut = (overrides: Partial<Api>): Api => {
       signedIn
         ? Promise.resolve(aSession())
         : Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
-    authMethods: () => Promise.resolve({ email: true }),
+    authMethods: () => Promise.resolve({ github: true, email: true, signUp: 'invite-only' }),
     ...overrides,
     ...(overrides.consumeEmailSignIn === undefined
       ? {}
@@ -78,7 +78,7 @@ describe('the email form on the sign-in card', () => {
   const ask = async (view: Awaited<ReturnType<typeof renderApp>>, email: string): Promise<void> => {
     const user = person();
     await user.type(view.getByRole('textbox', { name: 'Email address' }), email);
-    await user.click(view.getByRole('button', { name: 'Email me a sign-in link' }));
+    await user.click(view.getByRole('button', { name: 'Email me a sign-in link instead' }));
     await settle();
   };
 
@@ -122,7 +122,9 @@ describe('the email form on the sign-in card', () => {
     );
     const user = person();
     await user.type(view.getByRole('textbox', { name: 'E-posta adresi' }), 'ada@example.test');
-    await user.click(view.getByRole('button', { name: 'Bana giriş bağlantısı gönder' }));
+    await user.click(
+      view.getByRole('button', { name: 'Bunun yerine bana giriş bağlantısı gönder' }),
+    );
     await settle();
     expect(asked).toEqual([{ email: 'ada@example.test', locale: 'tr', invitation: INVITATION }]);
     expect(view.getByRole('status').textContent).toContain('bağlantı yolda');
@@ -165,13 +167,14 @@ describe('the email form on the sign-in card', () => {
     expect(view.queryByRole('status')).toBeNull();
   });
 
-  test('until the server says it sends mail, or if it cannot say, the card is GitHub’s alone', async () => {
+  test('until the server says it sends mail, or if it cannot say, the card offers no form', async () => {
     const pending = await visit(
       '/sign-in',
       signedOut({ authMethods: () => new Promise(() => undefined) }),
     );
     expect(pending.queryByRole('textbox')).toBeNull();
-    expect(pending.getByRole('link', { name: 'Continue with GitHub' })).toBeDefined();
+    // Nor a button it has not been told works: the card waits for the server's word (`UX.md` §11).
+    expect(pending.queryByRole('link', { name: 'Continue with GitHub' })).toBeNull();
     pending.unmount();
     const failing = await visit(
       '/sign-in',

@@ -39,6 +39,30 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserRole = "admin" | "member" | "owner";
 
+export interface Accounts {
+  access_token: string | null;
+  access_token_expires_at: Timestamp | null;
+  account_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  id_token: string | null;
+  password: string | null;
+  provider_id: string;
+  refresh_token: string | null;
+  refresh_token_expires_at: Timestamp | null;
+  scope: string | null;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
+export interface AdminEmailVerification {
+  email: string;
+  id: Generated<boolean>;
+  issued_at: Timestamp;
+  token_digest: string;
+  user_id: string;
+}
+
 export interface Attachments {
   channel_id: string | null;
   created_at: Generated<Timestamp>;
@@ -94,16 +118,6 @@ export interface Channels {
   type: Generated<ChannelType>;
   updated_at: Generated<Timestamp>;
   workspace_id: string;
-}
-
-export interface EmailSignIns {
-  created_at: Timestamp;
-  email: string;
-  expires_at: Timestamp;
-  id: Generated<string>;
-  kind: string;
-  token_hash: string | null;
-  used_at: Timestamp | null;
 }
 
 export interface GithubDeliveries {
@@ -167,6 +181,16 @@ export interface IncidentUpdates {
   incident_id: string;
   kind: string;
   to_value: string;
+}
+
+export interface InvitationPassports {
+  address_digest: string | null;
+  consumed_at: Timestamp | null;
+  cookie_digest: string | null;
+  expires_at: Timestamp;
+  id: string;
+  invitation_id: string;
+  kind: string;
 }
 
 export interface JobRuns {
@@ -264,6 +288,13 @@ export interface PushSubscriptions {
   user_id: string;
 }
 
+export interface RateLimits {
+  count: number;
+  id: Generated<string>;
+  key: string;
+  last_request: Int8;
+}
+
 export interface Reactions {
   created_at: Generated<Timestamp>;
   emoji: string;
@@ -283,6 +314,30 @@ export interface SavedMessages {
   workspace_id: string;
 }
 
+export interface ServerAuditLog {
+  action: string;
+  actor_user_id: string | null;
+  created_at: Generated<Timestamp>;
+  id: string;
+  session_id: string | null;
+}
+
+export interface ServerSettings {
+  created_at: Generated<Timestamp>;
+  github_client_id: string | null;
+  github_client_secret_encrypted: string | null;
+  id: Generated<boolean>;
+  imported_from_env_at: Timestamp | null;
+  mail_from: string | null;
+  setup_completed_at: Timestamp | null;
+  sign_up: Generated<string>;
+  smtp_allow_plaintext: Generated<boolean>;
+  smtp_url_encrypted: string | null;
+  updated_at: Generated<Timestamp>;
+  workspace_creator_logins: Generated<string[]>;
+  workspace_creators: Generated<string>;
+}
+
 export interface Sessions {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -293,6 +348,23 @@ export interface Sessions {
   token_hash: string;
   user_agent: string | null;
   user_id: string;
+}
+
+export interface SetupState {
+  admin_user_id: string | null;
+  claim_digest: string | null;
+  claim_seen_at: Timestamp | null;
+  claimed_at: Timestamp | null;
+  claimed_by: string | null;
+  code_digest: string | null;
+  code_issued_at: Timestamp | null;
+  email_tried_at: Timestamp | null;
+  failed_attempts: Generated<number>;
+  github_tried_at: Timestamp | null;
+  id: Generated<boolean>;
+  locked_until: Timestamp | null;
+  step_reached: string | null;
+  step_reached_at: Timestamp | null;
 }
 
 export interface ThreadFollows {
@@ -310,10 +382,12 @@ export interface Users {
   deleted_at: Timestamp | null;
   display_name: string;
   email: string;
+  email_verified: Generated<boolean>;
   github_connected_at: Timestamp | null;
   github_id: Int8 | null;
   github_login: string | null;
   id: Generated<string>;
+  is_server_admin: Generated<boolean>;
   last_seen_at: Timestamp | null;
   locale: Generated<string>;
   status_text: string | null;
@@ -321,6 +395,15 @@ export interface Users {
   title: string | null;
   updated_at: Generated<Timestamp>;
   username: string;
+}
+
+export interface Verifications {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  identifier: string;
+  updated_at: Generated<Timestamp>;
+  value: string;
 }
 
 export interface WorkspaceExports {
@@ -373,17 +456,19 @@ export interface Workspaces {
 }
 
 export interface DB {
+  accounts: Accounts;
+  admin_email_verification: AdminEmailVerification;
   attachments: Attachments;
   audit_log: AuditLog;
   channel_members: ChannelMembers;
   channels: Channels;
-  email_sign_ins: EmailSignIns;
   github_deliveries: GithubDeliveries;
   github_integrations: GithubIntegrations;
   github_repo_feeds: GithubRepoFeeds;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;
+  invitation_passports: InvitationPassports;
   job_runs: JobRuns;
   link_previews: LinkPreviews;
   mentions: Mentions;
@@ -393,11 +478,16 @@ export interface DB {
   object_deletions: ObjectDeletions;
   pinned_messages: PinnedMessages;
   push_subscriptions: PushSubscriptions;
+  rate_limits: RateLimits;
   reactions: Reactions;
   saved_messages: SavedMessages;
+  server_audit_log: ServerAuditLog;
+  server_settings: ServerSettings;
   sessions: Sessions;
+  setup_state: SetupState;
   thread_follows: ThreadFollows;
   users: Users;
+  verifications: Verifications;
   workspace_exports: WorkspaceExports;
   workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;

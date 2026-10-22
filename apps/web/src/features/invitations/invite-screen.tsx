@@ -3,6 +3,13 @@
  * **Open** for somebody already in it. On the sign-in card's shape, because for a newcomer it is the
  * screen after sign-in.
  *
+ * **Signed out** the page is a way in, not a bounce to sign-in: before the person leaves for GitHub, or
+ * asks for a link, it asks the server for the invitation's passport (`POST /api/invitations/passport`,
+ * R51) — the answer sets the cookie GitHub's callback will present, or records the address a link may
+ * make an account for — and only when it is given does anything else happen. Whatever the server
+ * refuses is said here in words and nothing else is done. A person who already has an account is
+ * pointed to sign-in; the invitation stays in the tab and the front door brings them back to it.
+ *
  * The token was moved out of the address as the page loaded (`pending.ts`); this reads it from the
  * tab. A link that does not open — the server's one refusal for unknown, expired, revoked or a
  * deleted workspace — is said in one sentence with the way home, and forgotten. Any other failure
@@ -10,18 +17,23 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { AppSkeleton } from '../../app/skeleton';
 import { useActions } from '../../data/actions-provider';
 import { useApi } from '../../data/api-provider';
 import { isApiError } from '../../data/errors';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
+import { useAuthMethods, useMe } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
-import { useRoute } from '../../router/router-provider';
+import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
+import { SessionGate } from '../session/session';
 import { LogoMark, Notice } from '../shell/notice';
+import { EmailSignInForm } from '../sign-in/email-sign-in-form';
+import { GitHubButton } from '../sign-in/github-button';
 import { browserInvitationPorts, forgetInvitation, pendingInvitation } from './pending';
 
 const doesNotOpen = (failure: unknown): boolean =>
@@ -35,7 +47,7 @@ const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.E
   </Main>
 );
 
-export const InviteScreen = (): React.JSX.Element => {
+const JoinInvitation = (): React.JSX.Element => {
   const { t, format } = useI18n();
   const api = useApi();
   const { joinWorkspace } = useActions();
@@ -169,5 +181,115 @@ export const InviteScreen = (): React.JSX.Element => {
         )}
       </div>
     </Card>
+  );
+};
+
+/** The card for a person who is not signed in: GitHub, or a link by email, each after the passport. */
+const SignedOutInvitation = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const api = useApi();
+  const { navigate } = useRoute();
+  const describe = useDescribeFailure();
+  const methods = useAuthMethods();
+  const ports = useMemo(browserInvitationPorts, []);
+  const [token] = useState(() => pendingInvitation(ports, window.location));
+  const [gone, setGone] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (token === null || gone) {
+    forgetInvitation(ports);
+    return (
+      <Card>
+        <Notice
+          as="h1"
+          glyph="warning"
+          title={t('invite.gone.title')}
+          body={t('invite.gone.body')}
+          action={
+            <Button
+              variant="primary"
+              onClick={() => {
+                navigate(href('home'), { replace: true });
+              }}
+            >
+              {t('invite.home')}
+            </Button>
+          }
+        />
+      </Card>
+    );
+  }
+
+  /** The passport, then whether to go on: a refusal is said here, in words, and nothing else happens. */
+  const askPassport = async (email?: string): Promise<boolean> => {
+    setProblem(null);
+    try {
+      await api.openInvitationPassport({ token, ...(email === undefined ? {} : { email }) });
+      return true;
+    } catch (caught) {
+      if (doesNotOpen(caught)) setGone(true);
+      else if (isApiError(caught) && caught.code === 'RATE_LIMITED') {
+        setProblem(t('invite.passport.tooMany'));
+      } else if (isApiError(caught) && caught.code === 'VALIDATION_FAILED') {
+        setProblem(t('signIn.email.invalid'));
+      } else setProblem(`${t('invite.passport.failed')} ${describe(caught)}`);
+      return false;
+    }
+  };
+
+  const github = methods.data?.github === true;
+  const mail = methods.data?.email === true;
+  return (
+    <Card>
+      <LogoMark />
+      <section className="flex flex-col gap-2">
+        <h1 className="text-display">{t('invite.signedOut.title')}</h1>
+        <p className="text-balance text-body text-ink-muted">{t('invite.signedOut.body')}</p>
+      </section>
+      {methods.data === undefined && !methods.isError ? (
+        <LoadingStatus label={t('common.loading')}>
+          <Skeleton />
+        </LoadingStatus>
+      ) : (
+        <>
+          {(github || methods.isError) && (
+            <GitHubButton
+              variant={mail ? 'secondary' : 'primary'}
+              before={async () => await askPassport()}
+            />
+          )}
+          {mail && (
+            <EmailSignInForm
+              alone={!github}
+              mail
+              beforeLink={async (email) => await askPassport(email)}
+            />
+          )}
+        </>
+      )}
+      {problem !== null && (
+        <p role="alert" className="text-label text-danger-text">
+          {problem}
+        </p>
+      )}
+      <p className="text-balance text-label text-ink-muted">
+        {t('invite.signedOut.haveAccount')}{' '}
+        <Link to="signIn" className="text-accent-text underline">
+          {t('invite.signedOut.signIn')}
+        </Link>
+      </p>
+    </Card>
+  );
+};
+
+export const InviteScreen = (): React.JSX.Element => {
+  const me = useMe();
+  const signedOut = me.isError && isApiError(me.error) && me.error.status === 401;
+  if (me.isPending) return <AppSkeleton />;
+  if (signedOut) return <SignedOutInvitation />;
+  return (
+    <SessionGate>
+      <JoinInvitation />
+    </SessionGate>
   );
 };

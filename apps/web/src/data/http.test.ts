@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
-import { ApiError, isApiError, isTransient } from './errors';
+import { ApiError, LibraryFailure, isApiError, isTransient } from './errors';
 import { WRITE_DEADLINE_MS, createHttp, type Http, type UploadRequest } from './http';
 import { fakeSchedule } from '../testing/fakes';
 
@@ -409,5 +409,62 @@ describe('a write the network never answers (#604)', () => {
     stop.abort();
     expect(await sent).toMatchObject({ code: 'NETWORK' });
     expect(time.pending()).toBe(0);
+  });
+});
+
+describe('a route of the sign-in library', () => {
+  const refused = async (response: Response): Promise<LibraryFailure> => {
+    const { client } = http(() => response);
+    try {
+      await client.library('/auth/sign-in/email', { email: 'a@example.test', password: 'x' });
+    } catch (caught) {
+      if (caught instanceof LibraryFailure) return caught;
+    }
+    throw new Error('it was not refused');
+  };
+
+  test('is posted as JSON with cookies, and a success says nothing', async () => {
+    const { client, seen } = http(() => answer(200, { token: 'hidden' }));
+    await client.library('/auth/change-password', { currentPassword: 'a', newPassword: 'b' });
+    expect(seen[0]?.url).toBe('/auth/change-password');
+    expect(seen[0]?.init.method).toBe('POST');
+    expect(seen[0]?.init.credentials).toBe('same-origin');
+    expect(seen[0]?.init.body).toBe('{"currentPassword":"a","newPassword":"b"}');
+  });
+
+  test('a refusal is read in the library’s shape, with its reason', async () => {
+    const failure = await refused(
+      answer(400, { code: 'PASSWORD_TOO_WEAK', message: 'no', reason: 'common' }),
+    );
+    expect([failure.status, failure.code, failure.reason, failure.retryAfter]).toEqual([
+      400,
+      'PASSWORD_TOO_WEAK',
+      'common',
+      null,
+    ]);
+  });
+
+  test('a 429 carries Retry-After in seconds, and only a plain number is believed', async () => {
+    const wait = (header: string): Response =>
+      new Response(JSON.stringify({ code: 'RATE_LIMITED', message: 'slow' }), {
+        status: 429,
+        headers: { 'retry-after': header },
+      });
+    expect((await refused(wait('600'))).retryAfter).toBe(600);
+    expect((await refused(wait('soon'))).retryAfter).toBeNull();
+  });
+
+  test('an answer that is not the library’s is MALFORMED, a proxy’s is NETWORK', async () => {
+    expect((await refused(answer(500, '<html>'))).code).toBe('MALFORMED');
+    expect((await refused(answer(502, '<html>'))).code).toBe('NETWORK');
+    expect((await refused(answer(500, { nothing: true }))).code).toBe('MALFORMED');
+  });
+
+  test('no answer at all is NETWORK', async () => {
+    const client = createHttp(() => Promise.reject(new Error('offline')));
+    const failure = await client
+      .library('/auth/sign-in/email', {})
+      .catch((caught: unknown) => caught);
+    expect(failure instanceof LibraryFailure && failure.code).toBe('NETWORK');
   });
 });

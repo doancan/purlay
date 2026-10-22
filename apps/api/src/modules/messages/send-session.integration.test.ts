@@ -20,7 +20,8 @@ import type { EventBus } from '../../platform/events';
 import { requireChannelById } from '../../platform/channels';
 import { NOW } from '../../testing/doubles';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
-import { issueSession, requireLiveSession, revokeSession } from '../auth/sessions';
+import { requireLiveSession, revokeSession } from '../auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { send } from './messages';
 
 let cloned: ClonedDatabase;
@@ -54,7 +55,7 @@ const aRoom = async (): Promise<{
   userId: string;
 }> => {
   const user = await aUserRow(cloned.db, 'sess');
-  const { token } = await issueSession(cloned.db, clock, user.userId, 30);
+  const { token } = await aSession(cloned.db, clock, user.userId, 30);
   const session = await cloned.db
     .selectFrom('sessions')
     .select('id')
@@ -114,7 +115,7 @@ describe('integration: a send by a session that is being revoked', () => {
 
     // The sign-out holds the session row, uncommitted, while the send starts.
     await cloned.db.transaction().execute(async (transaction) => {
-      await revokeSession(transaction, clock, room.token);
+      await revokeSession(transaction, room.sessionId);
       outcome = sending(room);
       await pause(150);
     });
@@ -133,7 +134,7 @@ describe('integration: a send by a session that is being revoked', () => {
 
     await cloned.db.transaction().execute(async (transaction) => {
       await requireLiveSession(transaction, clock, room.sessionId);
-      revocation = revokeSession(cloned.db, clock, room.token).then(() => {
+      revocation = revokeSession(cloned.db, room.sessionId).then(() => {
         settled = true;
       });
       await pause(150);
@@ -142,12 +143,13 @@ describe('integration: a send by a session that is being revoked', () => {
 
     await revocation;
     expect(settled).toBe(true);
+    // Ending a session deletes its row (D-179 §3): once the write committed, the delete went through.
     const row = await cloned.db
       .selectFrom('sessions')
-      .select('revoked_at')
+      .select('id')
       .where('id', '=', room.sessionId)
-      .executeTakeFirstOrThrow();
-    expect(row.revoked_at).not.toBeNull();
+      .executeTakeFirst();
+    expect(row).toBeUndefined();
   });
 
   test('control: with no revocation in flight the same send commits', async () => {
@@ -158,7 +160,7 @@ describe('integration: a send by a session that is being revoked', () => {
 
   test('a session that has already ended or expired is refused', async () => {
     const room = await aRoom();
-    await revokeSession(cloned.db, clock, room.token);
+    await revokeSession(cloned.db, room.sessionId);
     expect(((await sending(room)) as AppError).body.code).toBe('UNAUTHENTICATED');
 
     const expired = await aRoom();

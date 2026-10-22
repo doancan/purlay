@@ -22,7 +22,7 @@ export const updateMyProfile = async (
   body: unknown,
 ): Promise<Profile> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(UpdateProfileRequest, body);
   const change = await atomicallyOn(database)(
     async (transaction) => await updateProfile(transaction, userId, input),

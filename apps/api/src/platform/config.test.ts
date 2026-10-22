@@ -134,9 +134,9 @@ describe('loading configuration', () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ConfigurationError);
       const { problems } = error as ConfigurationError;
-      expect(problems.length).toBeGreaterThanOrEqual(4);
+      expect(problems.length).toBeGreaterThanOrEqual(3);
       expect(problems.join(' ')).toContain('APP_URL');
-      expect(problems.join(' ')).toContain('GITHUB_CLIENT_SECRET');
+      expect(problems.join(' ')).toContain('ENCRYPTION_KEY');
     }
   });
 
@@ -576,5 +576,120 @@ describe('sign-in mail (D-138 §6)', () => {
     expect(refusal({ ...valid, ...mail, MAIL_FROM: 'not an address' })).toContain('MAIL_FROM');
     const message = refusal({ ...valid, SMTP_URL: 'smtps://purlay:secret-pw-x@mail.example.com' });
     expect(message).not.toContain('secret-pw-x');
+  });
+});
+
+describe('GitHub sign-in is a setting, not a requirement (D-179, R38)', () => {
+  const without = (environment: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries(environment).filter(([key]) => !key.startsWith('GITHUB_CLIENT_')),
+    );
+  const bare = without(valid);
+  const github = { GITHUB_CLIENT_ID: 'Iv1.app', GITHUB_CLIENT_SECRET: 'gh-secret-value' };
+
+  test('a fresh server boots with no GitHub variable at all, in production too', () => {
+    const config = loadConfig(bare);
+    expect(config.GITHUB_CLIENT_ID).toBeUndefined();
+    expect(config.GITHUB_CLIENT_SECRET).toBeUndefined();
+    expect(() => loadConfig(without(production))).not.toThrow();
+  });
+
+  test('both are read when both are set', () => {
+    const config = loadConfig({ ...bare, ...github });
+    expect([config.GITHUB_CLIENT_ID, config.GITHUB_CLIENT_SECRET]).toEqual([
+      'Iv1.app',
+      'gh-secret-value',
+    ]);
+  });
+
+  test('one without the other is refused, naming both variables and never the value', () => {
+    const message = 'GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: set both, or neither';
+    expect(refusal({ ...bare, GITHUB_CLIENT_ID: github.GITHUB_CLIENT_ID })).toContain(message);
+    const secretOnly = refusal({ ...bare, GITHUB_CLIENT_SECRET: github.GITHUB_CLIENT_SECRET });
+    expect(secretOnly).toContain(message);
+    expect(secretOnly).not.toContain('gh-secret-value');
+  });
+
+  test('empty strings are unset, as a compose file passes them', () => {
+    const config = loadConfig({ ...bare, GITHUB_CLIENT_ID: '', GITHUB_CLIENT_SECRET: '' });
+    expect([config.GITHUB_CLIENT_ID, config.GITHUB_CLIENT_SECRET]).toEqual([undefined, undefined]);
+    // An empty one beside a set one is still one without the other.
+    expect(refusal({ ...bare, GITHUB_CLIENT_ID: 'Iv1.app', GITHUB_CLIENT_SECRET: '' })).toContain(
+      'set both, or neither',
+    );
+  });
+});
+
+describe('GitHub’s addresses (D-179)', () => {
+  test('default to github.com and its API, as the production sign-in calls them', () => {
+    const config = loadConfig(valid);
+    expect(config.GITHUB_URL).toBe('https://github.com');
+    expect(config.GITHUB_API_URL).toBe('https://api.github.com');
+  });
+
+  test('may name a GitHub Enterprise Server, its API under a path; a trailing slash is dropped', () => {
+    const config = loadConfig({
+      ...production,
+      GITHUB_URL: 'https://github.example.com/',
+      GITHUB_API_URL: 'https://github.example.com/api/v3/',
+    });
+    expect(config.GITHUB_URL).toBe('https://github.example.com');
+    expect(config.GITHUB_API_URL).toBe('https://github.example.com/api/v3');
+  });
+
+  test('are https, but for a GitHub on this machine, which may be http in any environment', () => {
+    for (const host of ['127.0.0.1:4010', 'localhost:4010', '[::1]:4010']) {
+      const config = loadConfig({
+        ...production,
+        GITHUB_URL: `http://${host}`,
+        GITHUB_API_URL: `http://${host}`,
+      });
+      expect(config.GITHUB_URL).toBe(`http://${host}`);
+    }
+    for (const name of ['GITHUB_URL', 'GITHUB_API_URL']) {
+      expect(refusal({ ...valid, [name]: 'http://github.example.com' })).toContain(
+        `${name}: must be https://, or http:// to this machine`,
+      );
+      // A name that only looks like this machine is somebody else's.
+      expect(refusal({ ...valid, [name]: 'http://localhost.example.com' })).toContain(name);
+      expect(refusal({ ...valid, [name]: 'http://127.0.0.1.nip.io' })).toContain(name);
+      expect(refusal({ ...valid, [name]: 'ftp://github.example.com' })).toContain(name);
+      expect(refusal({ ...valid, [name]: 'not a url' })).toContain(name);
+    }
+  });
+
+  test('carry no credentials, query or fragment, and never quote one back', () => {
+    for (const name of ['GITHUB_URL', 'GITHUB_API_URL']) {
+      const message = refusal({ ...valid, [name]: 'https://user:hunter2@github.example.com' });
+      expect(message).toContain(`${name}: an address without credentials, query or fragment`);
+      expect(message).not.toContain('hunter2');
+      expect(refusal({ ...valid, [name]: 'https://github.example.com/?x=1' })).toContain(name);
+      expect(refusal({ ...valid, [name]: 'https://github.example.com/#x' })).toContain(name);
+    }
+  });
+});
+
+describe('the SMTP address is one a transport can be built from (D-179 §6)', () => {
+  test('a password with an unescaped `#`, `/`, `?` or a broken escape refuses to start, naming the variable and never the value', () => {
+    for (const SMTP_URL of [
+      'smtp://u:pa#ss@mail.example.com',
+      'smtp://u:pa/ss@mail.example.com',
+      'smtp://u:pa?ss@mail.example.com',
+      'smtps://u:pa%zzss@mail.example.com',
+      'smtps://:pass@mail.example.com',
+      'smtp://',
+    ]) {
+      const message = refusal({ ...valid, SMTP_URL, MAIL_FROM: 'purlay@example.com' });
+      expect({ SMTP_URL, says: message.includes('SMTP_URL:') }).toEqual({ SMTP_URL, says: true });
+      expect(message).not.toContain('pa#ss');
+      expect(message).not.toContain('pa%zzss');
+    }
+    expect(
+      loadConfig({
+        ...valid,
+        SMTP_URL: 'smtps://u:pa%23ss@mail.example.com',
+        MAIL_FROM: 'purlay@example.com',
+      }).SMTP_URL,
+    ).toBe('smtps://u:pa%23ss@mail.example.com');
   });
 });

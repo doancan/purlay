@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
-import { aDatabaseThatMustNotBeTouched } from '../testing/doubles';
+import { anAuthThatMustNotBeTouched } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
 import {
@@ -79,7 +79,7 @@ describe('a timer longer than a JavaScript timer allows', () => {
 describe('the end of a session, on a connection', () => {
   test('is announced, then the connection is closed with the code that says why', () => {
     const hub = createSocketHub(
-      aDatabaseThatMustNotBeTouched(),
+      anAuthThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
       { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
@@ -108,7 +108,7 @@ describe('the end of a session, on a connection', () => {
 describe('the end of a session, heard twice', () => {
   test('is said once and closed once: the topic and the opening read may both learn it (#577)', () => {
     const hub = createSocketHub(
-      aDatabaseThatMustNotBeTouched(),
+      anAuthThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
       { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
@@ -154,7 +154,7 @@ describe('a connection that falls behind (#197)', () => {
 
   const deliverTo = (connection: Connection): void => {
     const hub = createSocketHub(
-      aDatabaseThatMustNotBeTouched(),
+      anAuthThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
       { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
@@ -192,7 +192,7 @@ describe('a connection that falls behind (#197)', () => {
 describe('live frames held while a subscription replays', () => {
   const rig = (): { hub: ReturnType<typeof createSocketHub>; events: string[] } => {
     const hub = createSocketHub(
-      aDatabaseThatMustNotBeTouched(),
+      anAuthThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
       { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
@@ -259,7 +259,7 @@ describe('live frames held while a subscription replays', () => {
 describe('a connection with no identity', () => {
   test('is told its session has ended and is closed, with nothing armed for it', async () => {
     const hub = createSocketHub(
-      aDatabaseThatMustNotBeTouched(),
+      anAuthThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
       { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );
@@ -285,7 +285,7 @@ describe('the frames of one connection, in turn', () => {
     closes: string[];
   } => {
     const hub = createSocketHub(
-      aDatabaseThatMustNotBeTouched(),
+      anAuthThatMustNotBeTouched(),
       fixedClock(new Date('2026-09-09T12:00:00.000Z')),
       { log: createLogger({ level: 'silent' }), leave: () => undefined, listen: () => undefined },
     );

@@ -19,7 +19,12 @@ const ROUTES = {
   signIn: SIGN_IN_PATH,
   // A sign-in link's page; its token is in the fragment, never the path (D-138 §4).
   signInEmail: `${SIGN_IN_PATH}/email`,
+  // Making an account, where the server lets anybody (R51); by invitation it says so and points back.
+  signUp: '/sign-up',
   invite: '/invite',
+  // The setup in the browser (D-179 §4); the address link's page keeps its token in the fragment.
+  setup: '/setup',
+  setupVerify: '/setup/verify',
   home: '/',
   workspace: '/w/:slug',
   channel: '/w/:slug/c/:channelId',

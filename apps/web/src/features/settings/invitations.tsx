@@ -8,7 +8,7 @@
  * immediate on the server; the list is read again after it.
  */
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
-import type { InvitationPage } from '@purlay/types';
+import type { CreateInvitationRequest, InvitationMailResult, InvitationPage } from '@purlay/types';
 import { useState } from 'react';
 import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
@@ -25,7 +25,15 @@ export interface Invitations {
   readonly link: string | null;
   readonly making: boolean;
   readonly problem: string | null;
-  readonly make: () => Promise<void>;
+  /**
+   * What became of each address sent with the link, in the server's words; null when none were. The
+   * link is made either way, so a refusal here is never a dead end.
+   */
+  readonly mail: readonly InvitationMailResult[] | null;
+  /** Makes the link — and, with `mail`, asks the server to send it to those addresses too. */
+  readonly make: (
+    mail?: CreateInvitationRequest,
+  ) => Promise<readonly InvitationMailResult[] | undefined>;
   readonly revoke: (invitationId: string) => Promise<void>;
   readonly copyLink: (text: string) => void;
   /** What was made is shown once: leaving lets it go. */
@@ -43,6 +51,7 @@ export const useInvitations = (enabled: boolean): Invitations => {
   const [link, setLink] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [mail, setMail] = useState<readonly InvitationMailResult[] | null>(null);
 
   const list = useQuery({
     queryKey: keys.invitations(workspace.id),
@@ -53,15 +62,22 @@ export const useInvitations = (enabled: boolean): Invitations => {
     await client.invalidateQueries({ queryKey: keys.invitations(workspace.id) });
   };
 
-  const make = async (): Promise<void> => {
+  const make = async (
+    request?: CreateInvitationRequest,
+  ): Promise<readonly InvitationMailResult[] | undefined> => {
     setMaking(true);
     setProblem(null);
     try {
-      const { token } = await api.createInvitation(workspace.id);
-      setLink(`${window.location.origin}/invite#${token}`);
+      const made = await api.createInvitation(workspace.id, request);
+      setLink(`${window.location.origin}/invite#${made.token}`);
+      setMail(made.mail ?? null);
       await reread();
+      return made.mail;
     } catch (failure) {
-      setProblem(`${t('invite.admin.makeFailed')} ${describe(failure)}`);
+      setProblem(
+        `${t(request?.emails === undefined ? 'invite.admin.makeFailed' : 'invite.mail.failed')} ${describe(failure)}`,
+      );
+      return undefined;
     } finally {
       setMaking(false);
     }
@@ -90,9 +106,10 @@ export const useInvitations = (enabled: boolean): Invitations => {
   const forget = (): void => {
     setLink(null);
     setProblem(null);
+    setMail(null);
   };
 
-  return { list, link, making, problem, make, revoke, copyLink, forget };
+  return { list, link, making, problem, mail, make, revoke, copyLink, forget };
 };
 
 /** The link just made, whole and selectable, with Copy beside it. */

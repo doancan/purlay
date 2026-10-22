@@ -1,5 +1,5 @@
 /**
- * Sending mail: sign-in links (#81, D-138 §6), over SMTP with nodemailer (`docs/spikes/nodemailer.md`).
+ * Sending mail: sign-in links (#81, D-138 §6) and invitations (D-179 §5), over SMTP with nodemailer (`docs/spikes/nodemailer.md`).
  *
  * - **The transport is built from an object, typed** — the spike's first run passed its options where
  *   the library reads a message's defaults, and nothing said so. `transportOptions` is what is built,
@@ -37,6 +37,12 @@ export type SendMail = (message: MailMessage) => Promise<void>;
 export interface Mailer {
   readonly send: SendMail;
   readonly verify: () => Promise<void>;
+  /**
+   * Lets the transport go, once its letters are out: what a relay replaced by a change of the settings
+   * is told (`modules/setup/runtime.ts`). Nodemailer's unpooled transport holds no connection between
+   * letters — each opens its own and closes it — so a letter posted after this is still sent.
+   */
+  readonly close: () => void;
 }
 
 /** How long a relay may take, connecting and answering, before a send is given up. */
@@ -63,8 +69,31 @@ export const transportOptions = (
     connectionTimeout: CONNECT_MS,
     greetingTimeout: CONNECT_MS,
     socketTimeout: SOCKET_MS,
+    // Unpooled, on purpose: a connection per letter, so `close` holds nothing back and a letter posted
+    // to a relay the settings replaced after it was closed is still sent (`mail.test.ts` pins it).
   };
 };
+
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * A letter in plain text and the same as HTML, with `url` — which must appear in `text` — made a link.
+ * Every character of the text is escaped for the HTML, so what a name says stays words.
+ */
+export const textLetter = (
+  to: string,
+  subject: string,
+  text: string,
+  url: string,
+): MailMessage => ({
+  to,
+  subject,
+  text,
+  html: `<p>${escapeHtml(text)
+    .replace(escapeHtml(url), `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`)
+    .replace(/\n\n/g, '</p><p>')}</p>`,
+});
 
 /** What the relay is handed: the envelope names the one recipient, not a header parsed for one. */
 export const letter = (message: MailMessage, from: string): Mail.Options => ({
@@ -72,6 +101,19 @@ export const letter = (message: MailMessage, from: string): Mail.Options => ({
   ...message,
   envelope: { from, to: [message.to] },
 });
+
+/** What asking a relay takes of a transport: whether it answers, one letter, and letting it go. */
+interface SmtpTransport {
+  readonly verify: () => Promise<true>;
+  readonly sendMail: (mail: Mail.Options) => Promise<SMTPTransport.SentMessageInfo>;
+  readonly close: () => void;
+}
+
+/** Builds a transport from its options: nodemailer's, or a test's around it. */
+export type SmtpTransportFactory = (options: SMTPTransport.Options) => SmtpTransport;
+
+/** Nodemailer's transport, the one every relay is spoken to through. */
+export const smtpTransport: SmtpTransportFactory = (options) => createTransport(options);
 
 /** The relay this server is configured with, sending from `MAIL_FROM`. */
 export const smtpMailer = (
@@ -87,6 +129,9 @@ export const smtpMailer = (
     },
     verify: async (): Promise<void> => {
       await transport.verify();
+    },
+    close: (): void => {
+      transport.close();
     },
   };
 };
@@ -118,11 +163,65 @@ export const checkRelay = async (mailer: Mailer, log: Logger): Promise<void> => 
 export interface Outbox {
   /** Starts sending, and returns: the answer to whoever asked does not wait for the relay. */
   readonly post: (message: MailMessage, purpose: string) => void;
-  /** Resolves when every send started so far has finished, or the bound has passed. */
-  readonly flush: (boundMs?: number) => Promise<void>;
+  /**
+   * Resolves when every send started so far has finished, or the bound has passed — and then says
+   * `left`, with how many are still on their way.
+   */
+  readonly flush: (boundMs?: number, left?: string) => Promise<void>;
 }
 
-export const outbox = (send: SendMail, log: Logger): Outbox => {
+/**
+ * Waits for the sends in `running` — those started while it waits too — or until the bound has passed,
+ * and says how many were left. Never throws: each send has said its own failure already.
+ */
+const flushRunning = async (
+  running: ReadonlySet<Promise<void>>,
+  log: Logger,
+  boundMs: number,
+  left: string,
+): Promise<void> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const bound = new Promise<'bound'>((resolve) => {
+    timer = setTimeout(() => {
+      resolve('bound');
+    }, boundMs);
+  });
+  const drained = (async (): Promise<'drained'> => {
+    while (running.size > 0) await Promise.allSettled([...running]);
+    return 'drained';
+  })();
+  const outcome = await Promise.race([drained, bound]);
+  clearTimeout(timer);
+  // Each of these was answered `202`: the person will ask again, and the log says how many will.
+  if (outcome === 'bound') log.warn(left, { sending: running.size });
+};
+
+/** What a flush that ran out of time says, by default: the process is ending without them. */
+const LEFT_AT_SHUTDOWN = 'mail left at shutdown';
+
+/**
+ * Every send started by any outbox that shares it, whichever relay it went through: what a shutdown
+ * waits for when the settings have replaced the relay since the start, so a letter posted to the one
+ * replaced — even after it was let go — is waited for as the current one's are.
+ */
+export interface MailInFlight {
+  /** Resolves when every send started so far by every outbox sharing this has finished, or the bound passed. */
+  readonly flush: (boundMs?: number) => Promise<void>;
+  /** The set the outboxes add to; theirs to write, nobody else's. */
+  readonly running: Set<Promise<void>>;
+}
+
+export const mailInFlight = (log: Logger): MailInFlight => {
+  const running = new Set<Promise<void>>();
+  return {
+    running,
+    flush: async (boundMs = FLUSH_BOUND_MS): Promise<void> => {
+      await flushRunning(running, log, boundMs, LEFT_AT_SHUTDOWN);
+    },
+  };
+};
+
+export const outbox = (send: SendMail, log: Logger, shared?: MailInFlight): Outbox => {
   const running = new Set<Promise<void>>();
   return {
     post: (message, purpose): void => {
@@ -141,24 +240,13 @@ export const outbox = (send: SendMail, log: Logger): Outbox => {
         })
         .finally(() => {
           running.delete(sending);
+          shared?.running.delete(sending);
         });
       running.add(sending);
+      shared?.running.add(sending);
     },
-    flush: async (boundMs = FLUSH_BOUND_MS): Promise<void> => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const bound = new Promise<'bound'>((resolve) => {
-        timer = setTimeout(() => {
-          resolve('bound');
-        }, boundMs);
-      });
-      const drained = (async (): Promise<'drained'> => {
-        while (running.size > 0) await Promise.allSettled([...running]);
-        return 'drained';
-      })();
-      const outcome = await Promise.race([drained, bound]);
-      clearTimeout(timer);
-      // Each of these was answered `202`: the person will ask again, and the log says how many will.
-      if (outcome === 'bound') log.warn('mail left at shutdown', { sending: running.size });
+    flush: async (boundMs = FLUSH_BOUND_MS, left = LEFT_AT_SHUTDOWN): Promise<void> => {
+      await flushRunning(running, log, boundMs, left);
     },
   };
 };

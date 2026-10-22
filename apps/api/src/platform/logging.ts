@@ -33,6 +33,13 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'access_token_encrypted',
   // A repository feed's webhook secret, sealed (D-134 §3).
   'secret_encrypted',
+  // The server's settings (D-179 §6): the GitHub app's secret and the relay's address, which carries
+  // its password — as read (`ServerSettings`) and as stored, sealed.
+  'clientSecret',
+  'smtpUrl',
+  'smtp_url',
+  'github_client_secret_encrypted',
+  'smtp_url_encrypted',
   // A delivery's signature: an HMAC of its body under the secret (D-134 §4).
   'signature',
   'email',
@@ -52,6 +59,10 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'html',
   'text',
   'token_hash',
+  // The setup's claim, as handed to the browser (D-179 §4.2). The setup *code* is not here, on purpose:
+  // the log at a start is the one place it is shown, under its own field, `setupCode`
+  // (`modules/setup/setup.ts`).
+  'claimToken',
 ]);
 
 const REDACTED = '[redacted]';

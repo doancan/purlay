@@ -7,6 +7,7 @@
  * through the membership guard and then the visibility guard; a channel named on
  * its own derives the workspace from the resource and does both (D-34).
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
   AddChannelMemberRequest,
@@ -57,6 +58,8 @@ import { requireSession } from './session';
 import { validated } from './validate';
 
 export interface ChannelDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
 }
@@ -73,8 +76,8 @@ export const listChannels = async (
   request: Request,
   workspaceId: string,
 ): Promise<readonly Channel[]> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await channelsVisibleIn(database, context);
 };
@@ -90,7 +93,7 @@ export const createWorkspaceChannel = async (
   body: unknown,
 ): Promise<Channel> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(CreateChannelRequest, body);
   const made = await atomicallyOn(database)(
@@ -107,8 +110,8 @@ export const readChannel = async (
   request: Request,
   channelId: string,
 ): Promise<Channel> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return await channelIn(database, context);
 };
@@ -124,7 +127,7 @@ export const joinPublicChannel = async (
   channelId: string,
 ): Promise<Channel> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const joined = await joinChannel(database, clock, context);
   const channel = await channelIn(database, context);
@@ -153,7 +156,7 @@ export const readUpTo = async (
   body: unknown,
 ): Promise<ReadChannelResponse> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(ReadChannelRequest, body);
   const outcome = await atomicallyOn(database)(
@@ -181,7 +184,7 @@ export const openDirectMessageWith = async (
   body: unknown,
 ): Promise<{ readonly channel: Channel; readonly created: boolean }> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(CreateDirectMessageRequest, body);
   const opened = await atomicallyOn(database)(
@@ -208,7 +211,7 @@ export const openConversationWith = async (
   body: unknown,
 ): Promise<{ readonly channel: Channel; readonly created: boolean }> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const input = validated(OpenConversationRequest, body);
   const opened = await atomicallyOn(database)(
@@ -236,7 +239,7 @@ export const addChannelMember = async (
   body: unknown,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(AddChannelMemberRequest, body);
   const added = await atomicallyOn(database)(
@@ -264,8 +267,8 @@ export const setLevel = async (
   channelId: string,
   body: unknown,
 ): Promise<void> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SetNotificationLevelRequest, body);
   await setNotificationLevel(database, context, input.level);
@@ -283,7 +286,7 @@ export const changeChannel = async (
   body: unknown,
 ): Promise<Channel> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(UpdateChannelRequest, body);
   const { channel, update } = await atomicallyOn(database)(
@@ -311,7 +314,7 @@ export const archive = async (
   channelId: string,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   await atomicallyOn(database)(async (transaction) => {
     await archiveChannel(transaction, clock, context);
@@ -331,7 +334,7 @@ export const leave = async (
   channelId: string,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const left = await atomicallyOn(database)(
     async (transaction) => await leaveChannel(transaction, context),
@@ -359,7 +362,7 @@ export const removeFromChannel = async (
   memberId: string,
 ): Promise<void> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const removal = await atomicallyOn(database)(
     async (transaction) => await removeChannelMember(transaction, clock, context, memberId),
@@ -381,8 +384,8 @@ export const listChannelMembers = async (
   request: Request,
   channelId: string,
 ): Promise<ChannelMemberList> => {
-  const { database, clock } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   return [...(await channelMembers(database, context))];
 };

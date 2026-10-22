@@ -36,6 +36,9 @@ interface Site {
 const MEMBERSHIPS = ['workspace_members', 'channel_members'];
 const SOFT_DELETED = ['users', 'workspaces', 'channels'];
 
+/** The sign-in library's model names for the tables above (`better-auth.ts`'s mapping). */
+const LIBRARY_MODELS: Readonly<Record<string, string>> = { session: 'sessions', user: 'users' };
+
 /** The statement from its start to its first `execute`, or a bounded stretch. */
 const statementFrom = (text: string, at: number): string => {
   const rest = text.slice(at, at + 800);
@@ -78,6 +81,17 @@ const visibilityWrites = (sources: readonly Source[]): Site[] => {
           MEMBERSHIPS.includes(table);
         if (removes) sites.push({ site: `${path}#${enclosing(text, match.index)}`, table });
       }
+    }
+    // The sign-in library's own writes (D-179): a delete through its adapter names the model, not
+    // the table, and a revocation it makes because it is configured to appears only as its option.
+    for (const match of text.matchAll(/\.(?:deleteMany|delete)\(\s*\{\s*model:\s*'(\w+)'/g)) {
+      const table = LIBRARY_MODELS[match[1] ?? ''];
+      if (table !== undefined) {
+        sites.push({ site: `${path}#${enclosing(text, match.index)}`, table });
+      }
+    }
+    for (const match of text.matchAll(/\brevokeSessionsOnPasswordReset:\s*true\b/g)) {
+      sites.push({ site: `${path}#${enclosing(text, match.index)}`, table: 'sessions' });
     }
   }
   return sites;
@@ -177,6 +191,27 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishUserDeleted',
     calledFrom: 'apps/api/src/ingress/http/auth.ts',
   },
+  // The break-glass for the server administrator's password (`bun run admin:reset-password`): every
+  // session of the account ends in its transaction. It runs as a process of its own with no bus, so it
+  // publishes nothing; the liveness sweep (`realtime/liveness.ts`) ends the sockets of a session the
+  // database removed within about half a minute (D-179 §4.8).
+  'apps/api/src/modules/setup/reset-password.ts#resetAdministratorPassword': {
+    none: 'a command-line process with no bus: its owner is the hub liveness sweep, which ends the sockets of a session the database removed within about half a minute (D-179 §4.8)',
+  },
+  // The sign-in library ends sessions itself (D-179). "Sign out my other devices" is our endpoint,
+  // deleting by row id with a statement of its own, so it announces what it ended through the
+  // publisher `createAuth` hands it — every page of ids, after its delete (#194).
+  'apps/api/src/modules/auth/revoke-other-sessions.ts#revokeOtherSessionsById': {
+    publishes: 'publishSessionsEnded',
+    calledFrom: 'apps/api/src/modules/auth/better-auth.ts',
+  },
+  // Everything else the library ends — /sign-out, /revoke-session, /revoke-sessions, a password
+  // reset — goes through its delete hooks, which run after the
+  // commit and never for a rolled-back one, and announce each session (#194).
+  'apps/api/src/modules/auth/better-auth.ts#createAuth': {
+    publishes: 'publishSessionsEnded',
+    calledFrom: 'apps/api/src/modules/auth/better-auth.ts',
+  },
   'packages/db/src/sessions.ts#purgeDeadSessions': {
     none: 'deletes only sessions already revoked or expired, whose sockets were told or time out by themselves (#231)',
   },
@@ -230,7 +265,8 @@ describe('every write that removes visibility decides what open sockets are told
   test('a row that publishes nothing says why, and names who owns it', () => {
     for (const [site, decision] of Object.entries(DECISIONS)) {
       if (!('none' in decision)) continue;
-      expect(decision.none, site).toMatch(/\(#\d+\)$/);
+      // Its owner: an issue, or the decision that put the liveness sweep behind it.
+      expect(decision.none, site).toMatch(/\((#\d+|D-\d+ §\d+(\.\d+)*)\)$/);
     }
   });
 
@@ -274,6 +310,27 @@ describe('every write that removes visibility decides what open sockets are told
         planted(`export const sweep = async (db) => {
           await sql\`delete from sessions where expires_at < now()\`.execute(db);
         };`),
+      ).toEqual(['sessions']);
+    });
+
+    test('and the sign-in library’s: a delete through its adapter, and a revocation it is told to make', () => {
+      expect(
+        planted(`export const others = createAuthEndpoint('/x', {}, async (ctx) => {
+          await ctx.context.adapter.deleteMany({
+            model: 'session',
+            where: [{ field: 'userId', value: id }],
+          });
+        });`),
+      ).toEqual(['sessions']);
+      expect(
+        planted(`export const gone = async (ctx) => {
+          await ctx.context.adapter.delete({ model: 'user', where: [{ field: 'id', value: id }] });
+        };`),
+      ).toEqual(['users']);
+      expect(
+        planted(`export const createAuth = (deps) => betterAuth({
+          emailAndPassword: { enabled: true, revokeSessionsOnPasswordReset: true },
+        });`),
       ).toEqual(['sessions']);
     });
 

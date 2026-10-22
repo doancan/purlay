@@ -5,7 +5,8 @@
  * so what these pin is what is *not* believed (#235).
  */
 import { describe, expect, test } from 'bun:test';
-import { clientAddress, limitKeyFor } from './client-address';
+import { limitKeyFor } from '../../platform/client-key';
+import { clientAddress } from './client-address';
 
 const forwarded = (value: string): Headers => new Headers({ 'x-forwarded-for': value });
 
@@ -77,5 +78,10 @@ describe('the key a limit is held under', () => {
 
   test('an unknown address shares one bucket: the safe failure is a stricter limit', () => {
     expect(limitKeyFor(undefined)).toBe('unknown');
+    expect(limitKeyFor('not an address')).toBe('unknown');
+  });
+
+  test('an IPv4 address mapped into IPv6 is the IPv4 address’s key', () => {
+    expect(limitKeyFor('::ffff:203.0.113.9')).toBe('203.0.113.9');
   });
 });

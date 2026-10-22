@@ -9,6 +9,7 @@
  * nothing, and `same-origin` for who may embed it. The bytes behind an id never change and the
  * cache is the person's own, so it is cached as long as a browser will.
  */
+import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import {
@@ -24,6 +25,8 @@ import { discardUpload } from '../../modules/attachments/uploads';
 import { requireSession } from './session';
 
 export interface AttachmentRouteDependencies {
+  /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
+  readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
   readonly storage: ObjectStore;
@@ -64,8 +67,8 @@ export const downloadAttachment = async (
   readonly body: ReadableStream<Uint8Array>;
   readonly headers: Record<string, string>;
 }> => {
-  const { database, clock, storage } = dependencies;
-  const { userId } = await requireSession(database, clock, request);
+  const { database, storage } = dependencies;
+  const { userId } = await requireSession(dependencies.auth, request);
   const attachment = await requireAttachmentById(database, userId, attachmentId);
   const key = variant === 'original' ? attachment.storageKey : attachment.thumbnailKey;
   // A file has no thumbnail: there is nothing at that address, for anyone.
@@ -89,6 +92,6 @@ export const discardAttachment = async (
   request: Request,
   attachmentId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(dependencies.database, dependencies.clock, request);
+  const { userId } = await requireSession(dependencies.auth, request);
   await discardUpload(dependencies, userId, attachmentId);
 };

@@ -13,7 +13,7 @@ import { MESSAGE_CONTENT_MAX, messageId } from '@purlay/types';
 import { createApp } from './app';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { fixedClock } from '../../platform/clock';
-import { issueSession } from '../../modules/auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { aUniqueSlug } from '../../testing/users';
 
@@ -33,7 +33,7 @@ const aChannel = async (
     .values({ email: `${name}@example.test`, username: name, display_name: name })
     .returning('id')
     .executeTakeFirstOrThrow();
-  const { token } = await issueSession(db, clock, user.id, 30);
+  const { token } = await aSession(db, clock, user.id, 30);
   const cookie = `${SESSION_COOKIE}=${token}`;
   const app = createApp(testDependencies({ database: db, clock }));
   const post = async (path: string, body: unknown): Promise<string> => {

@@ -12,7 +12,7 @@ import { markRead } from '../channels/read-state';
 import { requireChannelById, requireMessageById } from '../../platform/channels';
 import { aRoom, counters, notificationsOf, type Room } from '../../testing/rooms';
 import { deleteMessage, removeMessage } from './delete';
-import { issueSession } from '../auth/sessions';
+import { aSession } from '../../testing/signed-in';
 import { atomicallyOn } from '../../platform/transactions';
 import { channelTopic, userTopic, type EventBus } from '../../platform/events';
 import type { ServerFrame } from '@purlay/types';
@@ -361,7 +361,7 @@ describe('integration: the one way in', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const root = await post(db, room, 'alice', `look ${at(room, 'bob')}`);
-      await issueSession(db, later, member(room, 'alice').userId, 30);
+      await aSession(db, later, member(room, 'alice').userId, 30);
       const session = await db
         .selectFrom('sessions')
         .select('id')

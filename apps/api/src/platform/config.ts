@@ -18,6 +18,7 @@ import { Value } from '@sinclair/typebox/value';
 // Side effect: registers the string formats. TypeBox rejects every value for a
 // format it does not know — valid ones included — so this is not optional.
 import '@purlay/types';
+import { smtpUrlProblem } from './smtp-address';
 
 /**
  * The key the tests and a developer's laptop use. It is public — it is in this
@@ -25,6 +26,10 @@ import '@purlay/types';
  * with a key the whole world knows. `loadConfig` refuses it there (#236).
  */
 export const DEVELOPMENT_ENCRYPTION_KEY = 'ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMhISE=';
+
+/** Where GitHub is, unless the deployment names another: github.com and its API (`CONFIG.md`). */
+export const GITHUB_URL_DEFAULT = 'https://github.com';
+export const GITHUB_API_URL_DEFAULT = 'https://api.github.com';
 
 export const Environment = Type.Object({
   NODE_ENV: Type.Union(
@@ -68,8 +73,16 @@ export const Environment = Type.Object({
    *  means off and nothing leaves the process; there is no default (D-44, D-96). */
   ERROR_TRACKING_DSN: Type.Optional(Type.String({ minLength: 1 })),
 
-  GITHUB_CLIENT_ID: Type.String({ minLength: 1 }),
-  GITHUB_CLIENT_SECRET: Type.String({ minLength: 1 }),
+  /** A seed, read on the first start only, into the server's settings; ignored after (D-179 §6). Both or
+   *  neither: neither is a server that waits in setup mode for the wizard to connect GitHub (R38). */
+  GITHUB_CLIENT_ID: Type.Optional(Type.String({ minLength: 1 })),
+  GITHUB_CLIENT_SECRET: Type.Optional(Type.String({ minLength: 1 })),
+  /** Where a GitHub sign-in is sent and its code redeemed: another for a GitHub Enterprise Server, or
+   *  a stand-in on this machine for a run that cannot reach GitHub. Checked in `loadConfig`. */
+  GITHUB_URL: Type.String({ minLength: 1, default: GITHUB_URL_DEFAULT }),
+  /** GitHub's API, where a sign-in reads the person and their addresses: `…/api/v3` on an Enterprise
+   *  Server. Checked as `GITHUB_URL` is. */
+  GITHUB_API_URL: Type.String({ minLength: 1, default: GITHUB_API_URL_DEFAULT }),
 
   /** 32 bytes, base64. The root secret; the OAuth state signing key is derived
    *  from it with domain separation rather than being a second variable (D-62).
@@ -230,7 +243,17 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
       `APP_URL: must be an origin, without a path, query or fragment (${appUrl.origin})`,
     );
   }
-  const config: Config = { ...loaded, APP_URL: appUrl.origin };
+  const github = githubAddress('GITHUB_URL', loaded.GITHUB_URL);
+  const githubApi = githubAddress('GITHUB_API_URL', loaded.GITHUB_API_URL);
+  for (const checked of [github, githubApi]) {
+    if ('problem' in checked) problems.push(checked.problem);
+  }
+  const config: Config = {
+    ...loaded,
+    APP_URL: appUrl.origin,
+    ...('address' in github ? { GITHUB_URL: github.address } : {}),
+    ...('address' in githubApi ? { GITHUB_API_URL: githubApi.address } : {}),
+  };
   const production = config.NODE_ENV === 'production';
 
   if (production && appUrl.protocol !== 'https:') {
@@ -272,6 +295,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     problems.push(...vapidProblems(config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY));
   }
   problems.push(...mailProblems(config));
+  problems.push(...githubAppProblems(config));
   if (config.STORAGE_DIRECTORY !== undefined) {
     if (production) {
       problems.push(
@@ -284,6 +308,36 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
 
   if (problems.length > 0) throw new ConfigurationError(problems);
   return config;
+};
+
+/** A host that is this machine, spelled as a URL's hostname spells it. */
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * One of GitHub's addresses (Ruling R36): `https://`, or `http://` to this machine alone — a stand-in
+ * for GitHub run beside the server, as an acceptance run does, which carries the sign-in's code and
+ * client secret over nothing but the loopback, in any environment. A path is kept (an Enterprise
+ * Server's API is under `/api/v3`), a trailing slash dropped; credentials, a query or a fragment are
+ * refused, since each call appends a path to it. Never quotes the value.
+ */
+const githubAddress = (
+  name: string,
+  value: string,
+): { readonly address: string } | { readonly problem: string } => {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return { problem: `${name}: not an absolute address` };
+  }
+  if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
+    return { problem: `${name}: an address without credentials, query or fragment` };
+  }
+  const secure = url.protocol === 'https:';
+  if (!secure && !(url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname))) {
+    return { problem: `${name}: must be https://, or http:// to this machine` };
+  }
+  return { address: `${url.origin}${url.pathname.replace(/\/+$/, '')}` };
 };
 
 /** Fewer distinct bytes than this is not a CSPRNG's output. Measured: 2,000,000 random
@@ -313,9 +367,20 @@ const isSequence = (bytes: Buffer): boolean => {
  * here (D-126). Never quotes either value.
  */
 /** Sign-in mail (D-138 §6): both or neither. How the connection is held to TLS is the sender's. */
-const mailProblems = (config: Config): string[] =>
-  (config.SMTP_URL === undefined) !== (config.MAIL_FROM === undefined)
-    ? ['SMTP_URL, MAIL_FROM: set both, or neither']
+const mailProblems = (config: Config): string[] => {
+  if ((config.SMTP_URL === undefined) !== (config.MAIL_FROM === undefined)) {
+    return ['SMTP_URL, MAIL_FROM: set both, or neither'];
+  }
+  // Refused here, before the first start copies it into the settings, where it would stop every
+  // start after (D-179 §6). The reason, never the value: it holds a password.
+  const problem = config.SMTP_URL === undefined ? undefined : smtpUrlProblem(config.SMTP_URL);
+  return problem === undefined ? [] : [`SMTP_URL: ${problem}`];
+};
+
+/** The GitHub app (D-179 §6): both variables or neither. Half of one is no app, and is said so. */
+const githubAppProblems = (config: Config): string[] =>
+  (config.GITHUB_CLIENT_ID === undefined) !== (config.GITHUB_CLIENT_SECRET === undefined)
+    ? ['GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET: set both, or neither']
     : [];
 
 const vapidProblems = (publicKey: string, privateKey: string): string[] => {

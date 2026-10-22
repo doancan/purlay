@@ -17,7 +17,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import type { Translate } from '../../i18n/types';
 import { useRoute } from '../../router/router-provider';
 import { useSession } from '../session/session';
-import { useWorkspaceRole } from '../settings/role';
+import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
 import { FIRST_SECTION, sectionFor } from '../settings/sections';
 import { useDeepWork } from './deep-work';
 import { useWorkspace } from './workspace';
@@ -61,6 +61,7 @@ export const TabTitle = (): null => {
   const channels = useChannels(workspace.id).data ?? [];
   const quiet = useDeepWork().until !== null;
   const role = useWorkspaceRole();
+  const serverAdmin = useIsServerAdmin();
 
   let place: string | null = null;
   if (match.name === 'inbox') place = t('inbox.title');
@@ -73,6 +74,7 @@ export const TabTitle = (): null => {
     const section = sectionFor(
       match.name === 'settings' ? match.params.section : FIRST_SECTION,
       role,
+      serverAdmin,
     );
     place =
       section === null

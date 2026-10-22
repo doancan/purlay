@@ -308,6 +308,15 @@ const VIOLATIONS: readonly Violation[] = [
     source:
       "interface WorkspaceContext {\n  readonly workspaceId: string;\n}\nexport const forged = { workspaceId: 'w' } as WorkspaceContext;\n",
   },
+  // A probe of GitHub or a relay checks nothing of its own: the session it takes is the proof
+  // that the guard ran, and an assertion would forge it. (D-179 §4.4, R48)
+  {
+    rule: 'a setup session may not be asserted into existence (R48)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/modules/setup/__enforcement__.test.ts',
+    source:
+      "import type { SetupSession } from './setup';\nexport const forged = { claimDigest: 'x' } as unknown as SetupSession;\n",
+  },
   // A link's address is checked once, by `SafeHref.of`, and a renderer trusts the tree.
   // Asserting one is the only way past the type, in a test as anywhere. (D-101 §9)
   {

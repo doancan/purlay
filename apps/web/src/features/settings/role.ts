@@ -11,3 +11,6 @@ export const useWorkspaceRole = (): UserRole | undefined => {
   const { workspace } = useWorkspace();
   return memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
 };
+
+/** Whether this person is the server's administrator, as the session says (`GET /api/me`): read only. */
+export const useIsServerAdmin = (): boolean => useSession().isServerAdmin;

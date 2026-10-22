@@ -5,10 +5,13 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "dependencies": {
+    "@better-auth/core": "1.7.12",
+    "@better-auth/kysely-adapter": "1.7.12",
     "@purlay/db": "workspace:*",
     "@purlay/markdown": "workspace:*",
     "@purlay/types": "workspace:*",
     "@sinclair/typebox": "0.34.52",
+    "better-auth": "1.7.12",
     "elysia": "1.4.30",
     "nodemailer": "10.1.2",
     "pino": "10.4.0"

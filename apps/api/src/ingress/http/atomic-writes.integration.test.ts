@@ -17,7 +17,14 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, sql, type ClonedDatabase } from '@purlay/db';
 import { createApp } from './app';
 import { aSignedInUser } from '../../testing/signed-in';
-import { NOW, aGitHubAccount, testDependencies } from '../../testing/doubles';
+import { NOW, testDependencies } from '../../testing/doubles';
+import {
+  aGitHubAuth,
+  aGitHubFor,
+  aGitHubPerson,
+  signInWithGitHub,
+  type GitHubPerson,
+} from '../../testing/github-sign-in';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
 
@@ -50,8 +57,8 @@ const whileRefusingInserts = async (table: string, body: () => Promise<void>): P
   }
 };
 
-const app = (github = testDependencies().github): ReturnType<typeof createApp> =>
-  createApp(testDependencies({ database: cloned.db, clock, github }));
+const app = (): ReturnType<typeof createApp> =>
+  createApp(testDependencies({ database: cloned.db, clock }));
 
 const postJson = async (path: string, cookie: string, body: unknown): Promise<Response> =>
   await app().handle(
@@ -141,45 +148,128 @@ describe('integration: multi-write requests are atomic', () => {
     expect(retry.status).toBe(200);
   });
 
-  test('a sign-in whose session fails to write leaves no account behind', async () => {
-    const login = `atomic-${crypto.randomUUID().slice(0, 8)}`;
-    const email = `${login}@example.test`;
-    const github = aGitHubAccount(
-      {
-        id: Math.floor(Math.random() * 1_000_000_000) + 1_000_000,
-        login,
-        name: null,
-        avatarUrl: null,
-      },
-      [{ email, primary: true, verified: true }],
-    );
-
-    const signIn = async (): Promise<Response> => {
-      const started = await app(github).handle(new Request(`${ORIGIN}/auth/github`));
-      const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
-      const cookie = (started.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-      return await app(github).handle(
-        new Request(`${ORIGIN}/auth/github/callback?code=a-valid-code&state=${state}`, {
-          headers: { cookie },
+  /** A GitHub sign-in of this person through the library, as a browser makes it. */
+  const signInAs = async (person: GitHubPerson): Promise<Response> => {
+    const github = aGitHubFor(person);
+    return await signInWithGitHub(
+      createApp(
+        testDependencies({
+          database: cloned.db,
+          clock,
+          auth: aGitHubAuth(cloned.db, github.fetch, { baseUrl: ORIGIN }),
         }),
-      );
-    };
+      ),
+      ORIGIN,
+      github,
+    );
+  };
 
-    await whileRefusingInserts('sessions', async () => {
+  const accountsOf = async (email: string): Promise<{ id: string }[]> =>
+    await cloned.db.selectFrom('users').select('id').where('email', '=', email).execute();
+
+  test('a sign-up whose account row fails to write leaves no user behind (D-179)', async () => {
+    const person = aGitHubPerson(`atomic-${crypto.randomUUID().slice(0, 8)}`);
+    await whileRefusingInserts('accounts', async () => {
       // The callback is a browser's, so the failure comes back as the sign-in screen (D-121).
-      const refused = await signIn();
+      const refused = await signInAs(person);
       expect(refused.status).toBe(302);
       expect(refused.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
     });
-    const left = await cloned.db
-      .selectFrom('users')
-      .select('id')
-      .where('email', '=', email)
-      .execute();
-    expect(left).toEqual([]);
+    expect(await accountsOf(person.email)).toEqual([]);
 
-    const signedIn = await signIn();
-    expect(signedIn.status).toBe(302);
+    const signedIn = await signInAs(person);
     expect(signedIn.headers.get('location')).toBe(ORIGIN);
+    expect(await accountsOf(person.email)).toHaveLength(1);
+  });
+
+  // The library commits the account before it makes the session, so a session that fails to write
+  // leaves the account: what must hold is that the next attempt signs that same account in.
+  test('a sign-in whose session fails to write is sent back, and the next one is the same account', async () => {
+    const person = aGitHubPerson(`atomic-${crypto.randomUUID().slice(0, 8)}`);
+    await whileRefusingInserts('sessions', async () => {
+      const refused = await signInAs(person);
+      expect(refused.status).toBe(302);
+      expect(refused.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
+    });
+    const signedIn = await signInAs(person);
+    expect(signedIn.headers.get('location')).toBe(ORIGIN);
+    const accounts = await accountsOf(person.email);
+    expect(accounts).toHaveLength(1);
+    const user = await cloned.db
+      .selectFrom('users')
+      .select(['github_id', 'github_login', 'github_connected_at'])
+      .where('email', '=', person.email)
+      .executeTakeFirstOrThrow();
+    // Still an account GitHub made, never one "connected" (0046, D-176).
+    expect(user).toEqual({
+      github_id: String(person.id),
+      github_login: person.login,
+      github_connected_at: null,
+    });
+  });
+
+  /** Makes every update of `users` fail, for the duration of the body. */
+  const whileRefusingUserUpdates = async (
+    body: () => Promise<void>,
+    when = 'true',
+  ): Promise<void> => {
+    await sql
+      .raw(
+        `create trigger refuse_update before update on users for each row when (${when}) execute function refuse_insert()`,
+      )
+      .execute(cloned.db);
+    try {
+      await body();
+    } finally {
+      await sql`drop trigger refuse_update on users`.execute(cloned.db);
+    }
+  };
+
+  const githubColumnsOf = async (email: string): Promise<Record<string, unknown>> =>
+    await cloned.db
+      .selectFrom('users')
+      .select(['github_id', 'github_login', 'github_connected_at', 'display_name'])
+      .where('email', '=', email)
+      .executeTakeFirstOrThrow();
+
+  test('an account GitHub made stays one when what follows its making fails (D-176)', async () => {
+    const person = aGitHubPerson(`atomic-${crypto.randomUUID().slice(0, 8)}`);
+    await whileRefusingUserUpdates(async () => {
+      const refused = await signInAs(person);
+      expect(refused.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
+    });
+    // Made in the library's own transaction, with the account: GitHub's id and login are already
+    // there, so nothing after it can leave the account looking like one made by email.
+    expect(await githubColumnsOf(person.email)).toMatchObject({
+      github_id: String(person.id),
+      github_login: person.login,
+      github_connected_at: null,
+    });
+    expect((await signInAs(person)).headers.get('location')).toBe(ORIGIN);
+    expect(await githubColumnsOf(person.email)).toMatchObject({
+      github_id: String(person.id),
+      github_connected_at: null,
+      display_name: 'Ada Lovelace',
+    });
+  });
+
+  test('a refresh whose second statement fails leaves nothing half-written', async () => {
+    const person = aGitHubPerson(`atomic-${crypto.randomUUID().slice(0, 8)}`);
+    expect((await signInAs(person)).headers.get('location')).toBe(ORIGIN);
+    const renamed = {
+      ...person,
+      login: `renamed-${crypto.randomUUID().slice(0, 8)}`,
+      name: 'New Name',
+    };
+    // Only the statement that writes the new login fails — after the names were written.
+    await whileRefusingUserUpdates(async () => {
+      const refused = await signInAs(renamed);
+      expect(refused.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
+    }, `new.github_login is distinct from old.github_login and new.github_login is not null`);
+    expect(await githubColumnsOf(person.email)).toMatchObject({
+      github_login: person.login,
+      display_name: 'Ada Lovelace',
+      github_connected_at: null,
+    });
   });
 });

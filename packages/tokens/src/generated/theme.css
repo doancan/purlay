@@ -119,6 +119,9 @@
   --transition-duration-bar: var(--duration-bar);
   --transition-duration-hover: var(--duration-hover);
   --transition-duration-overlay: var(--duration-overlay);
+  --transition-duration-step: var(--duration-step);
+  --transition-duration-mark: var(--duration-mark);
+  --transition-duration-nudge: var(--duration-nudge);
   --ease-standard: var(--easing-standard);
 
   /* Type: families, weights; the sizes are the text- utilities below */

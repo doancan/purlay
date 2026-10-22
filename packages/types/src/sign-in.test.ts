@@ -1,15 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  ConnectGitHubOutcome,
+  AUTH_BASE_PATH,
+  SIGN_IN_CALLBACK,
   SIGN_IN_PATH,
   SignInFailure,
-  connectGitHubHref,
-  connectGitHubOutcomeIn,
   signInFailureHref,
   signInFailureIn,
 } from './sign-in';
 
 const EVERY_FAILURE = SignInFailure.anyOf.map((literal) => literal.const);
+
+describe('where GitHub sends the browser back (D-179, R13)', () => {
+  test('is the sign-in library’s own callback for GitHub, under its base path', () => {
+    expect(AUTH_BASE_PATH).toBe('/auth');
+    expect(SIGN_IN_CALLBACK).toBe('/auth/callback/github');
+  });
+});
 
 describe('the address a failed sign-in comes back to', () => {
   test('there is a reason for every case the callback distinguishes', () => {
@@ -18,6 +24,7 @@ describe('the address a failed sign-in comes back to', () => {
       'expired',
       'email-required',
       'email-taken',
+      'signup-closed',
       'github-unavailable',
       'busy',
       'failed',
@@ -43,24 +50,5 @@ describe('the address a failed sign-in comes back to', () => {
     expect(signInFailureIn('?error=1')).toBe('failed');
     expect(signInFailureIn('?error=<script>')).toBe('failed');
     expect(signInFailureIn('?error=')).toBe('failed');
-  });
-});
-
-describe('the address a connect of GitHub comes back to (D-176)', () => {
-  const EVERY_OUTCOME = ConnectGitHubOutcome.anyOf.map((literal) => literal.const);
-
-  for (const outcome of EVERY_OUTCOME) {
-    test(`\`${outcome}\` is written on the account page's address and read back as itself`, () => {
-      const address = new URL(connectGitHubHref('acme-eng', outcome), 'https://purlay.test');
-      expect(address.origin).toBe('https://purlay.test');
-      expect(address.pathname).toBe('/w/acme-eng/settings/account');
-      expect([...address.searchParams.keys()]).toEqual(['github']);
-      expect(connectGitHubOutcomeIn(address.search)).toBe(outcome);
-    });
-  }
-
-  test('an address with no outcome reads as none, and one outside the set as a failure', () => {
-    expect(connectGitHubOutcomeIn('')).toBeNull();
-    expect(connectGitHubOutcomeIn('?github=<script>')).toBe('failed');
   });
 });

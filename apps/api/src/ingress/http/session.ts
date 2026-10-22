@@ -9,21 +9,15 @@
  * useful in telling them apart, and a caller who could would learn whether a
  * token they hold was ever real (D-60).
  */
-import type { Executor } from '@purlay/db';
-import type { Clock } from '../../platform/clock';
-import { requireSessionFromCookie } from '../../modules/auth/sessions';
+import type { Auth } from '../../modules/auth/better-auth';
+import { requireSessionFromHeaders } from '../../modules/auth/sessions';
 import { noteSession } from '../../platform/logging';
 
 export const requireSession = async (
-  database: Executor,
-  clock: Clock,
+  auth: Auth,
   request: Request,
 ): Promise<{ readonly userId: string; readonly sessionId: string }> => {
-  const { userId, sessionId } = await requireSessionFromCookie(
-    database,
-    clock,
-    request.headers.get('cookie'),
-  );
+  const { userId, sessionId } = await requireSessionFromHeaders(auth, request.headers);
   // What the trail names as who acted, for whatever this request goes on to do (D-116).
   noteSession(sessionId);
   return { userId, sessionId };

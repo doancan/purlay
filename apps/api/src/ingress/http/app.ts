@@ -23,33 +23,31 @@
  */
 import { askForExport, downloadExport, readExports } from './exports';
 import { goneMessageReference } from '../../platform/gone-message';
-import {
-  SIGN_IN_REQUEST_BUDGET,
-  askForSignInLink,
-  consumeSignIn,
-  previewSignIn,
-} from './email-sign-in';
-import type { Outbox } from '../../platform/mail';
+import { askForSignInLink, consumeSignIn, previewSignIn } from './magic-link';
+import { afterAnswer } from '../../platform/after-answer';
+import type { SignInLinkDependencies } from '../../modules/auth/magic-link';
 import { authMethods } from './auth-methods';
 import { Elysia, type HTTPHeaders } from 'elysia';
 import type { Executor } from '@purlay/db';
+import type { Auth } from '../../modules/auth/better-auth';
+import { readWorkspaceCreators } from '../../modules/setup/settings';
+import type { ServicesPin, SettingsChange } from '../../modules/setup/runtime';
+import type { WorkspaceCreators } from '../../modules/workspaces/creators';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
-import type { GitHubClient } from '../../modules/auth/github';
 import {
   abandonSignIn,
   readMySignIn,
-  startConnectGitHub,
-  completeSignIn,
+  answerAuth,
   signOut,
   eraseMyAccount,
   signOutEverywhere,
   startSignIn,
   type AuthResponse,
 } from './auth';
-import { SIGN_IN_CALLBACK } from '../../modules/auth/sign-in';
-import { clearedStateCookie } from '../../platform/cookies';
-import { clientAddress, limitKeyFor, peerOf } from './client-address';
+import { AUTH_BASE_PATH, SIGN_IN_CALLBACK } from '@purlay/types';
+import { limitKeyFor } from '../../platform/client-key';
+import { clientAddress, peerOf, type PeerSource } from './client-address';
 import {
   GITHUB_CALL_BUDGET,
   httpLimits,
@@ -99,6 +97,30 @@ import {
 } from './workspaces';
 import { readPushKey, setMyLocale, subscribeDevice, unsubscribeDevice } from './push';
 import {
+  choosePolicyOf,
+  claimTheSetup,
+  confirmAddress,
+  finishTheSetup,
+  followAddressLink,
+  inviteDone,
+  makeAdministrator,
+  makeTheFirstWorkspace,
+  readSetupState,
+  readSetupStatus,
+  tryGitHubApp,
+  tryMailRelay,
+  type SetupAnswer,
+  type SetupDependencies,
+} from './setup';
+import {
+  changeSignUpPolicy,
+  changeWorkspaceCreators,
+  connectGitHubApp,
+  connectMailRelay,
+  disconnectChannel,
+  readServerSettings,
+} from './server';
+import {
   createWorkspaceChannel,
   joinPublicChannel,
   listChannels,
@@ -146,7 +168,9 @@ import {
   joinByInvitation,
   lookAtInvitation,
   makeInvitation,
+  openPassport,
   readInvitations,
+  type InvitationMailDependencies,
 } from './invitations';
 import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
@@ -171,10 +195,26 @@ import {
 
 export interface Dependencies {
   readonly config: Config;
+  /**
+   * Better Auth (D-179): every session either door sees is resolved through it, over the same
+   * database (`sessions.ts`).
+   */
+  readonly auth: Auth;
+  /**
+   * Where `auth` is the holder's (`modules/setup/runtime.ts`): what pins, at a request's first hook, the
+   * instance and relay the whole request is served by, so a change of the settings while it is in flight
+   * lets it finish on the ones it started on (D-179 §4). Absent where `auth` is an instance nothing swaps.
+   */
+  readonly services?: ServicesPin;
+  /**
+   * What the setup's steps change the settings through, and the holder whose pair serves now
+   * (`applySettings`, D-179 §4.9): the composition root's. Absent where `auth` is an instance nothing
+   * swaps — and there the `/setup` routes that read or change the settings fail as a defect.
+   */
+  readonly settingsChange?: SettingsChange;
   /** A `Kysely` or a `Transaction` — indistinguishable here, which is the point (D-46). */
   readonly database: Executor;
   readonly clock: Clock;
-  readonly github: GitHubClient;
   /** Where attachment bytes live (D-109); the unconfigured store refuses every use, loudly. */
   readonly storage: ObjectStore;
   /**
@@ -208,8 +248,13 @@ export interface Dependencies {
   readonly attention: Attention;
   /** Presence's grace timers (D-136); a test passes its own, to pass a grace without waiting. */
   readonly timers?: Timers;
-  /** Where sign-in links are posted; absent where email sign-in is off (D-138 §6). */
-  readonly mail?: Outbox;
+  /** The socket liveness sweep's own timers and interval (`realtime/liveness.ts`); absent, the real ones. */
+  readonly liveness?: { readonly timers?: Timers; readonly intervalMs?: number };
+  /**
+   * Who may make a workspace (D-155), read per request; absent, the server's setting
+   * (`readWorkspaceCreators`, D-179 §6). A test about something else lets anybody.
+   */
+  readonly workspaceCreators?: (executor: Executor) => Promise<WorkspaceCreators>;
 }
 
 /**
@@ -238,12 +283,22 @@ export interface HttpApplication {
    * test asserts that on the sizes rather than on coverage.
    */
   readonly held: () => HeldByConnections;
-  /** Resolves when the frames being handled, and the presence being told, are done. */
+  /**
+   * Resolves when the frames being handled, the presence being told, and the sign-in links being made
+   * after their answers are done.
+   */
   readonly settled: () => Promise<void>;
 }
 
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
+
+/**
+ * The sign-in library's routes (D-179): everything under its base path no route of ours answers. The
+ * registrations below spell it as a literal, which `scripts/enforcement.test.ts` reads against
+ * `API.md`; the request line's test binds the two spellings (`logging.integration.test.ts`).
+ */
+const LIBRARY_ROUTE = `${AUTH_BASE_PATH}/*`;
 
 /**
  * The only place a handler's decision becomes a framework response.
@@ -265,13 +320,30 @@ const respond = (
   return '';
 };
 
+/** A setup route's answer, applied: its status, its cookies, its body. */
+const answerSetup = <T>(
+  set: { status?: number | string; headers: HTTPHeaders },
+  answer: SetupAnswer<T>,
+): T | string => {
+  set.status = answer.status;
+  if (answer.setCookie.length > 0) set.headers['set-cookie'] = [...answer.setCookie];
+  return answer.status === 204 ? '' : answer.body;
+};
+
+/** The setup's paths, its client pages included: nothing under them is for a search engine. */
+const SETUP_PATH = /^\/setup(?:\/|$)/;
+
 export const createApp = (dependencies: Dependencies): HttpApplication => {
   const { log } = dependencies;
+  /** `body` served by one instance of the library, the one current now; see `Dependencies.services`. */
+  const within = async <T>(body: () => Promise<T>): Promise<T> =>
+    dependencies.services === undefined ? await body() : await dependencies.services.within(body);
   /** Set once, by `drain`; readiness reads it before anything else. */
   let draining = false;
   // One check at a time, reused for a second, however often the outside asks (#636).
   const askReadiness = recentReadiness(
-    async () => await readiness(dependencies.database),
+    async () =>
+      await readiness(dependencies.database, async () => await dependencies.auth.schemaProblem()),
     dependencies.clock,
   );
   // The reason a node is not ready is written once per check, not once per probe that hears it.
@@ -291,9 +363,30 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   const uploading = { count: 0 };
   // GitHub's deliveries: every address before the signature, each feed after it (D-134 §4).
   const knocks = inProcessRateLimiter(dependencies.clock, WEBHOOK_BUDGET);
-  // Sign-in links asked for, per client address (D-138 §7).
-  const signInRequests = inProcessRateLimiter(dependencies.clock, SIGN_IN_REQUEST_BUDGET);
+  // Sign-in by link: the library's, decided by Purlay's rules (`modules/auth/magic-link.ts`). Read
+  // per request, so building the application asks nothing of the library.
+  // What a request for a link comes to is decided after its answer (D-138 §1, §6).
+  const afterSignInAnswers = afterAnswer(log, 'sign-in');
+  const signInLinks = (): SignInLinkDependencies => ({
+    ...dependencies,
+    appUrl: dependencies.config.APP_URL,
+    links: dependencies.auth.signInLinks,
+    later: afterSignInAnswers.run,
+  });
+  // Invitation letters are posted after the answer too, by the relay the sign-in library mails through.
+  const afterInvitationAnswers = afterAnswer(log, 'invitation');
+  const invitationMail = (): InvitationMailDependencies => ({
+    ...dependencies,
+    appUrl: dependencies.config.APP_URL,
+    outbox: dependencies.auth.signInLinks?.outbox,
+    later: afterInvitationAnswers.run,
+  });
   const feedPosts = inProcessRateLimiter(dependencies.clock, WEBHOOK_FEED_BUDGET);
+  // Who may make a workspace: the setting as it is now, each time it is asked (D-155, D-179 §6).
+  const creating = {
+    ...dependencies,
+    workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
+  };
   const delivering = { count: 0 };
 
   // Server-wide, because that is the one the framework passes on: the per-route
@@ -301,13 +394,31 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
   // the handler with it set (`docs/spikes/elysia.md`). Over the cap, the server
   // drops the connection before any handler runs. (§5.5)
   const admit = httpLimits({
-    database: dependencies.database,
+    auth: dependencies.auth,
     clock: dependencies.clock,
     writes: userWrites,
     trustProxy: dependencies.config.TRUST_PROXY,
     ...(dependencies.rateBudgets === undefined ? {} : { budgets: dependencies.rateBudgets }),
   });
   const edgeHeaders = responseHeaders(dependencies.config.APP_URL);
+  const setup: SetupDependencies = {
+    ...dependencies,
+    settingsChange: dependencies.settingsChange,
+  };
+  /** The library's answer to a request under its base path, with the client's address decided here. */
+  const library = async (request: Request, server: PeerSource | null): Promise<Response> =>
+    await answerAuth(
+      dependencies,
+      request,
+      clientAddress(peerOf(server, request), request.headers, dependencies.config.TRUST_PROXY),
+    );
+  /**
+   * The path a log line names a request by: as sent, except under the library's routes, where it is
+   * the route as the library's own table spells it (`Auth.routeOf`) — a reset's token travels in a
+   * path segment there, and nothing a caller wrote belongs in the log (D-179 §3).
+   */
+  const writtenPath = (route: string | undefined, path: string): string =>
+    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : path;
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
     // What an upload needs, and no more: every other body is bounded at the edge by its length,
@@ -328,7 +439,14 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       // An id from the edge is kept when well-formed, as a label only (#234).
       const requestId = inboundRequestId(request.headers);
       enterRequest({ requestId, startedAt: performance.now() });
-      const headers = { ...edgeHeaders, 'x-request-id': requestId };
+      // Before anything asks the library: every use of it in this request, and in what the request
+      // leaves for after its answer, is of the instance current now (D-179 §4).
+      dependencies.services?.pin();
+      const headers = {
+        ...edgeHeaders,
+        'x-request-id': requestId,
+        ...(SETUP_PATH.test(new URL(request.url).pathname) ? { 'x-robots-tag': 'noindex' } : {}),
+      };
       Object.assign(set.headers, headers);
       // Before the body is read or a session looked up (D-39 item 2).
       if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
@@ -355,26 +473,31 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       set.headers['retry-after'] = String(wait);
       throw new AppError({ code: 'RATE_LIMITED', message: 'Too many requests. Slow down.' });
     })
-    .onError(async ({ code, error, set, path, request }) => {
+    .onError(({ code, error, set, path, route }) => {
       const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
       const refusal = refusalFor(code, error, issues);
       // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
       if (path === SIGN_IN_CALLBACK) {
-        return respond(
-          set,
-          await abandonSignIn(dependencies, request, error, refusal.body.error.code),
-        );
+        return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code));
       }
+      const where = writtenPath(route, path);
       // The client is told INTERNAL and nothing else; the cause is written here.
-      if (refusal.status === 500) log.error('request failed', { err: error, path });
+      if (refusal.status === 500) log.error('request failed', { err: error, path: where });
       // Said by the name of the reference, so a pairing defect is not hidden by the 404 (D-139 §2).
       const gone = goneMessageReference(error);
-      if (gone !== undefined)
-        log.warn('a write referred to a message that is not there', { constraint: gone, path });
+      if (gone !== undefined) {
+        log.warn('a write referred to a message that is not there', {
+          constraint: gone,
+          path: where,
+        });
+      }
+      if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
+        set.headers['retry-after'] = String(error.retryAfterSeconds);
+      }
       set.status = refusal.status;
       return refusal.body;
     })
-    .onAfterResponse(({ request, path, set }) => {
+    .onAfterResponse(({ request, path, route, set }) => {
       const started = currentRequest()?.startedAt;
       // A balancer and the container's own health check poll these every few seconds; at
       // info they were most of the log. A probe that FAILS is not lost: readiness writes the
@@ -382,7 +505,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       const write = path === '/health' || path === '/health/ready' ? log.debug : log.info;
       write('request', {
         method: request.method,
-        path,
+        path: writtenPath(route, path),
         status: set.status,
         ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
       });
@@ -405,23 +528,24 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     })
 
     .get('/auth/github', async ({ set }) => respond(set, await startSignIn(dependencies)))
-    .get('/api/auth/methods', () => authMethods(dependencies.config))
+    .get('/api/auth/methods', () => authMethods(dependencies.auth))
     .post('/auth/email', async ({ request, body, set, server }) => {
-      await askForSignInLink(dependencies, body, {
+      await askForSignInLink(
+        signInLinks(),
+        body,
         // Keyed as the edge's budget is: an IPv6 client by its /64 (`limitKeyFor`).
-        address: limitKeyFor(
+        limitKeyFor(
           clientAddress(peerOf(server, request), request.headers, dependencies.config.TRUST_PROXY),
         ),
-        requests: signInRequests,
-      });
+      );
       set.status = 202;
       return null;
     })
-    .post('/auth/email/preview', async ({ body }) => await previewSignIn(dependencies, body))
+    .post('/auth/email/preview', async ({ body }) => await previewSignIn(signInLinks(), body))
     .post('/auth/email/consume', async ({ request, body, set, server }) =>
       respond(
         set,
-        await consumeSignIn(dependencies, body, {
+        await consumeSignIn(signInLinks(), body, {
           userAgent: request.headers.get('user-agent') ?? undefined,
           ipAddress: clientAddress(
             peerOf(server, request),
@@ -431,20 +555,18 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         }),
       ),
     )
-    // Spelled out, as every route is, for `scripts/enforcement.test.ts` to read against
-    // `API.md`. It is `SIGN_IN_CALLBACK`: were they to differ, the error hook's redirect
-    // would miss this route and `auth.integration.test.ts` would see JSON (D-121).
-    .get('/auth/github/callback', async ({ request, set, server }) => {
-      // Spent whatever happens next: set before the handler runs, so a refusal
-      // carries it too — measured, a header set before a throw survives into
-      // the error response (#199).
-      set.headers['set-cookie'] = clearedStateCookie();
-      const address = clientAddress(
-        peerOf(server, request),
-        request.headers,
-        dependencies.config.TRUST_PROXY,
-      );
-      return respond(set, await completeSignIn(dependencies, request, address));
+    // The sign-in library's own routes (D-179), which answer only GET and POST: everything under its
+    // base path (`AUTH_BASE_PATH`) that no route of ours answers — a static route wins over these
+    // whatever the order. Not `.mount`: it strips the prefix the library is configured to expect,
+    // and a route registered for every method loses to `GET *` below, the client's (measured on
+    // Elysia 1.4.30). The body is left unread for the library, as `.mount` would leave it. Its
+    // GitHub callback is `SIGN_IN_CALLBACK`: a failure thrown there reaches the error hook's
+    // redirect above, never JSON (D-121).
+    .get('/auth/*', async ({ request, server }) => await library(request, server), {
+      parse: 'none',
+    })
+    .post('/auth/*', async ({ request, server }) => await library(request, server), {
+      parse: 'none',
     })
     .post('/auth/logout', async ({ request, set }) =>
       respond(set, await signOut({ ...dependencies, bus: sockets.bus }, request)),
@@ -453,16 +575,84 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       respond(set, await signOutEverywhere({ ...dependencies, bus: sockets.bus }, request)),
     )
 
+    // The setup in the browser (D-179 §4): not under `/api`, since there is no session yet.
+    .get('/setup/status', async () => await readSetupStatus(setup))
+    .post('/setup/claim', async ({ body, set }) =>
+      answerSetup(set, await claimTheSetup(setup, body)),
+    )
+    .get('/setup/state', async ({ request, set }) =>
+      answerSetup(set, await readSetupState(setup, request)),
+    )
+    .post('/setup/address', async ({ request, body, set }) =>
+      answerSetup(set, await confirmAddress(setup, request, body)),
+    )
+    .post('/setup/admin', async ({ request, body, set, server }) =>
+      answerSetup(
+        set,
+        await makeAdministrator(
+          setup,
+          request,
+          body,
+          clientAddress(peerOf(server, request), request.headers, dependencies.config.TRUST_PROXY),
+        ),
+      ),
+    )
+    .post('/setup/policy', async ({ request, body, set }) =>
+      answerSetup(set, await choosePolicyOf(setup, request, body)),
+    )
+    .post('/setup/github', async ({ request, body, set }) =>
+      answerSetup(set, await tryGitHubApp(setup, request, body)),
+    )
+    .post('/setup/smtp', async ({ request, body, set }) =>
+      answerSetup(set, await tryMailRelay(setup, request, body)),
+    )
+    .post('/setup/workspace', async ({ request, body, set }) =>
+      answerSetup(set, await makeTheFirstWorkspace(setup, request, body)),
+    )
+    .post('/setup/invite', async ({ request, set }) =>
+      answerSetup(set, await inviteDone(setup, request)),
+    )
+    .post('/setup/finish', async ({ request, set }) =>
+      answerSetup(set, await finishTheSetup(setup, request)),
+    )
+    .post('/setup/verify', async ({ body }) => await followAddressLink(setup, body))
+
+    // Administration → Server (D-179 §4.8): the server's administrator alone; everybody else is absent.
+    .get('/api/server/settings', async ({ request }) => await readServerSettings(setup, request))
+    .post(
+      '/api/server/github',
+      async ({ request, body }) => await connectGitHubApp(setup, request, body),
+    )
+    .post(
+      '/api/server/smtp',
+      async ({ request, body }) => await connectMailRelay(setup, request, body),
+    )
+    .delete('/api/server/github', async ({ request, set }) => {
+      await disconnectChannel(setup, request, 'github');
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/server/smtp', async ({ request, set }) => {
+      await disconnectChannel(setup, request, 'smtp');
+      set.status = 204;
+      return '';
+    })
+    .post('/api/server/policy', async ({ request, body, set }) => {
+      await changeSignUpPolicy(setup, request, body);
+      set.status = 204;
+      return '';
+    })
+    .post('/api/server/creators', async ({ request, body, set }) => {
+      await changeWorkspaceCreators(setup, request, body);
+      set.status = 204;
+      return '';
+    })
+
     .post('/api/me/erase', async ({ request, body, set }) =>
       respond(set, await eraseMyAccount({ ...dependencies, bus: sockets.bus }, request, body)),
     )
-    .get('/api/me', async ({ request }) => await readMe(dependencies, request))
+    .get('/api/me', async ({ request }) => await readMe(creating, request))
     .get('/api/me/sign-in', async ({ request }) => await readMySignIn(dependencies, request))
-    .post('/api/me/github/connect', async ({ request, body, set }) => {
-      const started = await startConnectGitHub(dependencies, request, body);
-      set.headers['set-cookie'] = [...started.setCookie];
-      return started.body;
-    })
     .patch(
       '/api/me/profile',
       async ({ request, body }) => await updateMyProfile(sending, request, body),
@@ -486,7 +676,7 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     .get('/api/workspaces', async ({ request }) => await listMyWorkspaces(dependencies, request))
     .post('/api/workspaces', async ({ request, body, set }) => {
       set.status = 201;
-      return await createMyWorkspace(dependencies, request, body);
+      return await createMyWorkspace(creating, request, body);
     })
     .get(
       '/api/workspaces/:workspaceId',
@@ -547,9 +737,9 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
         return null;
       },
     )
-    .post('/api/workspaces/:workspaceId/invitations', async ({ request, params, set }) => {
+    .post('/api/workspaces/:workspaceId/invitations', async ({ request, params, body, set }) => {
       set.status = 201;
-      return await makeInvitation(dependencies, request, params.workspaceId);
+      return await makeInvitation(invitationMail(), request, params.workspaceId, body);
     })
     .get(
       '/api/workspaces/:workspaceId/invitations',
@@ -568,6 +758,12 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
       '/api/invitations/preview',
       async ({ request, body }) => await lookAtInvitation(dependencies, request, body),
     )
+    .post('/api/invitations/passport', async ({ body, set }) => {
+      const { setCookie } = await openPassport(dependencies, body);
+      if (setCookie.length > 0) set.headers['set-cookie'] = [...setCookie];
+      set.status = 204;
+      return '';
+    })
     .post(
       '/api/invitations/accept',
       async ({ request, body }) => await joinByInvitation(dependencies, request, body),
@@ -1046,14 +1242,17 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
      * closes for a reason the client has to guess at (D-39, §7.2).
      */
     .ws('/ws', {
+      // An upgrade's admission and a socket's open are flows of their own: each served by one instance.
       beforeHandle: async ({ request, set }) => {
-        const refusal = await sockets.admit(request);
+        const refusal = await within(async () => await sockets.admit(request));
         if (refusal === undefined) return undefined;
         set.status = refusal.status;
         return refusal.body;
       },
       open: async (socket) => {
-        await sockets.open(socket);
+        await within(async () => {
+          await sockets.open(socket);
+        });
       },
       message: (socket, raw) => {
         sockets.message(socket, raw);
@@ -1073,14 +1272,22 @@ export const createApp = (dependencies: Dependencies): HttpApplication => {
     },
     stop: async (closeActiveConnections) => await app.stop(closeActiveConnections),
     held: sockets.held,
-    settled: sockets.settled,
+    settled: async (): Promise<void> => {
+      await Promise.all([
+        sockets.settled(),
+        afterSignInAnswers.settled(),
+        afterInvitationAnswers.settled(),
+      ]);
+    },
     drain: async (): Promise<void> => {
       draining = true;
       sockets.closeAll();
       // Not closing active connections: a request in flight finishes, and so does a
       // frame being handled — the pool closes after this returns, so a handler still
-      // reading it would fail on a connection that was pulled out from under it.
+      // reading it would fail on a connection that was pulled out from under it. The
+      // same for a sign-in link being made after its answer.
       await Promise.all([app.stop(false), sockets.settled()]);
+      await Promise.all([afterSignInAnswers.settled(), afterInvitationAnswers.settled()]);
     },
   };
 };

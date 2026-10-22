@@ -4,6 +4,7 @@
  */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
+import { spyOn } from 'bun:test';
 import type { InvitationPreview, Membership } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
@@ -11,6 +12,8 @@ import { expectNoAxeViolations } from '../../testing/axe';
 import { installDom } from '../../testing/dom';
 import { WORKSPACE, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
+import { person } from '../../testing/user';
+import { leave } from '../sign-in/leave';
 import type { Api } from '../../data/api';
 
 installDom();
@@ -192,5 +195,127 @@ describe('coming back from signing in with an invitation', () => {
     });
     await settle();
     expect(here(view)).toBe('/invite');
+  });
+});
+
+describe('an invitation, opened by somebody who is not signed in', () => {
+  const asSignedOut = async (
+    api: Partial<Api>,
+    methods: { github: boolean; email: boolean } = { github: true, email: true },
+    locale: 'en' | 'tr' = 'en',
+  ): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+    window.sessionStorage.setItem(KEY, TOKEN);
+    const view = await renderApp(<Outlet />, {
+      path: '/invite',
+      locale,
+      api: aSignedInApi({
+        me: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'no')),
+        authMethods: () => Promise.resolve({ ...methods, signUp: 'invite-only' }),
+        ...api,
+      }),
+    });
+    await settle();
+    return view;
+  };
+
+  test('GitHub: the passport is asked for first, and only when it is given does the page leave', async () => {
+    const order: string[] = [];
+    const left = spyOn(leave, 'to').mockImplementation((url) => {
+      order.push(`leave ${url}`);
+    });
+    const view = await asSignedOut({
+      openInvitationPassport: async (input) => {
+        order.push(`passport ${JSON.stringify(input)}`);
+        await Promise.resolve();
+      },
+    });
+    expect(view.getByRole('heading', { name: 'You have been invited' })).toBeDefined();
+    await expectNoAxeViolations(view.container);
+    await person().click(view.getByRole('link', { name: 'Continue with GitHub' }));
+    await settle();
+    expect(order).toEqual([`passport ${JSON.stringify({ token: TOKEN })}`, 'leave /auth/github']);
+    left.mockRestore();
+  });
+
+  test.each([
+    [
+      new ApiError(429, 'RATE_LIMITED', 'slow'),
+      'This invitation is being opened a lot right now. Try again in a while.',
+    ],
+    [new ApiError(500, 'INTERNAL', 'broke'), 'The invitation could not be checked.'],
+  ])(
+    'a passport that is refused (%s) is said in words and the page does not leave',
+    async (failure, words) => {
+      const left = spyOn(leave, 'to').mockImplementation(() => undefined);
+      const view = await asSignedOut({ openInvitationPassport: () => Promise.reject(failure) });
+      await person().click(view.getByRole('link', { name: 'Continue with GitHub' }));
+      await settle();
+      expect(view.getByRole('alert').textContent).toContain(words);
+      expect(left).not.toHaveBeenCalled();
+      left.mockRestore();
+    },
+  );
+
+  test('a link that does not open is the page’s "does not open" state, forgotten, and nothing else happens', async () => {
+    const left = spyOn(leave, 'to').mockImplementation(() => undefined);
+    const view = await asSignedOut({
+      openInvitationPassport: () =>
+        Promise.reject(new ApiError(404, 'INVITATION_NOT_FOUND', 'That invitation does not open.')),
+    });
+    await person().click(view.getByRole('link', { name: 'Continue with GitHub' }));
+    await settle();
+    expect(view.getByRole('heading', { name: 'This invitation does not open' })).toBeDefined();
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+    expect(left).not.toHaveBeenCalled();
+    left.mockRestore();
+  });
+
+  test('email: the passport is for that address, then the link is asked for with the invitation', async () => {
+    const order: string[] = [];
+    const view = await asSignedOut({
+      openInvitationPassport: async (input) => {
+        order.push(`passport ${JSON.stringify(input)}`);
+        await Promise.resolve();
+      },
+      requestEmailSignIn: async (input) => {
+        order.push(`link ${JSON.stringify(input)}`);
+        await Promise.resolve();
+      },
+    });
+    const user = person();
+    await user.type(view.getByRole('textbox', { name: 'Email address' }), 'new@example.test');
+    await user.click(view.getByRole('button', { name: 'Email me a sign-in link' }));
+    await settle();
+    expect(order).toEqual([
+      `passport ${JSON.stringify({ token: TOKEN, email: 'new@example.test' })}`,
+      `link ${JSON.stringify({ email: 'new@example.test', locale: 'en', invitation: TOKEN })}`,
+    ]);
+  });
+
+  test('email: a refused passport asks for no link', async () => {
+    let asked = 0;
+    const view = await asSignedOut({
+      openInvitationPassport: () => Promise.reject(new ApiError(429, 'RATE_LIMITED', 'slow')),
+      requestEmailSignIn: () => {
+        asked += 1;
+        return Promise.resolve();
+      },
+    });
+    const user = person();
+    await user.type(view.getByRole('textbox', { name: 'Email address' }), 'new@example.test');
+    await user.click(view.getByRole('button', { name: 'Email me a sign-in link' }));
+    await settle();
+    expect(asked).toBe(0);
+    expect(view.getByRole('alert').textContent).toContain('Try again in a while');
+  });
+
+  test('without mail there is no form; somebody with an account is pointed to sign-in, in Turkish too', async () => {
+    const view = await asSignedOut({}, { github: true, email: false }, 'tr');
+    expect(view.queryByRole('textbox')).toBeNull();
+    expect(view.getByRole('link', { name: 'Parolanla giriş yap' }).getAttribute('href')).toBe(
+      '/sign-in',
+    );
+    // The invitation is still in the tab for the way back from signing in.
+    expect(window.sessionStorage.getItem(KEY)).toBe(TOKEN);
   });
 });

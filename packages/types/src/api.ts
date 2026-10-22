@@ -86,11 +86,17 @@ export const MeResponse = Type.Object({
   profile: Profile,
   memberships: Type.Array(Membership),
   /**
-   * Whether this server would let the caller make a workspace (D-155): the operator's
-   * `WORKSPACE_CREATORS`, or, unset, only the first person to sign in while there is none. The client
+   * Whether this server would let the caller make a workspace (D-155): whom the server's setting
+   * names (D-179 §6; first seeded from `WORKSPACE_CREATORS`), or, by default, only the first person
+   * to sign in while there is none. The client
    * offers the form only where it would be accepted.
    */
   mayCreateWorkspace: Type.Boolean(),
+  /**
+   * Whether the caller is this server's administrator (`users.is_server_admin`, D-179 §4.8): the
+   * client draws Settings → Server only for them. Read only; what it opens is the server's to refuse.
+   */
+  isServerAdmin: Type.Boolean(),
 });
 export type MeResponse = Static<typeof MeResponse>;
 
@@ -616,8 +622,59 @@ export const Invitation = Type.Object({
 });
 export type Invitation = Static<typeof Invitation>;
 
-/** `POST …/invitations` — the link just made, with its token, this once. */
-export const CreatedInvitation = Type.Object({ invitation: Invitation, token: InvitationToken });
+/** The languages a sign-in message is written in: the interface's (D-41). */
+export const SignInLocale = Type.Union([Type.Literal('en'), Type.Literal('tr')]);
+
+/** The most addresses one request may name (D-179 §5): more is `400`, not a longer wait. */
+export const INVITATION_EMAILS_PER_REQUEST = 20;
+/** Invitation e-mails one inviter may have sent in a day, whatever the workspace (D-179 §5). */
+export const INVITATION_EMAILS_PER_INVITER_PER_DAY = 50;
+/** Invitation e-mails one workspace may have sent in a day, whoever asks (D-179 §5). */
+export const INVITATION_EMAILS_PER_WORKSPACE_PER_DAY = 200;
+
+/**
+ * `POST …/invitations` — a new link, and optionally the addresses to send it to, in the language the
+ * letter is written in (the interface's, D-41). No role and no address is bound to the link: it is the
+ * same bearer link whoever holds it (D-115, D-179 §5). The body may be empty, as it was.
+ */
+export const CreateInvitationRequest = FromClient({
+  emails: Type.Optional(
+    Type.Array(Type.String({ maxLength: 254 }), { maxItems: INVITATION_EMAILS_PER_REQUEST }),
+  ),
+  locale: Type.Optional(SignInLocale),
+});
+export type CreateInvitationRequest = Static<typeof CreateInvitationRequest>;
+
+/**
+ * What became of one address. `queued` is all the server can honestly say: the letter is handed to the
+ * mail server *after* the answer, so neither delivery nor even the hand-over has happened yet — a
+ * failure then is logged, not told. The others are refusals made before anything was queued.
+ */
+export const InvitationMailOutcome = Type.Union([
+  Type.Literal('queued'),
+  Type.Literal('invalid'),
+  Type.Literal('inviter_limit'),
+  Type.Literal('workspace_limit'),
+  Type.Literal('unavailable'),
+]);
+export type InvitationMailOutcome = Static<typeof InvitationMailOutcome>;
+
+export const InvitationMailResult = Type.Object({
+  /** As the inviter typed it, trimmed. */
+  address: Type.String(),
+  outcome: InvitationMailOutcome,
+});
+export type InvitationMailResult = Static<typeof InvitationMailResult>;
+
+/**
+ * `POST …/invitations` — the link just made, with its token, this once. `mail` is there when addresses
+ * were named: one entry for each, in order, the repeats of an address (any case) dropped.
+ */
+export const CreatedInvitation = Type.Object({
+  invitation: Invitation,
+  token: InvitationToken,
+  mail: Type.Optional(Type.Array(InvitationMailResult)),
+});
 export type CreatedInvitation = Static<typeof CreatedInvitation>;
 
 /** `GET …/invitations` — the links that still let people in, newest first. */
@@ -627,6 +684,17 @@ export type InvitationPage = Static<typeof InvitationPage>;
 /** `POST /api/invitations/preview` and `…/accept` — the link's token, in the body. */
 export const InvitationTokenRequest = FromClient({ token: InvitationToken });
 export type InvitationTokenRequest = Static<typeof InvitationTokenRequest>;
+
+/**
+ * `POST /api/invitations/passport` — a newcomer's pass to make an account on an invite-only server by
+ * this link (D-179 §5). With `email`, the pass is for that address and the mail's link; without, it is
+ * for the browser asking, which GitHub's return will be told apart by (a cookie). The link in `token`.
+ */
+export const InvitationPassportRequest = FromClient({
+  token: InvitationToken,
+  email: Type.Optional(Type.String({ format: 'email', maxLength: 254 })),
+});
+export type InvitationPassportRequest = Static<typeof InvitationPassportRequest>;
 
 /** What a link opens, shown before the person joins. */
 export const InvitationPreview = Type.Object({
@@ -1107,14 +1175,17 @@ export type IncidentUpdatePage = Static<typeof IncidentUpdatePage>;
 // ── Signing in (#81, D-138) ─────────────────────────────────────────────────
 
 /**
- * `GET /api/auth/methods` — how this server signs people in: GitHub always, and email when it can send
- * a link (D-138 §6). Asked before anybody is signed in, so the screen offers only what works.
+ * `GET /api/auth/methods` — how this server signs people in: GitHub when an app is connected, and email
+ * when it can send a link (D-138 §6, D-179). Both false is a server whose setup is not done. Asked
+ * before anybody is signed in, so the screen offers only what works.
  */
-export const AuthMethods = Type.Object({ email: Type.Boolean() });
+export const AuthMethods = Type.Object({
+  github: Type.Boolean(),
+  email: Type.Boolean(),
+  /** Who may make an account: anybody, or only the holder of an invitation (R51). */
+  signUp: Type.Union([Type.Literal('open'), Type.Literal('invite-only')]),
+});
 export type AuthMethods = Static<typeof AuthMethods>;
-
-/** The languages a sign-in message is written in: the interface's (D-41). */
-export const SignInLocale = Type.Union([Type.Literal('en'), Type.Literal('tr')]);
 
 /**
  * `POST /auth/email` — send a sign-in link to this address, in this language. Answered `202` whatever
@@ -1141,13 +1212,15 @@ export type EmailSignInPreview = Static<typeof EmailSignInPreview>;
 
 /**
  * `GET /api/me/sign-in` — the ways the caller signs in (D-176): their address, whether a link sent to
- * it signs them in (an account made by email, connected to GitHub or not — never one GitHub made,
- * D-138 §2), and the GitHub account connected, if any. `login` is null for a GitHub account whose
+ * it signs them in (an account made by email, linked to GitHub or not — never one GitHub made,
+ * D-138 §2), and the GitHub account linked to it, if any (D-179 §5). `login` is null for a GitHub account whose
  * login is not known yet (D-169 §4). Only ever the caller's own.
  */
 export const MySignIn = Type.Object({
   email: Type.String(),
   emailLinks: Type.Boolean(),
+  /** Whether the account has a password to sign in or to change: the setup's administrator does. */
+  hasPassword: Type.Boolean(),
   github: Type.Union([
     Type.Object({ login: Type.Union([Type.String(), Type.Null()]) }),
     Type.Null(),
@@ -1155,15 +1228,118 @@ export const MySignIn = Type.Object({
 });
 export type MySignIn = Static<typeof MySignIn>;
 
-/**
- * `POST /api/me/github/connect` — start connecting GitHub to the caller's account (D-176), from the
- * settings page of this workspace, which is where the person comes back to.
- */
-export const ConnectGitHubRequest = FromClient({
-  workspace: Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]*$' }),
-});
-export type ConnectGitHubRequest = Static<typeof ConnectGitHubRequest>;
+// ── The setup in the browser (D-179 §4) ──────────────────────────────────────
+// The answers are plain types in `setup.ts` (`SetupStatus`, `SetupState`, …): the browser only reads
+// them, and a schema built at the top of a module stays in its bundle whether read or not.
 
-/** Where to send the browser: GitHub's authorization page, with this connect's `state`. */
-export const ConnectGitHubResponse = Type.Object({ location: Type.String() });
-export type ConnectGitHubResponse = Static<typeof ConnectGitHubResponse>;
+/** `POST /setup/claim` — the setup code from the server's log, as typed: any case, dashes or not. */
+export const SetupClaimRequest = FromClient({ code: Type.String({ minLength: 1, maxLength: 64 }) });
+export type SetupClaimRequest = Static<typeof SetupClaimRequest>;
+
+/** `POST /setup/address` — the server's address (`APP_URL`), seen and confirmed (Ruling R35). */
+export const SetupAddressRequest = FromClient({ confirmed: Type.Literal(true) });
+export type SetupAddressRequest = Static<typeof SetupAddressRequest>;
+
+/**
+ * `POST /setup/admin` — the administrator. Bounded here only against a body nobody types; the rules of
+ * each field are the server's (`passwordProblem`, the name's and the address's), said by name.
+ */
+export const SetupAdminRequest = FromClient({
+  name: Type.String({ maxLength: 512 }),
+  email: Type.String({ maxLength: 254 }),
+  password: Type.String({ maxLength: 1024 }),
+});
+export type SetupAdminRequest = Static<typeof SetupAdminRequest>;
+
+/** `POST /setup/policy` — who may make an account (D-179 §4.7). */
+export const SetupPolicyRequest = FromClient({
+  signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]),
+});
+export type SetupPolicyRequest = Static<typeof SetupPolicyRequest>;
+
+/** A step that is passed without connecting anything: GitHub or mail, skipped. */
+const Skipped = FromClient({ skip: Type.Literal(true) });
+
+/**
+ * `POST /setup/github` — the OAuth app's pair, tried against GitHub; kept only when the try works and
+ * `save` says to. Or the step skipped.
+ */
+export const SetupGitHubRequest = Type.Union([
+  FromClient({
+    clientId: Type.String({ minLength: 1, maxLength: 128 }),
+    clientSecret: Type.String({ minLength: 1, maxLength: 256 }),
+    save: Type.Optional(Type.Boolean()),
+  }),
+  Skipped,
+]);
+export type SetupGitHubRequest = Static<typeof SetupGitHubRequest>;
+
+/**
+ * `POST /setup/smtp` — the relay (`smtpUrl`, its credentials in it — named so the log never writes it)
+ * and the sender, tried with the administrator's verification letter in `locale`; kept only when the
+ * try works and `save` says to. Or the step skipped.
+ */
+export const SetupSmtpRequest = Type.Union([
+  FromClient({
+    smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
+    from: Type.String({ minLength: 1, maxLength: 254 }),
+    allowPlaintext: Type.Boolean(),
+    locale: SignInLocale,
+    save: Type.Optional(Type.Boolean()),
+  }),
+  Skipped,
+]);
+export type SetupSmtpRequest = Static<typeof SetupSmtpRequest>;
+
+// ── Administration → Server (D-179 §4.8) ─────────────────────────────────────
+
+/** `POST /api/server/github` — GitHub's OAuth app, tried with these values and kept only if it works. */
+export const ServerGitHubRequest = FromClient({
+  clientId: Type.String({ minLength: 1, maxLength: 128 }),
+  clientSecret: Type.String({ minLength: 1, maxLength: 256 }),
+});
+export type ServerGitHubRequest = Static<typeof ServerGitHubRequest>;
+
+/** `POST /api/server/smtp` — the relay, tried with a test letter to the caller, kept only if it works. */
+export const ServerSmtpRequest = FromClient({
+  smtpUrl: Type.String({ minLength: 1, maxLength: 2048 }),
+  from: Type.String({ minLength: 1, maxLength: 254 }),
+  allowPlaintext: Type.Boolean(),
+});
+export type ServerSmtpRequest = Static<typeof ServerSmtpRequest>;
+
+/** `DELETE /api/server/github` and `/smtp` — the body is optional; `confirmLastChannel` is the only field. */
+export const ServerDisconnectRequest = FromClient({
+  confirmLastChannel: Type.Optional(Type.Boolean()),
+});
+export type ServerDisconnectRequest = Static<typeof ServerDisconnectRequest>;
+
+/** `POST /api/server/policy` — who may make an account. */
+export const ServerPolicyRequest = FromClient({
+  signUp: Type.Union([Type.Literal('invite-only'), Type.Literal('open')]),
+});
+export type ServerPolicyRequest = Static<typeof ServerPolicyRequest>;
+
+/** The longest list of workspace creators the page takes, and a GitHub login's longest. */
+export const WORKSPACE_CREATOR_LOGINS_MAX = 100;
+
+/** `POST /api/server/creators` — who may make a workspace (D-155, D-169): the setting's own values. */
+export const ServerCreatorsRequest = FromClient({
+  workspaceCreators: Type.Union([
+    FromClient({ kind: Type.Union([Type.Literal('first'), Type.Literal('anyone')]) }),
+    FromClient({
+      kind: Type.Literal('listed'),
+      logins: Type.Array(Type.String({ minLength: 1, maxLength: 39 }), {
+        minItems: 1,
+        maxItems: WORKSPACE_CREATOR_LOGINS_MAX,
+      }),
+    }),
+  ]),
+});
+export type ServerCreatorsRequest = Static<typeof ServerCreatorsRequest>;
+
+/** `POST /setup/verify` — the token the administrator's link carried in its fragment. */
+export const SetupVerifyRequest = FromClient({
+  token: Type.String({ pattern: '^[0-9a-f]{64}$', maxLength: 64 }),
+});
+export type SetupVerifyRequest = Static<typeof SetupVerifyRequest>;

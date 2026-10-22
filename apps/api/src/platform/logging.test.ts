@@ -49,6 +49,10 @@ describe('the never-logged list', () => {
       'cookie',
       'authorization',
       'access_token_encrypted',
+      'github_client_secret_encrypted',
+      'smtp_url_encrypted',
+      'clientSecret',
+      'smtpUrl',
       'content',
       'email',
       'endpoint',
@@ -57,6 +61,42 @@ describe('the never-logged list', () => {
     ]) {
       expect({ key, listed: NEVER_LOGGED.has(key) }).toEqual({ key, listed: true });
     }
+  });
+
+  test('the server settings, read or as stored, are written without a secret (D-179 §6)', () => {
+    const { log, lines } = recording();
+    // As `readSettings` returns them…
+    log.info('settings', {
+      settings: {
+        signUp: 'open',
+        github: { clientId: 'Iv1.app', clientSecret: 'gh-secret-value' },
+        smtp: {
+          smtpUrl: 'smtps://user:relay-password@mail.example.com',
+          from: 'purlay@example.com',
+          allowPlaintext: false,
+        },
+      },
+    });
+    // …and as the row is: sealed, but a ciphertext is not for a log either.
+    log.info('row', {
+      row: {
+        github_client_id: 'Iv1.app',
+        github_client_secret_encrypted: 'AQ-sealed-github',
+        smtp_url_encrypted: 'AQ-sealed-relay',
+        smtp_url: 'smtps://user:relay-password@mail.example.com',
+      },
+    });
+    const written = JSON.stringify(lines);
+    for (const secret of [
+      'gh-secret-value',
+      'relay-password',
+      'AQ-sealed-github',
+      'AQ-sealed-relay',
+    ]) {
+      expect({ secret, written: written.includes(secret) }).toEqual({ secret, written: false });
+    }
+    // What is not a secret is still there to read.
+    expect(lines[0]).toMatchObject({ settings: { github: { clientId: 'Iv1.app' } } });
   });
 
   test('what is not on the list is written as it was given', () => {

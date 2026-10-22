@@ -24,7 +24,13 @@ export { purgeDeadSessions } from './sessions';
  * Re-exported so the query builder still has one home (`CONTRIBUTING.md` §1.5).
  */
 export { sql } from 'kysely';
-export type { RawBuilder, SelectQueryBuilder } from 'kysely';
+export type {
+  Expression,
+  ExpressionBuilder,
+  RawBuilder,
+  SelectQueryBuilder,
+  SqlBool,
+} from 'kysely';
 export {
   migrateToLatest,
   type MigrateOptions,
@@ -42,6 +48,7 @@ export {
   closeIntegrationDatabase,
   dropDatabases,
   integrationDatabase,
+  unconnectedDatabase,
   withRollback,
   type ClonedDatabase,
 } from './testing';
@@ -53,3 +60,8 @@ export type * from './schema';
  * generated file is never edited by hand (D-45).
  */
 export type { DB as Database } from './schema';
+export {
+  sessionTokenDigest,
+  sessionTokenHashing,
+  SessionTokenHashingError,
+} from './session-token-hashing';

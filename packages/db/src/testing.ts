@@ -49,6 +49,13 @@ const onDatabase = (connectionString: string, name: string): string => {
   return url.toString();
 };
 
+/**
+ * A handle that has never connected and, pointed at a closed port, cannot: for a test that builds
+ * something needing an executor and runs no query. The pool is lazy, so nothing is attempted.
+ */
+export const unconnectedDatabase = (): Kysely<DB> =>
+  connect<DB>('postgres://nobody@127.0.0.1:1/none', 1);
+
 /** One pool for the run. */
 export const integrationDatabase = (): Kysely<DB> => {
   const connectionString = integrationUrl();

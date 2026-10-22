@@ -51,3 +51,7 @@ apps/api/src/testing
 # kept out of the image so that no container can run it at all (H-API 9).
 apps/api/src/cli/demo-*.ts
 apps/api/src/cli/seed-demo.ts
+# The check-only tools (the throwaway database the checks make, and the budget measurements) run
+# from a checkout, never from a container.
+apps/api/src/cli/throwaway-database.ts
+apps/api/src/cli/budget-*.ts

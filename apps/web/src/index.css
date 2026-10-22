@@ -68,6 +68,58 @@
 }
 
 /*
+ * The setup wizard's three movements (UX §11): a step enters from the right, a finished step's mark
+ * settles, a refused field nudges once. Lengths are tokens (0ms under reduced motion); none loops.
+ */
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--space-4));
+  }
+}
+
+@keyframes step-back {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--space-4) * -1));
+  }
+}
+
+@keyframes mark-settle {
+  from {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes nudge {
+  25% {
+    transform: translateX(calc(var(--space-1) * -1));
+  }
+  75% {
+    transform: translateX(var(--space-1));
+  }
+}
+
+@utility animate-step-in {
+  animation: step-in var(--duration-step) var(--easing-standard);
+}
+
+@utility animate-step-back {
+  animation: step-back var(--duration-step) var(--easing-standard);
+}
+
+@utility animate-mark-settle {
+  animation: mark-settle var(--duration-mark) var(--easing-standard);
+}
+
+@utility animate-nudge {
+  animation: nudge var(--duration-nudge) var(--easing-standard);
+}
+
+/*
  * A thin scrollbar that is always drawn, in the theme's tones: what scrolls sideways — a long line
  * of code — says so before it is scrolled. macOS hides an overlay scrollbar until then, which left a
  * line cut at the block's edge with no sign of more. Chromium and Safari draw a styled one always;

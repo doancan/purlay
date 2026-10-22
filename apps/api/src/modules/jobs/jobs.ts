@@ -14,6 +14,7 @@ import type { Logger } from '../../platform/logging';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
+import { sweepAdminVerification } from '../setup/verification';
 
 /** An upload nobody has sent after a day is not going to be: the composer sends at once (D-109 §5). */
 export const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
@@ -210,17 +211,42 @@ export const sweepGitHubDeliveries = async (dependencies: {
 };
 
 /**
- * Sign-in messages a day old (D-138): no link is usable past fifteen minutes, and the per-address limit
- * counts the last hour — a day is a margin, not a reader. Spent and unspent alike.
+ * Sign-in links and their counters, a day past use (D-138, D-179): every row of `verifications` a day
+ * after it expired, whatever its identifier — a sign-in link (`magic-link:`) opens for fifteen minutes, a
+ * reset or the state of an abandoned GitHub round trip (with its PKCE verifier) for less than an hour, and a
+ * day is a margin, not a reader — and `rate_limits` rows whose
+ * `last_request` is more than a day old: the library's (a client address and a path) are a day past
+ * any window it keeps, and Purlay's sign-in counters hold when their hour closes, so theirs is a day
+ * closed. A row that has not expired is never touched. And the
+ * setup administrator's address link once its day is over (`sweepAdminVerification`), and the invitation
+ * passports a day past their hour or their use (D-179 §5).
  */
 export const sweepEmailSignIns = async (dependencies: {
   readonly database: Executor;
   readonly clock: Clock;
 }): Promise<{ removed: number }> => {
   const before = new Date(dependencies.clock.now().getTime() - DAY_MS);
-  const result = await dependencies.database
-    .deleteFrom('email_sign_ins')
-    .where('created_at', '<', before)
+  const links = await dependencies.database
+    .deleteFrom('verifications')
+    .where('expires_at', '<', before)
     .executeTakeFirst();
-  return { removed: Number(result.numDeletedRows) };
+  const counters = await dependencies.database
+    .deleteFrom('rate_limits')
+    .where('last_request', '<', String(before.getTime()))
+    .executeTakeFirst();
+  // And the setup administrator's address link once it no longer opens (D-179 §4.3).
+  const adminLink = await sweepAdminVerification(dependencies.database, dependencies.clock);
+  // And the passports a newcomer's invitation made: none opens past its hour, and a spent one has done its
+  // work — a day is a margin for the person who comes back, not a reader.
+  const passports = await dependencies.database
+    .deleteFrom('invitation_passports')
+    .where((eb) => eb.or([eb('expires_at', '<', before), eb('consumed_at', '<', before)]))
+    .executeTakeFirst();
+  return {
+    removed:
+      Number(links.numDeletedRows) +
+      Number(counters.numDeletedRows) +
+      adminLink +
+      Number(passports.numDeletedRows),
+  };
 };

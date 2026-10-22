@@ -32,7 +32,7 @@
 	# Passed to the client unchanged; the API sets its own security headers (D-39).
 	#
 	# The access log records the path, never the query. An OAuth callback is
-	# `/auth/github/callback?code=...&state=...` — a one-time code and the signed state — and
+	# `/auth/callback/github?code=...&state=...` — a one-time code and the signed state — and
 	# a search carries what was searched for; neither belongs in a file that is shipped and
 	# kept. (Caddy already redacts the Cookie and Authorization request headers.)
 	log {

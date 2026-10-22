@@ -228,10 +228,15 @@ const uploadRefusal = (
     case 'UNKNOWN':
     case 'ACCOUNT_EMAIL_CONFLICT':
     case 'GITHUB_ACCOUNT_TAKEN':
-    case 'GITHUB_ALREADY_CONNECTED':
+    // The setup's, never an upload's.
+    case 'SETUP_UNAVAILABLE':
+    case 'SETUP_LOCKED':
+    case 'SETUP_STEP_REFUSED':
+    case 'SETTINGS_CHANGE_FAILED':
+    case 'SERVER_CHANGE_REFUSED':
+    case 'ADMIN_LINK_NOT_FOUND':
     case 'CHANNEL_NAME_TAKEN':
     case 'CHANNEL_NOT_FOUND':
-    case 'EMAIL_REQUIRED':
     case 'EMAIL_SIGN_IN_UNAVAILABLE':
     case 'EXPORT_IN_PROGRESS':
     case 'EXPORT_NOT_FOUND':
@@ -253,7 +258,6 @@ const uploadRefusal = (
     case 'MESSAGE_ID_CONFLICT':
     case 'MESSAGE_NOT_FOUND':
     case 'MESSAGE_VERSION_NOT_FOUND':
-    case 'OAUTH_STATE_INVALID':
     case 'PINS_LIMIT':
     case 'PUSH_UNAVAILABLE':
     case 'REAUTHENTICATION_REQUIRED':

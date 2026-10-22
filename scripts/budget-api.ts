@@ -8,6 +8,8 @@
  * process, started the way the image starts it — migrations on, against a real database — then left
  * alone for a moment before its resident memory is read. It needs `DATABASE_URL`; without one it says
  * so, and in CI, where the database is provided, it refuses rather than report a budget it never took.
+ * The API is started on a clone of the test template made from that server, dropped afterwards —
+ * never on the database `DATABASE_URL` names, which it would migrate and write settings into.
  */
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
@@ -57,10 +59,31 @@ export const rssOf = (pid: number): number => {
 };
 
 /**
- * Starts the API against this database, waits until it is ready and has settled, and answers its
- * resident memory in bytes. Throws when it never becomes ready: a budget that was not taken.
+ * The name a clone of the test template has (`cloneIntegrationDatabase`): the source's name and twelve
+ * hexadecimal digits of its own. Nothing else is a database this command may migrate and fill.
+ */
+const CLONE_NAME = /_[0-9a-f]{12}$/;
+
+/**
+ * Why the API must not be started against this database, or nothing. It starts with migrations on and
+ * imports the environment into the server's settings, so against the database a developer works in it
+ * would migrate it past the branch they have checked out and write a settings row there (D-179 §4.9).
+ */
+export const throwawayDatabaseProblem = (url: string): string | undefined => {
+  const name = new URL(url).pathname.slice(1);
+  return CLONE_NAME.test(name)
+    ? undefined
+    : `"${name}" is not a throwaway database: the API is started only on a clone of the test template`;
+};
+
+/**
+ * Starts the API against this database — a clone, refused otherwise before anything starts — waits until
+ * it is ready and has settled, and answers its resident memory in bytes. Throws when it never becomes
+ * ready: a budget that was not taken.
  */
 export const measureIdleRss = async (url: string): Promise<number> => {
+  const problem = throwawayDatabaseProblem(url);
+  if (problem !== undefined) throw new Error(problem);
   const port = await freePort();
   const api = Bun.spawn(['bun', 'apps/api/src/index.ts'], {
     env: {
@@ -99,10 +122,81 @@ export const measureIdleRss = async (url: string): Promise<number> => {
   }
 };
 
+/** The API's command that makes and drops a clone: this file cannot import the database package. */
+const THROWAWAY = 'apps/api/src/cli/throwaway-database.ts';
+
+/** What `onAClone` reaches the machine through: a test replaces each, and nothing real is spawned. */
+export interface CloneWorld {
+  readonly spawn: (command: readonly string[]) => {
+    readonly exitCode: number | null;
+    readonly stdout: { toString: () => string };
+  };
+  readonly exit: (code: number) => never;
+  readonly signals: {
+    readonly once: (signal: 'SIGINT' | 'SIGTERM', handler: () => void) => unknown;
+    readonly off: (signal: 'SIGINT' | 'SIGTERM', handler: () => void) => unknown;
+  };
+}
+
+const realWorld: CloneWorld = {
+  spawn: (command) => Bun.spawnSync([...command], { stderr: 'inherit' }),
+  exit: process.exit.bind(process),
+  signals: process,
+};
+
+/**
+ * `body`, given a clone of the test template made from the server `DATABASE_URL` names; the clone is
+ * dropped afterwards, whatever `body` did, and when the process is interrupted while `body` runs.
+ */
+export const onAClone = async <T>(
+  body: (url: string) => Promise<T>,
+  world: CloneWorld = realWorld,
+): Promise<T> => {
+  const made = world.spawn(['bun', THROWAWAY, 'clone']);
+  const url = made.stdout.toString().trim().split('\n').at(-1) ?? '';
+  if (made.exitCode !== 0 || url === '') {
+    throw new Error('a clone of the test template could not be made to start the API on');
+  }
+  const name = new URL(url).pathname.slice(1);
+  const drop = (): void => {
+    const dropped = world.spawn(['bun', THROWAWAY, 'drop', name]);
+    // A clone left behind is said, not swallowed: it is a whole database on the developer's server.
+    if (dropped.exitCode !== 0) {
+      console.error(`budget:api — could not drop the clone "${name}"; drop it by hand.`);
+    }
+  };
+  // An interrupt must not strand the clone: drop it first, then leave as the signal asked.
+  const interrupted = (code: number) => (): never => {
+    drop();
+    return world.exit(code);
+  };
+  const onInt = interrupted(130);
+  const onTerm = interrupted(143);
+  world.signals.once('SIGINT', onInt);
+  world.signals.once('SIGTERM', onTerm);
+  try {
+    return await body(url);
+  } finally {
+    world.signals.off('SIGINT', onInt);
+    world.signals.off('SIGTERM', onTerm);
+    drop();
+  }
+};
+
+/**
+ * The measurement on a clone, dropped afterwards. The address it is given is the server's, which
+ * `onAClone` reads from the environment itself; the rest is what a test replaces.
+ */
+export const measureOnAClone = async (
+  _server: string,
+  world: CloneWorld = realWorld,
+  measure: (url: string) => Promise<number> = measureIdleRss,
+): Promise<number> => await onAClone(measure, world);
+
 /** The command: what it says, and whether it fails — with the database it is given, or none. */
 export const main = async (
   environment: Readonly<Record<string, string | undefined>>,
-  measure: (url: string) => Promise<number> = measureIdleRss,
+  measure: (url: string) => Promise<number> = measureOnAClone,
 ): Promise<{ readonly line: string; readonly code: number }> => {
   const url = environment['DATABASE_URL'] ?? '';
   if (url === '' || !(await reachable(url))) {

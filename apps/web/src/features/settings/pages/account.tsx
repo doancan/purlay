@@ -1,9 +1,9 @@
 /**
  * Sessions & account (D-146): how the person signs in, leaving, and ending the account.
  *
- * *How you sign in* (D-176) names the address and the GitHub account connected. An account with no
- * GitHub account offers **Connect GitHub**: a same-origin `POST` that answers where to send the browser,
- * and GitHub sends it back here with how it went, said in words in the card.
+ * *How you sign in* (D-176, D-179 §5) names the address and the GitHub account linked to it, and only
+ * names them: GitHub is linked by signing in with it on an address that is verified, so there is
+ * nothing here to press.
  *
  * *Sign out everywhere* ends every session the person holds, this one with them (D-11); it asks first,
  * because it signs out devices that are not in front of them. *Erase my account* is the dialog it has
@@ -13,8 +13,6 @@
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { connectGitHubOutcomeIn, type ConnectGitHubOutcome } from '@purlay/types';
-import type { MessageKey } from '../../../i18n/types';
 import { Icon } from '../../../components/icon';
 import { useMySignIn } from '../../../data/queries';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
@@ -30,71 +28,16 @@ import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
 import { EraseAccountDialog } from '../../shell/erase-account-dialog';
 import { useSignOut } from '../../shell/sign-out';
-import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow } from '../page';
-
-/** How a connect came back, in words: one per outcome, so a new one is a compile error until said. */
-const OUTCOME_SENTENCE = {
-  connected: 'settings.account.github.connected',
-  cancelled: 'settings.account.github.cancelled',
-  expired: 'settings.account.github.expired',
-  session: 'settings.account.github.session',
-  taken: 'settings.account.github.taken',
-  already: 'settings.account.github.already',
-  'github-unavailable': 'settings.account.github.unavailable',
-  busy: 'settings.account.github.busy',
-  failed: 'settings.account.github.failed',
-} as const satisfies Readonly<Record<ConnectGitHubOutcome, MessageKey>>;
-
-/** The browser leaves for GitHub; a test replaces it, since a test's page cannot leave. */
-export const leaveFor = {
-  go: (location: string): void => {
-    window.location.assign(location);
-  },
-};
+import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import { ChangePasswordCard } from './change-password-card';
 
 const SignInCard = (): React.JSX.Element => {
   const { t } = useI18n();
-  const api = useApi();
   const describe = useDescribeFailure();
-  const { workspace } = useWorkspace();
-  const { search } = useRoute();
   const signIn = useMySignIn();
-  const [starting, setStarting] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const outcome = connectGitHubOutcomeIn(search);
-
-  const connect = async (): Promise<void> => {
-    setStarting(true);
-    setProblem(null);
-    try {
-      const { location } = await api.connectGitHub(workspace.slug);
-      leaveFor.go(location);
-    } catch (failure) {
-      setStarting(false);
-      setProblem(`${t('settings.account.githubConnectFailed')} ${describe(failure)}`);
-      // Connected meanwhile, in another tab: the card says so once it reads the account again.
-      if (isApiError(failure) && failure.code === 'GITHUB_ALREADY_CONNECTED') {
-        void signIn.refetch();
-      }
-    }
-  };
-
-  const said =
-    problem !== null
-      ? { ok: false, words: problem }
-      : outcome === null
-        ? null
-        : // Connected, or cancelled by the person themselves: news, not a fault.
-          {
-            ok: outcome === 'connected' || outcome === 'cancelled',
-            words: t(OUTCOME_SENTENCE[outcome]),
-          };
 
   return (
-    <SettingsCard
-      title={t('settings.account.signIn')}
-      {...(said === null ? {} : { footer: <SaveOutcome outcome={said} /> })}
-    >
+    <SettingsCard title={t('settings.account.signIn')}>
       {signIn.isError ? (
         <SettingsRow label={t('settings.account.signIn')}>
           <span className="flex items-center gap-3">
@@ -126,37 +69,31 @@ const SignInCard = (): React.JSX.Element => {
           >
             <span className="min-w-0 truncate text-label text-ink">{signIn.data.email}</span>
           </SettingsRow>
-          <SettingsRow
-            label={t('settings.account.github')}
-            description={
-              signIn.data.github === null
-                ? t('settings.account.githubNone')
-                : t('settings.account.githubSignsIn')
-            }
-          >
-            {signIn.data.github === null ? (
-              <Button
-                glyph="github"
-                busy={starting}
-                onClick={() => {
-                  void connect();
-                }}
-              >
-                {t('settings.account.githubConnect')}
-              </Button>
-            ) : (
+          {signIn.data.github !== null && (
+            <SettingsRow
+              label={t('settings.account.github')}
+              description={t('settings.account.githubSignsIn')}
+            >
               <span className="flex min-w-0 items-center gap-2 text-label text-ink">
                 <Icon name="github" />
                 <span className="truncate">
-                  {signIn.data.github.login ?? t('settings.account.githubConnected')}
+                  {signIn.data.github.login ?? t('settings.account.githubLinked')}
                 </span>
               </span>
-            )}
-          </SettingsRow>
+            </SettingsRow>
+          )}
         </>
       )}
     </SettingsCard>
   );
+};
+
+/** Only an account that has a password has one to change; the card is not drawn for the others. */
+const PasswordSection = (): React.JSX.Element | null => {
+  const signIn = useMySignIn();
+  return signIn.data?.hasPassword === true ? (
+    <ChangePasswordCard email={signIn.data.email} />
+  ) : null;
 };
 
 export const AccountPage = (): React.JSX.Element => {
@@ -198,6 +135,7 @@ export const AccountPage = (): React.JSX.Element => {
       description={t('settings.account.description')}
     >
       <SignInCard />
+      <PasswordSection />
       <SettingsCard title={t('settings.account.sessions')}>
         <SettingsRow
           label={t('settings.account.here')}

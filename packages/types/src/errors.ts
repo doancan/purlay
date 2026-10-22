@@ -36,8 +36,6 @@ export const ErrorCode = Type.Union([
    * oracle about accounts it does not own (D-60).
    */
   Type.Literal('UNAUTHENTICATED'),
-  Type.Literal('OAUTH_STATE_INVALID'),
-  Type.Literal('EMAIL_REQUIRED'),
   /** A webhook delivery whose signature is missing, malformed, or not the feed's secret's (D-134 §4). */
   Type.Literal('WEBHOOK_SIGNATURE_INVALID'),
   // Authorization — only ever for a resource the caller can already see
@@ -77,9 +75,7 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('THREAD_NOT_RESOLVABLE'),
   Type.Literal('ACCOUNT_EMAIL_CONFLICT'),
-  /** Connecting GitHub to an account that has a GitHub account already (D-176). */
-  Type.Literal('GITHUB_ALREADY_CONNECTED'),
-  /** Connecting a GitHub account another Purlay account already signs in with (D-176): never merged. */
+  /** A GitHub account another Purlay account already signs in with, found by the index on its id: never merged. */
   Type.Literal('GITHUB_ACCOUNT_TAKEN'),
   /** The channel already has a feed from this repository (D-134 §1). */
   Type.Literal('GITHUB_FEED_EXISTS'),
@@ -149,8 +145,9 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('RATE_LIMITED'),
   /**
-   * No database connection could be had within the wait: the server is busy, not
-   * broken. The request changed nothing and may be retried. (D-87)
+   * No database connection could be had within the wait, or the process has not yet
+   * read its settings from the database as it starts (D-179 §6): the server is busy,
+   * not broken. The request changed nothing and may be retried. (D-87)
    */
   Type.Literal('DATABASE_UNAVAILABLE'),
   /**
@@ -162,6 +159,36 @@ export const ErrorCode = Type.Union([
   Type.Literal('PUSH_UNAVAILABLE'),
   /** This server cannot send a sign-in link: no `SMTP_URL` and `MAIL_FROM` (D-138 §6). */
   Type.Literal('EMAIL_SIGN_IN_UNAVAILABLE'),
+  // The setup in the browser (D-179 §4)
+  /**
+   * A `/setup` route to anybody but the browser holding the setup's claim: setup finished, never
+   * claimed, claimed by another browser, a cookie wrong, idle or taken over — one answer, so nothing
+   * tells them apart. Shaped as absence, as a route that does not exist is.
+   */
+  Type.Literal('SETUP_UNAVAILABLE'),
+  /**
+   * Five wrong setup codes locked every claim, the right code included, for fifteen minutes (the
+   * server's lock, not a client's): `Retry-After` says how long is left; a restart, which writes a new
+   * code, ends it.
+   */
+  Type.Literal('SETUP_LOCKED'),
+  /** A step the browser holding the setup may not take now, and why (`SetupStepRefusal`). */
+  Type.Literal('SETUP_STEP_REFUSED'),
+  /**
+   * A change of the server's settings did not complete (D-179 §4.9): at which stage, and whether only
+   * a restart puts things right. Never what was in the change.
+   */
+  Type.Literal('SETTINGS_CHANGE_FAILED'),
+  /**
+   * A change of the server's settings the administrator may not make now, and why
+   * (`ServerChangeRefusedDetails`): Administration → Server (D-179 §4.8).
+   */
+  Type.Literal('SERVER_CHANGE_REFUSED'),
+  /**
+   * The administrator's address link does not open — unknown, spent, expired, its account gone or its
+   * address changed since: one answer (D-179 §4.3).
+   */
+  Type.Literal('ADMIN_LINK_NOT_FOUND'),
   // Anything we failed to anticipate. Never carries detail to the client.
   Type.Literal('INTERNAL'),
 ]);
@@ -176,7 +203,6 @@ export type ErrorCode = Static<typeof ErrorCode>;
 export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   VALIDATION_FAILED: 400,
   INVALID_MESSAGE_ID: 400,
-  OAUTH_STATE_INVALID: 400,
 
   UNAUTHENTICATED: 401,
   WEBHOOK_SIGNATURE_INVALID: 401,
@@ -184,7 +210,6 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   FORBIDDEN: 403,
   REAUTHENTICATION_REQUIRED: 403,
   NOT_A_CHANNEL_MEMBER: 403,
-  EMAIL_REQUIRED: 403,
 
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
@@ -199,7 +224,6 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   MESSAGE_ID_CONFLICT: 409,
   THREAD_NOT_RESOLVABLE: 409,
   ACCOUNT_EMAIL_CONFLICT: 409,
-  GITHUB_ALREADY_CONNECTED: 409,
   GITHUB_ACCOUNT_TAKEN: 409,
 
   UNSUPPORTED_MEDIA_TYPE: 415,
@@ -231,6 +255,12 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   LAST_OWNER: 409,
   LAST_CHANNEL_MEMBER: 409,
   RATE_LIMITED: 429,
+  SETUP_UNAVAILABLE: 404,
+  SETUP_LOCKED: 429,
+  SETUP_STEP_REFUSED: 409,
+  SETTINGS_CHANGE_FAILED: 500,
+  SERVER_CHANGE_REFUSED: 409,
+  ADMIN_LINK_NOT_FOUND: 404,
 
   INTERNAL: 500,
   STORAGE_UNAVAILABLE: 503,
@@ -272,6 +302,45 @@ export const StorageQuotaDetails = Type.Object({
 });
 export type StorageQuotaDetails = Static<typeof StorageQuotaDetails>;
 
+/** Why a setup step was refused (`SetupStepRefusal` in `setup.ts`, the same four). */
+export const SetupStepRefusedDetails = Type.Object({
+  reason: Type.Union([
+    Type.Literal('out-of-order'),
+    Type.Literal('no-workspace'),
+    Type.Literal('no-channel'),
+    Type.Literal('admin-exists'),
+  ]),
+});
+export type SetupStepRefusedDetails = Static<typeof SetupStepRefusedDetails>;
+
+/** Where a change of the settings stopped, and whether only a restart puts it right (D-179 §4.9). */
+export const SettingsChangeFailedDetails = Type.Object({
+  stage: Type.Union([
+    Type.Literal('save'),
+    Type.Literal('build'),
+    Type.Literal('verify'),
+    Type.Literal('commit'),
+    Type.Literal('retire'),
+  ]),
+  restartNeeded: Type.Boolean(),
+});
+export type SettingsChangeFailedDetails = Static<typeof SettingsChangeFailedDetails>;
+
+/**
+ * Why Administration → Server refused a change (`409 SERVER_CHANGE_REFUSED`): `last-channel` — it would
+ * leave the administrator's password as the only way in, and `confirmLastChannel` was not said;
+ * `not-connected` — there is nothing of that kind to disconnect; `setup-unfinished` — the setup in the
+ * browser is still open, and its steps are the way to change settings until it is finished.
+ */
+export const ServerChangeRefusedDetails = Type.Object({
+  reason: Type.Union([
+    Type.Literal('last-channel'),
+    Type.Literal('not-connected'),
+    Type.Literal('setup-unfinished'),
+  ]),
+});
+export type ServerChangeRefusedDetails = Static<typeof ServerChangeRefusedDetails>;
+
 export const AppErrorBody = Type.Union([
   Type.Object({
     code: Type.Literal('VALIDATION_FAILED'),
@@ -289,6 +358,21 @@ export const AppErrorBody = Type.Union([
     details: Type.Optional(StorageQuotaDetails),
   }),
   Type.Object({
+    code: Type.Literal('SETUP_STEP_REFUSED'),
+    message: Type.String(),
+    details: SetupStepRefusedDetails,
+  }),
+  Type.Object({
+    code: Type.Literal('SETTINGS_CHANGE_FAILED'),
+    message: Type.String(),
+    details: SettingsChangeFailedDetails,
+  }),
+  Type.Object({
+    code: Type.Literal('SERVER_CHANGE_REFUSED'),
+    message: Type.String(),
+    details: ServerChangeRefusedDetails,
+  }),
+  Type.Object({
     // Derived, so the codes are listed once. A new code lands here automatically
     // rather than in a second list somebody has to remember to update.
     code: Type.Exclude(
@@ -297,6 +381,9 @@ export const AppErrorBody = Type.Union([
         Type.Literal('VALIDATION_FAILED'),
         Type.Literal('LAST_OWNER'),
         Type.Literal('STORAGE_QUOTA_EXCEEDED'),
+        Type.Literal('SETUP_STEP_REFUSED'),
+        Type.Literal('SETTINGS_CHANGE_FAILED'),
+        Type.Literal('SERVER_CHANGE_REFUSED'),
       ]),
     ),
     message: Type.String(),

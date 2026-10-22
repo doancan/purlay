@@ -4,10 +4,17 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { cloneIntegrationDatabase, type ClonedDatabase } from '@purlay/db';
-import { CLOSE_CODES, messageId } from '@purlay/types';
-import type { GitHubEmail } from '../modules/auth/github';
+import { CLOSE_CODES, SIGN_IN_CALLBACK, messageId } from '@purlay/types';
+import type { GithubFetch } from '../modules/auth/better-auth';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { aGitHubAccount, testConfig, testDependencies } from '../testing/doubles';
+import { testConfig, testDependencies } from '../testing/doubles';
+import {
+  aGitHubAuth,
+  aGitHubFor,
+  aGitHubPerson,
+  cookiesFrom,
+  type GitHubStub,
+} from '../testing/github-sign-in';
 import { aSignedInUser } from '../testing/signed-in';
 import { fixedClock } from '../platform/clock';
 
@@ -53,15 +60,14 @@ const aGate = (): Gate => {
 };
 
 /** GitHub, held up until the test lets it go: a sign-in through it is a request still in flight. */
-const aSlowGitHub = (gate: Gate): ReturnType<typeof aGitHubAccount> => {
-  const fast = aGitHubAccount({ id: 9001, login: 'slow-signin', name: null, avatarUrl: null }, [
-    { email: 'slow-signin@example.test', primary: true, verified: true } satisfies GitHubEmail,
-  ]);
+const aSlowGitHub = (gate: Gate): { readonly stub: GitHubStub; readonly fetch: GithubFetch } => {
+  const stub = aGitHubFor(aGitHubPerson(`slow-signin-${crypto.randomUUID().slice(0, 6)}`));
   return {
-    ...fast,
-    exchangeCode: async (code: string): Promise<string> => {
-      await gate.wait();
-      return await fast.exchangeCode(code);
+    stub,
+    fetch: async (url, init): Promise<Response> => {
+      // The first call of the callback is the token's: held there, the request is mid-flight.
+      if (url.startsWith('https://github.com/login/oauth/access_token')) await gate.wait();
+      return await stub.fetch(url, init);
     },
   };
 };
@@ -69,11 +75,12 @@ const aSlowGitHub = (gate: Gate): ReturnType<typeof aGitHubAccount> => {
 describe('integration: draining for shutdown', () => {
   test('finishes what is in flight, tells sockets to reconnect, and takes nothing new', async () => {
     const github = aGate();
+    const slow = aSlowGitHub(github);
     const app: HttpApplication = createApp(
       testDependencies({
         database: cloned.db,
         clock,
-        github: aSlowGitHub(github),
+        auth: aGitHubAuth(cloned.db, slow.fetch, { baseUrl: origin }),
         config: testConfig({ APP_URL: origin }),
       }),
     );
@@ -96,10 +103,9 @@ describe('integration: draining for shutdown', () => {
 
     // A sign-in, started and still waiting on GitHub when the drain begins.
     const started = await fetch(`${server}/auth/github`, { redirect: 'manual' });
-    const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
-    const stateCookie = (started.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-    const inFlight = fetch(`${server}/auth/github/callback?code=a-valid-code&state=${state}`, {
-      headers: { cookie: stateCookie },
+    const { code, state } = slow.stub.authorize(started.headers.get('location') ?? '');
+    const inFlight = fetch(`${server}${SIGN_IN_CALLBACK}?code=${code}&state=${state}`, {
+      headers: { cookie: cookiesFrom(started) },
       redirect: 'manual',
     });
     await github.reached;
@@ -194,15 +200,18 @@ describe('integration: draining for shutdown', () => {
     let sessionReads = 0;
     let readFinished = false;
     const read = aGate();
+    // Better Auth reads a session through a derived table (`select … from (select … from sessions)`),
+    // and compiles a probe of every table it never runs: a read is a statement naming `sessions` that
+    // comes back with a result.
+    const readsSessions = new WeakSet<object>();
     const database = cloned.db.withPlugin({
       transformQuery: (args) => {
-        const from = (
-          args.node as { from?: { froms?: { table?: { identifier?: { name?: string } } }[] } }
-        ).from?.froms?.[0]?.table?.identifier?.name;
-        if (from === 'sessions') sessionReads += 1;
+        if (JSON.stringify(args.node).includes('"name":"sessions"'))
+          readsSessions.add(args.queryId);
         return args.node;
       },
       transformResult: async (args) => {
+        if (readsSessions.has(args.queryId)) sessionReads += 1;
         if (sessionReads === 4 && !readFinished) {
           await read.wait();
           readFinished = true;

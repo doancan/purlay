@@ -9,7 +9,7 @@ import { nobodyActive } from '../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId, TYPING_TTL_MS, type ServerFrame } from '@purlay/types';
-import { issueSession } from '../modules/auth/sessions';
+import { aSession } from '../testing/signed-in';
 import { channelTopic } from '../platform/events';
 import { createLogger } from '../platform/logging';
 import { atomicallyOn } from '../platform/transactions';
@@ -218,7 +218,7 @@ describe('integration: typing', () => {
       if (ana === undefined) throw new Error('no ana');
       const node = aNode(db);
       node.listen(room.channelId, 'ben-socket');
-      const { sessionId } = await issueSession(db, node.clock, ana.userId, 30);
+      const { sessionId } = await aSession(db, node.clock, ana.userId, 30);
 
       await node.route(ana, typing(room.channelId));
       const sent = await node.route(

@@ -29,19 +29,18 @@ import {
   ServerFrame,
   TYPING_TTL_MS,
 } from '@purlay/types';
-import { createApp, type HttpApplication } from '../ingress/http/app';
+import { createApp, type Dependencies, type HttpApplication } from '../ingress/http/app';
 import { SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { REPLAY_BYTES_MAX } from '../modules/messages/replay';
 import { createConnection } from 'node:net';
 import { aManualTimers, aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
-import { issueSession } from '../modules/auth/sessions';
 import { fixedClock } from '../platform/clock';
 import { requireWorkspaceMembership } from '../platform/tenancy';
 import { atomicallyOn } from '../platform/transactions';
 import { storeUpload } from '../modules/attachments/uploads';
 import { aMemoryStore } from '../testing/storage';
 import { SESSION_COOKIE } from '../platform/cookies';
-import { aSignedInUser } from '../testing/signed-in';
+import { aSession, aSignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
 import type { PushSender } from '../modules/push/sender';
 
@@ -51,6 +50,7 @@ let cloned: ClonedDatabase;
 let db: Executor;
 
 let app: HttpApplication;
+let dependencies: Dependencies;
 /**
  * The application's public origin, which the socket's `Origin` check compares
  * against — not the address the server happens to listen on. Kept apart, the
@@ -73,15 +73,14 @@ const push: PushSender = {
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-  app = createApp(
-    testDependencies({
-      database: db,
-      clock,
-      config: testConfig({ APP_URL: origin }),
-      log: recorded.log,
-      push,
-    }),
-  );
+  dependencies = testDependencies({
+    database: db,
+    clock,
+    config: testConfig({ APP_URL: origin }),
+    log: recorded.log,
+    push,
+  });
+  app = createApp(dependencies);
   server = `http://localhost:${String(app.listen(0))}`;
 });
 
@@ -646,7 +645,7 @@ describe('integration: two real sockets', () => {
 
     test('signing out closes this device’s socket, and only this device’s', async () => {
       const alice = await aUser('alice');
-      const otherDevice = await issueSession(db, clock, alice.id, 30);
+      const otherDevice = await aSession(db, clock, alice.id, 30);
       const here = await connect(alice.cookie);
       const there = await connect(`${SESSION_COOKIE}=${otherDevice.token}`);
       await stillServed(here);
@@ -662,7 +661,7 @@ describe('integration: two real sockets', () => {
     test('signing out everywhere closes every socket of that user, and nobody else’s', async () => {
       const alice = await aUser('alice');
       const bob = await aUser('bob');
-      const second = await issueSession(db, clock, alice.id, 30);
+      const second = await aSession(db, clock, alice.id, 30);
       const phone = await connect(alice.cookie);
       const laptop = await connect(`${SESSION_COOKIE}=${second.token}`);
       const bystander = await connect(bob.cookie);
@@ -681,7 +680,7 @@ describe('integration: two real sockets', () => {
     test('erasing an account closes every socket it had, and the API no longer knows it (D-139 §5)', async () => {
       const alice = await aUser('alice');
       const bob = await aUser('bob');
-      const second = await issueSession(db, clock, alice.id, 30);
+      const second = await aSession(db, clock, alice.id, 30);
       const phone = await connect(alice.cookie);
       const laptop = await connect(`${SESSION_COOKIE}=${second.token}`);
       const bystander = await connect(bob.cookie);
@@ -708,13 +707,176 @@ describe('integration: two real sockets', () => {
       await bystander.close();
     });
 
+    /** A request to the sign-in library's own routes, from this origin as a browser makes it. */
+    const library = async (path: string, cookie: string, body: unknown = {}): Promise<Response> =>
+      await app.handle(
+        new Request(`${origin}/auth${path}`, {
+          method: 'POST',
+          headers: { cookie, origin, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    test('the library’s own sign-out closes this device’s socket, and only this device’s (D-179)', async () => {
+      const alice = await aUser('alice');
+      const otherDevice = await aSession(db, clock, alice.id, 30);
+      const here = await connect(alice.cookie);
+      const there = await connect(`${SESSION_COOKIE}=${otherDevice.token}`);
+      await stillServed(here);
+
+      expect((await library('/sign-out', alice.cookie)).status).toBe(200);
+      expect(await endedWith(here, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+      await stillServed(there);
+      await there.close();
+    });
+
+    test('signing out the other devices closes their sockets and keeps this one (D-179)', async () => {
+      const alice = await aUser('alice');
+      const bob = await aUser('bob');
+      const second = await aSession(db, clock, alice.id, 30);
+      const here = await connect(alice.cookie);
+      const there = await connect(`${SESSION_COOKIE}=${second.token}`);
+      const bystander = await connect(bob.cookie);
+      await stillServed(there);
+
+      expect((await library('/revoke-other-sessions', alice.cookie)).status).toBe(200);
+      expect(await endedWith(there, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+      await stillServed(here);
+      await stillServed(bystander);
+      await here.close();
+      await bystander.close();
+    });
+
+    test('changing the password with revokeOtherSessions closes the other devices’ sockets (D-179)', async () => {
+      const alice = await aUser('alice');
+      const context = await dependencies.auth.$context;
+      await context.internalAdapter.linkAccount({
+        userId: alice.id,
+        providerId: 'credential',
+        accountId: alice.id,
+        password: await context.password.hash('the old password'),
+      });
+      const second = await aSession(db, clock, alice.id, 30);
+      const there = await connect(`${SESSION_COOKIE}=${second.token}`);
+      const here = await connect(alice.cookie);
+      await stillServed(there);
+      await stillServed(here);
+
+      const changed = await library('/change-password', alice.cookie, {
+        currentPassword: 'the old password',
+        newPassword: 'a new password, long enough',
+        revokeOtherSessions: true,
+      });
+      expect(changed.status).toBe(200);
+      expect(await endedWith(there, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+      // The caller's own socket is never told its session ended: its session is the one it was.
+      await stillServed(here);
+      expect(here.frames.some((f) => f.event === 'SESSION_ENDED')).toBe(false);
+      await here.close();
+    });
+
+    test('changing the password ends the other devices’ sessions and sockets though the client did not ask (D-179 §4)', async () => {
+      const alice = await aUser('alice');
+      const context = await dependencies.auth.$context;
+      await context.internalAdapter.linkAccount({
+        userId: alice.id,
+        providerId: 'credential',
+        accountId: alice.id,
+        password: await context.password.hash('the old password'),
+      });
+      const second = await aSession(db, clock, alice.id, 30);
+      const there = await connect(`${SESSION_COOKIE}=${second.token}`);
+      const here = await connect(alice.cookie);
+      await stillServed(there);
+      await stillServed(here);
+
+      const changed = await library('/change-password', alice.cookie, {
+        currentPassword: 'the old password',
+        newPassword: 'a new password, long enough',
+      });
+      expect(changed.status).toBe(200);
+      expect(await endedWith(there, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+      await stillServed(here);
+      expect(here.frames.some((f) => f.event === 'SESSION_ENDED')).toBe(false);
+      await here.close();
+    });
+
+    /**
+     * The library reads the sessions it is about to delete a hundred at a time, and tells its hooks
+     * of those alone: past a hundred, the rest were deleted and never announced. The device whose
+     * socket is watched is the last of more than a hundred.
+     */
+    const aHundredAndOneSessions = async (userId: string): Promise<string> => {
+      for (let n = 0; n < 100; n += 1) await aSession(db, clock, userId, 30);
+      return (await aSession(db, clock, userId, 30)).token;
+    };
+
+    test('a password reset closes every device’s socket, the hundred-and-first’s too (D-179)', async () => {
+      const alice = await aUser('alice');
+      const context = await dependencies.auth.$context;
+      await context.internalAdapter.linkAccount({
+        userId: alice.id,
+        providerId: 'credential',
+        accountId: alice.id,
+        password: await context.password.hash('the old password'),
+      });
+      const last = await connect(`${SESSION_COOKIE}=${await aHundredAndOneSessions(alice.id)}`);
+      await stillServed(last);
+      const token = `reset-${crypto.randomUUID()}`;
+      await context.internalAdapter.createVerificationValue({
+        identifier: `reset-password:${token}`,
+        value: alice.id,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      const reset = await app.handle(
+        new Request(`${origin}/auth/reset-password`, {
+          method: 'POST',
+          headers: { origin, 'content-type': 'application/json' },
+          body: JSON.stringify({ newPassword: 'a new password, long enough', token }),
+        }),
+      );
+      expect(reset.status).toBe(200);
+      expect(await endedWith(last, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+    });
+
+    test('signing out everywhere through the library closes the hundred-and-first device too', async () => {
+      const alice = await aUser('alice');
+      const last = await connect(`${SESSION_COOKIE}=${await aHundredAndOneSessions(alice.id)}`);
+      await stillServed(last);
+      expect((await library('/revoke-sessions', alice.cookie)).status).toBe(200);
+      expect(await endedWith(last, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+    });
+
+    test('signing out the other devices closes the hundred-and-first too', async () => {
+      const alice = await aUser('alice');
+      const last = await connect(`${SESSION_COOKIE}=${await aHundredAndOneSessions(alice.id)}`);
+      await stillServed(last);
+      expect((await library('/revoke-other-sessions', alice.cookie)).status).toBe(200);
+      expect(await endedWith(last, 'signed-out')).toMatchObject({
+        code: CLOSE_CODES.SESSION_ENDED,
+      });
+    });
+
     test('a session that expires closes its socket on time, without a frame to prompt it', async () => {
       const alice = await aUser('alice');
-      const { token } = await issueSession(db, clock, alice.id, 30);
-      // Three hundred milliseconds left on the server's clock.
+      const { token } = await aSession(db, clock, alice.id, 30);
+      // A second left on the clock a session's expiry is judged by — the wall clock, which is Better
+      // Auth's and so the hub's (`SESSION_CLOCK`) — long enough to be admitted, short enough to end.
       await db
         .updateTable('sessions')
-        .set({ expires_at: new Date(NOW.getTime() + 300) })
+        .set({ expires_at: new Date(Date.now() + 1000) })
         .where('user_id', '=', alice.id)
         .execute();
       const socket = await connect(`${SESSION_COOKIE}=${token}`);
@@ -1238,5 +1400,64 @@ describe('integration: two real sockets', () => {
       expect(createdIds(alice.frames)).toEqual([]);
       await alice.close();
     });
+  });
+});
+
+/**
+ * The library reads what it is about to delete so it can tell its hooks, and swallows a failure of
+ * that read: the rows are deleted and nothing is announced. The read is made to fail here; the
+ * sockets must close all the same.
+ */
+describe('integration: sessions the library ended without telling its hooks', () => {
+  const failing = { on: false, hits: 0 };
+  /** The library's read of a user's sessions before it deletes them, and only that one, fails. */
+  const failingRead = (): Parameters<Executor['withPlugin']>[0] => ({
+    transformQuery: (args): ReturnType<Parameters<Executor['withPlugin']>[0]['transformQuery']> => {
+      const text = JSON.stringify(args.node);
+      // By the person, a page of them: a session's own lookup is by its token, and ours is aliased.
+      if (
+        failing.on &&
+        args.node.kind === 'SelectQueryNode' &&
+        text.includes('"name":"sessions"') &&
+        text.includes('"kind":"LimitNode"') &&
+        text.includes('"name":"user_id"}}},"operator"') &&
+        !text.includes('"sessions_ended"')
+      ) {
+        failing.hits += 1;
+        throw new Error('the read before the delete failed');
+      }
+      return args.node;
+    },
+    transformResult: async (args) => await Promise.resolve(args.result),
+  });
+
+  test('signing out everywhere still closes every socket of the person', async () => {
+    const database = db.withPlugin(failingRead());
+    const shaky = createApp(
+      testDependencies({ database, clock, config: testConfig({ APP_URL: origin }) }),
+    );
+    const at = `http://localhost:${String(shaky.listen(0))}`;
+    try {
+      const alice = await aSignedInUser(db, clock, 'shaky');
+      const other = await aSession(db, clock, alice.userId, 30);
+      const socket = await connect(`${SESSION_COOKIE}=${other.token}`, at);
+      failing.on = true;
+      const out = await shaky.handle(
+        new Request(`${origin}/auth/revoke-sessions`, {
+          method: 'POST',
+          headers: { cookie: alice.cookie, origin, 'content-type': 'application/json' },
+          body: '{}',
+        }),
+      );
+      failing.on = false;
+      expect(out.status).toBe(200);
+      // The library's read did fail, and it deleted the rows regardless.
+      expect(failing.hits).toBeGreaterThan(0);
+      const code = await Promise.race([socket.ended, Bun.sleep(5_000).then(() => 'still open')]);
+      expect(code).toBe(CLOSE_CODES.SESSION_ENDED);
+    } finally {
+      failing.on = false;
+      await shaky.stop(true);
+    }
   });
 });

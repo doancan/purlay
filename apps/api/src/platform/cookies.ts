@@ -1,5 +1,5 @@
 /**
- * The two cookies this application sets. One definition of each name and its
+ * The cookies this application sets. One definition of each name and its
  * attributes.
  *
  * These belong to ingress, not to the session module: `modules/` never sees an
@@ -36,19 +36,44 @@ export const STATE_COOKIE = '__Host-purlay_oauth_state';
 
 const ATTRIBUTES = 'HttpOnly; Secure; SameSite=Lax; Path=/';
 
-export const stateCookie = (value: string): string =>
-  `${STATE_COOKIE}=${value}; ${ATTRIBUTES}; Max-Age=600`;
-
 export const clearedStateCookie = (): string => `${STATE_COOKIE}=; ${ATTRIBUTES}; Max-Age=0`;
 
-export interface SessionCookie {
-  readonly token: string;
-  readonly expiresAt: Date;
-}
+/**
+ * Says a sign-in was sent round once already: a tab that lost a first sign-up to another tab of the
+ * same person is sent back through GitHub, and a second loss with this cookie is a failure, never a
+ * second round (D-78, R28). Ten minutes, as the state's; spent by the callback that finishes.
+ */
+export const RETRY_COOKIE = '__Host-purlay_signin_retry';
 
-/** The `Set-Cookie` value that stores a session. */
-export const sessionCookie = ({ token, expiresAt }: SessionCookie): string =>
-  `${SESSION_COOKIE}=${token}; ${ATTRIBUTES}; Expires=${expiresAt.toUTCString()}`;
+export const retryCookie = (): string => `${RETRY_COOKIE}=1; ${ATTRIBUTES}; Max-Age=600`;
+
+export const clearedRetryCookie = (): string => `${RETRY_COOKIE}=; ${ATTRIBUTES}; Max-Age=0`;
+
+/**
+ * The invitation passport's cookie (D-179 §5, R51): what lets the one browser that asked for it make an
+ * account on an invite-only server when it comes back from GitHub. `Lax`, not `Strict`, for the reason the
+ * session's is — it must ride the top-level redirect back from github.com, which `Strict` withholds. The
+ * value is a random secret, spent by the sign-up it was made for; the server keeps only its digest.
+ */
+export const INVITE_COOKIE = '__Host-purlay_invite';
+
+export const inviteCookie = (value: string, maxAgeSeconds: number): string =>
+  `${INVITE_COOKIE}=${value}; ${ATTRIBUTES}; Max-Age=${String(maxAgeSeconds)}`;
+
+/**
+ * The setup's claim (D-179 §4.2): the token that binds the setup to the one browser that entered the
+ * code. `SameSite=Strict`, unlike the session's — nothing reaches the setup by a link from another site,
+ * so the cookie is never sent on one — and as long as the claim stays open unused (`SETUP_CLAIM_IDLE_MS`).
+ * Cleared by the finish.
+ */
+export const SETUP_COOKIE = '__Host-purlay_setup';
+
+const SETUP_ATTRIBUTES = 'HttpOnly; Secure; SameSite=Strict; Path=/';
+
+export const setupCookie = (token: string, maxAgeSeconds: number): string =>
+  `${SETUP_COOKIE}=${token}; ${SETUP_ATTRIBUTES}; Max-Age=${String(maxAgeSeconds)}`;
+
+export const clearedSetupCookie = (): string => `${SETUP_COOKIE}=; ${SETUP_ATTRIBUTES}; Max-Age=0`;
 
 /**
  * The `Set-Cookie` value that removes one.
@@ -72,7 +97,3 @@ export const readCookie = (cookieHeader: string | null, name: string): string | 
   }
   return undefined;
 };
-
-/** Reads the session token out of a request's `Cookie` header, if it carries one. */
-export const sessionTokenFrom = (cookieHeader: string | null): string | undefined =>
-  readCookie(cookieHeader, SESSION_COOKIE);

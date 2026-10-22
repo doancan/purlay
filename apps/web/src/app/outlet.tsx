@@ -28,12 +28,14 @@ import { Shell } from '../features/shell/shell';
 import { WorkspaceHome } from '../features/shell/workspace-home';
 import { SignInScreen } from '../features/sign-in/sign-in-screen';
 import { EmailSignInScreen } from '../features/sign-in/email-sign-in-screen';
+import { SignUpScreen } from '../features/sign-in/sign-up-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
 import { SavedScreen } from '../features/saved/saved-screen';
 import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazySettingsScreen } from '../features/settings/load';
+import { LazySetupScreen, LazyVerifyScreen } from '../features/setup/load';
 import { FIRST_SECTION } from '../features/settings/sections';
 
 declare global {
@@ -82,6 +84,12 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
       return <SignInScreen />;
     case 'signInEmail':
       return <EmailSignInScreen />;
+    case 'signUp':
+      return <SignUpScreen />;
+    case 'setup':
+      return <LazySetupScreen />;
+    case 'setupVerify':
+      return <LazyVerifyScreen />;
     case 'home':
       return (
         <SessionGate>
@@ -89,11 +97,7 @@ export const Outlet = ({ gallery = defaultGallery }: OutletProps): React.JSX.Ele
         </SessionGate>
       );
     case 'invite':
-      return (
-        <SessionGate>
-          <InviteScreen />
-        </SessionGate>
-      );
+      return <InviteScreen />;
     case 'workspace':
       return (
         <Shell slug={match.params.slug}>

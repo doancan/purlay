@@ -12,7 +12,7 @@
 import { createContext, useContext, useEffect } from 'react';
 import { AppSkeleton } from '../../app/skeleton';
 import { isApiError } from '../../data/errors';
-import { useMe } from '../../data/queries';
+import { useMe, useSetupStatus } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
@@ -35,17 +35,24 @@ export const SessionGate = ({
   readonly children: React.ReactNode;
 }): React.JSX.Element | null => {
   const me = useMe();
-  const { navigate } = useRoute();
+  const { navigate, match } = useRoute();
   const { t } = useI18n();
   const signedOut = me.isError && isApiError(me.error) && me.error.status === 401;
+  // Nobody signed in at `/` on a server nobody has set up: the wizard, not a sign-in card with
+  // nothing behind it. Asked of the server once, and only here; a failed ask is "not open".
+  const front = signedOut && me.data === undefined && match.name === 'home';
+  const status = useSetupStatus(front);
+  const open = status.data?.open === true;
+  const deciding = front && status.isPending;
   // A session the page held, now refused, ended — and the sign-in screen says so (#693). A first
   // visit with none did not end anything, and is the plain screen.
   const ended = signedOut && me.data !== undefined;
 
   useEffect(() => {
-    if (signedOut)
-      navigate(ended ? `${href('signIn')}?reason=ended` : href('signIn'), { replace: true });
-  }, [signedOut, ended, navigate]);
+    if (!signedOut || deciding) return;
+    if (front && open) navigate(href('setup'), { replace: true });
+    else navigate(ended ? `${href('signIn')}?reason=ended` : href('signIn'), { replace: true });
+  }, [signedOut, ended, navigate, deciding, front, open]);
 
   if (me.isPending) return <AppSkeleton />;
   if (signedOut) return null;
