@@ -11,6 +11,7 @@ import { isSetupFailure } from '../client';
 import { useSetup } from '../context';
 import { Actions, CopyField, FailureNote, StepHeader } from '../parts';
 import type { StepProps } from './props';
+import { Radio } from '../../../ui/checkbox';
 
 type Policy = 'invite-only' | 'open';
 
@@ -77,15 +78,13 @@ export const AddressStep = ({ state, done, onBack }: StepProps): React.JSX.Eleme
                   : 'border-border-subtle bg-surface-100 hover:bg-surface-050',
               )}
             >
-              <input
-                type="radio"
+              <Radio
                 name="policy"
                 value={option.value}
                 checked={policy === option.value}
                 onChange={() => {
                   setPolicy(option.value);
                 }}
-                className="mt-1"
               />
               <span className="flex min-w-0 flex-col gap-1">
                 <span className="text-label text-ink">{option.label}</span>

@@ -41,6 +41,7 @@ import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from './channel-n
 import { typeChannelName } from './name-field';
 import { useLeaveRefusal } from './leave';
 import { LEVELS, useChooseLevel } from './notification-level-menu';
+import { Radio } from '../../ui/checkbox';
 
 const sectionTitle = 'text-label font-semibold text-ink';
 
@@ -178,8 +179,7 @@ const Notifications = ({ channel }: { readonly channel: Channel }): React.JSX.El
             key={level}
             className="flex min-h-row items-center gap-3 border-border-subtle px-3 py-2 text-body text-ink not-first:border-t-hairline max-narrow:min-h-touch"
           >
-            <input
-              type="radio"
+            <Radio
               name={name}
               value={level}
               checked={level === current}

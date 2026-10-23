@@ -31,7 +31,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118) — the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118), the whole dark theme in that one indigo family (D-183) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size. Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -722,7 +722,7 @@ Decided here so Phase 0 does not invent one at random.
   1.6 prose / 1.54 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
   choice kept per device. Both are designed together: neutral greys, one blue accent and a navigation
-  that is a light neutral in the light theme and the dark navy in the dark (D-110, D-180). Every colour pair is computed in both. Never colour alone
+  that is a light neutral in the light theme and the dark navy in the dark (D-110, D-180). Check boxes and radio buttons are one primitive, the browser's input drawn in these tokens (D-182). Every colour pair is computed in both. Never colour alone
   to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.

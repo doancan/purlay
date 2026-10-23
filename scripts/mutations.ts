@@ -8229,4 +8229,20 @@ export const MUTATIONS: readonly Mutation[] = [
     replace: '',
     tests: ['apps/web/src/features/sidebar/starred.test.tsx'],
   },
+  {
+    id: 'checkbox-tick-always-hidden',
+    why: 'a checked box shows no tick, so what is on the screen and what the input holds disagree (D-182)',
+    file: 'apps/web/src/ui/checkbox.tsx',
+    find: 'opacity-0 peer-checked:opacity-100',
+    replace: 'opacity-0',
+    tests: ['apps/web/src/ui/checkbox.test.tsx'],
+  },
+  {
+    id: 'checkbox-primitive-bypassed',
+    why: 'a screen goes back to drawing its own native check box, light in a dark theme and off the text’s baseline (D-182)',
+    file: 'apps/web/src/features/sidebar/new-channel-dialog.tsx',
+    find: '<Checkbox',
+    replace: '<input type="checkbox"',
+    tests: ['apps/web/src/ui/checkbox.test.tsx'],
+  },
 ];

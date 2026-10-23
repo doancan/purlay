@@ -10,6 +10,7 @@
 import { useId } from 'react';
 import { Icon, type GlyphName } from '../../components/icon';
 import { cn } from '../../ui/cn';
+import { Radio } from '../../ui/checkbox';
 
 interface Choice<V extends string> {
   readonly value: V;
@@ -51,15 +52,13 @@ export const Choices = <V extends string>({
                 : 'border-border-subtle bg-surface-100 hover:bg-surface-050',
             )}
           >
-            <input
-              type="radio"
+            <Radio
               name={name}
               value={choice.value}
               checked={chosen}
               onChange={() => {
                 onChange(choice.value);
               }}
-              className="mt-1 shrink-0"
             />
             <span className="flex min-w-0 flex-col gap-1">
               <span className="flex items-center gap-2 text-label text-ink">

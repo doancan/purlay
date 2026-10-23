@@ -21,6 +21,7 @@ import { TextField } from '../../ui/text-field';
 import { useWorkspace } from '../shell/workspace';
 import { CHANNEL_NAME, CHANNEL_NAME_MAX, finishedChannelName } from '../channel/channel-name';
 import { typeChannelName } from '../channel/name-field';
+import { Checkbox } from '../../ui/checkbox';
 
 interface Problem {
   readonly field: 'name' | 'form';
@@ -139,14 +140,12 @@ export const NewChannelDialog = ({
           }}
         />
         <label className="flex items-start gap-2 text-body text-ink">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={secret}
             aria-describedby={privateHint}
             onChange={(event) => {
               setSecret(event.target.checked);
             }}
-            className="mt-1 size-icon-sm"
           />
           <span className="flex flex-col">
             <span className="flex items-center gap-1">

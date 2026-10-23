@@ -8772,6 +8772,43 @@ side panel (the width the thread panel needs).
 `continueList` and `formatKey` in `composer-text.ts`, and the `MenuTiles` `grid` mode. No contract, route,
 key or stored data: a draft is the same text it always was.
 
+### D-182. One check box and one radio, the browser's input drawn in tokens
+
+**Decided (the owner, 2026-10-23).** Walking the dark theme, the new-channel dialog's "Private" box was the
+operating system's own: a light grey square in a dark window, a different size in each browser, sitting
+above the baseline of its label. Eight screens drew their own native `<input type="checkbox">` or
+`type="radio"`. There is now `ui/checkbox.tsx` — `Checkbox` and `Radio` — and the screens use it.
+
+It stays the browser's input (`appearance-none`, drawn by hand), so the keyboard, the wrapping label, forms
+and the screen reader are the platform's and nothing is reimplemented; the tick and the dot are shown by
+`peer-checked`, so the screen can only show what the input holds. The edge is `border-strong`, which the
+contrast gate holds to 3:1; the keyboard ring is the global one, inset over the edge (one line, not two).
+`ui/checkbox.test.tsx` scans the screens and fails on a native check box or radio outside the primitive.
+
+**Considered and rejected.** `accent-color` on the native input (still a light box in the dark theme and
+sized by the browser); a Radix checkbox (a button with a role: it loses the form, the label and the
+platform's keys, and adds a dependency for what one input does).
+
+**Cost of reversing.** One file and eight call sites; no contract, route or key.
+
+### D-183. The dark theme is one family: the navigation's indigo, in layers
+
+**Decided (the owner, 2026-10-23), amends D-180's "dark keeps the navigation's tones".** The dark theme's
+content was a neutral near-black (`#0f0f11`, `#161618`) beside a navigation in indigo-navy (`#16162b`,
+`#22223f`): two palettes side by side. The owner asked for the whole dark theme in the navigation's tone,
+clean and in the manner of Apple's dark mode: deep, calm, layered, no hard edges. Every dark surface, border
+and text token now sits in the navigation's hue: the window `#12122a`, the content `#1a1a34`, a raised
+fill `#25253f`, a hover `#20203c`, hairlines `#2d2d4b`, a control's edge `#7d7da0`, text `#f1f1f8` /
+`#b6b6d0` / `#a3a3bf`; the avatar tints moved from warm browns to the same family. The light theme and the
+navigation's own tokens are unchanged.
+
+The contrast pairs are the gate and were not touched: every pair passes at the new values (`bun run tokens:check`).
+
+**Considered and rejected.** A neutral grey dark with only the navigation in indigo (what it was: the
+mismatch the owner saw); a pure black "OLED" ground (harsh against the indigo navigation).
+
+**Cost of reversing.** Eleven dark values in `tokens.json` and the avatar tints; generated files follow.
+
 ## Part D — Open, deliberately
 
 Recorded so they are not silently assumed. None block Phase 0.

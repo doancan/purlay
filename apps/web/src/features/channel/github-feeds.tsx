@@ -25,6 +25,7 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
+import { Checkbox } from '../../ui/checkbox';
 
 /** `CreateGitHubFeedRequest`'s rule, so the common slip is answered before a round trip. */
 const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/(?!\.\.?$)[A-Za-z0-9._-]{1,100}$/;
@@ -309,9 +310,8 @@ export const GitHubFeeds = ({ channel }: { readonly channel: Channel }): React.J
           <fieldset className="flex flex-wrap gap-x-4 gap-y-1">
             <legend className="mb-1 text-label text-ink">{t('feeds.events')}</legend>
             {GITHUB_FEED_EVENTS.map((name) => (
-              <label key={name} className="flex items-center gap-2 text-body text-ink">
-                <input
-                  type="checkbox"
+              <label key={name} className="flex items-start gap-2 text-body text-ink">
+                <Checkbox
                   checked={events.includes(name)}
                   onChange={(event) => {
                     setEvents(
@@ -322,7 +322,6 @@ export const GitHubFeeds = ({ channel }: { readonly channel: Channel }): React.J
                         : events.filter((each) => each !== name),
                     );
                   }}
-                  className="size-icon-sm"
                 />
                 {t(`feeds.event.${name}`)}
               </label>

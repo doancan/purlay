@@ -25,6 +25,7 @@ import {
   useHeadingFocusOnChange,
 } from '../parts';
 import type { StepProps } from './props';
+import { Checkbox } from '../../../ui/checkbox';
 
 /** How far a stage got: passed, the one the try stopped at, or never reached. */
 const DONE = 0;
@@ -355,13 +356,11 @@ export const EmailStep = ({ state, done, onBack, onNext }: StepProps): React.JSX
           }}
         />
         <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={allowPlaintext}
             onChange={(event) => {
               setAllowPlaintext(event.target.checked);
             }}
-            className="mt-1"
           />
           <span className="flex flex-col">
             <span className="text-label text-ink">{t('setup.email.plaintext')}</span>

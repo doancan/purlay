@@ -29,6 +29,7 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 import { ScreenBar } from '../shell/screen-bar';
 import { useWorkspace } from '../shell/workspace';
 import { joinableChannels } from '../sidebar/ordering';
+import { Checkbox } from '../../ui/checkbox';
 
 /** How many of the busiest channels are marked and picked to begin with. */
 const RECOMMENDED = 3;
@@ -228,9 +229,7 @@ export const WelcomeScreen = (): React.JSX.Element => {
                     on ? 'bg-accent-subtle' : 'hover:bg-surface-050',
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    className="mt-1 shrink-0"
+                  <Checkbox
                     // The channel's name is the box's; its topic and whether it is busy describe it.
                     aria-label={`#${channel.name ?? ''}`}
                     aria-describedby={`${channel.id}-about`}

@@ -6,6 +6,14 @@ Notable changes, newest first. Releases get their own file: `docs/changelog/v{x.
 
 ## Unreleased
 
+### Change — 2026-10-23: the dark theme in one family, and one check box
+
+- **Dark is the navigation's indigo throughout** (D-183): the content, cards, hairlines and text moved from a
+  neutral near-black to the same hue as the left menu, in layers; the avatar tints with them. Every contrast
+  pair still passes.
+- **One check box and one radio** (D-182): the browser's input drawn in tokens, replacing the native one on
+  eight screens (light grey in a dark window, off the label's baseline).
+
 ### Change — 2026-10-23: the channel header, in groups
 
 - The channel's **star** moves beside its name; the actions on the right are one group at one spacing (the

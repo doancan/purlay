@@ -15,6 +15,7 @@ import { CopyField, MailServerField, Note, ProbeFailure } from '../../setup/part
 import { SaveOutcome, SettingsCard, SettingsRow } from '../page';
 import { useServerClient } from '../server-context';
 import { ChangeFailure, DisconnectDialog, Inset, Reveal, useRefresh } from '../server-parts';
+import { Checkbox } from '../../../ui/checkbox';
 
 /** What became of the last change, in words: shown quiet when it went well. */
 type Outcome = { readonly ok: boolean; readonly words: string } | null;
@@ -331,13 +332,11 @@ export const EmailCard = ({ view }: { readonly view: ServerSettingsAnswer }): Re
                 }}
               />
               <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={allowPlaintext}
                   onChange={(event) => {
                     setAllowPlaintext(event.target.checked);
                   }}
-                  className="mt-1"
                 />
                 <span className="flex flex-col">
                   <span className="text-label text-ink">{t('setup.email.plaintext')}</span>
