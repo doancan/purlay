@@ -541,6 +541,118 @@ describe('email', () => {
     expect(lost.getByRole('heading', { name: /code/i })).toBeDefined();
   });
 
+  test('says what the sender may be before it is typed, and under the field when the server refuses it', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              from: 'the sender cannot be tried: one plain address, with no name and nothing else',
+            }),
+          ),
+      }),
+    );
+    expect(view.getByText(en['setup.email.fromHint'])).toBeDefined();
+    expect(en['setup.email.fromHint']).toMatch(/plain address/i);
+    await person().type(view.getByLabelText('Mail server'), 'smtp://mail.example.test');
+    await person().type(view.getByLabelText('Sender'), 'Purlay <purlay@example.test>');
+    await press(view, TRY);
+    const sender = view.getByLabelText('Sender');
+    expect(sender.getAttribute('aria-invalid')).toBe('true');
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    // The refusal stands in the hint's place, not under it: two sentences saying one thing.
+    expect(view.queryByText(en['setup.email.fromHint']) === null).toBe(true);
+    // The sentence is the field's, not the page's "the server refused this".
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+    // Typing again takes the refusal off the field.
+    await person().type(sender, 'x');
+    expect(view.queryByText(en['setup.email.fromInvalid']) === null).toBe(true);
+  });
+
+  test('says an address the server cannot try under the mail server field', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              smtpUrl: 'an address with no space or line break in it',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByLabelText('Mail server').getAttribute('aria-invalid')).toBe('true');
+    expect(view.getByText(en['setup.email.urlInvalid'])).toBeDefined();
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+  });
+
+  test('editing one refused field takes away only its own refusal', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              smtpUrl: 'not an smtp:// or smtps:// address',
+              from: 'one plain address, with no name and nothing else',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByText(en['setup.email.urlInvalid'])).toBeDefined();
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    await person().type(view.getByLabelText('Mail server'), 'x');
+    expect(view.queryByText(en['setup.email.urlInvalid']) === null).toBe(true);
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    // And the page's generic sentence never comes back for what was explained under its fields.
+    expect(view.queryByText(en['setup.failed.generic']) === null).toBe(true);
+  });
+
+  test('a refusal that names a field this screen explains and another it does not still says the generic sentence', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              from: 'one plain address, with no name and nothing else',
+              locale: 'is not a language',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByText(en['setup.email.fromInvalid'])).toBeDefined();
+    expect(
+      view
+        .getAllByRole('alert')
+        .some((one) => one.textContent.includes(en['setup.failed.generic'])),
+    ).toBe(true);
+  });
+
+  test('a refusal that names a field the screen has not got is the page’s generic sentence', async () => {
+    const view = await openSetup(
+      aClient({
+        state: () => Promise.resolve(atEmail()),
+        smtp: () =>
+          Promise.reject(
+            new SetupFailure(400, 'VALIDATION_FAILED', 'That cannot be tried.', null, {
+              body: 'Expected union value',
+            }),
+          ),
+      }),
+    );
+    await fillMail(view);
+    await press(view, TRY);
+    expect(view.getByRole('alert').textContent).toContain(en['setup.failed.generic']);
+  });
+
   test('a mail login that can no longer be read asks for it again', async () => {
     const view = await openSetup(
       aClient({
