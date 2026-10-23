@@ -703,6 +703,26 @@ describe('email: the letter again', () => {
     ).toBe(true);
   });
 
+  test('says the letter went when reading the state afterwards fails, as far as the screen last knew', async () => {
+    let reads = 0;
+    const view = await connected({
+      state: () => {
+        reads += 1;
+        // The first read draws the wizard; the one after the send is the one that fails.
+        return reads === 1
+          ? Promise.resolve(KEPT)
+          : Promise.reject(new SetupFailure(0, 'NETWORK', 'down'));
+      },
+      resendSmtp: () => Promise.resolve({ ok: true }),
+    });
+    await press(view, AGAIN);
+    expect(
+      view.getByText(en['setup.email.resent'].replace('{email}', 'ayse@example.test')),
+    ).toBeDefined();
+    // The send was not undone by it: no failure is said.
+    expect(view.queryByText(en['setup.failed.network']) === null).toBe(true);
+  });
+
   test('takes the last "sent" note away while the next send is on its way', async () => {
     let release: () => void = () => undefined;
     let calls = 0;
